@@ -1,0 +1,45 @@
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+*.egg-info/
+.build/
+.dist/
+dist/
+build/
+*.db
+# Envs
+.env
+.venv/
+venv/
+
+# Node.js (web frontend)
+node_modules/
+.svelte-kit/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local settings
+.claude/settings.json
+
+# Test artifacts
+web/test-results/
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# SQLite
+*.db-shm
+*.db-wal
+
+# Data directory
+data/

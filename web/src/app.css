@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+@theme {
+	--color-zinc-850: #1f1f23;
+	--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--color-zinc-600);
+	border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+	background: var(--color-zinc-600);
+}
+
+/* Prose overrides for dark mode */
+.dark .prose {
+	--tw-prose-body: var(--color-zinc-300);
+	--tw-prose-headings: var(--color-zinc-100);
+	--tw-prose-links: var(--color-blue-400);
+	--tw-prose-code: var(--color-zinc-200);
+	--tw-prose-pre-bg: var(--color-zinc-800);
+}

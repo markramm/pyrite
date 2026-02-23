@@ -1,0 +1,12 @@
+{
+  "name": "pyrite",
+  "version": "0.1.0",
+  "description": "Pyrite multi-KB research infrastructure for citizen journalists and AI agents. Provides skills for KB operations and development workflow.",
+  "author": "markr",
+  "autoDiscover": {
+    "skills": true,
+    "commands": true,
+    "hooks": true,
+    "agents": true
+  }
+}
