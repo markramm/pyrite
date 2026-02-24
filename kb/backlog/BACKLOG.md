@@ -158,7 +158,18 @@ Depends on #25 (plugin DI) from Wave 5C.
 | 31 | [Plugin UI Extension Points](done/plugin-ui-hooks.md) | UI | feature | M | #25 (plugin DI) | **done** |
 | 36 | [Import/Export Support](done/import-export.md) | UI | feature | L | none | **done** |
 
-### Wave 7 — Heavy features with deep dependencies
+### Wave 7A — Access control + git automation (parallel — zero file contention)
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 54 | [Implement pyrite-read CLI](implement-pyrite-read-cli.md) | Core | feature | S | none | proposed |
+| 55 | [Add kb_commit MCP Tool and REST Endpoint](mcp-commit-tool.md) | Core | feature | M | none | proposed |
+| 56 | [REST API Tier Enforcement](rest-api-tier-enforcement.md) | Core | feature | L | none | proposed |
+| 57 | [Background Embedding Pipeline](background-embedding-pipeline.md) | AI | improvement | M | none | proposed |
+
+**Parallelism:** #54 touches `read_cli.py` + `pyproject.toml`. #55 touches `mcp_server.py` + `endpoints/admin.py` + `cli/kb_commands.py`. #56 touches `api.py` + config. #57 touches `embedding_service.py` + `database.py` (new table). Zero overlap.
+
+### Wave 7B — Heavy features with deep dependencies
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
@@ -314,4 +325,9 @@ collections (#51)                      [7] — subsumes #28, #29, #43
 import-export (#36) ✅                 [6C]
 ephemeral-kbs (#45) ✅                 [6B]
 cross-kb-shortlinks (#53) ✅           [6C]
+
+implement-pyrite-read-cli (#54)        [7A]
+mcp-commit-tool (#55)                  [7A]
+rest-api-tier-enforcement (#56)        [7A]
+background-embedding-pipeline (#57)    [7A]
 ```

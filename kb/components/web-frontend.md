@@ -4,13 +4,13 @@ title: "Web Frontend"
 kind: application
 path: "web/"
 owner: "markr"
-dependencies: ["svelte5", "sveltekit", "tailwindcss", "codemirror", "marked", "fuse.js"]
+dependencies: ["svelte5", "sveltekit", "tailwindcss", "codemirror", "tiptap", "marked", "fuse.js", "cytoscape"]
 tags: [web, frontend, svelte, ui]
 ---
 
 # Web Frontend
 
-SvelteKit 5 single-page application for browsing, editing, and managing knowledge bases. Built with Svelte 5 runes, Tailwind CSS, and CodeMirror 6.
+SvelteKit 5 single-page application for browsing, editing, and managing knowledge bases. Built with Svelte 5 runes, Tailwind CSS, dual-mode editor (CodeMirror 6 + Tiptap), and Cytoscape.js knowledge graph.
 
 ## Architecture
 
@@ -27,10 +27,14 @@ web/
       settings/+page.svelte    # Settings page (appearance, general, AI provider)
       daily/+page.svelte       # Daily notes with calendar
       timeline/+page.svelte    # Timeline visualization
+      graph/+page.svelte       # Interactive knowledge graph (Cytoscape.js)
+      entries/wanted/+page.svelte # Wanted pages (broken wikilinks)
+      settings/plugins/+page.svelte # Plugin management
     lib/
       api/
         client.ts              # ApiClient singleton with typed methods
         types.ts               # TypeScript interfaces matching Pydantic schemas
+        websocket.ts           # WebSocket client for real-time updates
       stores/
         kbs.svelte.ts          # Knowledge base list
         entries.svelte.ts      # Current entry, CRUD operations
@@ -66,9 +70,17 @@ web/
         StarButton.svelte      # Star/unstar toggle
         Calendar.svelte        # Calendar for daily notes
       editor/
-        Editor.svelte          # CodeMirror 6 markdown editor
-        wikilink-utils.ts      # [[wikilink]] rendering and parsing
+        Editor.svelte          # CodeMirror 6 markdown editor (source mode)
+        TiptapEditor.svelte    # Tiptap WYSIWYG editor (rich text mode)
+        wikilink-utils.ts      # [[wikilink]] parsing, rendering, cross-KB support
         callouts.ts            # Obsidian-style callout rendering
+        codemirror/            # CM6 setup, slash-commands, theme, wikilinks
+        tiptap/                # Tiptap extensions: wikilink-extension, markdown
+      components/
+        graph/
+          GraphView.svelte     # Cytoscape.js knowledge graph
+          GraphControls.svelte # Layout, zoom, search controls
+          LocalGraphPanel.svelte # Entry page graph panel
       utils/
         keyboard.ts            # Global keyboard shortcut manager
 ```
@@ -155,5 +167,7 @@ cd web && npm run test:unit # Vitest unit tests
 ## Related
 
 - [REST API Server](rest-api.md) — Backend API consumed by this frontend
+- [Editor System](editor-system.md) — Detailed editor architecture (CodeMirror + Tiptap)
+- [WebSocket Server](websocket-server.md) — Real-time event delivery
 - [LLM Service](llm-service.md) — Powers AI features via REST endpoints
 - [Search Service](search-service.md) — Provides search functionality

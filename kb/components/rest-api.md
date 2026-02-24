@@ -24,7 +24,7 @@ pyrite/server/
     entries.py              # CRUD /api/entries, /entries/titles, /entries/resolve
     timeline.py             # GET /api/timeline
     tags.py                 # GET /api/tags, /api/tags/tree
-    admin.py                # GET /api/stats, POST /api/index/sync, GET /api/ai/status
+    admin.py                # Stats, sync, AI status, KB management, plugins
     ai_ep.py                # POST /api/ai/{summarize,auto-tag,suggest-links,chat}
     starred.py              # CRUD /api/starred
     templates.py            # /api/kbs/{kb}/templates
@@ -32,6 +32,7 @@ pyrite/server/
     settings_ep.py          # CRUD /api/settings
     versions.py             # GET /api/versions/{entry_id}
   schemas.py                # Pydantic request/response models
+  websocket.py              # WebSocket connection manager for real-time events
   static.py                 # Static file serving for SvelteKit dist
   mcp_server.py             # MCP server (separate from REST API)
 ```
@@ -108,6 +109,17 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/api/settings` | GET/PUT | settings_ep.py | Get/bulk-update settings |
 | `/api/settings/{key}` | GET/PUT/DELETE | settings_ep.py | Single setting CRUD |
 | `/api/versions/{entry_id}` | GET | versions.py | Entry version history |
+| `/api/graph` | GET | graph.py | Knowledge graph (nodes + edges) |
+| `/api/kbs` | POST | admin.py | Create KB (incl. ephemeral) |
+| `/api/kbs/{name}` | DELETE | admin.py | Delete KB |
+| `/api/kbs/gc` | POST | admin.py | Garbage-collect ephemeral KBs |
+| `/api/plugins` | GET | admin.py | List installed plugins |
+| `/api/plugins/{name}` | GET | admin.py | Plugin detail |
+| `/api/entries/import` | POST | entries.py | Import entries (file upload) |
+| `/api/entries/export` | GET | entries.py | Export entries (JSON/MD/CSV) |
+| `/api/entries/resolve-batch` | POST | entries.py | Batch wikilink resolution |
+| `/api/entries/wanted` | GET | entries.py | Wanted pages (broken links) |
+| `/ws` | WebSocket | websocket.py | Real-time entry/sync events |
 | `/health` | GET | api.py | Health check (not behind /api) |
 
 ## Adding New Endpoints
