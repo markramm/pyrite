@@ -80,45 +80,114 @@ These items have overlapping file footprints and must run sequentially: #48 → 
 
 **Parallelism:** All four items had zero file overlap. #42 + #13 ran in parallel (schema/protocol vs mcp_server), then #14 + #44 ran in parallel (frontend editor vs backend formats module).
 
-### Wave 5 — Collections, packaging, and deep dependencies
+### Wave 5A — Skills + cleanup (zero file contention, all parallel)
+
+Pure skill files and docs — no backend/frontend code overlap.
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 10 | [Research Flow Skill](research-flow-skill.md) | AI | feature | L | `skills/research-flow/` | proposed |
+| 11 | [Investigation Skill](investigation-skill.md) | AI | feature | L | `skills/investigation/` | proposed |
+| 19 | [Pyrite Dev Workflow Skill](pyrite-dev-skill.md) | AI | feature | M | `skills/pyrite-dev/` | proposed |
+| 37 | [Rewrite README for Pyrite](readme-rewrite.md) | both | bug | S | `README.md` | proposed |
+
+### Wave 5B — Isolated UI features (zero file contention, all parallel)
+
+Each touches a different frontend route/component with no shared files.
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 21 | [Callouts and Admonitions](callouts-and-admonitions.md) | UI | feature | S | `web/` Lezer grammar + CSS only | proposed |
+| 22 | [Outline / Table of Contents](outline-table-of-contents.md) | UI | feature | S | New `OutlinePanel.svelte`, `entries/[id]/+page.svelte` | proposed |
+| 34 | [Timeline Visualization](timeline-visualization.md) | UI | feature | M | `web/src/routes/timeline/` only | proposed |
+| 38 | [Remove Legacy Files](legacy-file-cleanup.md) | both | improvement | S | `read_cli.py`, `write_cli.py`, `pyproject.toml` entry points | proposed |
+
+### Wave 5C — Core infrastructure (zero file contention across groups, sequential within)
+
+Three independent tracks that don't share files. Run all three groups in parallel.
+
+**Group 1 — MCP packaging** (standalone):
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 52 | [Standalone MCP Server Packaging](standalone-mcp-packaging.md) | Core | feature | M | New `pyrite_mcp/` package (reads existing code, doesn't modify) | proposed |
+
+**Group 2 — Plugin DI chain** (sequential: #25 → #24):
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 25 | [Replace Manual Plugin DI](plugin-dependency-injection.md) | both | improvement | M | `plugins/protocol.py`, `kb_service.py`, `api.py`, all extensions | proposed |
+| 24 | [Hooks Cannot Access DB Instance](hooks-db-access-gap.md) | both | bug | M | `plugins/protocol.py`, `kb_service.py` (blocked by #25) | proposed |
+
+**Group 3 — Exception cleanup** (standalone):
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 39 | [Custom Exception Hierarchy](custom-exception-hierarchy.md) | both | improvement | M | New `exceptions.py`, `schema.py`, `database.py`, `kb_service.py` | proposed |
+
+**Contention note:** #39 and #25 both touch `kb_service.py`. Run #39 after #25 merges, or coordinate the merge carefully. #52 is fully independent.
+
+### Wave 5D — Data model + new endpoints (parallel across groups)
+
+**Group 1 — Core data model additions** (parallel — different DB tables):
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 18 | [Typed Object References](typed-object-references.md) | Core | feature | M | `database.py` (new `entry_refs` table), `index.py`, `endpoints/entries.py`, `schema.py` | proposed |
+| 20 | [Tag Hierarchy and Nested Tags](tag-hierarchy.md) | UI | feature | M | `database.py` (tag prefix queries), `web/` tag tree component | proposed |
+
+**Group 2 — New endpoint modules** (parallel — each adds isolated endpoint):
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 30 | [Settings and User Preferences](settings-and-preferences.md) | UI | feature | M | New `endpoints/settings.py`, `database.py` (settings table), new settings page | proposed |
+| 35 | [Git-Based Version History](version-history.md) | UI | feature | M | New `endpoints/versions.py`, new `VersionHistoryPanel.svelte` | proposed |
+
+**Contention note:** #18, #20, and #30 all add to `database.py` but with additive changes (new methods/tables). #35 is fully independent. All four register new routers in `api.py` (one-line each).
+
+### Wave 6A — Graph + realtime (parallel — different stacks)
+
+| # | Item | Track | Kind | Effort | File Footprint | Status |
+|---|------|-------|------|--------|----------------|--------|
+| 16 | [Interactive Knowledge Graph](knowledge-graph-view.md) | UI | feature | L | New `endpoints/graph.py`, `database.py` (graph query), `GraphView.svelte` + Cytoscape.js | proposed |
+| 23 | [WebSocket Multi-Tab Awareness](websocket-multi-tab.md) | UI | feature | M | New `websocket.py`, `api.py` (WS route), `web/` stores + toast | proposed |
+| 33 | [Tiptap WYSIWYG Editor Mode](tiptap-wysiwyg-editor.md) | UI | feature | L | New `TiptapEditor.svelte`, `entries/[id]/+page.svelte`, Tiptap npm deps | proposed |
+
+**Contention note:** #33 touches `entries/[id]/+page.svelte` which #22 (Wave 5B) also modifies. Ensure 5B merges first. #16 and #23 are fully independent of each other and #33.
+
+### Wave 6B — AI features (sequential: #26 → #27, #32)
+
+Depends on #30 (settings) from Wave 5D.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 52 | [Standalone MCP Server Packaging](standalone-mcp-packaging.md) | Core | feature | M | none | proposed |
-| 51 | [Collections and Views](collections-and-views.md) | both | feature | XL | #42 ✅, #5 ✅ | proposed |
-| 10 | [Research Flow Skill](research-flow-skill.md) | AI | feature | L | #2 ✅ | proposed |
-| 11 | [Investigation Skill](investigation-skill.md) | AI | feature | L | #2 ✅ | proposed |
-| 18 | [Typed Object References](typed-object-references.md) | Core | feature | M | #5 ✅ | proposed |
-| 19 | [Pyrite Dev Workflow Skill](pyrite-dev-skill.md) | AI | feature | M | #2 ✅ | proposed |
-| 16 | [Interactive Knowledge Graph](knowledge-graph-view.md) | UI | feature | L | #3 ✅ | proposed |
-| 17 | [Block References and Transclusion](block-references.md) | UI | feature | XL | #3 ✅ | proposed |
-| 20 | [Tag Hierarchy and Nested Tags](tag-hierarchy.md) | UI | feature | M | none | proposed |
-| 21 | [Callouts and Admonitions](callouts-and-admonitions.md) | UI | feature | S | none | proposed |
-| 22 | [Outline / Table of Contents](outline-table-of-contents.md) | UI | feature | S | none | proposed |
-| 23 | [WebSocket Multi-Tab Awareness](websocket-multi-tab.md) | UI | feature | M | none | proposed |
-| 24 | [Hooks Cannot Access DB Instance](hooks-db-access-gap.md) | both | bug | M | #25 (plugin DI) | proposed |
-| 25 | [Replace Manual Plugin DI](plugin-dependency-injection.md) | both | improvement | M | none | proposed |
+| 26 | [Web AI: Summarize, Auto-Tag, Links](web-ai-summarize-and-tag.md) | AI | feature | M | #30 (settings) | proposed |
+| 27 | [AI Provider Settings in UI](ai-provider-settings-ui.md) | AI | feature | S | #30 (settings) | proposed |
+| 45 | [Ephemeral KBs for Agent Swarm Shared Memory](ephemeral-kbs.md) | AI | feature | M | none (but benefits from #25) | proposed |
+
+**Contention note:** #26 and #27 both touch `endpoints/ai.py` and settings UI — run sequentially or coordinate. #45 is independent.
+
+### Wave 6C — Plugin UI + import/export
+
+Depends on #25 (plugin DI) from Wave 5C.
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 31 | [Plugin UI Extension Points](plugin-ui-hooks.md) | UI | feature | M | #25 (plugin DI) | proposed |
+| 36 | [Import/Export Support](import-export.md) | UI | feature | L | none | proposed |
+
+### Wave 7 — Heavy features with deep dependencies
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 17 | [Block References and Transclusion](block-references.md) | UI | feature | XL | #18 (object refs) | proposed |
+| 51 | [Collections and Views](collections-and-views.md) | both | feature | XL | none (all deps done) | proposed |
+| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 (plugin DI) | proposed |
+| 32 | [Web AI: Chat Sidebar (RAG)](web-ai-chat-sidebar.md) | AI | feature | L | #26 (AI endpoints) | proposed |
+
+**Contention note:** #17 touches `entries.py` + `index.py` (overlaps with #18). #51 is massive (5 phases) but mostly new files. #40 touches `database.py` + all extensions (run after other DB changes land). #32 depends on #26's AI endpoint patterns.
 
 **Note on #51 (Collections):** This item subsumes #28 (Dataview-Style Queries), #29 (Database Views), and #43 (Display Hints). Those items are retired — their scope is now covered by Collections phases 1–3. See [ADR-0011](../adrs/0011-collections-and-views.md).
-
-### Later Waves — Build on foundations
-
-| # | Item | Track | Kind | Effort | Blocked by | Status |
-|---|------|-------|------|--------|------------|--------|
-| 26 | [Web AI: Summarize, Auto-Tag, Links](web-ai-summarize-and-tag.md) | AI | feature | M | #6 (LLM) | proposed |
-| 27 | [AI Provider Settings in UI](ai-provider-settings-ui.md) | AI | feature | S | #6 (LLM), #30 (settings) | proposed |
-| 30 | [Settings and User Preferences](settings-and-preferences.md) | UI | feature | M | none | proposed |
-| 31 | [Plugin UI Extension Points](plugin-ui-hooks.md) | UI | feature | M | #25 (plugin DI) | proposed |
-| 32 | [Web AI: Chat Sidebar (RAG)](web-ai-chat-sidebar.md) | AI | feature | L | #6 (LLM) | proposed |
-| 33 | [Tiptap WYSIWYG Editor Mode](tiptap-wysiwyg-editor.md) | UI | feature | L | none | proposed |
-| 34 | [Timeline Visualization](timeline-visualization.md) | UI | feature | M | none | proposed |
-| 35 | [Git-Based Version History](version-history.md) | UI | feature | M | none | proposed |
-| 36 | [Import/Export Support](import-export.md) | UI | feature | L | #44 ✅ | proposed |
-| 37 | [Rewrite README for Pyrite](readme-rewrite.md) | both | bug | S | none | proposed |
-| 38 | [Remove Legacy Files](legacy-file-cleanup.md) | both | improvement | S | none | proposed |
-| 39 | [Custom Exception Hierarchy](custom-exception-hierarchy.md) | both | improvement | M | none | proposed |
-| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | M | none | proposed |
-| 45 | [Ephemeral KBs for Agent Swarm Shared Memory](ephemeral-kbs.md) | AI | feature | M | none | proposed |
 
 ## Retired
 
@@ -140,16 +209,18 @@ Items subsumed by larger features:
 
 `api.py` was split into per-feature endpoint modules under `pyrite/server/endpoints/` to eliminate it as a merge bottleneck. See [parallel-agents.md](../../.claude/skills/pyrite-dev/parallel-agents.md) for the full merge protocol.
 
-| File | Touched by | Risk |
-|------|-----------|------|
-| `pyrite/server/api.py` | Factory + deps only (~169 lines). Rarely needs modification. | **Low** — endpoints are in separate modules now |
-| `pyrite/server/endpoints/entries.py` | #18 (object refs) | Low — sequential via dependency |
-| `pyrite/server/endpoints/starred.py` | Standalone | None |
-| `pyrite/server/endpoints/templates.py` | Standalone | None |
-| `pyrite/schema.py` | #18 (object refs) | Low — sequential via dependency |
-| `pyrite/plugins/protocol.py` | Standalone | None — #42 done |
+**Key shared files and which waves touch them:**
 
-**Rule of thumb:** Core, UI, and AI tracks have clean file separation. Items within the same track and wave need coordination. See the wave planning rules in [parallel-agents.md](../../.claude/skills/pyrite-dev/parallel-agents.md) before launching parallel agents.
+| File | Touched by | Risk | Mitigation |
+|------|-----------|------|------------|
+| `pyrite/storage/database.py` | #18, #20, #30 (5D), #16 (6A), #40 (7) | **Medium** — all add new methods/tables | Additive changes only; wave ordering prevents conflicts |
+| `pyrite/services/kb_service.py` | #25, #24 (5C), #39 (5C) | **Medium** — plugin DI + exceptions | Run #39 after #25 chain merges |
+| `pyrite/plugins/protocol.py` | #25, #24 (5C) | **Low** — sequential within chain | #24 blocked by #25 |
+| `pyrite/server/api.py` | #30, #35 (5D), #16, #23 (6A) | **Low** — one-line router includes | Trivial merge conflicts |
+| `web/src/routes/entries/[id]/+page.svelte` | #22 (5B), #33 (6A), #35 (5D) | **Medium** — layout changes | Wave ordering: 5B → 5D → 6A |
+| `pyrite/server/endpoints/entries.py` | #18 (5D), #17 (7) | **Low** — sequential via dependency | #17 blocked by #18 |
+
+**Rule of thumb:** Core, UI, and AI tracks have clean file separation. Items within the same track and wave need coordination. Max 3–4 parallel agents per wave. See [parallel-agents.md](../../.claude/skills/pyrite-dev/parallel-agents.md) before launching parallel agents.
 
 ## Future Ideas
 
@@ -198,56 +269,40 @@ Items in [`done/`](done/):
 
 ## Dependencies
 
-Numbers match the wave-based execution plan above.
+Wave assignments shown in brackets. Items within the same wave group have validated file separation.
 
 ```
-entry-factory-dedup (#46) ✅                  ← TECH DEBT CRITICAL CHAIN
-  └── split-database (#48) ✅
-        └── service-layer-enforcement (#47) ✅ (endpoints + MCP)
-              ├── cli-service-layer (#50) ✅   ← CLI parity for AI agents
-              │     └── test-improvements (#49) ✅
-              ├── type-metadata (#42) ✅
-              │     └── collections (#51)      ← ADR-0011, unblocked
-              │           ├── Phase 2: virtual collections
-              │           ├── Phase 3: rich views (kanban, gallery, timeline, thread)
-              │           ├── Phase 4: embedding (needs #17)
-              │           └── Phase 5: plugin collection types
-              ├── mcp-prompts (#13) ✅
-              └── content-negotiation (#44) ✅
-                    └── import-export (#36)
-
-ruamel-yaml-migration (#1) ✅
-  └── structured-data-schema (#5) ✅
-        ├── typed-object-references (#18)
-        ├── type-metadata-and-ai-instructions (#42) ✅ → also needs #47 ✅
-        │     └── collections (#51)            ← subsumes #28, #29, #43, unblocked
-        └── [RETIRED] dataview-queries (#28)   → now #51 Phase 2
-        └── [RETIRED] database-views (#29)     → now #51 Phase 3
-
-wikilinks-and-autocomplete (#3) ✅
-  ├── backlinks-and-split-panes (#12) ✅
-  ├── block-references (#17)
-  │     └── collections (#51) Phase 4          ← embedding uses transclusion
-  └── knowledge-graph-view (#16)
-
 claude-code-plugin (#2) ✅
-  ├── research-flow-skill (#10)
-  ├── investigation-skill (#11)
-  └── pyrite-dev-skill (#19)
+  ├── research-flow-skill (#10)        [5A]
+  ├── investigation-skill (#11)        [5A]
+  └── pyrite-dev-skill (#19)           [5A]
 
-llm-abstraction-service (#6) ✅
-  ├── mcp-prompts-and-resources (#13) ✅ → also needs #47 ✅
-  ├── web-ai-summarize-and-tag (#26)
-  ├── web-ai-chat-sidebar (#32)
-  └── ai-provider-settings-ui (#27)
+plugin-dependency-injection (#25)      [5C group 2]
+  ├── hooks-db-access-gap (#24)        [5C group 2, after #25]
+  ├── plugin-ui-hooks (#31)            [6C]
+  └── database-txn-mgmt (#40)          [7]
 
-templates-system (#8) ✅
-  └── daily-notes (#15) ✅
+custom-exception-hierarchy (#39)       [5C group 3, after #25 merges]
 
-settings-and-preferences (#30)
-  └── ai-provider-settings-ui (#27)
+typed-object-references (#18)          [5D group 1]
+  └── block-references (#17)           [7]
+        └── collections (#51) Phase 4
 
-plugin-dependency-injection (#25)
-  ├── hooks-db-access-gap (#24)
-  └── plugin-ui-hooks (#31)
+settings-and-preferences (#30)         [5D group 2]
+  ├── web-ai-summarize-and-tag (#26)   [6B]
+  │     └── web-ai-chat-sidebar (#32)  [7]
+  └── ai-provider-settings-ui (#27)    [6B]
+
+knowledge-graph-view (#16)             [6A]
+websocket-multi-tab (#23)              [6A]
+tiptap-wysiwyg-editor (#33)            [6A, after #22 merges]
+
+collections (#51)                      [7] — subsumes #28, #29, #43
+  ├── Phase 2: virtual collections
+  ├── Phase 3: rich views (kanban, gallery, timeline, thread)
+  ├── Phase 4: embedding (needs #17)
+  └── Phase 5: plugin collection types
+
+import-export (#36)                    [6C]
+ephemeral-kbs (#45)                    [6B]
 ```
