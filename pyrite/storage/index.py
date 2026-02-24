@@ -6,6 +6,7 @@ Supports incremental updates based on file modification times.
 """
 
 import logging
+import re
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +16,9 @@ from ..config import PyriteConfig, load_config
 from ..models import Entry, EventEntry
 from .database import PyriteDB
 from .repository import KBRepository
+
+# Matches [[target]] and [[target|display text]]
+_WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]")
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +109,18 @@ class IndexManager:
             # Fallback: just store the metadata dict
             if hasattr(entry, "metadata") and entry.metadata:
                 data["metadata"] = entry.metadata
+
+        # Extract body wikilinks as links with relation="wikilink"
+        body = entry.body or ""
+        if body:
+            existing_targets = {l.get("target") for l in data["links"]}
+            for match in _WIKILINK_RE.finditer(body):
+                target = match.group(1).strip()
+                if target and target != entry.id and target not in existing_targets:
+                    data["links"].append(
+                        {"target": target, "kb": kb_name, "relation": "wikilink", "note": ""}
+                    )
+                    existing_targets.add(target)
 
         # Extract object-ref fields for entry_ref table
         refs = []

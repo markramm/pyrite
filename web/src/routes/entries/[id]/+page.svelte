@@ -14,12 +14,14 @@
 	import { api } from '$lib/api/client';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import { parseWikilinks } from '$lib/editor/wikilink-utils';
 	import type { AITagSuggestion, AILinkSuggestion } from '$lib/api/types';
 
 	let editing = $state(false);
 	let editorContent = $state('');
 	let aiMenuOpen = $state(false);
 	let aiLoading = $state(false);
+	let resolvedIds = $state<Set<string>>(new Set());
 
 	// AI results
 	let summaryResult = $state<string | null>(null);
@@ -68,10 +70,28 @@
 		};
 	});
 
-	// Sync editor content when entry loads
+	// Sync editor content and resolve wikilinks when entry loads
 	$effect(() => {
 		if (entryStore.current) {
 			editorContent = entryStore.current.body ?? '';
+			// Batch-resolve wikilink targets for red link rendering
+			const body = entryStore.current.body ?? '';
+			const links = parseWikilinks(body);
+			if (links.length > 0) {
+				const targets = [...new Set(links.map((l) => l.target))];
+				api.resolveBatch(targets).then((res) => {
+					const existing = new Set<string>();
+					for (const [id, exists] of Object.entries(res.resolved)) {
+						if (exists) existing.add(id);
+					}
+					resolvedIds = existing;
+				}).catch(() => {
+					// On failure, treat all as existing (no red links)
+					resolvedIds = new Set();
+				});
+			} else {
+				resolvedIds = new Set();
+			}
 		}
 	});
 
@@ -392,7 +412,7 @@
 									</div>
 								{:else}
 									<div class="prose dark:prose-invert max-w-4xl">
-										{@html renderMarkdown(entryStore.current?.body ?? '')}
+										{@html renderMarkdownWithLinks(entryStore.current?.body ?? '', resolvedIds)}
 									</div>
 								{/if}
 							</div>
@@ -452,6 +472,13 @@
 		let html = marked.parse(md, { async: false, renderer }) as string;
 		html = renderCallouts(html);
 		html = renderWikilinks(html);
+		return html;
+	}
+
+	function renderMarkdownWithLinks(md: string, existingIds: Set<string>): string {
+		let html = marked.parse(md, { async: false, renderer }) as string;
+		html = renderCallouts(html);
+		html = renderWikilinks(html, existingIds.size > 0 ? existingIds : undefined);
 		return html;
 	}
 </script>

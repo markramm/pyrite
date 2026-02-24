@@ -34,6 +34,33 @@ class KBService:
         self.config = config
         self.db = db
         self._index_mgr = IndexManager(db, config)
+        self._embedding_svc = None
+        self._embedding_checked = False
+
+    def _get_embedding_svc(self):
+        """Lazy-load embedding service if available."""
+        if self._embedding_checked:
+            return self._embedding_svc
+        self._embedding_checked = True
+        try:
+            from .embedding_service import EmbeddingService, is_available
+
+            if is_available() and self.db.vec_available:
+                self._embedding_svc = EmbeddingService(
+                    self.db, model_name=self.config.settings.embedding_model
+                )
+        except Exception:
+            pass
+        return self._embedding_svc
+
+    def _auto_embed(self, entry_id: str, kb_name: str) -> None:
+        """Embed an entry if the embedding service is available."""
+        svc = self._get_embedding_svc()
+        if svc:
+            try:
+                svc.embed_entry(entry_id, kb_name)
+            except Exception as e:
+                logger.debug("Auto-embed failed for %s: %s", entry_id, e)
 
     # =========================================================================
     # KB Operations
@@ -148,6 +175,9 @@ class KBService:
         # Index the entry
         self._index_mgr.index_entry(entry, kb_name, file_path)
 
+        # Auto-embed for semantic search
+        self._auto_embed(entry.id, kb_name)
+
         # Run after_save hooks
         self._run_hooks("after_save", entry, hook_ctx)
 
@@ -204,6 +234,9 @@ class KBService:
         # Re-index
         self._index_mgr.index_entry(entry, kb_name, file_path)
 
+        # Auto-embed for semantic search
+        self._auto_embed(entry.id, kb_name)
+
         # Run after_save hooks
         self._run_hooks("after_save", entry, hook_ctx)
 
@@ -251,6 +284,50 @@ class KBService:
             self._run_hooks("after_delete", entry, hook_ctx)
 
         return file_deleted
+
+    def add_link(
+        self,
+        source_id: str,
+        source_kb: str,
+        target_id: str,
+        relation: str = "related_to",
+        target_kb: str | None = None,
+        note: str = "",
+    ) -> None:
+        """
+        Add a link from one entry to another.
+
+        Updates the source entry's frontmatter and re-indexes.
+
+        Args:
+            source_id: Source entry ID
+            source_kb: Source KB name
+            target_id: Target entry ID
+            relation: Relationship type (default: related_to)
+            target_kb: Target KB (defaults to source_kb)
+            note: Optional note about the link
+        """
+        kb_config = self.config.get_kb(source_kb)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {source_kb}")
+        if kb_config.read_only:
+            raise KBReadOnlyError(f"KB is read-only: {source_kb}")
+
+        repo = KBRepository(kb_config)
+        entry = repo.load(source_id)
+        if not entry:
+            raise EntryNotFoundError(f"Entry not found: {source_id}")
+
+        tkb = target_kb or source_kb
+        # Check for duplicate
+        for existing in entry.links:
+            if existing.target == target_id and (existing.kb or source_kb) == tkb:
+                return  # Link already exists
+
+        entry.add_link(target=target_id, relation=relation, note=note, kb=tkb)
+        entry.updated_at = datetime.now(UTC)
+        file_path = repo.save(entry)
+        self._index_mgr.index_entry(entry, source_kb, file_path)
 
     # =========================================================================
     # Query Operations (read-only, delegate to db)
@@ -426,6 +503,44 @@ class KBService:
             row = self.db._raw_conn.execute(sql, params).fetchone()
 
         return dict(row) if row else None
+
+    def resolve_batch(self, targets: list[str], kb_name: str | None = None) -> dict[str, bool]:
+        """Batch-resolve wikilink targets. Returns {target: exists_bool}."""
+        if not targets:
+            return {}
+        result: dict[str, bool] = {}
+        # Query all existing entry IDs in one go
+        placeholders = ",".join(["?"] * len(targets))
+        sql = f"SELECT id FROM entry WHERE id IN ({placeholders})"
+        params: list[str] = list(targets)
+        if kb_name:
+            sql += " AND kb_name = ?"
+            params.append(kb_name)
+        rows = self.db._raw_conn.execute(sql, params).fetchall()
+        existing_ids = {r["id"] for r in rows}
+        for t in targets:
+            result[t] = t in existing_ids
+        return result
+
+    def get_wanted_pages(
+        self, kb_name: str | None = None, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Get link targets that don't exist as entries (wanted pages)."""
+        sql = """
+            SELECT l.target_id, l.target_kb, COUNT(*) as ref_count,
+                   GROUP_CONCAT(DISTINCT l.source_id) as referenced_by
+            FROM link l
+            LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
+            WHERE e.id IS NULL
+        """
+        params: list[Any] = []
+        if kb_name:
+            sql += " AND l.target_kb = ?"
+            params.append(kb_name)
+        sql += " GROUP BY l.target_id, l.target_kb ORDER BY ref_count DESC LIMIT ?"
+        params.append(limit)
+        rows = self.db._raw_conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
     def list_daily_dates(self, kb_name: str, month: str) -> list[str]:
         """List dates that have daily notes for a given month (YYYY-MM)."""

@@ -377,6 +377,9 @@ RELATIONSHIP_TYPES: dict[str, dict[str, Any]] = {
     "answers_question": {"inverse": "asks_question", "description": "Answers a question"},
     "is_part_of": {"inverse": "contains_part", "description": "Part of a larger whole"},
     "contains_part": {"inverse": "is_part_of", "description": "Contains a part"},
+    # Body wikilink references
+    "wikilink": {"inverse": "wikilinked_by", "description": "Inline wikilink reference"},
+    "wikilinked_by": {"inverse": "wikilink", "description": "Referenced by inline wikilink"},
 }
 
 

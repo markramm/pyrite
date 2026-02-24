@@ -167,6 +167,22 @@ export interface ResolveResponse {
 	entry: EntryTitle | null;
 }
 
+export interface ResolveBatchResponse {
+	resolved: Record<string, boolean>;
+}
+
+export interface WantedPage {
+	target_id: string;
+	target_kb: string;
+	ref_count: number;
+	referenced_by: string[];
+}
+
+export interface WantedPagesResponse {
+	count: number;
+	pages: WantedPage[];
+}
+
 // Starred Entries
 
 export interface StarredEntryItem {

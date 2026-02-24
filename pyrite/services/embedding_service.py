@@ -39,6 +39,27 @@ def _entry_text(entry: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _generate_snippet(entry: dict[str, Any], max_len: int = 200) -> str:
+    """Generate a text snippet from an entry for search results."""
+    # Prefer summary if available
+    if entry.get("summary"):
+        text = entry["summary"]
+        return text[:max_len] + "..." if len(text) > max_len else text
+    # Fall back to body
+    body = entry.get("body") or ""
+    if not body:
+        return ""
+    # Strip markdown formatting for cleaner snippet
+    text = body.strip()
+    # Take first paragraph-ish chunk
+    for sep in ["\n\n", "\n"]:
+        idx = text.find(sep)
+        if 0 < idx < max_len * 2:
+            text = text[:idx]
+            break
+    return text[:max_len] + "..." if len(text) > max_len else text
+
+
 def _embedding_to_blob(embedding: list[float]) -> bytes:
     """Serialize float32 list to bytes for sqlite-vec."""
     return struct.pack(f"{len(embedding)}f", *embedding)
@@ -195,11 +216,19 @@ class EmbeddingService:
         query: str,
         kb_name: str | None = None,
         limit: int = 20,
+        max_distance: float = 1.1,
     ) -> list[dict[str, Any]]:
         """
         Search for semantically similar entries using vector KNN.
 
-        Returns list of entry dicts with 'distance' field.
+        Args:
+            query: Natural language search query.
+            kb_name: Optional KB filter.
+            limit: Max results to return.
+            max_distance: Cosine distance cutoff (0=identical, 2=opposite).
+                Results with distance > max_distance are excluded.
+
+        Returns list of entry dicts with 'distance' and 'snippet' fields.
         """
         if not self.db.vec_available:
             return []
@@ -208,8 +237,8 @@ class EmbeddingService:
         blob = _embedding_to_blob(embedding)
 
         # Use sqlite-vec KNN query with k constraint
-        # Fetch more than limit to allow for kb_name filtering
-        fetch_limit = limit * 3 if kb_name else limit
+        # Fetch more than limit to allow for kb_name filtering + distance cutoff
+        fetch_limit = limit * 3 if kb_name else limit * 2
 
         rows = self.db.conn.execute(
             """
@@ -225,8 +254,15 @@ class EmbeddingService:
         results = []
         for row in rows:
             entry = dict(row)
+            # Apply relevance cutoff
+            distance = entry.get("distance", 0)
+            if distance > max_distance:
+                continue
             if kb_name and entry.get("kb_name") != kb_name:
                 continue
+            # Generate snippet for semantic results
+            if not entry.get("snippet"):
+                entry["snippet"] = _generate_snippet(entry)
             results.append(entry)
             if len(results) >= limit:
                 break

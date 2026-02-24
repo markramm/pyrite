@@ -9,6 +9,7 @@ from .admin import router as admin_router
 from .ai_ep import router as ai_router
 from .daily import router as daily_router
 from .entries import router as entries_router
+from .graph import router as graph_router
 from .kbs import router as kbs_router
 from .search import router as search_router
 from .settings_ep import router as settings_router
@@ -31,6 +32,7 @@ all_routers = [
     daily_router,
     settings_router,
     versions_router,
+    graph_router,
 ]
 
 __all__ = ["all_routers"]

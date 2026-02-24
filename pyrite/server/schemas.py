@@ -370,6 +370,35 @@ class EntryTypesResponse(BaseModel):
 # =============================================================================
 
 
+class ResolveBatchRequest(BaseModel):
+    """Request body for batch wikilink resolution."""
+
+    targets: list[str]
+    kb: str | None = None
+
+
+class ResolveBatchResponse(BaseModel):
+    """Response for batch wikilink resolution."""
+
+    resolved: dict[str, bool]
+
+
+class WantedPage(BaseModel):
+    """A link target that doesn't exist as an entry."""
+
+    target_id: str
+    target_kb: str
+    ref_count: int
+    referenced_by: list[str] = []
+
+
+class WantedPagesResponse(BaseModel):
+    """Response for wanted pages listing."""
+
+    count: int
+    pages: list[WantedPage]
+
+
 class EntryTitle(BaseModel):
     """Lightweight entry reference for autocomplete."""
 

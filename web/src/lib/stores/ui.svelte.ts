@@ -15,6 +15,8 @@ class UIStore {
 	outlinePanelOpen = $state(false);
 	versionHistoryPanelOpen = $state(false);
 	chatPanelOpen = $state(false);
+	localGraphPanelOpen = $state(false);
+	editorMode = $state<'source' | 'wysiwyg'>('source');
 	toasts = $state<Toast[]>([]);
 
 	constructor() {
@@ -58,6 +60,14 @@ class UIStore {
 
 	toggleChatPanel() {
 		this.chatPanelOpen = !this.chatPanelOpen;
+	}
+
+	toggleLocalGraphPanel() {
+		this.localGraphPanelOpen = !this.localGraphPanelOpen;
+	}
+
+	toggleEditorMode() {
+		this.editorMode = this.editorMode === 'source' ? 'wysiwyg' : 'source';
 	}
 
 	toast(message: string, type: Toast['type'] = 'info') {

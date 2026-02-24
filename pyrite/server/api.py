@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from slowapi import Limiter
@@ -227,6 +227,19 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     def health_check():
         """Health check endpoint."""
         return {"status": "ok", "timestamp": datetime.now(UTC).isoformat()}
+
+    # WebSocket endpoint for multi-tab awareness
+    @application.websocket("/ws")
+    async def websocket_endpoint(ws: WebSocket):
+        from .websocket import manager
+
+        await manager.connect(ws)
+        try:
+            while True:
+                # Keep connection alive; clients can send pings
+                await ws.receive_text()
+        except WebSocketDisconnect:
+            manager.disconnect(ws)
 
     # Mount static files if dist directory exists
     dist_dir = Path(__file__).parent.parent.parent / "web" / "dist"

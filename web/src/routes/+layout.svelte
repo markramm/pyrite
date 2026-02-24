@@ -7,6 +7,8 @@
 	import ChatSidebar from '$lib/components/ai/ChatSidebar.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
+	import { wsClient } from '$lib/api/websocket';
+	import { entryStore } from '$lib/stores/entries.svelte';
 	import { registerShortcut } from '$lib/utils/keyboard';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -15,6 +17,26 @@
 
 	onMount(() => {
 		kbStore.load();
+
+		// WebSocket for multi-tab awareness
+		wsClient.connect();
+		const unregisterWS = wsClient.onEvent((event) => {
+			if (event.type === 'entry_updated' || event.type === 'entry_deleted') {
+				// If viewing the changed entry, auto-reload
+				if (entryStore.current && entryStore.current.id === event.entry_id) {
+					if (event.type === 'entry_updated') {
+						entryStore.loadEntry(event.entry_id, event.kb_name);
+						uiStore.toast(`"${event.entry_id}" was updated in another tab`, 'info');
+					} else {
+						uiStore.toast(`"${event.entry_id}" was deleted in another tab`, 'info');
+					}
+				}
+			} else if (event.type === 'entry_created') {
+				uiStore.toast(`New entry created: ${event.entry_id}`, 'info');
+			} else if (event.type === 'kb_synced') {
+				uiStore.toast('Knowledge base synced', 'info');
+			}
+		});
 
 		// Global: Cmd+D / Ctrl+D navigates to today's daily note
 		const unregisterDaily = registerShortcut('d', ['mod'], () => {
@@ -27,6 +49,8 @@
 		});
 
 		return () => {
+			wsClient.disconnect();
+			unregisterWS();
 			unregisterDaily();
 			unregisterChat();
 		};

@@ -21,6 +21,7 @@ def index_build(
     with_attribution: bool = typer.Option(
         False, "--with-attribution", help="Extract git history for attribution"
     ),
+    no_embed: bool = typer.Option(False, "--no-embed", help="Skip auto-embedding after build"),
 ):
     """Build or rebuild the search index."""
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
@@ -81,10 +82,28 @@ def index_build(
 
     console.print("\n[green]Index build complete.[/green]")
 
+    # Auto-embed after build if embeddings are available
+    if not no_embed:
+        try:
+            from ..services.embedding_service import EmbeddingService, is_available
+
+            if is_available() and db.vec_available:
+                console.print("[dim]Generating embeddings...[/dim]")
+                svc = EmbeddingService(db, model_name=config.settings.embedding_model)
+                stats = svc.embed_all(kb_name=kb_name, force=force)
+                if stats["embedded"] > 0:
+                    console.print(
+                        f"[green]Embedded {stats['embedded']} entries[/green] "
+                        f"(skipped {stats['skipped']})"
+                    )
+        except Exception:
+            pass  # Embedding is optional
+
 
 @index_app.command("sync")
 def index_sync(
     kb_name: str | None = typer.Argument(None, help="KB to sync (all if omitted)"),
+    no_embed: bool = typer.Option(False, "--no-embed", help="Skip auto-embedding after sync"),
 ):
     """Incremental sync: update index for changed files only."""
     from ..storage import IndexManager, PyriteDB
@@ -99,6 +118,20 @@ def index_sync(
     console.print(f"  Added: {results['added']}")
     console.print(f"  Updated: {results['updated']}")
     console.print(f"  Removed: {results['removed']}")
+
+    # Auto-embed new/updated entries if embeddings are available
+    changed = results["added"] + results["updated"]
+    if changed > 0 and not no_embed:
+        try:
+            from ..services.embedding_service import EmbeddingService, is_available
+
+            if is_available() and db.vec_available:
+                svc = EmbeddingService(db, model_name=config.settings.embedding_model)
+                stats = svc.embed_all(kb_name=kb_name)
+                if stats["embedded"] > 0:
+                    console.print(f"  Embedded: {stats['embedded']}")
+        except Exception:
+            pass  # Embedding is optional
 
 
 @index_app.command("stats")

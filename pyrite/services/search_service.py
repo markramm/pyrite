@@ -192,6 +192,7 @@ class SearchService:
         query: str,
         kb_name: str | None = None,
         limit: int = 50,
+        max_distance: float = 1.1,
     ) -> list[dict[str, Any]]:
         """Pure semantic vector search."""
         from .embedding_service import EmbeddingService, is_available
@@ -203,7 +204,9 @@ class SearchService:
         if not svc.has_embeddings():
             return []
 
-        return svc.search_similar(query, kb_name=kb_name, limit=limit)
+        return svc.search_similar(
+            query, kb_name=kb_name, limit=limit, max_distance=max_distance
+        )
 
     def _hybrid_search(
         self,

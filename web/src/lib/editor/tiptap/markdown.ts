@@ -1,0 +1,142 @@
+/**
+ * Markdown <-> HTML conversion for Tiptap editor.
+ *
+ * Uses `marked` (already a dep) for md->html.
+ * Uses a lightweight recursive converter for html->md.
+ * Markdown is always the source of truth.
+ */
+
+import { marked } from 'marked';
+
+/**
+ * Convert Markdown to HTML for Tiptap consumption.
+ * Handles wikilinks as inline spans so Tiptap can render them.
+ */
+export function markdownToHtml(md: string): string {
+	// Pre-process wikilinks: [[target|display]] -> <span data-wikilink="target">display</span>
+	let processed = md.replace(
+		/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
+		(_match, target: string, display?: string) => {
+			const label = display || target;
+			return `<span data-wikilink="${target.trim()}" class="wikilink">${label.trim()}</span>`;
+		}
+	);
+
+	const html = marked.parse(processed, { async: false }) as string;
+	return html;
+}
+
+/**
+ * Convert HTML from Tiptap back to Markdown.
+ * Lightweight recursive converter.
+ */
+export function htmlToMarkdown(html: string): string {
+	const parser = new DOMParser();
+	const doc = parser.parseFromString(html, 'text/html');
+	return nodeToMarkdown(doc.body).trim() + '\n';
+}
+
+function nodeToMarkdown(node: Node): string {
+	if (node.nodeType === Node.TEXT_NODE) {
+		return node.textContent || '';
+	}
+
+	if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+	const el = node as HTMLElement;
+	const tag = el.tagName.toLowerCase();
+	const children = () => Array.from(el.childNodes).map(nodeToMarkdown).join('');
+
+	// Wikilink spans
+	if (tag === 'span' && el.dataset.wikilink) {
+		const target = el.dataset.wikilink;
+		const display = el.textContent || target;
+		return target === display ? `[[${target}]]` : `[[${target}|${display}]]`;
+	}
+
+	switch (tag) {
+		case 'h1':
+			return `# ${children()}\n\n`;
+		case 'h2':
+			return `## ${children()}\n\n`;
+		case 'h3':
+			return `### ${children()}\n\n`;
+		case 'h4':
+			return `#### ${children()}\n\n`;
+		case 'h5':
+			return `##### ${children()}\n\n`;
+		case 'h6':
+			return `###### ${children()}\n\n`;
+		case 'p':
+			return `${children()}\n\n`;
+		case 'br':
+			return '\n';
+		case 'strong':
+		case 'b':
+			return `**${children()}**`;
+		case 'em':
+		case 'i':
+			return `*${children()}*`;
+		case 'code': {
+			if (el.parentElement?.tagName.toLowerCase() === 'pre') {
+				return children();
+			}
+			return `\`${children()}\``;
+		}
+		case 'pre': {
+			const codeEl = el.querySelector('code');
+			const lang = codeEl?.className?.match(/language-(\w+)/)?.[1] || '';
+			const code = codeEl?.textContent || children();
+			return `\`\`\`${lang}\n${code}\n\`\`\`\n\n`;
+		}
+		case 'a': {
+			const href = el.getAttribute('href') || '';
+			return `[${children()}](${href})`;
+		}
+		case 'ul':
+			return listToMarkdown(el, false);
+		case 'ol':
+			return listToMarkdown(el, true);
+		case 'li': {
+			// Handle task list items
+			const checkbox = el.querySelector('input[type="checkbox"]');
+			if (checkbox) {
+				const checked = (checkbox as HTMLInputElement).checked;
+				const text = Array.from(el.childNodes)
+					.filter((n) => n !== checkbox && !(n instanceof HTMLElement && n.tagName === 'LABEL'))
+					.map(nodeToMarkdown)
+					.join('')
+					.trim();
+				return `[${checked ? 'x' : ' '}] ${text}`;
+			}
+			return children().trim();
+		}
+		case 'blockquote':
+			return (
+				children()
+					.trim()
+					.split('\n')
+					.map((line: string) => `> ${line}`)
+					.join('\n') + '\n\n'
+			);
+		case 'hr':
+			return '---\n\n';
+		case 'img': {
+			const src = el.getAttribute('src') || '';
+			const alt = el.getAttribute('alt') || '';
+			return `![${alt}](${src})`;
+		}
+		default:
+			return children();
+	}
+}
+
+function listToMarkdown(el: HTMLElement, ordered: boolean): string {
+	const items = Array.from(el.children);
+	const lines = items.map((item, i) => {
+		const prefix = ordered ? `${i + 1}. ` : '- ';
+		const content = nodeToMarkdown(item);
+		return `${prefix}${content}`;
+	});
+	return lines.join('\n') + '\n\n';
+}

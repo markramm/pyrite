@@ -23,6 +23,19 @@ def get_stats(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)
 def sync_index(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)):
     """Trigger incremental index sync."""
     result = index_mgr.sync_incremental()
+    # Broadcast WebSocket event
+    import asyncio
+
+    from ..websocket import manager
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(
+            manager.broadcast({"type": "kb_synced", "entry_id": "", "kb_name": ""})
+        )
+    except RuntimeError:
+        pass
+
     return SyncResponse(
         synced=True,
         added=result.get("added", 0),

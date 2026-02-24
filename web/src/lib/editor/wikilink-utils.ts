@@ -43,11 +43,18 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
 /**
  * Replace wikilinks in HTML with clickable links.
  * Used in the rendered markdown view.
+ *
+ * @param html - HTML string with [[wikilink]] syntax
+ * @param existingIds - Optional set of entry IDs that exist. If provided,
+ *   links to non-existent entries get a "wikilink-missing" class (red links).
  */
-export function renderWikilinks(html: string): string {
+export function renderWikilinks(html: string, existingIds?: Set<string>): string {
 	return html.replace(WIKILINK_REGEX, (_match, target: string, display?: string) => {
-		const label = display?.trim() || target.trim();
-		const href = `/entries/${encodeURIComponent(target.trim())}`;
-		return `<a href="${href}" class="wikilink" data-wikilink="${target.trim()}">${label}</a>`;
+		const trimmed = target.trim();
+		const label = display?.trim() || trimmed;
+		const href = `/entries/${encodeURIComponent(trimmed)}`;
+		const missing = existingIds && !existingIds.has(trimmed);
+		const cls = missing ? 'wikilink wikilink-missing' : 'wikilink';
+		return `<a href="${href}" class="${cls}" data-wikilink="${trimmed}">${label}</a>`;
 	});
 }

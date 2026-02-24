@@ -23,8 +23,10 @@ import type {
 	RenderedTemplate,
 	ReorderStarredRequest,
 	ReorderStarredResponse,
+	ResolveBatchResponse,
 	ResolveResponse,
 	SearchResponse,
+	WantedPagesResponse,
 	SettingResponse,
 	SettingsResponse,
 	StarEntryResponse,
@@ -159,6 +161,22 @@ class ApiClient {
 		const params = new URLSearchParams({ target });
 		if (kb) params.set('kb', kb);
 		return this.request(`/api/entries/resolve?${params}`);
+	}
+
+	async resolveBatch(targets: string[], kb?: string): Promise<ResolveBatchResponse> {
+		return this.request('/api/entries/resolve-batch', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ targets, kb: kb ?? null })
+		});
+	}
+
+	async getWantedPages(kb?: string, limit?: number): Promise<WantedPagesResponse> {
+		const params = new URLSearchParams();
+		if (kb) params.set('kb', kb);
+		if (limit) params.set('limit', String(limit));
+		const qs = params.toString();
+		return this.request(`/api/entries/wanted${qs ? `?${qs}` : ''}`);
 	}
 
 	// Tags

@@ -20,9 +20,13 @@ from ..schemas import (
     EntryTitle,
     EntryTitlesResponse,
     EntryTypesResponse,
+    ResolveBatchRequest,
+    ResolveBatchResponse,
     ResolveResponse,
     UpdateEntryRequest,
     UpdateResponse,
+    WantedPage,
+    WantedPagesResponse,
 )
 
 router = APIRouter(tags=["Entries"])
@@ -101,6 +105,43 @@ def list_entry_titles(
         for r in rows
     ]
     return EntryTitlesResponse(entries=entries)
+
+
+@router.post("/entries/resolve-batch", response_model=ResolveBatchResponse)
+@limiter.limit("100/minute")
+def resolve_batch(
+    request: Request,
+    req: ResolveBatchRequest,
+    svc: KBService = Depends(get_kb_service),
+):
+    """Batch-resolve wikilink targets. Returns which targets exist."""
+    resolved = svc.resolve_batch(req.targets, kb_name=req.kb)
+    return ResolveBatchResponse(resolved=resolved)
+
+
+@router.get("/entries/wanted", response_model=WantedPagesResponse)
+@limiter.limit("100/minute")
+def list_wanted_pages(
+    request: Request,
+    kb: str | None = Query(None, description="Filter by KB name"),
+    limit: int = Query(100, ge=1, le=500),
+    svc: KBService = Depends(get_kb_service),
+):
+    """List link targets that don't exist as entries (wanted pages)."""
+    pages = svc.get_wanted_pages(kb_name=kb, limit=limit)
+    result = []
+    for p in pages:
+        refs = p.get("referenced_by", "") or ""
+        ref_list = [r for r in refs.split(",") if r] if isinstance(refs, str) else []
+        result.append(
+            WantedPage(
+                target_id=p["target_id"],
+                target_kb=p["target_kb"],
+                ref_count=p["ref_count"],
+                referenced_by=ref_list,
+            )
+        )
+    return WantedPagesResponse(count=len(result), pages=result)
 
 
 @router.get("/entries/resolve", response_model=ResolveResponse)

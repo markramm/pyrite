@@ -167,6 +167,169 @@ class QueryMixin:
 
         return related
 
+    def get_graph_data(
+        self,
+        center: str | None = None,
+        center_kb: str | None = None,
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        depth: int = 2,
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        """Multi-hop BFS graph traversal returning nodes and edges.
+
+        Args:
+            center: Optional entry ID to start from. If None, returns all linked entries.
+            center_kb: KB name for center entry.
+            kb_name: Filter to entries in this KB.
+            entry_type: Filter to this entry type.
+            depth: Max hops from center (1-3, default 2).
+            limit: Max nodes to return (default 500).
+
+        Returns:
+            {"nodes": [...], "edges": [...]}
+        """
+        depth = max(1, min(3, depth))
+        nodes: dict[tuple[str, str], dict[str, Any]] = {}
+        edges: list[dict[str, Any]] = []
+        edge_set: set[tuple[str, str, str, str]] = set()
+
+        if center and center_kb:
+            # BFS from center
+            row = self._raw_conn.execute(
+                "SELECT id, kb_name, title, entry_type FROM entry WHERE id = ? AND kb_name = ?",
+                (center, center_kb),
+            ).fetchone()
+            if not row:
+                return {"nodes": [], "edges": []}
+            nodes[(row["id"], row["kb_name"])] = dict(row)
+
+            frontier = [(center, center_kb)]
+            for _hop in range(depth):
+                if not frontier or len(nodes) >= limit:
+                    break
+                next_frontier: list[tuple[str, str]] = []
+                for eid, ekb in frontier:
+                    if len(nodes) >= limit:
+                        break
+                    # Outgoing links
+                    out_rows = self._raw_conn.execute(
+                        """SELECT l.target_id, l.target_kb, l.relation,
+                                  e.title, e.entry_type
+                           FROM link l
+                           LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
+                           WHERE l.source_id = ? AND l.source_kb = ?""",
+                        (eid, ekb),
+                    ).fetchall()
+                    for r in out_rows:
+                        if len(nodes) >= limit:
+                            break
+                        tid, tkb = r["target_id"], r["target_kb"]
+                        if kb_name and tkb != kb_name:
+                            continue
+                        if entry_type and r["entry_type"] and r["entry_type"] != entry_type:
+                            continue
+                        edge_key = (eid, ekb, tid, tkb)
+                        if edge_key not in edge_set:
+                            edge_set.add(edge_key)
+                            edges.append({
+                                "source_id": eid,
+                                "source_kb": ekb,
+                                "target_id": tid,
+                                "target_kb": tkb,
+                                "relation": r["relation"],
+                            })
+                        if (tid, tkb) not in nodes:
+                            nodes[(tid, tkb)] = {
+                                "id": tid,
+                                "kb_name": tkb,
+                                "title": r["title"] or tid,
+                                "entry_type": r["entry_type"] or "unknown",
+                            }
+                            next_frontier.append((tid, tkb))
+
+                    # Incoming links
+                    in_rows = self._raw_conn.execute(
+                        """SELECT l.source_id, l.source_kb, l.relation,
+                                  e.title, e.entry_type
+                           FROM link l
+                           JOIN entry e ON l.source_id = e.id AND l.source_kb = e.kb_name
+                           WHERE l.target_id = ? AND l.target_kb = ?""",
+                        (eid, ekb),
+                    ).fetchall()
+                    for r in in_rows:
+                        if len(nodes) >= limit:
+                            break
+                        sid, skb = r["source_id"], r["source_kb"]
+                        if kb_name and skb != kb_name:
+                            continue
+                        if entry_type and r["entry_type"] != entry_type:
+                            continue
+                        edge_key = (sid, skb, eid, ekb)
+                        if edge_key not in edge_set:
+                            edge_set.add(edge_key)
+                            edges.append({
+                                "source_id": sid,
+                                "source_kb": skb,
+                                "target_id": eid,
+                                "target_kb": ekb,
+                                "relation": r["relation"],
+                            })
+                        if (sid, skb) not in nodes:
+                            nodes[(sid, skb)] = {
+                                "id": sid,
+                                "kb_name": skb,
+                                "title": r["title"] or sid,
+                                "entry_type": r["entry_type"] or "unknown",
+                            }
+                            next_frontier.append((sid, skb))
+
+                frontier = next_frontier
+        else:
+            # No center: return all linked entries
+            sql = """
+                SELECT e.id, e.kb_name, e.title, e.entry_type
+                FROM entry e
+                WHERE e.id IN (SELECT source_id FROM link)
+                   OR e.id IN (SELECT target_id FROM link)
+            """
+            params: list[Any] = []
+            if kb_name:
+                sql += " AND e.kb_name = ?"
+                params.append(kb_name)
+            if entry_type:
+                sql += " AND e.entry_type = ?"
+                params.append(entry_type)
+            sql += " LIMIT ?"
+            params.append(limit)
+
+            for r in self._raw_conn.execute(sql, params).fetchall():
+                nodes[(r["id"], r["kb_name"])] = dict(r)
+
+            # Get edges between collected nodes
+            if nodes:
+                link_rows = self._raw_conn.execute(
+                    "SELECT source_id, source_kb, target_id, target_kb, relation FROM link"
+                ).fetchall()
+                for r in link_rows:
+                    src = (r["source_id"], r["source_kb"])
+                    tgt = (r["target_id"], r["target_kb"])
+                    if src in nodes and tgt in nodes:
+                        edges.append(dict(r))
+
+        # Compute link_count for each node
+        node_list = []
+        for node in nodes.values():
+            count = 0
+            for e in edges:
+                if (e["source_id"] == node["id"] and e["source_kb"] == node["kb_name"]) or \
+                   (e["target_id"] == node["id"] and e["target_kb"] == node["kb_name"]):
+                    count += 1
+            node["link_count"] = count
+            node_list.append(node)
+
+        return {"nodes": node_list, "edges": edges}
+
     # =========================================================================
     # Analytics
     # =========================================================================

@@ -152,6 +152,9 @@ def create_entry(
     date: str = typer.Option("", "--date", "-d", help="Date (YYYY-MM-DD, for events)"),
     importance: int = typer.Option(5, "--importance", "-i", help="Importance (1-10)"),
     field: list[str] | None = typer.Option(None, "--field", "-f", help="Extra field as key=value"),
+    link: list[str] | None = typer.Option(
+        None, "--link", "-l", help="Link to target entry (format: target-id or target-id:relation)"
+    ),
 ):
     """Create a new entry in a knowledge base."""
     from ..schema import generate_entry_id
@@ -184,6 +187,19 @@ def create_entry(
         entry = svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
         console.print(f"[green]Created:[/green] {entry.id}")
         console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+
+        # Add links after creation
+        if link:
+            for link_spec in link:
+                if ":" in link_spec:
+                    target, relation = link_spec.split(":", 1)
+                else:
+                    target, relation = link_spec, "related_to"
+                try:
+                    svc.add_link(entry.id, kb_name, target.strip(), relation.strip())
+                    console.print(f"  [dim]Linked to {target} ({relation})[/dim]")
+                except (PyriteError, ValueError) as e:
+                    console.print(f"  [yellow]Link failed:[/yellow] {e}")
     except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
@@ -250,6 +266,41 @@ def delete_entry(
             console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
             raise typer.Exit(1)
         console.print(f"[green]Deleted:[/green] {entry_id}")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+# =============================================================================
+# Link command
+# =============================================================================
+
+
+@app.command("link")
+def link_entries(
+    source: str = typer.Argument(..., help="Source entry ID"),
+    target: str = typer.Argument(..., help="Target entry ID"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Source KB name"),
+    relation: str = typer.Option("related_to", "--relation", "-r", help="Relationship type"),
+    target_kb: str | None = typer.Option(None, "--target-kb", help="Target KB (if different)"),
+    note: str = typer.Option("", "--note", "-n", help="Note about the link"),
+    bidirectional: bool = typer.Option(False, "--bidi", help="Create link in both directions"),
+):
+    """Create a link between two entries."""
+    svc, db = _get_svc()
+    try:
+        svc.add_link(source, kb_name, target, relation, target_kb=target_kb, note=note)
+        tkb = target_kb or kb_name
+        console.print(f"[green]Linked:[/green] {source} --[{relation}]--> {target} (in {tkb})")
+
+        if bidirectional:
+            from ..schema import get_inverse_relation
+
+            inverse = get_inverse_relation(relation)
+            svc.add_link(target, tkb, source, inverse, target_kb=kb_name, note=note)
+            console.print(f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})")
     except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
@@ -359,6 +410,7 @@ def timeline(
 @app.command("tags")
 def tags_cmd(
     kb_name: str = typer.Option(None, "--kb", "-k", help="Filter by KB"),
+    prefix: str = typer.Option(None, "--prefix", "-p", help="Filter tags by prefix"),
     limit: int = typer.Option(100, "--limit", "-n", help="Max tags to show"),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
@@ -369,6 +421,10 @@ def tags_cmd(
     try:
         tag_list = svc.get_tags(kb_name=kb_name, limit=limit)
 
+        # Apply prefix filter
+        if prefix:
+            tag_list = [t for t in tag_list if t.get("name", "").startswith(prefix)]
+
         if not tag_list:
             console.print("[yellow]No tags found.[/yellow]")
             return
@@ -378,7 +434,8 @@ def tags_cmd(
             typer.echo(formatted)
             return
 
-        table = Table(title="Tags")
+        title = f"Tags (prefix: {prefix})" if prefix else "Tags"
+        table = Table(title=title)
         table.add_column("Tag", style="cyan")
         table.add_column("Count", justify="right")
 

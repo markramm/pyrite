@@ -135,6 +135,33 @@
 	--tw-prose-pre-bg: var(--color-zinc-800);
 }
 
+/* Wikilink styles */
+.wikilink {
+	color: var(--color-blue-600);
+	text-decoration: none;
+	border-bottom: 1px solid transparent;
+}
+.wikilink:hover {
+	border-bottom-color: var(--color-blue-600);
+}
+.dark .wikilink {
+	color: var(--color-blue-400);
+}
+.dark .wikilink:hover {
+	border-bottom-color: var(--color-blue-400);
+}
+.wikilink-missing {
+	color: var(--color-red-600);
+	border-bottom: 1px dashed var(--color-red-400);
+}
+.wikilink-missing:hover {
+	border-bottom-style: solid;
+}
+.dark .wikilink-missing {
+	color: var(--color-red-400);
+	border-bottom-color: var(--color-red-500);
+}
+
 /* Prose spacing */
 .prose p { margin-top: 1.25em; margin-bottom: 1.25em; }
 .prose h1, .prose h2, .prose h3, .prose h4 { margin-top: 1.5em; margin-bottom: 0.5em; }

@@ -21,6 +21,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
+    "@types/cytoscape": "^3.21.9",
     "jsdom": "^28.1.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.0.0",
@@ -38,6 +39,15 @@
     "@codemirror/state": "^6.0.0",
     "@codemirror/view": "^6.0.0",
     "@lezer/markdown": "^1.0.0",
+    "@tiptap/core": "^3.20.0",
+    "@tiptap/extension-link": "^3.20.0",
+    "@tiptap/extension-placeholder": "^3.20.0",
+    "@tiptap/extension-task-item": "^3.20.0",
+    "@tiptap/extension-task-list": "^3.20.0",
+    "@tiptap/pm": "^3.20.0",
+    "@tiptap/starter-kit": "^3.20.0",
+    "cytoscape": "^3.33.1",
+    "cytoscape-cose-bilkent": "^4.1.0",
     "fuse.js": "^7.1.0",
     "marked": "^15.0.0"
   }
