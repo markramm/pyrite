@@ -307,3 +307,123 @@ class QueryMixin:
                 (limit,),
             ).fetchall()
         return [{"name": r["name"], "count": r["count"]} for r in rows]
+
+    # =========================================================================
+    # Object Refs
+    # =========================================================================
+
+    def get_refs_from(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get entries this entry references via object-ref fields."""
+        rows = self._raw_conn.execute(
+            """SELECT r.target_id as id, r.target_kb as kb_name, r.field_name, r.target_type,
+                      e.title, e.entry_type
+               FROM entry_ref r
+               LEFT JOIN entry e ON r.target_id = e.id AND r.target_kb = e.kb_name
+               WHERE r.source_id = ? AND r.source_kb = ?""",
+            (entry_id, kb_name),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_refs_to(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get entries that reference this entry via object-ref fields."""
+        rows = self._raw_conn.execute(
+            """SELECT r.source_id as id, r.source_kb as kb_name, r.field_name, r.target_type,
+                      e.title, e.entry_type
+               FROM entry_ref r
+               JOIN entry e ON r.source_id = e.id AND r.source_kb = e.kb_name
+               WHERE r.target_id = ? AND r.target_kb = ?""",
+            (entry_id, kb_name),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    # =========================================================================
+    # Settings
+    # =========================================================================
+
+    def get_setting(self, key: str) -> str | None:
+        """Get a setting value by key."""
+        row = self._raw_conn.execute(
+            "SELECT value FROM setting WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a setting value (upsert)."""
+        self._raw_conn.execute(
+            """INSERT INTO setting (key, value, updated_at)
+               VALUES (?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(key) DO UPDATE SET
+               value = excluded.value, updated_at = CURRENT_TIMESTAMP""",
+            (key, value),
+        )
+        self._raw_conn.commit()
+
+    def get_all_settings(self) -> dict[str, str]:
+        """Get all settings as a dict."""
+        rows = self._raw_conn.execute("SELECT key, value FROM setting").fetchall()
+        return {r["key"]: r["value"] for r in rows}
+
+    def delete_setting(self, key: str) -> bool:
+        """Delete a setting. Returns True if deleted."""
+        result = self._raw_conn.execute("DELETE FROM setting WHERE key = ?", (key,))
+        self._raw_conn.commit()
+        return result.rowcount > 0
+
+    # =========================================================================
+    # Tag hierarchy
+    # =========================================================================
+
+    def get_tag_tree(self, kb_name: str | None = None) -> list[dict[str, Any]]:
+        """Build hierarchical tag tree from /-separated tags.
+
+        Returns list of tree nodes: {name, full_path, count, children: [...]}
+        """
+        flat_tags = self.get_all_tags(kb_name)
+
+        root_children: list[dict[str, Any]] = []
+        node_map: dict[str, dict[str, Any]] = {}
+
+        for tag_name, count in sorted(flat_tags, key=lambda t: t[0]):
+            parts = tag_name.split("/")
+            for i, part in enumerate(parts):
+                full_path = "/".join(parts[: i + 1])
+                if full_path not in node_map:
+                    node: dict[str, Any] = {
+                        "name": part,
+                        "full_path": full_path,
+                        "count": 0,
+                        "children": [],
+                    }
+                    node_map[full_path] = node
+                    if i == 0:
+                        root_children.append(node)
+                    else:
+                        parent_path = "/".join(parts[:i])
+                        node_map[parent_path]["children"].append(node)
+            # Set count on the leaf (exact tag)
+            if tag_name in node_map:
+                node_map[tag_name]["count"] = count
+
+        return root_children
+
+    def search_by_tag_prefix(
+        self, prefix: str, kb_name: str | None = None, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """Search entries by tag prefix (parent tag includes children)."""
+        sql = """
+            SELECT DISTINCT e.* FROM entry e
+            JOIN entry_tag et ON e.id = et.entry_id AND e.kb_name = et.kb_name
+            JOIN tag t ON et.tag_id = t.id
+            WHERE (t.name = ? OR t.name LIKE ?)
+        """
+        params: list[Any] = [prefix, prefix + "/%"]
+
+        if kb_name:
+            sql += " AND e.kb_name = ?"
+            params.append(kb_name)
+
+        sql += " ORDER BY e.date DESC, e.title LIMIT ?"
+        params.append(limit)
+
+        rows = self._raw_conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]

@@ -140,6 +140,29 @@ class Link(Base):
     source_entry = relationship("Entry", back_populates="outgoing_links")
 
 
+class EntryRef(Base):
+    __tablename__ = "entry_ref"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_id = Column(String, nullable=False)
+    source_kb = Column(String, nullable=False)
+    target_id = Column(String, nullable=False)
+    target_kb = Column(String, nullable=False)
+    field_name = Column(String, nullable=False)
+    target_type = Column(String)  # from schema constraint
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_id", "source_kb"],
+            ["entry.id", "entry.kb_name"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_entry_ref_source", "source_id", "source_kb"),
+        Index("idx_entry_ref_target", "target_id", "target_kb"),
+        Index("idx_entry_ref_field", "field_name"),
+    )
+
+
 class Source(Base):
     __tablename__ = "source"
 
@@ -274,3 +297,17 @@ class StarredEntry(Base):
         Index("idx_starred_entry_kb", "kb_name"),
         Index("idx_starred_entry_sort", "sort_order"),
     )
+
+
+# =========================================================================
+# Settings
+# =========================================================================
+
+
+class Setting(Base):
+    __tablename__ = "setting"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key = Column(String, unique=True, nullable=False, index=True)
+    value = Column(Text)
+    updated_at = Column(String, server_default="CURRENT_TIMESTAMP")

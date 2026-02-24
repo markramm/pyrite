@@ -106,6 +106,46 @@ class IndexManager:
             if hasattr(entry, "metadata") and entry.metadata:
                 data["metadata"] = entry.metadata
 
+        # Extract object-ref fields for entry_ref table
+        refs = []
+        try:
+            from ..schema import KBSchema
+
+            kb_config = self.config.get_kb(kb_name)
+            if kb_config and (kb_config.path / "kb.yaml").exists():
+                schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+                entry_type_name = entry.entry_type
+                type_schema = schema.types.get(entry_type_name)
+                if type_schema:
+                    fm = entry.to_frontmatter()
+                    for field_name, field_schema in type_schema.fields.items():
+                        if field_schema.field_type == "object-ref":
+                            value = fm.get(field_name)
+                            if value:
+                                target_type = field_schema.constraints.get("target_type")
+                                if isinstance(value, list):
+                                    for v in value:
+                                        if isinstance(v, str):
+                                            refs.append(
+                                                {
+                                                    "target_id": v,
+                                                    "field_name": field_name,
+                                                    "target_type": target_type,
+                                                }
+                                            )
+                                elif isinstance(value, str):
+                                    refs.append(
+                                        {
+                                            "target_id": value,
+                                            "field_name": field_name,
+                                            "target_type": target_type,
+                                        }
+                                    )
+        except Exception:
+            pass  # Schema not available; skip ref extraction
+        if refs:
+            data["_refs"] = refs
+
         return data
 
     def index_kb(

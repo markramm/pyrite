@@ -13,6 +13,7 @@ class UIStore {
 	sidebarOpen = $state(true);
 	backlinksPanelOpen = $state(false);
 	outlinePanelOpen = $state(false);
+	versionHistoryPanelOpen = $state(false);
 	toasts = $state<Toast[]>([]);
 
 	constructor() {
@@ -44,6 +45,10 @@ class UIStore {
 
 	toggleOutlinePanel() {
 		this.outlinePanelOpen = !this.outlinePanelOpen;
+	}
+
+	toggleVersionHistoryPanel() {
+		this.versionHistoryPanelOpen = !this.versionHistoryPanelOpen;
 	}
 
 	toggleSidebar() {

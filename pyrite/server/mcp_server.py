@@ -177,7 +177,7 @@ class PyriteMCPServer:
                     "handler": self._kb_backlinks,
                 },
                 "kb_tags": {
-                    "description": "Get all tags with their usage counts, optionally filtered by KB.",
+                    "description": "Get all tags with their usage counts, optionally filtered by KB. Supports hierarchical /-separated tags.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -188,6 +188,10 @@ class PyriteMCPServer:
                             "prefix": {
                                 "type": "string",
                                 "description": "Filter tags starting with prefix",
+                            },
+                            "tree": {
+                                "type": "boolean",
+                                "description": "Return hierarchical tree instead of flat list",
                             },
                         },
                         "required": [],
@@ -427,6 +431,11 @@ class PyriteMCPServer:
         """Get all tags with counts."""
         kb_name = args.get("kb_name")
         prefix = args.get("prefix", "")
+
+        if args.get("tree"):
+            tree = self.svc.get_tag_tree(kb_name=kb_name)
+            return {"tree": tree}
+
         tag_dicts = self.svc.get_tags(kb_name=kb_name)
         tags = [
             {"tag": t["name"], "count": t["count"]}

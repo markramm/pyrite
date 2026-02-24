@@ -21,6 +21,7 @@ class CRUDMixin:
         self._sync_tags(entry_id, kb_name, entry_data.get("tags", []))
         self._sync_sources(entry_id, kb_name, entry_data.get("sources", []))
         self._sync_links(entry_id, kb_name, entry_data.get("links", []))
+        self._sync_entry_refs(entry_id, kb_name, entry_data)
 
         self._raw_conn.commit()
 
@@ -139,6 +140,28 @@ class CRUDMixin:
                     relation,
                     inverse,
                     link.get("note", ""),
+                ),
+            )
+
+    def _sync_entry_refs(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
+        """Sync object-ref fields into entry_ref table."""
+        self._raw_conn.execute(
+            "DELETE FROM entry_ref WHERE source_id = ? AND source_kb = ?",
+            (entry_id, kb_name),
+        )
+        refs = entry_data.get("_refs", [])
+        for ref in refs:
+            self._raw_conn.execute(
+                """INSERT INTO entry_ref (source_id, source_kb, target_id, target_kb,
+                   field_name, target_type)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    entry_id,
+                    kb_name,
+                    ref["target_id"],
+                    ref.get("target_kb", kb_name),
+                    ref["field_name"],
+                    ref.get("target_type"),
                 ),
             )
 

@@ -126,7 +126,11 @@ class KBService:
 
         # Run before_save hooks
         hook_ctx = PluginContext(
-            config=self.config, db=self.db, kb_name=kb_name, user="", operation="create",
+            config=self.config,
+            db=self.db,
+            kb_name=kb_name,
+            user="",
+            operation="create",
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
@@ -186,7 +190,11 @@ class KBService:
 
         # Run before_save hooks
         hook_ctx = PluginContext(
-            config=self.config, db=self.db, kb_name=kb_name, user="", operation="update",
+            config=self.config,
+            db=self.db,
+            kb_name=kb_name,
+            user="",
+            operation="update",
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
@@ -223,7 +231,11 @@ class KBService:
         # Load entry for hooks before deleting
         entry = repo.load(entry_id)
         hook_ctx = PluginContext(
-            config=self.config, db=self.db, kb_name=kb_name, user="", operation="delete",
+            config=self.config,
+            db=self.db,
+            kb_name=kb_name,
+            user="",
+            operation="delete",
         )
         if entry:
             entry = self._run_hooks("before_delete", entry, hook_ctx)
@@ -278,6 +290,48 @@ class KBService:
     def get_tags(self, kb_name: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         """Get tags with counts as dicts."""
         return self.db.get_tags_as_dicts(kb_name=kb_name, limit=limit)
+
+    def get_tag_tree(self, kb_name: str | None = None) -> list[dict]:
+        """Get hierarchical tag tree."""
+        return self.db.get_tag_tree(kb_name=kb_name)
+
+    def search_by_tag_prefix(
+        self, prefix: str, kb_name: str | None = None, limit: int = 50
+    ) -> list[dict]:
+        """Search entries by tag prefix (includes child tags)."""
+        return self.db.search_by_tag_prefix(prefix, kb_name=kb_name, limit=limit)
+
+    # =========================================================================
+    # Object References
+    # =========================================================================
+
+    def get_refs_to(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get entries that reference this entry via object-ref fields."""
+        return self.db.get_refs_to(entry_id, kb_name)
+
+    def get_refs_from(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get entries this entry references via object-ref fields."""
+        return self.db.get_refs_from(entry_id, kb_name)
+
+    # =========================================================================
+    # Settings
+    # =========================================================================
+
+    def get_setting(self, key: str) -> str | None:
+        """Get a setting value by key."""
+        return self.db.get_setting(key)
+
+    def set_setting(self, key: str, value: str) -> None:
+        """Set a setting value (upsert)."""
+        self.db.set_setting(key, value)
+
+    def get_all_settings(self) -> dict[str, str]:
+        """Get all settings as a dict."""
+        return self.db.get_all_settings()
+
+    def delete_setting(self, key: str) -> bool:
+        """Delete a setting. Returns True if deleted."""
+        return self.db.delete_setting(key)
 
     def get_backlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that link TO this entry."""
@@ -362,6 +416,56 @@ class KBService:
         file_path = repo.find_file(entry.id)
         if file_path:
             self._index_mgr.index_entry(entry, kb_name, file_path)
+
+    # =========================================================================
+    # Version History
+    # =========================================================================
+
+    def get_entry_versions(self, entry_id: str, kb_name: str, limit: int = 50) -> list[dict]:
+        """Get version history for an entry."""
+        return self.db.get_entry_versions(entry_id, kb_name, limit=limit)
+
+    def get_entry_at_version(self, entry_id: str, kb_name: str, commit_hash: str) -> str | None:
+        """Get entry content at a specific git commit."""
+        import subprocess
+        from pathlib import Path
+
+        from ..services.git_service import GitService
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            return None
+
+        kb_path = kb_config.path
+        if not GitService.is_git_repo(kb_path):
+            return None
+
+        # Find the file path for this entry
+        entry = self.db.get_entry(entry_id, kb_name)
+        if not entry or not entry.get("file_path"):
+            return None
+
+        file_path = entry["file_path"]
+        # Make relative to KB path
+        try:
+            rel_path = str(Path(file_path).relative_to(kb_path))
+        except ValueError:
+            rel_path = file_path
+
+        # Use git show to get content at commit
+        try:
+            result = subprocess.run(
+                ["git", "show", f"{commit_hash}:{rel_path}"],
+                cwd=str(kb_path),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                return result.stdout
+        except Exception:
+            pass
+        return None
 
     # =========================================================================
     # Hooks

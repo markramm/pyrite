@@ -23,6 +23,7 @@ import type {
 	StarredEntryListResponse,
 	StatsResponse,
 	TagsResponse,
+	TagTreeResponse,
 	TemplateDetail,
 	TemplateListResponse,
 	TimelineResponse,
@@ -140,9 +141,17 @@ class ApiClient {
 	}
 
 	// Tags
-	async getTags(kb?: string): Promise<TagsResponse> {
+	async getTags(kb?: string, prefix?: string): Promise<TagsResponse> {
+		const params = new URLSearchParams();
+		if (kb) params.set('kb', kb);
+		if (prefix) params.set('prefix', prefix);
+		const qs = params.toString();
+		return this.request(`/api/tags${qs ? `?${qs}` : ''}`);
+	}
+
+	async getTagTree(kb?: string): Promise<TagTreeResponse> {
 		const params = kb ? `?kb=${encodeURIComponent(kb)}` : '';
-		return this.request(`/api/tags${params}`);
+		return this.request(`/api/tags/tree${params}`);
 	}
 
 	// Timeline

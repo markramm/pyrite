@@ -106,6 +106,17 @@ export interface TagsResponse {
 	tags: TagCount[];
 }
 
+export interface TagTreeNode {
+	name: string;
+	full_path: string;
+	count: number;
+	children: TagTreeNode[];
+}
+
+export interface TagTreeResponse {
+	tree: TagTreeNode[];
+}
+
 export interface TimelineEvent {
 	id: string;
 	date: string;

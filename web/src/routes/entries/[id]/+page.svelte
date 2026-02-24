@@ -2,6 +2,7 @@
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import EntryMeta from '$lib/components/entry/EntryMeta.svelte';
 	import BacklinksPanel from '$lib/components/entry/BacklinksPanel.svelte';
+	import VersionHistoryPanel from '$lib/components/entry/VersionHistoryPanel.svelte';
 	import SplitPane from '$lib/components/layout/SplitPane.svelte';
 	import Editor from '$lib/editor/Editor.svelte';
 	import OutlinePanel from '$lib/components/entry/OutlinePanel.svelte';
@@ -26,6 +27,10 @@
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'O') {
 				e.preventDefault();
 				uiStore.toggleOutlinePanel();
+			}
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
+				e.preventDefault();
+				uiStore.toggleVersionHistoryPanel();
 			}
 		}
 		window.addEventListener('keydown', handleKeydown);
@@ -79,7 +84,7 @@
 	{:else if entryStore.error}
 		<div class="flex flex-1 items-center justify-center text-red-500">{entryStore.error}</div>
 	{:else if entryStore.current}
-		<SplitPane open={uiStore.backlinksPanelOpen}>
+		<SplitPane open={uiStore.backlinksPanelOpen || uiStore.versionHistoryPanelOpen}>
 			{#snippet children()}
 				<div class="flex h-full overflow-hidden">
 					<!-- Main content -->
@@ -121,6 +126,15 @@
 								>
 									Backlinks
 								</button>
+								<button
+									onclick={() => uiStore.toggleVersionHistoryPanel()}
+									class="rounded-md border px-3 py-1 text-sm {uiStore.versionHistoryPanelOpen
+										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+										: 'border-zinc-300 dark:border-zinc-600'}"
+									title="Toggle version history (Cmd+Shift+H)"
+								>
+									History
+								</button>
 							</div>
 						</div>
 
@@ -155,10 +169,17 @@
 			{/snippet}
 
 			{#snippet panel()}
-				<BacklinksPanel
-					backlinks={entryStore.current?.backlinks ?? []}
-					loading={entryStore.loading}
-				/>
+				{#if uiStore.versionHistoryPanelOpen}
+					<VersionHistoryPanel
+						entryId={entryStore.current?.id ?? ''}
+						kbName={entryStore.current?.kb_name ?? ''}
+					/>
+				{:else}
+					<BacklinksPanel
+						backlinks={entryStore.current?.backlinks ?? []}
+						loading={entryStore.loading}
+					/>
+				{/if}
 			{/snippet}
 		</SplitPane>
 	{/if}

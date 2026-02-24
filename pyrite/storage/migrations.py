@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 3
+CURRENT_VERSION = 4
 
 
 @dataclass
@@ -124,6 +124,29 @@ MIGRATIONS: list[Migration] = [
         DROP TABLE IF EXISTS workspace_repo;
         DROP TABLE IF EXISTS repo;
         DROP TABLE IF EXISTS user;
+        """,
+    ),
+    Migration(
+        version=4,
+        description="Add entry_ref table for typed object references",
+        up="""
+        CREATE TABLE IF NOT EXISTS entry_ref (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id TEXT NOT NULL,
+            source_kb TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            target_kb TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            target_type TEXT,
+            FOREIGN KEY (source_id, source_kb) REFERENCES entry(id, kb_name) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_entry_ref_source ON entry_ref(source_id, source_kb);
+        CREATE INDEX IF NOT EXISTS idx_entry_ref_target ON entry_ref(target_id, target_kb);
+        CREATE INDEX IF NOT EXISTS idx_entry_ref_field ON entry_ref(field_name);
+        """,
+        down="""
+        DROP TABLE IF EXISTS entry_ref;
         """,
     ),
 ]

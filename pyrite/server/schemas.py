@@ -150,6 +150,24 @@ class TagsResponse(BaseModel):
     tags: list[TagCount]
 
 
+class TagTreeNode(BaseModel):
+    """Hierarchical tag tree node."""
+
+    name: str
+    full_path: str
+    count: int = 0
+    children: list["TagTreeNode"] = []
+
+
+TagTreeNode.model_rebuild()
+
+
+class TagTreeResponse(BaseModel):
+    """Response for tag tree."""
+
+    tree: list[TagTreeNode]
+
+
 # =============================================================================
 # Admin
 # =============================================================================
@@ -388,3 +406,58 @@ class DailyDatesResponse(BaseModel):
     """Response listing dates that have daily notes."""
 
     dates: list[str]
+
+
+# =============================================================================
+# Version History
+# =============================================================================
+
+
+class EntryVersionResponse(BaseModel):
+    """Single version history entry."""
+
+    commit_hash: str
+    author_name: str | None = None
+    author_email: str | None = None
+    commit_date: str
+    message: str | None = None
+    change_type: str | None = None
+
+
+class VersionListResponse(BaseModel):
+    """Response for version history."""
+
+    entry_id: str
+    kb_name: str
+    count: int
+    versions: list[EntryVersionResponse]
+
+
+# =============================================================================
+# Settings
+# =============================================================================
+
+
+class SettingsResponse(BaseModel):
+    """Response for all settings."""
+
+    settings: dict[str, str]
+
+
+class SettingResponse(BaseModel):
+    """Response for a single setting."""
+
+    key: str
+    value: str | None
+
+
+class SettingUpdateRequest(BaseModel):
+    """Request to update a setting."""
+
+    value: str
+
+
+class BulkSettingsUpdateRequest(BaseModel):
+    """Request to bulk update settings."""
+
+    settings: dict[str, str]
