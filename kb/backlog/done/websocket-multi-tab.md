@@ -2,7 +2,7 @@
 type: backlog_item
 title: "WebSocket Multi-Tab Awareness"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [web, api, phase-3]

@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Interactive Knowledge Graph View"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: L
 tags: [web, graph, phase-3]

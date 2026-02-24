@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Cross-KB Shortlinks"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: L
 tags: [linking, cross-kb, wikilinks, core]

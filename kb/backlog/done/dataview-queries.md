@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Dataview-Style Embedded Queries"
 kind: feature
-status: proposed
+status: retired
 priority: medium
 effort: XL
 tags: [web, editor, query]

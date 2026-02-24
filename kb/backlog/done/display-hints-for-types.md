@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Display Hints for Types"
 kind: feature
-status: proposed
+status: retired
 priority: medium
 effort: S
 tags: [ui, types, schema]

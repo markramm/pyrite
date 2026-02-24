@@ -256,7 +256,6 @@ export interface DailyDatesResponse {
 	dates: string[];
 }
 
-<<<<<<< HEAD
 // Settings
 
 export interface SettingsResponse {

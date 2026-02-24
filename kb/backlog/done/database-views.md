@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Database Views (Table/Board/Gallery)"
 kind: feature
-status: proposed
+status: retired
 priority: medium
 effort: XL
 tags: [web, visualization, ux]

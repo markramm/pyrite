@@ -131,9 +131,9 @@ Each touches a different frontend route/component with no shared files.
 
 | # | Item | Track | Kind | Effort | File Footprint | Status |
 |---|------|-------|------|--------|----------------|--------|
-| 16 | [Interactive Knowledge Graph](knowledge-graph-view.md) | UI | feature | L | New `endpoints/graph.py`, `database.py` (graph query), `GraphView.svelte` + Cytoscape.js | proposed |
-| 23 | [WebSocket Multi-Tab Awareness](websocket-multi-tab.md) | UI | feature | M | New `websocket.py`, `api.py` (WS route), `web/` stores + toast | proposed |
-| 33 | [Tiptap WYSIWYG Editor Mode](tiptap-wysiwyg-editor.md) | UI | feature | L | New `TiptapEditor.svelte`, `entries/[id]/+page.svelte`, Tiptap npm deps | proposed |
+| 16 | [Interactive Knowledge Graph](knowledge-graph-view.md) | UI | feature | L | New `endpoints/graph.py`, `database.py` (graph query), `GraphView.svelte` + Cytoscape.js | **done** |
+| 23 | [WebSocket Multi-Tab Awareness](websocket-multi-tab.md) | UI | feature | M | New `websocket.py`, `api.py` (WS route), `web/` stores + toast | **done** |
+| 33 | [Tiptap WYSIWYG Editor Mode](tiptap-wysiwyg-editor.md) | UI | feature | L | New `TiptapEditor.svelte`, `entries/[id]/+page.svelte`, Tiptap npm deps | **done** |
 
 **Contention note:** #33 touches `entries/[id]/+page.svelte` which #22 (Wave 5B) also modifies. Ensure 5B merges first. #16 and #23 are fully independent of each other and #33.
 
@@ -146,7 +146,8 @@ Depends on #30 (settings) from Wave 5D.
 | 26 | [Web AI: Summarize, Auto-Tag, Links](done/web-ai-summarize-and-tag.md) | AI | feature | M | #30 ✅ | **done** |
 | 27 | [AI Provider Settings in UI](done/ai-provider-settings-ui.md) | AI | feature | S | #30 ✅ | **done** |
 | 32 | [Web AI: Chat Sidebar (RAG)](done/web-ai-chat-sidebar.md) | AI | feature | L | #26 ✅ | **done** |
-| 45 | [Ephemeral KBs for Agent Swarm Shared Memory](ephemeral-kbs.md) | AI | feature | M | none (but benefits from #25) | proposed |
+| 45 | [Ephemeral KBs for Agent Swarm Shared Memory](done/ephemeral-kbs.md) | AI | feature | M | none (but benefits from #25) | **done** |
+| 53 | [Cross-KB Shortlinks](done/cross-kb-shortlinks.md) | Core | feature | L | none | **done** |
 
 ### Wave 6C — Plugin UI + import/export
 
@@ -154,8 +155,8 @@ Depends on #25 (plugin DI) from Wave 5C.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 31 | [Plugin UI Extension Points](plugin-ui-hooks.md) | UI | feature | M | #25 (plugin DI) | proposed |
-| 36 | [Import/Export Support](import-export.md) | UI | feature | L | none | proposed |
+| 31 | [Plugin UI Extension Points](done/plugin-ui-hooks.md) | UI | feature | M | #25 (plugin DI) | **done** |
+| 36 | [Import/Export Support](done/import-export.md) | UI | feature | L | none | **done** |
 
 ### Wave 7 — Heavy features with deep dependencies
 
@@ -267,6 +268,10 @@ Items in [`done/`](done/):
 - [AI Provider Settings in UI](done/ai-provider-settings-ui.md) — AI provider section in settings (Anthropic/OpenAI/OpenRouter/Ollama), test connection, get_llm_service DI
 - [Web AI: Summarize, Auto-Tag, Links](done/web-ai-summarize-and-tag.md) — POST /api/ai/summarize, /auto-tag, /suggest-links with AI dropdown menu on entry page
 - [Web AI: Chat Sidebar (RAG)](done/web-ai-chat-sidebar.md) — SSE streaming chat endpoint, ChatSidebar component, RAG pipeline with KB context, Cmd+Shift+K toggle
+- [Cross-KB Shortlinks](done/cross-kb-shortlinks.md) — `[[kb:entry-id]]` wikilink syntax, shortname config, cross-KB resolution in backend + frontend
+- [Ephemeral KBs for Agent Swarm Shared Memory](done/ephemeral-kbs.md) — TTL-based temporary KBs, `POST /api/kbs` create, `POST /api/kbs/gc` garbage collection
+- [Plugin UI Extension Points](done/plugin-ui-hooks.md) — `GET /api/plugins` list, plugin detail page, capability display (entry types, tools, hooks)
+- [Import/Export Support](done/import-export.md) — JSON/Markdown/CSV importers, `POST /api/entries/import`, `GET /api/entries/export`, round-trip support
 
 ---
 
@@ -282,7 +287,7 @@ claude-code-plugin (#2) ✅
 
 plugin-dependency-injection (#25) ✅   [5C group 2]
   ├── hooks-db-access-gap (#24) ✅     [5C group 2, after #25]
-  ├── plugin-ui-hooks (#31)            [6C]
+  ├── plugin-ui-hooks (#31) ✅         [6C]
   └── database-txn-mgmt (#40)          [7]
 
 custom-exception-hierarchy (#39) ✅    [5C group 3, after #25 merges]
@@ -296,9 +301,9 @@ settings-and-preferences (#30) ✅      [5D group 2]
   │     └── web-ai-chat-sidebar (#32) ✅ [6B]
   └── ai-provider-settings-ui (#27) ✅  [6B]
 
-knowledge-graph-view (#16)             [6A]
-websocket-multi-tab (#23)              [6A]
-tiptap-wysiwyg-editor (#33)            [6A, after #22 merges]
+knowledge-graph-view (#16) ✅           [6A]
+websocket-multi-tab (#23) ✅            [6A]
+tiptap-wysiwyg-editor (#33) ✅          [6A, after #22 merges]
 
 collections (#51)                      [7] — subsumes #28, #29, #43
   ├── Phase 2: virtual collections
@@ -306,6 +311,7 @@ collections (#51)                      [7] — subsumes #28, #29, #43
   ├── Phase 4: embedding (needs #17)
   └── Phase 5: plugin collection types
 
-import-export (#36)                    [6C]
-ephemeral-kbs (#45)                    [6B]
+import-export (#36) ✅                 [6C]
+ephemeral-kbs (#45) ✅                 [6B]
+cross-kb-shortlinks (#53) ✅           [6C]
 ```

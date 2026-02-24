@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Tiptap WYSIWYG Editor Mode"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [web, editor, phase-4]

@@ -11,9 +11,12 @@ class TestEphemeralKBs:
     """Test ephemeral KB lifecycle."""
 
     @pytest.fixture
-    def config_and_svc(self, tmp_path):
+    def config_and_svc(self, tmp_path, monkeypatch):
         from pyrite.services.kb_service import KBService
         from pyrite.storage.database import PyriteDB
+
+        # Redirect save_config to tmp_path so tests don't clobber ~/.pyrite/config.yaml
+        monkeypatch.setattr("pyrite.config.CONFIG_FILE", tmp_path / "config.yaml")
 
         config = PyriteConfig(
             settings=Settings(

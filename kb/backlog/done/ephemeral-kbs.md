@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Ephemeral KBs for Agent Swarm Shared Memory"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [ai, agents, collaboration, multi-kb]

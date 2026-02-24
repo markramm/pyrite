@@ -256,12 +256,15 @@ See `kb/adrs/` for full details:
 
 For wave planning, agent launch checklists, and the merge protocol, see [parallel-agents.md](parallel-agents.md).
 
+**Critical: Do NOT use `isolation: "worktree"`.** Agents work directly on main. Edit tool retries on conflict are cheaper than worktree merge ceremonies. See CLAUDE.md and parallel-agents.md.
+
 **Quick rules:**
-- Each wave item must list its file footprint — no two items in a wave may share a modified file
+- **No worktrees** — agents write directly to the working tree, no isolation parameter
+- Each wave item must list its file footprint — minimize shared modified files
+- When agents share a file, Edit's exact-match fails gracefully on conflict — the agent retries
 - Max 3 parallel agents per wave
 - Commit all pending work before launching agents
-- Merge one agent at a time: new files → copy, shared files → patch via Edit tool, never copy
-- Run full test suite between each agent merge
+- Run full test suite after all agents complete
 
 ## Extension Building
 
