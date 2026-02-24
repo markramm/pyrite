@@ -14,6 +14,7 @@ class UIStore {
 	backlinksPanelOpen = $state(false);
 	outlinePanelOpen = $state(false);
 	versionHistoryPanelOpen = $state(false);
+	chatPanelOpen = $state(false);
 	toasts = $state<Toast[]>([]);
 
 	constructor() {
@@ -53,6 +54,10 @@ class UIStore {
 
 	toggleSidebar() {
 		this.sidebarOpen = !this.sidebarOpen;
+	}
+
+	toggleChatPanel() {
+		this.chatPanelOpen = !this.chatPanelOpen;
 	}
 
 	toast(message: string, type: Toast['type'] = 'info') {

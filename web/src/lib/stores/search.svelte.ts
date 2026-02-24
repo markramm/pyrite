@@ -8,6 +8,7 @@ class SearchStore {
 	results = $state<SearchResult[]>([]);
 	loading = $state(false);
 	error = $state<string | null>(null);
+	mode = $state<'keyword' | 'semantic' | 'hybrid'>('keyword');
 
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -21,12 +22,16 @@ class SearchStore {
 		this.debounceTimer = setTimeout(() => this.execute(), 300);
 	}
 
-	async execute(options: { kb?: string; type?: string } = {}) {
+	async execute(options: { kb?: string; type?: string; mode?: 'keyword' | 'semantic' | 'hybrid' } = {}) {
 		if (!this.query.trim()) return;
 		this.loading = true;
 		this.error = null;
 		try {
-			const res = await api.search(this.query, { kb: options.kb, type: options.type });
+			const res = await api.search(this.query, {
+				kb: options.kb,
+				type: options.type,
+				mode: options.mode ?? this.mode
+			});
 			this.results = res.results;
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Search failed';

@@ -6,6 +6,10 @@
  */
 
 import type {
+	AIAutoTagResponse,
+	AILinkSuggestResponse,
+	AIStatusResponse,
+	AISummarizeResponse,
 	CreateEntryRequest,
 	CreateResponse,
 	DailyDatesResponse,
@@ -19,6 +23,8 @@ import type {
 	ReorderStarredResponse,
 	ResolveResponse,
 	SearchResponse,
+	SettingResponse,
+	SettingsResponse,
 	StarEntryResponse,
 	StarredEntryListResponse,
 	StatsResponse,
@@ -70,6 +76,7 @@ class ApiClient {
 			type?: string;
 			tags?: string;
 			limit?: number;
+			mode?: 'keyword' | 'semantic' | 'hybrid';
 		} = {}
 	): Promise<SearchResponse> {
 		const params = new URLSearchParams({ q: query });
@@ -77,6 +84,7 @@ class ApiClient {
 		if (options.type) params.set('type', options.type);
 		if (options.tags) params.set('tags', options.tags);
 		if (options.limit) params.set('limit', String(options.limit));
+		if (options.mode) params.set('mode', options.mode);
 		return this.request(`/api/search?${params}`);
 	}
 
@@ -241,6 +249,51 @@ class ApiClient {
 		const params = new URLSearchParams({ kb });
 		if (month) params.set('month', month);
 		return this.request(`/api/daily/dates?${params}`);
+	}
+
+	// Settings
+	async getSettings(): Promise<SettingsResponse> {
+		return this.request('/api/settings');
+	}
+
+	async setSetting(key: string, value: string): Promise<SettingResponse> {
+		return this.request(`/api/settings/${encodeURIComponent(key)}`, {
+			method: 'PUT',
+			body: JSON.stringify({ value })
+		});
+	}
+
+	async bulkUpdateSettings(settings: Record<string, string>): Promise<SettingsResponse> {
+		return this.request('/api/settings', {
+			method: 'PUT',
+			body: JSON.stringify({ settings })
+		});
+	}
+
+	// AI
+	async getAIStatus(): Promise<AIStatusResponse> {
+		return this.request('/api/ai/status');
+	}
+
+	async aiSummarize(entryId: string, kbName: string): Promise<AISummarizeResponse> {
+		return this.request('/api/ai/summarize', {
+			method: 'POST',
+			body: JSON.stringify({ entry_id: entryId, kb_name: kbName })
+		});
+	}
+
+	async aiAutoTag(entryId: string, kbName: string): Promise<AIAutoTagResponse> {
+		return this.request('/api/ai/auto-tag', {
+			method: 'POST',
+			body: JSON.stringify({ entry_id: entryId, kb_name: kbName })
+		});
+	}
+
+	async aiSuggestLinks(entryId: string, kbName: string): Promise<AILinkSuggestResponse> {
+		return this.request('/api/ai/suggest-links', {
+			method: 'POST',
+			body: JSON.stringify({ entry_id: entryId, kb_name: kbName })
+		});
 	}
 }
 

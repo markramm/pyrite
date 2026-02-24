@@ -6,6 +6,7 @@ for inclusion by the application factory in api.py.
 """
 
 from .admin import router as admin_router
+from .ai_ep import router as ai_router
 from .daily import router as daily_router
 from .entries import router as entries_router
 from .kbs import router as kbs_router
@@ -24,6 +25,7 @@ all_routers = [
     timeline_router,
     tags_router,
     admin_router,
+    ai_router,
     starred_router,
     templates_router,
     daily_router,

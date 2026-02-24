@@ -19,8 +19,9 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from ..config import PyriteConfig, load_config
+from ..config import PyriteConfig, Settings, load_config
 from ..services.kb_service import KBService
+from ..services.llm_service import LLMService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
@@ -32,6 +33,7 @@ _config: PyriteConfig | None = None
 _db: PyriteDB | None = None
 _index_mgr: IndexManager | None = None
 _kb_service: KBService | None = None
+_llm_service: LLMService | None = None
 
 
 def get_config() -> PyriteConfig:
@@ -71,6 +73,36 @@ def get_kb_service(
     elif _kb_service.config is not config or _kb_service.db is not db:
         _kb_service = KBService(config, db)
     return _kb_service
+
+
+def get_llm_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> LLMService:
+    """Get or create LLM service, using DB settings with config file fallback."""
+    global _llm_service
+    if _llm_service is None:
+        from ..services.kb_service import KBService  # noqa: N814
+
+        svc = KBService(config, db)
+        provider = svc.get_setting("ai.provider") or config.settings.ai_provider
+        api_key = svc.get_setting("ai.apiKey") or config.settings.ai_api_key
+        model = svc.get_setting("ai.model") or config.settings.ai_model
+        base_url = svc.get_setting("ai.baseUrl") or config.settings.ai_api_base
+        settings = Settings(
+            ai_provider=provider,
+            ai_api_key=api_key,
+            ai_model=model,
+            ai_api_base=base_url,
+        )
+        _llm_service = LLMService(settings)
+    return _llm_service
+
+
+def invalidate_llm_service():
+    """Reset the cached LLM service so next request rebuilds it."""
+    global _llm_service
+    _llm_service = None
 
 
 async def verify_api_key(request: Request, config: PyriteConfig = Depends(get_config)):

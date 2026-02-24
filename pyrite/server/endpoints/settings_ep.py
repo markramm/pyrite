@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter
+from ..api import get_kb_service, invalidate_llm_service, limiter
 from ..schemas import (
     BulkSettingsUpdateRequest,
     SettingResponse,
@@ -12,6 +12,15 @@ from ..schemas import (
 )
 
 router = APIRouter(tags=["Settings"])
+
+# Settings keys that require LLM service invalidation on change
+_AI_SETTINGS_PREFIXES = ("ai.",)
+
+
+def _maybe_invalidate_llm(key: str) -> None:
+    """Invalidate cached LLM service if an AI setting changed."""
+    if any(key.startswith(p) for p in _AI_SETTINGS_PREFIXES):
+        invalidate_llm_service()
 
 
 @router.get("/settings", response_model=SettingsResponse)
@@ -35,6 +44,7 @@ def bulk_update_settings(
     """Bulk update settings."""
     for key, value in req.settings.items():
         svc.set_setting(key, value)
+        _maybe_invalidate_llm(key)
     return SettingsResponse(settings=svc.get_all_settings())
 
 
@@ -60,6 +70,7 @@ def set_setting(
 ):
     """Set a single setting."""
     svc.set_setting(key, req.value)
+    _maybe_invalidate_llm(key)
     return SettingResponse(key=key, value=req.value)
 
 
@@ -77,4 +88,5 @@ def delete_setting(
             status_code=404,
             detail={"code": "NOT_FOUND", "message": f"Setting '{key}' not found"},
         )
+    _maybe_invalidate_llm(key)
     return {"deleted": True, "key": key}

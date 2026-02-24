@@ -2,10 +2,10 @@
 
 from fastapi import APIRouter, Depends, Request
 
-from ...config import PyriteConfig
+from ...services.llm_service import LLMService
 from ...storage.index import IndexManager
-from ..api import get_config, get_index_mgr, limiter
-from ..schemas import StatsResponse, SyncResponse
+from ..api import get_index_mgr, get_llm_service, limiter
+from ..schemas import AIStatusResponse, StatsResponse, SyncResponse
 
 router = APIRouter(tags=["Admin"])
 
@@ -31,11 +31,9 @@ def sync_index(request: Request, index_mgr: IndexManager = Depends(get_index_mgr
     )
 
 
-@router.get("/ai/status")
+@router.get("/ai/status", response_model=AIStatusResponse)
 @limiter.limit("100/minute")
-def ai_status(request: Request, config: PyriteConfig = Depends(get_config)):
+def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
     """Return AI/LLM configuration status."""
-    from ...services.llm_service import LLMService
-
-    svc = LLMService(config.settings)
-    return svc.status()
+    status = llm.status()
+    return AIStatusResponse(**status)

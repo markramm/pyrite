@@ -235,3 +235,79 @@ export interface RenderedTemplate {
 export interface DailyDatesResponse {
 	dates: string[];
 }
+
+// Settings
+
+export interface SettingsResponse {
+	settings: Record<string, string>;
+}
+
+export interface SettingResponse {
+	key: string;
+	value: string | null;
+}
+
+// AI
+
+export interface AIStatusResponse {
+	configured: boolean;
+	provider: string;
+	model: string | null;
+}
+
+export interface AISummarizeRequest {
+	entry_id: string;
+	kb_name: string;
+}
+
+export interface AISummarizeResponse {
+	summary: string;
+}
+
+export interface AITagSuggestion {
+	name: string;
+	is_new: boolean;
+	reason: string;
+}
+
+export interface AIAutoTagResponse {
+	suggested_tags: AITagSuggestion[];
+}
+
+export interface AILinkSuggestion {
+	target_id: string;
+	target_kb: string;
+	target_title: string;
+	reason: string;
+}
+
+export interface AILinkSuggestResponse {
+	suggestions: AILinkSuggestion[];
+}
+
+export interface ChatMessage {
+	role: 'user' | 'assistant';
+	content: string;
+}
+
+export interface ChatRequest {
+	messages: ChatMessage[];
+	kb?: string;
+	entry_id?: string;
+}
+
+export interface ChatSourceEntry {
+	id: string;
+	kb_name: string;
+	title: string;
+	snippet: string;
+}
+
+export interface EntryVersion {
+	commit_hash: string;
+	author_name?: string;
+	author_email?: string;
+	commit_date: string;
+	message?: string;
+	change_type?: string;
+}

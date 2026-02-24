@@ -173,6 +173,71 @@ class TagTreeResponse(BaseModel):
 # =============================================================================
 
 
+class AIStatusResponse(BaseModel):
+    """AI/LLM configuration status."""
+
+    configured: bool
+    provider: str
+    model: str | None = None
+
+
+class AIEntryRequest(BaseModel):
+    """Request body for AI actions on an entry."""
+
+    entry_id: str
+    kb_name: str
+
+
+class AISummarizeResponse(BaseModel):
+    """Response for AI summarize."""
+
+    summary: str
+
+
+class AITagSuggestion(BaseModel):
+    """Single tag suggestion from AI."""
+
+    name: str
+    is_new: bool
+    reason: str
+
+
+class AIAutoTagResponse(BaseModel):
+    """Response for AI auto-tag."""
+
+    suggested_tags: list[AITagSuggestion]
+
+
+class AILinkSuggestion(BaseModel):
+    """Single link suggestion from AI."""
+
+    target_id: str
+    target_kb: str
+    target_title: str
+    reason: str
+
+
+class AILinkSuggestResponse(BaseModel):
+    """Response for AI suggest-links."""
+
+    suggestions: list[AILinkSuggestion]
+
+
+class ChatMessageSchema(BaseModel):
+    """Single chat message."""
+
+    role: str
+    content: str
+
+
+class AIChatRequest(BaseModel):
+    """Request body for AI chat."""
+
+    messages: list[ChatMessageSchema]
+    kb: str | None = None
+    entry_id: str | None = None
+
+
 class StatsResponse(BaseModel):
     """Index statistics."""
 
