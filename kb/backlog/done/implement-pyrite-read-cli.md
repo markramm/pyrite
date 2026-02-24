@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Implement pyrite-read CLI Entry Point"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: S
 tags: [cli, security, agents]

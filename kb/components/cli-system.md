@@ -12,7 +12,7 @@ Pyrite provides three CLI entry points with different permission levels:
 
 ## Entry Points
 - `pyrite` — Write-tier (Typer-based, full CRUD operations)
-- `pyrite-read` — Read-only (safe for agents)
+- `pyrite-read` — Read-only (safe for agents): `get`, `list`, `search`, `timeline`, `tags`, `backlinks`, `config`
 - `pyrite-admin` — Admin (KB management, indexing, repos, auth)
 
 ## Typer App (pyrite/cli/__init__.py)

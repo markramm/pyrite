@@ -64,6 +64,7 @@ all = [
 
 [project.scripts]
 pyrite = "pyrite.cli:main"
+pyrite-read = "pyrite.read_cli:main"
 pyrite-admin = "pyrite.admin_cli:main"
 pyrite-server = "pyrite.server.api:main"
 
