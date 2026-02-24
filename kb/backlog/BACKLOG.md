@@ -104,28 +104,12 @@ Each touches a different frontend route/component with no shared files.
 
 ### Wave 5C — Core infrastructure (zero file contention across groups, sequential within)
 
-Three independent tracks that don't share files. Run all three groups in parallel.
-
-**Group 1 — MCP packaging** (standalone):
-
-| # | Item | Track | Kind | Effort | File Footprint | Status |
-|---|------|-------|------|--------|----------------|--------|
-| 52 | [Standalone MCP Server Packaging](standalone-mcp-packaging.md) | Core | feature | M | New `pyrite_mcp/` package (reads existing code, doesn't modify) | proposed |
-
-**Group 2 — Plugin DI chain** (sequential: #25 → #24):
-
-| # | Item | Track | Kind | Effort | File Footprint | Status |
-|---|------|-------|------|--------|----------------|--------|
-| 25 | [Replace Manual Plugin DI](plugin-dependency-injection.md) | both | improvement | M | `plugins/protocol.py`, `kb_service.py`, `api.py`, all extensions | proposed |
-| 24 | [Hooks Cannot Access DB Instance](hooks-db-access-gap.md) | both | bug | M | `plugins/protocol.py`, `kb_service.py` (blocked by #25) | proposed |
-
-**Group 3 — Exception cleanup** (standalone):
-
-| # | Item | Track | Kind | Effort | File Footprint | Status |
-|---|------|-------|------|--------|----------------|--------|
-| 39 | [Custom Exception Hierarchy](custom-exception-hierarchy.md) | both | improvement | M | New `exceptions.py`, `schema.py`, `database.py`, `kb_service.py` | proposed |
-
-**Contention note:** #39 and #25 both touch `kb_service.py`. Run #39 after #25 merges, or coordinate the merge carefully. #52 is fully independent.
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 39 | [Custom Exception Hierarchy](done/custom-exception-hierarchy.md) | both | improvement | M | **done** |
+| 25 | [Replace Manual Plugin DI](done/plugin-dependency-injection.md) | both | improvement | M | **done** |
+| 24 | [Hooks Cannot Access DB Instance](done/hooks-db-access-gap.md) | both | bug | M | **done** |
+| 52 | [Standalone MCP Server Packaging](done/standalone-mcp-packaging.md) | Core | feature | M | **done** |
 
 ### Wave 5D — Data model + new endpoints (parallel across groups)
 
@@ -272,6 +256,10 @@ Items in [`done/`](done/):
 - [Outline / Table of Contents](done/outline-table-of-contents.md) — Auto-generated TOC sidebar panel with heading scroll-to, Cmd+Shift+O toggle
 - [Timeline Visualization](done/timeline-visualization.md) — Visual vertical timeline with month grouping, importance-colored markers, date/importance filters
 - [Remove Legacy Files](done/legacy-file-cleanup.md) — Removed read_cli.py, write_cli.py, requirements.txt, stale entry points; fixed pyrite CLI entry point
+- [Custom Exception Hierarchy](done/custom-exception-hierarchy.md) — PyriteError hierarchy replacing ValueError/PermissionError, fixed _run_hooks silent swallowing
+- [Replace Manual Plugin DI](done/plugin-dependency-injection.md) — PluginContext dataclass with dict-style compat, eliminating 13x self-bootstrapping patterns
+- [Hooks Cannot Access DB Instance](done/hooks-db-access-gap.md) — Hooks receive DB via PluginContext, social hooks now write to DB
+- [Standalone MCP Server Packaging](done/standalone-mcp-packaging.md) — pyrite-mcp package with optional dependency groups, init + serve CLI
 
 ---
 

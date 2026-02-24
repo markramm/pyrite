@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Add Custom Exception Hierarchy and Fix Silent Swallowing"
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [error-handling, dx]

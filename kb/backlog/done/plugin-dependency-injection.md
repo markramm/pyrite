@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Replace Manual Plugin DI with Injected Dependencies"
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [plugins, architecture]

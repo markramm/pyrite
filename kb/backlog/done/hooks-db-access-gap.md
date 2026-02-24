@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Hooks Cannot Access DB Instance"
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [plugins, hooks]

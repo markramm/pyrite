@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Standalone MCP Server Packaging"
 kind: feature
-status: proposed
+status: done
 priority: critical
 effort: M
 tags: [distribution, mcp, packaging, go-to-market]
