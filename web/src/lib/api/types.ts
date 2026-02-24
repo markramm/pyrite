@@ -256,6 +256,7 @@ export interface DailyDatesResponse {
 	dates: string[];
 }
 
+<<<<<<< HEAD
 // Settings
 
 export interface SettingsResponse {
@@ -353,4 +354,37 @@ export interface EntryVersion {
 	commit_date: string;
 	message?: string;
 	change_type?: string;
+}
+
+// Plugins
+
+export interface PluginInfo {
+	name: string;
+	entry_types: string[];
+	kb_types: string[];
+	tools: string[];
+	hooks: string[];
+	has_cli: boolean;
+}
+
+export interface PluginListResponse {
+	plugins: PluginInfo[];
+	total: number;
+}
+
+export interface PluginDetail {
+	name: string;
+	entry_types: Record<string, string>;
+	kb_types: string[];
+	hooks: Record<string, number>;
+	tools: Record<string, { tier: string; description: string }>;
+}
+
+// Import/Export
+
+export interface ImportResult {
+	imported: number;
+	errors: number;
+	entries: Array<{ id: string; title: string }>;
+	error_details: Array<{ title: string; error: string }>;
 }

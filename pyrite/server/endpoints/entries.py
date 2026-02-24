@@ -1,6 +1,9 @@
 """Entry CRUD endpoints including wikilink resolution."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import io
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 
 from ...exceptions import (
     EntryNotFoundError,
@@ -166,6 +169,153 @@ def resolve_entry(
             ),
         )
     return ResolveResponse(resolved=False, entry=None)
+
+
+# =============================================================================
+# Import / Export (must be before /entries/{entry_id} to avoid route conflicts)
+# =============================================================================
+
+
+@router.get("/entries/export")
+@limiter.limit("30/minute")
+def export_entries(
+    request: Request,
+    kb: str = Query(..., description="KB to export"),
+    format: str = Query("json", description="Export format: json, markdown, csv"),
+    entry_type: str | None = Query(None, description="Filter by entry type"),
+    tag: str | None = Query(None, description="Filter by tag"),
+    limit: int = Query(10000, ge=1, le=50000),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Export entries as JSON, Markdown, or CSV."""
+    from ...formats import get_format_registry
+
+    if not svc.get_kb(kb):
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb}' not found"},
+        )
+
+    entries = svc.list_entries(kb_name=kb, entry_type=entry_type, limit=limit, offset=0)
+
+    # For full export, load bodies from disk
+    full_entries = []
+    for e in entries:
+        full = svc.get_entry(e["id"], kb_name=kb)
+        if full:
+            # Apply tag filter if specified
+            if tag and tag not in full.get("tags", []):
+                continue
+            full_entries.append(full)
+
+    registry = get_format_registry()
+    fmt_spec = registry.get(format)
+    if not fmt_spec:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "UNSUPPORTED_FORMAT",
+                "message": f"Unsupported format: {format}",
+            },
+        )
+
+    data = {"entries": full_entries, "total": len(full_entries)}
+    content = fmt_spec.serializer(data)
+
+    ext = fmt_spec.file_extension
+    filename = f"{kb}-export.{ext}"
+
+    return StreamingResponse(
+        io.BytesIO(content.encode("utf-8")),
+        media_type=fmt_spec.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/entries/import")
+@limiter.limit("30/minute")
+async def import_entries(
+    request: Request,
+    file: UploadFile = File(...),
+    kb: str = Query(..., description="Target KB name"),
+    format: str = Query(
+        None, description="Format: json, markdown, csv (auto-detected from extension if omitted)"
+    ),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Import entries from an uploaded file."""
+    from ...formats.importers import get_importer_registry
+    from ...schema import generate_entry_id
+
+    if not svc.get_kb(kb):
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb}' not found"},
+        )
+
+    # Auto-detect format from filename
+    fmt = format
+    if not fmt and file.filename:
+        ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+        fmt = {"json": "json", "md": "markdown", "csv": "csv"}.get(ext)
+    if not fmt:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "FORMAT_REQUIRED",
+                "message": "Could not detect format. Specify format=json|markdown|csv",
+            },
+        )
+
+    registry = get_importer_registry()
+    importer = registry.get(fmt)
+    if not importer:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "UNSUPPORTED_FORMAT",
+                "message": f"Unsupported format: {fmt}. Available: {registry.available_formats()}",
+            },
+        )
+
+    content = await file.read()
+    try:
+        parsed = importer(content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "PARSE_ERROR", "message": f"Failed to parse file: {e}"},
+        )
+
+    created = []
+    errors = []
+    for entry_data in parsed:
+        try:
+            entry_id = entry_data.get("id") or generate_entry_id(entry_data["title"])
+            entry_type = entry_data.get("entry_type", "note")
+            extra = {
+                k: v
+                for k, v in entry_data.items()
+                if k not in ("id", "title", "entry_type", "body") and v is not None
+            }
+            entry = svc.create_entry(
+                kb, entry_id, entry_data["title"], entry_type, entry_data.get("body", ""), **extra
+            )
+            created.append({"id": entry.id, "title": entry.title})
+        except Exception as e:
+            errors.append({"title": entry_data.get("title", "?"), "error": str(e)})
+
+    return {
+        "imported": len(created),
+        "errors": len(errors),
+        "entries": created,
+        "error_details": errors,
+    }
+
+
+# =============================================================================
+# Entry CRUD (parametric routes must come after static routes)
+# =============================================================================
 
 
 @router.get("/entries/{entry_id}", response_model=EntryResponse)

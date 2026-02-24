@@ -19,7 +19,10 @@ import type {
 	EntryTitlesResponse,
 	EntryTypesResponse,
 	GraphResponse,
+	ImportResult,
 	KBListResponse,
+	PluginDetail,
+	PluginListResponse,
 	RenderedTemplate,
 	ReorderStarredRequest,
 	ReorderStarredResponse,
@@ -282,6 +285,7 @@ class ApiClient {
 		return this.request(`/api/daily/dates?${params}`);
 	}
 
+<<<<<<< HEAD
 	// Settings
 	async getSettings(): Promise<SettingsResponse> {
 		return this.request('/api/settings');
@@ -345,6 +349,50 @@ class ApiClient {
 			method: 'POST',
 			body: JSON.stringify({ entry_id: entryId, kb_name: kbName })
 		});
+	}
+
+	// Plugins
+	async getPlugins(): Promise<PluginListResponse> {
+		return this.request('/api/plugins');
+	}
+
+	async getPlugin(name: string): Promise<PluginDetail> {
+		return this.request(`/api/plugins/${encodeURIComponent(name)}`);
+	}
+
+	// Import/Export
+	async importEntries(file: File, kb: string, format?: string): Promise<ImportResult> {
+		const formData = new FormData();
+		formData.append('file', file);
+		const params = new URLSearchParams({ kb });
+		if (format) params.set('format', format);
+		const url = `${this.baseUrl}/api/entries/import?${params}`;
+		const res = await fetch(url, {
+			method: 'POST',
+			body: formData
+		});
+		if (!res.ok) {
+			const error = await res.json().catch(() => ({ message: res.statusText }));
+			throw new ApiError(res.status, error.detail ?? error.message ?? res.statusText);
+		}
+		return res.json();
+	}
+
+	async exportEntries(
+		kb: string,
+		format: string = 'json',
+		options: { entry_type?: string; tag?: string } = {}
+	): Promise<Blob> {
+		const params = new URLSearchParams({ kb, format });
+		if (options.entry_type) params.set('entry_type', options.entry_type);
+		if (options.tag) params.set('tag', options.tag);
+		const url = `${this.baseUrl}/api/entries/export?${params}`;
+		const res = await fetch(url);
+		if (!res.ok) {
+			const error = await res.json().catch(() => ({ message: res.statusText }));
+			throw new ApiError(res.status, error.detail ?? error.message ?? res.statusText);
+		}
+		return res.blob();
 	}
 }
 
