@@ -117,10 +117,16 @@ class IndexManager:
         if body:
             existing_targets = {l.get("target") for l in data["links"]}
             for match in _WIKILINK_RE.finditer(body):
-                target = match.group(1).strip()
+                kb_prefix = match.group(1)  # Optional kb: prefix
+                target = match.group(2).strip()
                 if target and target != entry.id and target not in existing_targets:
                     data["links"].append(
-                        {"target": target, "kb": kb_name, "relation": "wikilink", "note": ""}
+                        {
+                            "target": target,
+                            "kb": kb_prefix or kb_name,
+                            "relation": "wikilink",
+                            "note": "",
+                        }
                     )
                     existing_targets.add(target)
 

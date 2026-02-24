@@ -285,7 +285,6 @@ class ApiClient {
 		return this.request(`/api/daily/dates?${params}`);
 	}
 
-<<<<<<< HEAD
 	// Settings
 	async getSettings(): Promise<SettingsResponse> {
 		return this.request('/api/settings');
