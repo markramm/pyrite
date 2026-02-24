@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-crk: Full-access Knowledge Base CLI
+pyrite: Full-access Knowledge Base CLI
 
 Complete CLI for pyrite with read, write, and admin operations.
 For researcher-owned KBs where you have full control.
 
-For read-only access (safe for untrusted agents), use 'crk-read'.
+For read-only access (safe for untrusted agents), use 'pyrite-read'.
 
-Documentation: https://github.com/markramm/zettelkasten/blob/main/docs/ARCHITECTURE.md
+Documentation: https://github.com/markramm/pyrite/blob/main/docs/ARCHITECTURE.md
 """
 
 import argparse
@@ -16,8 +16,8 @@ import sqlite3
 import sys
 from typing import Any
 
-DOCS_URL = "https://github.com/markramm/zettelkasten/blob/main/docs"
-VERSION = "0.1.0"
+DOCS_URL = "https://github.com/markramm/pyrite/blob/main/docs"
+VERSION = "0.2.0"
 
 # Exit codes
 EXIT_OK = 0
@@ -114,7 +114,7 @@ class FullAccessCLI:
             return self.error(
                 "MISSING_QUERY",
                 "Search query required",
-                hint="crk search 'your query'",
+                hint="pyrite search 'your query'",
                 exit_code=EXIT_USAGE,
             )
 
@@ -123,7 +123,7 @@ class FullAccessCLI:
                 "INDEX_EMPTY",
                 "Index empty - build it first",
                 doc_path="ARCHITECTURE.md#indexing",
-                hint="crk index build",
+                hint="pyrite index build",
                 exit_code=EXIT_INDEX,
             )
 
@@ -165,7 +165,7 @@ class FullAccessCLI:
             return self.error(
                 "NOT_FOUND",
                 f"Entry '{args.entry_id}' not found",
-                hint=f"crk search '{args.entry_id}'",
+                hint=f"pyrite search '{args.entry_id}'",
                 exit_code=EXIT_NOT_FOUND,
             )
 
@@ -245,7 +245,7 @@ class FullAccessCLI:
         except ValueError as e:
             msg = str(e)
             if "not found" in msg.lower():
-                return self.error("KB_NOT_FOUND", msg, hint="crk list", exit_code=EXIT_KB_NOT_FOUND)
+                return self.error("KB_NOT_FOUND", msg, hint="pyrite list", exit_code=EXIT_KB_NOT_FOUND)
             if "read-only" in msg.lower():
                 return self.error("READ_ONLY", msg, exit_code=EXIT_PERMISSION)
             return self.error("CREATE_FAILED", msg, exit_code=EXIT_ERROR)
@@ -387,18 +387,18 @@ Admin Commands:
   index health            Check index health
 
 Examples:
-  crk list
-  crk search "immigration policy" --kb=timeline
-  crk get miller-stephen --with-links
-  crk timeline --from=2025-01-01 --actor=Miller
-  crk create --kb=timeline --type=event --title="Event" --date=2025-01-20
-  crk index build
+  pyrite list
+  pyrite search "immigration policy" --kb=timeline
+  pyrite get miller-stephen --with-links
+  pyrite timeline --from=2025-01-01 --actor=Miller
+  pyrite create --kb=timeline --type=event --title="Event" --date=2025-01-20
+  pyrite index build
 
-For read-only access (safe for agents): crk-read
+For read-only access (safe for agents): pyrite-read
 Docs: {DOCS_URL}/ARCHITECTURE.md
 """,
     )
-    parser.add_argument("--version", action="version", version=f"crk {VERSION}")
+    parser.add_argument("--version", action="version", version=f"pyrite {VERSION}")
 
     subs = parser.add_subparsers(dest="command", metavar="COMMAND")
 

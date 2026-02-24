@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-crk-read: Read-only Knowledge Base CLI
+pyrite-read: Read-only Knowledge Base CLI
 
 A read-only CLI for pyrite, safe for untrusted agent workflows.
 This tool cannot modify any data - only query and search.
 
 Commands: list, search, get, timeline, tags, actors, backlinks, stats
 
-For write operations, use 'crk-write' (requires elevated permissions).
+For write operations, use 'pyrite' (requires elevated permissions).
 """
 
 import argparse
@@ -17,7 +17,7 @@ import sys
 from typing import Any
 
 # Documentation base URL
-DOCS_URL = "https://github.com/markramm/zettelkasten/blob/main/docs"
+DOCS_URL = "https://github.com/markramm/pyrite/blob/main/docs"
 
 # Exit codes
 EXIT_OK = 0
@@ -116,7 +116,7 @@ class ReadOnlyCLI:
                 "MISSING_QUERY",
                 "Search query is required",
                 doc_path="ARCHITECTURE.md#search",
-                hint="Usage: crk-read search 'your query'",
+                hint="Usage: pyrite-read search 'your query'",
                 exit_code=EXIT_USAGE,
             )
 
@@ -126,7 +126,7 @@ class ReadOnlyCLI:
                 "INDEX_EMPTY",
                 "Search index is empty. Build it first.",
                 doc_path="ARCHITECTURE.md#indexing",
-                hint="Run: crk index build",
+                hint="Run: pyrite index build",
                 exit_code=EXIT_INDEX_EMPTY,
             )
 
@@ -169,7 +169,7 @@ class ReadOnlyCLI:
             return self.error(
                 "NOT_FOUND",
                 f"Entry '{args.entry_id}' not found",
-                hint=f"Search for it: crk-read search '{args.entry_id}'",
+                hint=f"Search for it: pyrite-read search '{args.entry_id}'",
                 exit_code=EXIT_NOT_FOUND,
             )
 
@@ -249,15 +249,15 @@ Commands (all read-only):
   stats                Get index statistics
 
 Examples:
-  crk-read list
-  crk-read search "immigration policy"
-  crk-read search --kb=timeline --type=event "Miller"
-  crk-read get miller-stephen
-  crk-read timeline --from=2025-01-01 --actor=Miller
-  crk-read tags --limit=20
+  pyrite-read list
+  pyrite-read search "immigration policy"
+  pyrite-read search --kb=timeline --type=event "Miller"
+  pyrite-read get miller-stephen
+  pyrite-read timeline --from=2025-01-01 --actor=Miller
+  pyrite-read tags --limit=20
 
 Output: JSON with {ok, code, data} or {ok, code, error}
-Docs: https://github.com/markramm/zettelkasten/blob/main/docs/ARCHITECTURE.md
+Docs: https://github.com/markramm/pyrite/blob/main/docs/ARCHITECTURE.md
 """,
     )
 

@@ -4,7 +4,7 @@ Run the pyrite web UI.
 
 Usage:
     python -m pyrite.ui.run
-    crk-ui  # if installed via pip
+    pyrite-ui  # if installed via pip
 """
 
 import sys
