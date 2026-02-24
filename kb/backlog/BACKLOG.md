@@ -97,10 +97,10 @@ Each touches a different frontend route/component with no shared files.
 
 | # | Item | Track | Kind | Effort | File Footprint | Status |
 |---|------|-------|------|--------|----------------|--------|
-| 21 | [Callouts and Admonitions](callouts-and-admonitions.md) | UI | feature | S | `web/` Lezer grammar + CSS only | proposed |
-| 22 | [Outline / Table of Contents](outline-table-of-contents.md) | UI | feature | S | New `OutlinePanel.svelte`, `entries/[id]/+page.svelte` | proposed |
-| 34 | [Timeline Visualization](timeline-visualization.md) | UI | feature | M | `web/src/routes/timeline/` only | proposed |
-| 38 | [Remove Legacy Files](legacy-file-cleanup.md) | both | improvement | S | `read_cli.py`, `write_cli.py`, `pyproject.toml` entry points | proposed |
+| 21 | [Callouts and Admonitions](done/callouts-and-admonitions.md) | UI | feature | S | `web/` Lezer grammar + CSS only | **done** |
+| 22 | [Outline / Table of Contents](done/outline-table-of-contents.md) | UI | feature | S | New `OutlinePanel.svelte`, `entries/[id]/+page.svelte` | **done** |
+| 34 | [Timeline Visualization](done/timeline-visualization.md) | UI | feature | M | `web/src/routes/timeline/` only | **done** |
+| 38 | [Remove Legacy Files](done/legacy-file-cleanup.md) | both | improvement | S | `read_cli.py`, `write_cli.py`, `pyproject.toml` entry points | **done** |
 
 ### Wave 5C — Core infrastructure (zero file contention across groups, sequential within)
 
@@ -268,6 +268,10 @@ Items in [`done/`](done/):
 - [Pyrite Dev Workflow Skill](done/pyrite-dev-skill.md) — TDD, debugging, verification, backlog management, parallel agent work
 - [Research Flow Skill](done/research-flow-skill.md) — Gather→Connect→Analyze→Synthesize methodology with source assessment rubric
 - [Investigation Skill](done/investigation-skill.md) — Entity investigation with source chain tracking, relationship mapping, confidence-rated findings
+- [Callouts and Admonitions](done/callouts-and-admonitions.md) — Obsidian-compatible `> [!type]` callout blocks with CSS styling and 12 types
+- [Outline / Table of Contents](done/outline-table-of-contents.md) — Auto-generated TOC sidebar panel with heading scroll-to, Cmd+Shift+O toggle
+- [Timeline Visualization](done/timeline-visualization.md) — Visual vertical timeline with month grouping, importance-colored markers, date/importance filters
+- [Remove Legacy Files](done/legacy-file-cleanup.md) — Removed read_cli.py, write_cli.py, requirements.txt, stale entry points; fixed pyrite CLI entry point
 
 ---
 

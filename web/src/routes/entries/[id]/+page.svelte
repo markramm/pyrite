@@ -4,6 +4,7 @@
 	import BacklinksPanel from '$lib/components/entry/BacklinksPanel.svelte';
 	import SplitPane from '$lib/components/layout/SplitPane.svelte';
 	import Editor from '$lib/editor/Editor.svelte';
+	import OutlinePanel from '$lib/components/entry/OutlinePanel.svelte';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { page } from '$app/stores';
@@ -21,6 +22,10 @@
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'B') {
 				e.preventDefault();
 				uiStore.toggleBacklinksPanel();
+			}
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'O') {
+				e.preventDefault();
+				uiStore.toggleOutlinePanel();
 			}
 		}
 		window.addEventListener('keydown', handleKeydown);
@@ -99,6 +104,15 @@
 									{editing ? 'View' : 'Edit'}
 								</button>
 								<button
+									onclick={() => uiStore.toggleOutlinePanel()}
+									class="rounded-md border px-3 py-1 text-sm {uiStore.outlinePanelOpen
+										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+										: 'border-zinc-300 dark:border-zinc-600'}"
+									title="Toggle outline panel (Cmd+Shift+O)"
+								>
+									Outline
+								</button>
+								<button
 									onclick={() => uiStore.toggleBacklinksPanel()}
 									class="rounded-md border px-3 py-1 text-sm {uiStore.backlinksPanelOpen
 										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
@@ -111,16 +125,23 @@
 						</div>
 
 						<!-- Editor or rendered view -->
-						<div class="h-full p-6">
-							{#if editing}
-								<div class="h-[calc(100vh-12rem)]">
-									<Editor content={editorContent} onchange={onEditorChange} onsave={save} />
-								</div>
-							{:else}
-								<div class="prose dark:prose-invert max-w-none">
-									{@html renderMarkdown(entryStore.current?.body ?? '')}
-								</div>
+						<div class="flex h-full flex-1 overflow-hidden">
+							{#if uiStore.outlinePanelOpen && !editing}
+								<aside class="w-56 shrink-0 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800">
+									<OutlinePanel body={entryStore.current?.body ?? ''} />
+								</aside>
 							{/if}
+							<div class="flex-1 overflow-y-auto p-6">
+								{#if editing}
+									<div class="h-[calc(100vh-12rem)]">
+										<Editor content={editorContent} onchange={onEditorChange} onsave={save} />
+									</div>
+								{:else}
+									<div class="prose dark:prose-invert max-w-none">
+										{@html renderMarkdown(entryStore.current?.body ?? '')}
+									</div>
+								{/if}
+							</div>
 						</div>
 					</div>
 
@@ -146,9 +167,25 @@
 <script lang="ts" module>
 	import { marked } from 'marked';
 	import { renderWikilinks } from '$lib/editor/wikilink-utils';
+	import { renderCallouts } from '$lib/editor/callouts';
+
+	// Custom renderer that adds id attributes to headings for outline scroll-to
+	const renderer = new marked.Renderer();
+	renderer.heading = ({ text, depth }: { text: string; depth: number }) => {
+		const slug = text
+			.toLowerCase()
+			.replace(/<[^>]*>/g, '')
+			.replace(/[^\w\s-]/g, '')
+			.replace(/\s+/g, '-')
+			.replace(/-+/g, '-')
+			.trim();
+		return `<h${depth} id="${slug}">${text}</h${depth}>`;
+	};
 
 	function renderMarkdown(md: string): string {
-		const html = marked.parse(md, { async: false }) as string;
-		return renderWikilinks(html);
+		let html = marked.parse(md, { async: false, renderer }) as string;
+		html = renderCallouts(html);
+		html = renderWikilinks(html);
+		return html;
 	}
 </script>

@@ -222,7 +222,7 @@ def main():
     """Run the API server."""
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8088)
+    uvicorn.run("pyrite.server.api:app", host="127.0.0.1", port=8088)
 
 
 if __name__ == "__main__":

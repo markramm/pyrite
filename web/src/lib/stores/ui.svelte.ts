@@ -12,6 +12,7 @@ class UIStore {
 	theme = $state<'light' | 'dark'>('dark');
 	sidebarOpen = $state(true);
 	backlinksPanelOpen = $state(false);
+	outlinePanelOpen = $state(false);
 	toasts = $state<Toast[]>([]);
 
 	constructor() {
@@ -39,6 +40,10 @@ class UIStore {
 
 	toggleBacklinksPanel() {
 		this.backlinksPanelOpen = !this.backlinksPanelOpen;
+	}
+
+	toggleOutlinePanel() {
+		this.outlinePanelOpen = !this.outlinePanelOpen;
 	}
 
 	toggleSidebar() {

@@ -20,7 +20,7 @@ export default defineConfig({
 	webServer: [
 		{
 			// Start the FastAPI backend
-			command: 'cd .. && .venv/bin/python -m pyrite.server.api',
+			command: 'cd .. && .venv/bin/uvicorn pyrite.server.api:app --host 127.0.0.1 --port 8088',
 			url: 'http://127.0.0.1:8088/health',
 			reuseExistingServer: !process.env.CI,
 			timeout: 15000

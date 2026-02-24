@@ -25,6 +25,107 @@
 	background: var(--color-zinc-600);
 }
 
+/* Callout styles */
+.callout {
+	border-left: 4px solid var(--color-zinc-400);
+	border-radius: 4px;
+	padding: 0.75rem 1rem;
+	margin: 1rem 0;
+	background: var(--color-zinc-100);
+}
+
+.dark .callout {
+	background: var(--color-zinc-800);
+	border-left-color: var(--color-zinc-500);
+}
+
+.callout-title {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-weight: 600;
+	margin-bottom: 0.25rem;
+}
+
+.callout-title::before {
+	font-size: 1.1em;
+}
+
+.callout-content > p:first-child { margin-top: 0; }
+.callout-content > p:last-child { margin-bottom: 0; }
+
+/* Callout type variants */
+.callout-info { border-left-color: var(--color-blue-500); }
+.callout-info .callout-title { color: var(--color-blue-600); }
+.callout-info .callout-title::before { content: 'ℹ'; }
+.dark .callout-info { background: color-mix(in srgb, var(--color-blue-900) 30%, transparent); }
+.dark .callout-info .callout-title { color: var(--color-blue-400); }
+
+.callout-warning { border-left-color: var(--color-amber-500); }
+.callout-warning .callout-title { color: var(--color-amber-600); }
+.callout-warning .callout-title::before { content: '⚠'; }
+.dark .callout-warning { background: color-mix(in srgb, var(--color-amber-900) 30%, transparent); }
+.dark .callout-warning .callout-title { color: var(--color-amber-400); }
+
+.callout-danger { border-left-color: var(--color-red-500); }
+.callout-danger .callout-title { color: var(--color-red-600); }
+.callout-danger .callout-title::before { content: '⛔'; }
+.dark .callout-danger { background: color-mix(in srgb, var(--color-red-900) 30%, transparent); }
+.dark .callout-danger .callout-title { color: var(--color-red-400); }
+
+.callout-tip { border-left-color: var(--color-emerald-500); }
+.callout-tip .callout-title { color: var(--color-emerald-600); }
+.callout-tip .callout-title::before { content: '💡'; }
+.dark .callout-tip { background: color-mix(in srgb, var(--color-emerald-900) 30%, transparent); }
+.dark .callout-tip .callout-title { color: var(--color-emerald-400); }
+
+.callout-note { border-left-color: var(--color-purple-500); }
+.callout-note .callout-title { color: var(--color-purple-600); }
+.callout-note .callout-title::before { content: '📝'; }
+.dark .callout-note { background: color-mix(in srgb, var(--color-purple-900) 30%, transparent); }
+.dark .callout-note .callout-title { color: var(--color-purple-400); }
+
+.callout-success { border-left-color: var(--color-green-500); }
+.callout-success .callout-title { color: var(--color-green-600); }
+.callout-success .callout-title::before { content: '✅'; }
+.dark .callout-success { background: color-mix(in srgb, var(--color-green-900) 30%, transparent); }
+.dark .callout-success .callout-title { color: var(--color-green-400); }
+
+.callout-failure { border-left-color: var(--color-red-500); }
+.callout-failure .callout-title { color: var(--color-red-600); }
+.callout-failure .callout-title::before { content: '❌'; }
+.dark .callout-failure { background: color-mix(in srgb, var(--color-red-900) 30%, transparent); }
+.dark .callout-failure .callout-title { color: var(--color-red-400); }
+
+.callout-question { border-left-color: var(--color-yellow-500); }
+.callout-question .callout-title { color: var(--color-yellow-600); }
+.callout-question .callout-title::before { content: '❓'; }
+.dark .callout-question { background: color-mix(in srgb, var(--color-yellow-900) 30%, transparent); }
+.dark .callout-question .callout-title { color: var(--color-yellow-400); }
+
+.callout-quote { border-left-color: var(--color-zinc-400); }
+.callout-quote .callout-title { color: var(--color-zinc-600); }
+.callout-quote .callout-title::before { content: '💬'; }
+.dark .callout-quote .callout-title { color: var(--color-zinc-400); }
+
+.callout-example { border-left-color: var(--color-indigo-500); }
+.callout-example .callout-title { color: var(--color-indigo-600); }
+.callout-example .callout-title::before { content: '📋'; }
+.dark .callout-example { background: color-mix(in srgb, var(--color-indigo-900) 30%, transparent); }
+.dark .callout-example .callout-title { color: var(--color-indigo-400); }
+
+.callout-bug { border-left-color: var(--color-red-500); }
+.callout-bug .callout-title { color: var(--color-red-600); }
+.callout-bug .callout-title::before { content: '🐛'; }
+.dark .callout-bug { background: color-mix(in srgb, var(--color-red-900) 30%, transparent); }
+.dark .callout-bug .callout-title { color: var(--color-red-400); }
+
+.callout-abstract { border-left-color: var(--color-cyan-500); }
+.callout-abstract .callout-title { color: var(--color-cyan-600); }
+.callout-abstract .callout-title::before { content: '📄'; }
+.dark .callout-abstract { background: color-mix(in srgb, var(--color-cyan-900) 30%, transparent); }
+.dark .callout-abstract .callout-title { color: var(--color-cyan-400); }
+
 /* Prose overrides for dark mode */
 .dark .prose {
 	--tw-prose-body: var(--color-zinc-300);

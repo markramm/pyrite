@@ -38,4 +38,18 @@ describe('UIStore', () => {
 		const { uiStore } = await import('./ui.svelte');
 		expect(uiStore.toasts).toHaveLength(0);
 	});
+
+	it('starts with outline panel closed', async () => {
+		const { uiStore } = await import('./ui.svelte');
+		expect(uiStore.outlinePanelOpen).toBe(false);
+	});
+
+	it('toggles outline panel', async () => {
+		const { uiStore } = await import('./ui.svelte');
+		expect(uiStore.outlinePanelOpen).toBe(false);
+		uiStore.toggleOutlinePanel();
+		expect(uiStore.outlinePanelOpen).toBe(true);
+		uiStore.toggleOutlinePanel();
+		expect(uiStore.outlinePanelOpen).toBe(false);
+	});
 });

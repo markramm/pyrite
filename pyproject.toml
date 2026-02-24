@@ -44,10 +44,6 @@ ai = [
     "openai>=1.30.0",
     "anthropic>=0.30.0",
 ]
-ui = [
-    "streamlit>=1.34.0",
-    "streamlit-agraph>=0.0.45",
-]
 semantic = [
     "sentence-transformers>=2.2.0",
     "sqlite-vec>=0.1.0",
@@ -59,15 +55,13 @@ dev = [
     "ruff>=0.3.0",
 ]
 all = [
-    "pyrite[ai,ui,semantic,dev]",
+    "pyrite[ai,semantic,dev]",
 ]
 
 [project.scripts]
-pyrite = "pyrite.write_cli:main"
-pyrite-read = "pyrite.read_cli:main"
+pyrite = "pyrite.cli:main"
 pyrite-admin = "pyrite.admin_cli:main"
 pyrite-server = "pyrite.server.api:main"
-pyrite-ui = "pyrite.ui.run:main"
 
 [project.urls]
 Homepage = "https://github.com/markramm/pyrite"
