@@ -42,6 +42,10 @@ class KBConfig:
     description: str = ""
     read_only: bool = False
     remote: str | None = None  # Git remote URL
+    shortname: str | None = None  # Short alias for cross-KB links (e.g. "dev", "ops")
+    ephemeral: bool = False  # Marks KB as temporary
+    ttl: int | None = None  # TTL in seconds for ephemeral KBs
+    created_at_ts: float | None = None  # Creation timestamp for TTL calculation
 
     # Repository reference (for multi-KB repos)
     repo: str | None = None  # Name of parent repo (if KB is inside a repo)
@@ -312,6 +316,13 @@ class PyriteConfig:
         """Get a KB by name."""
         return self._kb_by_name.get(name)
 
+    def get_kb_by_shortname(self, shortname: str) -> KBConfig | None:
+        """Get a KB by its shortname alias."""
+        for kb in self.knowledge_bases:
+            if kb.shortname == shortname:
+                return kb
+        return None
+
     def list_kbs(self, kb_type: str | None = None) -> list[KBConfig]:
         """List all KBs, optionally filtered by type."""
         if kb_type is None:
@@ -386,6 +397,10 @@ class PyriteConfig:
                     **({"remote": kb.remote} if kb.remote else {}),
                     **({"repo": kb.repo} if kb.repo else {}),
                     **({"repo_subpath": kb.repo_subpath} if kb.repo_subpath else {}),
+                    **({"shortname": kb.shortname} if kb.shortname else {}),
+                    **({"ephemeral": kb.ephemeral} if kb.ephemeral else {}),
+                    **({"ttl": kb.ttl} if kb.ttl else {}),
+                    **({"created_at_ts": kb.created_at_ts} if kb.created_at_ts else {}),
                 }
                 for kb in self.knowledge_bases
             ],
@@ -460,6 +475,10 @@ class PyriteConfig:
                     remote=kb_data.get("remote"),
                     repo=kb_data.get("repo"),
                     repo_subpath=kb_data.get("repo_subpath", ""),
+                    shortname=kb_data.get("shortname"),
+                    ephemeral=kb_data.get("ephemeral", False),
+                    ttl=kb_data.get("ttl"),
+                    created_at_ts=kb_data.get("created_at_ts"),
                 )
             )
 

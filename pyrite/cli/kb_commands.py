@@ -188,3 +188,67 @@ def kb_validate(
     else:
         console.print("\n[red]Validation errors found.[/red]")
         raise typer.Exit(1)
+
+
+@kb_app.command("create")
+def kb_create(
+    name: str = typer.Option(..., "--name", "-n", help="Name for the KB"),
+    path: Path | None = typer.Option(None, "--path", "-p", help="Path (auto for ephemeral)"),
+    kb_type: str = typer.Option("generic", "--type", "-t", help="KB type"),
+    description: str = typer.Option("", "--desc", "-d", help="Description"),
+    shortname: str | None = typer.Option(
+        None, "--shortname", "-s", help="Short alias for cross-KB links"
+    ),
+    ephemeral: bool = typer.Option(False, "--ephemeral", help="Create as ephemeral KB"),
+    ttl: int = typer.Option(3600, "--ttl", help="TTL in seconds for ephemeral KBs"),
+):
+    """Create a new knowledge base."""
+    from ..services.kb_service import KBService
+    from ..storage.database import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    svc = KBService(config, db)
+
+    if ephemeral:
+        kb = svc.create_ephemeral_kb(name, ttl=ttl, description=description)
+        console.print(f"[green]Created ephemeral KB:[/green] {name} (TTL: {ttl}s) at {kb.path}")
+        return
+
+    if not path:
+        console.print("[red]Error:[/red] --path is required for non-ephemeral KBs")
+        raise typer.Exit(1)
+
+    resolved_path = path.expanduser().resolve()
+    resolved_path.mkdir(parents=True, exist_ok=True)
+
+    kb = KBConfig(
+        name=name,
+        path=resolved_path,
+        kb_type=kb_type,
+        description=description,
+        shortname=shortname,
+    )
+    config.add_kb(kb)
+    save_config(config)
+    db.register_kb(name=name, kb_type=kb_type, path=str(resolved_path), description=description)
+    console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
+
+
+@kb_app.command("gc")
+def kb_gc():
+    """Garbage-collect expired ephemeral KBs."""
+    from ..services.kb_service import KBService
+    from ..storage.database import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    svc = KBService(config, db)
+    removed = svc.gc_ephemeral_kbs()
+
+    if removed:
+        for name in removed:
+            console.print(f"  [red]Removed:[/red] {name}")
+        console.print(f"[green]Garbage collected {len(removed)} expired KB(s).[/green]")
+    else:
+        console.print("[dim]No expired ephemeral KBs found.[/dim]")

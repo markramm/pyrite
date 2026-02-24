@@ -7,6 +7,7 @@ describe('parseWikilinks', () => {
 		expect(matches).toHaveLength(1);
 		expect(matches[0].target).toBe('john-doe');
 		expect(matches[0].display).toBeUndefined();
+		expect(matches[0].kb).toBeUndefined();
 		expect(matches[0].full).toBe('[[john-doe]]');
 	});
 
@@ -40,6 +41,33 @@ describe('parseWikilinks', () => {
 		expect(matches[0].start).toBe(7);
 		expect(matches[0].end).toBe(15);
 	});
+
+	it('parses cross-KB wikilink', () => {
+		const matches = parseWikilinks('See [[dev:some-entry]] for details');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].kb).toBe('dev');
+		expect(matches[0].target).toBe('some-entry');
+	});
+
+	it('parses cross-KB wikilink with display text', () => {
+		const matches = parseWikilinks('See [[ops:deploy-guide|Deploy Guide]] here');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].kb).toBe('ops');
+		expect(matches[0].target).toBe('deploy-guide');
+		expect(matches[0].display).toBe('Deploy Guide');
+	});
+
+	it('parses mixed local and cross-KB wikilinks', () => {
+		const matches = parseWikilinks('[[kb1:entry-a]] and [[entry-b]] and [[kb2:entry-c|Display]]');
+		expect(matches).toHaveLength(3);
+		expect(matches[0].kb).toBe('kb1');
+		expect(matches[0].target).toBe('entry-a');
+		expect(matches[1].kb).toBeUndefined();
+		expect(matches[1].target).toBe('entry-b');
+		expect(matches[2].kb).toBe('kb2');
+		expect(matches[2].target).toBe('entry-c');
+		expect(matches[2].display).toBe('Display');
+	});
 });
 
 describe('renderWikilinks', () => {
@@ -71,5 +99,27 @@ describe('renderWikilinks', () => {
 		const html = renderWikilinks('<p>[[a]] and [[b|Beta]]</p>');
 		expect(html).toContain('>a</a>');
 		expect(html).toContain('>Beta</a>');
+	});
+
+	it('renders cross-KB wikilink with kb badge', () => {
+		const html = renderWikilinks('<p>See [[dev:my-entry]] here</p>');
+		expect(html).toContain('href="/entries/my-entry?kb=dev"');
+		expect(html).toContain('data-wikilink="my-entry"');
+		expect(html).toContain('data-wikilink-kb="dev"');
+		expect(html).toContain('wikilink-kb-badge');
+		expect(html).toContain('>dev:my-entry</a>');
+	});
+
+	it('renders cross-KB wikilink with display text', () => {
+		const html = renderWikilinks('<p>[[ops:deploy|Deploy Guide]]</p>');
+		expect(html).toContain('href="/entries/deploy?kb=ops"');
+		expect(html).toContain('>Deploy Guide</a>');
+	});
+
+	it('marks missing wikilinks when existingIds provided', () => {
+		const ids = new Set(['exists']);
+		const html = renderWikilinks('<p>[[exists]] and [[missing]]</p>', ids);
+		expect(html).toContain('class="wikilink"');
+		expect(html).toContain('class="wikilink wikilink-missing"');
 	});
 });

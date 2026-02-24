@@ -365,26 +365,70 @@ class KBService:
         return [dict(r) for r in rows]
 
     def resolve_entry(self, target: str, kb_name: str | None = None) -> dict[str, Any] | None:
-        """Resolve a wikilink target to an entry. Tries exact ID, then title match."""
+        """Resolve a wikilink target to an entry. Supports kb:id format for cross-KB links."""
+        # Parse cross-KB format
+        actual_target = target
+        actual_kb = kb_name
+        if ":" in target and not target.startswith("http"):
+            prefix, rest = target.split(":", 1)
+            # Look up KB by shortname
+            kb_by_short = self.config.get_kb_by_shortname(prefix)
+            if kb_by_short:
+                actual_target = rest
+                actual_kb = kb_by_short.name
+            elif self.config.get_kb(prefix):
+                actual_target = rest
+                actual_kb = prefix
+
         sql = "SELECT id, kb_name, entry_type, title FROM entry WHERE id = ?"
-        params: list[str] = [target]
-        if kb_name:
+        params: list[str] = [actual_target]
+        if actual_kb:
             sql += " AND kb_name = ?"
-            params.append(kb_name)
+            params.append(actual_kb)
         sql += " LIMIT 1"
 
         row = self.db._raw_conn.execute(sql, params).fetchone()
 
         if not row:
             sql = "SELECT id, kb_name, entry_type, title FROM entry WHERE title LIKE ?"
-            params = [target]
-            if kb_name:
+            params = [actual_target]
+            if actual_kb:
                 sql += " AND kb_name = ?"
-                params.append(kb_name)
+                params.append(actual_kb)
             sql += " LIMIT 1"
             row = self.db._raw_conn.execute(sql, params).fetchone()
 
         return dict(row) if row else None
+
+    def resolve_batch(self, targets: list[str], kb_name: str | None = None) -> dict[str, bool]:
+        """Batch-resolve wikilink targets. Supports kb:id format."""
+        if not targets:
+            return {}
+        result: dict[str, bool] = {}
+
+        # Separate cross-KB targets from same-KB targets
+        simple_targets = []
+        for t in targets:
+            if ":" in t and not t.startswith("http"):
+                # Resolve cross-KB targets individually
+                resolved = self.resolve_entry(t, kb_name)
+                result[t] = resolved is not None
+            else:
+                simple_targets.append(t)
+
+        if simple_targets:
+            placeholders = ",".join(["?"] * len(simple_targets))
+            sql = f"SELECT id FROM entry WHERE id IN ({placeholders})"
+            params: list[str] = list(simple_targets)
+            if kb_name:
+                sql += " AND kb_name = ?"
+                params.append(kb_name)
+            rows = self.db._raw_conn.execute(sql, params).fetchall()
+            existing_ids = {r["id"] for r in rows}
+            for t in simple_targets:
+                result[t] = t in existing_ids
+
+        return result
 
     def list_daily_dates(self, kb_name: str, month: str) -> list[str]:
         """List dates that have daily notes for a given month (YYYY-MM)."""
@@ -503,3 +547,67 @@ class KBService:
     def get_index_stats(self) -> dict[str, Any]:
         """Get index statistics."""
         return self._index_mgr.get_index_stats()
+
+    # =========================================================================
+    # Ephemeral KBs
+    # =========================================================================
+
+    def create_ephemeral_kb(self, name: str, ttl: int = 3600, description: str = "") -> KBConfig:
+        """Create an ephemeral KB with TTL."""
+        import time
+
+        from ..config import save_config
+
+        # Create temp directory for ephemeral KB
+        ephemeral_dir = self.config.settings.workspace_path / "ephemeral" / name
+        ephemeral_dir.mkdir(parents=True, exist_ok=True)
+
+        kb = KBConfig(
+            name=name,
+            path=ephemeral_dir,
+            kb_type="generic",
+            description=description or f"Ephemeral KB (TTL: {ttl}s)",
+            ephemeral=True,
+            ttl=ttl,
+            created_at_ts=time.time(),
+        )
+        self.config.add_kb(kb)
+        save_config(self.config)
+
+        # Register in DB
+        self.db.register_kb(
+            name=name,
+            kb_type="generic",
+            path=str(ephemeral_dir),
+            description=kb.description,
+        )
+
+        return kb
+
+    def gc_ephemeral_kbs(self) -> list[str]:
+        """Garbage-collect expired ephemeral KBs. Returns list of removed KB names."""
+        import shutil
+        import time
+
+        from ..config import save_config
+
+        removed = []
+        now = time.time()
+
+        for kb in list(self.config.knowledge_bases):
+            if not kb.ephemeral or not kb.ttl or not kb.created_at_ts:
+                continue
+            if now - kb.created_at_ts > kb.ttl:
+                # Remove from index
+                self.db.unregister_kb(kb.name)
+                # Remove files
+                if kb.path.exists():
+                    shutil.rmtree(kb.path, ignore_errors=True)
+                # Remove from config
+                self.config.remove_kb(kb.name)
+                removed.append(kb.name)
+
+        if removed:
+            save_config(self.config)
+
+        return removed
