@@ -162,7 +162,7 @@ class TestAPIKeyAuth:
 
     def test_protected_endpoint_succeeds_with_query_param(self, client_with_auth):
         """Endpoints should succeed with correct api_key query param."""
-        resp = client_with_auth.get("/kbs?api_key=test-secret-key")
+        resp = client_with_auth.get("/api/kbs?api_key=test-secret-key")
         assert resp.status_code == 200
 
     def test_auth_disabled_when_key_empty(self, client_no_auth):

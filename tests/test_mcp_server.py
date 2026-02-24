@@ -2,7 +2,6 @@
 Tests for MCP Server.
 """
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -93,7 +92,7 @@ class TestPyriteMCPServer:
 
     def test_kb_list(self, server_setup):
         """Test listing knowledge bases."""
-        result = server_setup["server"].call_tool("kb_list", {})
+        result = server_setup["server"]._dispatch_tool("kb_list", {})
 
         assert "knowledge_bases" in result
         kbs = result["knowledge_bases"]
@@ -105,14 +104,14 @@ class TestPyriteMCPServer:
 
     def test_kb_search(self, server_setup):
         """Test full-text search."""
-        result = server_setup["server"].call_tool("kb_search", {"query": "immigration"})
+        result = server_setup["server"]._dispatch_tool("kb_search", {"query": "immigration"})
 
         assert "results" in result
         assert result["count"] >= 1
 
     def test_kb_search_with_filters(self, server_setup):
         """Test search with filters."""
-        result = server_setup["server"].call_tool(
+        result = server_setup["server"]._dispatch_tool(
             "kb_search", {"query": "immigration", "kb_name": "test-events", "entry_type": "event"}
         )
 
@@ -124,14 +123,14 @@ class TestPyriteMCPServer:
     def test_kb_get(self, server_setup):
         """Test getting entry by ID."""
         # First search to get an ID
-        search_result = server_setup["server"].call_tool(
+        search_result = server_setup["server"]._dispatch_tool(
             "kb_search", {"query": "Stephen Miller", "kb_name": "test-research"}
         )
 
         if search_result["count"] > 0:
             entry_id = search_result["results"][0]["id"]
 
-            result = server_setup["server"].call_tool(
+            result = server_setup["server"]._dispatch_tool(
                 "kb_get", {"entry_id": entry_id, "kb_name": "test-research"}
             )
 
@@ -140,7 +139,7 @@ class TestPyriteMCPServer:
 
     def test_kb_get_not_found(self, server_setup):
         """Test getting non-existent entry."""
-        result = server_setup["server"].call_tool(
+        result = server_setup["server"]._dispatch_tool(
             "kb_get", {"entry_id": "nonexistent-entry", "kb_name": "test-events"}
         )
 
@@ -148,7 +147,7 @@ class TestPyriteMCPServer:
 
     def test_kb_timeline(self, server_setup):
         """Test timeline queries."""
-        result = server_setup["server"].call_tool(
+        result = server_setup["server"]._dispatch_tool(
             "kb_timeline", {"date_from": "2025-01-01", "date_to": "2025-01-31"}
         )
 
@@ -157,7 +156,7 @@ class TestPyriteMCPServer:
 
     def test_kb_timeline_with_importance(self, server_setup):
         """Test timeline with importance filter."""
-        result = server_setup["server"].call_tool("kb_timeline", {"min_importance": 6})
+        result = server_setup["server"]._dispatch_tool("kb_timeline", {"min_importance": 6})
 
         assert "events" in result
         for event in result["events"]:
@@ -165,7 +164,7 @@ class TestPyriteMCPServer:
 
     def test_kb_tags(self, server_setup):
         """Test getting all tags."""
-        result = server_setup["server"].call_tool("kb_tags", {})
+        result = server_setup["server"]._dispatch_tool("kb_tags", {})
 
         assert "tags" in result
         tag_names = [t["tag"] for t in result["tags"]]
@@ -173,7 +172,7 @@ class TestPyriteMCPServer:
 
     def test_kb_create_event(self, server_setup):
         """Test creating a new event."""
-        result = server_setup["server"].call_tool(
+        result = server_setup["server"]._dispatch_tool(
             "kb_create",
             {
                 "kb_name": "test-events",
@@ -191,7 +190,7 @@ class TestPyriteMCPServer:
         assert "entry_id" in result
 
         # Verify it can be retrieved
-        get_result = server_setup["server"].call_tool(
+        get_result = server_setup["server"]._dispatch_tool(
             "kb_get", {"entry_id": result["entry_id"], "kb_name": "test-events"}
         )
         assert "entry" in get_result
@@ -199,7 +198,7 @@ class TestPyriteMCPServer:
 
     def test_kb_create_person(self, server_setup):
         """Test creating a new person entry."""
-        result = server_setup["server"].call_tool(
+        result = server_setup["server"]._dispatch_tool(
             "kb_create",
             {
                 "kb_name": "test-research",
@@ -218,7 +217,7 @@ class TestPyriteMCPServer:
     def test_kb_update(self, server_setup):
         """Test updating an entry."""
         # Create an entry first
-        create_result = server_setup["server"].call_tool(
+        create_result = server_setup["server"]._dispatch_tool(
             "kb_create",
             {
                 "kb_name": "test-events",
@@ -232,7 +231,7 @@ class TestPyriteMCPServer:
         entry_id = create_result["entry_id"]
 
         # Update it
-        update_result = server_setup["server"].call_tool(
+        update_result = server_setup["server"]._dispatch_tool(
             "kb_update",
             {
                 "entry_id": entry_id,
@@ -245,7 +244,7 @@ class TestPyriteMCPServer:
         assert update_result.get("updated") is True
 
         # Verify update
-        get_result = server_setup["server"].call_tool(
+        get_result = server_setup["server"]._dispatch_tool(
             "kb_get", {"entry_id": entry_id, "kb_name": "test-events"}
         )
         assert "Updated body" in get_result["entry"]["body"]
@@ -253,7 +252,7 @@ class TestPyriteMCPServer:
 
     def test_kb_index_sync(self, server_setup):
         """Test index sync."""
-        result = server_setup["server"].call_tool("kb_index_sync", {})
+        result = server_setup["server"]._dispatch_tool("kb_index_sync", {})
 
         assert result.get("synced") is True
         assert "added" in result
@@ -262,7 +261,7 @@ class TestPyriteMCPServer:
 
 
 class TestMCPProtocol:
-    """Test MCP protocol message handling."""
+    """Test MCP server business methods (protocol dispatch handled by SDK)."""
 
     @pytest.fixture
     def server(self):
@@ -282,60 +281,34 @@ class TestMCPProtocol:
             yield server
             server.close()
 
-    def test_initialize(self, server):
-        """Test initialize message."""
-        response = server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
-        )
-
-        assert response["id"] == 1
-        assert "result" in response
-        assert response["result"]["serverInfo"]["name"].startswith("pyrite")
-
-    def test_tools_list(self, server):
-        """Test tools/list message."""
-        response = server.handle_message(
-            {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}
-        )
-
-        assert response["id"] == 2
-        assert "result" in response
-        assert "tools" in response["result"]
-
-        tool_names = [t["name"] for t in response["result"]["tools"]]
+    def test_get_tools_list(self, server):
+        """Test get_tools_list returns tool definitions."""
+        tools = server.get_tools_list()
+        tool_names = [t["name"] for t in tools]
         assert "kb_list" in tool_names
         assert "kb_search" in tool_names
         assert "kb_get" in tool_names
+        for t in tools:
+            assert "name" in t
+            assert "description" in t
+            assert "inputSchema" in t
 
-    def test_tools_call(self, server):
-        """Test tools/call message."""
-        response = server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 3,
-                "method": "tools/call",
-                "params": {"name": "kb_list", "arguments": {}},
-            }
-        )
+    def test_dispatch_tool(self, server):
+        """Test _dispatch_tool calls handler and returns result."""
+        result = server._dispatch_tool("kb_list", {})
+        assert "knowledge_bases" in result
 
-        assert response["id"] == 3
-        assert "result" in response
-        assert "content" in response["result"]
-        assert response["result"]["content"][0]["type"] == "text"
+    def test_dispatch_tool_unknown(self, server):
+        """Test _dispatch_tool returns error for unknown tool."""
+        result = server._dispatch_tool("nonexistent_tool", {})
+        assert "error" in result
 
-        # Parse the JSON content
-        content = json.loads(response["result"]["content"][0]["text"])
-        assert "knowledge_bases" in content
+    def test_build_sdk_server(self, server):
+        """Test build_sdk_server returns a configured SDK Server."""
+        from mcp.server import Server
 
-    def test_unknown_method(self, server):
-        """Test unknown method returns error."""
-        response = server.handle_message(
-            {"jsonrpc": "2.0", "id": 4, "method": "unknown/method", "params": {}}
-        )
-
-        assert response["id"] == 4
-        assert "error" in response
-        assert response["error"]["code"] == -32601
+        sdk = server.build_sdk_server()
+        assert isinstance(sdk, Server)
 
 
 if __name__ == "__main__":

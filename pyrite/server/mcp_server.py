@@ -11,8 +11,9 @@ Tiers:
 """
 
 import json
-import sys
 from typing import Any
+
+from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
 from ..schema import KBSchema, generate_entry_id
@@ -825,7 +826,7 @@ class PyriteMCPServer:
             for name, meta in self.tools.items()
         ]
 
-    def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def _dispatch_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool and return result."""
         if name not in self.tools:
             return {"error": f"Unknown tool: {name}"}
@@ -836,112 +837,131 @@ class PyriteMCPServer:
         except Exception as e:
             return {"error": str(e)}
 
-    def handle_message(self, message: dict[str, Any]) -> dict[str, Any]:
-        """Handle an MCP protocol message."""
-        method = message.get("method")
-        msg_id = message.get("id")
-        params = message.get("params", {})
+    def build_sdk_server(self):
+        """Build an mcp.server.Server wired to this instance's business logic."""
+        from mcp.server import Server
+        from mcp.types import (
+            GetPromptResult,
+            Prompt,
+            PromptArgument,
+            PromptMessage,
+            ReadResourceResult,
+            Resource,
+            ResourceTemplate,
+            TextContent,
+            TextResourceContents,
+            Tool,
+        )
 
-        if method == "initialize":
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {"tools": {}, "prompts": {}, "resources": {}},
-                    "serverInfo": {
-                        "name": f"pyrite-{self.tier}",
-                        "version": "0.2.0",
-                    },
-                },
-            }
+        sdk = Server(f"pyrite-{self.tier}")
 
-        elif method == "tools/list":
-            return {"jsonrpc": "2.0", "id": msg_id, "result": {"tools": self.get_tools_list()}}
+        mcp_server = self  # capture for closures
 
-        elif method == "tools/call":
-            tool_name = params.get("name")
-            arguments = params.get("arguments", {})
-            result = self.call_tool(tool_name, arguments)
+        @sdk.list_tools()
+        async def _list_tools():
+            return [
+                Tool(
+                    name=name,
+                    description=meta["description"],
+                    inputSchema=meta["inputSchema"],
+                )
+                for name, meta in mcp_server.tools.items()
+            ]
 
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {
-                    "content": [{"type": "text", "text": json.dumps(result, indent=2, default=str)}]
-                },
-            }
+        @sdk.call_tool()
+        async def _call_tool(name: str, arguments: dict):
+            result = mcp_server._dispatch_tool(name, arguments or {})
+            return [TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
 
-        elif method == "prompts/list":
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"prompts": list(self.prompts.values())},
-            }
+        @sdk.list_prompts()
+        async def _list_prompts():
+            return [
+                Prompt(
+                    name=p["name"],
+                    description=p.get("description"),
+                    arguments=[
+                        PromptArgument(
+                            name=a["name"],
+                            description=a.get("description"),
+                            required=a.get("required", False),
+                        )
+                        for a in p.get("arguments", [])
+                    ],
+                )
+                for p in mcp_server.prompts.values()
+            ]
 
-        elif method == "prompts/get":
-            prompt_name = params.get("name")
-            arguments = params.get("arguments", {})
-            if prompt_name not in self.prompts:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "error": {"code": -32602, "message": f"Unknown prompt: {prompt_name}"},
-                }
-            result = self._get_prompt(prompt_name, arguments)
-            return {"jsonrpc": "2.0", "id": msg_id, "result": result}
-
-        elif method == "resources/list":
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"resources": self.resources},
-            }
-
-        elif method == "resources/templates/list":
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "result": {"resourceTemplates": self.resource_templates},
-            }
-
-        elif method == "resources/read":
-            uri = params.get("uri", "")
-            result = self._read_resource(uri)
+        @sdk.get_prompt()
+        async def _get_prompt(name: str, arguments: dict[str, str] | None):
+            if name not in mcp_server.prompts:
+                raise ValueError(f"Unknown prompt: {name}")
+            result = mcp_server._get_prompt(name, arguments or {})
             if "error" in result:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": msg_id,
-                    "error": {"code": -32602, "message": result["error"]},
-                }
-            return {"jsonrpc": "2.0", "id": msg_id, "result": result}
+                raise ValueError(result["error"])
+            return GetPromptResult(
+                messages=[
+                    PromptMessage(
+                        role=m["role"],
+                        content=TextContent(type="text", text=m["content"]["text"]),
+                    )
+                    for m in result["messages"]
+                ]
+            )
 
-        else:
-            return {
-                "jsonrpc": "2.0",
-                "id": msg_id,
-                "error": {"code": -32601, "message": f"Method not found: {method}"},
-            }
+        @sdk.list_resources()
+        async def _list_resources():
+            return [
+                Resource(
+                    uri=AnyUrl(r["uri"]),
+                    name=r["name"],
+                    description=r.get("description"),
+                    mimeType=r.get("mimeType"),
+                )
+                for r in mcp_server.resources
+            ]
+
+        @sdk.list_resource_templates()
+        async def _list_resource_templates():
+            return [
+                ResourceTemplate(
+                    uriTemplate=t["uriTemplate"],
+                    name=t["name"],
+                    description=t.get("description"),
+                    mimeType=t.get("mimeType"),
+                )
+                for t in mcp_server.resource_templates
+            ]
+
+        @sdk.read_resource()
+        async def _read_resource(uri: AnyUrl):
+            result = mcp_server._read_resource(str(uri))
+            if "error" in result:
+                raise ValueError(result["error"])
+            return ReadResourceResult(
+                contents=[
+                    TextResourceContents(
+                        uri=AnyUrl(c["uri"]),
+                        mimeType=c.get("mimeType"),
+                        text=c["text"],
+                    )
+                    for c in result["contents"]
+                ]
+            )
+
+        return sdk
 
     def run_stdio(self):
-        """Run the MCP server over stdio."""
-        print(f"pyrite-{self.tier} MCP server starting...", file=sys.stderr)
+        """Run the MCP server over stdio using the official MCP SDK."""
+        import anyio
+        from mcp.server.stdio import stdio_server
 
-        while True:
-            try:
-                line = sys.stdin.readline()
-                if not line:
-                    break
+        sdk = self.build_sdk_server()
 
-                message = json.loads(line)
-                response = self.handle_message(message)
+        async def _run():
+            async with stdio_server() as (read_stream, write_stream):
+                await sdk.run(read_stream, write_stream, sdk.create_initialization_options())
 
-                print(json.dumps(response), flush=True)
-
-            except json.JSONDecodeError as e:
-                print(f"JSON decode error: {e}", file=sys.stderr)
-            except Exception as e:
-                print(f"Error: {e}", file=sys.stderr)
+        anyio.run(_run)
 
     def close(self):
         """Clean up resources."""

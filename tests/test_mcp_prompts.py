@@ -50,13 +50,7 @@ class TestPromptsList:
 
     def test_prompts_list_returns_all_prompts(self, mcp_server):
         """prompts/list returns all 4 prompts."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "prompts/list", "params": {}}
-        )
-
-        assert response["id"] == 1
-        assert "result" in response
-        prompts = response["result"]["prompts"]
+        prompts = list(mcp_server.prompts.values())
         assert len(prompts) == 4
 
         names = {p["name"] for p in prompts}
@@ -64,11 +58,7 @@ class TestPromptsList:
 
     def test_each_prompt_has_required_fields(self, mcp_server):
         """Each prompt has name, description, and arguments."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "prompts/list", "params": {}}
-        )
-
-        for prompt in response["result"]["prompts"]:
+        for prompt in mcp_server.prompts.values():
             assert "name" in prompt
             assert "description" in prompt
             assert "arguments" in prompt
@@ -76,11 +66,7 @@ class TestPromptsList:
 
     def test_prompt_arguments_have_required_fields(self, mcp_server):
         """Each argument has name, description, and required fields."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "prompts/list", "params": {}}
-        )
-
-        for prompt in response["result"]["prompts"]:
+        for prompt in mcp_server.prompts.values():
             for arg in prompt["arguments"]:
                 assert "name" in arg
                 assert "description" in arg
@@ -92,17 +78,10 @@ class TestPromptsGet:
 
     def test_research_topic_returns_messages(self, mcp_server):
         """prompts/get for research_topic returns messages with the topic."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "prompts/get",
-                "params": {"name": "research_topic", "arguments": {"topic": "immigration"}},
-            }
-        )
+        result = mcp_server._get_prompt("research_topic", {"topic": "immigration"})
 
-        assert "result" in response
-        messages = response["result"]["messages"]
+        assert "messages" in result
+        messages = result["messages"]
         assert len(messages) >= 1
         assert messages[0]["role"] == "user"
         assert "immigration" in messages[0]["content"]["text"]
@@ -110,31 +89,17 @@ class TestPromptsGet:
     def test_summarize_entry_with_valid_entry(self, mcp_server):
         """prompts/get for summarize_entry returns entry content."""
         # Get an entry ID from search
-        search_resp = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {"name": "kb_search", "arguments": {"query": "Stephen Miller"}},
-            }
+        search_result = mcp_server._dispatch_tool(
+            "kb_search", {"query": "Stephen Miller"}
         )
-        search_data = json.loads(search_resp["result"]["content"][0]["text"])
-        entry_id = search_data["results"][0]["id"]
+        entry_id = search_result["results"][0]["id"]
 
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "prompts/get",
-                "params": {
-                    "name": "summarize_entry",
-                    "arguments": {"entry_id": entry_id, "kb_name": "test-research"},
-                },
-            }
+        result = mcp_server._get_prompt(
+            "summarize_entry", {"entry_id": entry_id, "kb_name": "test-research"}
         )
 
-        assert "result" in response
-        messages = response["result"]["messages"]
+        assert "messages" in result
+        messages = result["messages"]
         assert len(messages) >= 1
         assert "Summarize" in messages[0]["content"]["text"]
         # Entry content should be included
@@ -142,40 +107,24 @@ class TestPromptsGet:
 
     def test_summarize_entry_with_invalid_entry(self, mcp_server):
         """prompts/get for summarize_entry handles missing entry gracefully."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "prompts/get",
-                "params": {
-                    "name": "summarize_entry",
-                    "arguments": {"entry_id": "nonexistent-entry"},
-                },
-            }
+        result = mcp_server._get_prompt(
+            "summarize_entry", {"entry_id": "nonexistent-entry"}
         )
 
-        assert "result" in response
-        messages = response["result"]["messages"]
+        assert "messages" in result
+        messages = result["messages"]
         assert len(messages) >= 1
         # Should still return a message, not an error
         assert "not found" in messages[0]["content"]["text"].lower()
 
     def test_find_connections_returns_both_entries(self, mcp_server):
         """prompts/get for find_connections returns content about both entries."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "prompts/get",
-                "params": {
-                    "name": "find_connections",
-                    "arguments": {"entry_a": "some-entry-a", "entry_b": "some-entry-b"},
-                },
-            }
+        result = mcp_server._get_prompt(
+            "find_connections", {"entry_a": "some-entry-a", "entry_b": "some-entry-b"}
         )
 
-        assert "result" in response
-        messages = response["result"]["messages"]
+        assert "messages" in result
+        messages = result["messages"]
         assert len(messages) >= 1
         text = messages[0]["content"]["text"]
         assert "Entry A" in text
@@ -184,50 +133,28 @@ class TestPromptsGet:
 
     def test_daily_briefing_returns_recent_data(self, mcp_server):
         """prompts/get for daily_briefing returns briefing context."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "prompts/get",
-                "params": {"name": "daily_briefing", "arguments": {"days": "30"}},
-            }
-        )
+        result = mcp_server._get_prompt("daily_briefing", {"days": "30"})
 
-        assert "result" in response
-        messages = response["result"]["messages"]
+        assert "messages" in result
+        messages = result["messages"]
         assert len(messages) >= 1
         text = messages[0]["content"]["text"]
         assert "briefing" in text.lower()
 
     def test_daily_briefing_default_days(self, mcp_server):
         """daily_briefing defaults to 7 days when not specified."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "prompts/get",
-                "params": {"name": "daily_briefing", "arguments": {}},
-            }
-        )
+        result = mcp_server._get_prompt("daily_briefing", {})
 
-        assert "result" in response
-        messages = response["result"]["messages"]
+        assert "messages" in result
+        messages = result["messages"]
         assert "7 days" in messages[0]["content"]["text"]
 
     def test_unknown_prompt_returns_error(self, mcp_server):
         """prompts/get for unknown prompt returns error."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "prompts/get",
-                "params": {"name": "nonexistent_prompt", "arguments": {}},
-            }
-        )
+        result = mcp_server._get_prompt("nonexistent_prompt", {})
 
-        assert "error" in response
-        assert response["error"]["code"] == -32602
-        assert "nonexistent_prompt" in response["error"]["message"]
+        assert "error" in result
+        assert "nonexistent_prompt" in result["error"]
 
 
 # =========================================================================
@@ -240,12 +167,7 @@ class TestResourcesList:
 
     def test_resources_list_returns_static_resources(self, mcp_server):
         """resources/list returns the static pyrite://kbs resource."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "resources/list", "params": {}}
-        )
-
-        assert "result" in response
-        resources = response["result"]["resources"]
+        resources = mcp_server.resources
         assert len(resources) >= 1
 
         uris = {r["uri"] for r in resources}
@@ -253,11 +175,7 @@ class TestResourcesList:
 
     def test_resources_have_required_fields(self, mcp_server):
         """Each resource has uri, name, description, mimeType."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "resources/list", "params": {}}
-        )
-
-        for resource in response["result"]["resources"]:
+        for resource in mcp_server.resources:
             assert "uri" in resource
             assert "name" in resource
             assert "description" in resource
@@ -269,12 +187,7 @@ class TestResourceTemplatesList:
 
     def test_templates_list_returns_templates(self, mcp_server):
         """resources/templates/list returns URI templates."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "resources/templates/list", "params": {}}
-        )
-
-        assert "result" in response
-        templates = response["result"]["resourceTemplates"]
+        templates = mcp_server.resource_templates
         assert len(templates) == 2
 
         uri_templates = {t["uriTemplate"] for t in templates}
@@ -283,11 +196,7 @@ class TestResourceTemplatesList:
 
     def test_templates_have_required_fields(self, mcp_server):
         """Each template has uriTemplate, name, description, mimeType."""
-        response = mcp_server.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "resources/templates/list", "params": {}}
-        )
-
-        for template in response["result"]["resourceTemplates"]:
+        for template in mcp_server.resource_templates:
             assert "uriTemplate" in template
             assert "name" in template
             assert "description" in template
@@ -299,17 +208,10 @@ class TestResourcesRead:
 
     def test_read_kbs_returns_kb_list(self, mcp_server):
         """resources/read for pyrite://kbs returns KB list."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "resources/read",
-                "params": {"uri": "pyrite://kbs"},
-            }
-        )
+        result = mcp_server._read_resource("pyrite://kbs")
 
-        assert "result" in response
-        contents = response["result"]["contents"]
+        assert "contents" in result
+        contents = result["contents"]
         assert len(contents) == 1
         assert contents[0]["uri"] == "pyrite://kbs"
         assert contents[0]["mimeType"] == "application/json"
@@ -322,17 +224,10 @@ class TestResourcesRead:
 
     def test_read_kb_entries_returns_entries(self, mcp_server):
         """resources/read for pyrite://kbs/{name}/entries returns entry list."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "resources/read",
-                "params": {"uri": "pyrite://kbs/test-events/entries"},
-            }
-        )
+        result = mcp_server._read_resource("pyrite://kbs/test-events/entries")
 
-        assert "result" in response
-        contents = response["result"]["contents"]
+        assert "contents" in result
+        contents = result["contents"]
         assert len(contents) == 1
         assert contents[0]["uri"] == "pyrite://kbs/test-events/entries"
         assert contents[0]["mimeType"] == "application/json"
@@ -343,28 +238,15 @@ class TestResourcesRead:
     def test_read_entry_returns_entry(self, mcp_server):
         """resources/read for pyrite://entries/{id} returns entry data."""
         # First find an entry ID
-        search_resp = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {"name": "kb_search", "arguments": {"query": "Stephen Miller"}},
-            }
+        search_result = mcp_server._dispatch_tool(
+            "kb_search", {"query": "Stephen Miller"}
         )
-        search_data = json.loads(search_resp["result"]["content"][0]["text"])
-        entry_id = search_data["results"][0]["id"]
+        entry_id = search_result["results"][0]["id"]
 
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "resources/read",
-                "params": {"uri": f"pyrite://entries/{entry_id}"},
-            }
-        )
+        result = mcp_server._read_resource(f"pyrite://entries/{entry_id}")
 
-        assert "result" in response
-        contents = response["result"]["contents"]
+        assert "contents" in result
+        contents = result["contents"]
         assert len(contents) == 1
         assert contents[0]["mimeType"] == "application/json"
 
@@ -373,31 +255,13 @@ class TestResourcesRead:
 
     def test_read_entry_not_found(self, mcp_server):
         """resources/read for nonexistent entry returns error."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "resources/read",
-                "params": {"uri": "pyrite://entries/nonexistent-id"},
-            }
-        )
-
-        assert "error" in response
-        assert response["error"]["code"] == -32602
+        result = mcp_server._read_resource("pyrite://entries/nonexistent-id")
+        assert "error" in result
 
     def test_read_unknown_uri_returns_error(self, mcp_server):
         """resources/read for unknown URI returns error."""
-        response = mcp_server.handle_message(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "resources/read",
-                "params": {"uri": "pyrite://unknown/path"},
-            }
-        )
-
-        assert "error" in response
-        assert response["error"]["code"] == -32602
+        result = mcp_server._read_resource("pyrite://unknown/path")
+        assert "error" in result
 
 
 # =========================================================================
@@ -406,18 +270,14 @@ class TestResourcesRead:
 
 
 class TestCapabilities:
-    """Test that initialize advertises prompts and resources."""
+    """Test that the SDK server is properly configured."""
 
-    def test_initialize_advertises_prompts(self, mcp_server_minimal):
-        """initialize response includes prompts capability."""
-        response = mcp_server_minimal.handle_message(
-            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
-        )
+    def test_build_sdk_server_creates_server(self, mcp_server_minimal):
+        """build_sdk_server returns a configured SDK Server."""
+        from mcp.server import Server
 
-        capabilities = response["result"]["capabilities"]
-        assert "prompts" in capabilities
-        assert "resources" in capabilities
-        assert "tools" in capabilities
+        sdk = mcp_server_minimal.build_sdk_server()
+        assert isinstance(sdk, Server)
 
     def test_prompts_available_at_all_tiers(self):
         """Prompts are available at read, write, and admin tiers."""
