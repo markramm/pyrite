@@ -133,14 +133,15 @@ class WikilinkWidget extends WidgetType {
 	}
 }
 
-/** Regex for matching wikilinks in the document. */
-const wikilinkPattern = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
+/** Regex for matching wikilinks in the document (supports [[kb:target|display]]). */
+const wikilinkPattern = /\[\[(?:([a-z0-9-]+):)?([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
 
 const wikilinkMatcher = new MatchDecorator({
 	regexp: wikilinkPattern,
 	decoration: (match, _view, pos) => {
-		const target = match[1].trim();
-		const display = match[2]?.trim() || target;
+		const kb = match[1]?.trim();
+		const target = match[2].trim();
+		const display = match[3]?.trim() || (kb ? `${kb}:${target}` : target);
 		return Decoration.replace({
 			widget: new WikilinkWidget(target, display)
 		});

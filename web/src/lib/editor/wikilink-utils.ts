@@ -1,11 +1,11 @@
 /**
  * Wikilink parsing and rendering utilities.
  *
- * Supports [[id]] and [[id|display text]] syntax.
+ * Supports [[id]], [[id|display text]], and [[kb:id]] cross-KB syntax.
  */
 
-/** Regex matching wikilinks: [[target]] or [[target|display]] */
-export const WIKILINK_REGEX = /\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
+/** Regex matching wikilinks: [[target]], [[kb:target]], [[target|display]] */
+export const WIKILINK_REGEX = /\[\[(?:([a-z0-9-]+):)?([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
 
 /** Single wikilink match result */
 export interface WikilinkMatch {
@@ -15,6 +15,8 @@ export interface WikilinkMatch {
 	target: string;
 	/** Optional display text (undefined if not present) */
 	display?: string;
+	/** Cross-KB prefix (undefined if not present) */
+	kb?: string;
 	/** Start index in source string */
 	start: number;
 	/** End index in source string */
@@ -31,8 +33,9 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
 	while ((match = regex.exec(text)) !== null) {
 		matches.push({
 			full: match[0],
-			target: match[1].trim(),
-			display: match[2]?.trim(),
+			kb: match[1]?.trim(),
+			target: match[2].trim(),
+			display: match[3]?.trim(),
 			start: match.index,
 			end: match.index + match[0].length
 		});
@@ -49,12 +52,20 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
  *   links to non-existent entries get a "wikilink-missing" class (red links).
  */
 export function renderWikilinks(html: string, existingIds?: Set<string>): string {
-	return html.replace(WIKILINK_REGEX, (_match, target: string, display?: string) => {
-		const trimmed = target.trim();
-		const label = display?.trim() || trimmed;
-		const href = `/entries/${encodeURIComponent(trimmed)}`;
-		const missing = existingIds && !existingIds.has(trimmed);
-		const cls = missing ? 'wikilink wikilink-missing' : 'wikilink';
-		return `<a href="${href}" class="${cls}" data-wikilink="${trimmed}">${label}</a>`;
-	});
+	return html.replace(
+		WIKILINK_REGEX,
+		(_match, kb: string | undefined, target: string, display?: string) => {
+			const trimmed = target.trim();
+			const kbPrefix = kb?.trim();
+			const label =
+				display?.trim() || (kbPrefix ? `${kbPrefix}:${trimmed}` : trimmed);
+			const href = `/entries/${encodeURIComponent(trimmed)}${kbPrefix ? `?kb=${encodeURIComponent(kbPrefix)}` : ''}`;
+			const missing = existingIds && !existingIds.has(trimmed);
+			const cls = missing ? 'wikilink wikilink-missing' : 'wikilink';
+			const kbBadge = kbPrefix
+				? `<span class="wikilink-kb-badge">${kbPrefix}</span>`
+				: '';
+			return `<a href="${href}" class="${cls}" data-wikilink="${trimmed}" data-wikilink-kb="${kbPrefix || ''}">${kbBadge}${label}</a>`;
+		}
+	);
 }

@@ -22,6 +22,8 @@ _WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]")
 
 logger = logging.getLogger(__name__)
 
+_WIKILINK_RE = re.compile(r"\[\[(?:([a-z0-9-]+):)?([^\]|]+?)(?:\|[^\]]+?)?\]\]")
+
 
 class IndexManager:
     """
@@ -161,6 +163,23 @@ class IndexManager:
             pass  # Schema not available; skip ref extraction
         if refs:
             data["_refs"] = refs
+
+        # Extract body wikilinks as links with relation="wikilink"
+        body = entry.body or ""
+        if body:
+            existing_targets = {l.get("target") for l in data["links"]}
+            for match in _WIKILINK_RE.finditer(body):
+                kb_prefix = match.group(1)  # Optional kb: prefix
+                target = match.group(2).strip()
+                if target and target != entry.id and target not in existing_targets:
+                    link_data = {
+                        "target": target,
+                        "kb": kb_prefix or kb_name,
+                        "relation": "wikilink",
+                        "note": "",
+                    }
+                    data["links"].append(link_data)
+                    existing_targets.add(target)
 
         return data
 
