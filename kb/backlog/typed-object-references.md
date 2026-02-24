@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Typed Object References and Relation Indexing"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [schema, relations, database, core]

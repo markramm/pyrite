@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Tag Hierarchy and Nested Tags"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, organization, search]

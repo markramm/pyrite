@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Git-Based Version History"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [web, git, phase-5]

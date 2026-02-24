@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Settings Page and User Preferences"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [web, ux, phase-4]
