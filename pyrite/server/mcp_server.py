@@ -339,6 +339,55 @@ class PyriteMCPServer:
                     },
                     "handler": self._kb_manage,
                 },
+                "kb_commit": {
+                    "description": "Commit changes in a KB's git repository. Stages and commits files with a message. Admin tier only — prevents write-tier agents from self-approving changes.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "kb": {
+                                "type": "string",
+                                "description": "Knowledge base name",
+                            },
+                            "message": {
+                                "type": "string",
+                                "description": "Commit message describing the changes",
+                            },
+                            "paths": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Specific file paths to commit (commits all changes if omitted)",
+                            },
+                            "sign_off": {
+                                "type": "boolean",
+                                "description": "Add Signed-off-by line to commit",
+                            },
+                        },
+                        "required": ["kb", "message"],
+                    },
+                    "handler": self._kb_commit,
+                },
+                "kb_push": {
+                    "description": "Push KB commits to a remote repository. Requires a configured remote. Admin tier only.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "kb": {
+                                "type": "string",
+                                "description": "Knowledge base name",
+                            },
+                            "remote": {
+                                "type": "string",
+                                "description": "Remote name (default: origin)",
+                            },
+                            "branch": {
+                                "type": "string",
+                                "description": "Branch to push (default: current branch)",
+                            },
+                        },
+                        "required": ["kb"],
+                    },
+                    "handler": self._kb_push,
+                },
             }
         )
 
@@ -566,6 +615,37 @@ class PyriteMCPServer:
             return {"valid": True, "types": list(schema.types.keys())}
 
         return {"error": f"Unknown action: {action}"}
+
+    def _kb_commit(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Commit changes in a KB's git repository."""
+        kb_name = args.get("kb")
+        message = args.get("message")
+        paths = args.get("paths")
+        sign_off = args.get("sign_off", False)
+
+        if not kb_name or not message:
+            return {"error": "Both 'kb' and 'message' are required"}
+
+        try:
+            return self.svc.commit_kb(
+                kb_name, message=message, paths=paths, sign_off=sign_off
+            )
+        except PyriteError as e:
+            return {"error": str(e)}
+
+    def _kb_push(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Push KB commits to a remote repository."""
+        kb_name = args.get("kb")
+        remote = args.get("remote", "origin")
+        branch = args.get("branch")
+
+        if not kb_name:
+            return {"error": "'kb' is required"}
+
+        try:
+            return self.svc.push_kb(kb_name, remote=remote, branch=branch)
+        except PyriteError as e:
+            return {"error": str(e)}
 
     # =========================================================================
     # Prompts

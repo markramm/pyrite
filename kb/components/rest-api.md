@@ -120,6 +120,8 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/api/entries/resolve-batch` | POST | entries.py | Batch wikilink resolution |
 | `/api/entries/wanted` | GET | entries.py | Wanted pages (broken links) |
 | `/ws` | WebSocket | websocket.py | Real-time entry/sync events |
+| `/api/kbs/{kb}/commit` | POST | git_ops.py | Commit KB changes to git |
+| `/api/kbs/{kb}/push` | POST | git_ops.py | Push KB commits to remote |
 | `/health` | GET | api.py | Health check (not behind /api) |
 
 ## Adding New Endpoints

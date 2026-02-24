@@ -749,3 +749,80 @@ class KBService:
             save_config(self.config)
 
         return removed
+
+    # =========================================================================
+    # Git operations
+    # =========================================================================
+
+    def commit_kb(
+        self,
+        kb_name: str,
+        message: str,
+        paths: list[str] | None = None,
+        sign_off: bool = False,
+    ) -> dict:
+        """
+        Commit changes in a KB's git repository.
+
+        Args:
+            kb_name: Knowledge base name
+            message: Commit message
+            paths: Specific file paths to stage (all changes if None)
+            sign_off: Add Signed-off-by line
+
+        Returns:
+            dict with success, commit_hash, files_changed, etc.
+
+        Raises:
+            KBNotFoundError: KB doesn't exist
+            PyriteError: KB is not in a git repository
+        """
+        from .git_service import GitService
+
+        kb = self.config.get_kb(kb_name)
+        if not kb:
+            raise KBNotFoundError(f"KB '{kb_name}' not found")
+
+        if not GitService.is_git_repo(kb.path):
+            raise PyriteError(f"KB '{kb_name}' is not in a git repository")
+
+        success, result = GitService.commit(
+            kb.path, message, paths=paths, sign_off=sign_off
+        )
+
+        if success:
+            return {"success": True, **result}
+        return {"success": False, "error": result.get("error", "Unknown error")}
+
+    def push_kb(
+        self,
+        kb_name: str,
+        remote: str = "origin",
+        branch: str | None = None,
+    ) -> dict:
+        """
+        Push KB commits to a remote repository.
+
+        Args:
+            kb_name: Knowledge base name
+            remote: Remote name (default: origin)
+            branch: Branch to push (default: current branch)
+
+        Returns:
+            dict with success and message
+
+        Raises:
+            KBNotFoundError: KB doesn't exist
+            PyriteError: KB is not in a git repository
+        """
+        from .git_service import GitService
+
+        kb = self.config.get_kb(kb_name)
+        if not kb:
+            raise KBNotFoundError(f"KB '{kb_name}' not found")
+
+        if not GitService.is_git_repo(kb.path):
+            raise PyriteError(f"KB '{kb_name}' is not in a git repository")
+
+        success, msg = GitService.push(kb.path, remote=remote, branch=branch)
+        return {"success": success, "message": msg}

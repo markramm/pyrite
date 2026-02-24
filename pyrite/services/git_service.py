@@ -305,6 +305,184 @@ class GitService:
         return None
 
     @staticmethod
+    def commit(
+        local_path: Path,
+        message: str,
+        paths: list[str] | None = None,
+        sign_off: bool = False,
+    ) -> tuple[bool, dict]:
+        """
+        Stage and commit changes in a git repository.
+
+        Args:
+            local_path: Path to the git repository
+            message: Commit message
+            paths: Specific file paths to stage (stages all if None)
+            sign_off: Add Signed-off-by line
+
+        Returns:
+            (success, result_dict) where result_dict contains
+            commit_hash, files_changed, message on success
+            or error on failure.
+        """
+        if not GitService.is_git_repo(local_path):
+            return False, {"error": "Not a git repository"}
+
+        try:
+            # Stage files
+            if paths:
+                for p in paths:
+                    result = subprocess.run(
+                        ["git", "add", p],
+                        cwd=str(local_path),
+                        capture_output=True,
+                        text=True,
+                    )
+                    if result.returncode != 0:
+                        return False, {"error": f"Failed to stage {p}: {result.stderr.strip()}"}
+            else:
+                result = subprocess.run(
+                    ["git", "add", "-A"],
+                    cwd=str(local_path),
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode != 0:
+                    return False, {"error": f"Failed to stage: {result.stderr.strip()}"}
+
+            # Check if there's anything to commit
+            status_result = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+            )
+            staged_files = [f for f in status_result.stdout.strip().split("\n") if f]
+            if not staged_files:
+                return False, {"error": "No changes to commit"}
+
+            # Build commit command
+            cmd = ["git", "commit", "-m", message]
+            if sign_off:
+                cmd.append("--signoff")
+
+            result = subprocess.run(
+                cmd,
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode != 0:
+                return False, {"error": f"Commit failed: {result.stderr.strip()}"}
+
+            # Get the commit hash
+            commit_hash = GitService.get_head_commit(local_path)
+
+            return True, {
+                "commit_hash": commit_hash,
+                "files_changed": len(staged_files),
+                "files": staged_files,
+                "message": message,
+            }
+        except subprocess.TimeoutExpired:
+            return False, {"error": "Commit timed out"}
+        except Exception as e:
+            return False, {"error": str(e)}
+
+    @staticmethod
+    def push(
+        local_path: Path,
+        remote: str = "origin",
+        branch: str | None = None,
+        token: str | None = None,
+    ) -> tuple[bool, str]:
+        """
+        Push commits to a remote repository.
+
+        Args:
+            local_path: Path to the git repository
+            remote: Remote name (default: origin)
+            branch: Branch to push (default: current branch)
+            token: OAuth token for authentication
+
+        Returns:
+            (success, message)
+        """
+        if not GitService.is_git_repo(local_path):
+            return False, "Not a git repository"
+
+        if branch is None:
+            branch = GitService.get_current_branch(local_path)
+
+        env = os.environ.copy()
+        if token:
+            env["GIT_ASKPASS"] = "echo"
+            env["GIT_USERNAME"] = "oauth2"
+            env["GIT_PASSWORD"] = token
+
+        try:
+            result = subprocess.run(
+                ["git", "push", "-u", remote, branch],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=60,
+            )
+            if result.returncode == 0:
+                return True, result.stderr.strip() or result.stdout.strip() or "Pushed successfully"
+            error = GitService._sanitize_output(result.stderr, token)
+            return False, f"Push failed: {error}"
+        except subprocess.TimeoutExpired:
+            return False, "Push timed out"
+        except Exception as e:
+            return False, f"Push failed: {e}"
+
+    @staticmethod
+    def get_status(local_path: Path) -> dict:
+        """
+        Get git working tree status.
+
+        Returns dict with: clean (bool), staged (list), unstaged (list), untracked (list)
+        """
+        result = {"clean": True, "staged": [], "unstaged": [], "untracked": []}
+
+        if not GitService.is_git_repo(local_path):
+            return result
+
+        try:
+            status = subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+            )
+            if status.returncode != 0:
+                return result
+
+            for line in status.stdout.rstrip("\n").split("\n"):
+                if not line:
+                    continue
+                if len(line) < 4:
+                    continue
+                result["clean"] = False
+                index_status = line[0]
+                work_status = line[1]
+                filename = line[3:]
+
+                if index_status == "?":
+                    result["untracked"].append(filename)
+                elif index_status != " ":
+                    result["staged"].append(filename)
+                if work_status not in (" ", "?"):
+                    result["unstaged"].append(filename)
+
+            return result
+        except Exception:
+            return result
+
+    @staticmethod
     def _inject_token(url: str, token: str | None) -> str:
         """Inject OAuth token into HTTPS URL for authentication."""
         if not token:

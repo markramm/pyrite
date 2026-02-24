@@ -17,6 +17,7 @@ from .starred import router as starred_router
 from .tags import router as tags_router
 from .templates import router as templates_router
 from .timeline import router as timeline_router
+from .git_ops import router as git_ops_router
 from .versions import router as versions_router
 
 all_routers = [
@@ -33,6 +34,7 @@ all_routers = [
     settings_router,
     versions_router,
     graph_router,
+    git_ops_router,
 ]
 
 __all__ = ["all_routers"]

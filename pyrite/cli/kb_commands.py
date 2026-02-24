@@ -235,6 +235,66 @@ def kb_create(
     console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
 
 
+@kb_app.command("commit")
+def kb_commit(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    message: str = typer.Option(..., "--message", "-m", help="Commit message"),
+    paths: list[str] | None = typer.Option(None, "--path", "-p", help="Specific file paths to commit"),
+    sign_off: bool = typer.Option(False, "--signoff", "-s", help="Add Signed-off-by line"),
+):
+    """Commit changes in a KB's git repository."""
+    from ..services.kb_service import KBService
+    from ..storage.database import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    svc = KBService(config, db)
+
+    try:
+        result = svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
+        if result["success"]:
+            console.print(f"[green]Committed:[/green] {result['commit_hash'][:8]}")
+            console.print(f"  {result['files_changed']} file(s) changed")
+            if result.get("files"):
+                for f in result["files"]:
+                    console.print(f"  [dim]{f}[/dim]")
+        else:
+            console.print(f"[yellow]No commit:[/yellow] {result.get('error', 'Unknown error')}")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+@kb_app.command("push")
+def kb_push(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    remote: str = typer.Option("origin", "--remote", "-r", help="Remote name"),
+    branch: str | None = typer.Option(None, "--branch", "-b", help="Branch to push"),
+):
+    """Push KB commits to a remote repository."""
+    from ..services.kb_service import KBService
+    from ..storage.database import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    svc = KBService(config, db)
+
+    try:
+        result = svc.push_kb(kb_name, remote=remote, branch=branch)
+        if result["success"]:
+            console.print(f"[green]Pushed:[/green] {result['message']}")
+        else:
+            console.print(f"[red]Push failed:[/red] {result['message']}")
+            raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    finally:
+        db.close()
+
+
 @kb_app.command("gc")
 def kb_gc():
     """Garbage-collect expired ephemeral KBs."""

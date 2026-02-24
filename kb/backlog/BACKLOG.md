@@ -163,7 +163,7 @@ Depends on #25 (plugin DI) from Wave 5C.
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
 | 54 | [Implement pyrite-read CLI](done/implement-pyrite-read-cli.md) | Core | feature | S | none | **done** |
-| 55 | [Add kb_commit MCP Tool and REST Endpoint](mcp-commit-tool.md) | Core | feature | M | none | proposed |
+| 55 | [Add kb_commit MCP Tool and REST Endpoint](done/mcp-commit-tool.md) | Core | feature | M | none | **done** |
 | 56 | [REST API Tier Enforcement](rest-api-tier-enforcement.md) | Core | feature | L | none | proposed |
 | 57 | [Background Embedding Pipeline](background-embedding-pipeline.md) | AI | improvement | M | none | proposed |
 
@@ -284,6 +284,7 @@ Items in [`done/`](done/):
 - [Plugin UI Extension Points](done/plugin-ui-hooks.md) — `GET /api/plugins` list, plugin detail page, capability display (entry types, tools, hooks)
 - [Import/Export Support](done/import-export.md) — JSON/Markdown/CSV importers, `POST /api/entries/import`, `GET /api/entries/export`, round-trip support
 - [Implement pyrite-read CLI](done/implement-pyrite-read-cli.md) — Read-only CLI entry point (`pyrite-read`) with 7 commands, no write/admin operations
+- [Add kb_commit MCP Tool and REST Endpoint](done/mcp-commit-tool.md) — `kb_commit`/`kb_push` MCP tools (admin tier), REST endpoints, CLI commands for programmatic git operations
 
 ---
 
@@ -328,7 +329,7 @@ ephemeral-kbs (#45) ✅                 [6B]
 cross-kb-shortlinks (#53) ✅           [6C]
 
 implement-pyrite-read-cli (#54) ✅     [7A]
-mcp-commit-tool (#55)                  [7A]
+mcp-commit-tool (#55) ✅               [7A]
 rest-api-tier-enforcement (#56)        [7A]
 background-embedding-pipeline (#57)    [7A]
 ```

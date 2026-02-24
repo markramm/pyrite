@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Add kb_commit MCP Tool and REST Endpoint"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [mcp, git, agents, api]
