@@ -260,17 +260,35 @@ class KBService:
         self,
         kb_name: str | None = None,
         entry_type: str | None = None,
+        tag: str | None = None,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """List entries with pagination."""
         return self.db.list_entries(
-            kb_name=kb_name, entry_type=entry_type, limit=limit, offset=offset
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tag=tag,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
         )
 
-    def count_entries(self, kb_name: str | None = None, entry_type: str | None = None) -> int:
+    def count_entries(
+        self,
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        tag: str | None = None,
+    ) -> int:
         """Count entries, optionally filtered."""
-        return self.db.count_entries(kb_name=kb_name, entry_type=entry_type)
+        return self.db.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag)
+
+    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
+        """Get distinct entry types from the database."""
+        return self.db.get_distinct_types(kb_name=kb_name)
 
     def get_timeline(
         self,
@@ -300,6 +318,29 @@ class KBService:
     ) -> list[dict]:
         """Search entries by tag prefix (includes child tags)."""
         return self.db.search_by_tag_prefix(prefix, kb_name=kb_name, limit=limit)
+
+    # =========================================================================
+    # Graph
+    # =========================================================================
+
+    def get_graph(
+        self,
+        center: str | None = None,
+        center_kb: str | None = None,
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        depth: int = 2,
+        limit: int = 500,
+    ) -> dict[str, Any]:
+        """Get graph data for visualization."""
+        return self.db.get_graph_data(
+            center=center,
+            center_kb=center_kb,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            depth=depth,
+            limit=limit,
+        )
 
     # =========================================================================
     # Object References

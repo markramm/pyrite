@@ -17,6 +17,8 @@ import type {
 	EntryListResponse,
 	EntryResponse,
 	EntryTitlesResponse,
+	EntryTypesResponse,
+	GraphResponse,
 	KBListResponse,
 	RenderedTemplate,
 	ReorderStarredRequest,
@@ -92,16 +94,27 @@ class ApiClient {
 	async listEntries(options: {
 		kb?: string;
 		entry_type?: string;
+		tag?: string;
+		sort_by?: string;
+		sort_order?: string;
 		limit?: number;
 		offset?: number;
 	} = {}): Promise<EntryListResponse> {
 		const params = new URLSearchParams();
 		if (options.kb) params.set('kb', options.kb);
 		if (options.entry_type) params.set('entry_type', options.entry_type);
+		if (options.tag) params.set('tag', options.tag);
+		if (options.sort_by) params.set('sort_by', options.sort_by);
+		if (options.sort_order) params.set('sort_order', options.sort_order);
 		if (options.limit) params.set('limit', String(options.limit));
 		if (options.offset) params.set('offset', String(options.offset));
 		const qs = params.toString();
 		return this.request(`/api/entries${qs ? `?${qs}` : ''}`);
+	}
+
+	async getEntryTypes(kb?: string): Promise<EntryTypesResponse> {
+		const params = kb ? `?kb=${encodeURIComponent(kb)}` : '';
+		return this.request(`/api/entries/types${params}`);
 	}
 
 	async getEntry(id: string, options: { kb?: string; with_links?: boolean } = {}): Promise<EntryResponse> {
@@ -287,6 +300,26 @@ class ApiClient {
 			method: 'POST',
 			body: JSON.stringify({ entry_id: entryId, kb_name: kbName })
 		});
+	}
+
+	// Graph
+	async getGraph(options: {
+		center?: string;
+		center_kb?: string;
+		kb?: string;
+		type?: string;
+		depth?: number;
+		limit?: number;
+	} = {}): Promise<GraphResponse> {
+		const params = new URLSearchParams();
+		if (options.center) params.set('center', options.center);
+		if (options.center_kb) params.set('center_kb', options.center_kb);
+		if (options.kb) params.set('kb', options.kb);
+		if (options.type) params.set('type', options.type);
+		if (options.depth) params.set('depth', String(options.depth));
+		if (options.limit) params.set('limit', String(options.limit));
+		const qs = params.toString();
+		return this.request(`/api/graph${qs ? `?${qs}` : ''}`);
 	}
 
 	async aiSuggestLinks(entryId: string, kbName: string): Promise<AILinkSuggestResponse> {

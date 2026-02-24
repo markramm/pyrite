@@ -3,8 +3,10 @@
 	import EntryMeta from '$lib/components/entry/EntryMeta.svelte';
 	import BacklinksPanel from '$lib/components/entry/BacklinksPanel.svelte';
 	import VersionHistoryPanel from '$lib/components/entry/VersionHistoryPanel.svelte';
+	import LocalGraphPanel from '$lib/components/graph/LocalGraphPanel.svelte';
 	import SplitPane from '$lib/components/layout/SplitPane.svelte';
 	import Editor from '$lib/editor/Editor.svelte';
+	import TiptapEditor from '$lib/editor/TiptapEditor.svelte';
 	import OutlinePanel from '$lib/components/entry/OutlinePanel.svelte';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
@@ -42,6 +44,10 @@
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'H') {
 				e.preventDefault();
 				uiStore.toggleVersionHistoryPanel();
+			}
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'G') {
+				e.preventDefault();
+				uiStore.toggleLocalGraphPanel();
 			}
 		}
 		window.addEventListener('keydown', handleKeydown);
@@ -193,7 +199,7 @@
 	{:else if entryStore.error}
 		<div class="flex flex-1 items-center justify-center text-red-500">{entryStore.error}</div>
 	{:else if entryStore.current}
-		<SplitPane open={uiStore.backlinksPanelOpen || uiStore.versionHistoryPanelOpen}>
+		<SplitPane open={uiStore.backlinksPanelOpen || uiStore.versionHistoryPanelOpen || uiStore.localGraphPanelOpen}>
 			{#snippet children()}
 				<div class="flex h-full overflow-hidden">
 					<!-- Main content -->
@@ -217,6 +223,17 @@
 								>
 									{editing ? 'View' : 'Edit'}
 								</button>
+								{#if editing}
+									<button
+										onclick={() => uiStore.toggleEditorMode()}
+										class="rounded-md border px-3 py-1 text-sm {uiStore.editorMode === 'wysiwyg'
+											? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+											: 'border-zinc-300 dark:border-zinc-600'}"
+										title="Toggle between source and rich text editing"
+									>
+										{uiStore.editorMode === 'source' ? 'Rich Text' : 'Source'}
+									</button>
+								{/if}
 
 								<!-- AI menu -->
 								<div class="ai-menu-container relative">
@@ -276,6 +293,15 @@
 									title="Toggle backlinks panel (Cmd+Shift+B)"
 								>
 									Backlinks
+								</button>
+								<button
+									onclick={() => uiStore.toggleLocalGraphPanel()}
+									class="rounded-md border px-3 py-1 text-sm {uiStore.localGraphPanelOpen
+										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+										: 'border-zinc-300 dark:border-zinc-600'}"
+									title="Toggle local graph (Cmd+Shift+G)"
+								>
+									Graph
 								</button>
 								<button
 									onclick={() => uiStore.toggleVersionHistoryPanel()}
@@ -356,12 +382,16 @@
 								</aside>
 							{/if}
 							<div class="flex-1 overflow-y-auto p-6">
-								{#if editing}
+								{#if editing && uiStore.editorMode === 'wysiwyg'}
+									<div class="h-[calc(100vh-12rem)]">
+										<TiptapEditor content={editorContent} onchange={onEditorChange} onsave={save} />
+									</div>
+								{:else if editing}
 									<div class="h-[calc(100vh-12rem)]">
 										<Editor content={editorContent} onchange={onEditorChange} onsave={save} />
 									</div>
 								{:else}
-									<div class="prose dark:prose-invert max-w-none">
+									<div class="prose dark:prose-invert max-w-4xl">
 										{@html renderMarkdown(entryStore.current?.body ?? '')}
 									</div>
 								{/if}
@@ -379,7 +409,12 @@
 			{/snippet}
 
 			{#snippet panel()}
-				{#if uiStore.versionHistoryPanelOpen}
+				{#if uiStore.localGraphPanelOpen}
+					<LocalGraphPanel
+						entryId={entryStore.current?.id ?? ''}
+						kbName={entryStore.current?.kb_name ?? ''}
+					/>
+				{:else if uiStore.versionHistoryPanelOpen}
 					<VersionHistoryPanel
 						entryId={entryStore.current?.id ?? ''}
 						kbName={entryStore.current?.kb_name ?? ''}

@@ -4,29 +4,73 @@
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { searchStore } from '$lib/stores/search.svelte';
+	import { api } from '$lib/api/client';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 
 	let filterType = $state('');
+	let entryTypes = $state<string[]>([]);
 
-	// Get kb from URL query params
+	// Get params from URL
 	const urlKB = $derived($page.url.searchParams.get('kb') ?? undefined);
+	const urlTag = $derived($page.url.searchParams.get('tag') ?? undefined);
 
-	onMount(() => {
-		entryStore.loadList({ kb: urlKB ?? kbStore.activeKB ?? undefined });
+	onMount(async () => {
+		// Read initial filter from URL
+		filterType = $page.url.searchParams.get('type') ?? '';
+
+		loadEntries();
+
+		// Load dynamic types
+		try {
+			const kb = urlKB ?? kbStore.activeKB ?? undefined;
+			const res = await api.getEntryTypes(kb);
+			entryTypes = res.types;
+		} catch {
+			// Fall back to empty — dropdown will just show "All types"
+		}
 	});
 
-	// Reload when KB changes
+	function loadEntries() {
+		const kb = urlKB ?? kbStore.activeKB ?? undefined;
+		entryStore.loadList({
+			kb,
+			entry_type: filterType || undefined,
+			tag: urlTag,
+		});
+	}
+
+	// Reload when KB or tag changes
 	$effect(() => {
 		const kb = urlKB ?? kbStore.activeKB ?? undefined;
-		if (kb) {
-			entryStore.loadList({ kb, entry_type: filterType || undefined });
+		const tag = urlTag;
+		if (kb || tag) {
+			entryStore.loadList({
+				kb,
+				entry_type: filterType || undefined,
+				tag,
+			});
 		}
 	});
 
 	function onFilterChange() {
-		const kb = urlKB ?? kbStore.activeKB ?? undefined;
-		entryStore.loadList({ kb, entry_type: filterType || undefined });
+		loadEntries();
+	}
+
+	function onSortChange(e: Event) {
+		const value = (e.target as HTMLSelectElement).value;
+		entryStore.sortBy = value;
+		loadEntries();
+	}
+
+	function toggleSortOrder() {
+		entryStore.sortOrder = entryStore.sortOrder === 'desc' ? 'asc' : 'desc';
+		loadEntries();
+	}
+
+	function clearTag() {
+		goto('/entries');
 	}
 </script>
 
@@ -36,6 +80,25 @@
 	<div class="mb-4 flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Entries</h1>
 		<div class="flex items-center gap-3">
+			<!-- Sort -->
+			<select
+				value={entryStore.sortBy}
+				onchange={onSortChange}
+				class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+			>
+				<option value="updated_at">Updated</option>
+				<option value="created_at">Created</option>
+				<option value="title">Title</option>
+				<option value="entry_type">Type</option>
+			</select>
+			<button
+				onclick={toggleSortOrder}
+				class="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700"
+				title="Toggle sort direction"
+			>
+				{entryStore.sortOrder === 'desc' ? '↓' : '↑'}
+			</button>
+
 			<!-- Type filter -->
 			<select
 				bind:value={filterType}
@@ -43,10 +106,9 @@
 				class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
 			>
 				<option value="">All types</option>
-				<option value="event">Events</option>
-				<option value="person">People</option>
-				<option value="organization">Organizations</option>
-				<option value="note">Notes</option>
+				{#each entryTypes as t}
+					<option value={t}>{t}</option>
+				{/each}
 			</select>
 
 			<!-- Search -->
@@ -67,6 +129,17 @@
 			</a>
 		</div>
 	</div>
+
+	<!-- Active tag filter -->
+	{#if urlTag}
+		<div class="mb-3 flex items-center gap-2">
+			<span class="text-sm text-zinc-500">Filtered by tag:</span>
+			<span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+				{urlTag}
+				<button onclick={clearTag} class="ml-0.5 hover:text-blue-600 dark:hover:text-blue-100">&times;</button>
+			</span>
+		</div>
+	{/if}
 
 	<!-- Search results or entry list -->
 	{#if searchStore.query && searchStore.results.length > 0}

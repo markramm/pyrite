@@ -35,7 +35,7 @@
 			<span class="text-zinc-500">Tags:</span>
 			<div class="mt-1 flex flex-wrap gap-1">
 				{#each entry.tags as tag}
-					<TagBadge {tag} />
+					<TagBadge {tag} href="/entries?tag={encodeURIComponent(tag)}" />
 				{/each}
 			</div>
 		</div>

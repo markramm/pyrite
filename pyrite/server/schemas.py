@@ -169,6 +169,38 @@ class TagTreeResponse(BaseModel):
 
 
 # =============================================================================
+# Graph
+# =============================================================================
+
+
+class GraphNode(BaseModel):
+    """Node in the knowledge graph."""
+
+    id: str
+    kb_name: str
+    title: str
+    entry_type: str
+    link_count: int = 0
+
+
+class GraphEdge(BaseModel):
+    """Edge in the knowledge graph."""
+
+    source_id: str
+    source_kb: str
+    target_id: str
+    target_kb: str
+    relation: str | None = None
+
+
+class GraphResponse(BaseModel):
+    """Response for graph queries."""
+
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+# =============================================================================
 # Admin
 # =============================================================================
 
@@ -325,6 +357,12 @@ class EntryListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class EntryTypesResponse(BaseModel):
+    """Response for distinct entry types."""
+
+    types: list[str]
 
 
 # =============================================================================

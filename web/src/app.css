@@ -134,3 +134,12 @@
 	--tw-prose-code: var(--color-zinc-200);
 	--tw-prose-pre-bg: var(--color-zinc-800);
 }
+
+/* Prose spacing */
+.prose p { margin-top: 1.25em; margin-bottom: 1.25em; }
+.prose h1, .prose h2, .prose h3, .prose h4 { margin-top: 1.5em; margin-bottom: 0.5em; }
+.prose ul, .prose ol { margin-top: 1em; margin-bottom: 1em; }
+.prose pre { margin-top: 1.5em; margin-bottom: 1.5em; }
+.prose blockquote { margin-top: 1.25em; margin-bottom: 1.25em; }
+.prose table { margin-top: 1.25em; margin-bottom: 1.25em; }
+.prose hr { margin-top: 2em; margin-bottom: 2em; }

@@ -57,6 +57,10 @@ export interface EntryListResponse {
 	offset: number;
 }
 
+export interface EntryTypesResponse {
+	types: string[];
+}
+
 export interface CreateEntryRequest {
 	kb: string;
 	entry_type?: string;
@@ -283,6 +287,29 @@ export interface AILinkSuggestion {
 
 export interface AILinkSuggestResponse {
 	suggestions: AILinkSuggestion[];
+}
+
+// Graph
+
+export interface GraphNode {
+	id: string;
+	kb_name: string;
+	title: string;
+	entry_type: string;
+	link_count: number;
+}
+
+export interface GraphEdge {
+	source_id: string;
+	source_kb: string;
+	target_id: string;
+	target_kb: string;
+	relation: string | null;
+}
+
+export interface GraphResponse {
+	nodes: GraphNode[];
+	edges: GraphEdge[];
 }
 
 export interface ChatMessage {

@@ -26,7 +26,11 @@
 {:else if entryStore.entries.length === 0}
 	<div class="py-12 text-center text-zinc-400">No entries found</div>
 {:else}
-	<div class="space-y-2">
+	<div class="mb-2 text-sm text-zinc-500">
+		{entryStore.total} {entryStore.total === 1 ? 'entry' : 'entries'}
+	</div>
+
+	<div class="space-y-3">
 		{#each entryStore.entries as entry (entry.id)}
 			<EntryCard {entry} />
 		{/each}
@@ -36,7 +40,7 @@
 	{#if totalPages > 1}
 		<div class="mt-4 flex items-center justify-between">
 			<span class="text-sm text-zinc-500">
-				{entryStore.total} entries, page {currentPage} of {totalPages}
+				Page {currentPage} of {totalPages}
 			</span>
 			<div class="flex gap-1">
 				<button

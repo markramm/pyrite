@@ -19,6 +19,7 @@ from ..schemas import (
     EntryResponse,
     EntryTitle,
     EntryTitlesResponse,
+    EntryTypesResponse,
     ResolveResponse,
     UpdateEntryRequest,
     UpdateResponse,
@@ -33,13 +34,24 @@ def list_entries(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     entry_type: str | None = Query(None, description="Filter by entry type"),
+    tag: str | None = Query(None, description="Filter by tag"),
+    sort_by: str = Query("updated_at", description="Sort column"),
+    sort_order: str = Query("desc", description="Sort direction: asc or desc"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     svc: KBService = Depends(get_kb_service),
 ):
     """List entries with pagination."""
-    results = svc.list_entries(kb_name=kb, entry_type=entry_type, limit=limit, offset=offset)
-    total = svc.count_entries(kb_name=kb, entry_type=entry_type)
+    results = svc.list_entries(
+        kb_name=kb,
+        entry_type=entry_type,
+        tag=tag,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+    total = svc.count_entries(kb_name=kb, entry_type=entry_type, tag=tag)
 
     entries = []
     for r in results:
@@ -59,6 +71,18 @@ def list_entries(
     if neg is not None:
         return neg
     return EntryListResponse(entries=entries, total=total, limit=limit, offset=offset)
+
+
+@router.get("/entries/types", response_model=EntryTypesResponse)
+@limiter.limit("100/minute")
+def list_entry_types(
+    request: Request,
+    kb: str | None = Query(None, description="Filter by KB name"),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Get distinct entry types."""
+    types = svc.get_distinct_types(kb_name=kb)
+    return EntryTypesResponse(types=types)
 
 
 @router.get("/entries/titles", response_model=EntryTitlesResponse)
@@ -191,6 +215,21 @@ def create_entry(
     except (ValidationError, PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "CREATE_FAILED", "message": str(e)})
 
+    # Broadcast WebSocket event
+    import asyncio
+
+    from ..websocket import manager
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(
+            manager.broadcast(
+                {"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb}
+            )
+        )
+    except RuntimeError:
+        pass
+
     return CreateResponse(created=True, id=entry.id, kb_name=req.kb, file_path="")
 
 
@@ -222,6 +261,21 @@ def update_entry(
     except (ValidationError, PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
+    # Broadcast WebSocket event
+    import asyncio
+
+    from ..websocket import manager
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(
+            manager.broadcast(
+                {"type": "entry_updated", "entry_id": entry_id, "kb_name": req.kb}
+            )
+        )
+    except RuntimeError:
+        pass
+
     return UpdateResponse(updated=True, id=entry_id)
 
 
@@ -248,5 +302,20 @@ def delete_entry(
             status_code=404,
             detail={"code": "NOT_FOUND", "message": f"Entry '{entry_id}' not found"},
         )
+
+    # Broadcast WebSocket event
+    import asyncio
+
+    from ..websocket import manager
+
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(
+            manager.broadcast(
+                {"type": "entry_deleted", "entry_id": entry_id, "kb_name": kb}
+            )
+        )
+    except RuntimeError:
+        pass
 
     return DeleteResponse(deleted=True, id=entry_id)

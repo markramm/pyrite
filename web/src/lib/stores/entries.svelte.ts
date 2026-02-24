@@ -14,14 +14,24 @@ class EntryStore {
 	error = $state<string | null>(null);
 	dirty = $state(false);
 	recentIds = $state<string[]>([]);
+	sortBy = $state('updated_at');
+	sortOrder = $state<'asc' | 'desc'>('desc');
 
-	async loadList(options: { kb?: string; entry_type?: string; offset?: number } = {}) {
+	async loadList(options: {
+		kb?: string;
+		entry_type?: string;
+		tag?: string;
+		offset?: number;
+	} = {}) {
 		this.loading = true;
 		this.error = null;
 		try {
 			const res = await api.listEntries({
 				kb: options.kb,
 				entry_type: options.entry_type,
+				tag: options.tag,
+				sort_by: this.sortBy,
+				sort_order: this.sortOrder,
 				limit: this.limit,
 				offset: options.offset ?? this.offset
 			});

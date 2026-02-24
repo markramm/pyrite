@@ -223,23 +223,44 @@ class CRUDMixin:
             ).fetchall()
         ]
 
+    # Allowed sort columns to prevent SQL injection
+    _SORT_COLUMNS = {"title", "updated_at", "created_at", "entry_type"}
+
     def list_entries(
         self,
         kb_name: str | None = None,
         entry_type: str | None = None,
+        tag: str | None = None,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """List entries with pagination, optionally filtered by KB and/or entry type."""
-        sql = "SELECT * FROM entry WHERE 1=1"
+        """List entries with pagination, optionally filtered by KB, type, and/or tag."""
+        col = sort_by if sort_by in self._SORT_COLUMNS else "updated_at"
+        direction = "ASC" if sort_order.lower() == "asc" else "DESC"
+
+        sql = "SELECT DISTINCT e.* FROM entry e"
         params: list[str | int] = []
+        if tag:
+            sql += (
+                " JOIN entry_tag et ON e.id = et.entry_id AND e.kb_name = et.kb_name"
+                " JOIN tag t ON et.tag_id = t.id"
+            )
+        sql += " WHERE 1=1"
         if kb_name:
-            sql += " AND kb_name = ?"
+            sql += " AND e.kb_name = ?"
             params.append(kb_name)
         if entry_type:
-            sql += " AND entry_type = ?"
+            sql += " AND e.entry_type = ?"
             params.append(entry_type)
-        sql += " ORDER BY updated_at DESC, created_at DESC LIMIT ? OFFSET ?"
+        if tag:
+            sql += " AND t.name = ?"
+            params.append(tag)
+        sql += f" ORDER BY e.{col} {direction}"
+        if col != "updated_at":
+            sql += ", e.updated_at DESC"
+        sql += " LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = self._raw_conn.execute(sql, params).fetchall()
 
@@ -250,18 +271,43 @@ class CRUDMixin:
             entries.append(entry)
         return entries
 
-    def count_entries(self, kb_name: str | None = None, entry_type: str | None = None) -> int:
-        """Count entries, optionally filtered by KB and/or entry type."""
-        sql = "SELECT COUNT(*) FROM entry WHERE 1=1"
+    def count_entries(
+        self,
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        tag: str | None = None,
+    ) -> int:
+        """Count entries, optionally filtered by KB, type, and/or tag."""
+        sql = "SELECT COUNT(DISTINCT e.id) FROM entry e"
+        params: list[str] = []
+        if tag:
+            sql += (
+                " JOIN entry_tag et ON e.id = et.entry_id AND e.kb_name = et.kb_name"
+                " JOIN tag t ON et.tag_id = t.id"
+            )
+        sql += " WHERE 1=1"
+        if kb_name:
+            sql += " AND e.kb_name = ?"
+            params.append(kb_name)
+        if entry_type:
+            sql += " AND e.entry_type = ?"
+            params.append(entry_type)
+        if tag:
+            sql += " AND t.name = ?"
+            params.append(tag)
+        row = self._raw_conn.execute(sql, params).fetchone()
+        return row[0] if row else 0
+
+    def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
+        """Get distinct entry types, optionally filtered by KB."""
+        sql = "SELECT DISTINCT entry_type FROM entry WHERE entry_type IS NOT NULL"
         params: list[str] = []
         if kb_name:
             sql += " AND kb_name = ?"
             params.append(kb_name)
-        if entry_type:
-            sql += " AND entry_type = ?"
-            params.append(entry_type)
-        row = self._raw_conn.execute(sql, params).fetchone()
-        return row[0] if row else 0
+        sql += " ORDER BY entry_type"
+        rows = self._raw_conn.execute(sql, params).fetchall()
+        return [r[0] for r in rows]
 
     def get_entries_for_indexing(self, kb_name: str) -> list[dict[str, Any]]:
         """Get entry id, file_path, indexed_at for incremental indexing."""
