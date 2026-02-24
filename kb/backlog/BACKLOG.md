@@ -86,10 +86,10 @@ Pure skill files and docs — no backend/frontend code overlap.
 
 | # | Item | Track | Kind | Effort | File Footprint | Status |
 |---|------|-------|------|--------|----------------|--------|
-| 10 | [Research Flow Skill](research-flow-skill.md) | AI | feature | L | `skills/research-flow/` | proposed |
-| 11 | [Investigation Skill](investigation-skill.md) | AI | feature | L | `skills/investigation/` | proposed |
-| 19 | [Pyrite Dev Workflow Skill](pyrite-dev-skill.md) | AI | feature | M | `skills/pyrite-dev/` | proposed |
-| 37 | [Rewrite README for Pyrite](readme-rewrite.md) | both | bug | S | `README.md` | proposed |
+| 10 | [Research Flow Skill](done/research-flow-skill.md) | AI | feature | L | `.claude/skills/research-flow/` | **done** |
+| 11 | [Investigation Skill](done/investigation-skill.md) | AI | feature | L | `.claude/skills/investigation/` | **done** |
+| 19 | [Pyrite Dev Workflow Skill](done/pyrite-dev-skill.md) | AI | feature | M | `.claude/skills/pyrite-dev/` | **done** |
+| 37 | [Rewrite README for Pyrite](done/readme-rewrite.md) | both | bug | S | `README.md` | **done** |
 
 ### Wave 5B — Isolated UI features (zero file contention, all parallel)
 
@@ -264,6 +264,10 @@ Items in [`done/`](done/):
 - [MCP Prompts and Resources](done/mcp-prompts-and-resources.md) — 4 prompts (research, summarize, connections, briefing), 3 resource URIs, resource templates
 - [Slash Commands in Editor](done/slash-commands.md) — 14 slash commands via CodeMirror CompletionSource, headings/callouts/code/table/link/date/divider/todo
 - [Content Negotiation and Multi-Format Support](done/content-negotiation-and-formats.md) — pyrite/formats/ module, Accept header negotiation, JSON/Markdown/CSV/YAML, CLI --format flag
+- [Rewrite README for Pyrite](done/readme-rewrite.md) — New README covering installation, quick start, architecture overview
+- [Pyrite Dev Workflow Skill](done/pyrite-dev-skill.md) — TDD, debugging, verification, backlog management, parallel agent work
+- [Research Flow Skill](done/research-flow-skill.md) — Gather→Connect→Analyze→Synthesize methodology with source assessment rubric
+- [Investigation Skill](done/investigation-skill.md) — Entity investigation with source chain tracking, relationship mapping, confidence-rated findings
 
 ---
 

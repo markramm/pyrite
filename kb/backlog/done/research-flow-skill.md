@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Research Flow Skill for Claude Code"
 kind: feature
-status: proposed
+status: completed
 priority: high
 effort: L
 tags: [ai, claude-code, research, workflow]

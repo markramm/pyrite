@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Pyrite Development Workflow Skill"
 kind: feature
-status: proposed
+status: completed
 priority: medium
 effort: M
 tags: [ai, claude-code, dx, workflow]

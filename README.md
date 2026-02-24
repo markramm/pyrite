@@ -1,82 +1,84 @@
 # Pyrite
 
-**Knowledge-as-Code for you and your agents.**
+Pyrite is a multi-KB knowledge base system. Data is markdown files with YAML frontmatter, stored in git. Search is SQLite FTS5 with optional vector embeddings. AI agents access it through a three-tier MCP server (read/write/admin). Humans use a CLI, REST API, or SvelteKit web UI.
 
-Pyrite is a knowledge infrastructure platform. You define your domain's types in YAML, your data lives in git as markdown, and everything is searchable by both humans and AI agents through a permissioned MCP server.
+You define domain-specific entry types and field schemas in YAML. Pyrite validates entries, indexes them, and exposes them through all interfaces. A plugin protocol lets you extend entry types, add MCP tools, define relationship semantics, and hook into lifecycle events.
 
-## What It Does
-
-- **Typed knowledge entries** — People, organizations, events, documents, topics, and custom types with field-level validation
-- **Multi-KB architecture** — Mount multiple knowledge bases (a timeline, a research KB, a project wiki) and query across all of them with cross-KB links
-- **Three-tier MCP server** — AI agents get read, write, or admin access depending on trust level. The only knowledge system with permissioned agent access.
-- **Git-native storage** — Markdown files with YAML frontmatter. Version history on every entry. No vendor lock-in.
-- **Full-text + semantic search** — SQLite FTS5 with BM25 ranking, optional vector embeddings, and hybrid mode
-- **Plugin protocol** — Define custom entry types, field schemas, relationship semantics, workflows, and MCP tools without modifying core
-
-## Quick Start
+## Install
 
 ```bash
-# Install
-pip install pyrite
-
-# Or from source
-git clone https://github.com/markramm/pyrite
-cd pyrite
-pip install -e ".[all]"
-
-# Initialize a knowledge base
-pyrite kb init my-research --type generic
-pyrite kb mount my-research /path/to/my-research
-
-# Create entries
-pyrite entry create "Machine Learning Fundamentals" -k my-research -t note --tags ai,ml
-
-# Search
-pyrite search "machine learning" -k my-research
-
-# Start the web UI
-pyrite-server --dev
-# Open http://localhost:8088
+pip install -e "."            # Core
+pip install -e ".[all]"       # Core + AI + semantic search + dev tools
+pip install -e ".[ai]"        # OpenAI + Anthropic SDKs
+pip install -e ".[semantic]"  # sentence-transformers + sqlite-vec
 ```
 
-## Interfaces
+Extensions are installed separately:
 
-| Interface | Command | Purpose |
-|-----------|---------|---------|
-| CLI (full access) | `pyrite` | Researchers and power users |
-| CLI (read-only) | `pyrite-read` | Safe for untrusted AI agents |
-| REST API | `pyrite-server` | Web and programmatic access |
-| MCP Server | Configure in Claude/Cursor | AI agent integration |
-| Web UI | `pyrite-server --dev` | Browser-based search, editing, graph |
+```bash
+pip install -e extensions/software-kb
+pip install -e extensions/zettelkasten
+pip install -e extensions/encyclopedia
+pip install -e extensions/social
+```
+
+## Usage
+
+```bash
+# Build the search index (required before first search)
+pyrite index build
+
+# Search
+pyrite search "immigration policy"
+pyrite search "immigration" --kb=timeline --type=event --mode=hybrid
+
+# Read
+pyrite get stephen-miller
+pyrite backlinks stephen-miller --kb=research
+pyrite timeline --from=2025-01-01 --to=2025-06-30
+
+# Write
+pyrite create --kb=research --type=person --title="Jane Doe" \
+  --body="Senior policy advisor." --tags="policy,doj"
+
+# Admin
+pyrite index sync          # Incremental re-index after file edits
+pyrite index health        # Check for stale/missing entries
+pyrite kb discover         # Auto-find KBs by kb.yaml presence
+```
 
 ## MCP Server
 
-Pyrite's MCP server exposes your knowledge base to AI assistants with three permission tiers:
+Three permission tiers. Each tier is a separate server instance.
 
-| Tier | Tools | Use Case |
-|------|-------|----------|
-| **Read** | `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_schema` | Public assistants, research queries |
-| **Write** | Read + `kb_create`, `kb_update`, `kb_delete`, `kb_create_link` | Trusted research agents |
-| **Admin** | Write + `kb_init`, `kb_remove`, `index_sync`, `repo_sync` | Human-supervised operations |
+| Tier | Tools |
+|------|-------|
+| **read** | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema` |
+| **write** | read + `kb_create`, `kb_update`, `kb_delete` |
+| **admin** | write + `kb_index_sync`, `kb_manage` |
 
-Pre-built MCP prompts (`research_topic`, `summarize_entry`, `find_connections`, `daily_briefing`) and browsable `pyrite://` resources are included.
+Plugins add their own tools per tier (e.g., software-kb adds `sw_adrs`, `sw_backlog`, `sw_new_adr`).
 
-### Claude Desktop / Claude Code Configuration
+Also exposes: 4 prompts (`research_topic`, `summarize_entry`, `find_connections`, `daily_briefing`), resources (`pyrite://kbs`, `pyrite://kbs/{name}/entries`, `pyrite://entries/{id}`).
+
+### Claude Desktop / Claude Code
 
 ```json
 {
   "mcpServers": {
     "pyrite": {
-      "command": "pyrite-server",
-      "args": ["--mcp", "--tier", "write"]
+      "command": "pyrite",
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-## Define Your Domain
+Use `pyrite-admin mcp --tier read` for a read-only server.
 
-Custom types in `kb.yaml` — no code required:
+## Custom Types
+
+Define types in `kb.yaml`:
 
 ```yaml
 name: legal-research
@@ -99,70 +101,58 @@ types:
           type: text
 ```
 
-Field types: `text`, `number`, `date`, `datetime`, `checkbox`, `select`, `multi-select`, `object-ref`, `list`, `tags`. All auto-validated.
+Field types: `text`, `number`, `date`, `datetime`, `checkbox`, `select`, `multi-select`, `object-ref`, `list`, `tags`.
 
-For deeper customization, the [plugin protocol](kb/designs/plugin-protocol.md) provides 12 extension points: custom entry types, MCP tools, relationship semantics, lifecycle hooks, workflows, database tables, and more. Four extensions ship today: zettelkasten, encyclopedia, social, and software-kb.
+Eight built-in entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`.
+
+## Plugin Protocol
+
+Extensions implement a Python protocol class with up to 12 methods:
+
+- `get_entry_classes()` — custom entry types with serialization
+- `get_type_metadata()` — field definitions, AI instructions, presets
+- `get_mcp_tools(tier)` — per-tier MCP tools
+- `get_cli_app()` — Typer sub-commands
+- `get_validators()` — entry validation rules
+- `get_relationship_types()` — semantic relationship definitions
+- Lifecycle hooks: `before_save`, `after_save`, `before_delete`, `after_delete`
+
+Four extensions ship: `software-kb` (ADRs, components, backlog), `zettelkasten` (CEQRC maturity workflow), `encyclopedia` (articles, reviews, voting), `social` (engagement tracking).
 
 ## Architecture
 
 ```
 pyrite/
 ├── models/          # Entry types (base, core_types, factory, generic)
-├── schema.py        # Type definitions, field schemas, relationship types
-├── config.py        # Multi-KB + repo configuration
+├── schema.py        # YAML-driven type definitions, field validation
+├── config.py        # Multi-KB and repo configuration
 ├── server/
-│   ├── api.py       # FastAPI REST API
-│   ├── mcp_server.py # Three-tier MCP server
+│   ├── api.py       # FastAPI REST API factory
+│   ├── mcp_server.py # MCP server (mcp SDK, 3-tier)
 │   └── endpoints/   # Per-feature REST routes
 ├── storage/
-│   ├── models.py    # SQLAlchemy ORM
-│   ├── crud.py      # CRUD operations
-│   ├── queries.py   # Complex queries (backlinks, timeline, graph)
-│   └── index.py     # FTS5 indexing
+│   ├── database.py  # SQLite + FTS5 (SQLAlchemy + raw)
+│   ├── index.py     # Incremental indexing
+│   └── repository.py # Markdown file I/O
 ├── services/        # Business logic (kb, search, repo, llm, embedding, git, user)
 ├── plugins/         # Plugin discovery and protocol
-├── formats/         # Content negotiation (JSON, Markdown, CSV, YAML)
-└── ui/              # Streamlit web interface
+└── formats/         # Content negotiation (JSON, Markdown, CSV, YAML)
 
 extensions/          # Domain-specific plugins
-├── zettelkasten/    # ZettelEntry, CEQRC workflow, maturity tracking
-├── encyclopedia/    # ArticleEntry, review workflows, voting
-├── social/          # SocialPostEntry, engagement tracking
-└── software-kb/     # ComponentEntry, ADRs, backlog items
-
 web/                 # SvelteKit 5 frontend (TypeScript + Tailwind)
+kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 ```
 
-### Storage Model
+**Storage model:** Markdown files in git are the source of truth. SQLite FTS5 is a derived index. Rebuild from files at any time with `pyrite index build`.
 
-- **Source of truth**: Markdown files in git repos
-- **Index**: SQLite with FTS5 for fast search
-- **Two-tier durability**: Git for persistence, SQLite for queries. Rebuild the index from markdown at any time.
-
-### Data Model
-
-Eight core entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`. Each carries typed fields, source provenance with confidence scores, and relationship links with semantic inverses.
-
-Content negotiation: API responses in JSON, Markdown, CSV, or YAML via `Accept` header. CLI supports `--format`.
-
-## Who It's For
-
-Pyrite is a horizontal platform. Current and intended use cases:
-
-- **AI agent shared memory** — Persistent, typed, permissioned knowledge that agents can read and write through MCP
-- **Software teams** — Architecture decision records, component docs, system knowledge that AI coding assistants can query
-- **Domain-specific knowledge bases** — Legal research, policy analysis, medical studies — define your types in YAML
-- **Investigative journalism** — Battle-tested on a 4,240-event timeline and 323-article research knowledge base
-- **Enterprise knowledge management** — Multi-KB for organizational structure with plugin-based customization
-
-See [kb/positioning/](kb/positioning/) for detailed market analysis.
+**Content negotiation:** REST API responds in JSON, Markdown, CSV, or YAML via `Accept` header. CLI supports `--format`.
 
 ## Development
 
 ```bash
-# Setup
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[all]"
+for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
 # Tests (583 tests)
@@ -175,19 +165,19 @@ cd web && npm install && npm run dev
 ruff check pyrite/
 ```
 
-Pyrite manages its own backlog and architecture docs in its own KB:
+Pyrite's own backlog and architecture docs live in `kb/`:
 
 ```bash
-pyrite sw backlog        # Prioritized feature list
+pyrite sw backlog        # Prioritized backlog
 pyrite sw adrs           # Architecture Decision Records
-pyrite sw components     # Core module documentation
+pyrite sw components     # Module documentation
 pyrite sw standards      # Coding conventions
 ```
 
 ## Background
 
-Pyrite began as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten), a single-KB note-taking tool with OpenAI integration. It has since been substantially rewritten: multi-KB architecture, plugin system, three-tier MCP server, SQLite FTS5, REST API, SvelteKit frontend, service layer, schema-as-config, content negotiation, and collaboration support. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for the full divergence history and [CHANGELOG.md](CHANGELOG.md) for release notes.
+Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5, REST API, SvelteKit frontend, service layer, schema-as-config, content negotiation. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
