@@ -216,6 +216,10 @@ Lower-priority items in [`future-ideas/`](future-ideas/):
 - [Plugin Tool Collision Detection](future-ideas/plugin-tool-collision-detection.md) — Warn on duplicate tool names
 - [Trim Required Dependencies](future-ideas/trim-required-dependencies.md) — Reduce install footprint
 - [Engagement Federation](future-ideas/engagement-federation.md) — Sync engagement data across instances
+- [Graph Betweenness Centrality Sizing](future-ideas/graph-betweenness-centrality.md) — Size nodes by BC to highlight bridging entries
+- [Graph Community Detection](future-ideas/graph-community-detection.md) — Detect topical clusters, color by community instead of type
+- [Graph Structural Gap Detection](future-ideas/graph-structural-gap-detection.md) — Find missing links between distant clusters
+- [Graph Influence-per-Occurrence](future-ideas/graph-influence-per-occurrence.md) — Surface entries with outsized connective importance
 
 ## Completed
 
