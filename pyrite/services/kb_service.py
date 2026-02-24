@@ -4,15 +4,20 @@ Knowledge Base Service
 Unified KB operations used by API, CLI, and UI layers.
 """
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from ..config import KBConfig, PyriteConfig
+from ..exceptions import EntryNotFoundError, KBNotFoundError, KBReadOnlyError, PyriteError
 from ..models import Entry
 from ..models.factory import build_entry
+from ..plugins.context import PluginContext
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
+
+logger = logging.getLogger(__name__)
 
 
 class KBService:
@@ -105,13 +110,14 @@ class KBService:
             Created Entry object
 
         Raises:
-            ValueError: If KB not found or is read-only
+            KBNotFoundError: If KB not found
+            KBReadOnlyError: If KB is read-only
         """
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            raise ValueError(f"KB not found: {kb_name}")
+            raise KBNotFoundError(f"KB not found: {kb_name}")
         if kb_config.read_only:
-            raise ValueError(f"KB is read-only: {kb_name}")
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
         repo = KBRepository(kb_config)
 
@@ -119,7 +125,9 @@ class KBService:
         entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **kwargs)
 
         # Run before_save hooks
-        hook_ctx = {"kb_name": kb_name, "user": "", "operation": "create"}
+        hook_ctx = PluginContext(
+            config=self.config, db=self.db, kb_name=kb_name, user="", operation="create",
+        )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
         # Save to file
@@ -154,18 +162,20 @@ class KBService:
             Updated Entry object
 
         Raises:
-            ValueError: If entry not found or KB is read-only
+            KBNotFoundError: If KB not found
+            KBReadOnlyError: If KB is read-only
+            EntryNotFoundError: If entry not found
         """
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            raise ValueError(f"KB not found: {kb_name}")
+            raise KBNotFoundError(f"KB not found: {kb_name}")
         if kb_config.read_only:
-            raise ValueError(f"KB is read-only: {kb_name}")
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
         repo = KBRepository(kb_config)
         entry = repo.load(entry_id)
         if not entry:
-            raise ValueError(f"Entry not found: {entry_id}")
+            raise EntryNotFoundError(f"Entry not found: {entry_id}")
 
         # Apply updates
         for key, value in updates.items():
@@ -175,7 +185,9 @@ class KBService:
         entry.updated_at = datetime.now(UTC)
 
         # Run before_save hooks
-        hook_ctx = {"kb_name": kb_name, "user": "", "operation": "update"}
+        hook_ctx = PluginContext(
+            config=self.config, db=self.db, kb_name=kb_name, user="", operation="update",
+        )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
         # Save to file
@@ -197,19 +209,22 @@ class KBService:
             True if deleted, False if not found
 
         Raises:
-            ValueError: If KB is read-only
+            KBNotFoundError: If KB not found
+            KBReadOnlyError: If KB is read-only
         """
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            raise ValueError(f"KB not found: {kb_name}")
+            raise KBNotFoundError(f"KB not found: {kb_name}")
         if kb_config.read_only:
-            raise ValueError(f"KB is read-only: {kb_name}")
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
         repo = KBRepository(kb_config)
 
         # Load entry for hooks before deleting
         entry = repo.load(entry_id)
-        hook_ctx = {"kb_name": kb_name, "user": "", "operation": "delete"}
+        hook_ctx = PluginContext(
+            config=self.config, db=self.db, kb_name=kb_name, user="", operation="delete",
+        )
         if entry:
             entry = self._run_hooks("before_delete", entry, hook_ctx)
 
@@ -359,7 +374,10 @@ class KBService:
             from ..plugins import get_registry
 
             return get_registry().run_hooks(hook_name, entry, context)
+        except PyriteError:
+            raise  # Let Pyrite exceptions propagate (e.g. hook aborts)
         except Exception:
+            logger.warning("Hook %s failed", hook_name, exc_info=True)
             return entry
 
     # =========================================================================

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
+from pyrite.exceptions import ConfigError
 from pyrite.server.mcp_server import PyriteMCPServer
 
 
@@ -88,7 +89,7 @@ class TestMCPTierRestrictions:
             server.close()
 
     def test_invalid_tier_raises(self, minimal_config):
-        with pytest.raises(ValueError, match="Invalid tier"):
+        with pytest.raises(ConfigError, match="Invalid tier"):
             PyriteMCPServer(minimal_config, tier="superadmin")
 
     def test_read_tier_tool_count(self, minimal_config):

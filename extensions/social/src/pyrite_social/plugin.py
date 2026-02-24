@@ -23,6 +23,13 @@ class SocialPlugin:
 
     name = "social"
 
+    def __init__(self):
+        self.ctx = None
+
+    def set_context(self, ctx) -> None:
+        """Receive shared dependencies from the plugin infrastructure."""
+        self.ctx = ctx
+
     def get_entry_types(self) -> dict[str, type]:
         return {
             "writeup": WriteupEntry,
@@ -150,15 +157,21 @@ class SocialPlugin:
     # MCP tool handlers
     # =========================================================================
 
-    def _mcp_top(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get highest-voted writeups."""
-        import json
-
+    def _get_db(self):
+        """Get DB from injected context, falling back to self-bootstrap."""
+        if self.ctx is not None:
+            return self.ctx.db, False  # db, should_close
         from pyrite.config import load_config
         from pyrite.storage.database import PyriteDB
 
         config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        return PyriteDB(config.settings.index_path), True
+
+    def _mcp_top(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get highest-voted writeups."""
+        import json
+
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         period = args.get("period", "all")
         limit = args.get("limit", 10)
@@ -202,17 +215,14 @@ class SocialPlugin:
                 )
             return {"count": len(results), "top": results}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_newest(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get most recent writeups."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         limit = args.get("limit", 10)
 
@@ -246,15 +256,12 @@ class SocialPlugin:
                 )
             return {"count": len(results), "newest": results}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_reputation(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get user reputation."""
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         user_id = args["user_id"]
 
         try:
@@ -280,17 +287,14 @@ class SocialPlugin:
                 "from_adjustments": log_rep,
             }
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_vote(self, args: dict[str, Any]) -> dict[str, Any]:
         """Cast a vote on a writeup."""
         from datetime import UTC, datetime
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
 
         try:
             now = datetime.now(UTC).isoformat()
@@ -312,17 +316,22 @@ class SocialPlugin:
             db._raw_conn.commit()
             return {"voted": True, "entry_id": args["entry_id"], "value": args["value"]}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_post(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a new writeup."""
-        from pyrite.config import load_config
         from pyrite.schema import generate_entry_id
-        from pyrite.storage.database import PyriteDB
         from pyrite.storage.index import IndexManager
         from pyrite.storage.repository import KBRepository
 
-        config = load_config()
+        db, should_close = self._get_db()
+        config = self.ctx.config if self.ctx else None
+        if config is None:
+            from pyrite.config import load_config
+
+            config = load_config()
+
         kb_name = args["kb_name"]
         kb_config = config.get_kb(kb_name)
         if not kb_config:
@@ -340,10 +349,10 @@ class SocialPlugin:
         repo = KBRepository(kb_config)
         file_path = repo.save(entry)
 
-        db = PyriteDB(config.settings.index_path)
         try:
             index_mgr = IndexManager(db, config)
             index_mgr.index_entry(entry, kb_name, file_path)
             return {"created": True, "entry_id": entry.id, "file_path": str(file_path)}
         finally:
-            db.close()
+            if should_close:
+                db.close()

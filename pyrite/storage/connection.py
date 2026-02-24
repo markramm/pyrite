@@ -4,6 +4,7 @@ Database connection setup, extensions, migrations, and plugin tables.
 Mixin class providing __init__, close, transaction, and schema management.
 """
 
+import logging
 import sqlite3
 from contextlib import contextmanager
 from datetime import date, datetime
@@ -11,6 +12,8 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from .models import Base
 from .virtual_tables import create_fts_tables, create_vec_table
@@ -97,7 +100,7 @@ class ConnectionMixin:
             for table_def in get_registry().get_all_db_tables():
                 self._create_table_from_def(table_def)
         except Exception:
-            pass
+            logger.warning("Plugin table creation failed", exc_info=True)
 
     def _create_table_from_def(self, table_def: dict):
         """Create a single table from a plugin table definition."""

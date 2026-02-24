@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
+from pyrite.exceptions import KBReadOnlyError
 from pyrite.services import KBService, QueryExpansionService, SearchMode, SearchService
 from pyrite.services.query_expansion_service import is_available
 from pyrite.storage.database import PyriteDB
@@ -234,7 +235,7 @@ class TestKBService:
 
         service = KBService(config, test_db)
 
-        with pytest.raises(ValueError, match="read-only"):
+        with pytest.raises(KBReadOnlyError, match="read-only"):
             service.create_entry(
                 kb_name="readonly-kb",
                 entry_id="test",

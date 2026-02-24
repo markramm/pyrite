@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyrite-mcp"
+version = "0.2.0"
+description = "Standalone MCP server for Pyrite knowledge bases"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+keywords = ["mcp", "knowledge-base", "ai", "agent"]
+
+dependencies = [
+    "pyrite>=0.2.0",
+]
+
+[project.scripts]
+pyrite-mcp = "pyrite_mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/markramm/pyrite"
+Repository = "https://github.com/markramm/pyrite"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyrite_mcp*"]

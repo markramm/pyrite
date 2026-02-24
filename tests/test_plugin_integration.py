@@ -705,3 +705,113 @@ class TestEndToEnd:
         assert "quality: GA" in md
         assert "review_status: published" in md
         assert "physics" in md
+
+
+# =========================================================================
+# Plugin context injection
+# =========================================================================
+
+
+class TestPluginContextInjection:
+    """Test PluginContext injection into plugins."""
+
+    def test_set_context_on_registry(self, registry, temp_dir):
+        """set_context injects context into all plugins."""
+        from pyrite.config import PyriteConfig, Settings
+        from pyrite.plugins.context import PluginContext
+        from pyrite.storage.database import PyriteDB
+
+        db = PyriteDB(temp_dir / "ctx-test.db")
+        try:
+            config = PyriteConfig(
+                knowledge_bases=[],
+                settings=Settings(index_path=temp_dir / "ctx-test.db"),
+            )
+            ctx = PluginContext(config=config, db=db)
+            registry.set_context(ctx)
+
+            # All plugins should have received context
+            for name in registry.list_plugins():
+                plugin = registry.get_plugin(name)
+                assert hasattr(plugin, "ctx"), f"Plugin {name} has no ctx attribute"
+                assert plugin.ctx is ctx, f"Plugin {name} ctx not set correctly"
+        finally:
+            db.close()
+
+    def test_context_dict_access(self):
+        """PluginContext supports dict-style access for backwards compat."""
+        from pyrite.config import PyriteConfig, Settings
+        from pyrite.plugins.context import PluginContext
+
+        config = PyriteConfig(
+            knowledge_bases=[],
+            settings=Settings(index_path=Path("/tmp/test.db")),
+        )
+        ctx = PluginContext(config=config, db=None, kb_name="test-kb", user="alice")
+
+        # Dict-style access
+        assert ctx["kb_name"] == "test-kb"
+        assert ctx["user"] == "alice"
+        assert ctx.get("operation", "default") == ""
+        assert ctx.get("nonexistent", "fallback") == "fallback"
+        assert "kb_name" in ctx
+
+    def test_hooks_receive_plugin_context(self, registry, temp_dir):
+        """Hooks receive PluginContext which is backwards compatible with dict access."""
+        from pyrite.plugins.context import PluginContext
+
+        entry = WriteupEntry(id="test", title="Test")
+        ctx = PluginContext(
+            config=None, db=None, kb_name="social-kb", user="alice", operation="create"
+        )
+        # Hooks should still work — they call context.get("user", "") etc.
+        result = registry.run_hooks("before_save", entry, ctx)
+        assert result.author_id == "alice"
+
+    def test_after_save_hook_writes_to_db(self, registry, db_with_plugins):
+        """after_save_update_counts actually writes to DB when context has db."""
+        from pyrite.plugins.context import PluginContext
+
+        entry = WriteupEntry(id="test-writeup", title="Test", author_id="alice")
+        ctx = PluginContext(
+            config=None, db=db_with_plugins, kb_name="test", user="alice", operation="create"
+        )
+        # Run after_save hooks
+        registry.run_hooks("after_save", entry, ctx)
+
+        # Check that a reputation log entry was created
+        row = db_with_plugins._raw_conn.execute(
+            "SELECT * FROM social_reputation_log WHERE user_id = 'alice'"
+        ).fetchone()
+        assert row is not None
+        assert row["delta"] == 1
+        assert "writeup_created:test-writeup" in row["reason"]
+
+    def test_after_delete_hook_adjusts_reputation(self, registry, db_with_plugins):
+        """after_delete_adjust_reputation reverses vote reputation when db available."""
+        from pyrite.plugins.context import PluginContext
+
+        # First, add some votes for this writeup
+        db_with_plugins._raw_conn.execute(
+            "INSERT INTO social_vote (entry_id, kb_name, user_id, value, created_at) "
+            "VALUES ('del-writeup', 'test', 'bob', 1, '2025-01-01')"
+        )
+        db_with_plugins._raw_conn.execute(
+            "INSERT INTO social_vote (entry_id, kb_name, user_id, value, created_at) "
+            "VALUES ('del-writeup', 'test', 'carol', 1, '2025-01-01')"
+        )
+        db_with_plugins._raw_conn.commit()
+
+        entry = WriteupEntry(id="del-writeup", title="Test", author_id="alice")
+        ctx = PluginContext(
+            config=None, db=db_with_plugins, kb_name="test", user="alice", operation="delete"
+        )
+        registry.run_hooks("after_delete", entry, ctx)
+
+        # Check reputation adjustment was logged (should be -2 to reverse the +2 votes)
+        row = db_with_plugins._raw_conn.execute(
+            "SELECT * FROM social_reputation_log WHERE reason LIKE '%writeup_deleted:del-writeup%'"
+        ).fetchone()
+        assert row is not None
+        assert row["delta"] == -2
+        assert row["user_id"] == "alice"

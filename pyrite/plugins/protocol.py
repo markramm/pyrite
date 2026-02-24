@@ -5,8 +5,13 @@ Defines the interface that pyrite plugins must implement.
 Plugins can provide any subset of these capabilities.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from .context import PluginContext
 
 
 @runtime_checkable
@@ -203,6 +208,18 @@ class PyritePlugin(Protocol):
                 ai_instructions: str - guidance for AI agents on how to use this type
                 field_descriptions: dict[str, str] - per-field human-readable descriptions
                 display: dict - display hints (icon, color, layout)
+        """
+        ...
+
+    def set_context(self, ctx: PluginContext) -> None:
+        """
+        Receive shared dependencies from the plugin infrastructure.
+
+        Called after plugin discovery to inject config, db, and other
+        shared resources. Plugins should store the context and use it
+        in MCP tool handlers instead of calling load_config()/PyriteDB().
+
+        Default implementation: no-op (backwards compatible).
         """
         ...
 

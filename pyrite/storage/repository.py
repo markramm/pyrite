@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..config import KBConfig
+from ..exceptions import KBReadOnlyError
 from ..models import Entry, EventEntry
 from ..models.core_types import entry_from_frontmatter
 from ..schema import CORE_TYPES
@@ -136,7 +137,7 @@ class KBRepository:
             Path to the saved file
         """
         if self.config.read_only:
-            raise PermissionError(f"KB '{self.name}' is read-only")
+            raise KBReadOnlyError(f"KB '{self.name}' is read-only")
 
         if subdir is None:
             subdir = self._infer_subdir(entry)
@@ -154,7 +155,7 @@ class KBRepository:
     def delete(self, entry_id: str) -> bool:
         """Delete an entry file. Returns True if deleted."""
         if self.config.read_only:
-            raise PermissionError(f"KB '{self.name}' is read-only")
+            raise KBReadOnlyError(f"KB '{self.name}' is read-only")
 
         file_path = self.find_file(entry_id)
         if file_path and file_path.exists():

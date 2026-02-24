@@ -16,6 +16,7 @@ from typing import Any
 from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
+from ..exceptions import ConfigError, PyriteError
 from ..schema import KBSchema, generate_entry_id
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
@@ -34,7 +35,7 @@ class PyriteMCPServer:
 
     def __init__(self, config: PyriteConfig | None = None, tier: str = "read"):
         if tier not in self.VALID_TIERS:
-            raise ValueError(f"Invalid tier '{tier}'. Must be one of {self.VALID_TIERS}")
+            raise ConfigError(f"Invalid tier '{tier}'. Must be one of {self.VALID_TIERS}")
 
         self.config = config or load_config()
         self.tier = tier
@@ -340,9 +341,15 @@ class PyriteMCPServer:
     def _register_plugin_tools(self):
         """Register MCP tools from plugins for the current tier."""
         try:
-            from ..plugins import get_registry
+            from ..plugins import PluginContext, get_registry
 
-            plugin_tools = get_registry().get_all_mcp_tools(self.tier)
+            registry = get_registry()
+
+            # Inject shared context so plugin handlers don't need to self-bootstrap
+            ctx = PluginContext(config=self.config, db=self.db)
+            registry.set_context(ctx)
+
+            plugin_tools = registry.get_all_mcp_tools(self.tier)
             self.tools.update(plugin_tools)
         except Exception:
             pass  # Plugin loading shouldn't break the MCP server
@@ -477,7 +484,7 @@ class PyriteMCPServer:
 
         try:
             entry = self.svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
-        except ValueError as e:
+        except PyriteError as e:
             return {"error": str(e)}
 
         result = {"created": True, "entry_id": entry.id, "file_path": ""}
@@ -497,7 +504,7 @@ class PyriteMCPServer:
 
         try:
             entry = self.svc.update_entry(entry_id, kb_name, **updates)
-        except ValueError as e:
+        except PyriteError as e:
             return {"error": str(e)}
 
         return {"updated": True, "entry_id": entry.id, "file_path": ""}
@@ -509,7 +516,7 @@ class PyriteMCPServer:
 
         try:
             deleted = self.svc.delete_entry(entry_id, kb_name)
-        except ValueError as e:
+        except PyriteError as e:
             return {"error": str(e)}
 
         if not deleted:

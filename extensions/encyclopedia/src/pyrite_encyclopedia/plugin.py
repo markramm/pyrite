@@ -19,6 +19,23 @@ class EncyclopediaPlugin:
 
     name = "encyclopedia"
 
+    def __init__(self):
+        self.ctx = None
+
+    def set_context(self, ctx) -> None:
+        """Receive shared dependencies from the plugin infrastructure."""
+        self.ctx = ctx
+
+    def _get_db(self):
+        """Get DB from injected context, falling back to self-bootstrap."""
+        if self.ctx is not None:
+            return self.ctx.db, False
+        from pyrite.config import load_config
+        from pyrite.storage.database import PyriteDB
+
+        config = load_config()
+        return PyriteDB(config.settings.index_path), True
+
     def get_entry_types(self) -> dict[str, type]:
         return {
             "article": ArticleEntry,
@@ -155,11 +172,7 @@ class EncyclopediaPlugin:
         """Get quality distribution and review queue stats."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
 
         try:
@@ -193,17 +206,14 @@ class EncyclopediaPlugin:
                 "review_queue_size": review_counts.get("under_review", 0),
             }
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_review_queue(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get articles under review."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         limit = args.get("limit", 20)
 
@@ -239,17 +249,14 @@ class EncyclopediaPlugin:
 
             return {"count": len(queue), "queue": queue}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_stubs(self, args: dict[str, Any]) -> dict[str, Any]:
         """List stub articles."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         limit = args.get("limit", 20)
 
@@ -284,17 +291,14 @@ class EncyclopediaPlugin:
 
             return {"count": len(stubs), "stubs": stubs}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_submit_review(self, args: dict[str, Any]) -> dict[str, Any]:
         """Submit a review."""
         from datetime import UTC, datetime
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
 
         try:
             now = datetime.now(UTC).isoformat()
@@ -318,7 +322,8 @@ class EncyclopediaPlugin:
                 "action": args["action"],
             }
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_assess_quality(self, args: dict[str, Any]) -> dict[str, Any]:
         """Assess article quality."""

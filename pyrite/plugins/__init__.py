@@ -12,7 +12,8 @@ Plugins are discovered via Python entry points:
 See PyritePlugin protocol for the interface plugins must implement.
 """
 
+from .context import PluginContext
 from .protocol import PyritePlugin
 from .registry import PluginRegistry, get_registry
 
-__all__ = ["PyritePlugin", "PluginRegistry", "get_registry"]
+__all__ = ["PluginContext", "PyritePlugin", "PluginRegistry", "get_registry"]

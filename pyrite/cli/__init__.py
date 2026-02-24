@@ -22,6 +22,7 @@ from ..config import (
     load_config,
     save_config,
 )
+from ..exceptions import PyriteError
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from .index_commands import index_app
@@ -183,7 +184,7 @@ def create_entry(
         entry = svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
         console.print(f"[green]Created:[/green] {entry.id}")
         console.print(f"[dim]Type: {entry.entry_type}[/dim]")
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
     finally:
@@ -219,7 +220,7 @@ def update_entry(
     try:
         entry = svc.update_entry(entry_id, kb_name, **updates)
         console.print(f"[green]Updated:[/green] {entry.id}")
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
     finally:
@@ -249,7 +250,7 @@ def delete_entry(
             console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
             raise typer.Exit(1)
         console.print(f"[green]Deleted:[/green] {entry_id}")
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
     finally:

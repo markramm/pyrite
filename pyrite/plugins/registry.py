@@ -13,6 +13,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from .context import PluginContext
 from .protocol import PyritePlugin
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,16 @@ class PluginRegistry:
     def register(self, plugin: PyritePlugin) -> None:
         """Manually register a plugin (for testing or programmatic use)."""
         self._plugins[plugin.name] = plugin
+
+    def set_context(self, ctx: PluginContext) -> None:
+        """Inject shared context into all discovered plugins."""
+        self.discover()
+        for plugin in self._plugins.values():
+            if hasattr(plugin, "set_context"):
+                try:
+                    plugin.set_context(ctx)
+                except Exception as e:
+                    logger.warning("Plugin %s set_context failed: %s", plugin.name, e)
 
     def get_plugin(self, name: str) -> PyritePlugin | None:
         """Get a plugin by name."""

@@ -17,6 +17,23 @@ class ZettelkastenPlugin:
 
     name = "zettelkasten"
 
+    def __init__(self):
+        self.ctx = None
+
+    def set_context(self, ctx) -> None:
+        """Receive shared dependencies from the plugin infrastructure."""
+        self.ctx = ctx
+
+    def _get_db(self):
+        """Get DB from injected context, falling back to self-bootstrap."""
+        if self.ctx is not None:
+            return self.ctx.db, False
+        from pyrite.config import load_config
+        from pyrite.storage.database import PyriteDB
+
+        config = load_config()
+        return PyriteDB(config.settings.index_path), True
+
     def get_entry_types(self) -> dict[str, type]:
         return {
             "zettel": ZettelEntry,
@@ -114,11 +131,7 @@ class ZettelkastenPlugin:
         """List unprocessed fleeting notes."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
 
         try:
@@ -149,15 +162,12 @@ class ZettelkastenPlugin:
 
             return {"count": len(inbox), "inbox": inbox}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_graph(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get link graph around a note."""
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         entry_id = args["entry_id"]
         kb_name = args["kb_name"]
         depth = args.get("depth", 1)
@@ -191,4 +201,5 @@ class ZettelkastenPlugin:
 
             return graph
         finally:
-            db.close()
+            if should_close:
+                db.close()

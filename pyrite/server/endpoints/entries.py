@@ -2,6 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from ...exceptions import (
+    EntryNotFoundError,
+    KBNotFoundError,
+    KBReadOnlyError,
+    PyriteError,
+    ValidationError,
+)
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter, negotiate_response
 from ..schemas import (
@@ -177,7 +184,11 @@ def create_entry(
         entry = svc.create_entry(
             req.kb, entry_id, req.title, req.entry_type or "note", req.body, **extra
         )
-    except ValueError as e:
+    except (KBNotFoundError, EntryNotFoundError) as e:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
+    except KBReadOnlyError as e:
+        raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
+    except (ValidationError, PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "CREATE_FAILED", "message": str(e)})
 
     return CreateResponse(created=True, id=entry.id, kb_name=req.kb, file_path="")
@@ -204,14 +215,12 @@ def update_entry(
 
     try:
         svc.update_entry(entry_id, req.kb, **updates)
-    except ValueError as e:
-        msg = str(e)
-        if "not found" in msg.lower():
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "NOT_FOUND", "message": msg},
-            )
-        raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": msg})
+    except (KBNotFoundError, EntryNotFoundError) as e:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
+    except KBReadOnlyError as e:
+        raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
+    except (ValidationError, PyriteError, ValueError) as e:
+        raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
     return UpdateResponse(updated=True, id=entry_id)
 
@@ -227,14 +236,12 @@ def delete_entry(
     """Delete an entry."""
     try:
         deleted = svc.delete_entry(entry_id, kb)
-    except ValueError as e:
-        msg = str(e)
-        if "not found" in msg.lower():
-            raise HTTPException(
-                status_code=404,
-                detail={"code": "NOT_FOUND", "message": msg},
-            )
-        raise HTTPException(status_code=400, detail={"code": "DELETE_FAILED", "message": msg})
+    except (KBNotFoundError, EntryNotFoundError) as e:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
+    except KBReadOnlyError as e:
+        raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
+    except (ValidationError, PyriteError, ValueError) as e:
+        raise HTTPException(status_code=400, detail={"code": "DELETE_FAILED", "message": str(e)})
 
     if not deleted:
         raise HTTPException(

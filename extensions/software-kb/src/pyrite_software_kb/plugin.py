@@ -25,6 +25,23 @@ class SoftwareKBPlugin:
 
     name = "software_kb"
 
+    def __init__(self):
+        self.ctx = None
+
+    def set_context(self, ctx) -> None:
+        """Receive shared dependencies from the plugin infrastructure."""
+        self.ctx = ctx
+
+    def _get_db(self):
+        """Get DB from injected context, falling back to self-bootstrap."""
+        if self.ctx is not None:
+            return self.ctx.db, False
+        from pyrite.config import load_config
+        from pyrite.storage.database import PyriteDB
+
+        config = load_config()
+        return PyriteDB(config.settings.index_path), True
+
     def get_entry_types(self) -> dict[str, type]:
         return {
             "adr": ADREntry,
@@ -246,11 +263,7 @@ class SoftwareKBPlugin:
         """List ADRs."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         status_filter = args.get("status")
 
@@ -287,17 +300,14 @@ class SoftwareKBPlugin:
 
             return {"count": len(adrs), "adrs": adrs}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_component(self, args: dict[str, Any]) -> dict[str, Any]:
         """Find component docs."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         search_path = args.get("path", "")
         search_name = args.get("name", "")
@@ -343,17 +353,14 @@ class SoftwareKBPlugin:
 
             return {"count": len(results), "components": results}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_standards(self, args: dict[str, Any]) -> dict[str, Any]:
         """List standards."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         category_filter = args.get("category")
 
@@ -388,17 +395,14 @@ class SoftwareKBPlugin:
 
             return {"count": len(standards), "standards": standards}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_backlog(self, args: dict[str, Any]) -> dict[str, Any]:
         """List backlog items."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
         status_filter = args.get("status")
         priority_filter = args.get("priority")
@@ -445,17 +449,14 @@ class SoftwareKBPlugin:
 
             return {"count": len(items), "items": items}
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_create_adr(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a new ADR with auto-numbering."""
         import json
 
-        from pyrite.config import load_config
-        from pyrite.storage.database import PyriteDB
-
-        config = load_config()
-        db = PyriteDB(config.settings.index_path)
+        db, should_close = self._get_db()
         kb_name = args.get("kb_name")
 
         try:
@@ -505,7 +506,8 @@ class SoftwareKBPlugin:
                 "note": "Create the markdown file with this frontmatter and body to complete.",
             }
         finally:
-            db.close()
+            if should_close:
+                db.close()
 
     def _mcp_create_backlog_item(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a new backlog item."""
