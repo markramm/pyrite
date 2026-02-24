@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Web UI AI: Chat Sidebar (RAG over KB)"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [ai, web, search]

@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Callouts and Admonitions"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [web, editor, markdown]

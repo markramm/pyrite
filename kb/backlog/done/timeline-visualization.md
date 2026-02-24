@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Timeline Visualization"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [web, visualization, phase-4]

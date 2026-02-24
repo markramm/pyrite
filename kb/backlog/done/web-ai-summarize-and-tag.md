@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Web UI AI: Summarize, Auto-Tag, Link Suggestions"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [ai, web, editor]

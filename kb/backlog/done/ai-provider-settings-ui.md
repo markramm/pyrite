@@ -2,7 +2,7 @@
 type: backlog_item
 title: "AI Provider Settings in Web UI"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [ai, web, settings]

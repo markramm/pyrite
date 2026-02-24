@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Route All Data Access Through Service Layer"
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [architecture, refactoring, quality]

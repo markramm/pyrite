@@ -117,17 +117,15 @@ Each touches a different frontend route/component with no shared files.
 
 | # | Item | Track | Kind | Effort | File Footprint | Status |
 |---|------|-------|------|--------|----------------|--------|
-| 18 | [Typed Object References](typed-object-references.md) | Core | feature | M | `database.py` (new `entry_refs` table), `index.py`, `endpoints/entries.py`, `schema.py` | proposed |
-| 20 | [Tag Hierarchy and Nested Tags](tag-hierarchy.md) | UI | feature | M | `database.py` (tag prefix queries), `web/` tag tree component | proposed |
+| 18 | [Typed Object References](done/typed-object-references.md) | Core | feature | M | `database.py` (new `entry_refs` table), `index.py`, `endpoints/entries.py`, `schema.py` | **done** |
+| 20 | [Tag Hierarchy and Nested Tags](done/tag-hierarchy.md) | UI | feature | M | `database.py` (tag prefix queries), `web/` tag tree component | **done** |
 
 **Group 2 — New endpoint modules** (parallel — each adds isolated endpoint):
 
 | # | Item | Track | Kind | Effort | File Footprint | Status |
 |---|------|-------|------|--------|----------------|--------|
-| 30 | [Settings and User Preferences](settings-and-preferences.md) | UI | feature | M | New `endpoints/settings.py`, `database.py` (settings table), new settings page | proposed |
-| 35 | [Git-Based Version History](version-history.md) | UI | feature | M | New `endpoints/versions.py`, new `VersionHistoryPanel.svelte` | proposed |
-
-**Contention note:** #18, #20, and #30 all add to `database.py` but with additive changes (new methods/tables). #35 is fully independent. All four register new routers in `api.py` (one-line each).
+| 30 | [Settings and User Preferences](done/settings-and-preferences.md) | UI | feature | M | New `endpoints/settings_ep.py`, `database.py` (settings table), new settings page | **done** |
+| 35 | [Git-Based Version History](done/version-history.md) | UI | feature | M | New `endpoints/versions.py`, new `VersionHistoryPanel.svelte` | **done** |
 
 ### Wave 6A — Graph + realtime (parallel — different stacks)
 
@@ -145,11 +143,10 @@ Depends on #30 (settings) from Wave 5D.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 26 | [Web AI: Summarize, Auto-Tag, Links](web-ai-summarize-and-tag.md) | AI | feature | M | #30 (settings) | proposed |
-| 27 | [AI Provider Settings in UI](ai-provider-settings-ui.md) | AI | feature | S | #30 (settings) | proposed |
+| 26 | [Web AI: Summarize, Auto-Tag, Links](done/web-ai-summarize-and-tag.md) | AI | feature | M | #30 ✅ | **done** |
+| 27 | [AI Provider Settings in UI](done/ai-provider-settings-ui.md) | AI | feature | S | #30 ✅ | **done** |
+| 32 | [Web AI: Chat Sidebar (RAG)](done/web-ai-chat-sidebar.md) | AI | feature | L | #26 ✅ | **done** |
 | 45 | [Ephemeral KBs for Agent Swarm Shared Memory](ephemeral-kbs.md) | AI | feature | M | none (but benefits from #25) | proposed |
-
-**Contention note:** #26 and #27 both touch `endpoints/ai.py` and settings UI — run sequentially or coordinate. #45 is independent.
 
 ### Wave 6C — Plugin UI + import/export
 
@@ -164,12 +161,11 @@ Depends on #25 (plugin DI) from Wave 5C.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 17 | [Block References and Transclusion](block-references.md) | UI | feature | XL | #18 (object refs) | proposed |
+| 17 | [Block References and Transclusion](block-references.md) | UI | feature | XL | #18 ✅ | proposed |
 | 51 | [Collections and Views](collections-and-views.md) | both | feature | XL | none (all deps done) | proposed |
-| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 (plugin DI) | proposed |
-| 32 | [Web AI: Chat Sidebar (RAG)](web-ai-chat-sidebar.md) | AI | feature | L | #26 (AI endpoints) | proposed |
+| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 ✅ | proposed |
 
-**Contention note:** #17 touches `entries.py` + `index.py` (overlaps with #18). #51 is massive (5 phases) but mostly new files. #40 touches `database.py` + all extensions (run after other DB changes land). #32 depends on #26's AI endpoint patterns.
+**Contention note:** #17 touches `entries.py` + `index.py` (overlaps with #18). #51 is massive (5 phases) but mostly new files. #40 touches `database.py` + all extensions (run after other DB changes land).
 
 **Note on #51 (Collections):** This item subsumes #28 (Dataview-Style Queries), #29 (Database Views), and #43 (Display Hints). Those items are retired — their scope is now covered by Collections phases 1–3. See [ADR-0011](../adrs/0011-collections-and-views.md).
 
@@ -260,6 +256,13 @@ Items in [`done/`](done/):
 - [Replace Manual Plugin DI](done/plugin-dependency-injection.md) — PluginContext dataclass with dict-style compat, eliminating 13x self-bootstrapping patterns
 - [Hooks Cannot Access DB Instance](done/hooks-db-access-gap.md) — Hooks receive DB via PluginContext, social hooks now write to DB
 - [Standalone MCP Server Packaging](done/standalone-mcp-packaging.md) — pyrite-mcp package with optional dependency groups, init + serve CLI
+- [Typed Object References](done/typed-object-references.md) — `entry_refs` table, typed relation indexing, backlink resolution for object references
+- [Tag Hierarchy and Nested Tags](done/tag-hierarchy.md) — Hierarchical tag tree with prefix queries, TagTree component, GET /api/tags/tree endpoint
+- [Settings and User Preferences](done/settings-and-preferences.md) — Settings DB table, CRUD endpoints, settings page with appearance/general sections, Svelte store
+- [Git-Based Version History](done/version-history.md) — GitService commit log, GET /api/versions endpoint, VersionHistoryPanel with diff viewer
+- [AI Provider Settings in UI](done/ai-provider-settings-ui.md) — AI provider section in settings (Anthropic/OpenAI/OpenRouter/Ollama), test connection, get_llm_service DI
+- [Web AI: Summarize, Auto-Tag, Links](done/web-ai-summarize-and-tag.md) — POST /api/ai/summarize, /auto-tag, /suggest-links with AI dropdown menu on entry page
+- [Web AI: Chat Sidebar (RAG)](done/web-ai-chat-sidebar.md) — SSE streaming chat endpoint, ChatSidebar component, RAG pipeline with KB context, Cmd+Shift+K toggle
 
 ---
 
@@ -269,25 +272,25 @@ Wave assignments shown in brackets. Items within the same wave group have valida
 
 ```
 claude-code-plugin (#2) ✅
-  ├── research-flow-skill (#10)        [5A]
-  ├── investigation-skill (#11)        [5A]
-  └── pyrite-dev-skill (#19)           [5A]
+  ├── research-flow-skill (#10) ✅     [5A]
+  ├── investigation-skill (#11) ✅     [5A]
+  └── pyrite-dev-skill (#19) ✅        [5A]
 
-plugin-dependency-injection (#25)      [5C group 2]
-  ├── hooks-db-access-gap (#24)        [5C group 2, after #25]
+plugin-dependency-injection (#25) ✅   [5C group 2]
+  ├── hooks-db-access-gap (#24) ✅     [5C group 2, after #25]
   ├── plugin-ui-hooks (#31)            [6C]
   └── database-txn-mgmt (#40)          [7]
 
-custom-exception-hierarchy (#39)       [5C group 3, after #25 merges]
+custom-exception-hierarchy (#39) ✅    [5C group 3, after #25 merges]
 
-typed-object-references (#18)          [5D group 1]
+typed-object-references (#18) ✅       [5D group 1]
   └── block-references (#17)           [7]
         └── collections (#51) Phase 4
 
-settings-and-preferences (#30)         [5D group 2]
-  ├── web-ai-summarize-and-tag (#26)   [6B]
-  │     └── web-ai-chat-sidebar (#32)  [7]
-  └── ai-provider-settings-ui (#27)    [6B]
+settings-and-preferences (#30) ✅      [5D group 2]
+  ├── web-ai-summarize-and-tag (#26) ✅ [6B]
+  │     └── web-ai-chat-sidebar (#32) ✅ [6B]
+  └── ai-provider-settings-ui (#27) ✅  [6B]
 
 knowledge-graph-view (#16)             [6A]
 websocket-multi-tab (#23)              [6A]

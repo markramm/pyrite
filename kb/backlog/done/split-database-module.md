@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Split database.py Into Focused Modules"
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [architecture, refactoring, quality]

@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Remove Legacy Files and Stale Entry Points"
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [cleanup, dx]

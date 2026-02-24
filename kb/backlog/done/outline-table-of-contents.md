@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Outline / Table of Contents Panel"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [web, navigation, editor]
