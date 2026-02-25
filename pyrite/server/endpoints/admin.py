@@ -5,8 +5,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from ...config import KBConfig, save_config
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
+from ...storage.database import PyriteDB
 from ...storage.index import IndexManager
-from ..api import get_index_mgr, get_kb_service, get_llm_service, limiter, requires_tier
+from ..api import get_db, get_index_mgr, get_kb_service, get_llm_service, limiter, requires_tier
 from ..schemas import AIStatusResponse, StatsResponse, SyncResponse
 
 router = APIRouter(tags=["Admin"])
@@ -52,6 +53,16 @@ def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
     """Return AI/LLM configuration status."""
     status = llm.status()
     return AIStatusResponse(**status)
+
+
+@router.get("/index/embed-status")
+@limiter.limit("100/minute")
+def embed_status(request: Request, db: PyriteDB = Depends(get_db)):
+    """Return embedding queue status."""
+    from ...services.embedding_worker import EmbeddingWorker
+
+    worker = EmbeddingWorker(db)
+    return worker.get_status()
 
 
 # =========================================================================

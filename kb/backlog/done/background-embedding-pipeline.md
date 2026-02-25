@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Background Embedding Pipeline"
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [ai, performance, embedding]

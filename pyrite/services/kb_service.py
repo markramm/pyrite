@@ -36,6 +36,7 @@ class KBService:
         self._index_mgr = IndexManager(db, config)
         self._embedding_svc = None
         self._embedding_checked = False
+        self._embedding_worker = None  # Set externally to enable queue-based embedding
 
     def _get_embedding_svc(self):
         """Lazy-load embedding service if available."""
@@ -54,7 +55,10 @@ class KBService:
         return self._embedding_svc
 
     def _auto_embed(self, entry_id: str, kb_name: str) -> None:
-        """Embed an entry if the embedding service is available."""
+        """Embed an entry — via background queue if worker is set, else synchronously."""
+        if self._embedding_worker is not None:
+            self._embedding_worker.enqueue(entry_id, kb_name)
+            return
         svc = self._get_embedding_svc()
         if svc:
             try:

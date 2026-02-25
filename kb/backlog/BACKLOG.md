@@ -165,7 +165,7 @@ Depends on #25 (plugin DI) from Wave 5C.
 | 54 | [Implement pyrite-read CLI](done/implement-pyrite-read-cli.md) | Core | feature | S | none | **done** |
 | 55 | [Add kb_commit MCP Tool and REST Endpoint](done/mcp-commit-tool.md) | Core | feature | M | none | **done** |
 | 56 | [REST API Tier Enforcement](done/rest-api-tier-enforcement.md) | Core | feature | L | none | **done** |
-| 57 | [Background Embedding Pipeline](background-embedding-pipeline.md) | AI | improvement | M | none | proposed |
+| 57 | [Background Embedding Pipeline](done/background-embedding-pipeline.md) | AI | improvement | M | none | **done** |
 
 **Parallelism:** #54 touches `read_cli.py` + `pyproject.toml`. #55 touches `mcp_server.py` + `endpoints/admin.py` + `cli/kb_commands.py`. #56 touches `api.py` + config. #57 touches `embedding_service.py` + `database.py` (new table). Zero overlap.
 
@@ -286,6 +286,7 @@ Items in [`done/`](done/):
 - [Implement pyrite-read CLI](done/implement-pyrite-read-cli.md) — Read-only CLI entry point (`pyrite-read`) with 7 commands, no write/admin operations
 - [Add kb_commit MCP Tool and REST Endpoint](done/mcp-commit-tool.md) — `kb_commit`/`kb_push` MCP tools (admin tier), REST endpoints, CLI commands for programmatic git operations
 - [REST API Tier Enforcement](done/rest-api-tier-enforcement.md) — Role-based access control (read/write/admin) on REST API, `api_keys` config with hashed keys, `requires_tier()` dependency, backwards-compatible
+- [Background Embedding Pipeline](done/background-embedding-pipeline.md) — SQLite-backed embed_queue, EmbeddingWorker with retry/batch, queue-based _auto_embed in KBService, GET /api/index/embed-status
 
 ---
 
@@ -332,5 +333,5 @@ cross-kb-shortlinks (#53) ✅           [6C]
 implement-pyrite-read-cli (#54) ✅     [7A]
 mcp-commit-tool (#55) ✅               [7A]
 rest-api-tier-enforcement (#56) ✅     [7A]
-background-embedding-pipeline (#57)    [7A]
+background-embedding-pipeline (#57) ✅ [7A]
 ```
