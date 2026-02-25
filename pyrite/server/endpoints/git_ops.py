@@ -4,9 +4,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from ...exceptions import KBNotFoundError, PyriteError
 from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter
+from ..api import get_kb_service, limiter, requires_tier
 
-router = APIRouter(tags=["Git Operations"])
+router = APIRouter(tags=["Git Operations"], dependencies=[Depends(requires_tier("admin"))])
 
 
 @router.post("/kbs/{kb_name}/commit")

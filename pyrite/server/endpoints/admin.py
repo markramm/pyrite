@@ -6,7 +6,7 @@ from ...config import KBConfig, save_config
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...storage.index import IndexManager
-from ..api import get_index_mgr, get_kb_service, get_llm_service, limiter
+from ..api import get_index_mgr, get_kb_service, get_llm_service, limiter, requires_tier
 from ..schemas import AIStatusResponse, StatsResponse, SyncResponse
 
 router = APIRouter(tags=["Admin"])
@@ -20,7 +20,7 @@ def get_stats(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)
     return StatsResponse(**stats)
 
 
-@router.post("/index/sync", response_model=SyncResponse)
+@router.post("/index/sync", response_model=SyncResponse, dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def sync_index(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)):
     """Trigger incremental index sync."""
@@ -59,7 +59,7 @@ def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
 # =========================================================================
 
 
-@router.post("/kbs")
+@router.post("/kbs", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def create_kb(
     request: Request,
@@ -96,7 +96,7 @@ def create_kb(
     return {"created": True, "name": name, "path": str(kb_path)}
 
 
-@router.delete("/kbs/{name}")
+@router.delete("/kbs/{name}", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def delete_kb(
     request: Request,
@@ -114,7 +114,7 @@ def delete_kb(
     return {"deleted": True, "name": name}
 
 
-@router.post("/kbs/gc")
+@router.post("/kbs/gc", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def gc_ephemeral_kbs(
     request: Request,

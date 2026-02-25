@@ -105,17 +105,74 @@ def invalidate_llm_service():
     _llm_service = None
 
 
-async def verify_api_key(request: Request, config: PyriteConfig = Depends(get_config)):
-    """Verify API key if authentication is enabled.
+TIER_LEVELS = {"read": 0, "write": 1, "admin": 2}
 
-    When config.settings.api_key is empty, auth is disabled (backwards-compatible).
-    When set, requires X-API-Key header or api_key query param.
+
+def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
+    """Resolve an API key to its role (read/write/admin).
+
+    Returns:
+        - "admin" when auth is disabled (no api_key and no api_keys)
+        - "admin" when key matches the legacy single api_key
+        - The configured role when key hash matches an api_keys entry
+        - None when key is invalid or missing (auth enabled but key wrong)
     """
-    if not config.settings.api_key:
-        return
+    import hashlib
+
+    has_single_key = bool(config.settings.api_key)
+    has_key_list = bool(config.settings.api_keys)
+
+    # No auth configured → everyone is admin
+    if not has_single_key and not has_key_list:
+        return "admin"
+
+    if not key:
+        return None
+
+    # Check api_keys list first (takes precedence)
+    if has_key_list:
+        key_hash = hashlib.sha256(key.encode()).hexdigest()
+        for entry in config.settings.api_keys:
+            if entry.get("key_hash") == key_hash:
+                return entry.get("role", "read")
+
+    # Fall back to legacy single api_key (grants admin)
+    if has_single_key and key == config.settings.api_key:
+        return "admin"
+
+    return None
+
+
+async def verify_api_key(request: Request, config: PyriteConfig = Depends(get_config)):
+    """Verify API key and resolve role. Stores role in request.state.
+
+    When auth is disabled (no api_key, no api_keys), all requests get admin role.
+    When enabled, requires valid key via X-API-Key header or api_key query param.
+    """
     key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
-    if key != config.settings.api_key:
+    role = resolve_api_key_role(key, config)
+    if role is None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    request.state.api_role = role
+
+
+def requires_tier(tier: str):
+    """FastAPI dependency factory: enforce minimum tier on an endpoint.
+
+    Usage: router = APIRouter(dependencies=[Depends(requires_tier("admin"))])
+    """
+
+    async def _check_tier(request: Request):
+        role = getattr(request.state, "api_role", None)
+        if role is None:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
+            )
+
+    return _check_tier
 
 
 # =============================================================================
@@ -216,8 +273,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         ),
     )
 
-    # Collect endpoint routers under /api with shared auth dependency
-    api_router = APIRouter(prefix="/api", dependencies=[Depends(verify_api_key)])
+    # Collect endpoint routers under /api with auth + read-tier baseline
+    api_router = APIRouter(
+        prefix="/api",
+        dependencies=[Depends(verify_api_key), Depends(requires_tier("read"))],
+    )
     for r in all_routers:
         api_router.include_router(r)
     application.include_router(api_router)

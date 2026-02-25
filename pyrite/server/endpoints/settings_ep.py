@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ...services.kb_service import KBService
-from ..api import get_kb_service, invalidate_llm_service, limiter
+from ..api import get_kb_service, invalidate_llm_service, limiter, requires_tier
 from ..schemas import (
     BulkSettingsUpdateRequest,
     SettingResponse,
@@ -34,7 +34,7 @@ def get_all_settings(
     return SettingsResponse(settings=settings)
 
 
-@router.put("/settings")
+@router.put("/settings", dependencies=[Depends(requires_tier("write"))])
 @limiter.limit("30/minute")
 def bulk_update_settings(
     request: Request,
@@ -60,7 +60,7 @@ def get_setting(
     return SettingResponse(key=key, value=value)
 
 
-@router.put("/settings/{key}", response_model=SettingResponse)
+@router.put("/settings/{key}", response_model=SettingResponse, dependencies=[Depends(requires_tier("write"))])
 @limiter.limit("30/minute")
 def set_setting(
     request: Request,
@@ -74,7 +74,7 @@ def set_setting(
     return SettingResponse(key=key, value=req.value)
 
 
-@router.delete("/settings/{key}")
+@router.delete("/settings/{key}", dependencies=[Depends(requires_tier("write"))])
 @limiter.limit("30/minute")
 def delete_setting(
     request: Request,

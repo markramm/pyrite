@@ -2,7 +2,7 @@
 type: backlog_item
 title: "REST API Tier Enforcement"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [api, security, access-control]

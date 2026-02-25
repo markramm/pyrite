@@ -7,7 +7,7 @@ from sqlalchemy import func
 
 from ...storage.database import PyriteDB
 from ...storage.models import StarredEntry
-from ..api import get_db, limiter
+from ..api import get_db, limiter, requires_tier
 from ..schemas import (
     ReorderStarredRequest,
     ReorderStarredResponse,
@@ -49,7 +49,7 @@ def list_starred(
     )
 
 
-@router.post("/starred", response_model=StarEntryResponse)
+@router.post("/starred", response_model=StarEntryResponse, dependencies=[Depends(requires_tier("write"))])
 @limiter.limit("30/minute")
 def star_entry(
     request: Request,
@@ -82,7 +82,7 @@ def star_entry(
     return StarEntryResponse(starred=True, entry_id=body.entry_id, kb_name=body.kb_name)
 
 
-@router.delete("/starred/{entry_id}", response_model=UnstarEntryResponse)
+@router.delete("/starred/{entry_id}", response_model=UnstarEntryResponse, dependencies=[Depends(requires_tier("write"))])
 @limiter.limit("30/minute")
 def unstar_entry(
     request: Request,
@@ -110,7 +110,7 @@ def unstar_entry(
     return UnstarEntryResponse(unstarred=True, entry_id=entry_id)
 
 
-@router.put("/starred/reorder", response_model=ReorderStarredResponse)
+@router.put("/starred/reorder", response_model=ReorderStarredResponse, dependencies=[Depends(requires_tier("write"))])
 @limiter.limit("30/minute")
 def reorder_starred(
     request: Request,

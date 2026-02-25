@@ -261,6 +261,7 @@ class Settings:
         ]
     )
     api_key: str = ""  # Empty = auth disabled (backwards-compatible)
+    api_keys: list[dict[str, str]] = field(default_factory=list)  # [{key_hash, role, label}]
     rate_limit_read: str = "100/minute"
     rate_limit_write: str = "30/minute"
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -451,6 +452,7 @@ class PyriteConfig:
             "port": self.settings.port,
             "cors_origins": self.settings.cors_origins,
             "api_key": self.settings.api_key,
+            **({"api_keys": self.settings.api_keys} if self.settings.api_keys else {}),
             "rate_limit_read": self.settings.rate_limit_read,
             "rate_limit_write": self.settings.rate_limit_write,
             "embedding_model": self.settings.embedding_model,
@@ -535,6 +537,7 @@ class PyriteConfig:
                 ["http://localhost:3000", "http://localhost:5173", "http://localhost:8088"],
             ),
             api_key=settings_data.get("api_key", ""),
+            api_keys=settings_data.get("api_keys", []),
             rate_limit_read=settings_data.get("rate_limit_read", "100/minute"),
             rate_limit_write=settings_data.get("rate_limit_write", "30/minute"),
             embedding_model=settings_data.get("embedding_model", "all-MiniLM-L6-v2"),

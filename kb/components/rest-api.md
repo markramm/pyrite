@@ -69,9 +69,16 @@ The service is cached as a module-level singleton. When any `ai.*` setting is up
 
 slowapi with `get_remote_address` key function. Read endpoints: 100/minute. Write endpoints: 30/minute. Health check is not rate-limited (infra probes).
 
-### Authentication
+### Authentication and Tier Enforcement
 
 Optional API key via `X-API-Key` header or `api_key` query param. When `config.settings.api_key` is empty, auth is disabled (backwards-compatible).
+
+Role-based access control enforces three tiers (read/write/admin), matching the MCP server's model:
+- **Read tier** (default): GET endpoints — search, list, browse
+- **Write tier**: POST/PUT/DELETE on entries, starred, settings, AI endpoints (they cost money)
+- **Admin tier**: index sync, KB create/delete/gc, git commit/push, plugin management
+
+Key resolution: `api_keys` list in settings with `{key_hash, role, label}` (SHA-256 hashed). Legacy single `api_key` grants admin access. `resolve_api_key_role()` resolves key → role, `requires_tier(tier)` is a FastAPI dependency that enforces minimum tier per endpoint.
 
 ### CORS
 

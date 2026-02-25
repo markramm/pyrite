@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
-from ..api import get_config, get_db, get_kb_service, get_llm_service, limiter
+from ..api import get_config, get_db, get_kb_service, get_llm_service, limiter, requires_tier
 from ..schemas import (
     AIAutoTagResponse,
     AIChatRequest,
@@ -21,7 +21,7 @@ from ..schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai", tags=["AI"])
+router = APIRouter(prefix="/ai", tags=["AI"], dependencies=[Depends(requires_tier("write"))])
 
 
 def _require_configured(llm: LLMService) -> None:
