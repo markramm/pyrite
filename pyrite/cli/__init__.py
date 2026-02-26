@@ -22,7 +22,7 @@ from ..config import (
     load_config,
     save_config,
 )
-from ..exceptions import PyriteError
+from ..exceptions import PyriteError, ValidationError
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from .index_commands import index_app
@@ -144,9 +144,9 @@ def get_entry(
 
 @app.command("create")
 def create_entry(
-    kb_name: str = typer.Option(..., "--kb", "-k", help="Target knowledge base"),
+    kb_name: str = typer.Option(None, "--kb", "-k", help="Target knowledge base"),
     entry_type: str = typer.Option("note", "--type", "-t", help="Entry type"),
-    title: str = typer.Option(..., "--title", help="Entry title"),
+    title: str = typer.Option(None, "--title", help="Entry title"),
     body: str = typer.Option("", "--body", "-b", help="Entry body text"),
     tags: str = typer.Option("", "--tags", help="Comma-separated tags"),
     date: str = typer.Option("", "--date", "-d", help="Date (YYYY-MM-DD, for events)"),
@@ -155,9 +155,56 @@ def create_entry(
     link: list[str] | None = typer.Option(
         None, "--link", "-l", help="Link to target entry (format: target-id or target-id:relation)"
     ),
+    body_file: Path | None = typer.Option(None, "--body-file", help="Read body from file"),
+    stdin: bool = typer.Option(False, "--stdin", help="Read body from stdin"),
+    template: bool = typer.Option(False, "--template", help="Output entry skeleton to stdout"),
 ):
     """Create a new entry in a knowledge base."""
-    from ..schema import generate_entry_id
+    from ..schema import CORE_TYPES, generate_entry_id
+    from ..utils.yaml import dump_yaml
+
+    # Template mode: output a skeleton and exit
+    if template:
+        fm: dict = {
+            "id": "",
+            "type": entry_type,
+            "title": title or "Your Title Here",
+            "tags": [],
+        }
+        # Add type-specific fields as empty values
+        type_info = CORE_TYPES.get(entry_type, {})
+        for field_name, field_type in type_info.get("fields", {}).items():
+            if field_name in ("tags", "links"):
+                continue
+            if "list" in field_type:
+                fm[field_name] = []
+            elif field_type == "int":
+                fm[field_name] = 0
+            else:
+                fm[field_name] = ""
+        typer.echo(f"---\n{dump_yaml(fm)}\n---\n\nYour content here.")
+        return
+
+    # Require title for non-template mode
+    if title is None:
+        console.print("[red]Error:[/red] --title is required (unless using --template)")
+        raise typer.Exit(1)
+
+    # Require kb for non-template mode
+    if kb_name is None:
+        console.print("[red]Error:[/red] --kb is required (unless using --template)")
+        raise typer.Exit(1)
+
+    # Body resolution: --stdin > --body-file > --body
+    if stdin:
+        import sys
+
+        body = sys.stdin.read()
+    elif body_file:
+        if not body_file.exists():
+            console.print(f"[red]Error:[/red] Body file not found: {body_file}")
+            raise typer.Exit(1)
+        body = body_file.read_text(encoding="utf-8")
 
     entry_id = generate_entry_id(title)
 
@@ -201,6 +248,60 @@ def create_entry(
                 except (PyriteError, ValueError) as e:
                     console.print(f"  [yellow]Link failed:[/yellow] {e}")
     except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+# =============================================================================
+# Add command
+# =============================================================================
+
+
+@app.command("add")
+def add_entry(
+    file_path: Path = typer.Argument(..., help="Path to markdown file with frontmatter"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Target knowledge base"),
+    validate_only: bool = typer.Option(False, "--validate-only", help="Validate without saving"),
+):
+    """Add a markdown file to a knowledge base.
+
+    Reads a markdown file with YAML frontmatter, validates it, copies it to the
+    correct KB subdirectory, and indexes it.
+
+    Frontmatter must include 'type' and 'title'. If 'id' is missing, it is
+    generated from the title.
+    """
+    if not file_path.exists():
+        console.print(f"[red]Error:[/red] File not found: {file_path}")
+        raise typer.Exit(1)
+
+    svc, db = _get_svc()
+    try:
+        entry, result = svc.add_entry_from_file(
+            kb_name, file_path, validate_only=validate_only
+        )
+
+        # Show warnings
+        for warning in result.get("warnings", []):
+            console.print(f"[yellow]Warning:[/yellow] {warning}")
+
+        if validate_only:
+            errors = result.get("errors", [])
+            if errors:
+                for err in errors:
+                    console.print(f"[red]Error:[/red] {err}")
+                raise typer.Exit(1)
+            console.print(f"[green]Valid:[/green] {entry.id}")
+            console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+        else:
+            console.print(f"[green]Added:[/green] {entry.id}")
+            console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+    except ValidationError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    except PyriteError as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
     finally:

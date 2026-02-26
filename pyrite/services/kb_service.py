@@ -9,7 +9,13 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ..config import KBConfig, PyriteConfig
-from ..exceptions import EntryNotFoundError, KBNotFoundError, KBReadOnlyError, PyriteError
+from ..exceptions import (
+    EntryNotFoundError,
+    KBNotFoundError,
+    KBReadOnlyError,
+    PyriteError,
+    ValidationError,
+)
 from ..models import Entry
 from ..models.factory import build_entry
 from ..plugins.context import PluginContext
@@ -186,6 +192,130 @@ class KBService:
         self._run_hooks("after_save", entry, hook_ctx)
 
         return entry
+
+    def add_entry_from_file(
+        self, kb_name: str, source_path: "Path", *, validate_only: bool = False
+    ) -> tuple[Entry, dict[str, Any]]:
+        """
+        Add a markdown file with frontmatter to a knowledge base.
+
+        Reads the file, parses frontmatter, validates, and saves to the KB.
+        Frontmatter must include 'type' and 'title'.
+
+        Args:
+            kb_name: Target KB name
+            source_path: Path to the markdown file
+            validate_only: If True, validate without saving
+
+        Returns:
+            Tuple of (Entry, validation_result dict with errors/warnings)
+
+        Raises:
+            KBNotFoundError: If KB not found
+            KBReadOnlyError: If KB is read-only
+            ValidationError: If frontmatter is missing required fields or has errors
+        """
+        from pathlib import Path
+
+        from ..models.core_types import entry_from_frontmatter
+        from ..schema import generate_entry_id
+        from ..utils.yaml import load_yaml
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+        if not validate_only and kb_config.read_only:
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
+
+        source_path = Path(source_path)
+
+        # Read and parse frontmatter
+        text = source_path.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            raise ValidationError("File must start with YAML frontmatter (---)")
+
+        end = text.find("---", 3)
+        if end < 0:
+            raise ValidationError("Could not find closing frontmatter delimiter (---)")
+
+        meta = load_yaml(text[3:end])
+        if not meta or not isinstance(meta, dict):
+            raise ValidationError("Frontmatter is empty or invalid")
+
+        body = text[end + 3 :].strip()
+
+        # Require type and title
+        if "type" not in meta:
+            raise ValidationError("Frontmatter must include 'type'")
+        if "title" not in meta:
+            raise ValidationError("Frontmatter must include 'title'")
+
+        # Generate ID from title if not present
+        if "id" not in meta:
+            meta["id"] = generate_entry_id(meta["title"])
+
+        # Build Entry object
+        entry = entry_from_frontmatter(meta, body)
+
+        # Schema validation if kb.yaml exists
+        validation_result: dict[str, Any] = {"errors": [], "warnings": []}
+        kb_yaml = kb_config.path / "kb.yaml"
+        if kb_yaml.exists():
+            try:
+                from ..schema import KBSchema
+
+                schema = KBSchema.from_yaml(kb_yaml)
+                validation_result = schema.validate_entry(
+                    entry.entry_type, meta, context={"kb_name": kb_name}
+                )
+            except Exception as e:
+                validation_result["warnings"].append(f"Schema validation skipped: {e}")
+
+        if validate_only:
+            return entry, validation_result
+
+        if validation_result.get("errors"):
+            raise ValidationError(
+                f"Validation errors: {validation_result['errors']}"
+            )
+
+        repo = KBRepository(kb_config)
+
+        # Check for ID collision
+        if repo.exists(entry.id):
+            raise ValidationError(f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'")
+
+        # Run before_save hooks
+        hook_ctx = PluginContext(
+            config=self.config,
+            db=self.db,
+            kb_name=kb_name,
+            user="",
+            operation="create",
+        )
+        entry = self._run_hooks("before_save", entry, hook_ctx)
+
+        # Save to file
+        file_path = repo.save(entry)
+
+        # Ensure KB is registered before indexing
+        self.db.register_kb(
+            name=kb_name,
+            kb_type=kb_config.kb_type,
+            path=str(kb_config.path),
+            description=kb_config.description,
+        )
+
+        # Index the entry
+        self._index_mgr.index_entry(entry, kb_name, file_path)
+
+        # Auto-embed for semantic search
+        self._auto_embed(entry.id, kb_name)
+
+        # Run after_save hooks
+        self._run_hooks("after_save", entry, hook_ctx)
+
+        return entry, validation_result
 
     def update_entry(self, entry_id: str, kb_name: str, **updates) -> Entry:
         """

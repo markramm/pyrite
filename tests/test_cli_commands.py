@@ -256,6 +256,151 @@ class TestTyperDeleteCommand:
 
 
 @pytest.mark.cli
+class TestAddCommand:
+    def _write_md(self, path, frontmatter, body="Some content."):
+        """Helper to write a markdown file with frontmatter."""
+        path.write_text(f"---\n{frontmatter}\n---\n\n{body}", encoding="utf-8")
+
+    def test_add_valid_file(self, cli_env):
+        md = cli_env["tmpdir"] / "test-add.md"
+        self._write_md(md, "type: note\ntitle: Added Note\ntags:\n  - test")
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events"])
+            assert result.exit_code == 0
+            assert "Added" in result.output
+            assert "added-note" in result.output
+
+    def test_add_validate_only(self, cli_env):
+        md = cli_env["tmpdir"] / "test-validate.md"
+        self._write_md(md, "type: note\ntitle: Validate Only Note")
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app, ["add", str(md), "--kb", "test-events", "--validate-only"]
+            )
+            assert result.exit_code == 0
+            assert "Valid" in result.output
+            # Should NOT be saved to KB directory
+            events_path = cli_env["events_kb"].path
+            assert not (events_path / "notes" / "validate-only-note.md").exists()
+            assert not (events_path / "validate-only-note.md").exists()
+
+    def test_add_missing_type(self, cli_env):
+        md = cli_env["tmpdir"] / "no-type.md"
+        self._write_md(md, "title: No Type Here")
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events"])
+            assert result.exit_code == 1
+            assert "type" in result.output.lower()
+
+    def test_add_missing_title(self, cli_env):
+        md = cli_env["tmpdir"] / "no-title.md"
+        self._write_md(md, "type: note")
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events"])
+            assert result.exit_code == 1
+            assert "title" in result.output.lower()
+
+    def test_add_generates_id(self, cli_env):
+        md = cli_env["tmpdir"] / "auto-id.md"
+        self._write_md(md, "type: note\ntitle: Auto Generated ID")
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events"])
+            assert result.exit_code == 0
+            assert "auto-generated-id" in result.output
+
+    def test_add_nonexistent_file(self, cli_env):
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app, ["add", "/tmp/does-not-exist-12345.md", "--kb", "test-events"]
+            )
+            assert result.exit_code == 1
+            assert "not found" in result.output.lower() or "Error" in result.output
+
+    def test_add_nonexistent_kb(self, cli_env):
+        md = cli_env["tmpdir"] / "good-file.md"
+        self._write_md(md, "type: note\ntitle: Good File")
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["add", str(md), "--kb", "nonexistent"])
+            assert result.exit_code == 1
+            assert "not found" in result.output.lower() or "Error" in result.output
+
+    def test_add_duplicate_id(self, cli_env):
+        md = cli_env["tmpdir"] / "dup.md"
+        self._write_md(md, "type: note\ntitle: Duplicate Entry")
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events"])
+            assert result.exit_code == 0
+            # Add same file again
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events"])
+            assert result.exit_code == 1
+            assert "already exists" in result.output.lower() or "Error" in result.output
+
+
+@pytest.mark.cli
+class TestCreateImprovements:
+    def test_create_body_file(self, cli_env):
+        body_path = cli_env["tmpdir"] / "body.txt"
+        body_path.write_text("Body from file content.", encoding="utf-8")
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app,
+                [
+                    "create",
+                    "--kb",
+                    "test-events",
+                    "--type",
+                    "note",
+                    "--title",
+                    "Body File Test",
+                    "--body-file",
+                    str(body_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "Created" in result.output
+
+    def test_create_stdin(self, cli_env):
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app,
+                [
+                    "create",
+                    "--kb",
+                    "test-events",
+                    "--type",
+                    "note",
+                    "--title",
+                    "Stdin Test",
+                    "--stdin",
+                ],
+                input="Body from stdin.",
+            )
+            assert result.exit_code == 0
+            assert "Created" in result.output
+
+    def test_create_template_note(self, cli_env):
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["create", "--template", "--type", "note"])
+            assert result.exit_code == 0
+            assert "---" in result.output
+            assert "type: note" in result.output
+            assert "Your Title Here" in result.output
+
+    def test_create_template_event(self, cli_env):
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["create", "--template", "--type", "event"])
+            assert result.exit_code == 0
+            assert "type: event" in result.output
+            assert "date:" in result.output or "location:" in result.output
+
+    def test_create_template_no_title(self, cli_env):
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["create", "--template"])
+            assert result.exit_code == 0
+            assert "Your Title Here" in result.output
+
+
+@pytest.mark.cli
 class TestTyperConfigCommand:
     def test_config_shows_info(self, cli_env):
         with _patch_config(cli_env):
