@@ -427,6 +427,9 @@ class ResolveResponse(BaseModel):
 
     resolved: bool
     entry: EntryTitle | None = None
+    heading: str | None = None
+    block_id: str | None = None
+    block_content: str | None = None
 
 
 # =============================================================================

@@ -18,6 +18,7 @@ def get_entry_blocks(
     kb: str = Query(..., description="KB name"),
     heading: str | None = Query(None, description="Filter by heading"),
     block_type: str | None = Query(None, description="Filter by block type"),
+    block_id: str | None = Query(None, description="Filter by block ID"),
     svc: KBService = Depends(get_kb_service),
 ):
     """Get blocks extracted from an entry."""
@@ -35,6 +36,8 @@ def get_entry_blocks(
         blocks_query = blocks_query.filter(Block.heading == heading)
     if block_type:
         blocks_query = blocks_query.filter(Block.block_type == block_type)
+    if block_id:
+        blocks_query = blocks_query.filter(Block.block_id == block_id)
 
     blocks_query = blocks_query.order_by(Block.position)
     block_rows = blocks_query.all()

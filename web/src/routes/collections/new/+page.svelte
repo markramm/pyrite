@@ -6,8 +6,28 @@
 	let title = $state('');
 	let description = $state('');
 	let query = $state('');
+	let collectionType = $state('generic');
+	let collectionTypes: Record<string, { description: string; default_view: string; fields?: Record<string, unknown>; ai_instructions?: string; icon?: string }> = $state({
+		generic: { description: 'General-purpose collection', default_view: 'list', icon: 'folder' }
+	});
 
 	const kb = $derived(kbStore.activeKB ?? '');
+
+	async function loadCollectionTypes() {
+		try {
+			const res = await fetch('/api/collections/types');
+			if (res.ok) {
+				const data = await res.json();
+				collectionTypes = data.types;
+			}
+		} catch {
+			// Keep defaults
+		}
+	}
+
+	$effect(() => {
+		loadCollectionTypes();
+	});
 
 	const breadcrumbs = [
 		{ label: 'Collections', href: '/collections' },
@@ -50,7 +70,22 @@
 		</div>
 
 		<div>
-			<label class="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Query</label>
+			<label class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300" for="collection-type"
+				>Collection Type</label
+			>
+			<select
+				id="collection-type"
+				bind:value={collectionType}
+				class="w-full rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
+			>
+				{#each Object.entries(collectionTypes) as [key, ct]}
+					<option value={key}>{key} — {ct.description}</option>
+				{/each}
+			</select>
+		</div>
+
+		<div>
+			<label class="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300" for="query-builder">Query</label>
 			<QueryBuilder {kb} onQueryChange={(q) => (query = q)} />
 		</div>
 

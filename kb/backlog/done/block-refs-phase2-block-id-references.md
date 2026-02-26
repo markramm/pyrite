@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Block References Phase 2: Block ID References and Resolution"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, editor, linking, block-refs]

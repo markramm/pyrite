@@ -156,10 +156,37 @@ def resolve_entry(
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: KBService = Depends(get_kb_service),
 ):
-    """Resolve a wikilink target to an entry. Tries exact ID match first, then title match."""
-    result = svc.resolve_entry(target, kb_name=kb)
+    """Resolve a wikilink target to an entry. Tries exact ID match first, then title match.
+    Supports fragment syntax: target#heading or target^block-id."""
+    # Parse fragment from target
+    heading = None
+    block_id = None
+    entry_target = target
+
+    if "#" in target:
+        entry_target, heading = target.split("#", 1)
+    elif "^" in target:
+        entry_target, block_id = target.split("^", 1)
+
+    result = svc.resolve_entry(entry_target, kb_name=kb)
 
     if result:
+        block_content = None
+        # If fragment specified, try to find matching block
+        if heading or block_id:
+            from ...storage.models import Block
+
+            blocks_query = svc.db.session.query(Block).filter_by(
+                entry_id=result["id"], kb_name=result["kb_name"]
+            )
+            if heading:
+                blocks_query = blocks_query.filter(Block.heading == heading)
+            if block_id:
+                blocks_query = blocks_query.filter(Block.block_id == block_id)
+            block = blocks_query.first()
+            if block:
+                block_content = block.content
+
         return ResolveResponse(
             resolved=True,
             entry=EntryTitle(
@@ -168,6 +195,9 @@ def resolve_entry(
                 kb_name=result["kb_name"],
                 entry_type=result["entry_type"],
             ),
+            heading=heading,
+            block_id=block_id,
+            block_content=block_content,
         )
     return ResolveResponse(resolved=False, entry=None)
 

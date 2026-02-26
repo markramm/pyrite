@@ -309,6 +309,20 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_type_metadata failed: %s", plugin.name, e)
         return metadata
 
+    def get_all_collection_types(self) -> dict[str, dict]:
+        """Get all custom collection types from all plugins."""
+        self.discover()
+        types: dict[str, dict] = {}
+        for plugin in self._plugins.values():
+            if hasattr(plugin, "get_collection_types"):
+                try:
+                    plugin_types = plugin.get_collection_types()
+                    if plugin_types:
+                        self._merge_dict(types, plugin_types, plugin.name, "collection type")
+                except Exception as e:
+                    logger.warning("Plugin %s get_collection_types failed: %s", plugin.name, e)
+        return types
+
     def get_all_field_schemas(self) -> dict[str, dict[str, dict]]:
         """Get all rich field schemas from all plugins.
 

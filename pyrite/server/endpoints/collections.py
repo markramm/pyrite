@@ -5,6 +5,7 @@ import json
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from ...exceptions import EntryNotFoundError
+from ...plugins.registry import get_registry
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter, negotiate_response
 from ..schemas import (
@@ -29,6 +30,25 @@ def _parse_metadata(raw) -> dict:
         except (json.JSONDecodeError, TypeError):
             return {}
     return {}
+
+
+@router.get("/collections/types")
+@limiter.limit("100/minute")
+def get_collection_types(request: Request):
+    """Get available collection types (built-in + plugin-provided)."""
+    built_in = {
+        "generic": {
+            "description": "General-purpose collection",
+            "default_view": "list",
+            "fields": {},
+            "ai_instructions": "",
+            "icon": "folder",
+        },
+    }
+    plugin_types = get_registry().get_all_collection_types()
+    # Plugin types override built-in on collision
+    merged = {**built_in, **plugin_types}
+    return {"types": merged}
 
 
 @router.get("/collections", response_model=CollectionListResponse)

@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Collections Phase 5: Plugin Collection Types"
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: S
 tags: [plugins, collections]

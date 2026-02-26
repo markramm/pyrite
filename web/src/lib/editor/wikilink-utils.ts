@@ -1,22 +1,26 @@
 /**
  * Wikilink parsing and rendering utilities.
  *
- * Supports [[id]], [[id|display text]], and [[kb:id]] cross-KB syntax.
+ * Supports [[id]], [[id|display text]], [[kb:id]], [[id#heading]], and [[id^block-id]].
  */
 
-/** Regex matching wikilinks: [[target]], [[kb:target]], [[target|display]] */
-export const WIKILINK_REGEX = /\[\[(?:([a-z0-9-]+):)?([^\]|]+?)(?:\|([^\]]+?))?\]\]/g;
+/** Regex matching wikilinks with optional heading/block-id fragments. */
+export const WIKILINK_REGEX = /\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
 
 /** Single wikilink match result */
 export interface WikilinkMatch {
-	/** Full match including brackets: [[target|display]] */
+	/** Full match including brackets */
 	full: string;
 	/** Target entry ID or title */
 	target: string;
-	/** Optional display text (undefined if not present) */
+	/** Optional display text */
 	display?: string;
-	/** Cross-KB prefix (undefined if not present) */
+	/** Cross-KB prefix */
 	kb?: string;
+	/** Heading fragment (after #) */
+	heading?: string;
+	/** Block ID fragment (after ^) */
+	blockId?: string;
 	/** Start index in source string */
 	start: number;
 	/** End index in source string */
@@ -35,7 +39,9 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
 			full: match[0],
 			kb: match[1]?.trim(),
 			target: match[2].trim(),
-			display: match[3]?.trim(),
+			heading: match[3]?.trim(),
+			blockId: match[4]?.trim(),
+			display: match[5]?.trim(),
 			start: match.index,
 			end: match.index + match[0].length
 		});
@@ -54,12 +60,35 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
 export function renderWikilinks(html: string, existingIds?: Set<string>): string {
 	return html.replace(
 		WIKILINK_REGEX,
-		(_match, kb: string | undefined, target: string, display?: string) => {
+		(_match, kb: string | undefined, target: string, heading?: string, blockId?: string, display?: string) => {
 			const trimmed = target.trim();
 			const kbPrefix = kb?.trim();
-			const label =
-				display?.trim() || (kbPrefix ? `${kbPrefix}:${trimmed}` : trimmed);
-			const href = `/entries/${encodeURIComponent(trimmed)}${kbPrefix ? `?kb=${encodeURIComponent(kbPrefix)}` : ''}`;
+			const headingTrimmed = heading?.trim();
+			const blockIdTrimmed = blockId?.trim();
+
+			// Build display label
+			let label: string;
+			if (display?.trim()) {
+				label = display.trim();
+			} else if (headingTrimmed) {
+				const base = kbPrefix ? `${kbPrefix}:${trimmed}` : trimmed;
+				label = `${base} \u00A7 ${headingTrimmed}`;
+			} else if (blockIdTrimmed) {
+				const base = kbPrefix ? `${kbPrefix}:${trimmed}` : trimmed;
+				label = `${base} ^${blockIdTrimmed}`;
+			} else {
+				label = kbPrefix ? `${kbPrefix}:${trimmed}` : trimmed;
+			}
+
+			// Build href with fragment
+			let fragment = '';
+			if (headingTrimmed) {
+				fragment = `#${encodeURIComponent(headingTrimmed)}`;
+			} else if (blockIdTrimmed) {
+				fragment = `#block-${encodeURIComponent(blockIdTrimmed)}`;
+			}
+			const href = `/entries/${encodeURIComponent(trimmed)}${kbPrefix ? `?kb=${encodeURIComponent(kbPrefix)}` : ''}${fragment}`;
+
 			const missing = existingIds && !existingIds.has(trimmed);
 			const cls = missing ? 'wikilink wikilink-missing' : 'wikilink';
 			const kbBadge = kbPrefix

@@ -18,6 +18,7 @@ class CollectionEntry(Entry):
     view_config: dict = field(default_factory=lambda: {"default_view": "list"})
     entry_filter: dict = field(default_factory=dict)
     folder_path: str = ""  # Relative path within KB (for folder collections)
+    collection_type: str = "generic"  # Plugin-defined collection type
 
     @property
     def entry_type(self) -> str:
@@ -39,6 +40,8 @@ class CollectionEntry(Entry):
             meta["entry_filter"] = self.entry_filter
         if self.folder_path:
             meta["folder_path"] = self.folder_path
+        if self.collection_type and self.collection_type != "generic":
+            meta["collection_type"] = self.collection_type
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -64,6 +67,7 @@ class CollectionEntry(Entry):
             view_config=meta.get("view_config", {"default_view": "list"}) or {"default_view": "list"},
             entry_filter=meta.get("entry_filter", {}) or {},
             folder_path=meta.get("folder_path", ""),
+            collection_type=meta.get("collection_type", "generic"),
             tags=meta.get("tags", []) or [],
             sources=parse_sources(meta.get("sources")),
             links=parse_links(meta.get("links")),
@@ -95,6 +99,7 @@ class CollectionEntry(Entry):
             view_config=yaml_data.get("view_config", {"default_view": "list"}) or {"default_view": "list"},
             entry_filter=yaml_data.get("entry_filter", {}) or {},
             folder_path=folder_path,
+            collection_type=yaml_data.get("collection_type", "generic"),
             tags=yaml_data.get("tags", []) or [],
             sources=parse_sources(yaml_data.get("sources")),
             links=parse_links(yaml_data.get("links")),

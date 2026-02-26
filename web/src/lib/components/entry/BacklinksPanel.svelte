@@ -9,6 +9,7 @@
 		kb_name: string;
 		entry_type: string;
 		snippet?: string;
+		note?: string;
 		[key: string]: unknown;
 	}
 
@@ -64,6 +65,13 @@
 								>
 									{link.entry_type}
 								</span>
+								{#if link.note}
+									<span
+										class="inline-flex shrink-0 items-center rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-900 dark:text-blue-400"
+									>
+										{link.note}
+									</span>
+								{/if}
 							</div>
 						</a>
 					</li>

@@ -184,8 +184,8 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
 | 58 | [Block Refs Phase 1: Storage + Heading Links](done/block-refs-phase1-storage-and-heading-links.md) | both | feature | M | #40 ✅ | **done** |
-| 59 | [Block Refs Phase 2: Block ID References](block-refs-phase2-block-id-references.md) | both | feature | M | #58 ✅ | proposed |
-| 60 | [Block Refs Phase 3: Transclusion Rendering](block-refs-phase3-transclusion.md) | UI | feature | L | #59 | proposed |
+| 59 | [Block Refs Phase 2: Block ID References](done/block-refs-phase2-block-id-references.md) | both | feature | M | #58 ✅ | **done** |
+| 60 | [Block Refs Phase 3: Transclusion Rendering](block-refs-phase3-transclusion.md) | UI | feature | L | #59 ✅ | proposed |
 
 ### Wave 7D — Collections (5 phases, mostly sequential)
 
@@ -197,7 +197,7 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 | 62 | [Collections Phase 2: Virtual Collections](done/collections-phase2-virtual-collections.md) | both | feature | M | #61 ✅ | **done** |
 | 63 | [Collections Phase 3: Rich Views](done/collections-phase3-rich-views.md) | UI | feature | L | #61 ✅ | **done** |
 | 64 | [Collections Phase 4: Embedding](collections-phase4-embedding.md) | UI | feature | M | #62 ✅, #60 | proposed |
-| 65 | [Collections Phase 5: Plugin Types](collections-phase5-plugin-types.md) | both | feature | S | #61 ✅ | proposed |
+| 65 | [Collections Phase 5: Plugin Types](done/collections-phase5-plugin-types.md) | both | feature | S | #61 ✅ | **done** |
 
 **Parallelism:** #61 (Collections Phase 1) and #58 (Block Refs Phase 1) can run in parallel — different tables, different file footprints. #62 and #63 can run in parallel after #61. #64 depends on both #62 and #60 (transclusion).
 
@@ -313,6 +313,8 @@ Items in [`done/`](done/):
 - [Collections Phase 3: Rich Views](done/collections-phase3-rich-views.md) — Kanban view with drag-drop, gallery view with card grid, PATCH /api/entries/{id}, extended ViewSwitcher
 - [Extension Builder Skill](done/extension-builder-skill.md) — Claude Code skill for scaffolding new pyrite extensions from description
 - [Semantic Search for Plugins](future-ideas/semantic-search-for-plugins.md) — `PluginContext.search_semantic()` with vector search fallback to FTS5
+- [Block Refs Phase 2: Block ID References](done/block-refs-phase2-block-id-references.md) — Extended wikilink regex for `[[entry#heading]]` and `[[entry^block-id]]`, resolve endpoint with fragments, two-stage autocomplete, backlinks fragment context
+- [Collections Phase 5: Plugin Types](done/collections-phase5-plugin-types.md) — `get_collection_types()` plugin protocol, registry aggregation, GET /api/collections/types, CollectionEntry.collection_type field
 - [Health Check Timezone Fix](health-check-timezone-fix.md) — Fixed false stale entries from UTC vs local time mismatch in `IndexManager.check_health()`
 
 ---
@@ -322,7 +324,7 @@ Items in [`done/`](done/):
 | # | Item | Track | Kind | Effort | Status |
 |---|------|-------|------|--------|--------|
 | 66 | [Health Check Timezone False Positives](health-check-timezone-fix.md) | Core | bug | S | **done** |
-| 67 | [pyrite create --body-file Nested YAML Bug](create-body-file-nested-yaml-bug.md) | Core | bug | S | proposed |
+| 67 | [pyrite create --body-file Nested YAML Bug](create-body-file-nested-yaml-bug.md) | Core | bug | S | **done** |
 
 ---
 
@@ -373,7 +375,7 @@ background-embedding-pipeline (#57) ✅ [7A]
 
 database-txn-mgmt (#40) ✅             [7B]
   └── block-refs-phase1 (#58) ✅       [7C]
-        └── block-refs-phase2 (#59)    [7C]
+        └── block-refs-phase2 (#59) ✅ [8]
               └── block-refs-phase3 (#60) [7C]
                     └── collections-phase4 (#64) [7D]
 
@@ -381,5 +383,5 @@ collections-phase1 (#61) ✅           [7D]
   ├── collections-phase2 (#62) ✅      [7D]
   │     └── collections-phase4 (#64)   [7D]
   ├── collections-phase3 (#63) ✅      [7D]
-  └── collections-phase5 (#65)         [7D]
+  └── collections-phase5 (#65) ✅      [8]
 ```

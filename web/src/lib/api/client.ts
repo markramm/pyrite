@@ -389,10 +389,11 @@ class ApiClient {
 	}
 
 	// Blocks
-	async getEntryBlocks(entryId: string, kb: string, options?: { heading?: string; block_type?: string }): Promise<BlockListResponse> {
+	async getEntryBlocks(entryId: string, kb: string, options?: { heading?: string; block_type?: string; block_id?: string }): Promise<BlockListResponse> {
 		const params = new URLSearchParams({ kb });
 		if (options?.heading) params.set('heading', options.heading);
 		if (options?.block_type) params.set('block_type', options.block_type);
+		if (options?.block_id) params.set('block_id', options.block_id);
 		return this.request(`/api/entries/${encodeURIComponent(entryId)}/blocks?${params}`);
 	}
 

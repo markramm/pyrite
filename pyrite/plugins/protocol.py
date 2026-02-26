@@ -211,6 +211,24 @@ class PyritePlugin(Protocol):
         """
         ...
 
+    def get_collection_types(self) -> dict[str, dict]:
+        """
+        Return custom collection type definitions.
+
+        Returns:
+            Dict mapping collection type name to definition:
+            {
+                "evidence-board": {
+                    "description": "Evidence board for investigations",
+                    "default_view": "kanban",
+                    "fields": {"confidence": {"type": "select", "options": [...]}},
+                    "ai_instructions": "Use for organizing evidence in investigations...",
+                    "icon": "shield",
+                }
+            }
+        """
+        ...
+
     def set_context(self, ctx: PluginContext) -> None:
         """
         Receive shared dependencies from the plugin infrastructure.

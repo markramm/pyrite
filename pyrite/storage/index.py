@@ -17,12 +17,11 @@ from ..models import Entry, EventEntry
 from .database import PyriteDB
 from .repository import KBRepository
 
-# Matches [[target]] and [[target|display text]]
-_WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]")
-
 logger = logging.getLogger(__name__)
 
-_WIKILINK_RE = re.compile(r"\[\[(?:([a-z0-9-]+):)?([^\]|]+?)(?:\|[^\]]+?)?\]\]")
+# Matches wikilinks: [[target]], [[kb:target]], [[target#heading]], [[target^block-id]], [[target|display]]
+# Groups: (1) kb prefix, (2) target, (3) heading, (4) block-id, (5) display text
+_WIKILINK_RE = re.compile(r"\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]")
 
 
 def _parse_indexed_at(indexed_at: str) -> datetime:
@@ -133,13 +132,20 @@ class IndexManager:
             for match in _WIKILINK_RE.finditer(body):
                 kb_prefix = match.group(1)  # Optional kb: prefix
                 target = match.group(2).strip()
+                heading = match.group(3)
+                block_id = match.group(4)
+                note = ""
+                if heading:
+                    note = f"#{heading}"
+                elif block_id:
+                    note = f"^{block_id}"
                 if target and target != entry.id and target not in existing_targets:
                     data["links"].append(
                         {
                             "target": target,
                             "kb": kb_prefix or kb_name,
                             "relation": "wikilink",
-                            "note": "",
+                            "note": note,
                         }
                     )
                     existing_targets.add(target)
@@ -191,12 +197,19 @@ class IndexManager:
             for match in _WIKILINK_RE.finditer(body):
                 kb_prefix = match.group(1)  # Optional kb: prefix
                 target = match.group(2).strip()
+                heading = match.group(3)
+                block_id = match.group(4)
+                note = ""
+                if heading:
+                    note = f"#{heading}"
+                elif block_id:
+                    note = f"^{block_id}"
                 if target and target != entry.id and target not in existing_targets:
                     link_data = {
                         "target": target,
                         "kb": kb_prefix or kb_name,
                         "relation": "wikilink",
-                        "note": "",
+                        "note": note,
                     }
                     data["links"].append(link_data)
                     existing_targets.add(target)
