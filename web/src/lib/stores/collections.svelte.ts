@@ -10,7 +10,7 @@ class CollectionStore {
 	total = $state(0);
 	loading = $state(false);
 	error = $state<string | null>(null);
-	viewMode = $state<'list' | 'table'>('list');
+	viewMode = $state<'list' | 'table' | 'kanban' | 'gallery'>('list');
 
 	async loadCollections(kb?: string) {
 		this.loading = true;
@@ -31,7 +31,7 @@ class CollectionStore {
 		try {
 			this.activeCollection = await api.getCollection(id, kb);
 			const defaultView = (this.activeCollection.view_config?.default_view as string) ?? 'list';
-			if (defaultView === 'table' || defaultView === 'list') {
+			if (defaultView === 'table' || defaultView === 'list' || defaultView === 'kanban' || defaultView === 'gallery') {
 				this.viewMode = defaultView;
 			}
 		} catch (e) {
@@ -60,7 +60,7 @@ class CollectionStore {
 		}
 	}
 
-	setViewMode(mode: 'list' | 'table') {
+	setViewMode(mode: 'list' | 'table' | 'kanban' | 'gallery') {
 		this.viewMode = mode;
 	}
 }

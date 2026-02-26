@@ -79,6 +79,7 @@ class Entry(Base):
         "Link", back_populates="source_entry", cascade="all, delete-orphan"
     )
     versions = relationship("EntryVersion", back_populates="entry", cascade="all, delete-orphan")
+    blocks = relationship("Block", cascade="all, delete-orphan")
 
 
 class Tag(Base):
@@ -296,6 +297,34 @@ class StarredEntry(Base):
         UniqueConstraint("entry_id", "kb_name", name="uq_starred_entry"),
         Index("idx_starred_entry_kb", "kb_name"),
         Index("idx_starred_entry_sort", "sort_order"),
+    )
+
+
+# =========================================================================
+# Block References (Phase 1)
+# =========================================================================
+
+
+class Block(Base):
+    __tablename__ = "block"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entry_id = Column(String, nullable=False)
+    kb_name = Column(String, nullable=False)
+    block_id = Column(String, nullable=False)
+    heading = Column(String)
+    content = Column(Text, nullable=False)
+    position = Column(Integer, nullable=False)
+    block_type = Column(String, nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["entry_id", "kb_name"],
+            ["entry.id", "entry.kb_name"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_block_entry", "entry_id", "kb_name"),
+        Index("idx_block_block_id", "block_id"),
     )
 
 

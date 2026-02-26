@@ -391,6 +391,7 @@ export interface CollectionResponse {
 	entry_count: number;
 	kb_name: string;
 	folder_path: string;
+	query?: string;
 	tags: string[];
 }
 
@@ -403,6 +404,23 @@ export interface CollectionEntriesResponse {
 	entries: EntryResponse[];
 	total: number;
 	collection_id: string;
+}
+
+// Blocks
+
+export interface BlockResponse {
+	block_id: string;
+	heading: string | null;
+	content: string;
+	position: number;
+	block_type: string;
+}
+
+export interface BlockListResponse {
+	entry_id: string;
+	kb_name: string;
+	blocks: BlockResponse[];
+	total: number;
 }
 
 // Import/Export

@@ -10,6 +10,7 @@ import type {
 	AILinkSuggestResponse,
 	AIStatusResponse,
 	AISummarizeResponse,
+	BlockListResponse,
 	CollectionEntriesResponse,
 	CollectionListResponse,
 	CollectionResponse,
@@ -363,6 +364,17 @@ class ApiClient {
 		return this.request(`/api/collections/${encodeURIComponent(id)}?kb=${encodeURIComponent(kb)}`);
 	}
 
+	async previewCollectionQuery(
+		query: string,
+		kb?: string,
+		limit?: number
+	): Promise<{ entries: EntryResponse[]; total: number; query_parsed: Record<string, unknown> }> {
+		return this.request('/api/collections/query-preview', {
+			method: 'POST',
+			body: JSON.stringify({ query, kb, limit: limit ?? 20 })
+		});
+	}
+
 	async getCollectionEntries(
 		id: string,
 		kb: string,
@@ -374,6 +386,14 @@ class ApiClient {
 		if (options.limit) params.set('limit', String(options.limit));
 		if (options.offset) params.set('offset', String(options.offset));
 		return this.request(`/api/collections/${encodeURIComponent(id)}/entries?${params}`);
+	}
+
+	// Blocks
+	async getEntryBlocks(entryId: string, kb: string, options?: { heading?: string; block_type?: string }): Promise<BlockListResponse> {
+		const params = new URLSearchParams({ kb });
+		if (options?.heading) params.set('heading', options.heading);
+		if (options?.block_type) params.set('block_type', options.block_type);
+		return this.request(`/api/entries/${encodeURIComponent(entryId)}/blocks?${params}`);
 	}
 
 	// Plugins

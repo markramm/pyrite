@@ -23,6 +23,7 @@ from ..schemas import (
     EntryTitle,
     EntryTitlesResponse,
     EntryTypesResponse,
+    PatchEntryRequest,
     ResolveBatchRequest,
     ResolveBatchResponse,
     ResolveResponse,
@@ -466,6 +467,27 @@ def update_entry(
         )
     except RuntimeError:
         pass
+
+    return UpdateResponse(updated=True, id=entry_id)
+
+
+@router.patch("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_tier("write"))])
+@limiter.limit("30/minute")
+def patch_entry_field(
+    request: Request,
+    entry_id: str,
+    body: PatchEntryRequest,
+    svc: KBService = Depends(get_kb_service),
+):
+    """Update a single field on an entry (used by kanban drag-drop)."""
+    try:
+        svc.update_entry(entry_id, body.kb, **{body.field: body.value})
+    except (KBNotFoundError, EntryNotFoundError) as e:
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
+    except KBReadOnlyError as e:
+        raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
+    except (ValidationError, PyriteError, ValueError) as e:
+        raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
     return UpdateResponse(updated=True, id=entry_id)
 

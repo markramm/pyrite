@@ -501,7 +501,7 @@ class KBService:
         limit: int = 200,
         offset: int = 0,
     ) -> tuple[list[dict[str, Any]], int]:
-        """Get entries belonging to a folder collection.
+        """Get entries belonging to a collection (folder-based or query-based).
 
         Returns:
             Tuple of (entries, total_count)
@@ -520,6 +520,16 @@ class KBService:
                 metadata = json.loads(metadata)
             except (json.JSONDecodeError, TypeError):
                 metadata = {}
+
+        source_type = metadata.get("source_type", "folder") if isinstance(metadata, dict) else "folder"
+
+        # Virtual collection (query-based)
+        if source_type == "query":
+            return self._get_query_collection_entries(
+                metadata, kb_name, sort_by, sort_order, limit, offset
+            )
+
+        # Folder-based collection (Phase 1)
         folder_path = metadata.get("folder_path", "") if isinstance(metadata, dict) else ""
         if not folder_path:
             return [], 0
@@ -532,6 +542,44 @@ class KBService:
         )
         total = self.db.count_entries_in_folder(kb_name, abs_folder)
         return entries, total
+
+    def _get_query_collection_entries(
+        self,
+        metadata: dict,
+        kb_name: str,
+        sort_by: str,
+        sort_order: str,
+        limit: int,
+        offset: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Evaluate a query-based virtual collection."""
+        from .collection_query import (
+            evaluate_query_cached,
+            parse_query,
+            query_from_dict,
+        )
+
+        query_str = metadata.get("query", "")
+        entry_filter = metadata.get("entry_filter", {})
+
+        if query_str:
+            query = parse_query(query_str)
+        elif entry_filter and isinstance(entry_filter, dict):
+            query = query_from_dict(entry_filter)
+        else:
+            return [], 0
+
+        # Override sort/pagination from caller
+        query.sort_by = sort_by
+        query.sort_order = sort_order
+        query.limit = limit
+        query.offset = offset
+
+        # Default kb_name if not set in query
+        if not query.kb_name:
+            query.kb_name = kb_name
+
+        return evaluate_query_cached(query, self.db)
 
     def count_entries(
         self,

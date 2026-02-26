@@ -25,6 +25,7 @@ from ..config import (
 from ..exceptions import PyriteError, ValidationError
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
+from .collection_commands import collections_app
 from .index_commands import index_app
 from .kb_commands import kb_app
 from .repo_commands import repo_collab_app
@@ -48,6 +49,7 @@ def _get_svc():
 # Register sub-apps
 app.add_typer(kb_app, name="kb")
 app.add_typer(index_app, name="index")
+app.add_typer(collections_app, name="collections")
 
 # Repository management — collaboration app with subscribe/fork/sync/unsubscribe/status/list
 # Plus legacy add/remove commands added below

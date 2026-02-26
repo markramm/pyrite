@@ -2,6 +2,8 @@
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import EntryCard from '$lib/components/entry/EntryCard.svelte';
 	import TableView from '$lib/components/collection/TableView.svelte';
+	import KanbanView from '$lib/components/collection/KanbanView.svelte';
+	import GalleryView from '$lib/components/collection/GalleryView.svelte';
 	import ViewSwitcher from '$lib/components/collection/ViewSwitcher.svelte';
 	import { collectionStore } from '$lib/stores/collections.svelte';
 	import { onMount } from 'svelte';
@@ -105,6 +107,17 @@
 			{sortBy}
 			{sortOrder}
 			onSort={handleSort}
+		/>
+	{:else if collectionStore.viewMode === 'kanban'}
+		<KanbanView
+			entries={collectionStore.entries}
+			groupBy={collectionStore.activeCollection?.view_config?.kanban?.group_by ?? 'status'}
+			columnOrder={collectionStore.activeCollection?.view_config?.kanban?.column_order}
+		/>
+	{:else if collectionStore.viewMode === 'gallery'}
+		<GalleryView
+			entries={collectionStore.entries}
+			cardFields={collectionStore.activeCollection?.view_config?.gallery?.card_fields}
 		/>
 	{:else}
 		<div class="space-y-2">

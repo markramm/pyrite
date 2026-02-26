@@ -11,7 +11,7 @@ from typing import Any
 
 from sqlalchemy import func
 
-from .models import Entry, EntryRef, EntryTag, Link, Source, Tag
+from .models import Block, Entry, EntryRef, EntryTag, Link, Source, Tag
 
 
 class CRUDMixin:
@@ -28,6 +28,7 @@ class CRUDMixin:
             self._sync_sources(entry_id, kb_name, entry_data.get("sources", []))
             self._sync_links(entry_id, kb_name, entry_data.get("links", []))
             self._sync_entry_refs(entry_id, kb_name, entry_data)
+            self._sync_blocks(entry_id, kb_name, entry_data)
 
             self.session.commit()
         except Exception:
@@ -163,6 +164,25 @@ class CRUDMixin:
                 target_type=ref.get("target_type"),
             )
             self.session.add(entry_ref)
+
+    def _sync_blocks(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
+        """Sync extracted blocks into the block table using ORM."""
+        self.session.query(Block).filter_by(
+            entry_id=entry_id, kb_name=kb_name
+        ).delete()
+
+        blocks = entry_data.get("_blocks", [])
+        for blk in blocks:
+            block = Block(
+                entry_id=entry_id,
+                kb_name=kb_name,
+                block_id=blk["block_id"],
+                heading=blk.get("heading"),
+                content=blk["content"],
+                position=blk["position"],
+                block_type=blk["block_type"],
+            )
+            self.session.add(block)
 
     def delete_entry(self, entry_id: str, kb_name: str) -> bool:
         """Delete an entry. Returns True if deleted."""

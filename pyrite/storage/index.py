@@ -187,6 +187,13 @@ class IndexManager:
                     data["links"].append(link_data)
                     existing_targets.add(target)
 
+        # Extract blocks for block-level references
+        body = entry.body or ""
+        if body:
+            from ..utils.markdown_blocks import extract_blocks
+
+            data["_blocks"] = extract_blocks(body)
+
         return data
 
     def index_kb(

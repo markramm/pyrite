@@ -22,6 +22,12 @@
 <div class="flex-1 overflow-y-auto p-6">
 	<div class="mb-4 flex items-center justify-between">
 		<h1 class="text-2xl font-bold">Collections</h1>
+		<a
+			href="/collections/new"
+			class="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+		>
+			New Virtual Collection
+		</a>
 	</div>
 
 	{#if collectionStore.loading}
@@ -53,13 +59,20 @@
 							</svg>
 						{/if}
 						<h3 class="font-medium">{collection.title}</h3>
+						{#if collection.source_type === 'query'}
+							<span class="rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">Virtual</span>
+						{/if}
 					</div>
 					{#if collection.description}
 						<p class="mb-3 line-clamp-2 text-sm text-zinc-400">{collection.description}</p>
 					{/if}
 					<div class="flex items-center justify-between text-xs text-zinc-400">
-						<span>{collection.folder_path}</span>
-						<span class="rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">{collection.kb_name}</span>
+						{#if collection.source_type === 'query' && collection.query}
+							<span class="truncate font-mono">{collection.query}</span>
+						{:else}
+							<span>{collection.folder_path}</span>
+						{/if}
+						<span class="ml-2 shrink-0 rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">{collection.kb_name}</span>
 					</div>
 				</a>
 			{/each}

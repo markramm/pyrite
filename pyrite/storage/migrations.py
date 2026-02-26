@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 4
+CURRENT_VERSION = 5
 
 
 @dataclass
@@ -147,6 +147,28 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS entry_ref;
+        """,
+    ),
+    Migration(
+        version=5,
+        description="Add block table for block-level references",
+        up="""
+        CREATE TABLE IF NOT EXISTS block (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id TEXT NOT NULL,
+            kb_name TEXT NOT NULL,
+            block_id TEXT NOT NULL,
+            heading TEXT,
+            content TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            block_type TEXT NOT NULL,
+            FOREIGN KEY (entry_id, kb_name) REFERENCES entry(id, kb_name) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_block_entry ON block(entry_id, kb_name);
+        CREATE INDEX IF NOT EXISTS idx_block_block_id ON block(block_id);
+        """,
+        down="""
+        DROP TABLE IF EXISTS block;
         """,
     ),
 ]

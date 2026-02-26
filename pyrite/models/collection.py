@@ -11,7 +11,8 @@ from .base import Entry, parse_datetime, parse_links, parse_sources
 class CollectionEntry(Entry):
     """A collection that groups entries, backed by a filesystem folder."""
 
-    source_type: str = "folder"  # "folder" (Phase 1); "query" in Phase 2
+    source_type: str = "folder"  # "folder" (Phase 1); "query" (Phase 2)
+    query: str = ""  # Inline query string for virtual collections (source_type="query")
     description: str = ""
     icon: str = ""
     view_config: dict = field(default_factory=lambda: {"default_view": "list"})
@@ -26,6 +27,8 @@ class CollectionEntry(Entry):
         meta = self._base_frontmatter()
         if self.source_type != "folder":
             meta["source_type"] = self.source_type
+        if self.source_type == "query" and self.query:
+            meta["query"] = self.query
         if self.description:
             meta["description"] = self.description
         if self.icon:
@@ -55,6 +58,7 @@ class CollectionEntry(Entry):
             body=body,
             summary=meta.get("summary", ""),
             source_type=meta.get("source_type", "folder"),
+            query=meta.get("query", ""),
             description=meta.get("description", ""),
             icon=meta.get("icon", ""),
             view_config=meta.get("view_config", {"default_view": "list"}) or {"default_view": "list"},
@@ -85,6 +89,7 @@ class CollectionEntry(Entry):
             body=yaml_data.get("body", ""),
             summary=yaml_data.get("summary", ""),
             source_type=yaml_data.get("source_type", "folder"),
+            query=yaml_data.get("query", ""),
             description=yaml_data.get("description", ""),
             icon=yaml_data.get("icon", ""),
             view_config=yaml_data.get("view_config", {"default_view": "list"}) or {"default_view": "list"},

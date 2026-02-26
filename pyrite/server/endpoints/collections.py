@@ -1,8 +1,8 @@
-"""Collection endpoints — list and browse folder-backed collections."""
+"""Collection endpoints — list and browse folder-backed and query-based collections."""
 
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from ...exceptions import EntryNotFoundError
 from ...services.kb_service import KBService
@@ -12,6 +12,8 @@ from ..schemas import (
     CollectionListResponse,
     CollectionResponse,
     EntryResponse,
+    QueryPreviewRequest,
+    QueryPreviewResponse,
 )
 
 router = APIRouter(tags=["Collections"])
@@ -53,6 +55,7 @@ def list_collections(
                 entry_count=0,
                 kb_name=r.get("kb_name", ""),
                 folder_path=meta.get("folder_path", ""),
+                query=meta.get("query", ""),
                 tags=r.get("tags", []),
             )
         )
@@ -94,6 +97,7 @@ def get_collection(
         entry_count=0,
         kb_name=result.get("kb_name", ""),
         folder_path=meta.get("folder_path", ""),
+        query=meta.get("query", ""),
         tags=result.get("tags", []),
     )
 
@@ -147,3 +151,63 @@ def get_collection_entries(
     if neg is not None:
         return neg
     return CollectionEntriesResponse(entries=entries, total=total, collection_id=collection_id)
+
+
+@router.post("/collections/query-preview", response_model=QueryPreviewResponse)
+@limiter.limit("60/minute")
+def preview_collection_query(
+    request: Request,
+    body: QueryPreviewRequest = Body(...),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Preview results for a collection query without saving."""
+    from ...services.collection_query import (
+        evaluate_query,
+        parse_query,
+        validate_query,
+    )
+
+    query = parse_query(body.query)
+    if body.kb:
+        query.kb_name = body.kb
+    query.limit = body.limit
+
+    errors = validate_query(query)
+    if errors:
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "INVALID_QUERY", "message": "; ".join(errors)},
+        )
+
+    results, total = evaluate_query(query, svc.db)
+
+    entries = []
+    for r in results:
+        r.setdefault("sources", [])
+        r.setdefault("tags", [])
+        r.setdefault("outlinks", [])
+        r.setdefault("backlinks", [])
+        entries.append(EntryResponse(**r))
+
+    query_parsed = {
+        "entry_type": query.entry_type,
+        "tags_any": query.tags_any,
+        "tags_all": query.tags_all,
+        "status": query.status,
+        "kb_name": query.kb_name,
+        "date_from": query.date_from,
+        "date_to": query.date_to,
+        "sort_by": query.sort_by,
+        "sort_order": query.sort_order,
+        "limit": query.limit,
+    }
+
+    resp_data = {
+        "entries": [e.model_dump() for e in entries],
+        "total": total,
+        "query_parsed": query_parsed,
+    }
+    neg = negotiate_response(request, resp_data)
+    if neg is not None:
+        return neg
+    return QueryPreviewResponse(entries=entries, total=total, query_parsed=query_parsed)

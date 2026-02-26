@@ -47,3 +47,39 @@ class PluginContext:
 
     def __contains__(self, key: str) -> bool:
         return hasattr(self, key) or key in self.extra
+
+    def search_semantic(
+        self, query: str, kb_name: str | None = None, limit: int = 10
+    ) -> list[dict[str, Any]]:
+        """Search using semantic (vector) search if available, falls back to FTS5.
+
+        Args:
+            query: Natural language search query
+            kb_name: Filter to specific KB (None for all)
+            limit: Maximum results to return
+
+        Returns:
+            List of matching entry dicts with id, kb_name, title, entry_type, snippet
+        """
+        kb = kb_name or self.kb_name
+
+        # Try semantic search first
+        try:
+            from ..services.embedding_service import EmbeddingService, is_available
+
+            if is_available() and self.db.vec_available:
+                svc = EmbeddingService(self.db)
+                results = svc.search(query, kb_name=kb, limit=limit)
+                if results:
+                    return results
+        except Exception:
+            pass
+
+        # Fallback to FTS5 keyword search
+        try:
+            from ..services.search_service import SearchService
+
+            search_svc = SearchService(self.db)
+            return search_svc.search(query, kb_name=kb, limit=limit)
+        except Exception:
+            return []

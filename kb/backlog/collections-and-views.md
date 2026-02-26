@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Collections and Views"
 kind: feature
-status: proposed
+status: in_progress
 priority: high
 effort: XL
 tags: [architecture, schema, views, ui, core]
@@ -26,14 +26,14 @@ Parts of **#17 Block References and Transclusion** are also covered (collection 
 
 ## Phases
 
-### Phase 1: Foundation (M)
+### Phase 1: Foundation (M) — DONE
 - `collection` built-in entry type
 - `__collection.yaml` parsing in KBRepository and IndexManager
 - Folder collections indexed as entries
 - `list` and `table` views in web frontend
 - Blocked by: #42 (type metadata), #5 ✅ (schema)
 
-### Phase 2: Virtual Collections (M)
+### Phase 2: Virtual Collections (M) — IN PROGRESS
 - `source: query` parsing and execution
 - Query DSL: entry_type, tags, date range, field comparisons
 - `GET /api/collections/{id}/entries` endpoint

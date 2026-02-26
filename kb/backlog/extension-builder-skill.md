@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Build Extension Builder Skill for Claude Code"
 kind: feature
-status: in_progress
+status: done
 priority: high
 effort: L
 tags: [dx, ai-agents, extensions]

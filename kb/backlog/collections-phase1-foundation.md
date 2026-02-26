@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Collections Phase 1: Foundation"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [architecture, schema, views, collections, core]

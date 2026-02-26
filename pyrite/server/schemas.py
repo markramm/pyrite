@@ -350,6 +350,14 @@ class UpdateEntryRequest(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class PatchEntryRequest(BaseModel):
+    """Request to update a single field on an entry."""
+
+    kb: str
+    field: str
+    value: str
+
+
 class EntryListResponse(BaseModel):
     """Paginated entry list response."""
 
@@ -612,6 +620,7 @@ class CollectionResponse(BaseModel):
     entry_count: int = 0
     kb_name: str = ""
     folder_path: str = ""
+    query: str = ""  # For virtual collections
     tags: list[str] = []
 
 
@@ -628,3 +637,43 @@ class CollectionEntriesResponse(BaseModel):
     entries: list[EntryResponse]
     total: int
     collection_id: str
+
+
+class QueryPreviewRequest(BaseModel):
+    """Request to preview a collection query without saving."""
+
+    query: str
+    kb: str | None = None
+    limit: int = 20
+
+
+class QueryPreviewResponse(BaseModel):
+    """Response for query preview."""
+
+    entries: list[EntryResponse]
+    total: int
+    query_parsed: dict  # Shows how the query was interpreted
+
+
+# =============================================================================
+# Blocks
+# =============================================================================
+
+
+class BlockResponse(BaseModel):
+    """Single block from an entry."""
+
+    block_id: str
+    heading: str | None = None
+    content: str
+    position: int
+    block_type: str
+
+
+class BlockListResponse(BaseModel):
+    """Response for entry blocks."""
+
+    entry_id: str
+    kb_name: str
+    blocks: list[BlockResponse]
+    total: int
