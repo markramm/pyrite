@@ -6,6 +6,7 @@ resolution, CLI registration, MCP tool registration, validator execution,
 hook firing, DB table creation, and multi-plugin coexistence.
 """
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -815,3 +816,66 @@ class TestPluginContextInjection:
         assert row is not None
         assert row["delta"] == -2
         assert row["user_id"] == "alice"
+
+
+# =========================================================================
+# Plugin name collision detection
+# =========================================================================
+
+
+class TestPluginCollisionDetection:
+    """Test that the registry warns on duplicate tool/type registrations."""
+
+    @staticmethod
+    def _registry_with_duplicate():
+        """Create a registry with two copies of the same plugin under different names."""
+        reg = PluginRegistry()
+        p1 = ZettelkastenPlugin()
+        p2 = ZettelkastenPlugin()
+        p2.name = "zettelkasten-copy"  # Different name so both stay in registry
+        reg.register(p1)
+        reg.register(p2)
+        return reg
+
+    def test_duplicate_entry_type_logs_warning(self, caplog):
+        """Registering two plugins with the same entry type logs a warning."""
+        reg = self._registry_with_duplicate()
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
+            reg.get_all_entry_types()
+
+        collision_warnings = [r for r in caplog.records if "conflicts with" in r.message]
+        assert len(collision_warnings) > 0
+        assert "entry type" in collision_warnings[0].message
+
+    def test_duplicate_mcp_tool_logs_warning(self, caplog):
+        """Registering two plugins with the same MCP tool logs a warning."""
+        reg = self._registry_with_duplicate()
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
+            reg.get_all_mcp_tools("read")
+
+        collision_warnings = [r for r in caplog.records if "conflicts with" in r.message]
+        assert len(collision_warnings) > 0
+        assert "MCP tool" in collision_warnings[0].message
+
+    def test_duplicate_relationship_type_logs_warning(self, caplog):
+        """Registering two plugins with the same relationship type logs a warning."""
+        reg = self._registry_with_duplicate()
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
+            reg.get_all_relationship_types()
+
+        collision_warnings = [r for r in caplog.records if "conflicts with" in r.message]
+        assert len(collision_warnings) > 0
+        assert "relationship type" in collision_warnings[0].message
+
+    def test_no_collision_with_distinct_plugins(self, registry, caplog):
+        """Three distinct plugins produce no collision warnings."""
+        with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
+            registry.get_all_entry_types()
+            registry.get_all_mcp_tools("read")
+            registry.get_all_relationship_types()
+
+        collision_warnings = [r for r in caplog.records if "conflicts with" in r.message]
+        assert len(collision_warnings) == 0

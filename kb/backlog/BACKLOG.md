@@ -173,7 +173,7 @@ Depends on #25 (plugin DI) from Wave 5C.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 ✅ | proposed |
+| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 ✅ | **done** |
 
 See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md). Consolidate dual-connection model, add `execute_raw()` API, `raw_transaction()` context manager. Foundation for block table and collection table work in 7C/7D.
 

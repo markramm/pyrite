@@ -95,6 +95,21 @@ class PluginRegistry:
     # Aggregation methods — collect capabilities from all plugins
     # =========================================================================
 
+    def _merge_dict(
+        self, target: dict, source: dict, plugin_name: str, kind: str
+    ) -> None:
+        """Merge source into target, warning on key collisions."""
+        for key, value in source.items():
+            if key in target:
+                logger.warning(
+                    "Plugin '%s' registers %s '%s' which conflicts with an "
+                    "existing registration — last writer wins",
+                    plugin_name,
+                    kind,
+                    key,
+                )
+            target[key] = value
+
     def get_all_entry_types(self) -> dict[str, type]:
         """Get all custom entry types from all plugins."""
         self.discover()
@@ -104,7 +119,7 @@ class PluginRegistry:
                 try:
                     plugin_types = plugin.get_entry_types()
                     if plugin_types:
-                        types.update(plugin_types)
+                        self._merge_dict(types, plugin_types, plugin.name, "entry type")
                 except Exception as e:
                     logger.warning("Plugin %s get_entry_types failed: %s", plugin.name, e)
         return types
@@ -146,7 +161,7 @@ class PluginRegistry:
                 try:
                     plugin_tools = plugin.get_mcp_tools(tier)
                     if plugin_tools:
-                        tools.update(plugin_tools)
+                        self._merge_dict(tools, plugin_tools, plugin.name, "MCP tool")
                 except Exception as e:
                     logger.warning("Plugin %s get_mcp_tools failed: %s", plugin.name, e)
         return tools
@@ -174,7 +189,7 @@ class PluginRegistry:
                 try:
                     plugin_rels = plugin.get_relationship_types()
                     if plugin_rels:
-                        rel_types.update(plugin_rels)
+                        self._merge_dict(rel_types, plugin_rels, plugin.name, "relationship type")
                 except Exception as e:
                     logger.warning("Plugin %s get_relationship_types failed: %s", plugin.name, e)
         return rel_types
@@ -188,7 +203,7 @@ class PluginRegistry:
                 try:
                     plugin_workflows = plugin.get_workflows()
                     if plugin_workflows:
-                        workflows.update(plugin_workflows)
+                        self._merge_dict(workflows, plugin_workflows, plugin.name, "workflow")
                 except Exception as e:
                     logger.warning("Plugin %s get_workflows failed: %s", plugin.name, e)
         return workflows
@@ -264,7 +279,7 @@ class PluginRegistry:
                 try:
                     plugin_presets = plugin.get_kb_presets()
                     if plugin_presets:
-                        presets.update(plugin_presets)
+                        self._merge_dict(presets, plugin_presets, plugin.name, "KB preset")
                 except Exception as e:
                     logger.warning("Plugin %s get_kb_presets failed: %s", plugin.name, e)
         return presets

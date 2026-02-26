@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Detect Plugin Name Collisions in Registry"
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [plugins, registry]

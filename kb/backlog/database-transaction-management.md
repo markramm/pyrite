@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Unify Database Connection and Transaction Management"
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [database, architecture]
