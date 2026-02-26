@@ -169,15 +169,37 @@ Depends on #25 (plugin DI) from Wave 5C.
 
 **Parallelism:** #54 touches `read_cli.py` + `pyproject.toml`. #55 touches `mcp_server.py` + `endpoints/admin.py` + `cli/kb_commands.py`. #56 touches `api.py` + config. #57 touches `embedding_service.py` + `database.py` (new table). Zero overlap.
 
-### Wave 7B — Heavy features with deep dependencies
+### Wave 7B — DB transaction cleanup (foundation for 7C/7D)
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 17 | [Block References and Transclusion](block-references.md) | UI | feature | XL | #18 ✅ | proposed |
-| 51 | [Collections and Views](collections-and-views.md) | both | feature | XL | none (all deps done) | proposed |
 | 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 ✅ | proposed |
 
-**Contention note:** #17 touches `entries.py` + `index.py` (overlaps with #18). #51 is massive (5 phases) but mostly new files. #40 touches `database.py` + all extensions (run after other DB changes land).
+See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md). Consolidate dual-connection model, add `execute_raw()` API, `raw_transaction()` context manager. Foundation for block table and collection table work in 7C/7D.
+
+### Wave 7C — Block References (3 phases, sequential)
+
+#17 broken into 3 phases per [ADR-0012](../adrs/0012-block-references-and-transclusion.md):
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 58 | [Block Refs Phase 1: Storage + Heading Links](block-refs-phase1-storage-and-heading-links.md) | both | feature | M | #40 | proposed |
+| 59 | [Block Refs Phase 2: Block ID References](block-refs-phase2-block-id-references.md) | both | feature | M | #58 | proposed |
+| 60 | [Block Refs Phase 3: Transclusion Rendering](block-refs-phase3-transclusion.md) | UI | feature | L | #59 | proposed |
+
+### Wave 7D — Collections (5 phases, mostly sequential)
+
+#51 broken into 5 phases per [ADR-0011](../adrs/0011-collections-and-views.md):
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 61 | [Collections Phase 1: Foundation](collections-phase1-foundation.md) | both | feature | M | none | proposed |
+| 62 | [Collections Phase 2: Virtual Collections](collections-phase2-virtual-collections.md) | both | feature | M | #61 | proposed |
+| 63 | [Collections Phase 3: Rich Views](collections-phase3-rich-views.md) | UI | feature | L | #61 | proposed |
+| 64 | [Collections Phase 4: Embedding](collections-phase4-embedding.md) | UI | feature | M | #62, #60 | proposed |
+| 65 | [Collections Phase 5: Plugin Types](collections-phase5-plugin-types.md) | both | feature | S | #61 | proposed |
+
+**Parallelism:** #61 (Collections Phase 1) and #58 (Block Refs Phase 1) can run in parallel — different tables, different file footprints. #62 and #63 can run in parallel after #61. #64 depends on both #62 and #60 (transclusion).
 
 **Note on #51 (Collections):** This item subsumes #28 (Dataview-Style Queries), #29 (Database Views), and #43 (Display Hints). Those items are retired — their scope is now covered by Collections phases 1–3. See [ADR-0011](../adrs/0011-collections-and-views.md).
 
@@ -334,4 +356,16 @@ implement-pyrite-read-cli (#54) ✅     [7A]
 mcp-commit-tool (#55) ✅               [7A]
 rest-api-tier-enforcement (#56) ✅     [7A]
 background-embedding-pipeline (#57) ✅ [7A]
+
+database-txn-mgmt (#40)               [7B]
+  └── block-refs-phase1 (#58)          [7C]
+        └── block-refs-phase2 (#59)    [7C]
+              └── block-refs-phase3 (#60) [7C]
+                    └── collections-phase4 (#64) [7D]
+
+collections-phase1 (#61)              [7D]
+  ├── collections-phase2 (#62)         [7D]
+  │     └── collections-phase4 (#64)   [7D]
+  ├── collections-phase3 (#63)         [7D]
+  └── collections-phase5 (#65)         [7D]
 ```
