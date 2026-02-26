@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Collections Phase 2: Virtual Collections"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [architecture, schema, views, collections, core]

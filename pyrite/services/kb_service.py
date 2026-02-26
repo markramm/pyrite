@@ -6,6 +6,7 @@ Unified KB operations used by API, CLI, and UI layers.
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from ..config import KBConfig, PyriteConfig
@@ -194,7 +195,7 @@ class KBService:
         return entry
 
     def add_entry_from_file(
-        self, kb_name: str, source_path: "Path", *, validate_only: bool = False
+        self, kb_name: str, source_path: Path, *, validate_only: bool = False
     ) -> tuple[Entry, dict[str, Any]]:
         """
         Add a markdown file with frontmatter to a knowledge base.
@@ -215,8 +216,6 @@ class KBService:
             KBReadOnlyError: If KB is read-only
             ValidationError: If frontmatter is missing required fields or has errors
         """
-        from pathlib import Path
-
         from ..models.core_types import entry_from_frontmatter
         from ..schema import generate_entry_id
         from ..utils.yaml import load_yaml
@@ -837,7 +836,6 @@ class KBService:
     def get_entry_at_version(self, entry_id: str, kb_name: str, commit_hash: str) -> str | None:
         """Get entry content at a specific git commit."""
         import subprocess
-        from pathlib import Path
 
         from ..services.git_service import GitService
 

@@ -377,6 +377,87 @@ class TestIndexManager:
         assert results["updated"] == 0
         assert results["removed"] == 0
 
+    def test_check_health_no_false_stale(self, setup):
+        """Health check should not report entries as stale immediately after indexing.
+
+        Regression test for timezone mismatch: check_health() compared file mtime
+        (local time) with indexed_at (UTC), causing false positives in timezones
+        with positive UTC offsets.
+        """
+        setup["index_mgr"].index_kb("test-kb")
+
+        health = setup["index_mgr"].check_health()
+        assert health["stale_entries"] == [], (
+            f"Expected no stale entries immediately after indexing, "
+            f"got: {health['stale_entries']}"
+        )
+        assert health["missing_files"] == []
+        assert health["unindexed_files"] == []
+
+
+class TestParseIndexedAt:
+    """Tests for _parse_indexed_at() helper in index.py."""
+
+    def test_parse_naive_utc(self):
+        """Naive datetime (from SQLite CURRENT_TIMESTAMP) → UTC-aware."""
+        from datetime import UTC
+
+        from pyrite.storage.index import _parse_indexed_at
+
+        result = _parse_indexed_at("2026-02-25 12:00:00")
+        assert result.tzinfo is not None
+        assert result.tzinfo == UTC
+        assert result.hour == 12
+
+    def test_parse_with_z_suffix(self):
+        """ISO format with Z suffix → UTC-aware."""
+        from datetime import UTC
+
+        from pyrite.storage.index import _parse_indexed_at
+
+        result = _parse_indexed_at("2026-02-25T12:00:00Z")
+        assert result.tzinfo is not None
+        assert result.year == 2026
+        assert result.month == 2
+
+    def test_parse_with_offset(self):
+        """ISO format with +00:00 offset → UTC-aware."""
+        from pyrite.storage.index import _parse_indexed_at
+
+        result = _parse_indexed_at("2026-02-25T12:00:00+00:00")
+        assert result.tzinfo is not None
+        assert result.hour == 12
+
+
+class TestIsStaleHelper:
+    """Tests for IndexManager._is_stale() helper."""
+
+    def test_stale_file_detected(self, tmp_path):
+        """A file newer than indexed_at should be stale."""
+        import time
+
+        from pyrite.storage.index import IndexManager
+
+        # indexed_at in the past
+        indexed_at = "2020-01-01 00:00:00"
+        # Create a file (will have current mtime, much newer)
+        f = tmp_path / "test.md"
+        f.write_text("hello")
+        time.sleep(0.01)  # ensure mtime settles
+
+        assert IndexManager._is_stale(f, indexed_at) is True
+
+    def test_fresh_file_not_stale(self, tmp_path):
+        """A file older than indexed_at should not be stale."""
+        from pyrite.storage.index import IndexManager
+
+        f = tmp_path / "test.md"
+        f.write_text("hello")
+
+        # indexed_at far in the future
+        indexed_at = "2099-12-31 23:59:59"
+        assert IndexManager._is_stale(f, indexed_at) is False
+
 
 class TestIntegrationWithExistingKBs:
     """Integration tests with actual CascadeSeries KBs."""

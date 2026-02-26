@@ -173,7 +173,7 @@ Depends on #25 (plugin DI) from Wave 5C.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 40 | [Database Transaction Management](database-transaction-management.md) | both | improvement | L | #25 ✅ | **done** |
+| 40 | [Database Transaction Management](done/database-transaction-management.md) | both | improvement | L | #25 ✅ | **done** |
 
 See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md). Consolidate dual-connection model, add `execute_raw()` API, `raw_transaction()` context manager. Foundation for block table and collection table work in 7C/7D.
 
@@ -183,8 +183,8 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 58 | [Block Refs Phase 1: Storage + Heading Links](block-refs-phase1-storage-and-heading-links.md) | both | feature | M | #40 | proposed |
-| 59 | [Block Refs Phase 2: Block ID References](block-refs-phase2-block-id-references.md) | both | feature | M | #58 | proposed |
+| 58 | [Block Refs Phase 1: Storage + Heading Links](done/block-refs-phase1-storage-and-heading-links.md) | both | feature | M | #40 ✅ | **done** |
+| 59 | [Block Refs Phase 2: Block ID References](block-refs-phase2-block-id-references.md) | both | feature | M | #58 ✅ | proposed |
 | 60 | [Block Refs Phase 3: Transclusion Rendering](block-refs-phase3-transclusion.md) | UI | feature | L | #59 | proposed |
 
 ### Wave 7D — Collections (5 phases, mostly sequential)
@@ -193,11 +193,11 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 61 | [Collections Phase 1: Foundation](collections-phase1-foundation.md) | both | feature | M | none | proposed |
-| 62 | [Collections Phase 2: Virtual Collections](collections-phase2-virtual-collections.md) | both | feature | M | #61 | proposed |
-| 63 | [Collections Phase 3: Rich Views](collections-phase3-rich-views.md) | UI | feature | L | #61 | proposed |
-| 64 | [Collections Phase 4: Embedding](collections-phase4-embedding.md) | UI | feature | M | #62, #60 | proposed |
-| 65 | [Collections Phase 5: Plugin Types](collections-phase5-plugin-types.md) | both | feature | S | #61 | proposed |
+| 61 | [Collections Phase 1: Foundation](done/collections-phase1-foundation.md) | both | feature | M | none | **done** |
+| 62 | [Collections Phase 2: Virtual Collections](done/collections-phase2-virtual-collections.md) | both | feature | M | #61 ✅ | **done** |
+| 63 | [Collections Phase 3: Rich Views](done/collections-phase3-rich-views.md) | UI | feature | L | #61 ✅ | **done** |
+| 64 | [Collections Phase 4: Embedding](collections-phase4-embedding.md) | UI | feature | M | #62 ✅, #60 | proposed |
+| 65 | [Collections Phase 5: Plugin Types](collections-phase5-plugin-types.md) | both | feature | S | #61 ✅ | proposed |
 
 **Parallelism:** #61 (Collections Phase 1) and #58 (Block Refs Phase 1) can run in parallel — different tables, different file footprints. #62 and #63 can run in parallel after #61. #64 depends on both #62 and #60 (transclusion).
 
@@ -215,9 +215,7 @@ Items subsumed by larger features:
 
 ## In Progress
 
-| Item | Track | Kind | Effort | Status |
-|------|-------|------|--------|--------|
-| [Extension Builder Skill](extension-builder-skill.md) | AI | feature | L | in_progress |
+*No items currently in progress.*
 
 ## Collaboration Bottleneck Notes
 
@@ -246,7 +244,6 @@ Lower-priority items in [`future-ideas/`](future-ideas/):
 - [Entry Aliases](future-ideas/entry-aliases.md) — Multiple names resolving to one entry
 - [Canvas / Whiteboard](future-ideas/canvas-whiteboard.md) — Freeform spatial canvas for visual thinking
 - [Git Sync Conflict Resolution UI](future-ideas/sync-conflict-resolution-ui.md) — Visual merge conflict resolution
-- [Semantic Search for Plugins](future-ideas/semantic-search-for-plugins.md) — Vector search integration
 - [Plugin Tool Collision Detection](future-ideas/plugin-tool-collision-detection.md) — Warn on duplicate tool names
 - [Trim Required Dependencies](future-ideas/trim-required-dependencies.md) — Reduce install footprint
 - [Engagement Federation](future-ideas/engagement-federation.md) — Sync engagement data across instances
@@ -309,6 +306,23 @@ Items in [`done/`](done/):
 - [Add kb_commit MCP Tool and REST Endpoint](done/mcp-commit-tool.md) — `kb_commit`/`kb_push` MCP tools (admin tier), REST endpoints, CLI commands for programmatic git operations
 - [REST API Tier Enforcement](done/rest-api-tier-enforcement.md) — Role-based access control (read/write/admin) on REST API, `api_keys` config with hashed keys, `requires_tier()` dependency, backwards-compatible
 - [Background Embedding Pipeline](done/background-embedding-pipeline.md) — SQLite-backed embed_queue, EmbeddingWorker with retry/batch, queue-based _auto_embed in KBService, GET /api/index/embed-status
+- [Database Transaction Management](done/database-transaction-management.md) — Unified DB connection model per ADR-0013, execute_raw() API, raw_transaction() context manager
+- [Block Refs Phase 1: Storage + Heading Links](done/block-refs-phase1-storage-and-heading-links.md) — Block table (migration v5), markdown block extraction, `[[entry#heading]]` links, GET /api/entries/{id}/blocks
+- [Collections Phase 1: Foundation](done/collections-phase1-foundation.md) — `__collection.yaml` parsing, folder collections, list/table views, /collections routes
+- [Collections Phase 2: Virtual Collections](done/collections-phase2-virtual-collections.md) — Query DSL parser, cached evaluation, virtual collections, `pyrite collections` CLI commands
+- [Collections Phase 3: Rich Views](done/collections-phase3-rich-views.md) — Kanban view with drag-drop, gallery view with card grid, PATCH /api/entries/{id}, extended ViewSwitcher
+- [Extension Builder Skill](done/extension-builder-skill.md) — Claude Code skill for scaffolding new pyrite extensions from description
+- [Semantic Search for Plugins](future-ideas/semantic-search-for-plugins.md) — `PluginContext.search_semantic()` with vector search fallback to FTS5
+- [Health Check Timezone Fix](health-check-timezone-fix.md) — Fixed false stale entries from UTC vs local time mismatch in `IndexManager.check_health()`
+
+---
+
+## Bugs
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 66 | [Health Check Timezone False Positives](health-check-timezone-fix.md) | Core | bug | S | **done** |
+| 67 | [pyrite create --body-file Nested YAML Bug](create-body-file-nested-yaml-bug.md) | Core | bug | S | proposed |
 
 ---
 
@@ -357,15 +371,15 @@ mcp-commit-tool (#55) ✅               [7A]
 rest-api-tier-enforcement (#56) ✅     [7A]
 background-embedding-pipeline (#57) ✅ [7A]
 
-database-txn-mgmt (#40)               [7B]
-  └── block-refs-phase1 (#58)          [7C]
+database-txn-mgmt (#40) ✅             [7B]
+  └── block-refs-phase1 (#58) ✅       [7C]
         └── block-refs-phase2 (#59)    [7C]
               └── block-refs-phase3 (#60) [7C]
                     └── collections-phase4 (#64) [7D]
 
-collections-phase1 (#61)              [7D]
-  ├── collections-phase2 (#62)         [7D]
+collections-phase1 (#61) ✅           [7D]
+  ├── collections-phase2 (#62) ✅      [7D]
   │     └── collections-phase4 (#64)   [7D]
-  ├── collections-phase3 (#63)         [7D]
+  ├── collections-phase3 (#63) ✅      [7D]
   └── collections-phase5 (#65)         [7D]
 ```

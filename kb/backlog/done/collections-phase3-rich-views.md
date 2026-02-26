@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Collections Phase 3: Rich Views (Kanban, Gallery, Timeline)"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [ui, views, collections]

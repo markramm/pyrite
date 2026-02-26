@@ -352,3 +352,38 @@ class TestCollectionAPI:
     def test_get_nonexistent_collection(self, client):
         resp = client.get("/api/collections/collection-nope/entries?kb=test-kb")
         assert resp.status_code == 404
+
+    def test_list_collections_empty(self, client):
+        """Listing collections for a KB with none should return empty list."""
+        resp = client.get("/api/collections?kb=nonexistent-kb")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["collections"] == []
+        assert data["total"] == 0
+
+    def test_get_collection_not_found(self, client):
+        """GET /api/collections/{id} for missing collection returns 404."""
+        resp = client.get("/api/collections/no-such-collection?kb=test-kb")
+        assert resp.status_code == 404
+        data = resp.json()
+        assert data["detail"]["code"] == "NOT_FOUND"
+
+    def test_preview_query_invalid(self, client):
+        """POST /api/collections/query-preview with invalid sort_by returns 400."""
+        resp = client.post(
+            "/api/collections/query-preview",
+            json={"query": "type:note sort:BOGUS_COLUMN", "kb": "test-kb", "limit": 10},
+        )
+        assert resp.status_code == 400
+        data = resp.json()
+        assert data["detail"]["code"] == "INVALID_QUERY"
+
+    def test_get_collection_entries_pagination(self, client):
+        """GET /api/collections/{id}/entries respects limit/offset."""
+        resp = client.get(
+            "/api/collections/collection-notes/entries?kb=test-kb&limit=1&offset=0"
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["entries"]) == 1
+        assert data["total"] == 2  # 2 notes total in fixture

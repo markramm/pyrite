@@ -33,17 +33,19 @@ Parts of **#17 Block References and Transclusion** are also covered (collection 
 - `list` and `table` views in web frontend
 - Blocked by: #42 (type metadata), #5 ✅ (schema)
 
-### Phase 2: Virtual Collections (M) — IN PROGRESS
+### Phase 2: Virtual Collections (M) — DONE
 - `source: query` parsing and execution
 - Query DSL: entry_type, tags, date range, field comparisons
 - `GET /api/collections/{id}/entries` endpoint
+- CLI: `pyrite collections list`, `pyrite collections query`
 - Blocked by: Phase 1
 
-### Phase 3: Rich Views (L)
-- Kanban view with drag-and-drop
-- Gallery view with card layout
-- Timeline view (extend existing)
-- Thread view for discussions
+### Phase 3: Rich Views (L) — DONE (Kanban + Gallery)
+- Kanban view with drag-and-drop field updates
+- Gallery view with responsive card grid
+- View switcher extended for kanban/gallery
+- PATCH /api/entries/{id} for field updates
+- Thread view deferred to Phase 4+
 - Blocked by: Phase 1
 
 ### Phase 4: Embedding and Composition (M)

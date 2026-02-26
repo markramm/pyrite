@@ -2,7 +2,7 @@
 type: adr
 title: "Collections, Folder Metadata, and Views"
 adr_number: 11
-status: proposed
+status: accepted
 deciders: ["markr"]
 date: "2026-02-23"
 tags: [architecture, schema, views, collections, ui]

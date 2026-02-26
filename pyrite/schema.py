@@ -8,14 +8,14 @@ Supports per-KB schema customization via kb.yaml.
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from pyrite.utils.yaml import load_yaml_file
 
 
-class VerificationStatus(str, Enum):
+class VerificationStatus(StrEnum):
     """Verification status for sources and claims."""
 
     UNVERIFIED = "unverified"
@@ -25,7 +25,7 @@ class VerificationStatus(str, Enum):
     DISPUTED = "disputed"
 
 
-class EventStatus(str, Enum):
+class EventStatus(StrEnum):
     """Status for timeline events."""
 
     CONFIRMED = "confirmed"
@@ -34,7 +34,7 @@ class EventStatus(str, Enum):
     RUMORED = "rumored"
 
 
-class ResearchStatus(str, Enum):
+class ResearchStatus(StrEnum):
     """Research completion status."""
 
     STUB = "stub"

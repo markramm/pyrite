@@ -8,7 +8,7 @@ Supports incremental updates based on file modification times.
 import logging
 import re
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,20 @@ _WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|[^\]]+?)?\]\]")
 logger = logging.getLogger(__name__)
 
 _WIKILINK_RE = re.compile(r"\[\[(?:([a-z0-9-]+):)?([^\]|]+?)(?:\|[^\]]+?)?\]\]")
+
+
+def _parse_indexed_at(indexed_at: str) -> datetime:
+    """Parse indexed_at timestamp string to a UTC-aware datetime.
+
+    SQLite CURRENT_TIMESTAMP produces UTC strings like '2026-02-25 12:00:00'.
+    Some values may have 'Z' or '+00:00' suffix. We normalize all to UTC-aware.
+    """
+    cleaned = indexed_at.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(cleaned)
+    if dt.tzinfo is None:
+        # Naive datetime from SQLite — it's UTC
+        dt = dt.replace(tzinfo=UTC)
+    return dt
 
 
 class IndexManager:
@@ -316,6 +330,26 @@ class IndexManager:
 
         return stats
 
+    def _load_indexed_state(self, kb_name: str) -> dict[str, dict[str, str]]:
+        """Load indexed entry state from DB for a KB.
+
+        Returns dict mapping entry_id -> {"file_path": ..., "indexed_at": ...}.
+        """
+        indexed = {}
+        for row in self.db.get_entries_for_indexing(kb_name):
+            indexed[row["id"]] = {
+                "file_path": row["file_path"],
+                "indexed_at": row["indexed_at"],
+            }
+        return indexed
+
+    @staticmethod
+    def _is_stale(file_path: Path, indexed_at: str) -> bool:
+        """Check whether a file is newer than its indexed_at timestamp."""
+        file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=UTC)
+        index_time = _parse_indexed_at(indexed_at)
+        return file_mtime > index_time
+
     def check_health(self) -> dict[str, Any]:
         """
         Check index health and consistency.
@@ -336,14 +370,7 @@ class IndexManager:
                 continue
 
             repo = KBRepository(kb)
-
-            # Get all indexed entries for this KB
-            indexed = {}
-            for row in self.db.get_entries_for_indexing(kb.name):
-                indexed[row["id"]] = {
-                    "file_path": row["file_path"],
-                    "indexed_at": row["indexed_at"],
-                }
+            indexed = self._load_indexed_state(kb.name)
 
             # Check each file
             seen_ids = set()
@@ -357,22 +384,18 @@ class IndexManager:
                             {"kb": kb.name, "path": str(file_path), "id": entry.id}
                         )
                     else:
-                        # Check if file is newer than index
                         indexed_at = indexed[entry.id]["indexed_at"]
-                        if indexed_at:
-                            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                            index_time = datetime.fromisoformat(
-                                indexed_at.replace("Z", "+00:00").replace("+00:00", "")
+                        if indexed_at and self._is_stale(file_path, indexed_at):
+                            health["stale_entries"].append(
+                                {
+                                    "kb": kb.name,
+                                    "id": entry.id,
+                                    "file_mtime": datetime.fromtimestamp(
+                                        file_path.stat().st_mtime, tz=UTC
+                                    ).isoformat(),
+                                    "indexed_at": indexed_at,
+                                }
                             )
-                            if file_mtime > index_time:
-                                health["stale_entries"].append(
-                                    {
-                                        "kb": kb.name,
-                                        "id": entry.id,
-                                        "file_mtime": file_mtime.isoformat(),
-                                        "indexed_at": indexed_at,
-                                    }
-                                )
                 except Exception:
                     continue
 
@@ -407,14 +430,7 @@ class IndexManager:
                 description=kb.description,
             )
 
-            # Get current index state
-            indexed = {}
-            for row in self.db.get_entries_for_indexing(kb.name):
-                indexed[row["id"]] = {
-                    "file_path": row["file_path"],
-                    "indexed_at": row["indexed_at"],
-                }
-
+            indexed = self._load_indexed_state(kb.name)
             seen_ids = set()
 
             # Check each file
@@ -430,11 +446,7 @@ class IndexManager:
                     indexed_at = indexed[entry.id]["indexed_at"]
                     if indexed_at:
                         try:
-                            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-                            index_time = datetime.fromisoformat(
-                                indexed_at.replace("Z", "+00:00").replace("+00:00", "")
-                            )
-                            if file_mtime > index_time:
+                            if self._is_stale(file_path, indexed_at):
                                 self.index_entry(entry, kb.name, file_path)
                                 results["updated"] += 1
                         except Exception:

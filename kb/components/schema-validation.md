@@ -8,13 +8,58 @@ dependencies: ["pyrite.plugins"]
 tags: [core, validation]
 ---
 
-KBSchema defines per-KB validation rules. Validators enforce data quality at write time.
+`KBSchema` defines per-KB validation rules loaded from `kb.yaml`. The module also houses core data classes (`Source`, `Link`, `Provenance`), enums (`VerificationStatus`, `EventStatus`, `ResearchStatus`), and the `CORE_TYPES` / `CORE_TYPE_METADATA` registries.
 
-## Key Behaviors
-- Plugin validators **always run**, even for types not declared in kb.yaml
-- Validators return `list[dict]` with field, rule, expected, got, and optional `severity: "warning"`
-- Warnings are advisory; errors block saves when enforce=True
-- Quality-gated validation: higher quality levels impose stricter requirements (Encyclopedia pattern)
+## Validator Lifecycle
+
+1. `KBSchema.from_yaml(path)` loads the KB's `kb.yaml` and parses type definitions into `TypeSchema` objects with `FieldSchema` fields.
+2. On write, `validate_entry(entry_type, fields, context)` runs validation:
+   - Checks required fields from `TypeSchema.required`
+   - Validates typed field values via `_validate_field_value()` (supports 10 types: text, number, date, datetime, checkbox, select, multi-select, object-ref, list, tags)
+   - Applies `validation.rules` from kb.yaml (range checks, ISO8601 format)
+   - Checks `policies.minimum_sources`
+   - Runs plugin validators (always, even for unknown types)
+3. Returns `{"valid": bool, "errors": [...], "warnings": [...]}`.
+
+## Enforcement Modes
+
+- **Advisory** (default): field type mismatches become warnings with `severity: "warning"`. Entries are saved.
+- **Enforced** (`validation.enforce: true` in kb.yaml): mismatches become errors that block saves.
+- Unknown entry types produce errors only when enforce is true.
+
+## Plugin Validator Registration
+
+Plugins implement `get_validators() -> list[Callable]`. Each validator receives `(entry_type, fields, context)` and returns `list[dict]` with keys: `field`, `rule`, `expected`, `got`, optional `severity`.
+
+Validators are collected via `get_registry().get_all_validators()` and called in registration order. The system gracefully falls back to the old `(entry_type, data)` two-argument signature for backwards compatibility.
+
+## Quality-Gated Validation
+
+The Encyclopedia extension demonstrates quality-gated validation: higher `research_status` levels (stub → partial → draft → complete → published) impose stricter requirements. For example, `published` articles must have minimum sources, proper citations, and verified provenance.
+
+## Type Metadata Resolution
+
+`resolve_type_metadata(type_name, kb_schema)` merges metadata from 4 layers (lowest → highest priority):
+
+1. `CORE_TYPE_METADATA` — built-in defaults (8 core types + collection)
+2. Plugin `get_type_metadata()` — domain-specific overrides
+3. `TypeSchema` from kb.yaml — KB-level customization
+4. (Empty defaults as base)
+
+Returns: `ai_instructions`, `field_descriptions`, `display` dict.
 
 ## Relationship Types
-Core relationship types (extends, is_part_of, related_to, owns, etc.) are merged with plugin-provided types. Each has an inverse. `get_inverse_relation()` resolves bidirectionally.
+
+`RELATIONSHIP_TYPES` defines ~30 core relationship types, each with an inverse (e.g., `owns` ↔ `owned_by`, `supports` ↔ `supported_by`). Includes both entity relationships (employment, funding, membership) and Zettelkasten note relationships (supports, contradicts, extends, refines).
+
+`get_all_relationship_types()` merges core types with plugin-provided types via `get_registry().get_all_relationship_types()`. `get_inverse_relation()` resolves inverses bidirectionally, defaulting to `related_to`.
+
+## Agent Schema Export
+
+`to_agent_schema()` serializes the full schema for MCP's `kb_schema` tool: all core + custom types with fields, AI instructions, field descriptions, display hints, and relationship types. Used by AI agents to discover what they can create.
+
+## Related
+
+- [[entry-model]] — data classes that schema validates
+- [[kb-service]] — calls `validate_entry()` on create/update
+- [[mcp-server]] — `kb_schema` tool exposes schema to agents

@@ -14,10 +14,10 @@ from pathlib import Path
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
-
 from .models import Base
 from .virtual_tables import create_fts_tables, create_vec_table
+
+logger = logging.getLogger(__name__)
 
 # Register explicit adapters to avoid Python 3.12+ deprecation warnings
 sqlite3.register_adapter(datetime, lambda dt: dt.isoformat())

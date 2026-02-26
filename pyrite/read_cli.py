@@ -12,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .cli.search_commands import register_search_command
 from .config import CONFIG_FILE, load_config
 from .services.kb_service import KBService
 from .storage.database import PyriteDB
@@ -137,8 +138,6 @@ def list_kbs(
 # =============================================================================
 # Search command
 # =============================================================================
-
-from .cli.search_commands import register_search_command
 
 register_search_command(app)
 

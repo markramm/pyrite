@@ -11,7 +11,7 @@ Configuration is loaded from:
 import logging
 import os
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-class KBType(str, Enum):
+class KBType(StrEnum):
     """Knowledge Base type (legacy compat — prefer string kb_type)."""
 
     EVENTS = "events"

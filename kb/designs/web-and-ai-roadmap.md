@@ -180,6 +180,21 @@ Phases are organized by deliverable value, not by track. Each phase delivers usa
 
 ---
 
+## Pyrite 0.3 Milestone — COMPLETE
+
+**Delivered 2026-02-25.** Collections (phases 1–3), block references (phase 1), semantic search for plugins, extension builder skill. Key deliverables:
+
+- **Collections Phase 1:** `__collection.yaml` parsing, folder-backed collections, list/table views, `/collections` routes
+- **Collections Phase 2:** Query DSL parser (`type:x status:y tags:z`), cached evaluation, virtual collections, `pyrite collections` CLI commands
+- **Collections Phase 3:** Kanban view with drag-and-drop, gallery view with card grid, PATCH endpoint for field updates
+- **Block References Phase 1:** Block table (migration v5), markdown block extraction, `[[entry#heading]]` links, `GET /api/entries/{id}/blocks`
+- **Extension Builder Skill:** Claude Code skill for scaffolding new pyrite extensions from description
+- **Semantic Search for Plugins:** `PluginContext.search_semantic()` with vector search fallback to FTS5
+
+See [ADR-0011](../adrs/0011-collections-and-views.md) (collections — status: accepted) and [ADR-0012](../adrs/0012-block-references-and-transclusion.md) (block references — status: accepted).
+
+---
+
 ## Future (Post-Phase 5)
 
 Items in `kb/backlog/future-ideas/`:
@@ -190,7 +205,7 @@ Items in `kb/backlog/future-ideas/`:
 - Entry Aliases
 - Canvas/Whiteboard view
 - Git sync conflict resolution UI
-- Semantic search for plugins (vector embeddings)
+- Semantic search for plugins (vector embeddings) ✅ Done in 0.3
 
 ---
 

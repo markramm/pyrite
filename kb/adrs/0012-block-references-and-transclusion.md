@@ -2,7 +2,7 @@
 type: adr
 title: "Block References and Transclusion"
 adr_number: 12
-status: proposed
+status: accepted
 deciders: ["markr"]
 date: "2026-02-24"
 tags: [architecture, editor, wikilinks, transclusion]

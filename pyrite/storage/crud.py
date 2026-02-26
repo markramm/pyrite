@@ -7,6 +7,7 @@ underlying INSERT/UPDATE/DELETE at the SQLite level.
 """
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func
@@ -53,6 +54,7 @@ class CRUDMixin:
             existing.location = entry_data.get("location")
             existing.extra_data = metadata_json
             existing.updated_at = entry_data.get("updated_at")
+            existing.indexed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             # Preserve original created_by, update modified_by
             if entry_data.get("created_by") and not existing.created_by:
                 existing.created_by = entry_data.get("created_by")

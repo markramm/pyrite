@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Block References Phase 1: Block Storage and Heading Links"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, editor, linking, block-refs]
