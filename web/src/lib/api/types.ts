@@ -379,6 +379,32 @@ export interface PluginDetail {
 	tools: Record<string, { tier: string; description: string }>;
 }
 
+// Collections
+
+export interface CollectionResponse {
+	id: string;
+	title: string;
+	description: string;
+	source_type: string;
+	icon: string;
+	view_config: Record<string, unknown>;
+	entry_count: number;
+	kb_name: string;
+	folder_path: string;
+	tags: string[];
+}
+
+export interface CollectionListResponse {
+	collections: CollectionResponse[];
+	total: number;
+}
+
+export interface CollectionEntriesResponse {
+	entries: EntryResponse[];
+	total: number;
+	collection_id: string;
+}
+
 // Import/Export
 
 export interface ImportResult {

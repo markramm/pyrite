@@ -13,8 +13,10 @@ from pathlib import Path
 from ..config import KBConfig
 from ..exceptions import KBReadOnlyError
 from ..models import Entry, EventEntry
+from ..models.collection import CollectionEntry
 from ..models.core_types import entry_from_frontmatter
 from ..schema import CORE_TYPES
+from ..utils.yaml import load_yaml_file
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +94,13 @@ class KBRepository:
                 if (subdir / f"{entry_id}.md").exists():
                     return True
 
+        # Check for collection entries (collection-<folder_name>)
+        if entry_id.startswith("collection-"):
+            folder_name = entry_id[len("collection-"):]
+            for subdir in self.path.rglob(folder_name):
+                if subdir.is_dir() and (subdir / "__collection.yaml").exists():
+                    return True
+
         return False
 
     def find_file(self, entry_id: str) -> Path | None:
@@ -107,6 +116,15 @@ class KBRepository:
                 file_path = subdir / f"{entry_id}.md"
                 if file_path.exists():
                     return file_path
+
+        # Check for collection entries (collection-<folder_name>)
+        if entry_id.startswith("collection-"):
+            folder_name = entry_id[len("collection-"):]
+            for subdir in self.path.rglob(folder_name):
+                if subdir.is_dir():
+                    yaml_path = subdir / "__collection.yaml"
+                    if yaml_path.exists():
+                        return yaml_path
 
         return None
 
@@ -186,9 +204,34 @@ class KBRepository:
                 logger.warning("Could not parse %s: %s", file_path, e)
                 continue
 
+        # Discover __collection.yaml files
+        for yaml_file in self.path.rglob("__collection.yaml"):
+            if any(part.startswith(".") for part in yaml_file.parts):
+                continue
+            try:
+                entry = self._load_collection(yaml_file)
+                entry.kb_name = self.name
+                entry.file_path = yaml_file
+                yield entry, yaml_file
+            except Exception as e:
+                logger.warning("Could not parse collection %s: %s", yaml_file, e)
+                continue
+
+    def _load_collection(self, yaml_file: Path) -> CollectionEntry:
+        """Load a CollectionEntry from a __collection.yaml file."""
+        data = load_yaml_file(yaml_file)
+        folder_path = str(yaml_file.parent.relative_to(self.path))
+        return CollectionEntry.from_collection_yaml(data, folder_path)
+
     def count(self) -> int:
         """Count total entries in the KB."""
-        return sum(1 for _ in self.list_files())
+        md_count = sum(1 for _ in self.list_files())
+        yaml_count = sum(
+            1
+            for f in self.path.rglob("__collection.yaml")
+            if not any(part.startswith(".") for part in f.parts)
+        )
+        return md_count + yaml_count
 
     def search_files(self, query: str) -> Iterator[tuple[Entry, Path]]:
         """

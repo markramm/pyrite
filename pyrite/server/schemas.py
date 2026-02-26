@@ -593,3 +593,38 @@ class BulkSettingsUpdateRequest(BaseModel):
     """Request to bulk update settings."""
 
     settings: dict[str, str]
+
+
+# =============================================================================
+# Collections
+# =============================================================================
+
+
+class CollectionResponse(BaseModel):
+    """Single collection response."""
+
+    id: str
+    title: str
+    description: str = ""
+    source_type: str = "folder"
+    icon: str = ""
+    view_config: dict = {}
+    entry_count: int = 0
+    kb_name: str = ""
+    folder_path: str = ""
+    tags: list[str] = []
+
+
+class CollectionListResponse(BaseModel):
+    """Response for listing collections."""
+
+    collections: list[CollectionResponse]
+    total: int
+
+
+class CollectionEntriesResponse(BaseModel):
+    """Response for entries within a collection."""
+
+    entries: list[EntryResponse]
+    total: int
+    collection_id: str

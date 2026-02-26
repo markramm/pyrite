@@ -110,6 +110,17 @@ CORE_TYPES: dict[str, dict[str, Any]] = {
             "date_range": "str",
         },
     },
+    "collection": {
+        "description": "A folder-backed collection of entries",
+        "subdirectory": None,  # Collections live in-place, not a dedicated folder
+        "fields": {
+            "source_type": "str",
+            "description": "str",
+            "icon": "str",
+            "view_config": "dict",
+            "folder_path": "str",
+        },
+    },
 }
 
 
@@ -221,6 +232,21 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "date_range": "Time span covered, e.g. '2024-01 to 2025-06'",
         },
         "display": {"icon": "clock", "layout": "document"},
+    },
+    "collection": {
+        "ai_instructions": (
+            "A folder-backed collection that groups related entries. "
+            "Created automatically from __collection.yaml files in KB folders. "
+            "Use to organize entries into browsable groups with list or table views."
+        ),
+        "field_descriptions": {
+            "source_type": "Collection source: 'folder' for filesystem-backed",
+            "description": "Human-readable description of the collection's purpose",
+            "icon": "Icon identifier for display",
+            "view_config": "View settings: default_view, table_columns",
+            "folder_path": "Relative path to the folder within the KB",
+        },
+        "display": {"icon": "folder", "layout": "record"},
     },
 }
 

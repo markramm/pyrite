@@ -19,6 +19,7 @@ from ..schema import (
     validate_importance,
 )
 from .base import Entry, parse_datetime, parse_links, parse_sources
+from .collection import CollectionEntry
 
 
 @dataclass
@@ -506,6 +507,7 @@ ENTRY_TYPE_REGISTRY: dict[str, type[Entry]] = {
     "topic": TopicEntry,
     "relationship": RelationshipEntry,
     "timeline": TimelineEntry,
+    "collection": CollectionEntry,
 }
 
 

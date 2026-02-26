@@ -2,6 +2,7 @@
 
 from ..schema import generate_entry_id
 from .base import Entry
+from .collection import CollectionEntry
 from .core_types import (
     ENTRY_TYPE_REGISTRY,
     EventEntry,
@@ -67,6 +68,20 @@ def build_entry(
             title=title,
             body=body,
             importance=kwargs.get("importance", 5),
+            tags=kwargs.get("tags", []),
+            summary=kwargs.get("summary", ""),
+        )
+    elif entry_type == "collection":
+        return CollectionEntry(
+            id=entry_id,
+            title=title,
+            body=body,
+            source_type=kwargs.get("source_type", "folder"),
+            description=kwargs.get("description", ""),
+            icon=kwargs.get("icon", ""),
+            view_config=kwargs.get("view_config", {"default_view": "list"}),
+            entry_filter=kwargs.get("entry_filter", {}),
+            folder_path=kwargs.get("folder_path", ""),
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
         )

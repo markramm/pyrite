@@ -31,9 +31,9 @@ class TestCoreTypeMetadata:
             assert isinstance(meta["display"], dict)
             assert "icon" in meta["display"], f"{type_name}: display missing icon"
 
-    def test_exactly_eight_core_types(self):
-        """There should be exactly 8 core types with metadata."""
-        assert len(CORE_TYPE_METADATA) == 8
+    def test_exactly_nine_core_types(self):
+        """There should be exactly 9 core types with metadata."""
+        assert len(CORE_TYPE_METADATA) == 9
 
 
 class TestResolveTypeMetadata:

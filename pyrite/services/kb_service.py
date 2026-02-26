@@ -488,6 +488,51 @@ class KBService:
             offset=offset,
         )
 
+    def list_collections(self, kb_name: str | None = None) -> list[dict[str, Any]]:
+        """List all collection entries."""
+        return self.list_entries(kb_name=kb_name, entry_type="collection")
+
+    def get_collection_entries(
+        self,
+        collection_id: str,
+        kb_name: str,
+        sort_by: str = "title",
+        sort_order: str = "asc",
+        limit: int = 200,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Get entries belonging to a folder collection.
+
+        Returns:
+            Tuple of (entries, total_count)
+
+        Raises:
+            EntryNotFoundError: If collection not found
+        """
+        entry = self.get_entry(collection_id, kb_name)
+        if not entry or entry.get("entry_type") != "collection":
+            raise EntryNotFoundError(f"Collection not found: {collection_id}")
+        metadata = entry.get("metadata", {})
+        if isinstance(metadata, str):
+            import json
+
+            try:
+                metadata = json.loads(metadata)
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+        folder_path = metadata.get("folder_path", "") if isinstance(metadata, dict) else ""
+        if not folder_path:
+            return [], 0
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+        abs_folder = str(kb_config.path / folder_path)
+        entries = self.db.list_entries_in_folder(
+            kb_name, abs_folder, sort_by, sort_order, limit, offset
+        )
+        total = self.db.count_entries_in_folder(kb_name, abs_folder)
+        return entries, total
+
     def count_entries(
         self,
         kb_name: str | None = None,

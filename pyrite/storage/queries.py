@@ -572,6 +572,47 @@ class QueryMixin:
 
         return root_children
 
+    # =========================================================================
+    # Folder queries (for collections)
+    # =========================================================================
+
+    def list_entries_in_folder(
+        self,
+        kb_name: str,
+        folder_path: str,
+        sort_by: str = "title",
+        sort_order: str = "asc",
+        limit: int = 200,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """List entries whose file_path is within the given folder."""
+        allowed_sorts = {"title", "entry_type", "updated_at", "created_at", "date"}
+        if sort_by not in allowed_sorts:
+            sort_by = "title"
+        if sort_order not in ("asc", "desc"):
+            sort_order = "asc"
+        sql = f"""
+            SELECT * FROM entry
+            WHERE kb_name = ? AND file_path LIKE ? || '%'
+              AND entry_type != 'collection'
+            ORDER BY {sort_by} {sort_order}
+            LIMIT ? OFFSET ?
+        """
+        folder_prefix = folder_path.rstrip("/") + "/"
+        rows = self._raw_conn.execute(sql, (kb_name, folder_prefix, limit, offset)).fetchall()
+        return [dict(r) for r in rows]
+
+    def count_entries_in_folder(self, kb_name: str, folder_path: str) -> int:
+        """Count entries whose file_path is within the given folder."""
+        folder_prefix = folder_path.rstrip("/") + "/"
+        row = self._raw_conn.execute(
+            """SELECT COUNT(*) FROM entry
+               WHERE kb_name = ? AND file_path LIKE ? || '%'
+                 AND entry_type != 'collection'""",
+            (kb_name, folder_prefix),
+        ).fetchone()
+        return row[0] if row else 0
+
     def search_by_tag_prefix(
         self, prefix: str, kb_name: str | None = None, limit: int = 50
     ) -> list[dict[str, Any]]:

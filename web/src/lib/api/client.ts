@@ -10,6 +10,9 @@ import type {
 	AILinkSuggestResponse,
 	AIStatusResponse,
 	AISummarizeResponse,
+	CollectionEntriesResponse,
+	CollectionListResponse,
+	CollectionResponse,
 	CreateEntryRequest,
 	CreateResponse,
 	DailyDatesResponse,
@@ -348,6 +351,29 @@ class ApiClient {
 			method: 'POST',
 			body: JSON.stringify({ entry_id: entryId, kb_name: kbName })
 		});
+	}
+
+	// Collections
+	async listCollections(kb?: string): Promise<CollectionListResponse> {
+		const params = kb ? `?kb=${encodeURIComponent(kb)}` : '';
+		return this.request(`/api/collections${params}`);
+	}
+
+	async getCollection(id: string, kb: string): Promise<CollectionResponse> {
+		return this.request(`/api/collections/${encodeURIComponent(id)}?kb=${encodeURIComponent(kb)}`);
+	}
+
+	async getCollectionEntries(
+		id: string,
+		kb: string,
+		options: { sort_by?: string; sort_order?: string; limit?: number; offset?: number } = {}
+	): Promise<CollectionEntriesResponse> {
+		const params = new URLSearchParams({ kb });
+		if (options.sort_by) params.set('sort_by', options.sort_by);
+		if (options.sort_order) params.set('sort_order', options.sort_order);
+		if (options.limit) params.set('limit', String(options.limit));
+		if (options.offset) params.set('offset', String(options.offset));
+		return this.request(`/api/collections/${encodeURIComponent(id)}/entries?${params}`);
 	}
 
 	// Plugins
