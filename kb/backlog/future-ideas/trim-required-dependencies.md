@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Move Unused/Premature Dependencies to Optional Groups"
 kind: improvement
-status: proposed
+status: done
 priority: low
 effort: S
 tags: [packaging, dx]

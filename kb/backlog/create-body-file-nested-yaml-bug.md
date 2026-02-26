@@ -3,7 +3,7 @@ id: create-body-file-nested-yaml-bug
 title: "pyrite create --body-file Doesn't Merge Nested YAML into Frontmatter"
 type: backlog_item
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [bug, cli, metadata]

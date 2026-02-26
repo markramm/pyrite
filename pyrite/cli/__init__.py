@@ -208,9 +208,23 @@ def create_entry(
             raise typer.Exit(1)
         body = body_file.read_text(encoding="utf-8")
 
+    # Extract YAML frontmatter from body content (--body-file or --stdin)
+    _file_meta: dict = {}
+    if body and body.startswith("---"):
+        _fm_end = body.find("---", 3)
+        if _fm_end > 0:
+            from pyrite.utils.yaml import load_yaml
+
+            _parsed = load_yaml(body[3:_fm_end])
+            if _parsed and isinstance(_parsed, dict):
+                for _k, _v in _parsed.items():
+                    if _k not in ("id", "type", "title"):
+                        _file_meta[_k] = _v
+                body = body[_fm_end + 3 :].strip()
+
     entry_id = generate_entry_id(title)
 
-    extra: dict = {}
+    extra: dict = {**_file_meta}
     if date:
         extra["date"] = date
     if importance != 5:

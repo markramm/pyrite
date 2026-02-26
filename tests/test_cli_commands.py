@@ -399,6 +399,90 @@ class TestCreateImprovements:
             assert result.exit_code == 0
             assert "Your Title Here" in result.output
 
+    def test_create_body_file_merges_frontmatter(self, cli_env):
+        """Fields from file frontmatter appear in created entry metadata."""
+        body_path = cli_env["tmpdir"] / "with_fm.md"
+        body_path.write_text(
+            "---\nkind: component\npath: src/foo.py\nowner: alice\n---\nActual body content.",
+            encoding="utf-8",
+        )
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app,
+                [
+                    "create",
+                    "--kb", "test-events",
+                    "--type", "note",
+                    "--title", "FM Merge Test",
+                    "--body-file", str(body_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "Created" in result.output
+
+            # Read back the saved file and verify frontmatter was merged
+            saved = list(cli_env["events_kb"].path.glob("**/*fm-merge-test*"))
+            assert len(saved) == 1
+            content = saved[0].read_text(encoding="utf-8")
+            assert "kind: component" in content
+            assert "owner: alice" in content
+            assert "path: src/foo.py" in content
+            # Body should be just the content after closing ---
+            assert "Actual body content." in content
+            # Frontmatter block should NOT appear in body
+            assert content.count("---") == 2  # only the entry's own frontmatter fences
+
+    def test_create_body_file_cli_flags_override(self, cli_env):
+        """Explicit CLI --field takes precedence over file frontmatter."""
+        body_path = cli_env["tmpdir"] / "override.md"
+        body_path.write_text(
+            "---\nkind: from-file\npriority: low\n---\nOverride body.",
+            encoding="utf-8",
+        )
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app,
+                [
+                    "create",
+                    "--kb", "test-events",
+                    "--type", "note",
+                    "--title", "Override Test",
+                    "--body-file", str(body_path),
+                    "--field", "kind=from-cli",
+                ],
+            )
+            assert result.exit_code == 0
+
+            saved = list(cli_env["events_kb"].path.glob("**/*override-test*"))
+            assert len(saved) == 1
+            content = saved[0].read_text(encoding="utf-8")
+            assert "kind: from-cli" in content
+            # priority from file should still be present
+            assert "priority: low" in content
+
+    def test_create_body_file_plain_content(self, cli_env):
+        """File without frontmatter works as before (no regression)."""
+        body_path = cli_env["tmpdir"] / "plain.txt"
+        body_path.write_text("Just plain text, no frontmatter.", encoding="utf-8")
+        with _patch_config(cli_env):
+            result = runner.invoke(
+                app,
+                [
+                    "create",
+                    "--kb", "test-events",
+                    "--type", "note",
+                    "--title", "Plain Body Test",
+                    "--body-file", str(body_path),
+                ],
+            )
+            assert result.exit_code == 0
+            assert "Created" in result.output
+
+            saved = list(cli_env["events_kb"].path.glob("**/*plain-body-test*"))
+            assert len(saved) == 1
+            content = saved[0].read_text(encoding="utf-8")
+            assert "Just plain text, no frontmatter." in content
+
 
 @pytest.mark.cli
 class TestTyperConfigCommand:

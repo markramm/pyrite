@@ -87,12 +87,17 @@ def build_entry(
         )
     elif entry_type in ENTRY_TYPE_REGISTRY:
         cls = ENTRY_TYPE_REGISTRY[entry_type]
+        # Capture non-standard kwargs as metadata so --field / frontmatter extras persist
+        _known = {"tags", "summary", "metadata", "date", "importance"}
+        _extra_meta = {k: v for k, v in kwargs.items() if k not in _known}
+        _metadata = {**kwargs.get("metadata", {}), **_extra_meta}
         return cls(
             id=entry_id,
             title=title,
             body=body,
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
+            metadata=_metadata,
         )
     else:
         # Check plugin registry, then fall back to GenericEntry
