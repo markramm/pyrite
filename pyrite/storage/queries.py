@@ -2,9 +2,13 @@
 Search, graph, analytics, and timeline queries.
 
 Mixin class for read-only query operations.
+Settings methods use ORM; all search/graph/analytics stay as raw SQL.
 """
 
+from datetime import UTC, datetime
 from typing import Any
+
+from .models import Setting
 
 
 class QueryMixin:
@@ -505,32 +509,31 @@ class QueryMixin:
 
     def get_setting(self, key: str) -> str | None:
         """Get a setting value by key."""
-        row = self._raw_conn.execute(
-            "SELECT value FROM setting WHERE key = ?", (key,)
-        ).fetchone()
-        return row["value"] if row else None
+        setting = self.session.query(Setting).filter_by(key=key).first()
+        return setting.value if setting else None
 
     def set_setting(self, key: str, value: str) -> None:
         """Set a setting value (upsert)."""
-        self._raw_conn.execute(
-            """INSERT INTO setting (key, value, updated_at)
-               VALUES (?, ?, CURRENT_TIMESTAMP)
-               ON CONFLICT(key) DO UPDATE SET
-               value = excluded.value, updated_at = CURRENT_TIMESTAMP""",
-            (key, value),
-        )
-        self._raw_conn.commit()
+        now = datetime.now(UTC).isoformat()
+        existing = self.session.query(Setting).filter_by(key=key).first()
+        if existing:
+            existing.value = value
+            existing.updated_at = now
+        else:
+            setting = Setting(key=key, value=value, updated_at=now)
+            self.session.add(setting)
+        self.session.commit()
 
     def get_all_settings(self) -> dict[str, str]:
         """Get all settings as a dict."""
-        rows = self._raw_conn.execute("SELECT key, value FROM setting").fetchall()
-        return {r["key"]: r["value"] for r in rows}
+        settings = self.session.query(Setting).all()
+        return {s.key: s.value for s in settings}
 
     def delete_setting(self, key: str) -> bool:
         """Delete a setting. Returns True if deleted."""
-        result = self._raw_conn.execute("DELETE FROM setting WHERE key = ?", (key,))
-        self._raw_conn.commit()
-        return result.rowcount > 0
+        count = self.session.query(Setting).filter_by(key=key).delete()
+        self.session.commit()
+        return count > 0
 
     # =========================================================================
     # Tag hierarchy

@@ -6,11 +6,12 @@ Mixin class providing __init__, close, transaction, and schema management.
 
 import logging
 import sqlite3
+import warnings
 from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -53,9 +54,10 @@ class ConnectionMixin:
         # Create session
         self.session = Session(self.engine)
 
-        # Get raw connection for virtual tables and extensions
-        raw_conn = self.engine.raw_connection()
-        self._raw_conn = raw_conn.driver_connection
+        # Derive raw connection FROM the session's underlying connection
+        # This ensures ORM writes and raw SQL share the same connection
+        self._sa_conn = self.engine.connect()
+        self._raw_conn = self._sa_conn.connection.dbapi_connection
         self._raw_conn.row_factory = sqlite3.Row
 
         # Load extensions and create virtual tables
@@ -139,8 +141,26 @@ class ConnectionMixin:
 
     @property
     def conn(self):
-        """Backward-compat: returns raw sqlite3 connection for virtual table ops."""
+        """Backward-compat: returns raw sqlite3 connection.
+
+        Deprecated: Use ``session`` for writes and ``execute_sql()`` for
+        read-only raw SQL queries.
+        """
+        warnings.warn(
+            "db.conn is deprecated. Use db.session for writes and "
+            "db.execute_sql() for read-only queries.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._raw_conn
+
+    def execute_sql(self, sql: str, params=None) -> list[dict]:
+        """Execute raw SQL through the session connection. For read-only search queries."""
+        result = self.session.execute(text(sql), params or {})
+        if result.returns_rows:
+            cols = result.keys()
+            return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
+        return []
 
     def get_schema_version(self) -> int:
         """Get current schema version."""
@@ -159,11 +179,13 @@ class ConnectionMixin:
     def close(self):
         """Close database connection."""
         self.session.close()
+        if hasattr(self, "_sa_conn"):
+            self._sa_conn.close()
         self.engine.dispose()
 
     @contextmanager
     def transaction(self):
-        """Context manager for transactions."""
+        """Context manager for ORM transactions with rollback on failure."""
         try:
             yield self.session
             self.session.commit()
