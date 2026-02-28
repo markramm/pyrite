@@ -209,8 +209,8 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 |---|------|-------|------|--------|--------|
 | 68 | [Entry Type Mismatch: event vs timeline_event](done/entry-type-mismatch-event-vs-timeline-event.md) | Core | bug | S | **done** |
 | 69 | [MCP Link Creation Tool](done/mcp-link-creation-tool.md) | AI | feature | M | **done** |
-| 70 | [MCP Large Result Handling](mcp-large-result-handling.md) | AI | improvement | M | **done** |
-| 71 | [MCP Bulk Create Tool](mcp-bulk-create-tool.md) | AI | feature | M | **done** |
+| 70 | [MCP Large Result Handling](done/mcp-large-result-handling.md) | AI | improvement | M | **done** |
+| 71 | [MCP Bulk Create Tool](done/mcp-bulk-create-tool.md) | AI | feature | M | **done** |
 | 72 | [Capture Lane Validation via kb.yaml Controlled Vocabulary](capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) | Core | feature | M | proposed |
 
 **Parallelism:** #70 and #71 touch different parts of `mcp_server.py` (pagination vs batch handler). #72 touches `schema.py` only. All three can run in parallel.
@@ -236,6 +236,21 @@ Items subsumed by larger features:
 | 28 | [Dataview-Style Queries](dataview-queries.md) | #51 Collections (Phase 2) | Virtual collections with `source: query` are dataview |
 | 29 | [Database Views (Table/Board/Gallery)](database-views.md) | #51 Collections (Phase 3) | Collection view types cover table, kanban, gallery |
 | 43 | [Display Hints for Types](display-hints-for-types.md) | #51 Collections (Phase 1) | View configuration is per-collection, not just per-type |
+
+## Prioritized Next Up
+
+Recommended execution order for remaining proposed items:
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **1** | #72 Capture Lane Validation | Small (M), self-contained, foundation for QA tier 1 |
+| **2** | #60 Block Refs Phase 3: Transclusion | Backend done, frontend extension partially built, completes the block refs story |
+| **3** | #73 QA Agent Workflows (Phase 1 only) | Tier 1 structural validation is high-value, no LLM needed, M effort |
+| **4** | #64 Collections Phase 4: Embedding | Blocked by #60, moderate value |
+| **5** | #73 QA Phases 2-5 | Incrementally valuable but large investment |
+| **6** | Coordination/Task Plugin | Ambitious, not blocking anything, consider after QA |
+
+**Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
 
 ## In Progress
 
@@ -264,12 +279,9 @@ Lower-priority items in [`future-ideas/`](future-ideas/):
 
 - [Web AI: Writing Assistant in Editor](future-ideas/web-ai-writing-assist.md) — Select text → AI summarize/expand/rewrite/continue
 - [Offline Support and Performance](future-ideas/offline-and-performance.md) — IndexedDB cache, virtual scrolling, service worker
-- [Web Clipper](future-ideas/web-clipper.md) — Capture web content into Pyrite entries
-- [Entry Aliases](future-ideas/entry-aliases.md) — Multiple names resolving to one entry
 - [Canvas / Whiteboard](future-ideas/canvas-whiteboard.md) — Freeform spatial canvas for visual thinking
 - [Git Sync Conflict Resolution UI](future-ideas/sync-conflict-resolution-ui.md) — Visual merge conflict resolution
 - [Plugin Tool Collision Detection](future-ideas/plugin-tool-collision-detection.md) — Warn on duplicate tool names
-- [Trim Required Dependencies](future-ideas/trim-required-dependencies.md) — Reduce install footprint
 - [Engagement Federation](future-ideas/engagement-federation.md) — Sync engagement data across instances
 - [Graph Betweenness Centrality Sizing](future-ideas/graph-betweenness-centrality.md) — Size nodes by BC to highlight bridging entries
 - [Graph Community Detection](future-ideas/graph-community-detection.md) — Detect topical clusters, color by community instead of type
@@ -342,8 +354,10 @@ Items in [`done/`](done/):
 - [Health Check Timezone Fix](health-check-timezone-fix.md) — Fixed false stale entries from UTC vs local time mismatch in `IndexManager.check_health()`
 - [Entry Type Mismatch Fix](done/entry-type-mismatch-event-vs-timeline-event.md) — `_resolve_entry_type()` in KBService maps core types to plugin subtypes (e.g. event → timeline_event)
 - [MCP Link Creation Tool](done/mcp-link-creation-tool.md) — `kb_link` write-tier MCP tool for creating typed links between entries via `KBService.add_link()`
-- [MCP Large Result Handling](mcp-large-result-handling.md) — Server-side pagination with limit/offset pushed to SQL, `has_more` flag on all paginated responses
-- [MCP Bulk Create Tool](mcp-bulk-create-tool.md) — `kb_bulk_create` write-tier tool for batch entry creation (max 50, best-effort per-entry semantics)
+- [MCP Large Result Handling](done/mcp-large-result-handling.md) — Server-side pagination with limit/offset pushed to SQL, `has_more` flag on all paginated responses
+- [MCP Bulk Create Tool](done/mcp-bulk-create-tool.md) — `kb_bulk_create` write-tier tool for batch entry creation (max 50, best-effort per-entry semantics)
+- [Entry Aliases](done/entry-aliases.md) — `aliases` field on all entry types, autocomplete search, wikilink resolution
+- [Web Clipper](done/web-clipper.md) — `POST /api/clip` endpoint, clipper service, web clip page
 
 ---
 

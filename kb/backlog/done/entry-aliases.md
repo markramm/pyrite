@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Entry Aliases"
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: S
 tags: [linking, editor]

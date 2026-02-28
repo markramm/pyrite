@@ -7,6 +7,8 @@ tags:
 - extension
 - plugin
 kind: feature
+priority: low
+status: proposed
 effort: XL
 ---
 

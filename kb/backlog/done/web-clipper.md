@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Web Clipper"
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: M
 tags: [web, import, phase-5]

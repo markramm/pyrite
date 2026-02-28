@@ -1,6 +1,6 @@
 # Pyrite
 
-Pyrite is a multi-KB knowledge base system. Data is markdown files with YAML frontmatter, stored in git. Search is SQLite FTS5 with optional vector embeddings. AI agents access it through a three-tier MCP server (read/write/admin). Humans use a CLI, REST API, or SvelteKit web UI.
+Pyrite is a multi-KB knowledge base system. Data is markdown files with YAML frontmatter, stored in git. Search is SQLite FTS5 with optional vector embeddings (semantic and hybrid modes). AI agents access it through a three-tier MCP server (read/write/admin). Humans use a CLI, REST API, or SvelteKit web UI.
 
 You define domain-specific entry types and field schemas in YAML. Pyrite validates entries, indexes them, and exposes them through all interfaces. A plugin protocol lets you extend entry types, add MCP tools, define relationship semantics, and hook into lifecycle events.
 
@@ -20,6 +20,7 @@ pip install -e extensions/software-kb
 pip install -e extensions/zettelkasten
 pip install -e extensions/encyclopedia
 pip install -e extensions/social
+pip install -e extensions/cascade
 ```
 
 ## Usage
@@ -28,7 +29,7 @@ pip install -e extensions/social
 # Build the search index (required before first search)
 pyrite index build
 
-# Search
+# Search (keyword, semantic, or hybrid)
 pyrite search "immigration policy"
 pyrite search "immigration" --kb=timeline --type=event --mode=hybrid
 
@@ -36,6 +37,7 @@ pyrite search "immigration" --kb=timeline --type=event --mode=hybrid
 pyrite get stephen-miller
 pyrite backlinks stephen-miller --kb=research
 pyrite timeline --from=2025-01-01 --to=2025-06-30
+pyrite collections list --kb=research
 
 # Write
 pyrite create --kb=research --type=person --title="Jane Doe" \
@@ -49,13 +51,15 @@ pyrite kb discover         # Auto-find KBs by kb.yaml presence
 
 ## MCP Server
 
-Three permission tiers. Each tier is a separate server instance.
+Three permission tiers. Each tier includes the tools from lower tiers.
 
 | Tier | Tools |
 |------|-------|
 | **read** | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema` |
-| **write** | read + `kb_create`, `kb_update`, `kb_delete` |
-| **admin** | write + `kb_index_sync`, `kb_manage` |
+| **write** | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link` |
+| **admin** | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push` |
+
+All paginated tools (`kb_search`, `kb_timeline`, `kb_backlinks`, `kb_tags`) support `limit`/`offset` params and return a `has_more` flag. `kb_bulk_create` handles up to 50 entries per call with best-effort per-entry semantics.
 
 Plugins add their own tools per tier (e.g., software-kb adds `sw_adrs`, `sw_backlog`, `sw_new_adr`).
 
@@ -75,6 +79,27 @@ Also exposes: 4 prompts (`research_topic`, `summarize_entry`, `find_connections`
 ```
 
 Use `pyrite-admin mcp --tier read` for a read-only server.
+
+## Web UI
+
+SvelteKit 5 frontend with:
+
+- WYSIWYG + markdown editor (Tiptap + CodeMirror dual mode)
+- `[[wikilinks]]` with autocomplete, alias resolution, and pill decorations
+- `![[transclusion]]` embedded content cards
+- Block references: `[[entry#heading]]` and `[[entry^block-id]]`
+- Backlinks panel, outline/TOC, split panes
+- Interactive knowledge graph (Cytoscape.js)
+- Collections with list, table, kanban, and gallery views
+- Virtual collections via query DSL
+- AI chat sidebar (RAG), summarize, auto-tag, suggest links
+- Quick switcher (Cmd+O), command palette (Cmd+K)
+- Daily notes with calendar
+- Timeline visualization
+- Version history with diff viewer
+- Web clipper for URL content capture
+- WebSocket multi-tab sync
+- Slash commands in editor
 
 ## Custom Types
 
@@ -103,7 +128,7 @@ types:
 
 Field types: `text`, `number`, `date`, `datetime`, `checkbox`, `select`, `multi-select`, `object-ref`, `list`, `tags`.
 
-Eight built-in entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`.
+Eight built-in entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`. Entries support `aliases` for alternate names that resolve in wikilinks and autocomplete.
 
 ## Plugin Protocol
 
@@ -111,41 +136,45 @@ Extensions implement a Python protocol class with up to 12 methods:
 
 - `get_entry_classes()` — custom entry types with serialization
 - `get_type_metadata()` — field definitions, AI instructions, presets
+- `get_collection_types()` — custom collection types
 - `get_mcp_tools(tier)` — per-tier MCP tools
 - `get_cli_app()` — Typer sub-commands
 - `get_validators()` — entry validation rules
 - `get_relationship_types()` — semantic relationship definitions
 - Lifecycle hooks: `before_save`, `after_save`, `before_delete`, `after_delete`
 
-Four extensions ship: `software-kb` (ADRs, components, backlog), `zettelkasten` (CEQRC maturity workflow), `encyclopedia` (articles, reviews, voting), `social` (engagement tracking).
+Five extensions ship: `software-kb` (ADRs, components, backlog), `zettelkasten` (CEQRC maturity workflow), `encyclopedia` (articles, reviews, voting), `social` (engagement tracking), `cascade` (timeline events and migration).
 
 ## Architecture
 
 ```
 pyrite/
-├── models/          # Entry types (base, core_types, factory, generic)
+├── models/          # Entry types (base, core_types, factory, generic, collection)
 ├── schema.py        # YAML-driven type definitions, field validation
 ├── config.py        # Multi-KB and repo configuration
 ├── server/
-│   ├── api.py       # FastAPI REST API factory
-│   ├── mcp_server.py # MCP server (mcp SDK, 3-tier)
-│   └── endpoints/   # Per-feature REST routes
+│   ├── api.py       # FastAPI REST API factory (role-based tier enforcement)
+│   ├── mcp_server.py # MCP server (mcp SDK, 3-tier, paginated)
+│   ├── websocket.py # WebSocket multi-tab sync
+│   └── endpoints/   # Per-feature REST routes (entries, search, kbs, collections, graph, daily, clipper, ...)
 ├── storage/
-│   ├── database.py  # SQLite + FTS5 (SQLAlchemy + raw)
-│   ├── index.py     # Incremental indexing
+│   ├── database.py  # SQLite + FTS5 + sqlite-vec (SQLAlchemy ORM + raw SQL)
+│   ├── index.py     # Incremental indexing with wikilink/transclusion extraction
 │   └── repository.py # Markdown file I/O
-├── services/        # Business logic (kb, search, repo, llm, embedding, git, user)
+├── services/        # Business logic (kb, search, embedding, llm, git, collection_query, clipper, user)
 ├── plugins/         # Plugin discovery and protocol
 └── formats/         # Content negotiation (JSON, Markdown, CSV, YAML)
 
-extensions/          # Domain-specific plugins
+extensions/          # Domain-specific plugins (software-kb, zettelkasten, encyclopedia, social, cascade)
 web/                 # SvelteKit 5 frontend (TypeScript + Tailwind)
 kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 ```
 
-**Storage model:** Markdown files in git are the source of truth. SQLite FTS5 is a derived index. Rebuild from files at any time with `pyrite index build`.
+**Storage model:** Markdown files in git are the source of truth. SQLite FTS5 is a derived index. Rebuild from files at any time with `pyrite index build`. Background embedding pipeline keeps vector index current.
 
 **Content negotiation:** REST API responds in JSON, Markdown, CSV, or YAML via `Accept` header. CLI supports `--format`.
+
+**Access control:** REST API supports role-based tier enforcement (read/write/admin) with hashed API keys.
 
 ## Development
 
@@ -155,7 +184,7 @@ pip install -e ".[all]"
 for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
-# Tests (583 tests)
+# Tests (1030+ tests)
 pytest tests/ -v
 
 # Frontend
@@ -169,14 +198,14 @@ Pyrite's own backlog and architecture docs live in `kb/`:
 
 ```bash
 pyrite sw backlog        # Prioritized backlog
-pyrite sw adrs           # Architecture Decision Records
+pyrite sw adrs           # Architecture Decision Records (13 ADRs)
 pyrite sw components     # Module documentation
 pyrite sw standards      # Coding conventions
 ```
 
 ## Background
 
-Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5, REST API, SvelteKit frontend, service layer, schema-as-config, content negotiation. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.
+Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5 + vector search, REST API with tier enforcement, SvelteKit frontend, service layer, schema-as-config, content negotiation, collections, block references, web clipper, AI integration. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.
 
 ## License
 
