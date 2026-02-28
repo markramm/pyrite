@@ -203,6 +203,18 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 
 **Note on #51 (Collections):** This item subsumes #28 (Dataview-Style Queries), #29 (Database Views), and #43 (Display Hints). Those items are retired — their scope is now covered by Collections phases 1–3. See [ADR-0011](../adrs/0011-collections-and-views.md).
 
+### Wave 9 — MCP Server Hardening
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 68 | [Entry Type Mismatch: event vs timeline_event](done/entry-type-mismatch-event-vs-timeline-event.md) | Core | bug | S | **done** |
+| 69 | [MCP Link Creation Tool](done/mcp-link-creation-tool.md) | AI | feature | M | **done** |
+| 70 | [MCP Large Result Handling](mcp-large-result-handling.md) | AI | improvement | M | proposed |
+| 71 | [MCP Bulk Create Tool](mcp-bulk-create-tool.md) | AI | feature | M | proposed |
+| 72 | [Capture Lane Validation via kb.yaml Controlled Vocabulary](capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) | Core | feature | M | proposed |
+
+**Parallelism:** #70 and #71 touch different parts of `mcp_server.py` (pagination vs batch handler). #72 touches `schema.py` only. All three can run in parallel.
+
 ## Retired
 
 Items subsumed by larger features:
@@ -316,6 +328,8 @@ Items in [`done/`](done/):
 - [Block Refs Phase 2: Block ID References](done/block-refs-phase2-block-id-references.md) — Extended wikilink regex for `[[entry#heading]]` and `[[entry^block-id]]`, resolve endpoint with fragments, two-stage autocomplete, backlinks fragment context
 - [Collections Phase 5: Plugin Types](done/collections-phase5-plugin-types.md) — `get_collection_types()` plugin protocol, registry aggregation, GET /api/collections/types, CollectionEntry.collection_type field
 - [Health Check Timezone Fix](health-check-timezone-fix.md) — Fixed false stale entries from UTC vs local time mismatch in `IndexManager.check_health()`
+- [Entry Type Mismatch Fix](done/entry-type-mismatch-event-vs-timeline-event.md) — `_resolve_entry_type()` in KBService maps core types to plugin subtypes (e.g. event → timeline_event)
+- [MCP Link Creation Tool](done/mcp-link-creation-tool.md) — `kb_link` write-tier MCP tool for creating typed links between entries via `KBService.add_link()`
 
 ---
 
