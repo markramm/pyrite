@@ -302,6 +302,40 @@ class PyriteMCPServer:
                     },
                     "handler": self._kb_delete,
                 },
+                "kb_link": {
+                    "description": "Create a link between two entries. Adds a typed relationship from source to target. Idempotent — linking the same pair twice has no effect.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "source_id": {
+                                "type": "string",
+                                "description": "Source entry ID",
+                            },
+                            "source_kb": {
+                                "type": "string",
+                                "description": "KB containing the source entry",
+                            },
+                            "target_id": {
+                                "type": "string",
+                                "description": "Target entry ID",
+                            },
+                            "relation": {
+                                "type": "string",
+                                "description": "Relationship type (default: related_to)",
+                            },
+                            "target_kb": {
+                                "type": "string",
+                                "description": "KB containing the target entry (defaults to source_kb)",
+                            },
+                            "note": {
+                                "type": "string",
+                                "description": "Optional note about the link",
+                            },
+                        },
+                        "required": ["source_id", "source_kb", "target_id"],
+                    },
+                    "handler": self._kb_link,
+                },
             }
         )
 
@@ -581,6 +615,34 @@ class PyriteMCPServer:
             return {"error": f"Entry '{entry_id}' not found in {kb_name}"}
 
         return {"deleted": True, "entry_id": entry_id}
+
+    def _kb_link(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create a link between two entries."""
+        source_id = args.get("source_id")
+        source_kb = args.get("source_kb")
+        target_id = args.get("target_id")
+        relation = args.get("relation", "related_to")
+        target_kb = args.get("target_kb")
+        note = args.get("note", "")
+
+        try:
+            self.svc.add_link(
+                source_id=source_id,
+                source_kb=source_kb,
+                target_id=target_id,
+                relation=relation,
+                target_kb=target_kb,
+                note=note,
+            )
+        except PyriteError as e:
+            return {"error": str(e)}
+
+        return {
+            "linked": True,
+            "source_id": source_id,
+            "target_id": target_id,
+            "relation": relation,
+        }
 
     # =========================================================================
     # Admin handlers

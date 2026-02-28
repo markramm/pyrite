@@ -130,6 +130,28 @@ class KBService:
                 return result
         return None
 
+    def _resolve_entry_type(self, entry_type: str) -> str:
+        """Resolve a generic core type to a plugin subtype if one exists.
+
+        If a plugin provides a type that subclasses the core type for the
+        given name, prefer the plugin type.  E.g. "event" -> "timeline_event"
+        when the Cascade plugin registers TimelineEventEntry(EventEntry).
+        """
+        from ..models.core_types import ENTRY_TYPE_REGISTRY
+
+        core_cls = ENTRY_TYPE_REGISTRY.get(entry_type)
+        if not core_cls:
+            return entry_type
+        try:
+            from ..plugins import get_registry
+
+            for ptype_name, ptype_cls in get_registry().get_all_entry_types().items():
+                if ptype_name != entry_type and issubclass(ptype_cls, core_cls):
+                    return ptype_name
+        except Exception:
+            pass
+        return entry_type
+
     def create_entry(
         self, kb_name: str, entry_id: str, title: str, entry_type: str, body: str = "", **kwargs
     ) -> Entry:
@@ -158,6 +180,9 @@ class KBService:
             raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
         repo = KBRepository(kb_config)
+
+        # Resolve generic core type to plugin subtype if one exists
+        entry_type = self._resolve_entry_type(entry_type)
 
         # Create appropriate entry type via factory
         entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **kwargs)
@@ -692,14 +717,15 @@ class KBService:
         limit: int = 500,
     ) -> list[dict[str, Any]]:
         """Lightweight listing of entry IDs and titles for wikilink autocomplete."""
-        sql = "SELECT id, kb_name, entry_type, title FROM entry WHERE 1=1"
+        sql = "SELECT id, kb_name, entry_type, title, json_extract(metadata, '$.aliases') as aliases FROM entry WHERE 1=1"
         params: list[str | int] = []
 
         if kb_name:
             sql += " AND kb_name = ?"
             params.append(kb_name)
         if query:
-            sql += " AND title LIKE ?"
+            sql += " AND (title LIKE ? OR json_extract(metadata, '$.aliases') LIKE ?)"
+            params.append(f"%{query}%")
             params.append(f"%{query}%")
 
         sql += " ORDER BY title COLLATE NOCASE LIMIT ?"
@@ -736,6 +762,19 @@ class KBService:
         if not row:
             sql = "SELECT id, kb_name, entry_type, title FROM entry WHERE title LIKE ?"
             params = [actual_target]
+            if actual_kb:
+                sql += " AND kb_name = ?"
+                params.append(actual_kb)
+            sql += " LIMIT 1"
+            row = self.db._raw_conn.execute(sql, params).fetchone()
+
+        if not row:
+            # Third pass: search aliases
+            sql = """
+                SELECT id, kb_name, entry_type, title FROM entry
+                WHERE json_extract(metadata, '$.aliases') LIKE ?
+            """
+            params = [f'%{actual_target}%']
             if actual_kb:
                 sql += " AND kb_name = ?"
                 params.append(actual_kb)

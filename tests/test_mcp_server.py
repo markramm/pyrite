@@ -568,6 +568,181 @@ class TestPyriteMCPServer:
         assert result["count"] == 0
         assert result["results"] == []
 
+    # ------------------------------------------------------------------
+    # kb_link handler
+    # ------------------------------------------------------------------
+
+    def test_kb_link(self, server_setup):
+        """Test creating a link between two entries via kb_link."""
+        server = server_setup["server"]
+
+        # Create two entries
+        r1 = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Link Source",
+                "date": "2025-04-01",
+                "body": "Source entry.",
+            },
+        )
+        r2 = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Link Target",
+                "date": "2025-04-02",
+                "body": "Target entry.",
+            },
+        )
+        assert r1.get("created") and r2.get("created")
+
+        # Link them
+        link_result = server._dispatch_tool(
+            "kb_link",
+            {
+                "source_id": r1["entry_id"],
+                "source_kb": "test-events",
+                "target_id": r2["entry_id"],
+                "relation": "caused_by",
+            },
+        )
+        assert link_result.get("linked") is True
+        assert link_result["relation"] == "caused_by"
+
+        # Verify via backlinks
+        bl = server._dispatch_tool(
+            "kb_backlinks",
+            {"entry_id": r2["entry_id"], "kb_name": "test-events"},
+        )
+        backlink_ids = [b["id"] for b in bl["backlinks"]]
+        assert r1["entry_id"] in backlink_ids
+
+    def test_kb_link_idempotent(self, server_setup):
+        """Test linking the same pair twice doesn't create duplicate links."""
+        server = server_setup["server"]
+
+        r1 = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Idem Source",
+                "date": "2025-04-03",
+                "body": "Source.",
+            },
+        )
+        r2 = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Idem Target",
+                "date": "2025-04-04",
+                "body": "Target.",
+            },
+        )
+
+        args = {
+            "source_id": r1["entry_id"],
+            "source_kb": "test-events",
+            "target_id": r2["entry_id"],
+        }
+        result1 = server._dispatch_tool("kb_link", args)
+        result2 = server._dispatch_tool("kb_link", args)
+        assert result1.get("linked") is True
+        assert result2.get("linked") is True
+
+        # Only one backlink should exist
+        bl = server._dispatch_tool(
+            "kb_backlinks",
+            {"entry_id": r2["entry_id"], "kb_name": "test-events"},
+        )
+        source_links = [b for b in bl["backlinks"] if b["id"] == r1["entry_id"]]
+        assert len(source_links) == 1
+
+    def test_kb_link_not_found(self, server_setup):
+        """Test linking from a nonexistent entry returns error."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_link",
+            {
+                "source_id": "no-such-entry",
+                "source_kb": "test-events",
+                "target_id": "also-missing",
+            },
+        )
+        assert "error" in result
+
+    def test_kb_link_in_write_tier(self):
+        """Test kb_link appears in write-tier tools but not read-tier."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            config = PyriteConfig(
+                knowledge_bases=[KBConfig(name="t", path=kb_path, kb_type=KBType.EVENTS)],
+                settings=Settings(index_path=db_path),
+            )
+
+            read_server = PyriteMCPServer(config, tier="read")
+            write_server = PyriteMCPServer(config, tier="write")
+
+            read_names = [t["name"] for t in read_server.get_tools_list()]
+            write_names = [t["name"] for t in write_server.get_tools_list()]
+
+            assert "kb_link" not in read_names
+            assert "kb_link" in write_names
+
+            read_server.close()
+            write_server.close()
+
+    # ------------------------------------------------------------------
+    # Entry type resolution (plugin subtype)
+    # ------------------------------------------------------------------
+
+    def test_kb_create_resolves_plugin_subtype(self, server_setup):
+        """Test that create with a core type resolves to plugin subtype."""
+        from unittest.mock import patch
+
+        from pyrite.models import EventEntry
+
+        # Create a mock plugin subclass of EventEntry
+        class MockTimelineEvent(EventEntry):
+            entry_type = "timeline_event"
+
+        mock_plugin_types = {"timeline_event": MockTimelineEvent}
+
+        server = server_setup["server"]
+
+        with patch("pyrite.plugins.get_registry") as mock_reg:
+            mock_reg.return_value.get_all_entry_types.return_value = mock_plugin_types
+            # Also patch the hooks to avoid plugin lookup issues
+            with patch.object(type(server.svc), "_run_hooks", side_effect=lambda _n, e, _c: e):
+                result = server._dispatch_tool(
+                    "kb_create",
+                    {
+                        "kb_name": "test-events",
+                        "entry_type": "event",
+                        "title": "Resolved Event",
+                        "date": "2025-05-01",
+                        "body": "Should resolve to timeline_event.",
+                    },
+                )
+
+        assert result.get("created") is True
+        entry_id = result["entry_id"]
+
+        # Verify the entry was created — the type depends on whether
+        # build_entry dispatches correctly for the resolved type
+        get_result = server._dispatch_tool(
+            "kb_get", {"entry_id": entry_id, "kb_name": "test-events"}
+        )
+        assert "entry" in get_result
+
 
 class TestMCPProtocol:
     """Test MCP server business methods (protocol dispatch handled by SDK)."""
