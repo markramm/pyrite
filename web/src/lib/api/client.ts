@@ -45,6 +45,8 @@ import type {
 	TemplateListResponse,
 	TimelineResponse,
 	UnstarEntryResponse,
+	ClipRequest,
+	ClipResponse,
 	UpdateEntryRequest,
 	UpdateResponse
 } from './types';
@@ -395,6 +397,14 @@ class ApiClient {
 		if (options?.block_type) params.set('block_type', options.block_type);
 		if (options?.block_id) params.set('block_id', options.block_id);
 		return this.request(`/api/entries/${encodeURIComponent(entryId)}/blocks?${params}`);
+	}
+
+	// Web Clipper
+	async clipUrl(req: ClipRequest): Promise<ClipResponse> {
+		return this.request('/api/clip', {
+			method: 'POST',
+			body: JSON.stringify(req)
+		});
 	}
 
 	// Plugins

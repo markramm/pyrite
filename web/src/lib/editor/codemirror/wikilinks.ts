@@ -136,22 +136,26 @@ export async function wikilinkCompletions(
 	const filtered = query
 		? entries.filter(
 				(e) =>
-					e.title.toLowerCase().includes(lowerQuery) || e.id.toLowerCase().includes(lowerQuery)
+					e.title.toLowerCase().includes(lowerQuery) ||
+					e.id.toLowerCase().includes(lowerQuery) ||
+					(e.aliases ?? []).some((a) => a.toLowerCase().includes(lowerQuery))
 			)
 		: entries;
 
-	const options: Completion[] = filtered.slice(0, 50).map((e) => ({
-		label: e.title,
-		detail: e.entry_type,
-		apply: (view: EditorView, completion: Completion, from: number, to: number) => {
-			// Replace from [[ to cursor with id]], keeping any existing display text
-			const fullLine = view.state.doc.lineAt(from);
-			const afterCursor = fullLine.text.slice(to - fullLine.from);
-			const hasClosing = afterCursor.startsWith(']]');
-			const insert = `${e.id}${hasClosing ? '' : ']]'}`;
-			view.dispatch({ changes: { from, to, insert } });
-		}
-	}));
+	const options: Completion[] = filtered.slice(0, 50).map((e) => {
+		const matchedAlias = (e.aliases ?? []).find((a) => a.toLowerCase().includes(lowerQuery));
+		return {
+			label: e.title,
+			detail: matchedAlias ? `${e.entry_type} (alias: ${matchedAlias})` : e.entry_type,
+			apply: (view: EditorView, completion: Completion, from: number, to: number) => {
+				const fullLine = view.state.doc.lineAt(from);
+				const afterCursor = fullLine.text.slice(to - fullLine.from);
+				const hasClosing = afterCursor.startsWith(']]');
+				const insert = `${e.id}${hasClosing ? '' : ']]'}`;
+				view.dispatch({ changes: { from, to, insert } });
+			}
+		};
+	});
 
 	return {
 		from,
@@ -272,6 +276,159 @@ const wikilinkDecorations = ViewPlugin.fromClass(
 );
 
 // =============================================================================
+// Transclusion Decorations (embedded cards)
+// =============================================================================
+
+/** Widget that renders a transclusion as a read-only embedded card. */
+class TransclusionWidget extends WidgetType {
+	constructor(
+		readonly target: string,
+		readonly heading?: string,
+		readonly blockId?: string
+	) {
+		super();
+	}
+
+	toDOM(): HTMLElement {
+		const wrapper = document.createElement('div');
+		wrapper.className = 'transclusion-card';
+		wrapper.style.cssText =
+			'border: 1px solid #374151; border-left: 3px solid #3b82f6; padding: 0.75rem; margin: 0.5rem 0; border-radius: 4px; background: rgba(59,130,246,0.05); cursor: default;';
+		wrapper.contentEditable = 'false';
+
+		// Header label
+		const label = document.createElement('div');
+		label.style.cssText = 'color: #9ca3af; font-size: 0.85em; margin-bottom: 0.5rem;';
+		const fragment = this.heading ? ` \u00A7 ${this.heading}` : this.blockId ? ` ^${this.blockId}` : '';
+		label.textContent = `\u{1F4CE} ${this.target}${fragment}`;
+		wrapper.appendChild(label);
+
+		// Content area (loading state)
+		const content = document.createElement('div');
+		content.className = 'transclusion-content';
+		content.style.cssText = 'color: #d1d5db; font-size: 0.9em;';
+		content.textContent = 'Loading...';
+		wrapper.appendChild(content);
+
+		// Source link
+		const cite = document.createElement('div');
+		cite.style.cssText = 'margin-top: 0.5rem; font-size: 0.8em;';
+		const link = document.createElement('a');
+		link.href = `/entries/${encodeURIComponent(this.target)}`;
+		link.textContent = this.target;
+		link.style.cssText = 'color: #3b82f6; text-decoration: underline;';
+		link.addEventListener('click', (e) => {
+			e.preventDefault();
+			window.location.href = link.href;
+		});
+		cite.appendChild(link);
+		wrapper.appendChild(cite);
+
+		// Async load content
+		this._loadContent(content);
+
+		return wrapper;
+	}
+
+	private async _loadContent(contentEl: HTMLElement): Promise<void> {
+		try {
+			const res = await api.resolveEntry(this.target);
+			if (res.resolved && res.entry) {
+				const entryRes = await api.getEntry(res.entry.id, { kb: res.entry.kb_name });
+				let body = entryRes.body || '';
+
+				if (this.heading) {
+					const headingRegex = new RegExp(
+						`^##?#?#?#?#?\\s+${this.heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
+						'mi'
+					);
+					const match = headingRegex.exec(body);
+					if (match) {
+						const start = match.index + match[0].length;
+						const nextHeading = body.slice(start).search(/^##?#?#?#?#?\s+/m);
+						body =
+							nextHeading === -1
+								? body.slice(start).trim()
+								: body.slice(start, start + nextHeading).trim();
+					}
+				}
+				contentEl.textContent = body.slice(0, 500) + (body.length > 500 ? '...' : '');
+			} else {
+				contentEl.textContent = '\u26A0 Entry not found';
+			}
+		} catch {
+			contentEl.textContent = '\u26A0 Failed to load';
+		}
+	}
+
+	eq(other: TransclusionWidget): boolean {
+		return (
+			this.target === other.target &&
+			this.heading === other.heading &&
+			this.blockId === other.blockId
+		);
+	}
+
+	ignoreEvent(): boolean {
+		return true;
+	}
+}
+
+/** Regex for matching transclusions in the document (supports ![[kb:target#heading^block|display]]). */
+const transclusionPattern =
+	/!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
+
+const transclusionMatcher = new MatchDecorator({
+	regexp: transclusionPattern,
+	decoration: (match) => {
+		const target = match[2].trim();
+		const heading = match[3]?.trim();
+		const blockId = match[4]?.trim();
+
+		return Decoration.replace({
+			widget: new TransclusionWidget(target, heading, blockId)
+		});
+	}
+});
+
+/** ViewPlugin that shows transclusion cards. */
+const transclusionDecorations = ViewPlugin.fromClass(
+	class {
+		decorations: DecorationSet;
+
+		constructor(view: EditorView) {
+			this.decorations = transclusionMatcher.createDeco(view);
+		}
+
+		update(update: ViewUpdate) {
+			this.decorations = transclusionMatcher.updateDeco(update, this.decorations);
+		}
+	},
+	{
+		decorations: (v) => {
+			// Hide decorations when cursor is inside a transclusion
+			const { from, to } = v.view.state.selection.main;
+			const doc = v.view.state.doc;
+
+			const line = doc.lineAt(from);
+			const lineText = line.text;
+			const regex = new RegExp(transclusionPattern.source, 'g');
+			let match;
+			while ((match = regex.exec(lineText)) !== null) {
+				const start = line.from + match.index;
+				const end = start + match[0].length;
+				if (from >= start && to <= end) {
+					return v.decorations.update({
+						filter: (decoFrom, decoTo) => !(decoFrom === start && decoTo === end)
+					});
+				}
+			}
+			return v.decorations;
+		}
+	}
+);
+
+// =============================================================================
 // Export
 // =============================================================================
 
@@ -283,5 +440,5 @@ const wikilinkDecorations = ViewPlugin.fromClass(
  * the wikilink completion source with slash commands and other sources.
  */
 export function wikilinkExtension(): Extension {
-	return [wikilinkDecorations];
+	return [wikilinkDecorations, transclusionDecorations];
 }

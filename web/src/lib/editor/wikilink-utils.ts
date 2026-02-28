@@ -7,6 +7,9 @@
 /** Regex matching wikilinks with optional heading/block-id fragments. */
 export const WIKILINK_REGEX = /\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
 
+/** Regex matching transclusions: ![[target]], ![[target#heading]], ![[target^block-id]] */
+export const TRANSCLUSION_REGEX = /!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
+
 /** Single wikilink match result */
 export interface WikilinkMatch {
 	/** Full match including brackets */
@@ -50,6 +53,28 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
 }
 
 /**
+ * Extract all transclusions from a string.
+ */
+export function parseTransclusions(text: string): WikilinkMatch[] {
+	const matches: WikilinkMatch[] = [];
+	const regex = new RegExp(TRANSCLUSION_REGEX.source, 'g');
+	let match: RegExpExecArray | null;
+	while ((match = regex.exec(text)) !== null) {
+		matches.push({
+			full: match[0],
+			kb: match[1]?.trim(),
+			target: match[2].trim(),
+			heading: match[3]?.trim(),
+			blockId: match[4]?.trim(),
+			display: match[5]?.trim(),
+			start: match.index,
+			end: match.index + match[0].length
+		});
+	}
+	return matches;
+}
+
+/**
  * Replace wikilinks in HTML with clickable links.
  * Used in the rendered markdown view.
  *
@@ -58,7 +83,22 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
  *   links to non-existent entries get a "wikilink-missing" class (red links).
  */
 export function renderWikilinks(html: string, existingIds?: Set<string>): string {
-	return html.replace(
+	// First, handle transclusions: ![[...]] -> blockquote embeds
+	let result = html.replace(
+		TRANSCLUSION_REGEX,
+		(_match, _kb: string | undefined, target: string, heading?: string, blockId?: string) => {
+			const trimmed = target.trim();
+			const headingTrimmed = heading?.trim() || '';
+			const blockIdTrimmed = blockId?.trim() || '';
+			return `<blockquote class="transclusion" data-transclusion-target="${trimmed}" data-transclusion-heading="${headingTrimmed}" data-transclusion-block="${blockIdTrimmed}">
+  <p class="transclusion-loading">Loading transcluded content...</p>
+  <cite><a href="/entries/${encodeURIComponent(trimmed)}">${trimmed}</a></cite>
+</blockquote>`;
+		}
+	);
+
+	// Then handle regular wikilinks: [[...]] -> clickable links
+	return result.replace(
 		WIKILINK_REGEX,
 		(_match, kb: string | undefined, target: string, heading?: string, blockId?: string, display?: string) => {
 			const trimmed = target.trim();

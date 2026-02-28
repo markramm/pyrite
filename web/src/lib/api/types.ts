@@ -156,6 +156,7 @@ export interface EntryTitle {
 	title: string;
 	kb_name: string;
 	entry_type: string;
+	aliases?: string[];
 }
 
 export interface EntryTitlesResponse {
@@ -430,4 +431,22 @@ export interface ImportResult {
 	errors: number;
 	entries: Array<{ id: string; title: string }>;
 	error_details: Array<{ title: string; error: string }>;
+}
+
+// Web Clipper
+
+export interface ClipRequest {
+	url: string;
+	kb: string;
+	title?: string;
+	tags?: string[];
+	entry_type?: string;
+}
+
+export interface ClipResponse {
+	created: boolean;
+	id: string;
+	kb_name: string;
+	title: string;
+	source_url: string;
 }

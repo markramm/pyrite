@@ -6,6 +6,7 @@
 	import TaskList from '@tiptap/extension-task-list';
 	import TaskItem from '@tiptap/extension-task-item';
 	import { Wikilink } from './tiptap/wikilink-extension';
+	import { Transclusion } from './tiptap/transclusion-extension';
 	import { markdownToHtml, htmlToMarkdown } from './tiptap/markdown';
 	import { onMount } from 'svelte';
 
@@ -39,7 +40,8 @@
 				}),
 				TaskList,
 				TaskItem.configure({ nested: true }),
-				Wikilink
+				Wikilink,
+				Transclusion
 			],
 			onUpdate: ({ editor: ed }) => {
 				const html = ed.getHTML();

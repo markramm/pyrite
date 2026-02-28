@@ -13,8 +13,24 @@ import { marked } from 'marked';
  * Handles wikilinks as inline spans so Tiptap can render them.
  */
 export function markdownToHtml(md: string): string {
-	// Pre-process wikilinks: [[target|display]] -> <span data-wikilink="target">display</span>
+	// Pre-process transclusions: ![[target#heading]] -> <div data-transclusion="target" ...>
 	let processed = md.replace(
+		/!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g,
+		(_match, kb: string | undefined, target: string, heading?: string, blockId?: string) => {
+			const attrs = [
+				`data-transclusion="${target.trim()}"`,
+				heading ? `data-transclusion-heading="${heading.trim()}"` : '',
+				blockId ? `data-transclusion-block="${blockId.trim()}"` : '',
+				kb ? `data-transclusion-kb="${kb.trim()}"` : ''
+			]
+				.filter(Boolean)
+				.join(' ');
+			return `<div ${attrs} class="transclusion-embed"><p class="transclusion-content">Loading...</p></div>`;
+		}
+	);
+
+	// Pre-process wikilinks: [[target|display]] -> <span data-wikilink="target">display</span>
+	processed = processed.replace(
 		/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
 		(_match, target: string, display?: string) => {
 			const label = display || target;
@@ -46,6 +62,18 @@ function nodeToMarkdown(node: Node): string {
 	const el = node as HTMLElement;
 	const tag = el.tagName.toLowerCase();
 	const children = () => Array.from(el.childNodes).map(nodeToMarkdown).join('');
+
+	// Transclusion divs
+	if (tag === 'div' && el.dataset.transclusion) {
+		const target = el.dataset.transclusion;
+		const heading = el.dataset.transclusionHeading;
+		const blockId = el.dataset.transclusionBlock;
+		const kb = el.dataset.transclusionKb;
+		let ref = kb ? `${kb}:${target}` : target;
+		if (heading) ref += `#${heading}`;
+		else if (blockId) ref += `^${blockId}`;
+		return `![[${ref}]]\n\n`;
+	}
 
 	// Wikilink spans
 	if (tag === 'span' && el.dataset.wikilink) {
