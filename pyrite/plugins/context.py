@@ -30,6 +30,7 @@ class PluginContext:
     kb_name: str = ""
     user: str = ""
     operation: str = ""
+    kb_type: str = ""
     kb_schema: KBSchema | None = None
     extra: dict[str, Any] = field(default_factory=dict)
 

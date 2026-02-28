@@ -267,6 +267,7 @@ class TestFieldValidation:
         return KBSchema.from_dict(
             {
                 "name": "test",
+                "kb_type": "generic",
                 "validation": {"enforce": True},
                 "types": {
                     "task": {
@@ -422,6 +423,7 @@ class TestFieldValidation:
         schema = KBSchema.from_dict(
             {
                 "name": "test",
+                "kb_type": "generic",
                 "validation": {"enforce": False},
                 "types": {
                     "task": {

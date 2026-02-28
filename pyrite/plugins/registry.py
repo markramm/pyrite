@@ -356,6 +356,75 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_validators failed: %s", plugin.name, e)
         return validators
 
+    def _plugin_matches_kb_type(self, plugin: PyritePlugin, kb_type: str) -> bool:
+        """Check if a plugin should be active for a given KB type.
+
+        A plugin matches if:
+        - kb_type is empty (no filtering)
+        - plugin declares no kb_types (universal plugin)
+        - kb_type is in the plugin's declared kb_types
+        """
+        if not kb_type:
+            return True
+        if not hasattr(plugin, "get_kb_types"):
+            return True
+        try:
+            plugin_kb_types = plugin.get_kb_types()
+            if not plugin_kb_types:
+                return True
+            return kb_type in plugin_kb_types
+        except Exception:
+            return True
+
+    def get_validators_for_kb(self, kb_type: str = "") -> list[Callable]:
+        """Get validators scoped to a specific KB type."""
+        self.discover()
+        validators = []
+        for plugin in self._plugins.values():
+            if not self._plugin_matches_kb_type(plugin, kb_type):
+                continue
+            if hasattr(plugin, "get_validators"):
+                try:
+                    plugin_validators = plugin.get_validators()
+                    if plugin_validators:
+                        validators.extend(plugin_validators)
+                except Exception as e:
+                    logger.warning("Plugin %s get_validators failed: %s", plugin.name, e)
+        return validators
+
+    def get_hooks_for_kb(self, kb_type: str = "") -> dict[str, list[Callable]]:
+        """Get lifecycle hooks scoped to a specific KB type."""
+        self.discover()
+        hooks: dict[str, list[Callable]] = {}
+        for plugin in self._plugins.values():
+            if not self._plugin_matches_kb_type(plugin, kb_type):
+                continue
+            if hasattr(plugin, "get_hooks"):
+                try:
+                    plugin_hooks = plugin.get_hooks()
+                    if plugin_hooks:
+                        for hook_name, hook_list in plugin_hooks.items():
+                            hooks.setdefault(hook_name, []).extend(hook_list)
+                except Exception as e:
+                    logger.warning("Plugin %s get_hooks failed: %s", plugin.name, e)
+        return hooks
+
+    def run_hooks_for_kb(
+        self, hook_name: str, entry: Any, context: dict, kb_type: str = ""
+    ) -> Any:
+        """Run hooks for a given hook point, scoped to a KB type."""
+        hooks = self.get_hooks_for_kb(kb_type).get(hook_name, [])
+        for hook in hooks:
+            try:
+                result = hook(entry, context)
+                if result is not None:
+                    entry = result
+            except Exception:
+                if hook_name.startswith("before_"):
+                    raise
+                logger.warning("Hook %s failed for %s", hook_name, hook.__name__, exc_info=True)
+        return entry
+
 
 def get_registry() -> PluginRegistry:
     """Get the global plugin registry (lazy singleton)."""

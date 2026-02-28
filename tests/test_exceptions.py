@@ -69,7 +69,7 @@ class TestRunHooksPropagation:
         from pyrite.services.kb_service import KBService
 
         mock_registry = MagicMock()
-        mock_registry.run_hooks.side_effect = KBReadOnlyError("read-only")
+        mock_registry.run_hooks_for_kb.side_effect = KBReadOnlyError("read-only")
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
@@ -82,7 +82,7 @@ class TestRunHooksPropagation:
         from pyrite.services.kb_service import KBService
 
         mock_registry = MagicMock()
-        mock_registry.run_hooks.side_effect = PermissionError("denied")
+        mock_registry.run_hooks_for_kb.side_effect = PermissionError("denied")
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
@@ -95,7 +95,7 @@ class TestRunHooksPropagation:
         from pyrite.services.kb_service import KBService
 
         mock_registry = MagicMock()
-        mock_registry.run_hooks.side_effect = RuntimeError("boom")
+        mock_registry.run_hooks_for_kb.side_effect = RuntimeError("boom")
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
@@ -109,7 +109,7 @@ class TestRunHooksPropagation:
 
         modified = NoteEntry(id="modified", title="Modified")
         mock_registry = MagicMock()
-        mock_registry.run_hooks.return_value = modified
+        mock_registry.run_hooks_for_kb.return_value = modified
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")

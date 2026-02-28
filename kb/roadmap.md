@@ -90,6 +90,14 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 Phase 1 delivered: `extensions/task/` with TaskEntry (7-state workflow), 4 CLI commands (`task create/list/status/update`), 4 MCP tools (read: `task_list`/`task_status`, write: `task_create`/`task_update`), before_save workflow validation hook, after_save parent rollup detection, 36 tests.
 
+### Plugin KB-Type Scoping (done)
+
+| Item | Description | Effort | Status |
+|------|-------------|--------|--------|
+| Plugin KB-type scoping | Validators and hooks scoped by KB type at registry level | M | done |
+
+Delivered: `PluginRegistry.get_validators_for_kb(kb_type)`, `get_hooks_for_kb(kb_type)`, `run_hooks_for_kb()`. `KBSchema.kb_type` field. `PluginContext.kb_type` field. All `validate_entry` and hook call sites threaded with `kb_type`. Removed fragile field-sniffing heuristic from task validator. 8 new integration tests.
+
 ### Programmatic Schema Provisioning (done)
 
 | Item | Description | Effort | Status |

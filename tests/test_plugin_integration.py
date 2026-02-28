@@ -823,6 +823,154 @@ class TestPluginContextInjection:
 # =========================================================================
 
 
+class TestValidatorScoping:
+    """Test that validators/hooks are scoped by KB type."""
+
+    @staticmethod
+    def _make_scoped_plugin(name: str, kb_types: list[str], validator_fn=None):
+        """Create a minimal plugin that targets specific KB types."""
+
+        class ScopedPlugin:
+            pass
+
+        plugin = ScopedPlugin()
+        plugin.name = name
+
+        def get_kb_types():
+            return kb_types
+
+        plugin.get_kb_types = get_kb_types
+
+        if validator_fn:
+            plugin.get_validators = lambda: [validator_fn]
+        else:
+            plugin.get_validators = lambda: []
+
+        plugin.get_hooks = lambda: {}
+        return plugin
+
+    @staticmethod
+    def _fresh_registry():
+        """Create a PluginRegistry that won't discover installed plugins."""
+        reg = PluginRegistry()
+        reg._discovered = True  # Prevent entry point discovery
+        return reg
+
+    def test_get_validators_for_kb_excludes_mismatched(self):
+        """Validators from a plugin scoped to 'task' KB don't fire for 'software' KB."""
+        reg = self._fresh_registry()
+
+        def task_validator(entry_type, data, ctx):
+            return [{"field": "status", "rule": "task_only"}]
+
+        reg.register(self._make_scoped_plugin("task", ["task"], task_validator))
+
+        # Should NOT include task validator when kb_type is "software"
+        validators = reg.get_validators_for_kb("software")
+        assert len(validators) == 0
+
+    def test_get_validators_for_kb_includes_matching(self):
+        """Validators from a plugin scoped to 'task' KB fire for 'task' KB."""
+        reg = self._fresh_registry()
+
+        def task_validator(entry_type, data, ctx):
+            return [{"field": "status", "rule": "task_only"}]
+
+        reg.register(self._make_scoped_plugin("task", ["task"], task_validator))
+
+        validators = reg.get_validators_for_kb("task")
+        assert len(validators) == 1
+
+    def test_get_validators_for_kb_empty_returns_all(self):
+        """When kb_type is empty, all validators are returned."""
+        reg = self._fresh_registry()
+
+        def task_validator(entry_type, data, ctx):
+            return []
+
+        reg.register(self._make_scoped_plugin("task", ["task"], task_validator))
+
+        validators = reg.get_validators_for_kb("")
+        assert len(validators) == 1
+
+    def test_universal_plugin_always_included(self):
+        """A plugin with empty kb_types is always included."""
+        reg = self._fresh_registry()
+
+        def universal_validator(entry_type, data, ctx):
+            return []
+
+        reg.register(self._make_scoped_plugin("universal", [], universal_validator))
+
+        validators = reg.get_validators_for_kb("anything")
+        assert len(validators) == 1
+
+    def test_get_hooks_for_kb_excludes_mismatched(self):
+        """Hooks from a scoped plugin don't fire for mismatched KB types."""
+        reg = self._fresh_registry()
+
+        def before_save_hook(entry, ctx):
+            return entry
+
+        plugin = self._make_scoped_plugin("task", ["task"])
+        plugin.get_hooks = lambda: {"before_save": [before_save_hook]}
+        reg.register(plugin)
+
+        hooks = reg.get_hooks_for_kb("software")
+        assert len(hooks.get("before_save", [])) == 0
+
+    def test_get_hooks_for_kb_includes_matching(self):
+        """Hooks from a scoped plugin fire for matching KB types."""
+        reg = self._fresh_registry()
+
+        def before_save_hook(entry, ctx):
+            return entry
+
+        plugin = self._make_scoped_plugin("task", ["task"])
+        plugin.get_hooks = lambda: {"before_save": [before_save_hook]}
+        reg.register(plugin)
+
+        hooks = reg.get_hooks_for_kb("task")
+        assert len(hooks.get("before_save", [])) == 1
+
+    def test_run_hooks_for_kb_scoped(self):
+        """run_hooks_for_kb only runs hooks from matching plugins."""
+        reg = self._fresh_registry()
+        called = []
+
+        def task_hook(entry, ctx):
+            called.append("task")
+            return entry
+
+        plugin = self._make_scoped_plugin("task", ["task"])
+        plugin.get_hooks = lambda: {"before_save": [task_hook]}
+        reg.register(plugin)
+
+        entry = NoteEntry(id="test", title="Test")
+        reg.run_hooks_for_kb("before_save", entry, {}, kb_type="software")
+        assert called == []
+
+        reg.run_hooks_for_kb("before_save", entry, {}, kb_type="task")
+        assert called == ["task"]
+
+    def test_validate_entry_with_kb_type_context(self, patched_registry):
+        """KBSchema.validate_entry with kb_type in context scopes plugin validators."""
+        from pyrite.schema import KBSchema
+
+        schema = KBSchema(
+            name="test",
+            kb_type="generic",
+            types={},
+        )
+        # With kb_type="generic", task plugin validators should NOT fire
+        result = schema.validate_entry(
+            "task", {"status": "invalid_status", "title": "T"},
+            context={"kb_type": "generic"},
+        )
+        # Should be valid — task validator skipped for generic KB
+        assert result["valid"], f"Expected valid but got errors: {result['errors']}"
+
+
 class TestPluginCollisionDetection:
     """Test that the registry warns on duplicate tool/type registrations."""
 

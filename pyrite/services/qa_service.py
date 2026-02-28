@@ -409,7 +409,9 @@ class QAService:
         # Build fields dict for validation
         fields = {k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")}
 
-        result = schema.validate_entry(entry_type, fields)
+        result = schema.validate_entry(
+            entry_type, fields, context={"kb_type": kb_config.kb_type}
+        )
 
         for err in result.get("errors", []):
             issues.append(
@@ -472,7 +474,9 @@ class QAService:
             entry_type = entry.get("entry_type", "")
             fields = {k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")}
 
-            result = schema.validate_entry(entry_type, fields)
+            result = schema.validate_entry(
+                entry_type, fields, context={"kb_type": kb_config.kb_type}
+            )
 
             for err in result.get("errors", []):
                 issues.append(

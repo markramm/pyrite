@@ -8,7 +8,11 @@ from .entry_types import TASK_STATUSES
 def validate_task(
     entry_type: str, data: dict[str, Any], context: dict[str, Any]
 ) -> list[dict]:
-    """Validate task-specific rules."""
+    """Validate task-specific rules.
+
+    KB-type scoping is handled at the registry level — this validator
+    only fires when the plugin matches the KB type.
+    """
     errors: list[dict] = []
 
     if entry_type != "task":

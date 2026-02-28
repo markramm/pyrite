@@ -194,6 +194,7 @@ class KBService:
             kb_name=kb_name,
             user="",
             operation="create",
+            kb_type=kb_config.kb_type,
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
@@ -257,6 +258,7 @@ class KBService:
             kb_name=kb_name,
             user="",
             operation="create",
+            kb_type=kb_config.kb_type,
         )
 
         results: list[dict[str, Any]] = []
@@ -374,7 +376,8 @@ class KBService:
 
                 schema = KBSchema.from_yaml(kb_yaml)
                 validation_result = schema.validate_entry(
-                    entry.entry_type, meta, context={"kb_name": kb_name}
+                    entry.entry_type, meta,
+                    context={"kb_name": kb_name, "kb_type": kb_config.kb_type},
                 )
             except Exception as e:
                 validation_result["warnings"].append(f"Schema validation skipped: {e}")
@@ -400,6 +403,7 @@ class KBService:
             kb_name=kb_name,
             user="",
             operation="create",
+            kb_type=kb_config.kb_type,
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
@@ -467,6 +471,7 @@ class KBService:
             kb_name=kb_name,
             user="",
             operation="update",
+            kb_type=kb_config.kb_type,
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
@@ -511,6 +516,7 @@ class KBService:
             kb_name=kb_name,
             user="",
             operation="delete",
+            kb_type=kb_config.kb_type,
         )
         if entry:
             entry = self._run_hooks("before_delete", entry, hook_ctx)
@@ -1021,11 +1027,12 @@ class KBService:
 
     @staticmethod
     def _run_hooks(hook_name: str, entry: Entry, context: dict) -> Entry:
-        """Run plugin lifecycle hooks. Returns the (possibly modified) entry."""
+        """Run plugin lifecycle hooks, scoped by KB type. Returns the (possibly modified) entry."""
         try:
             from ..plugins import get_registry
 
-            return get_registry().run_hooks(hook_name, entry, context)
+            kb_type = context.get("kb_type", "") if context else ""
+            return get_registry().run_hooks_for_kb(hook_name, entry, context, kb_type=kb_type)
         except PyriteError:
             raise  # Let Pyrite exceptions propagate (e.g. hook aborts)
         except Exception:

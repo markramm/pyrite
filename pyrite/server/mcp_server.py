@@ -755,7 +755,9 @@ class PyriteMCPServer:
 
         # Validate against schema
         schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
-        validation = schema.validate_entry(entry_type, args)
+        validation = schema.validate_entry(
+            entry_type, args, context={"kb_type": kb_config.kb_type}
+        )
         warnings = validation.get("warnings", [])
 
         if entry_type == "event" and not args.get("date"):
@@ -804,7 +806,9 @@ class PyriteMCPServer:
             for i, spec in enumerate(entries):
                 if i < len(results) and results[i].get("created"):
                     entry_type = spec.get("entry_type", "note")
-                    validation = schema.validate_entry(entry_type, spec)
+                    validation = schema.validate_entry(
+                        entry_type, spec, context={"kb_type": kb_config.kb_type}
+                    )
                     entry_warnings = validation.get("warnings", [])
                     if entry_warnings:
                         results[i]["warnings"] = entry_warnings
@@ -838,7 +842,10 @@ class PyriteMCPServer:
             if existing:
                 entry_type = existing.get("entry_type", "note")
                 # Merge existing fields with updates for validation
-                validation = schema.validate_entry(entry_type, {**existing, **updates})
+                validation = schema.validate_entry(
+                    entry_type, {**existing, **updates},
+                    context={"kb_type": kb_config.kb_type},
+                )
                 warnings = validation.get("warnings", [])
 
         try:
@@ -926,52 +933,47 @@ class PyriteMCPServer:
             schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
             return {"valid": True, "types": list(schema.types.keys())}
 
-        elif action == "show_schema":
-            kb_name = args.get("kb_name")
-            if not kb_name:
-                return {"error": "kb_name required for show_schema"}
-            from pyrite.services.schema_service import SchemaService
-            svc = SchemaService(self.config)
-            try:
-                return svc.show_schema(kb_name)
-            except ValueError as e:
-                return {"error": str(e)}
-        elif action == "add_type":
-            kb_name = args.get("kb_name")
-            type_name = args.get("type_name")
-            type_def = args.get("type_def", {})
-            if not kb_name or not type_name:
-                return {"error": "kb_name and type_name required for add_type"}
-            from pyrite.services.schema_service import SchemaService
-            svc = SchemaService(self.config)
-            try:
-                return svc.add_type(kb_name, type_name, type_def)
-            except ValueError as e:
-                return {"error": str(e)}
-        elif action == "remove_type":
-            kb_name = args.get("kb_name")
-            type_name = args.get("type_name")
-            if not kb_name or not type_name:
-                return {"error": "kb_name and type_name required for remove_type"}
-            from pyrite.services.schema_service import SchemaService
-            svc = SchemaService(self.config)
-            try:
-                return svc.remove_type(kb_name, type_name)
-            except ValueError as e:
-                return {"error": str(e)}
-        elif action == "set_schema":
-            kb_name = args.get("kb_name")
-            schema = args.get("schema", {})
-            if not kb_name:
-                return {"error": "kb_name required for set_schema"}
-            from pyrite.services.schema_service import SchemaService
-            svc = SchemaService(self.config)
-            try:
-                return svc.set_schema(kb_name, schema)
-            except ValueError as e:
-                return {"error": str(e)}
+        elif action in ("show_schema", "add_type", "remove_type", "set_schema"):
+            return self._kb_manage_schema(action, args)
 
         return {"error": f"Unknown action: {action}"}
+
+    def _kb_manage_schema(self, action: str, args: dict[str, Any]) -> dict[str, Any]:
+        """Handle schema management actions for _kb_manage."""
+        from pyrite.services.schema_service import SchemaService
+
+        kb_name = args.get("kb_name")
+        svc = SchemaService(self.config)
+
+        try:
+            if action == "show_schema":
+                if not kb_name:
+                    return {"error": "kb_name required for show_schema"}
+                return svc.show_schema(kb_name)
+
+            elif action == "add_type":
+                type_name = args.get("type_name")
+                type_def = args.get("type_def", {})
+                if not kb_name or not type_name:
+                    return {"error": "kb_name and type_name required for add_type"}
+                return svc.add_type(kb_name, type_name, type_def)
+
+            elif action == "remove_type":
+                type_name = args.get("type_name")
+                if not kb_name or not type_name:
+                    return {"error": "kb_name and type_name required for remove_type"}
+                return svc.remove_type(kb_name, type_name)
+
+            elif action == "set_schema":
+                schema = args.get("schema", {})
+                if not kb_name:
+                    return {"error": "kb_name required for set_schema"}
+                return svc.set_schema(kb_name, schema)
+
+        except ValueError as e:
+            return {"error": str(e)}
+
+        return {"error": f"Unknown schema action: {action}"}
 
     def _kb_commit(self, args: dict[str, Any]) -> dict[str, Any]:
         """Commit changes in a KB's git repository."""

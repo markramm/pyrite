@@ -258,6 +258,10 @@ class TestTaskWorkflow:
 
 
 class TestValidators:
+    """Validator tests — KB-type scoping is handled at the registry level,
+    so validate_task always validates when entry_type == "task".
+    """
+
     def test_valid_task(self):
         errors = validate_task("task", {"status": "open", "priority": 5}, {})
         assert errors == []
@@ -277,6 +281,11 @@ class TestValidators:
     def test_non_task_ignored(self):
         errors = validate_task("note", {"status": "invalid"}, {})
         assert errors == []
+
+    def test_validates_any_task_entry(self):
+        """All task entries are validated regardless of fields present."""
+        errors = validate_task("task", {"status": "todo"}, {})
+        assert any(e["field"] == "status" for e in errors)
 
 
 # =========================================================================

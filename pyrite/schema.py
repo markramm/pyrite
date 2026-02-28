@@ -815,6 +815,7 @@ class KBSchema:
 
     name: str = ""
     description: str = ""
+    kb_type: str = ""
     types: dict[str, TypeSchema] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
     validation: dict[str, Any] = field(default_factory=dict)
@@ -859,6 +860,7 @@ class KBSchema:
         return cls(
             name=data.get("name", ""),
             description=data.get("description", ""),
+            kb_type=data.get("kb_type", ""),
             types=types,
             policies=data.get("policies", {}),
             validation=data.get("validation", {}),
@@ -1070,7 +1072,8 @@ class KBSchema:
             from .plugins import get_registry
 
             ctx = context or {}
-            for validator in get_registry().get_all_validators():
+            kb_type = ctx.get("kb_type", "") or self.kb_type
+            for validator in get_registry().get_validators_for_kb(kb_type):
                 try:
                     results = validator(entry_type, fields, ctx)
                     for item in results or []:
