@@ -83,16 +83,20 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ### Coordination/Task Plugin (Phases 1-2)
 
-| Phase | Description | Effort |
-|-------|-------------|--------|
-| Phase 1 | Core TaskEntry type, workflow state machine, CLI commands, validators | M |
-| Phase 2 | MCP tools with atomic task_claim, task_decompose, task_checkpoint | M |
+| Phase | Description | Effort | Status |
+|-------|-------------|--------|--------|
+| Phase 1 | Core TaskEntry type, workflow state machine, CLI commands, MCP tools, validators, hooks | M | done |
+| Phase 2 | Atomic task_claim, task_decompose, task_checkpoint, parent auto-rollup | M | pending |
 
-### Programmatic Schema Provisioning
+Phase 1 delivered: `extensions/task/` with TaskEntry (7-state workflow), 4 CLI commands (`task create/list/status/update`), 4 MCP tools (read: `task_list`/`task_status`, write: `task_create`/`task_update`), before_save workflow validation hook, after_save parent rollup detection, 36 tests.
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[programmatic-schema-provisioning]] | MCP and CLI tools to define types and fields without editing YAML | M |
+### Programmatic Schema Provisioning (done)
+
+| Item | Description | Effort | Status |
+|------|-------------|--------|--------|
+| [[programmatic-schema-provisioning]] | MCP and CLI tools to define types and fields without editing YAML | M | done |
+
+Delivered: `SchemaService` with show/add_type/remove_type/set_schema. MCP: extended `kb_manage` with 4 new actions. CLI: `kb schema show/add-type/remove-type/set`. 11 tests.
 
 ### QA Phase 2 — Assessment Entries
 

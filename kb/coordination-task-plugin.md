@@ -9,7 +9,7 @@ tags:
 - agent-infrastructure
 kind: feature
 priority: medium
-status: proposed
+status: in_progress
 effort: XL
 ---
 

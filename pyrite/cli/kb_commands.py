@@ -5,6 +5,7 @@ Commands: list, add, remove, discover, validate
 """
 
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -385,3 +386,174 @@ def kb_gc():
         console.print(f"[green]Garbage collected {len(removed)} expired KB(s).[/green]")
     else:
         console.print("[dim]No expired ephemeral KBs found.[/dim]")
+
+
+# =========================================================================
+# Schema provisioning
+# =========================================================================
+
+schema_app = typer.Typer(help="Schema provisioning — manage kb.yaml types programmatically")
+kb_app.add_typer(schema_app, name="schema")
+
+
+@schema_app.command("show")
+def schema_show(
+    kb_name: str = typer.Argument(..., help="Knowledge base name"),
+    output_format: str = typer.Option(
+        "rich", "--format", "-f", help="Output format: rich, json"
+    ),
+):
+    """Show the current schema for a KB."""
+    from ..services.schema_service import SchemaService
+
+    config = load_config()
+    try:
+        svc = SchemaService(config)
+        result = svc.show_schema(kb_name)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    formatted = _format_output(result, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    console.print(f"\n[bold]Schema for {kb_name}[/bold]")
+    types = result.get("types", {})
+    if types:
+        table = Table(title="Types")
+        table.add_column("Type", style="cyan")
+        table.add_column("Description")
+        table.add_column("Required")
+        table.add_column("Optional")
+        table.add_column("Subdirectory")
+        for name, tdef in types.items():
+            table.add_row(
+                name,
+                tdef.get("description", ""),
+                ", ".join(tdef.get("required", [])),
+                ", ".join(tdef.get("optional", [])),
+                tdef.get("subdirectory", ""),
+            )
+        console.print(table)
+    else:
+        console.print("  [dim]No types defined[/dim]")
+
+    policies = result.get("policies", {})
+    if policies:
+        console.print(f"\n  [bold]Policies:[/bold] {policies}")
+    validation = result.get("validation", {})
+    if validation:
+        console.print(f"  [bold]Validation:[/bold] {validation}")
+
+
+@schema_app.command("add-type")
+def schema_add_type(
+    kb_name: str = typer.Argument(..., help="Knowledge base name"),
+    type_name: str = typer.Option(..., "--type", "-t", help="Type name to add"),
+    description: str = typer.Option("", "--description", "-d", help="Type description"),
+    required: str = typer.Option("", "--required", "-r", help="Comma-separated required fields"),
+    optional: str = typer.Option("", "--optional", "-o", help="Comma-separated optional fields"),
+    subdirectory: str = typer.Option("", "--subdirectory", "-s", help="Subdirectory for files"),
+    output_format: str = typer.Option(
+        "rich", "--format", "-f", help="Output format: rich, json"
+    ),
+):
+    """Add a type definition to a KB's schema."""
+    from ..services.schema_service import SchemaService
+
+    config = load_config()
+    type_def: dict[str, Any] = {}
+    if description:
+        type_def["description"] = description
+    if required:
+        type_def["required"] = [f.strip() for f in required.split(",") if f.strip()]
+    if optional:
+        type_def["optional"] = [f.strip() for f in optional.split(",") if f.strip()]
+    if subdirectory:
+        type_def["subdirectory"] = subdirectory
+
+    try:
+        svc = SchemaService(config)
+        result = svc.add_type(kb_name, type_name, type_def)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if "error" in result:
+        console.print(f"[red]Error:[/red] {result['error']}")
+        raise typer.Exit(1)
+
+    formatted = _format_output(result, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    console.print(f"[green]Added type:[/green] {type_name} to {kb_name}")
+
+
+@schema_app.command("remove-type")
+def schema_remove_type(
+    kb_name: str = typer.Argument(..., help="Knowledge base name"),
+    type_name: str = typer.Option(..., "--type", "-t", help="Type name to remove"),
+    output_format: str = typer.Option(
+        "rich", "--format", "-f", help="Output format: rich, json"
+    ),
+):
+    """Remove a type definition from a KB's schema."""
+    from ..services.schema_service import SchemaService
+
+    config = load_config()
+    try:
+        svc = SchemaService(config)
+        result = svc.remove_type(kb_name, type_name)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    if "error" in result:
+        console.print(f"[red]Error:[/red] {result['error']}")
+        raise typer.Exit(1)
+
+    formatted = _format_output(result, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    console.print(f"[green]Removed type:[/green] {type_name} from {kb_name}")
+
+
+@schema_app.command("set")
+def schema_set(
+    kb_name: str = typer.Argument(..., help="Knowledge base name"),
+    schema_file: Path = typer.Option(..., "--schema-file", "-s", help="YAML file with schema"),
+    output_format: str = typer.Option(
+        "rich", "--format", "-f", help="Output format: rich, json"
+    ),
+):
+    """Replace schema from a YAML file."""
+    from ..services.schema_service import SchemaService
+    from ..utils.yaml import load_yaml_file as load_yaml
+
+    config = load_config()
+
+    if not schema_file.exists():
+        console.print(f"[red]Error:[/red] File not found: {schema_file}")
+        raise typer.Exit(1)
+
+    schema = load_yaml(schema_file)
+
+    try:
+        svc = SchemaService(config)
+        result = svc.set_schema(kb_name, schema)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+
+    formatted = _format_output(result, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    console.print(f"[green]Set schema:[/green] {result['type_count']} types in {kb_name}")

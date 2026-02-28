@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pyrite-task"
+version = "0.1.0"
+description = "Task management extension for pyrite — agent-oriented task tracking with workflow state machine"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.entry-points."pyrite.plugins"]
+task = "pyrite_task.plugin:TaskPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pyrite_task"]

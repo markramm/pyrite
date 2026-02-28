@@ -475,10 +475,19 @@ class PyriteMCPServer:
                         "properties": {
                             "action": {
                                 "type": "string",
-                                "enum": ["discover", "validate"],
+                                "enum": ["discover", "validate", "show_schema", "add_type", "remove_type", "set_schema"],
                                 "description": "Management action",
                             },
                             "kb_name": {"type": "string", "description": "KB name (for validate)"},
+                            "type_name": {"type": "string", "description": "Type name (for add_type, remove_type)"},
+                            "type_def": {
+                                "type": "object",
+                                "description": "Type definition with description, required, optional, subdirectory (for add_type)",
+                            },
+                            "schema": {
+                                "type": "object",
+                                "description": "Schema object with types, policies, validation keys (for set_schema)",
+                            },
                         },
                         "required": ["action"],
                     },
@@ -916,6 +925,51 @@ class PyriteMCPServer:
                 return {"error": f"KB '{kb_name}' not found"}
             schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
             return {"valid": True, "types": list(schema.types.keys())}
+
+        elif action == "show_schema":
+            kb_name = args.get("kb_name")
+            if not kb_name:
+                return {"error": "kb_name required for show_schema"}
+            from pyrite.services.schema_service import SchemaService
+            svc = SchemaService(self.config)
+            try:
+                return svc.show_schema(kb_name)
+            except ValueError as e:
+                return {"error": str(e)}
+        elif action == "add_type":
+            kb_name = args.get("kb_name")
+            type_name = args.get("type_name")
+            type_def = args.get("type_def", {})
+            if not kb_name or not type_name:
+                return {"error": "kb_name and type_name required for add_type"}
+            from pyrite.services.schema_service import SchemaService
+            svc = SchemaService(self.config)
+            try:
+                return svc.add_type(kb_name, type_name, type_def)
+            except ValueError as e:
+                return {"error": str(e)}
+        elif action == "remove_type":
+            kb_name = args.get("kb_name")
+            type_name = args.get("type_name")
+            if not kb_name or not type_name:
+                return {"error": "kb_name and type_name required for remove_type"}
+            from pyrite.services.schema_service import SchemaService
+            svc = SchemaService(self.config)
+            try:
+                return svc.remove_type(kb_name, type_name)
+            except ValueError as e:
+                return {"error": str(e)}
+        elif action == "set_schema":
+            kb_name = args.get("kb_name")
+            schema = args.get("schema", {})
+            if not kb_name:
+                return {"error": "kb_name required for set_schema"}
+            from pyrite.services.schema_service import SchemaService
+            svc = SchemaService(self.config)
+            try:
+                return svc.set_schema(kb_name, schema)
+            except ValueError as e:
+                return {"error": str(e)}
 
         return {"error": f"Unknown action: {action}"}
 
