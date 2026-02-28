@@ -45,43 +45,35 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.5 — QA & Agent CLI (in progress)
+## 0.5 — QA & Agent CLI (done)
 
 **Theme:** Structural quality assurance and CLI completeness for agent workflows. Agents can validate their own work and interact with Pyrite entirely through structured output.
 
-### QA Phase 1 — Structural Validation (done)
+### Delivered
 
-| Deliverable | Status |
-|-------------|--------|
-| `QAService` — `validate_entry()`, `validate_kb()`, `validate_all()`, `get_status()` | done |
-| 9 validation rules: missing titles, empty bodies, broken links, orphans, invalid dates, importance range, event missing dates, schema violations | done |
-| CLI: `pyrite qa validate [KB_NAME] [--entry ID] [--format json] [--severity]` + `pyrite qa status` | done |
-| MCP tools: `kb_qa_validate`, `kb_qa_status` (read tier) | done |
-| 17 new tests (15 service + 2 MCP), 1060 total passing | done |
+**QA Phase 1 — Structural Validation**
 
-### QA Phase 1.5 — Hooks & Remediation
+- `QAService` with `validate_entry()`, `validate_kb()`, `validate_all()`, `get_status()`
+- 9 validation rules: missing titles, empty bodies, broken links, orphans, invalid dates, importance range, event missing dates, schema violations
+- CLI: `pyrite qa validate [KB_NAME] [--entry ID] [--format json] [--severity]` + `pyrite qa status`
+- MCP tools: `kb_qa_validate`, `kb_qa_status` (read tier)
 
-| Deliverable | Description | Effort |
-|-------------|-------------|--------|
-| Post-save validation hook | Optional automatic validation on entry create/update | S |
-| `--fix` flag | Auto-remediation for fixable issues (e.g., generate missing dates from ID) | S |
+**Agent CLI Completeness**
 
-### Agent CLI Completeness
+- `--format json/markdown/csv/yaml` added to 11 CLI commands: kb list/discover/validate, index stats/health, repo list/status, qa validate/status, auth status/whoami
+- `pyrite init --template <name> --path <path>` — headless KB creation with 4 built-in templates (software, zettelkasten, research, empty), plugin preset lookup, idempotent
+- `pyrite extension init <name>` — scaffolds 7-file extension with plugin class, entry types, validators, preset, tests
+- `pyrite extension install/list/uninstall` — full extension lifecycle management
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[headless-kb-init]] | `pyrite init --template <domain>` with zero interactive prompts | M |
-| [[cli-json-output-audit]] | Consistent `--format json` on every CLI command | M |
-| [[extension-init-cli]] | `pyrite extension init <name>` scaffolding command | S |
-| [[extension-install-cli]] | `pyrite extension install <path>` with verification | S |
+### Deferred to future
 
-### Definition of done
+- QA Phase 1.5 (hooks + `--fix`) — post-save validation hook, auto-remediation for fixable issues
 
-- `pyrite init --template software` creates a working KB non-interactively
-- `--format json` returns clean JSON on every CLI command
-- `pyrite qa validate` catches missing fields, bad dates, broken links, schema violations
-- Extension scaffolding and install commands work end-to-end
-- 1060+ tests passing
+### Results
+
+- 1086 tests passing (26 new tests over Phase 1 baseline)
+- All CLI commands produce clean, parseable JSON with `--format json`
+- Extension init → install → list round-trip works end-to-end
 
 ---
 

@@ -9,7 +9,7 @@ tags:
 kind: improvement
 priority: high
 effort: M
-status: proposed
+status: done
 ---
 
 ## Problem
