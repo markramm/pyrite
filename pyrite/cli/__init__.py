@@ -637,8 +637,8 @@ def show_config():
 
 @app.command("serve")
 def serve(
-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
-    port: int = typer.Option(8088, "--port", "-p", help="Port to bind to"),
+    host: str = typer.Option(None, "--host", "-h", help="Host to bind to"),
+    port: int = typer.Option(None, "--port", "-p", help="Port to bind to"),
     dev: bool = typer.Option(
         False, "--dev", help="API-only mode (frontend dev server runs separately on :5173)"
     ),
@@ -652,6 +652,10 @@ def serve(
     import subprocess
 
     import uvicorn
+
+    config = load_config()
+    host = host or config.settings.host or "127.0.0.1"
+    port = port or config.settings.port or 8088
 
     web_dir = Path(__file__).parent.parent.parent / "web"
     dist_dir = web_dir / "dist"
