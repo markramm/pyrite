@@ -142,7 +142,7 @@ class SearchService:
 
         if mode == SearchMode.SEMANTIC:
             # Semantic uses original natural language query, not expanded
-            return self._semantic_search(query, kb_name, limit)
+            return self._semantic_search(query, kb_name, limit, offset=offset)
         elif mode == SearchMode.HYBRID:
             return self._hybrid_search(
                 query,
@@ -193,6 +193,7 @@ class SearchService:
         kb_name: str | None = None,
         limit: int = 50,
         max_distance: float = 1.3,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Pure semantic vector search."""
         from .embedding_service import EmbeddingService, is_available
@@ -204,9 +205,12 @@ class SearchService:
         if not svc.has_embeddings():
             return []
 
-        return svc.search_similar(
-            query, kb_name=kb_name, limit=limit, max_distance=max_distance
+        # sqlite-vec KNN doesn't support SQL OFFSET, so fetch limit+offset
+        # and slice in Python
+        results = svc.search_similar(
+            query, kb_name=kb_name, limit=limit + offset, max_distance=max_distance
         )
+        return results[offset:]
 
     def _hybrid_search(
         self,
