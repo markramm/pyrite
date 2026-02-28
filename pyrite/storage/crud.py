@@ -7,12 +7,24 @@ underlying INSERT/UPDATE/DELETE at the SQLite level.
 """
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from pathlib import PurePath
 from typing import Any
 
 from sqlalchemy import func
 
 from .models import Block, Entry, EntryRef, EntryTag, Link, Source, Tag
+
+
+class _SafeEncoder(json.JSONEncoder):
+    """JSON encoder that serializes date/datetime/Path objects safely."""
+
+    def default(self, o):
+        if isinstance(o, (date, datetime)):
+            return o.isoformat()
+        if isinstance(o, PurePath):
+            return str(o)
+        return super().default(o)
 
 
 class CRUDMixin:
@@ -39,7 +51,7 @@ class CRUDMixin:
     def _upsert_entry_main(self, entry_id: str, kb_name: str, entry_data: dict[str, Any]) -> None:
         """Insert or update the core entry row using ORM merge."""
         metadata = entry_data.get("metadata", {})
-        metadata_json = json.dumps(metadata) if metadata else "{}"
+        metadata_json = json.dumps(metadata, cls=_SafeEncoder) if metadata is not None else "{}"
 
         existing = self.session.get(Entry, (entry_id, kb_name))
         if existing:

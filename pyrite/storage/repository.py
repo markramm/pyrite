@@ -184,8 +184,10 @@ class KBRepository:
     def list_files(self) -> Iterator[Path]:
         """Iterate over all markdown files in the KB."""
         for md_file in self.path.rglob("*.md"):
-            # Skip hidden directories and files
-            if any(part.startswith(".") for part in md_file.parts):
+            # Skip hidden directories and files (check relative path only,
+            # so a KB stored under e.g. ~/.pyrite/kbs/ is not skipped)
+            rel = md_file.relative_to(self.path)
+            if any(part.startswith(".") for part in rel.parts):
                 continue
             # Skip templates
             if "template" in md_file.name.lower():
