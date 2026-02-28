@@ -4,8 +4,6 @@ QA validation commands for pyrite CLI.
 Commands: validate, status
 """
 
-import json
-
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -17,11 +15,23 @@ qa_app = typer.Typer(help="Quality assurance validation")
 console = Console()
 
 
+def _format_output(data: dict, fmt: str) -> str | None:
+    """Format data using the format registry. Returns None for default (rich) output."""
+    if fmt == "rich":
+        return None
+    from ..formats import format_response
+
+    content, _ = format_response(data, fmt)
+    return content
+
+
 @qa_app.command("validate")
 def qa_validate(
     kb_name: str | None = typer.Argument(None, help="KB to validate (all if omitted)"),
     entry: str | None = typer.Option(None, "--entry", "-e", help="Validate single entry by ID"),
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
     severity: str | None = typer.Option(
         None, "--severity", "-s", help="Minimum severity filter: error, warning, info"
     ),
@@ -59,8 +69,9 @@ def qa_validate(
                 i for i in issues if severity_order.get(i.get("severity", "info"), 2) <= min_level
             ]
 
-        if output_format == "json":
-            typer.echo(json.dumps({"issues": issues, "count": len(issues)}, indent=2))
+        formatted = _format_output({"issues": issues, "count": len(issues)}, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
             return
 
         # Rich output
@@ -110,7 +121,9 @@ def qa_validate(
 @qa_app.command("status")
 def qa_status(
     kb_name: str | None = typer.Argument(None, help="KB to check (all if omitted)"),
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Show QA status dashboard with issue counts."""
     from ..services.qa_service import QAService
@@ -122,12 +135,13 @@ def qa_status(
         qa = QAService(config, db)
         status = qa.get_status(kb_name=kb_name)
 
-        if output_format == "json":
-            typer.echo(json.dumps(status, indent=2))
+        formatted = _format_output(status, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
             return
 
         # Rich output
-        console.print(f"\n[bold]QA Status[/bold]")
+        console.print("\n[bold]QA Status[/bold]")
         console.print(f"  Total entries: {status['total_entries']}")
         console.print(f"  Total issues: {status['total_issues']}")
 

@@ -26,7 +26,9 @@ from ..exceptions import PyriteError, ValidationError
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from .collection_commands import collections_app
+from .extension_commands import extension_app
 from .index_commands import index_app
+from .init_command import init_kb
 from .kb_commands import kb_app
 from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
@@ -56,6 +58,12 @@ app.add_typer(qa_app, name="qa")
 # Repository management — collaboration app with subscribe/fork/sync/unsubscribe/status/list
 # Plus legacy add/remove commands added below
 app.add_typer(repo_collab_app, name="repo")
+
+# Extension management
+app.add_typer(extension_app, name="extension")
+
+# Init command (headless KB init)
+app.command("init")(init_kb)
 
 # Authentication commands
 auth_app = typer.Typer(help="Authentication (GitHub OAuth)")
@@ -778,11 +786,21 @@ def repo_remove(
 
 
 @auth_app.command("status")
-def auth_status():
+def auth_status(
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
     """Check GitHub authentication status."""
     from ..github_auth import check_github_auth
 
     valid, message = check_github_auth()
+
+    formatted = _format_output({"authenticated": valid, "message": message}, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
     if valid:
         console.print(f"[green]{message}")
     else:
@@ -790,7 +808,11 @@ def auth_status():
 
 
 @auth_app.command("whoami")
-def auth_whoami():
+def auth_whoami(
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
     """Show current user identity."""
     _svc, db = _get_svc()
     try:
@@ -798,6 +820,11 @@ def auth_whoami():
 
         user_service = UserService(db)
         user = user_service.get_current_user()
+
+        formatted = _format_output(user, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
 
         if user.get("github_id", 0) == 0:
             console.print("[yellow]Not authenticated with GitHub[/yellow]")

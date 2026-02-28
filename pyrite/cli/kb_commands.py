@@ -21,10 +21,23 @@ kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
 
 
+def _format_output(data: dict, fmt: str) -> str | None:
+    """Format data using the format registry. Returns None for default (rich) output."""
+    if fmt == "rich":
+        return None
+    from ..formats import format_response
+
+    content, _ = format_response(data, fmt)
+    return content
+
+
 @kb_app.command("list")
 def kb_list(
     kb_type: str | None = typer.Option(
         None, "--type", "-t", help="Filter by type (events/research)"
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
     ),
 ):
     """List all configured knowledge bases."""
@@ -36,6 +49,24 @@ def kb_list(
     if not kbs:
         console.print("[yellow]No knowledge bases configured.[/yellow]")
         console.print("Add a KB with: pyrite kb add <path> --name <name>")
+        return
+
+    formatted = _format_output(
+        {
+            "kbs": [
+                {
+                    "name": kb.name,
+                    "type": kb.kb_type,
+                    "path": str(kb.path),
+                    "valid": len(kb.validate()) == 0,
+                }
+                for kb in kbs
+            ]
+        },
+        output_format,
+    )
+    if formatted is not None:
+        typer.echo(formatted)
         return
 
     table = Table(title="Knowledge Bases")
@@ -111,6 +142,9 @@ def kb_remove(
 def kb_discover(
     search_path: Path | None = typer.Argument(None, help="Path to search for KBs"),
     add: bool = typer.Option(False, "--add", "-a", help="Add discovered KBs to registry"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Auto-discover knowledge bases by finding kb.yaml files."""
     config = load_config()
@@ -120,6 +154,24 @@ def kb_discover(
 
     if not discovered:
         console.print("[yellow]No KB configurations found.[/yellow]")
+        return
+
+    formatted = _format_output(
+        {
+            "discovered": [
+                {
+                    "name": kb.name,
+                    "type": kb.kb_type,
+                    "path": str(kb.path),
+                    "already_registered": config.get_kb(kb.name) is not None,
+                }
+                for kb in discovered
+            ]
+        },
+        output_format,
+    )
+    if formatted is not None:
+        typer.echo(formatted)
         return
 
     table = Table(title="Discovered Knowledge Bases")
@@ -152,6 +204,9 @@ def kb_discover(
 @kb_app.command("validate")
 def kb_validate(
     name: str | None = typer.Argument(None, help="Name of KB to validate (all if omitted)"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Validate knowledge base configuration and contents."""
     config = load_config()
@@ -165,21 +220,39 @@ def kb_validate(
     else:
         kbs = config.knowledge_bases
 
+    # Collect results for all KBs
+    kb_results = []
     all_valid = True
     for kb in kbs:
-        console.print(f"\n[bold]Validating {kb.name}...[/bold]")
         errors = kb.validate()
         if errors:
             all_valid = False
-            for error in errors:
+        kb_results.append({"name": kb.name, "valid": len(errors) == 0, "errors": errors})
+
+    formatted = _format_output(
+        {"kbs": kb_results, "all_valid": all_valid},
+        output_format,
+    )
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    # Rich output
+    for kb_res in kb_results:
+        console.print(f"\n[bold]Validating {kb_res['name']}...[/bold]")
+        if kb_res["errors"]:
+            for error in kb_res["errors"]:
                 console.print(f"  [red]✗[/red] {error}")
         else:
             console.print("  [green]✓[/green] Configuration valid")
 
-            # Count entries
-            if kb.path.exists():
+            # Count entries — find the matching KB config for path
+            matching_kb = config.get_kb(kb_res["name"])
+            if matching_kb and matching_kb.path.exists():
                 count = sum(
-                    1 for f in kb.path.rglob("*.md") if not any(p.startswith(".") for p in f.parts)
+                    1
+                    for f in matching_kb.path.rglob("*.md")
+                    if not any(p.startswith(".") for p in f.parts)
                 )
                 console.print(f"  [green]✓[/green] {count} markdown files found")
 

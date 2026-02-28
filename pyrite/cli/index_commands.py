@@ -14,6 +14,16 @@ index_app = typer.Typer(help="Search index management")
 console = Console()
 
 
+def _format_output(data: dict, fmt: str) -> str | None:
+    """Format data using the format registry. Returns None for default (rich) output."""
+    if fmt == "rich":
+        return None
+    from ..formats import format_response
+
+    content, _ = format_response(data, fmt)
+    return content
+
+
 @index_app.command("build")
 def index_build(
     kb_name: str | None = typer.Argument(None, help="KB to index (all if omitted)"),
@@ -135,7 +145,11 @@ def index_sync(
 
 
 @index_app.command("stats")
-def index_stats():
+def index_stats(
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
     """Show index statistics."""
     from ..storage import IndexManager, PyriteDB
 
@@ -144,6 +158,11 @@ def index_stats():
     index_mgr = IndexManager(db, config)
 
     stats = index_mgr.get_index_stats()
+
+    formatted = _format_output(stats, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
 
     console.print("\n[bold]Index Statistics[/bold]\n")
     console.print(f"Total entries: {stats['total_entries']}")
@@ -226,7 +245,11 @@ def index_embed(
 
 
 @index_app.command("health")
-def index_health():
+def index_health(
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
     """Check index health and consistency."""
     from ..storage import IndexManager, PyriteDB
 
@@ -235,6 +258,26 @@ def index_health():
     index_mgr = IndexManager(db, config)
 
     health = index_mgr.check_health()
+
+    formatted = _format_output(
+        {
+            "status": "healthy"
+            if (
+                not health["missing_files"]
+                and not health["unindexed_files"]
+                and not health["stale_entries"]
+            )
+            else "unhealthy",
+            "missing_files": len(health["missing_files"]),
+            "unindexed_files": len(health["unindexed_files"]),
+            "stale_entries": len(health["stale_entries"]),
+            "checks": health,
+        },
+        output_format,
+    )
+    if formatted is not None:
+        typer.echo(formatted)
+        return
 
     console.print("\n[bold]Index Health Check[/bold]\n")
 

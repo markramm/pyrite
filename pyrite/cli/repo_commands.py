@@ -15,6 +15,16 @@ repo_collab_app = typer.Typer(help="Repository collaboration commands")
 console = Console()
 
 
+def _format_output(data: dict, fmt: str) -> str | None:
+    """Format data using the format registry. Returns None for default (rich) output."""
+    if fmt == "rich":
+        return None
+    from ..formats import format_response
+
+    content, _ = format_response(data, fmt)
+    return content
+
+
 def _get_db_and_services():
     """Helper to create DB and service instances."""
     from ..services.repo_service import RepoService
@@ -134,6 +144,9 @@ def repo_unsubscribe(
 @repo_collab_app.command("status")
 def repo_status(
     name: str = typer.Argument(..., help="Repository name"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Show detailed status for a repository."""
     config, db, repo_service, _ = _get_db_and_services()
@@ -143,6 +156,11 @@ def repo_status(
         if not status.get("name"):
             console.print(f"[red]Error:[/red] {status.get('error', 'Not found')}")
             raise typer.Exit(1)
+
+        formatted = _format_output(status, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
 
         console.print(f"\n[bold cyan]{status['name']}[/bold cyan]")
         console.print(f"  Path: {status['local_path']}")
@@ -173,7 +191,11 @@ def repo_status(
 
 
 @repo_collab_app.command("list")
-def repo_list_extended():
+def repo_list_extended(
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
     """List all repositories with sync status."""
     config, db, repo_service, _ = _get_db_and_services()
     try:
@@ -186,6 +208,11 @@ def repo_list_extended():
                 console.print("[yellow]No repositories configured.[/yellow]")
                 console.print("Subscribe with: pyrite repo subscribe <url>")
                 return
+
+        formatted = _format_output({"repos": repos}, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
 
         table = Table(title="Repositories")
         table.add_column("Name", style="cyan")
