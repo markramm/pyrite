@@ -221,11 +221,11 @@ Continuous quality assurance for KB entries. Three evaluation tiers: structural 
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 73 | [QA Agent Workflows](qa-agent-workflows.md) | AI | feature | XL | #72 (Tier 1 benefits from controlled vocab) | proposed |
+| 73 | [QA Agent Workflows](qa-agent-workflows.md) | AI | feature | XL | #72 (Tier 1 benefits from controlled vocab) | **Phase 1 done** |
 
-**Phases:** (1) Tier 1 structural validation [M] → (2) QA assessment entry type [M] → (3) Tier 2 LLM consistency checks [L] → (4) Tier 3 factual verification [XL] → (5) Continuous QA pipeline [L]
+**Phase 1 delivered:** QAService with 9 validation rules, CLI (`pyrite qa validate`, `pyrite qa status`), MCP tools (`kb_qa_validate`, `kb_qa_status`), 17 new tests (1060 total passing).
 
-**Dependencies:** Phase 1 has no hard blockers. Phases 2-5 are sequential. #72 (capture lane validation) enriches Tier 1 checks but isn't a hard blocker.
+**Remaining phases:** (1.5) Hooks + remediation [S] → (2) QA assessment entry type [M] → (3) Tier 2 LLM consistency checks [L] → (4) Tier 3 factual verification [XL] → (5) Continuous QA pipeline [L]
 
 ## Retired
 
@@ -237,19 +237,18 @@ Items subsumed by larger features:
 | 29 | [Database Views (Table/Board/Gallery)](database-views.md) | #51 Collections (Phase 3) | Collection view types cover table, kanban, gallery |
 | 43 | [Display Hints for Types](display-hints-for-types.md) | #51 Collections (Phase 1) | View configuration is per-collection, not just per-type |
 
-### Wave 11 — Agent Infrastructure (Announceable Alpha)
+### Wave 11 — Agent CLI Completeness (0.5)
 
-Agent-as-user infrastructure. Makes Pyrite installable and usable by autonomous agents (OpenClaw, Claude Code, Codex) without human setup. See [[bhag-self-configuring-knowledge-infrastructure]] for the motivating vision.
+Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (OpenClaw, Claude Code, Codex) without human setup. See [[bhag-self-configuring-knowledge-infrastructure]] for the motivating vision.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 74 | [Publish pyrite and pyrite-mcp to PyPI](pypi-publish.md) | Core | feature | S | none | proposed |
 | 75 | [Headless KB Initialization with Templates](headless-kb-init.md) | Core | feature | M | none | proposed |
 | 76 | [CLI --format json Audit and Consistency](cli-json-output-audit.md) | Core | improvement | M | none | proposed |
 | 77 | [pyrite extension init CLI Command](extension-init-cli.md) | Core | feature | S | none | proposed |
 | 78 | [pyrite extension install CLI Command](extension-install-cli.md) | Core | feature | S | none | proposed |
 
-**Parallelism:** #74, #76, and #77 touch different files. #75 is new code (cli/init_commands.py). #78 depends on #77 conceptually but not at the file level.
+**Parallelism:** #76 and #77 touch different files. #75 is new code (cli/init_commands.py). #78 depends on #77 conceptually but not at the file level.
 
 ### Wave 12 — Agent Coordination
 
@@ -262,18 +261,40 @@ Agent-as-user infrastructure. Makes Pyrite installable and usable by autonomous 
 
 ## Prioritized Next Up
 
-Recommended execution order for remaining proposed items:
+Recommended execution order. Grouped by milestone.
+
+**0.5 — QA & Agent CLI (in progress):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **1** | #74 PyPI Publish | Unblocks agent-as-user; enables `pip install pyrite` |
+| **1** | #73 QA Phase 1.5: Hooks + remediation | Post-save hook + `--fix` flag, small effort, completes QA story |
 | **2** | #75 Headless KB Init | `pyrite init --template software` is the golden path for humans and agents |
 | **3** | #76 CLI JSON Audit | Every agent interaction depends on parseable output |
 | **4** | #77 Extension Init CLI | Enables the self-configuring agent loop |
-| **5** | #73 QA Phase 1 | Structural validation for agent-authored content |
-| **6** | #60 Block Refs Phase 3 | Completes the block refs story (UI polish) |
-| **7** | #79 Coordination/Task Plugin | Agent swarm coordination primitive |
-| **8** | #80 Programmatic Schema Provisioning | Closes the schema-as-API gap |
+| **5** | #78 Extension Install CLI | Completes the extension lifecycle |
+
+**0.6 — Agent Coordination:**
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **6** | #79 Coordination/Task Plugin | Agent swarm coordination primitive |
+| **7** | #80 Programmatic Schema Provisioning | Closes the schema-as-API gap |
+| **8** | #73 QA Phase 2 | Assessment entries, queryable quality |
+
+**0.7 — Web UI Polish:**
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **9** | #60 Block Refs Phase 3 | Transclusion rendering, demo-ready editor |
+| **10** | QA Dashboard | Visual quality monitoring for operators |
+| **11** | Graph enhancements | Demo-ready knowledge graph |
+
+**0.8 — Announceable Alpha (packaging):**
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **12** | #74 PyPI Publish | `pip install pyrite` as the golden path |
+| **13** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
 
 **Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
 

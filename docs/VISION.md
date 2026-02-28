@@ -180,8 +180,10 @@ Anytype's insight that knowledge should be typed and relational, but reoriented 
 |-----------|-------|--------|
 | 0.1–0.3 | Core infrastructure, CLI, MCP, REST API, Web UI, plugins | Done |
 | 0.4 | MCP server hardening for agent workflows | Done |
-| **0.5** | **Announceable alpha: agent infrastructure, QA Phase 1, web UI polish** | **Next** |
+| **0.5** | **QA & Agent CLI: structural validation, headless init, extension commands** | **In progress** |
 | 0.6 | Agent coordination: task plugin, programmatic schema provisioning | Planned |
-| 0.7+ | Agent swarm infrastructure: provenance, conflict resolution, orchestrator events | Future |
+| 0.7 | Web UI polish: transclusions, QA dashboard, graph enhancements | Planned |
+| **0.8** | **Announceable alpha: PyPI publish, docs, tutorial, demo** | **Announce** |
+| 0.9+ | Agent swarm infrastructure: provenance, conflict resolution, orchestrator events | Future |
 
 See `kb/roadmap.md` for detailed milestone definitions.
