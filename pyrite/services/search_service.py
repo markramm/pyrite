@@ -192,7 +192,7 @@ class SearchService:
         query: str,
         kb_name: str | None = None,
         limit: int = 50,
-        max_distance: float = 1.1,
+        max_distance: float = 1.3,
     ) -> list[dict[str, Any]]:
         """Pure semantic vector search."""
         from .embedding_service import EmbeddingService, is_available

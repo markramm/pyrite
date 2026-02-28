@@ -106,6 +106,10 @@ class PyriteMCPServer:
                                 "type": "integer",
                                 "description": "Maximum results to return (default 20)",
                             },
+                            "offset": {
+                                "type": "integer",
+                                "description": "Pagination offset (default 0)",
+                            },
                             "mode": {
                                 "type": "string",
                                 "enum": ["keyword", "semantic", "hybrid"],
@@ -156,6 +160,10 @@ class PyriteMCPServer:
                                 "type": "integer",
                                 "description": "Maximum results (default 50)",
                             },
+                            "offset": {
+                                "type": "integer",
+                                "description": "Pagination offset (default 0)",
+                            },
                         },
                         "required": [],
                     },
@@ -171,6 +179,14 @@ class PyriteMCPServer:
                                 "description": "Entry ID to find backlinks for",
                             },
                             "kb_name": {"type": "string", "description": "KB name"},
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum results (default 100)",
+                            },
+                            "offset": {
+                                "type": "integer",
+                                "description": "Pagination offset (default 0)",
+                            },
                         },
                         "required": ["entry_id", "kb_name"],
                     },
@@ -192,6 +208,14 @@ class PyriteMCPServer:
                             "tree": {
                                 "type": "boolean",
                                 "description": "Return hierarchical tree instead of flat list",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum tags to return (default 100)",
+                            },
+                            "offset": {
+                                "type": "integer",
+                                "description": "Pagination offset (default 0)",
                             },
                         },
                         "required": [],
@@ -269,6 +293,51 @@ class PyriteMCPServer:
                         "required": ["kb_name", "entry_type", "title"],
                     },
                     "handler": self._kb_create,
+                },
+                "kb_bulk_create": {
+                    "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls — single index sync and batched embedding. Best-effort: each entry succeeds or fails independently. Max 50 entries per call.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "kb_name": {"type": "string", "description": "Target KB name"},
+                            "entries": {
+                                "type": "array",
+                                "description": "Array of entry specs (max 50)",
+                                "maxItems": 50,
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "entry_type": {
+                                            "type": "string",
+                                            "description": "Entry type: note, person, organization, event, etc.",
+                                        },
+                                        "title": {
+                                            "type": "string",
+                                            "description": "Entry title",
+                                        },
+                                        "body": {
+                                            "type": "string",
+                                            "description": "Entry body content (markdown)",
+                                        },
+                                        "date": {"type": "string", "description": "Date (YYYY-MM-DD)"},
+                                        "importance": {"type": "integer", "description": "Importance 1-10"},
+                                        "tags": {
+                                            "type": "array",
+                                            "items": {"type": "string"},
+                                            "description": "Tags for categorization",
+                                        },
+                                        "metadata": {
+                                            "type": "object",
+                                            "description": "Additional fields",
+                                        },
+                                    },
+                                    "required": ["title"],
+                                },
+                            },
+                        },
+                        "required": ["kb_name", "entries"],
+                    },
+                    "handler": self._kb_bulk_create,
                 },
                 "kb_update": {
                     "description": "Update an existing entry. Only provided fields are updated.",
@@ -466,6 +535,7 @@ class PyriteMCPServer:
         from ..services.search_service import SearchService
 
         query = args.get("query", "")
+        limit = args.get("limit", 20)
         search_svc = SearchService(self.db, settings=self.config.settings)
         results = search_svc.search(
             query=query,
@@ -474,12 +544,18 @@ class PyriteMCPServer:
             tags=args.get("tags"),
             date_from=args.get("date_from"),
             date_to=args.get("date_to"),
-            limit=args.get("limit", 20),
+            limit=limit,
+            offset=args.get("offset", 0),
             mode=args.get("mode", "keyword"),
             expand=args.get("expand", False),
         )
 
-        return {"query": query, "count": len(results), "results": results}
+        return {
+            "query": query,
+            "count": len(results),
+            "has_more": len(results) == limit,
+            "results": results,
+        }
 
     def _kb_get(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get entry by ID."""
@@ -495,37 +571,57 @@ class PyriteMCPServer:
 
     def _kb_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get timeline events."""
+        limit = args.get("limit", 50)
         results = self.svc.get_timeline(
             date_from=args.get("date_from"),
             date_to=args.get("date_to"),
             min_importance=args.get("min_importance", 1),
+            limit=limit,
+            offset=args.get("offset", 0),
         )
-        results = results[: args.get("limit", 50)]
-        return {"count": len(results), "events": results}
+        return {
+            "count": len(results),
+            "has_more": len(results) == limit,
+            "events": results,
+        }
 
     def _kb_backlinks(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get backlinks to an entry."""
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
-        backlinks = self.svc.get_backlinks(entry_id, kb_name)
-        return {"entry_id": entry_id, "backlink_count": len(backlinks), "backlinks": backlinks}
+        limit = args.get("limit", 100)
+        backlinks = self.svc.get_backlinks(
+            entry_id, kb_name, limit=limit, offset=args.get("offset", 0)
+        )
+        return {
+            "entry_id": entry_id,
+            "backlink_count": len(backlinks),
+            "has_more": len(backlinks) == limit,
+            "backlinks": backlinks,
+        }
 
     def _kb_tags(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get all tags with counts."""
         kb_name = args.get("kb_name")
-        prefix = args.get("prefix", "")
+        prefix = args.get("prefix") or None
 
         if args.get("tree"):
             tree = self.svc.get_tag_tree(kb_name=kb_name)
             return {"tree": tree}
 
-        tag_dicts = self.svc.get_tags(kb_name=kb_name)
-        tags = [
-            {"tag": t["name"], "count": t["count"]}
-            for t in tag_dicts
-            if t["name"].startswith(prefix)
-        ]
-        return {"tag_count": len(tags), "tags": tags}
+        limit = args.get("limit", 100)
+        tag_dicts = self.svc.get_tags(
+            kb_name=kb_name,
+            limit=limit,
+            offset=args.get("offset", 0),
+            prefix=prefix,
+        )
+        tags = [{"tag": t["name"], "count": t["count"]} for t in tag_dicts]
+        return {
+            "tag_count": len(tags),
+            "has_more": len(tags) == limit,
+            "tags": tags,
+        }
 
     def _kb_stats(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get index statistics."""
@@ -583,6 +679,30 @@ class PyriteMCPServer:
         if warnings:
             result["warnings"] = warnings
         return result
+
+    def _kb_bulk_create(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Batch-create multiple entries."""
+        kb_name = args.get("kb_name")
+        entries = args.get("entries", [])
+
+        if not entries:
+            return {"error": "entries array is required and must not be empty"}
+        if len(entries) > 50:
+            return {"error": "Maximum 50 entries per call"}
+
+        try:
+            results = self.svc.bulk_create_entries(kb_name, entries)
+        except PyriteError as e:
+            return {"error": str(e)}
+
+        created = sum(1 for r in results if r.get("created"))
+        failed = len(results) - created
+        return {
+            "total": len(results),
+            "created": created,
+            "failed": failed,
+            "results": results,
+        }
 
     def _kb_update(self, args: dict[str, Any]) -> dict[str, Any]:
         """Update an existing entry."""

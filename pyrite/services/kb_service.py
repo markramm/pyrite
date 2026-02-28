@@ -219,6 +219,90 @@ class KBService:
 
         return entry
 
+    def bulk_create_entries(
+        self,
+        kb_name: str,
+        entries: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        Create multiple entries in a single batch.
+
+        Each entry spec should have at least {entry_type, title} plus optional
+        fields (body, date, importance, tags, metadata, etc.).
+
+        Returns a list of result dicts, one per input entry:
+            {"created": True, "entry_id": "..."} on success
+            {"created": False, "error": "..."} on failure
+        """
+        from ..schema import generate_entry_id
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+        if kb_config.read_only:
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
+
+        # Register KB once
+        self.db.register_kb(
+            name=kb_name,
+            kb_type=kb_config.kb_type,
+            path=str(kb_config.path),
+            description=kb_config.description,
+        )
+
+        repo = KBRepository(kb_config)
+        hook_ctx = PluginContext(
+            config=self.config,
+            db=self.db,
+            kb_name=kb_name,
+            user="",
+            operation="create",
+        )
+
+        results: list[dict[str, Any]] = []
+        created_ids: list[tuple[str, str]] = []  # (entry_id, kb_name) for batch embed
+
+        for spec in entries:
+            try:
+                entry_type = spec.get("entry_type", "note")
+                title = spec.get("title")
+                if not title:
+                    results.append({"created": False, "error": "title is required"})
+                    continue
+
+                body = spec.get("body", "")
+                entry_id = generate_entry_id(title)
+
+                # Resolve type
+                entry_type = self._resolve_entry_type(entry_type)
+
+                # Build extra kwargs
+                extra = {
+                    k: v
+                    for k, v in spec.items()
+                    if k not in ("entry_type", "title", "body")
+                }
+
+                entry = build_entry(
+                    entry_type, entry_id=entry_id, title=title, body=body, **extra
+                )
+                entry = self._run_hooks("before_save", entry, hook_ctx)
+
+                file_path = repo.save(entry)
+                self._index_mgr.index_entry(entry, kb_name, file_path)
+                self._run_hooks("after_save", entry, hook_ctx)
+
+                created_ids.append((entry.id, kb_name))
+                results.append({"created": True, "entry_id": entry.id})
+            except Exception as e:
+                results.append({"created": False, "error": str(e)})
+
+        # Batch embed all created entries
+        for eid, ekb in created_ids:
+            self._auto_embed(eid, ekb)
+
+        return results
+
     def add_entry_from_file(
         self, kb_name: str, source_path: Path, *, validate_only: bool = False
     ) -> tuple[Entry, dict[str, Any]]:
@@ -624,6 +708,8 @@ class KBService:
         date_to: str | None = None,
         min_importance: int = 1,
         kb_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         return self.db.get_timeline(
@@ -631,11 +717,21 @@ class KBService:
             date_to=date_to,
             min_importance=min_importance,
             kb_name=kb_name,
+            limit=limit,
+            offset=offset,
         )
 
-    def get_tags(self, kb_name: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    def get_tags(
+        self,
+        kb_name: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        prefix: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get tags with counts as dicts."""
-        return self.db.get_tags_as_dicts(kb_name=kb_name, limit=limit)
+        return self.db.get_tags_as_dicts(
+            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix
+        )
 
     def get_tag_tree(self, kb_name: str | None = None) -> list[dict]:
         """Get hierarchical tag tree."""
@@ -702,9 +798,15 @@ class KBService:
         """Delete a setting. Returns True if deleted."""
         return self.db.delete_setting(key)
 
-    def get_backlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+    def get_backlinks(
+        self,
+        entry_id: str,
+        kb_name: str,
+        limit: int = 0,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
         """Get entries that link TO this entry."""
-        return self.db.get_backlinks(entry_id, kb_name)
+        return self.db.get_backlinks(entry_id, kb_name, limit=limit, offset=offset)
 
     def get_outlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that this entry links TO."""

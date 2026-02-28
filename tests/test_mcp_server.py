@@ -569,6 +569,131 @@ class TestPyriteMCPServer:
         assert result["results"] == []
 
     # ------------------------------------------------------------------
+    # kb_bulk_create handler
+    # ------------------------------------------------------------------
+
+    def test_kb_bulk_create(self, server_setup):
+        """Test batch-creating multiple entries."""
+        server = server_setup["server"]
+
+        result = server._dispatch_tool(
+            "kb_bulk_create",
+            {
+                "kb_name": "test-events",
+                "entries": [
+                    {
+                        "entry_type": "event",
+                        "title": "Bulk Event A",
+                        "date": "2025-05-01",
+                        "body": "First bulk event.",
+                        "tags": ["bulk"],
+                    },
+                    {
+                        "entry_type": "event",
+                        "title": "Bulk Event B",
+                        "date": "2025-05-02",
+                        "body": "Second bulk event.",
+                    },
+                    {
+                        "entry_type": "note",
+                        "title": "Bulk Note C",
+                        "body": "A note in the batch.",
+                    },
+                ],
+            },
+        )
+
+        assert result["total"] == 3
+        assert result["created"] == 3
+        assert result["failed"] == 0
+        for r in result["results"]:
+            assert r["created"] is True
+            assert "entry_id" in r
+
+        # Verify entries are retrievable
+        for r in result["results"]:
+            get = server._dispatch_tool(
+                "kb_get", {"entry_id": r["entry_id"], "kb_name": "test-events"}
+            )
+            assert "entry" in get
+
+    def test_kb_bulk_create_partial_failure(self, server_setup):
+        """Test bulk create with some entries failing."""
+        server = server_setup["server"]
+
+        result = server._dispatch_tool(
+            "kb_bulk_create",
+            {
+                "kb_name": "test-events",
+                "entries": [
+                    {
+                        "entry_type": "event",
+                        "title": "Good Entry",
+                        "date": "2025-05-10",
+                        "body": "This should succeed.",
+                    },
+                    {
+                        # Missing title — should fail
+                        "entry_type": "event",
+                        "body": "No title here.",
+                    },
+                ],
+            },
+        )
+
+        assert result["total"] == 2
+        assert result["created"] == 1
+        assert result["failed"] == 1
+        assert result["results"][0]["created"] is True
+        assert result["results"][1]["created"] is False
+        assert "title" in result["results"][1]["error"].lower()
+
+    def test_kb_bulk_create_empty(self, server_setup):
+        """Test bulk create with empty entries array."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_bulk_create",
+            {"kb_name": "test-events", "entries": []},
+        )
+        assert "error" in result
+
+    def test_kb_bulk_create_readonly(self):
+        """Test bulk create on read-only KB returns error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            ro_path = tmpdir / "readonly-kb"
+            ro_path.mkdir()
+
+            config = PyriteConfig(
+                knowledge_bases=[
+                    KBConfig(name="ro", path=ro_path, kb_type=KBType.RESEARCH, read_only=True)
+                ],
+                settings=Settings(index_path=tmpdir / "index.db"),
+            )
+            server = PyriteMCPServer(config, tier="write")
+            try:
+                result = server._dispatch_tool(
+                    "kb_bulk_create",
+                    {
+                        "kb_name": "ro",
+                        "entries": [{"title": "Should Fail"}],
+                    },
+                )
+                assert "error" in result
+                assert "read-only" in result["error"]
+            finally:
+                server.close()
+
+    def test_kb_bulk_create_over_limit(self, server_setup):
+        """Test bulk create rejects more than 50 entries."""
+        entries = [{"title": f"Entry {i}"} for i in range(51)]
+        result = server_setup["server"]._dispatch_tool(
+            "kb_bulk_create",
+            {"kb_name": "test-events", "entries": entries},
+        )
+        assert "error" in result
+        assert "50" in result["error"]
+
+    # ------------------------------------------------------------------
     # kb_link handler
     # ------------------------------------------------------------------
 
@@ -793,6 +918,190 @@ class TestMCPProtocol:
 
         sdk = server.build_sdk_server()
         assert isinstance(sdk, Server)
+
+
+class TestMCPPagination:
+    """Tests for MCP tool pagination (limit/offset/has_more)."""
+
+    @pytest.fixture
+    def server_setup(self):
+        """Create a test server with enough data for pagination tests."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            kb = KBConfig(
+                name="test-kb",
+                path=kb_path,
+                kb_type=KBType.EVENTS,
+                description="Pagination test KB",
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb], settings=Settings(index_path=db_path)
+            )
+
+            repo = KBRepository(kb)
+
+            # Create 5 events with distinct dates and content
+            for i in range(5):
+                event = EventEntry.create(
+                    date=f"2025-06-{10+i:02d}",
+                    title=f"Pagination Event {i}",
+                    body=f"Body for pagination event number {i}.",
+                    importance=5,
+                )
+                event.tags = [f"tag-{i}", "common"]
+                repo.save(event)
+
+            # Create a target entry and 4 entries linking to it (for backlinks)
+            target = NoteEntry(id="backlink-target", title="Backlink Target", body="Target entry.")
+            target.tags = ["target"]
+            repo.save(target)
+
+            for i in range(4):
+                source = NoteEntry(
+                    id=f"backlink-source-{i}",
+                    title=f"Backlink Source {i}",
+                    body=f"Source {i} links to target.",
+                )
+                source.links = [Link(target=target.id, relation="related_to")]
+                source.tags = ["source"]
+                repo.save(source)
+
+            server = PyriteMCPServer(config, tier="admin")
+            server.index_mgr.index_all()
+
+            yield {
+                "server": server,
+                "target_id": target.id,
+            }
+            server.close()
+
+    # ------------------------------------------------------------------
+    # kb_search pagination
+    # ------------------------------------------------------------------
+
+    def test_kb_search_pagination(self, server_setup):
+        """Test kb_search offset returns different pages and has_more flag."""
+        server = server_setup["server"]
+
+        page1 = server._dispatch_tool(
+            "kb_search", {"query": "pagination", "limit": 2, "offset": 0}
+        )
+        assert page1["count"] == 2
+        assert page1["has_more"] is True
+
+        page2 = server._dispatch_tool(
+            "kb_search", {"query": "pagination", "limit": 2, "offset": 2}
+        )
+        assert page2["count"] == 2
+        assert page2["has_more"] is True
+
+        # IDs should differ between pages
+        ids1 = {r["id"] for r in page1["results"]}
+        ids2 = {r["id"] for r in page2["results"]}
+        assert ids1.isdisjoint(ids2)
+
+        # Last page
+        page3 = server._dispatch_tool(
+            "kb_search", {"query": "pagination", "limit": 2, "offset": 4}
+        )
+        assert page3["count"] == 1
+        assert page3["has_more"] is False
+
+    # ------------------------------------------------------------------
+    # kb_timeline pagination
+    # ------------------------------------------------------------------
+
+    def test_kb_timeline_pagination(self, server_setup):
+        """Test kb_timeline limit/offset and has_more flag."""
+        server = server_setup["server"]
+
+        page1 = server._dispatch_tool("kb_timeline", {"limit": 2, "offset": 0})
+        assert page1["count"] == 2
+        assert page1["has_more"] is True
+
+        page2 = server._dispatch_tool("kb_timeline", {"limit": 2, "offset": 2})
+        assert page2["count"] == 2
+        assert page2["has_more"] is True
+
+        # Different events on each page
+        ids1 = {e["id"] for e in page1["events"]}
+        ids2 = {e["id"] for e in page2["events"]}
+        assert ids1.isdisjoint(ids2)
+
+        # Large offset returns empty
+        page_end = server._dispatch_tool("kb_timeline", {"limit": 10, "offset": 100})
+        assert page_end["count"] == 0
+        assert page_end["has_more"] is False
+
+    # ------------------------------------------------------------------
+    # kb_backlinks pagination
+    # ------------------------------------------------------------------
+
+    def test_kb_backlinks_pagination(self, server_setup):
+        """Test kb_backlinks limit/offset and has_more flag."""
+        server = server_setup["server"]
+        target_id = server_setup["target_id"]
+
+        page1 = server._dispatch_tool(
+            "kb_backlinks",
+            {"entry_id": target_id, "kb_name": "test-kb", "limit": 2, "offset": 0},
+        )
+        assert page1["backlink_count"] == 2
+        assert page1["has_more"] is True
+
+        page2 = server._dispatch_tool(
+            "kb_backlinks",
+            {"entry_id": target_id, "kb_name": "test-kb", "limit": 2, "offset": 2},
+        )
+        assert page2["backlink_count"] == 2
+        assert page2["has_more"] is True
+
+        ids1 = {b["id"] for b in page1["backlinks"]}
+        ids2 = {b["id"] for b in page2["backlinks"]}
+        assert ids1.isdisjoint(ids2)
+
+        # Past the end
+        page3 = server._dispatch_tool(
+            "kb_backlinks",
+            {"entry_id": target_id, "kb_name": "test-kb", "limit": 10, "offset": 10},
+        )
+        assert page3["backlink_count"] == 0
+        assert page3["has_more"] is False
+
+    # ------------------------------------------------------------------
+    # kb_tags limit, offset, and prefix
+    # ------------------------------------------------------------------
+
+    def test_kb_tags_limit_and_prefix(self, server_setup):
+        """Test kb_tags limit, offset, and prefix filtering at DB level."""
+        server = server_setup["server"]
+
+        # All tags
+        all_tags = server._dispatch_tool("kb_tags", {"limit": 100})
+        assert all_tags["tag_count"] >= 5  # tag-0..4 + common + target + source
+
+        # Limit
+        limited = server._dispatch_tool("kb_tags", {"limit": 2})
+        assert limited["tag_count"] == 2
+        assert limited["has_more"] is True
+
+        # Offset
+        page2 = server._dispatch_tool("kb_tags", {"limit": 2, "offset": 2})
+        assert page2["tag_count"] == 2
+        tags1 = {t["tag"] for t in limited["tags"]}
+        tags2 = {t["tag"] for t in page2["tags"]}
+        assert tags1.isdisjoint(tags2)
+
+        # Prefix filter
+        prefixed = server._dispatch_tool("kb_tags", {"prefix": "tag-", "limit": 100})
+        assert prefixed["tag_count"] == 5
+        for t in prefixed["tags"]:
+            assert t["tag"].startswith("tag-")
 
 
 if __name__ == "__main__":

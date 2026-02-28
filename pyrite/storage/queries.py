@@ -127,18 +127,31 @@ class QueryMixin:
     # Graph queries (links)
     # =========================================================================
 
-    def get_backlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
-        """Get entries that link TO this entry."""
-        rows = self._raw_conn.execute(
-            """
+    def get_backlinks(
+        self,
+        entry_id: str,
+        kb_name: str,
+        limit: int = 0,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Get entries that link TO this entry.
+
+        Args:
+            limit: Max results (0 = unbounded, for display-context callers).
+            offset: Pagination offset.
+        """
+        sql = """
             SELECT e.id, e.kb_name, e.title, e.entry_type,
                    l.inverse_relation as relation, l.note
             FROM link l
             JOIN entry e ON l.source_id = e.id AND l.source_kb = e.kb_name
             WHERE l.target_id = ? AND l.target_kb = ?
-            """,
-            (entry_id, kb_name),
-        ).fetchall()
+        """
+        params: list[Any] = [entry_id, kb_name]
+        if limit > 0:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+        rows = self._raw_conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     def get_outlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
@@ -409,6 +422,8 @@ class QueryMixin:
         date_to: str | None = None,
         min_importance: int = 1,
         kb_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         sql = """
@@ -430,7 +445,8 @@ class QueryMixin:
             sql += " AND date <= ?"
             params.append(date_to)
 
-        sql += " ORDER BY date ASC"
+        sql += " ORDER BY date ASC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
 
         rows = self._raw_conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
@@ -445,34 +461,38 @@ class QueryMixin:
         }
 
     def get_tags_as_dicts(
-        self, kb_name: str | None = None, limit: int = 100
+        self,
+        kb_name: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        prefix: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Get tags with counts as dicts, optionally filtered by KB."""
+        """Get tags with counts as dicts, optionally filtered by KB and prefix."""
+        conditions: list[str] = []
+        params: list[Any] = []
+
         if kb_name:
-            rows = self._raw_conn.execute(
-                """
-                SELECT t.name, COUNT(*) as count
-                FROM tag t
-                JOIN entry_tag et ON t.id = et.tag_id
-                WHERE et.kb_name = ?
-                GROUP BY t.name
-                ORDER BY count DESC
-                LIMIT ?
-                """,
-                (kb_name, limit),
-            ).fetchall()
-        else:
-            rows = self._raw_conn.execute(
-                """
-                SELECT t.name, COUNT(*) as count
-                FROM tag t
-                JOIN entry_tag et ON t.id = et.tag_id
-                GROUP BY t.name
-                ORDER BY count DESC
-                LIMIT ?
-                """,
-                (limit,),
-            ).fetchall()
+            conditions.append("et.kb_name = ?")
+            params.append(kb_name)
+
+        if prefix:
+            conditions.append("t.name LIKE ?")
+            params.append(f"{prefix}%")
+
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        sql = f"""
+            SELECT t.name, COUNT(*) as count
+            FROM tag t
+            JOIN entry_tag et ON t.id = et.tag_id
+            {where}
+            GROUP BY t.name
+            ORDER BY count DESC
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+
+        rows = self._raw_conn.execute(sql, params).fetchall()
         return [{"name": r["name"], "count": r["count"]} for r in rows]
 
     # =========================================================================

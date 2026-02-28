@@ -216,7 +216,7 @@ class EmbeddingService:
         query: str,
         kb_name: str | None = None,
         limit: int = 20,
-        max_distance: float = 1.1,
+        max_distance: float = 1.3,
     ) -> list[dict[str, Any]]:
         """
         Search for semantically similar entries using vector KNN.
