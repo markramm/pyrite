@@ -10,7 +10,8 @@ import pytest
 pytest.importorskip("fastapi", reason="fastapi not installed")
 
 from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
-from pyrite.models import EventEntry, PersonEntry
+from pyrite.models import EventEntry, NoteEntry, PersonEntry
+from pyrite.schema import Link
 from pyrite.server.mcp_server import PyriteMCPServer
 from pyrite.storage.repository import KBRepository
 
@@ -258,6 +259,314 @@ class TestPyriteMCPServer:
         assert "added" in result
         assert "updated" in result
         assert "removed" in result
+
+    # ------------------------------------------------------------------
+    # Delete handler
+    # ------------------------------------------------------------------
+
+    def test_kb_delete(self, server_setup):
+        """Test deleting an entry removes it from the KB."""
+        server = server_setup["server"]
+
+        # Create an entry to delete
+        create_result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Ephemeral Event",
+                "date": "2025-02-01",
+                "body": "This will be deleted.",
+            },
+        )
+        assert create_result.get("created") is True
+        entry_id = create_result["entry_id"]
+
+        # Delete it
+        delete_result = server._dispatch_tool(
+            "kb_delete", {"entry_id": entry_id, "kb_name": "test-events"}
+        )
+        assert delete_result.get("deleted") is True
+        assert delete_result["entry_id"] == entry_id
+
+        # Verify it's gone
+        get_result = server._dispatch_tool(
+            "kb_get", {"entry_id": entry_id, "kb_name": "test-events"}
+        )
+        assert "error" in get_result
+
+    def test_kb_delete_not_found(self, server_setup):
+        """Test deleting a non-existent entry returns an error."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_delete", {"entry_id": "no-such-entry", "kb_name": "test-events"}
+        )
+        assert "error" in result
+
+    # ------------------------------------------------------------------
+    # Backlinks handler
+    # ------------------------------------------------------------------
+
+    def test_kb_backlinks(self, server_setup):
+        """Test backlinks returns entries that link TO a given entry."""
+        server = server_setup["server"]
+        events_kb = server_setup["events_kb"]
+        repo = KBRepository(events_kb)
+
+        # Create target entry
+        target = EventEntry.create(
+            date="2025-03-01", title="Target Event", body="Target.", importance=5
+        )
+        repo.save(target)
+
+        # Create source entry that links to target
+        source = EventEntry.create(
+            date="2025-03-02", title="Source Event", body="Links to target.", importance=5
+        )
+        source.links = [Link(target=target.id, relation="related_to")]
+        repo.save(source)
+
+        # Re-index to pick up links
+        server.index_mgr.index_all()
+
+        result = server._dispatch_tool(
+            "kb_backlinks", {"entry_id": target.id, "kb_name": "test-events"}
+        )
+
+        assert result["entry_id"] == target.id
+        assert result["backlink_count"] >= 1
+        backlink_ids = [bl["id"] for bl in result["backlinks"]]
+        assert source.id in backlink_ids
+
+    # ------------------------------------------------------------------
+    # Stats handler
+    # ------------------------------------------------------------------
+
+    def test_kb_stats(self, server_setup):
+        """Test stats returns entry/tag/link counts."""
+        result = server_setup["server"]._dispatch_tool("kb_stats", {})
+
+        assert "total_entries" in result
+        assert result["total_entries"] >= 4  # 3 events + 1 person
+        assert "total_tags" in result
+        assert "total_links" in result
+        assert "kbs" in result
+
+    # ------------------------------------------------------------------
+    # Schema handler
+    # ------------------------------------------------------------------
+
+    def test_kb_schema(self, server_setup):
+        """Test schema returns type information for a KB."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_schema", {"kb_name": "test-events"}
+        )
+
+        # Schema may be empty (no kb.yaml in test tmpdir) but should not error
+        assert "error" not in result
+
+    def test_kb_schema_not_found(self, server_setup):
+        """Test schema for a non-existent KB returns error."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_schema", {"kb_name": "nonexistent-kb"}
+        )
+        assert "error" in result
+
+    # ------------------------------------------------------------------
+    # Manage handler
+    # ------------------------------------------------------------------
+
+    def test_kb_manage_validate(self, server_setup):
+        """Test manage validate action returns KB validation info."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_manage", {"action": "validate", "kb_name": "test-events"}
+        )
+
+        assert result.get("valid") is True
+        assert "types" in result
+
+    def test_kb_manage_validate_not_found(self, server_setup):
+        """Test manage validate for non-existent KB returns error."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_manage", {"action": "validate", "kb_name": "nonexistent"}
+        )
+        assert "error" in result
+
+    # ------------------------------------------------------------------
+    # Metadata round-trip (regression for build_entry metadata bug)
+    # ------------------------------------------------------------------
+
+    def test_kb_create_with_metadata_generic_type(self, server_setup):
+        """Test create with metadata dict round-trips for generic entry types."""
+        server = server_setup["server"]
+
+        # Use a generic type (not event/person/org) so metadata is stored
+        create_result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "note",
+                "title": "Metadata Note",
+                "body": "Has custom metadata.",
+                "metadata": {"source_url": "https://example.com", "category": "test"},
+            },
+        )
+        assert create_result.get("created") is True
+
+        get_result = server._dispatch_tool(
+            "kb_get", {"entry_id": create_result["entry_id"], "kb_name": "test-events"}
+        )
+        assert "entry" in get_result
+        entry = get_result["entry"]
+        # Metadata may be a JSON string or dict depending on DB layer
+        import json as _json
+
+        metadata = entry.get("metadata", {})
+        if isinstance(metadata, str):
+            metadata = _json.loads(metadata) if metadata else {}
+        assert metadata.get("source_url") == "https://example.com"
+
+    def test_kb_create_event_with_metadata(self, server_setup):
+        """Test create event with metadata dict preserves custom fields."""
+        server = server_setup["server"]
+
+        create_result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Event With Metadata",
+                "date": "2025-02-15",
+                "body": "Event with custom metadata.",
+                "metadata": {"source_url": "https://example.com/event", "custom_field": "value"},
+            },
+        )
+        assert create_result.get("created") is True
+
+        get_result = server._dispatch_tool(
+            "kb_get", {"entry_id": create_result["entry_id"], "kb_name": "test-events"}
+        )
+        assert "entry" in get_result
+        import json as _json
+
+        metadata = get_result["entry"].get("metadata", {})
+        if isinstance(metadata, str):
+            metadata = _json.loads(metadata) if metadata else {}
+        assert metadata.get("source_url") == "https://example.com/event"
+
+    def test_kb_create_person_with_metadata(self, server_setup):
+        """Test create person with metadata dict preserves custom fields."""
+        server = server_setup["server"]
+
+        create_result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-research",
+                "entry_type": "person",
+                "title": "Person With Metadata",
+                "body": "A person with custom metadata.",
+                "role": "Analyst",
+                "metadata": {"linkedin": "https://linkedin.com/in/test"},
+            },
+        )
+        assert create_result.get("created") is True
+
+        get_result = server._dispatch_tool(
+            "kb_get", {"entry_id": create_result["entry_id"], "kb_name": "test-research"}
+        )
+        assert "entry" in get_result
+        import json as _json
+
+        metadata = get_result["entry"].get("metadata", {})
+        if isinstance(metadata, str):
+            metadata = _json.loads(metadata) if metadata else {}
+        assert metadata.get("linkedin") == "https://linkedin.com/in/test"
+
+    def test_kb_create_with_empty_metadata(self, server_setup):
+        """Test create with empty metadata dict doesn't cause errors."""
+        server = server_setup["server"]
+
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test-events",
+                "entry_type": "event",
+                "title": "Empty Metadata Event",
+                "date": "2025-02-11",
+                "body": "No custom metadata.",
+                "metadata": {},
+            },
+        )
+        assert result.get("created") is True
+
+    # ------------------------------------------------------------------
+    # Error handling on writes
+    # ------------------------------------------------------------------
+
+    def test_kb_create_readonly_kb(self):
+        """Test creating on a read-only KB returns error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            ro_path = tmpdir / "readonly-kb"
+            ro_path.mkdir()
+
+            ro_kb = KBConfig(
+                name="readonly",
+                path=ro_path,
+                kb_type=KBType.RESEARCH,
+                read_only=True,
+            )
+            config = PyriteConfig(
+                knowledge_bases=[ro_kb], settings=Settings(index_path=db_path)
+            )
+            server = PyriteMCPServer(config, tier="write")
+            try:
+                result = server._dispatch_tool(
+                    "kb_create",
+                    {
+                        "kb_name": "readonly",
+                        "entry_type": "note",
+                        "title": "Should Fail",
+                    },
+                )
+                assert "error" in result
+                assert "read-only" in result["error"]
+            finally:
+                server.close()
+
+    def test_kb_update_not_found(self, server_setup):
+        """Test updating a non-existent entry returns error."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_update",
+            {
+                "entry_id": "no-such-entry",
+                "kb_name": "test-events",
+                "body": "Should fail.",
+            },
+        )
+        assert "error" in result
+
+    # ------------------------------------------------------------------
+    # Search edge cases
+    # ------------------------------------------------------------------
+
+    def test_kb_search_boolean_operators(self, server_setup):
+        """Test FTS5 boolean operators work in search."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_search", {"query": "immigration AND policy"}
+        )
+
+        assert "results" in result
+        assert result["count"] >= 1
+
+    def test_kb_search_no_results(self, server_setup):
+        """Test search with no matches returns count=0."""
+        result = server_setup["server"]._dispatch_tool(
+            "kb_search", {"query": "xyzzy_nonexistent_term_12345"}
+        )
+
+        assert result["count"] == 0
+        assert result["results"] == []
 
 
 class TestMCPProtocol:

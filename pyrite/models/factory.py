@@ -51,6 +51,7 @@ def build_entry(
             participants=kwargs.get("participants", []),
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
+            metadata=kwargs.get("metadata", {}),
         )
     elif entry_type == "person":
         return PersonEntry(
@@ -61,6 +62,7 @@ def build_entry(
             importance=kwargs.get("importance", 5),
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
+            metadata=kwargs.get("metadata", {}),
         )
     elif entry_type == "organization":
         return OrganizationEntry(
@@ -70,6 +72,7 @@ def build_entry(
             importance=kwargs.get("importance", 5),
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
+            metadata=kwargs.get("metadata", {}),
         )
     elif entry_type == "collection":
         return CollectionEntry(
@@ -84,6 +87,7 @@ def build_entry(
             folder_path=kwargs.get("folder_path", ""),
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
+            metadata=kwargs.get("metadata", {}),
         )
     elif entry_type in ENTRY_TYPE_REGISTRY:
         cls = ENTRY_TYPE_REGISTRY[entry_type]
@@ -103,17 +107,20 @@ def build_entry(
         # Check plugin registry, then fall back to GenericEntry
         resolved_cls = get_entry_class(entry_type)
         if resolved_cls is not GenericEntry:
-            return resolved_cls.from_frontmatter(
-                {
-                    "id": entry_id,
-                    "title": title,
-                    "type": entry_type,
-                    "tags": kwargs.get("tags", []),
-                    "summary": kwargs.get("summary", ""),
-                    **(kwargs.get("metadata") or {}),
-                },
-                body,
-            )
+            # Build frontmatter from all kwargs — plugin entry types expect
+            # their fields (date, importance, actors, etc.) as top-level keys
+            fm: dict = {
+                "id": entry_id,
+                "title": title,
+                "type": entry_type,
+            }
+            for k, v in kwargs.items():
+                if k == "metadata":
+                    # Spread metadata contents as top-level frontmatter keys
+                    fm.update(v or {})
+                else:
+                    fm[k] = v
+            return resolved_cls.from_frontmatter(fm, body)
         else:
             return GenericEntry(
                 id=entry_id,
