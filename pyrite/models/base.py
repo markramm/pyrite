@@ -39,6 +39,7 @@ class Entry(ABC):
     body: str = ""
     summary: str = ""
     tags: list[str] = field(default_factory=list)
+    aliases: list[str] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     sources: list[Source] = field(default_factory=list)
     provenance: Provenance | None = None
@@ -77,6 +78,8 @@ class Entry(ABC):
 
         if self.tags:
             meta["tags"] = self.tags
+        if self.aliases:
+            meta["aliases"] = self.aliases
         if self.sources:
             meta["sources"] = [s.to_dict() for s in self.sources]
         if self.links:

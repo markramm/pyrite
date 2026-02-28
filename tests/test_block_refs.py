@@ -1,8 +1,6 @@
 """Tests for block reference (Phase 2) — [[entry#heading]] and [[entry^block-id]] syntax."""
-import re
 import pytest
 
-# Import the regex from index.py
 from pyrite.storage.index import _WIKILINK_RE
 
 
@@ -179,3 +177,60 @@ class TestBlocksEndpointFilter:
                 return
 
         pytest.fail("get_entry_blocks function not found in blocks.py")
+
+
+class TestTransclusionRegex:
+    """Test transclusion regex: ![[entry#heading]] and ![[entry^block-id]]."""
+
+    def test_transclusion_regex_heading(self):
+        """![[entry#heading]] matches."""
+        from pyrite.storage.index import _TRANSCLUSION_RE
+
+        m = _TRANSCLUSION_RE.search("embed ![[my-entry#introduction]]")
+        assert m is not None
+        assert m.group(2) == "my-entry"
+        assert m.group(3) == "introduction"
+        assert m.group(4) is None
+
+    def test_transclusion_regex_block_id(self):
+        """![[entry^block-id]] matches."""
+        from pyrite.storage.index import _TRANSCLUSION_RE
+
+        m = _TRANSCLUSION_RE.search("embed ![[my-entry^abc123]]")
+        assert m is not None
+        assert m.group(2) == "my-entry"
+        assert m.group(3) is None
+        assert m.group(4) == "abc123"
+
+    def test_transclusion_not_regular_link(self):
+        """![[...]] is distinguished from [[...]]."""
+        from pyrite.storage.index import _TRANSCLUSION_RE, _WIKILINK_RE
+
+        text = "see [[link]] and embed ![[transclusion#heading]]"
+        wikilinks = list(_WIKILINK_RE.finditer(text))
+        transclusions = list(_TRANSCLUSION_RE.finditer(text))
+        # Wikilink regex matches both [[link]] AND the [[transclusion...]] inside ![[...]]
+        # But transclusion regex only matches ![[...]]
+        assert len(transclusions) == 1
+        assert transclusions[0].group(2) == "transclusion"
+
+    def test_index_transclusion_as_link(self):
+        """Transclusion stored with relation='transclusion' in index links."""
+        from pyrite.storage.index import _TRANSCLUSION_RE
+
+        body = "Embed this: ![[other-entry#summary]]"
+        links = []
+        for match in _TRANSCLUSION_RE.finditer(body):
+            target = match.group(2).strip()
+            heading = match.group(3)
+            block_id = match.group(4)
+            note = ""
+            if heading:
+                note = f"#{heading}"
+            elif block_id:
+                note = f"^{block_id}"
+            links.append({"target": target, "relation": "transclusion", "note": note})
+        assert len(links) == 1
+        assert links[0]["target"] == "other-entry"
+        assert links[0]["relation"] == "transclusion"
+        assert links[0]["note"] == "#summary"

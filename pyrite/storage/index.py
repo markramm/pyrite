@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 # Groups: (1) kb prefix, (2) target, (3) heading, (4) block-id, (5) display text
 _WIKILINK_RE = re.compile(r"\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]")
 
+# Matches transclusions: ![[target]], ![[target#heading]], ![[target^block-id]]
+# Same groups as _WIKILINK_RE: (1) kb prefix, (2) target, (3) heading, (4) block-id, (5) display text
+_TRANSCLUSION_RE = re.compile(r"!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]")
+
 
 def _parse_indexed_at(indexed_at: str) -> datetime:
     """Parse indexed_at timestamp string to a UTC-aware datetime.
@@ -63,6 +67,7 @@ class IndexManager:
             "summary": entry.summary,
             "file_path": str(file_path),
             "tags": entry.tags,
+            "aliases": entry.aliases,
             "sources": [s.to_dict() for s in entry.sources],
             "links": [l.to_dict() for l in entry.links],
             "created_at": entry.created_at.isoformat() if entry.created_at else None,
@@ -150,6 +155,29 @@ class IndexManager:
                     )
                     existing_targets.add(target)
 
+        # Extract transclusions as links with relation="transclusion"
+        if body:
+            for match in _TRANSCLUSION_RE.finditer(body):
+                kb_prefix = match.group(1)
+                target = match.group(2).strip()
+                heading = match.group(3)
+                block_id = match.group(4)
+                note = ""
+                if heading:
+                    note = f"#{heading}"
+                elif block_id:
+                    note = f"^{block_id}"
+                if target and target != entry.id and target not in existing_targets:
+                    data["links"].append(
+                        {
+                            "target": target,
+                            "kb": kb_prefix or kb_name,
+                            "relation": "transclusion",
+                            "note": note,
+                        }
+                    )
+                    existing_targets.add(target)
+
         # Extract object-ref fields for entry_ref table
         refs = []
         try:
@@ -189,30 +217,6 @@ class IndexManager:
             pass  # Schema not available; skip ref extraction
         if refs:
             data["_refs"] = refs
-
-        # Extract body wikilinks as links with relation="wikilink"
-        body = entry.body or ""
-        if body:
-            existing_targets = {l.get("target") for l in data["links"]}
-            for match in _WIKILINK_RE.finditer(body):
-                kb_prefix = match.group(1)  # Optional kb: prefix
-                target = match.group(2).strip()
-                heading = match.group(3)
-                block_id = match.group(4)
-                note = ""
-                if heading:
-                    note = f"#{heading}"
-                elif block_id:
-                    note = f"^{block_id}"
-                if target and target != entry.id and target not in existing_targets:
-                    link_data = {
-                        "target": target,
-                        "kb": kb_prefix or kb_name,
-                        "relation": "wikilink",
-                        "note": note,
-                    }
-                    data["links"].append(link_data)
-                    existing_targets.add(target)
 
         # Extract blocks for block-level references
         body = entry.body or ""

@@ -104,10 +104,26 @@ def list_entry_titles(
 ):
     """Lightweight listing of entry IDs and titles for wikilink autocomplete."""
     rows = svc.list_entry_titles(kb_name=kb, query=q, limit=limit)
-    entries = [
-        EntryTitle(id=r["id"], title=r["title"], kb_name=r["kb_name"], entry_type=r["entry_type"])
-        for r in rows
-    ]
+    entries = []
+    for r in rows:
+        aliases_raw = r.get("aliases")
+        if isinstance(aliases_raw, str):
+            import json
+
+            try:
+                aliases = json.loads(aliases_raw) or []
+            except (json.JSONDecodeError, TypeError):
+                aliases = []
+        elif isinstance(aliases_raw, list):
+            aliases = aliases_raw
+        else:
+            aliases = []
+        entries.append(
+            EntryTitle(
+                id=r["id"], title=r["title"], kb_name=r["kb_name"],
+                entry_type=r["entry_type"], aliases=aliases,
+            )
+        )
     return EntryTitlesResponse(entries=entries)
 
 

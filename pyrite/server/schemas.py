@@ -414,6 +414,7 @@ class EntryTitle(BaseModel):
     title: str
     kb_name: str
     entry_type: str
+    aliases: list[str] = []
 
 
 class EntryTitlesResponse(BaseModel):
@@ -680,3 +681,28 @@ class BlockListResponse(BaseModel):
     kb_name: str
     blocks: list[BlockResponse]
     total: int
+
+
+# =============================================================================
+# Web Clipper
+# =============================================================================
+
+
+class ClipRequest(BaseModel):
+    """Request to clip a URL."""
+
+    url: str
+    kb: str
+    title: str | None = None
+    tags: list[str] = []
+    entry_type: str = "note"
+
+
+class ClipResponse(BaseModel):
+    """Response for clip operations."""
+
+    created: bool
+    id: str
+    kb_name: str
+    title: str
+    source_url: str

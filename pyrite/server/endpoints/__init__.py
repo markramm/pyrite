@@ -8,6 +8,7 @@ for inclusion by the application factory in api.py.
 from .admin import router as admin_router
 from .ai_ep import router as ai_router
 from .blocks import router as blocks_router
+from .clipper import router as clipper_router
 from .collections import router as collections_router
 from .daily import router as daily_router
 from .entries import router as entries_router
@@ -39,6 +40,7 @@ all_routers = [
     git_ops_router,
     collections_router,
     blocks_router,
+    clipper_router,
 ]
 
 __all__ = ["all_routers"]
