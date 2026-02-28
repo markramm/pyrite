@@ -211,7 +211,7 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 | 69 | [MCP Link Creation Tool](done/mcp-link-creation-tool.md) | AI | feature | M | **done** |
 | 70 | [MCP Large Result Handling](done/mcp-large-result-handling.md) | AI | improvement | M | **done** |
 | 71 | [MCP Bulk Create Tool](done/mcp-bulk-create-tool.md) | AI | feature | M | **done** |
-| 72 | [Capture Lane Validation via kb.yaml Controlled Vocabulary](capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) | Core | feature | M | proposed |
+| 72 | [Capture Lane Validation via kb.yaml Controlled Vocabulary](done/capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) | Core | feature | M | **done** |
 
 **Parallelism:** #70 and #71 touch different parts of `mcp_server.py` (pagination vs batch handler). #72 touches `schema.py` only. All three can run in parallel.
 
@@ -243,12 +243,11 @@ Recommended execution order for remaining proposed items:
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **1** | #72 Capture Lane Validation | Small (M), self-contained, foundation for QA tier 1 |
-| **2** | #60 Block Refs Phase 3: Transclusion | Backend done, frontend extension partially built, completes the block refs story |
-| **3** | #73 QA Agent Workflows (Phase 1 only) | Tier 1 structural validation is high-value, no LLM needed, M effort |
-| **4** | #64 Collections Phase 4: Embedding | Blocked by #60, moderate value |
-| **5** | #73 QA Phases 2-5 | Incrementally valuable but large investment |
-| **6** | Coordination/Task Plugin | Ambitious, not blocking anything, consider after QA |
+| **1** | #60 Block Refs Phase 3: Transclusion | Backend done, frontend extension partially built, completes the block refs story |
+| **2** | #73 QA Agent Workflows (Phase 1 only) | Tier 1 structural validation is high-value, no LLM needed, M effort |
+| **3** | #64 Collections Phase 4: Embedding | Blocked by #60, moderate value |
+| **4** | #73 QA Phases 2-5 | Incrementally valuable but large investment |
+| **5** | Coordination/Task Plugin | Ambitious, not blocking anything, consider after QA |
 
 **Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
 
@@ -358,6 +357,7 @@ Items in [`done/`](done/):
 - [MCP Bulk Create Tool](done/mcp-bulk-create-tool.md) — `kb_bulk_create` write-tier tool for batch entry creation (max 50, best-effort per-entry semantics)
 - [Entry Aliases](done/entry-aliases.md) — `aliases` field on all entry types, autocomplete search, wikilink resolution
 - [Web Clipper](done/web-clipper.md) — `POST /api/clip` endpoint, clipper service, web clip page
+- [Capture Lane Validation](done/capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) — `allow_other` flag on FieldSchema for flexible vocabulary validation, schema validation on `_kb_update`/`_kb_bulk_create`
 
 ---
 

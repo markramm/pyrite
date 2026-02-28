@@ -249,7 +249,7 @@ class PyriteMCPServer:
         self.tools.update(
             {
                 "kb_create": {
-                    "description": "Create a new entry in a knowledge base. Use kb_schema first to discover valid types and fields.",
+                    "description": "Create a new entry in a knowledge base. Validates against kb.yaml schema and returns warnings for unknown vocabulary values. Use kb_schema first to discover valid types and fields.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -295,7 +295,7 @@ class PyriteMCPServer:
                     "handler": self._kb_create,
                 },
                 "kb_bulk_create": {
-                    "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls — single index sync and batched embedding. Best-effort: each entry succeeds or fails independently. Max 50 entries per call.",
+                    "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls — single index sync and batched embedding. Validates each entry against kb.yaml schema. Best-effort: each entry succeeds or fails independently. Max 50 entries per call.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
@@ -340,19 +340,20 @@ class PyriteMCPServer:
                     "handler": self._kb_bulk_create,
                 },
                 "kb_update": {
-                    "description": "Update an existing entry. Only provided fields are updated.",
+                    "description": "Update an existing entry. Only provided fields are updated. Runs schema validation and returns warnings for unknown select/multi-select values.",
                     "inputSchema": {
                         "type": "object",
                         "properties": {
                             "entry_id": {"type": "string", "description": "Entry ID to update"},
-                            "kb_name": {"type": "string", "description": "KB name"},
-                            "title": {"type": "string"},
-                            "body": {"type": "string"},
-                            "importance": {"type": "integer"},
-                            "tags": {"type": "array", "items": {"type": "string"}},
+                            "kb_name": {"type": "string", "description": "KB containing the entry"},
+                            "title": {"type": "string", "description": "New title"},
+                            "body": {"type": "string", "description": "New body content (markdown)"},
+                            "importance": {"type": "integer", "description": "Importance score 1-10"},
+                            "tags": {"type": "array", "items": {"type": "string"}, "description": "Replacement tags (overwrites existing)"},
+                            "participants": {"type": "array", "items": {"type": "string"}, "description": "Participants involved (for events)"},
                             "metadata": {
                                 "type": "object",
-                                "description": "Extension fields to update",
+                                "description": "Additional/extension fields to update",
                             },
                         },
                         "required": ["entry_id", "kb_name"],
@@ -658,7 +659,7 @@ class PyriteMCPServer:
         # Validate against schema
         schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
         validation = schema.validate_entry(entry_type, args)
-        warnings = [e for e in validation.get("errors", []) if e.get("severity") == "warning"]
+        warnings = validation.get("warnings", [])
 
         if entry_type == "event" and not args.get("date"):
             return {"error": "Date is required for events"}
@@ -690,10 +691,26 @@ class PyriteMCPServer:
         if len(entries) > 50:
             return {"error": "Maximum 50 entries per call"}
 
+        # Pre-validate each entry against schema
+        kb_config = self.config.get_kb(kb_name)
+        schema = None
+        if kb_config:
+            schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+
         try:
             results = self.svc.bulk_create_entries(kb_name, entries)
         except PyriteError as e:
             return {"error": str(e)}
+
+        # Attach per-entry validation warnings
+        if schema:
+            for i, spec in enumerate(entries):
+                if i < len(results) and results[i].get("created"):
+                    entry_type = spec.get("entry_type", "note")
+                    validation = schema.validate_entry(entry_type, spec)
+                    entry_warnings = validation.get("warnings", [])
+                    if entry_warnings:
+                        results[i]["warnings"] = entry_warnings
 
         created = sum(1 for r in results if r.get("created"))
         failed = len(results) - created
@@ -714,12 +731,28 @@ class PyriteMCPServer:
             if key in args:
                 updates[key] = args[key]
 
+        # Schema validation on the updated fields
+        warnings: list[dict[str, Any]] = []
+        kb_config = self.config.get_kb(kb_name)
+        if kb_config:
+            schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+            # Get the current entry to determine its type
+            existing = self.svc.get_entry(entry_id, kb_name)
+            if existing:
+                entry_type = existing.get("entry_type", "note")
+                # Merge existing fields with updates for validation
+                validation = schema.validate_entry(entry_type, {**existing, **updates})
+                warnings = validation.get("warnings", [])
+
         try:
             entry = self.svc.update_entry(entry_id, kb_name, **updates)
         except PyriteError as e:
             return {"error": str(e)}
 
-        return {"updated": True, "entry_id": entry.id, "file_path": ""}
+        result: dict[str, Any] = {"updated": True, "entry_id": entry.id, "file_path": ""}
+        if warnings:
+            result["warnings"] = warnings
+        return result
 
     def _kb_delete(self, args: dict[str, Any]) -> dict[str, Any]:
         """Delete an entry."""
@@ -931,7 +964,7 @@ class PyriteMCPServer:
                 ]
             }
 
-        entry_text = json.dumps(entry, indent=2, default=str)
+        entry_text = json.dumps(entry, separators=(",", ":"), default=str)
         return {
             "messages": [
                 {
@@ -956,12 +989,12 @@ class PyriteMCPServer:
         entry_b = self.svc.get_entry(entry_b_id)
 
         entry_a_text = (
-            json.dumps(entry_a, indent=2, default=str)
+            json.dumps(entry_a, separators=(",", ":"), default=str)
             if entry_a
             else f"Entry '{entry_a_id}' not found"
         )
         entry_b_text = (
-            json.dumps(entry_b, indent=2, default=str)
+            json.dumps(entry_b, separators=(",", ":"), default=str)
             if entry_b
             else f"Entry '{entry_b_id}' not found"
         )
@@ -994,7 +1027,7 @@ class PyriteMCPServer:
         events = events[:50]  # Cap at 50 events
 
         if events:
-            events_text = json.dumps(events, indent=2, default=str)
+            events_text = json.dumps(events, separators=(",", ":"), default=str)
         else:
             events_text = "No timeline events found in this period."
 
@@ -1056,7 +1089,7 @@ class PyriteMCPServer:
                     {
                         "uri": uri,
                         "mimeType": "application/json",
-                        "text": json.dumps(kbs_data, indent=2, default=str),
+                        "text": json.dumps(kbs_data, separators=(",", ":"), default=str),
                     }
                 ]
             }
@@ -1070,7 +1103,7 @@ class PyriteMCPServer:
                     {
                         "uri": uri,
                         "mimeType": "application/json",
-                        "text": json.dumps(entries, indent=2, default=str),
+                        "text": json.dumps(entries, separators=(",", ":"), default=str),
                     }
                 ]
             }
@@ -1086,7 +1119,7 @@ class PyriteMCPServer:
                     {
                         "uri": uri,
                         "mimeType": "application/json",
-                        "text": json.dumps(entry, indent=2, default=str),
+                        "text": json.dumps(entry, separators=(",", ":"), default=str),
                     }
                 ]
             }
@@ -1149,7 +1182,7 @@ class PyriteMCPServer:
         @sdk.call_tool()
         async def _call_tool(name: str, arguments: dict):
             result = mcp_server._dispatch_tool(name, arguments or {})
-            return [TextContent(type="text", text=json.dumps(result, indent=2, default=str))]
+            return [TextContent(type="text", text=json.dumps(result, separators=(",", ":"), default=str))]
 
         @sdk.list_prompts()
         async def _list_prompts():

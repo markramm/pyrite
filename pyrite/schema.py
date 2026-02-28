@@ -599,6 +599,7 @@ class FieldSchema:
     default: Any = None
     description: str = ""
     options: list[str] = field(default_factory=list)  # for select/multi-select
+    allow_other: bool = False  # when True, unknown select/multi-select values produce warnings not errors
     items: dict[str, Any] = field(default_factory=dict)  # for list type
     constraints: dict[str, Any] = field(default_factory=dict)  # min, max, format, target_type
 
@@ -632,6 +633,7 @@ class FieldSchema:
             default=data.get("default"),
             description=data.get("description", ""),
             options=data.get("options", []),
+            allow_other=data.get("allow_other", False),
             items=data.get("items", {}),
             constraints=constraints,
         )
@@ -647,6 +649,8 @@ class FieldSchema:
             result["description"] = self.description
         if self.options:
             result["options"] = self.options
+        if self.allow_other:
+            result["allow_other"] = True
         if self.items:
             result["items"] = self.items
         result.update(self.constraints)
@@ -767,27 +771,29 @@ def _validate_field_value(
 
     elif ft == "select":
         if field_schema.options and value not in field_schema.options:
-            errors.append(
-                {
-                    "field": field_name,
-                    "rule": "field_select",
-                    "expected": field_schema.options,
-                    "got": value,
-                }
-            )
+            err = {
+                "field": field_name,
+                "rule": "field_select",
+                "expected": field_schema.options,
+                "got": value,
+            }
+            if field_schema.allow_other:
+                err["severity"] = "warning"
+            errors.append(err)
 
     elif ft == "multi-select":
         if isinstance(value, list) and field_schema.options:
             invalid = [v for v in value if v not in field_schema.options]
             if invalid:
-                errors.append(
-                    {
-                        "field": field_name,
-                        "rule": "field_multi_select",
-                        "expected": field_schema.options,
-                        "got": invalid,
-                    }
-                )
+                err = {
+                    "field": field_name,
+                    "rule": "field_multi_select",
+                    "expected": field_schema.options,
+                    "got": invalid,
+                }
+                if field_schema.allow_other:
+                    err["severity"] = "warning"
+                errors.append(err)
         elif not isinstance(value, list):
             errors.append(
                 {
@@ -996,7 +1002,10 @@ class KBSchema:
                 value = fields[field_name]
                 field_errors = _validate_field_value(field_name, value, field_schema)
                 for item in field_errors:
-                    if enforce:
+                    if item.get("severity") == "warning":
+                        # allow_other fields always produce warnings, not errors
+                        warnings.append(item)
+                    elif enforce:
                         errors.append(item)
                     else:
                         item["severity"] = "warning"

@@ -143,6 +143,84 @@ class TestSearchService:
         results = service.search("test", mode="invalid_mode")
         assert isinstance(results, list)
 
+    def test_hybrid_search_offset_returns_correct_page(self, test_db, test_config):
+        """Hybrid search with offset returns the correct page of fused results."""
+        from unittest.mock import patch
+
+        service = SearchService(test_db)
+
+        # Create 20 fake keyword results
+        keyword_results = [
+            {"id": f"kw-{i}", "kb_name": "test", "title": f"Keyword {i}"}
+            for i in range(20)
+        ]
+        # Create 20 fake semantic results (different IDs = 40 unique after fusion)
+        semantic_results = [
+            {"id": f"sem-{i}", "kb_name": "test", "title": f"Semantic {i}"}
+            for i in range(20)
+        ]
+
+        with (
+            patch.object(test_db, "search", return_value=keyword_results),
+            patch.object(service, "_semantic_search", return_value=semantic_results),
+        ):
+            # Get page 1 (offset=0, limit=5)
+            page1 = service.search("test", mode=SearchMode.HYBRID, limit=5, offset=0)
+            # Get page 2 (offset=5, limit=5)
+            page2 = service.search("test", mode=SearchMode.HYBRID, limit=5, offset=5)
+            # Get page 3 (offset=10, limit=5)
+            page3 = service.search("test", mode=SearchMode.HYBRID, limit=5, offset=10)
+
+        # Pages should not overlap
+        page1_ids = {r["id"] for r in page1}
+        page2_ids = {r["id"] for r in page2}
+        page3_ids = {r["id"] for r in page3}
+        assert page1_ids.isdisjoint(page2_ids), "Page 1 and 2 should not overlap"
+        assert page2_ids.isdisjoint(page3_ids), "Page 2 and 3 should not overlap"
+        assert page1_ids.isdisjoint(page3_ids), "Page 1 and 3 should not overlap"
+
+        # Each page should have 5 results (40 unique entries in pool)
+        assert len(page1) == 5
+        assert len(page2) == 5
+        assert len(page3) == 5
+
+    def test_hybrid_search_large_offset_fetches_enough(self, test_db, test_config):
+        """Hybrid search fetches enough candidates from each leg for large offsets."""
+        from unittest.mock import patch
+
+        service = SearchService(test_db)
+        offset = 20
+        limit = 5
+
+        db_call_args = {}
+
+        def capture_db_search(**kwargs):
+            db_call_args.update(kwargs)
+            return [
+                {"id": f"kw-{i}", "kb_name": "test", "title": f"Keyword {i}"}
+                for i in range(kwargs.get("limit", 50))
+            ]
+
+        semantic_results = [
+            {"id": f"sem-{i}", "kb_name": "test", "title": f"Semantic {i}"}
+            for i in range(50)
+        ]
+
+        with (
+            patch.object(test_db, "search", side_effect=capture_db_search),
+            patch.object(service, "_semantic_search", return_value=semantic_results),
+        ):
+            results = service.search(
+                "test", mode=SearchMode.HYBRID, limit=limit, offset=offset
+            )
+
+        # Keyword leg should fetch enough to cover offset + limit
+        keyword_limit = db_call_args["limit"]
+        assert keyword_limit >= offset + limit, (
+            f"Keyword leg fetched {keyword_limit} but needs >= {offset + limit} "
+            f"to cover offset={offset} + limit={limit}"
+        )
+
 
 class TestKBService:
     """Tests for KBService."""

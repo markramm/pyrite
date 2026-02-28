@@ -232,6 +232,8 @@ class SearchService:
         Falls back to keyword-only if no embeddings exist.
         """
         # Get keyword results — use expanded query for FTS5 leg if available
+        # Fetch enough candidates from each leg to cover offset + limit after fusion
+        fetch_size = max(limit * 2, offset + limit)
         fts_query = expanded_query if expanded_query else query
         kw_query = self.sanitize_fts_query(fts_query) if sanitize else fts_query
         keyword_results = self.db.search(
@@ -241,12 +243,12 @@ class SearchService:
             tags=tags,
             date_from=date_from,
             date_to=date_to,
-            limit=limit * 2,
+            limit=fetch_size,
             offset=0,
         )
 
         # Try to get semantic results
-        semantic_results = self._semantic_search(query, kb_name, limit=limit * 2)
+        semantic_results = self._semantic_search(query, kb_name, limit=fetch_size)
 
         if not semantic_results:
             # No embeddings — fall back to keyword only

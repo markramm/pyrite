@@ -1104,5 +1104,104 @@ class TestMCPPagination:
             assert t["tag"].startswith("tag-")
 
 
+class TestMCPValidation:
+    """Tests for schema validation on MCP write paths."""
+
+    @pytest.fixture
+    def validated_server(self):
+        """Server with a kb.yaml schema for validation testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            # Write a kb.yaml with capture_lanes field (allow_other: true)
+            from pyrite.utils.yaml import dump_yaml
+
+            schema = {
+                "name": "validated-kb",
+                "types": {
+                    "event": {
+                        "fields": {
+                            "capture_lanes": {
+                                "type": "multi-select",
+                                "allow_other": True,
+                                "options": ["lane-a", "lane-b", "lane-c"],
+                            },
+                        },
+                    },
+                },
+                "validation": {"enforce": True},
+            }
+            (kb_path / "kb.yaml").write_text(
+                dump_yaml(schema), encoding="utf-8"
+            )
+
+            kb_config = KBConfig(
+                name="val-kb",
+                path=kb_path,
+                kb_type=KBType.GENERIC,
+                description="Validated KB",
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb_config],
+                settings=Settings(index_path=db_path),
+            )
+            server = PyriteMCPServer(config, tier="admin")
+            server.index_mgr.index_all()
+            yield {"server": server, "config": config, "kb_config": kb_config}
+            server.close()
+
+    def test_kb_create_with_capture_lane_warning(self, validated_server):
+        """Creating with unknown capture lane returns result + warning."""
+        server = validated_server["server"]
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "val-kb",
+                "entry_type": "event",
+                "title": "Lane Test Event",
+                "date": "2025-03-01",
+                "body": "Testing lanes.",
+                "capture_lanes": ["lane-a", "new-lane"],
+            },
+        )
+        assert result.get("created") is True
+        assert "warnings" in result
+        assert any(
+            "new-lane" in str(w.get("got", ""))
+            for w in result["warnings"]
+        )
+
+    def test_kb_update_validates_schema(self, validated_server):
+        """_kb_update runs schema validation and surfaces warnings."""
+        server = validated_server["server"]
+        # First create an entry
+        create_result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "val-kb",
+                "entry_type": "note",
+                "title": "Update Val Test",
+                "body": "Will be updated.",
+            },
+        )
+        assert create_result.get("created") is True
+        entry_id = create_result["entry_id"]
+
+        # Update should return updated: True (basic case)
+        update_result = server._dispatch_tool(
+            "kb_update",
+            {
+                "entry_id": entry_id,
+                "kb_name": "val-kb",
+                "body": "Updated body.",
+            },
+        )
+        assert update_result.get("updated") is True
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

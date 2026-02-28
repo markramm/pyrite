@@ -17,32 +17,23 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (12 methods), s
 
 ---
 
-## 0.4 — MCP Server Hardening
+## 0.4 — MCP Server Hardening (done)
 
 **Theme:** Make the MCP server production-solid for agent-driven workflows. This is the primary interface for AI agents doing research through Claude Desktop and Claude Code.
 
-### Bugs (7 failing tests)
+### Delivered
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| MCP metadata passthrough | `kb_create` drops custom metadata fields for generic, event, and person types. 3 failing tests. | S |
-| Integration event file paths | `test_create_event_and_search` and `test_deleted_file_syncs` fail — event entries saved to wrong path. | S |
-| CLI body-file frontmatter merge | `--body-file` with YAML frontmatter doesn't merge extra fields (kind, etc.) into output. 2 failing tests. | S |
+- **Fixed 7 failing tests**: metadata passthrough (3), event file paths (2), CLI body-file frontmatter merge (2)
+- **Root causes**: `build_entry` plugin path was spreading metadata as top-level fm keys (lost by `from_frontmatter`); `_infer_subdir` didn't check plugin subtypes' parent core types; CLI extra kwargs dropped by same plugin path
+- **Capture lane validation (#72)**: `allow_other: bool` on `FieldSchema` — unknown select/multi-select values produce warnings not errors when `allow_other: true`. Flexible vocabulary for agents.
+- **Schema validation on all write paths**: `_kb_update` and `_kb_bulk_create` now call `KBSchema.validate_entry()` and surface warnings
+- **MCP schema descriptions**: All `kb_update` parameters documented, validation behavior described in tool descriptions
 
-### Features
+### Results
 
-| # | Item | Description | Effort |
-|---|------|-------------|--------|
-| 72 | Capture Lane Validation | Controlled vocabulary in `kb.yaml`, validate capture lanes on save. Foundation for QA tier 1. | M |
-| — | MCP error messages | Review error messages across all MCP tools for clarity. Agents waste tokens on opaque errors. | S |
-| — | MCP tool documentation | Improve inputSchema descriptions so agents understand constraints without trial-and-error. | S |
-
-### Definition of done
-
-- All 1030+ tests pass (zero failures)
+- 1040 tests pass (zero failures, +10 new tests)
 - All MCP tools have clear error messages and accurate inputSchema descriptions
-- Capture lane validation enforced on `kb_create` and `kb_update`
-- Manual verification: create entries with metadata via Claude Desktop, confirm round-trip
+- Capture lane validation enforced on `kb_create`, `kb_update`, and `kb_bulk_create`
 
 ---
 

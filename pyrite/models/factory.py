@@ -108,18 +108,32 @@ def build_entry(
         resolved_cls = get_entry_class(entry_type)
         if resolved_cls is not GenericEntry:
             # Build frontmatter from all kwargs — plugin entry types expect
-            # their fields (date, importance, actors, etc.) as top-level keys
+            # their fields (date, importance, actors, etc.) as top-level keys.
+            # Unknown kwargs are collected into the metadata dict so they
+            # persist through from_frontmatter() round-trips.
+            import dataclasses as _dc
+
+            _cls_fields = {f.name for f in _dc.fields(resolved_cls)}
+            # Keys recognised as top-level frontmatter by from_frontmatter
+            _fm_keys = _cls_fields | {
+                "type", "provenance", "sources", "links", "aliases",
+                "created_at", "updated_at",
+            }
             fm: dict = {
                 "id": entry_id,
                 "title": title,
                 "type": entry_type,
             }
+            _extra_meta: dict = {}
             for k, v in kwargs.items():
-                if k == "metadata":
-                    # Spread metadata contents as top-level frontmatter keys
-                    fm.update(v or {})
-                else:
+                if k == "metadata" or k in _fm_keys:
                     fm[k] = v
+                else:
+                    _extra_meta[k] = v
+            # Merge unknown kwargs into metadata so they survive round-trip
+            if _extra_meta:
+                existing = fm.get("metadata") or {}
+                fm["metadata"] = {**existing, **_extra_meta}
             return resolved_cls.from_frontmatter(fm, body)
         else:
             return GenericEntry(

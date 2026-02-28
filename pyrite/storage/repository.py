@@ -80,6 +80,12 @@ class KBRepository:
         # Check core types for subdirectory mapping
         if entry_type in CORE_TYPES:
             return CORE_TYPES[entry_type].get("subdirectory")
+        # Plugin subtype: walk MRO to find the parent core type's subdirectory
+        from ..models.core_types import ENTRY_TYPE_REGISTRY
+
+        for core_name, core_cls in ENTRY_TYPE_REGISTRY.items():
+            if isinstance(entry, core_cls) and core_name in CORE_TYPES:
+                return CORE_TYPES[core_name].get("subdirectory")
         return None
 
     def exists(self, entry_id: str) -> bool:
