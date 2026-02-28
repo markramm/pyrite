@@ -582,7 +582,8 @@ def mcp_server(
     """Start an MCP server at the specified permission tier."""
     from .server.mcp_server import PyriteMCPServer
 
-    console.print(f"[dim]Starting MCP server (tier={tier}) on stdio...[/dim]", err=True)
+    import sys
+    print(f"Starting MCP server (tier={tier}) on stdio...", file=sys.stderr)
     server = PyriteMCPServer(tier=tier)
     try:
         server.run_stdio()
