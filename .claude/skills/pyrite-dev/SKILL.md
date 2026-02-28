@@ -170,6 +170,16 @@ Use the correct `type` frontmatter for KB entries so plugin tools can find them:
 Ask: "Did this work change the status of any backlog item, or reveal new work?"
 ```
 
+```
+⚠️  PRE-COMMIT: UPDATE GOTCHAS
+───────────────────────────────
+- Hit a surprising behavior? → Append to .claude/skills/pyrite-dev/gotchas.md
+- Resolved an existing gotcha? → Update or remove it from gotchas.md
+- Found a new _resolve_entry_type mapping issue? → Document it
+
+Ask: "Did I encounter any non-obvious behavior that would trip up the next agent?"
+```
+
 ### Wave Completion Checklist
 
 **Run this at the end of every wave, before the final commit.** This is both process enforcement and dogfooding.
@@ -218,15 +228,28 @@ When implementation + verification are done, follow the backlog process:
 
 | File | Purpose |
 |------|---------|
-| `pyrite/plugins/protocol.py` | PyritePlugin Protocol (11 methods) |
+| `pyrite/plugins/protocol.py` | PyritePlugin Protocol (15 methods + `name` attribute) |
 | `pyrite/plugins/registry.py` | Plugin discovery and aggregation |
-| `pyrite/models/core_types.py` | 8 built-in entry types + ENTRY_TYPE_REGISTRY |
+| `pyrite/models/core_types.py` | 9 built-in entry types + ENTRY_TYPE_REGISTRY |
+| `pyrite/models/factory.py` | Entry factory — `build_entry()` single dispatch point |
 | `pyrite/cli/__init__.py` | Main Typer CLI app, all commands |
 | `pyrite/storage/database.py` | PyriteDB (SQLite + FTS5) |
+| `pyrite/storage/queries.py` | SQL queries (FTS search, tag search, graph) |
 | `pyrite/server/api.py` | REST API factory, deps, rate limiter |
 | `pyrite/server/endpoints/` | Per-feature endpoint modules (kbs, search, entries, etc.) |
 | `pyrite/server/mcp_server.py` | MCP server (3-tier tools) |
 | `pyrite/services/kb_service.py` | KBService CRUD with hooks |
+| `pyrite/services/search_service.py` | SearchService — keyword, semantic, hybrid search + RRF |
+| `pyrite/services/embedding_service.py` | EmbeddingService — vector storage, similarity search |
+| `pyrite/services/embedding_worker.py` | EmbeddingWorker — background embedding pipeline |
+| `pyrite/services/llm_service.py` | LLMService — provider-agnostic LLM abstraction |
+| `pyrite/services/template_service.py` | TemplateService — entry templates and presets |
+| `pyrite/services/git_service.py` | GitService — git operations, commit, diff |
+| `pyrite/services/repo_service.py` | RepoService — multi-repo management |
+| `pyrite/services/user_service.py` | UserService — user identity and auth |
+| `pyrite/services/clipper.py` | ClipperService — web clipper |
+| `pyrite/services/collection_query.py` | Collection query functions |
+| `pyrite/schema.py` | KBSchema, FieldSchema — schema-as-config validation |
 | `pyrite/config.py` | PyriteConfig, Settings, KBConfig |
 
 ### Architecture decisions
@@ -242,13 +265,14 @@ See `kb/adrs/` for full details:
 | 0007 | AI integration: three surfaces, BYOK, Anthropic+OpenAI SDKs |
 | 0008 | Structured data: schema-as-config, field types, object refs |
 
-### 5 plugin integration points
+### 6 plugin integration points
 
 1. **Entry type resolution** — `get_entry_class()` consults registry before GenericEntry
 2. **CLI commands** — `cli/__init__.py` adds plugin Typer sub-apps
 3. **MCP tools** — `mcp_server.py` merges plugin tools per tier
 4. **Validators** — `schema.py` runs plugin validators always (even for undeclared types)
 5. **Relationship types** — `schema.py` merges plugin relationship types
+6. **PluginContext** — `set_context(ctx)` injects config, db, and services into plugins at startup
 
 ---
 
@@ -273,6 +297,10 @@ For complete scaffolding recipes, entry type contracts, plugin class templates, 
 ## Testing Conventions
 
 For the 8-section test structure, fixture patterns, and test-specific gotchas, see [testing.md](testing.md).
+
+## Data Pipelines
+
+For the entry lifecycle (create → validate → build → save → index → embed), type resolution behavior, and the build_entry factory, see [data-pipelines.md](data-pipelines.md).
 
 ## Gotchas
 

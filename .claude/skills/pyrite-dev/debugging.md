@@ -159,3 +159,44 @@ lsof -i :8088
 | "Just try this first" | First fix sets the pattern. Do it right. |
 | "Multiple fixes saves time" | Can't isolate what worked. Causes new bugs. |
 | "I see the problem" | Seeing symptoms ≠ understanding root cause |
+
+---
+
+## Agent-Quality Debugging
+
+**This is different from code debugging.** When an AI agent produces a bad entry, wrong link, or low-quality content, the root cause is often not a code bug — it's a context, schema, or pipeline gap. Use this protocol instead of the Four Phases above.
+
+### The question to ask first
+
+**"Was this a code bug or an agent-quality bug?"**
+
+- Code bug: wrong behavior given correct input (use Four Phases above)
+- Agent-quality bug: correct code, but the agent's output is wrong/incomplete/mislinked
+
+### Provenance debugging
+
+Trace backward from the bad output:
+
+1. **What entry is wrong?** Read it fully — `pyrite get <id> -k <kb> --format yaml`
+2. **What tool call produced it?** Check the MCP call log or agent transcript
+3. **What context did the agent have?** Was the schema visible? Were validation warnings surfaced?
+4. **Where did the pipeline fail to catch it?**
+   - Schema validation: Did the field have a type/options constraint? Should it?
+   - Type resolution: Did `_resolve_entry_type` send it to the wrong class?
+   - build_entry: Did unknown kwargs end up in metadata instead of a proper field?
+   - Indexing: Was the entry indexed with the right type/tags?
+
+### Common agent-quality failure patterns
+
+| Pattern | Likely Cause | Fix |
+|---------|-------------|-----|
+| Wrong entry type | Agent used core type name, plugin subtype expected | Improve MCP tool description to list valid types |
+| Missing field | Agent didn't know the field existed | Add field to schema, surface in MCP inputSchema |
+| Bad link target | Agent guessed an entry ID that doesn't exist | Add link target validation in schema.py |
+| Vocabulary mismatch | Agent used free text where controlled vocabulary exists | Add select/multi-select field with options |
+| Duplicate entry | Agent couldn't find existing entry to update | Improve search, add MCP tool for exact-match lookup |
+| Body too sparse | Agent wrote a stub instead of real content | Add minimum body length validation in QA |
+
+### Key principle
+
+**Every agent-quality bug should produce a schema or validation improvement.** If the agent *could* have produced bad output, it eventually *will*. The fix is always structural — better constraints, better tool descriptions, better validation — not "tell the agent to be more careful."

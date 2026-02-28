@@ -2,22 +2,25 @@
 
 Things that look right but will bite you. Read this before your first extension or before debugging a confusing issue.
 
-## Hooks Cannot Access DB Instance
+## Hooks: DB Access via PluginContext
 
-**Status:** Known gap, backlog item `hooks-db-access-gap`
+**Status:** Resolved via PluginContext dependency injection.
 
-Lifecycle hooks receive `(entry, context)` where context has `kb_name`, `user`, `kb_schema`, `operation`. But **not the DB instance**. If your hook needs to query or update the database, you're stuck.
-
-**Current workaround:** Log the intended action and handle it elsewhere, or create a new DB connection inside the hook (not ideal):
+Plugins receive a `PluginContext` via `set_context(ctx)` at startup. The context provides `ctx.db`, `ctx.config`, and `ctx.services`. Hooks can access the DB through the plugin instance's stored context:
 
 ```python
-def after_save_update_counts(entry, context):
-    # Can't do: context["db"].update(...)
-    # Workaround: log it
-    logger.info("Should update count for %s", entry.id)
+class MyPlugin:
+    def set_context(self, ctx):
+        self._ctx = ctx
+
+    def get_hooks(self):
+        return {"after_save": [self._after_save]}
+
+    def _after_save(self, entry, context):
+        self._ctx.db.execute_sql("UPDATE ...")  # Works
 ```
 
-**Future fix:** Plugin dependency injection (backlog item `plugin-dependency-injection`) will provide DB access to hooks.
+**Gotcha:** Hooks defined as standalone functions (not methods) still don't have DB access. Always use instance methods that can reach the plugin's stored context.
 
 ## generate_entry_id Is Title-Based
 
@@ -195,3 +198,32 @@ When defining relationship types in `get_relationship_types()`, always define bo
 ```
 
 `get_inverse_relation()` in `schema.py` will look up the inverse, and it must exist in the merged relationship types.
+
+## _resolve_entry_type Silently Maps Core Types to Plugin Subtypes
+
+When you call `kb_create(type="event")`, the entry type gets silently resolved to a plugin subtype (e.g., `cascade_event`) if a plugin provides one. This happens in `kb_service.py:_resolve_entry_type()`.
+
+**Consequences:**
+- `type(entry).__name__` won't be `Event` — it'll be `CascadeEvent`
+- The entry's dataclass fields come from the plugin class, not the core class
+- `isinstance(entry, Event)` still works (inheritance), but exact type checks fail
+
+**When this bites you:** Writing tests that construct entries directly vs going through `build_entry()`. Direct construction uses the core class; the factory uses the resolved plugin class. Behavior differs if the plugin overrides `from_frontmatter` or adds custom fields.
+
+## build_entry: Unknown kwargs Go to metadata, Not Top-Level Frontmatter
+
+The `build_entry()` factory in `factory.py` introspects the resolved entry class's dataclass fields. Any kwargs that aren't recognized dataclass fields get collected into the `metadata` dict.
+
+**Consequence:** If you add a new field to a plugin entry class's dataclass but forget to handle it in `from_frontmatter()`, the field's value silently ends up in `metadata` instead of the proper field. The entry appears to save correctly but the field is "invisible" to code that reads the dataclass attribute.
+
+**How to verify:** After creating an entry, check both `entry.my_field` and `entry.metadata.get("my_field")`. If the value is in metadata but not the field, your `from_frontmatter()` isn't extracting it.
+
+## Hybrid Search Pagination: Both Legs Must Over-Fetch
+
+`_hybrid_search()` in `search_service.py` uses Reciprocal Rank Fusion to combine keyword and semantic results. Both legs fetch `max(limit * 2, offset + limit)` candidates because:
+
+1. RRF needs full ranked lists from both legs to compute scores correctly
+2. The fused result set is sliced at `[offset : offset + limit]` after scoring
+3. If either leg fetches too few candidates, pagination at high offsets returns empty
+
+**When this bites you:** Adding a new search mode or modifying the hybrid pipeline. Always ensure both legs fetch enough to cover `offset + limit`.

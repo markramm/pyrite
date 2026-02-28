@@ -32,7 +32,10 @@ class QueryMixin:
         """Full-text search across entries using FTS5."""
         sql = """
             SELECT
-                e.*,
+                e.id, e.kb_name, e.entry_type, e.title, e.summary,
+                e.file_path, e.date, e.importance, e.status, e.location,
+                e.metadata, e.created_at, e.updated_at, e.indexed_at,
+                e.created_by, e.modified_by,
                 snippet(entry_fts, 4, '<mark>', '</mark>', '...', 32) as snippet,
                 bm25(entry_fts) as rank
             FROM entry_fts

@@ -37,10 +37,16 @@ def _query_entries(db: PyriteDB, entry_type: str, kb_name: str | None = None) ->
     return results
 
 
+def _json_output(items: list[dict]) -> None:
+    """Print items as compact JSON to stdout."""
+    print(json.dumps(items, separators=(",", ":"), default=str))
+
+
 @sw_app.command("adrs")
 def sw_adrs(
     status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """List Architecture Decision Records."""
     config = load_config()
@@ -53,7 +59,22 @@ def sw_adrs(
             rows = [r for r in rows if r["_meta"].get("status", "proposed") == status]
 
         if not rows:
-            console.print("[dim]No ADRs found.[/dim]")
+            if fmt == "json":
+                _json_output([])
+            else:
+                console.print("[dim]No ADRs found.[/dim]")
+            return
+
+        if fmt == "json":
+            _json_output([
+                {
+                    "adr_number": r["_meta"].get("adr_number", ""),
+                    "title": r["title"],
+                    "status": r["_meta"].get("status", "proposed"),
+                    "date": r["_meta"].get("date", ""),
+                }
+                for r in rows
+            ])
             return
 
         table = Table(title="Architecture Decision Records")
@@ -114,6 +135,7 @@ def sw_backlog(
     priority: str | None = typer.Option(None, "--priority", "-p", help="Filter by priority"),
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """List backlog items."""
     config = load_config()
@@ -130,7 +152,24 @@ def sw_backlog(
             rows = [r for r in rows if r["_meta"].get("kind", "") == kind]
 
         if not rows:
-            console.print("[dim]No backlog items found.[/dim]")
+            if fmt == "json":
+                _json_output([])
+            else:
+                console.print("[dim]No backlog items found.[/dim]")
+            return
+
+        if fmt == "json":
+            _json_output([
+                {
+                    "id": r["id"],
+                    "title": r["title"],
+                    "kind": r["_meta"].get("kind", ""),
+                    "status": r["_meta"].get("status", "proposed"),
+                    "priority": r["_meta"].get("priority", "medium"),
+                    "effort": r["_meta"].get("effort", ""),
+                }
+                for r in rows
+            ])
             return
 
         table = Table(title="Backlog")
@@ -161,6 +200,7 @@ def sw_backlog(
 def sw_standards(
     category: str | None = typer.Option(None, "--category", "-c", help="Filter by category"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """List coding standards and conventions."""
     config = load_config()
@@ -173,7 +213,21 @@ def sw_standards(
             rows = [r for r in rows if r["_meta"].get("category", "") == category]
 
         if not rows:
-            console.print("[dim]No standards found.[/dim]")
+            if fmt == "json":
+                _json_output([])
+            else:
+                console.print("[dim]No standards found.[/dim]")
+            return
+
+        if fmt == "json":
+            _json_output([
+                {
+                    "title": r["title"],
+                    "category": r["_meta"].get("category", ""),
+                    "enforced": bool(r["_meta"].get("enforced")),
+                }
+                for r in rows
+            ])
             return
 
         table = Table(title="Standards")
@@ -195,6 +249,7 @@ def sw_standards(
 def sw_components(
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """List component documentation."""
     config = load_config()
@@ -207,7 +262,22 @@ def sw_components(
             rows = [r for r in rows if r["_meta"].get("kind", "") == kind]
 
         if not rows:
-            console.print("[dim]No components found.[/dim]")
+            if fmt == "json":
+                _json_output([])
+            else:
+                console.print("[dim]No components found.[/dim]")
+            return
+
+        if fmt == "json":
+            _json_output([
+                {
+                    "title": r["title"],
+                    "kind": r["_meta"].get("kind", ""),
+                    "path": r["_meta"].get("path", ""),
+                    "owner": r["_meta"].get("owner", ""),
+                }
+                for r in rows
+            ])
             return
 
         table = Table(title="Components")

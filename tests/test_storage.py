@@ -119,6 +119,31 @@ class TestPyriteDB:
         results = db.search("Stephen OR Steve")
         assert len(results) == 2
 
+    def test_search_fts_excludes_body(self, db):
+        """FTS search results should not include body to save tokens."""
+        db.register_kb("test-kb", "generic", "/tmp/test", "")
+        db.upsert_entry(
+            {
+                "id": "entry-1",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Test Entry",
+                "body": "This is a long body that should not appear in search results.",
+                "summary": "Short summary",
+                "tags": [],
+            }
+        )
+
+        results = db.search("Test Entry")
+        assert len(results) >= 1
+        result = results[0]
+        assert "body" not in result, "Search results should not include body field"
+        # But should still have other useful fields
+        assert result["id"] == "entry-1"
+        assert result["title"] == "Test Entry"
+        assert result["summary"] == "Short summary"
+        assert "snippet" in result
+
     def test_search_by_tag(self, db):
         """Test tag-based search."""
         db.register_kb("test-kb", "generic", "/tmp/test", "")
