@@ -1203,5 +1203,76 @@ class TestMCPValidation:
         assert update_result.get("updated") is True
 
 
+class TestMCPQATools:
+    """Tests for QA validation MCP tools."""
+
+    @pytest.fixture
+    def qa_server_setup(self):
+        """Create a test server with some bad data for QA testing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+
+            events_path = tmpdir / "events"
+            events_path.mkdir()
+
+            events_kb = KBConfig(
+                name="qa-events",
+                path=events_path,
+                kb_type=KBType.EVENTS,
+                description="QA test events",
+            )
+            config = PyriteConfig(
+                knowledge_bases=[events_kb],
+                settings=Settings(index_path=db_path),
+            )
+
+            # Create valid entries
+            events_repo = KBRepository(events_kb)
+            event = EventEntry.create(
+                date="2025-01-10",
+                title="Good Event",
+                body="Valid event body.",
+                importance=5,
+            )
+            events_repo.save(event)
+
+            server = PyriteMCPServer(config, tier="admin")
+            server.index_mgr.index_all()
+
+            # Insert a bad entry directly in DB
+            server.db._raw_conn.execute(
+                "INSERT INTO entry (id, kb_name, entry_type, title, body, importance) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("no-title", "qa-events", "note", "", "Has body", 5),
+            )
+            server.db._raw_conn.commit()
+
+            yield {"server": server, "config": config}
+            server.close()
+
+    def test_mcp_qa_validate_tool(self, qa_server_setup):
+        """MCP kb_qa_validate returns issues."""
+        result = qa_server_setup["server"]._dispatch_tool(
+            "kb_qa_validate", {"kb_name": "qa-events"}
+        )
+        assert "issues" in result
+        assert "count" in result
+        # Should find the missing title issue
+        rules = [i["rule"] for i in result["issues"]]
+        assert "missing_title" in rules
+
+    def test_mcp_qa_status_tool(self, qa_server_setup):
+        """MCP kb_qa_status returns status dict."""
+        result = qa_server_setup["server"]._dispatch_tool(
+            "kb_qa_status", {"kb_name": "qa-events"}
+        )
+        assert "total_entries" in result
+        assert "total_issues" in result
+        assert "issues_by_severity" in result
+        assert "issues_by_rule" in result
+        assert result["total_entries"] > 0
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

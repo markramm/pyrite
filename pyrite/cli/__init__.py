@@ -28,6 +28,7 @@ from ..storage.database import PyriteDB
 from .collection_commands import collections_app
 from .index_commands import index_app
 from .kb_commands import kb_app
+from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
 from .search_commands import register_search_command
 
@@ -50,6 +51,7 @@ def _get_svc():
 app.add_typer(kb_app, name="kb")
 app.add_typer(index_app, name="index")
 app.add_typer(collections_app, name="collections")
+app.add_typer(qa_app, name="qa")
 
 # Repository management — collaboration app with subscribe/fork/sync/unsubscribe/status/list
 # Plus legacy add/remove commands added below

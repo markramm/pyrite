@@ -237,17 +237,43 @@ Items subsumed by larger features:
 | 29 | [Database Views (Table/Board/Gallery)](database-views.md) | #51 Collections (Phase 3) | Collection view types cover table, kanban, gallery |
 | 43 | [Display Hints for Types](display-hints-for-types.md) | #51 Collections (Phase 1) | View configuration is per-collection, not just per-type |
 
+### Wave 11 — Agent Infrastructure (Announceable Alpha)
+
+Agent-as-user infrastructure. Makes Pyrite installable and usable by autonomous agents (OpenClaw, Claude Code, Codex) without human setup. See [[bhag-self-configuring-knowledge-infrastructure]] for the motivating vision.
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 74 | [Publish pyrite and pyrite-mcp to PyPI](pypi-publish.md) | Core | feature | S | none | proposed |
+| 75 | [Headless KB Initialization with Templates](headless-kb-init.md) | Core | feature | M | none | proposed |
+| 76 | [CLI --format json Audit and Consistency](cli-json-output-audit.md) | Core | improvement | M | none | proposed |
+| 77 | [pyrite extension init CLI Command](extension-init-cli.md) | Core | feature | S | none | proposed |
+| 78 | [pyrite extension install CLI Command](extension-install-cli.md) | Core | feature | S | none | proposed |
+
+**Parallelism:** #74, #76, and #77 touch different files. #75 is new code (cli/init_commands.py). #78 depends on #77 conceptually but not at the file level.
+
+### Wave 12 — Agent Coordination
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 79 | [Coordination/Task Plugin (Phases 1-2)](../coordination-task-plugin.md) | AI | feature | L | none | proposed |
+| 80 | [Programmatic Schema Provisioning](programmatic-schema-provisioning.md) | Core | feature | M | none | proposed |
+
+**Dependencies:** #79 benefits from #73 Phase 1 (QA) and #75 (headless init) but neither is a hard blocker.
+
 ## Prioritized Next Up
 
 Recommended execution order for remaining proposed items:
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **1** | #60 Block Refs Phase 3: Transclusion | Backend done, frontend extension partially built, completes the block refs story |
-| **2** | #73 QA Agent Workflows (Phase 1 only) | Tier 1 structural validation is high-value, no LLM needed, M effort |
-| **3** | #64 Collections Phase 4: Embedding | Blocked by #60, moderate value |
-| **4** | #73 QA Phases 2-5 | Incrementally valuable but large investment |
-| **5** | Coordination/Task Plugin | Ambitious, not blocking anything, consider after QA |
+| **1** | #74 PyPI Publish | Unblocks agent-as-user; enables `pip install pyrite` |
+| **2** | #75 Headless KB Init | `pyrite init --template software` is the golden path for humans and agents |
+| **3** | #76 CLI JSON Audit | Every agent interaction depends on parseable output |
+| **4** | #77 Extension Init CLI | Enables the self-configuring agent loop |
+| **5** | #73 QA Phase 1 | Structural validation for agent-authored content |
+| **6** | #60 Block Refs Phase 3 | Completes the block refs story (UI polish) |
+| **7** | #79 Coordination/Task Plugin | Agent swarm coordination primitive |
+| **8** | #80 Programmatic Schema Provisioning | Closes the schema-as-API gap |
 
 **Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
 
@@ -433,4 +459,17 @@ qa-agent-workflows (#73)              [10]
   Phase 3: LLM consistency checks     [10, after Phase 2]
   Phase 4: factual verification       [10, after Phase 3]
   Phase 5: continuous QA pipeline     [10, after Phase 4]
+
+pypi-publish (#74)                    [11] — no blockers
+headless-kb-init (#75)                [11] — no blockers
+cli-json-output-audit (#76)           [11] — no blockers
+extension-init-cli (#77)              [11] — no blockers
+extension-install-cli (#78)           [11] — after #77
+  └── programmatic-schema-provisioning (#80) [12]
+
+coordination-task-plugin (#79)        [12] — benefits from #73 Phase 1, #75
+  Phase 1: core type + CLI            [12]
+  Phase 2: MCP tools + atomic ops     [12, after Phase 1]
+  Phase 3: DAG queries                [future]
+  Phase 4: QA integration             [future, after #73 Phase 2]
 ```

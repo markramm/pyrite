@@ -241,6 +241,47 @@ class PyriteMCPServer:
                     },
                     "handler": self._kb_schema,
                 },
+                "kb_qa_validate": {
+                    "description": "Validate KB structural integrity. Checks missing titles, empty bodies, broken links, orphans, invalid dates, importance range, and schema violations.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "kb_name": {
+                                "type": "string",
+                                "description": "KB to validate (validates all if not provided)",
+                            },
+                            "entry_id": {
+                                "type": "string",
+                                "description": "Validate a single entry (requires kb_name)",
+                            },
+                            "severity": {
+                                "type": "string",
+                                "enum": ["error", "warning", "info"],
+                                "description": "Minimum severity to include (default: warning)",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum issues to return (default 50)",
+                            },
+                        },
+                        "required": [],
+                    },
+                    "handler": self._kb_qa_validate,
+                },
+                "kb_qa_status": {
+                    "description": "Get QA status dashboard with issue counts by severity and rule.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "kb_name": {
+                                "type": "string",
+                                "description": "KB to check (checks all if not provided)",
+                            },
+                        },
+                        "required": [],
+                    },
+                    "handler": self._kb_qa_status,
+                },
             }
         )
 
@@ -638,6 +679,53 @@ class PyriteMCPServer:
 
         schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
         return schema.to_agent_schema()
+
+    def _kb_qa_validate(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Validate KB structural integrity."""
+        from ..services.qa_service import QAService
+
+        qa = QAService(self.config, self.db)
+
+        entry_id = args.get("entry_id")
+        kb_name = args.get("kb_name")
+        severity_filter = args.get("severity", "warning")
+        limit = args.get("limit", 50)
+
+        if entry_id and kb_name:
+            result = qa.validate_entry(entry_id, kb_name)
+            issues = result["issues"]
+        elif kb_name:
+            result = qa.validate_kb(kb_name)
+            issues = result["issues"]
+        else:
+            result = qa.validate_all()
+            issues = []
+            for kb in result["kbs"]:
+                issues.extend(kb["issues"])
+
+        # Filter by severity
+        severity_order = {"error": 0, "warning": 1, "info": 2}
+        min_level = severity_order.get(severity_filter, 1)
+        issues = [
+            i for i in issues if severity_order.get(i.get("severity", "info"), 2) <= min_level
+        ]
+
+        # Apply limit
+        truncated = len(issues) > limit
+        issues = issues[:limit]
+
+        return {
+            "issues": issues,
+            "count": len(issues),
+            "truncated": truncated,
+        }
+
+    def _kb_qa_status(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get QA status dashboard."""
+        from ..services.qa_service import QAService
+
+        qa = QAService(self.config, self.db)
+        return qa.get_status(kb_name=args.get("kb_name"))
 
     # =========================================================================
     # Write handlers
