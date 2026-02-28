@@ -209,11 +209,23 @@ See [ADR-0013](../adrs/0013-unified-database-connection-and-transaction-model.md
 |---|------|-------|------|--------|--------|
 | 68 | [Entry Type Mismatch: event vs timeline_event](done/entry-type-mismatch-event-vs-timeline-event.md) | Core | bug | S | **done** |
 | 69 | [MCP Link Creation Tool](done/mcp-link-creation-tool.md) | AI | feature | M | **done** |
-| 70 | [MCP Large Result Handling](mcp-large-result-handling.md) | AI | improvement | M | proposed |
-| 71 | [MCP Bulk Create Tool](mcp-bulk-create-tool.md) | AI | feature | M | proposed |
+| 70 | [MCP Large Result Handling](mcp-large-result-handling.md) | AI | improvement | M | **done** |
+| 71 | [MCP Bulk Create Tool](mcp-bulk-create-tool.md) | AI | feature | M | **done** |
 | 72 | [Capture Lane Validation via kb.yaml Controlled Vocabulary](capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) | Core | feature | M | proposed |
 
 **Parallelism:** #70 and #71 touch different parts of `mcp_server.py` (pagination vs batch handler). #72 touches `schema.py` only. All three can run in parallel.
+
+### Wave 10 — QA Agent Workflows (5 phases)
+
+Continuous quality assurance for KB entries. Three evaluation tiers: structural validation (no LLM), LLM-assisted consistency checks, and factual verification with research. QA results are themselves KB entries, making quality queryable and trackable.
+
+| # | Item | Track | Kind | Effort | Blocked by | Status |
+|---|------|-------|------|--------|------------|--------|
+| 73 | [QA Agent Workflows](qa-agent-workflows.md) | AI | feature | XL | #72 (Tier 1 benefits from controlled vocab) | proposed |
+
+**Phases:** (1) Tier 1 structural validation [M] → (2) QA assessment entry type [M] → (3) Tier 2 LLM consistency checks [L] → (4) Tier 3 factual verification [XL] → (5) Continuous QA pipeline [L]
+
+**Dependencies:** Phase 1 has no hard blockers. Phases 2-5 are sequential. #72 (capture lane validation) enriches Tier 1 checks but isn't a hard blocker.
 
 ## Retired
 
@@ -330,6 +342,8 @@ Items in [`done/`](done/):
 - [Health Check Timezone Fix](health-check-timezone-fix.md) — Fixed false stale entries from UTC vs local time mismatch in `IndexManager.check_health()`
 - [Entry Type Mismatch Fix](done/entry-type-mismatch-event-vs-timeline-event.md) — `_resolve_entry_type()` in KBService maps core types to plugin subtypes (e.g. event → timeline_event)
 - [MCP Link Creation Tool](done/mcp-link-creation-tool.md) — `kb_link` write-tier MCP tool for creating typed links between entries via `KBService.add_link()`
+- [MCP Large Result Handling](mcp-large-result-handling.md) — Server-side pagination with limit/offset pushed to SQL, `has_more` flag on all paginated responses
+- [MCP Bulk Create Tool](mcp-bulk-create-tool.md) — `kb_bulk_create` write-tier tool for batch entry creation (max 50, best-effort per-entry semantics)
 
 ---
 
@@ -398,4 +412,11 @@ collections-phase1 (#61) ✅           [7D]
   │     └── collections-phase4 (#64)   [7D]
   ├── collections-phase3 (#63) ✅      [7D]
   └── collections-phase5 (#65) ✅      [8]
+
+qa-agent-workflows (#73)              [10]
+  Phase 1: structural validation      [10] — no hard blockers
+  Phase 2: assessment entry type      [10, after Phase 1]
+  Phase 3: LLM consistency checks     [10, after Phase 2]
+  Phase 4: factual verification       [10, after Phase 3]
+  Phase 5: continuous QA pipeline     [10, after Phase 4]
 ```
