@@ -5,6 +5,7 @@ Mixin class providing __init__, close, transaction, and schema management.
 """
 
 import logging
+import re
 import sqlite3
 import warnings
 from contextlib import contextmanager
@@ -104,18 +105,32 @@ class ConnectionMixin:
         except Exception:
             logger.warning("Plugin table creation failed", exc_info=True)
 
+    _VALID_SQL_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+    _VALID_SQL_TYPE = re.compile(r"^[A-Z][A-Z0-9_ ()]*$")
+    _VALID_FK_REF = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\([a-zA-Z_][a-zA-Z0-9_]*\)$")
+
+    def _validate_identifier(self, value: str, context: str) -> str:
+        """Validate a SQL identifier to prevent injection."""
+        if not self._VALID_SQL_IDENTIFIER.match(value):
+            raise ValueError(f"Invalid SQL identifier for {context}: {value!r}")
+        return value
+
     def _create_table_from_def(self, table_def: dict):
         """Create a single table from a plugin table definition."""
-        name = table_def["name"]
+        name = self._validate_identifier(table_def["name"], "table name")
         columns = table_def.get("columns", [])
         indexes = table_def.get("indexes", [])
 
         col_defs = []
         for col in columns:
-            parts = [col["name"], col["type"]]
+            col_name = self._validate_identifier(col["name"], "column name")
+            col_type = col["type"]
+            if not self._VALID_SQL_TYPE.match(col_type):
+                raise ValueError(f"Invalid SQL type: {col_type!r}")
+            parts = [col_name, col_type]
             if col.get("primary_key"):
                 parts.append("PRIMARY KEY")
-                if col["type"] == "INTEGER":
+                if col_type == "INTEGER":
                     parts.append("AUTOINCREMENT")
             if col.get("nullable") is False:
                 parts.append("NOT NULL")
@@ -124,12 +139,18 @@ class ConnectionMixin:
             col_defs.append(" ".join(parts))
 
         for fk in table_def.get("foreign_keys", []):
-            col_defs.append(f"FOREIGN KEY ({fk['column']}) REFERENCES {fk['references']}")
+            fk_col = self._validate_identifier(fk["column"], "foreign key column")
+            fk_ref = fk["references"]
+            if not self._VALID_FK_REF.match(fk_ref):
+                raise ValueError(f"Invalid FK reference: {fk_ref!r}")
+            col_defs.append(f"FOREIGN KEY ({fk_col}) REFERENCES {fk_ref}")
 
         sql = f"CREATE TABLE IF NOT EXISTS {name} ({', '.join(col_defs)})"
         self._raw_conn.execute(sql)
 
         for idx in indexes:
+            for idx_col in idx["columns"]:
+                self._validate_identifier(idx_col, "index column")
             cols = ", ".join(idx["columns"])
             unique = "UNIQUE " if idx.get("unique") else ""
             idx_name = f"idx_{name}_{'_'.join(idx['columns'])}"

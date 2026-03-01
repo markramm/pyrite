@@ -509,10 +509,8 @@ class IndexManager:
         Returns:
             Number of entries indexed
         """
-        from ..services.git_service import GitService as GitServiceClass
-
         if git_service is None:
-            git_service = GitServiceClass()
+            raise ValueError("git_service is required for index_with_attribution")
 
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:

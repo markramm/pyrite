@@ -25,6 +25,10 @@ from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
+URI_SCHEME = "pyrite://"
+MAX_TIMELINE_EVENTS = 50
+MAX_RESOURCE_LIST_ENTRIES = 200
+
 
 class PyriteMCPServer:
     """
@@ -770,7 +774,7 @@ class PyriteMCPServer:
         date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
         events = self.svc.get_timeline(date_from=date_from, date_to=date_to)
-        events = events[:50]  # Cap at 50 events
+        events = events[:MAX_TIMELINE_EVENTS]
 
         if events:
             events_text = json.dumps(events, separators=(",", ":"), default=str)
@@ -802,7 +806,7 @@ class PyriteMCPServer:
         """Build static resource list."""
         return [
             {
-                "uri": "pyrite://kbs",
+                "uri": f"{URI_SCHEME}kbs",
                 "name": "Knowledge Bases",
                 "description": "List all knowledge bases",
                 "mimeType": "application/json",
@@ -813,13 +817,13 @@ class PyriteMCPServer:
         """Build resource URI templates."""
         return [
             {
-                "uriTemplate": "pyrite://kbs/{name}/entries",
+                "uriTemplate": f"{URI_SCHEME}kbs/{{name}}/entries",
                 "name": "KB Entries",
                 "description": "List entries in a knowledge base",
                 "mimeType": "application/json",
             },
             {
-                "uriTemplate": "pyrite://entries/{id}",
+                "uriTemplate": f"{URI_SCHEME}entries/{{id}}",
                 "name": "Entry",
                 "description": "Get a specific entry",
                 "mimeType": "application/json",
@@ -828,7 +832,7 @@ class PyriteMCPServer:
 
     def _read_resource(self, uri: str) -> dict[str, Any]:
         """Read a resource by URI and return contents."""
-        if uri == "pyrite://kbs":
+        if uri == f"{URI_SCHEME}kbs":
             kbs_data = self.svc.list_kbs()
             return {
                 "contents": [
@@ -841,9 +845,9 @@ class PyriteMCPServer:
             }
 
         # pyrite://kbs/{name}/entries
-        if uri.startswith("pyrite://kbs/") and uri.endswith("/entries"):
-            kb_name = uri[len("pyrite://kbs/") : -len("/entries")]
-            entries = self.db.list_entries(kb_name=kb_name, limit=200)
+        if uri.startswith(f"{URI_SCHEME}kbs/") and uri.endswith("/entries"):
+            kb_name = uri[len(f"{URI_SCHEME}kbs/") : -len("/entries")]
+            entries = self.db.list_entries(kb_name=kb_name, limit=MAX_RESOURCE_LIST_ENTRIES)
             return {
                 "contents": [
                     {
@@ -855,8 +859,8 @@ class PyriteMCPServer:
             }
 
         # pyrite://entries/{id}
-        if uri.startswith("pyrite://entries/"):
-            entry_id = uri[len("pyrite://entries/") :]
+        if uri.startswith(f"{URI_SCHEME}entries/"):
+            entry_id = uri[len(f"{URI_SCHEME}entries/") :]
             entry = self.svc.get_entry(entry_id)
             if not entry:
                 return {"error": f"Entry '{entry_id}' not found"}
