@@ -68,27 +68,43 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 
 ## 0.12 — Launch Prep
 
-**Theme:** Everything needed for a stranger to find, install, try, and trust Pyrite. Distribution, auth, rate limiting, demo site.
+**Theme:** Everything needed for a stranger to find, install, try, and trust Pyrite. Three parallel tracks: distribution, public demo, onboarding.
+
+**Track 1 — Distribution:**
 
 | Item | Description | Effort |
 |------|-------------|--------|
 | [[pypi-publish]] | Publish `pyrite` and `pyrite-mcp` to PyPI | S |
+| [[plugin-repo-extraction]] | Extract 5 extensions to separate repos, publish to PyPI | M |
 | [[mcp-submission-update]] | Accurate tool count, test count, configuration examples | XS |
+
+**Track 2 — Public Demo:**
+
+| Item | Description | Effort |
+|------|-------------|--------|
 | [[web-ui-auth]] Phase 1 | Local auth + API key tiers | M |
 | [[mcp-rate-limiting]] | Rate limiting for public-facing MCP server | S |
 | [[demo-site-deployment]] | Live demo on Fly.io/Railway with PostgresBackend | M |
 | [[byok-ai-gap-analysis]] | Audit AI features for bring-your-own-key completeness | M |
-| [[pyrite-ci-command]] | `pyrite ci` for CI/CD schema + link validation | S |
+
+**Track 3 — Onboarding:**
+
+| Item | Description | Effort |
+|------|-------------|--------|
 | Getting Started tutorial | Zero to working MCP connection in 5 minutes | S |
+| [[plugin-writing-tutorial]] | Build a plugin with Claude Code + extension-builder skill | S |
+| [[awesome-plugins-page]] | Curated plugin listing (pre-registry discovery) | XS |
+| [[pyrite-ci-command]] | `pyrite ci` for CI/CD schema + link validation | S |
 
 ### Definition of done
 
 - `pip install pyrite && pyrite init --template software` works from a clean venv
-- `pip install pyrite-mcp` works and connects to Claude Desktop
+- `pip install pyrite-software-kb` (and all 5 plugins) works from PyPI
 - Demo site live with auth + rate limiting
-- An autonomous agent can: install Pyrite, create a KB, build an extension, test it, install it, and start populating — entirely via CLI
+- An autonomous agent can: install Pyrite, create a KB, build an extension, test it, install it, and start populating — entirely via Claude Code
+- Plugin writing tutorial published — builds a plugin end-to-end using the extension-builder skill
 - BYOK audit complete — all AI features work with user-provided keys
-- README, tutorial, and docs are accurate and newcomer-friendly
+- README, tutorials, and awesome plugins page are accurate and newcomer-friendly
 
 ---
 

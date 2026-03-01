@@ -14,18 +14,33 @@ Active items in priority order across three tracks: **UI** (web application feat
 
 Recommended execution order. Grouped by milestone.
 
-**0.12 — Launch Prep:**
+**0.12 — Launch Prep (3 tracks):**
+
+*Track 1 — Distribution:*
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **6** | [[pypi-publish]] | S | `pip install pyrite` as the golden path |
-| **7** | [[mcp-submission-update]] | XS | Accurate listing for MCP registry |
-| **8** | [[web-ui-auth]] Phase 1 | M | Local auth + tiers — required for demo site |
-| **9** | [[mcp-rate-limiting]] | S | Required for public-facing demo site |
-| **10** | [[demo-site-deployment]] | M | Live demo for visitors (needs #94, #97, #91 ✅) |
-| **11** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
-| **12** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
-| **13** | Getting Started tutorial | S | Newcomer-friendly onboarding |
+| **1** | [[pypi-publish]] | S | `pip install pyrite` — unblocks everything |
+| **2** | [[plugin-repo-extraction]] | M | Plugins as standalone PyPI packages |
+| **3** | [[mcp-submission-update]] | XS | Accurate listing for MCP registry |
+
+*Track 2 — Public Demo:*
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **4** | [[web-ui-auth]] Phase 1 | M | Local auth + tiers — required for demo site |
+| **5** | [[mcp-rate-limiting]] | S | Required for public-facing demo site |
+| **6** | [[demo-site-deployment]] | M | Live demo for visitors (needs #94, #97) |
+| **7** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
+
+*Track 3 — Onboarding:*
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **8** | Getting Started tutorial | S | Newcomer-friendly onboarding |
+| **9** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code + extension-builder skill |
+| **10** | [[awesome-plugins-page]] | XS | Curated plugin listing (bridges gap before extension registry) |
+| **11** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
 
 **0.13 — Ecosystem:**
 
@@ -59,15 +74,18 @@ Recommended execution order. Grouped by milestone.
 
 ### Planned — 0.12
 
-| # | Item | Kind | Effort | Milestone |
-|---|------|------|--------|-----------|
-| 74 | [[pypi-publish]] | feature | S | 0.12 |
-| 85 | [[demo-site-deployment]] | feature | M | 0.12 |
-| 86 | [[pyrite-ci-command]] | feature | S | 0.12 |
-| 87 | [[byok-ai-gap-analysis]] | improvement | M | 0.12 |
-| 89 | [[mcp-submission-update]] | improvement | XS | 0.12 |
-| 94 | [[web-ui-auth]] | feature | M | 0.12 |
-| 97 | [[mcp-rate-limiting]] | feature | S | 0.12 |
+| # | Item | Kind | Effort | Track | Milestone |
+|---|------|------|--------|-------|-----------|
+| 74 | [[pypi-publish]] | feature | S | Distribution | 0.12 |
+| 107 | [[plugin-repo-extraction]] | feature | M | Distribution | 0.12 |
+| 89 | [[mcp-submission-update]] | improvement | XS | Distribution | 0.12 |
+| 94 | [[web-ui-auth]] | feature | M | Public Demo | 0.12 |
+| 97 | [[mcp-rate-limiting]] | feature | S | Public Demo | 0.12 |
+| 85 | [[demo-site-deployment]] | feature | M | Public Demo | 0.12 |
+| 87 | [[byok-ai-gap-analysis]] | improvement | M | Public Demo | 0.12 |
+| 108 | [[plugin-writing-tutorial]] | feature | S | Onboarding | 0.12 |
+| 109 | [[awesome-plugins-page]] | feature | XS | Onboarding | 0.12 |
+| 86 | [[pyrite-ci-command]] | feature | S | Onboarding | 0.12 |
 
 ### Planned — 0.13
 
@@ -113,11 +131,16 @@ Recommended execution order. Grouped by milestone.
 schema-versioning (#93)              [0.11] ✅
   └── depends on odm-layer (#100) ✅
 
+pypi-publish (#74)                   [0.12] — no blockers
+  └── plugin-repo-extraction (#107)  [0.12] — needs #74
+      ├── awesome-plugins-page (#109) [0.12] — needs #107
+      └── plugin-writing-tutorial (#108) [0.12] — needs #107
+
 web-ui-auth (#94)                    [0.12]
   Phase 1: local auth + tiers        — needs #56 ✅ (REST tier enforcement)
   Phase 2: OAuth/OIDC                — post-launch
 
-demo-site-deployment (#85)           [0.12] — needs #94, #97, #91 ✅
+demo-site-deployment (#85)           [0.12] — needs #94, #97
 
 extension-type-protocols (#99)       [0.13]
   Phase 1: protocol definitions      — needs #92 (intent layer)
