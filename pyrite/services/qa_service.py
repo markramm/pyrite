@@ -1,15 +1,19 @@
 """
-QA Service — structural validation for knowledge bases.
+QA Service — structural validation and assessment for knowledge bases.
 
 Validates KB integrity without LLM involvement:
 - Bulk SQL checks (missing titles, empty bodies, broken links, orphans)
 - Per-entry schema validation via KBSchema.validate_entry()
 - Aggregate health metrics
+- Assessment entries: first-class KB entries recording QA results
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+from datetime import UTC, datetime
 from typing import Any
 
 from ..config import PyriteConfig
@@ -127,6 +131,281 @@ class QAService:
             "total_issues": len(issues),
             "issues_by_severity": issues_by_severity,
             "issues_by_rule": issues_by_rule,
+        }
+
+    # =========================================================================
+    # Assessment API
+    # =========================================================================
+
+    def _get_kb_service(self):
+        """Lazy-load KBService for creating assessment entries."""
+        if not hasattr(self, "_kb_svc"):
+            from .kb_service import KBService
+
+            self._kb_svc = KBService(self.config, self.db)
+        return self._kb_svc
+
+    def assess_entry(
+        self,
+        entry_id: str,
+        kb_name: str,
+        tier: int = 1,
+        create_task_on_fail: bool = False,
+    ) -> dict[str, Any]:
+        """Assess a single entry and create a qa_assessment entry.
+
+        Returns dict with assessment_id, qa_status, issues_found, issues.
+        """
+        result = self.validate_entry(entry_id, kb_name)
+        issues = result["issues"]
+
+        errors = [i for i in issues if i.get("severity") == "error"]
+        warnings = [i for i in issues if i.get("severity") == "warning"]
+
+        if errors:
+            qa_status = "fail"
+        elif warnings:
+            qa_status = "warn"
+        else:
+            qa_status = "pass"
+
+        now = datetime.now(UTC).isoformat()
+        ms_ts = int(time.time() * 1000)
+        assessment_id = f"qa-{entry_id}-{ms_ts}"[:80]
+
+        body = self._format_assessment_body(entry_id, kb_name, qa_status, issues)
+
+        svc = self._get_kb_service()
+        svc.create_entry(
+            kb_name=kb_name,
+            entry_id=assessment_id,
+            title=f"QA: {entry_id}",
+            entry_type="qa_assessment",
+            body=body,
+            target_entry=entry_id,
+            target_kb=kb_name,
+            tier=tier,
+            qa_status=qa_status,
+            issues=issues,
+            issues_found=len(issues),
+            issues_resolved=0,
+            assessed_at=now,
+            tags=["qa", f"qa-{qa_status}"],
+        )
+
+        if create_task_on_fail and qa_status == "fail":
+            self._maybe_create_task(entry_id, kb_name, assessment_id, issues)
+
+        return {
+            "assessment_id": assessment_id,
+            "target_entry": entry_id,
+            "kb_name": kb_name,
+            "qa_status": qa_status,
+            "issues_found": len(issues),
+            "issues": issues,
+        }
+
+    def assess_kb(
+        self,
+        kb_name: str,
+        tier: int = 1,
+        max_age_hours: int = 24,
+        create_task_on_fail: bool = False,
+    ) -> dict[str, Any]:
+        """Assess all entries in a KB (skipping qa_assessment entries and recently assessed).
+
+        Returns dict with kb_name, assessed count, skipped count, and results list.
+        """
+        rows = self.db._raw_conn.execute(
+            "SELECT id, entry_type FROM entry WHERE kb_name = ?",
+            (kb_name,),
+        ).fetchall()
+
+        results = []
+        skipped = 0
+
+        for row in rows:
+            eid = row["id"]
+            etype = row["entry_type"]
+
+            # Skip assessment entries themselves
+            if etype == "qa_assessment":
+                skipped += 1
+                continue
+
+            # Skip recently assessed
+            if max_age_hours > 0 and self._is_recently_assessed(eid, kb_name, max_age_hours):
+                skipped += 1
+                continue
+
+            result = self.assess_entry(eid, kb_name, tier=tier, create_task_on_fail=create_task_on_fail)
+            results.append(result)
+
+        return {
+            "kb_name": kb_name,
+            "assessed": len(results),
+            "skipped": skipped,
+            "results": results,
+        }
+
+    def _format_assessment_body(
+        self, entry_id: str, kb_name: str, qa_status: str, issues: list[dict]
+    ) -> str:
+        """Format assessment body as markdown."""
+        lines = [f"Assessment of `{entry_id}` in `{kb_name}`: **{qa_status}**\n"]
+        if not issues:
+            lines.append("No issues found.")
+            return "\n".join(lines)
+
+        lines.append("| Severity | Rule | Field | Message |")
+        lines.append("|----------|------|-------|---------|")
+        for issue in issues:
+            sev = issue.get("severity", "info")
+            rule = issue.get("rule", "")
+            fld = issue.get("field", "") or ""
+            msg = issue.get("message", "")
+            lines.append(f"| {sev} | {rule} | {fld} | {msg} |")
+
+        return "\n".join(lines)
+
+    def _is_recently_assessed(self, entry_id: str, kb_name: str, max_age_hours: int) -> bool:
+        """Check if entry was assessed within max_age_hours."""
+        row = self.db._raw_conn.execute(
+            "SELECT json_extract(metadata, '$.assessed_at') as assessed_at "
+            "FROM entry WHERE kb_name = ? AND entry_type = 'qa_assessment' "
+            "AND json_extract(metadata, '$.target_entry') = ? "
+            "ORDER BY json_extract(metadata, '$.assessed_at') DESC LIMIT 1",
+            (kb_name, entry_id),
+        ).fetchone()
+
+        if not row or not row["assessed_at"]:
+            return False
+
+        try:
+            assessed = datetime.fromisoformat(row["assessed_at"])
+            age_hours = (datetime.now(UTC) - assessed).total_seconds() / 3600
+            return age_hours < max_age_hours
+        except (ValueError, TypeError):
+            return False
+
+    def _maybe_create_task(
+        self, entry_id: str, kb_name: str, assessment_id: str, issues: list[dict]
+    ) -> None:
+        """Try to create a task for failed assessment. No-op if task plugin absent."""
+        try:
+            from pyrite_task.service import TaskService
+
+            task_svc = TaskService(self.config, self.db)
+            error_count = sum(1 for i in issues if i.get("severity") == "error")
+            task_svc.create_task(
+                kb_name=kb_name,
+                title=f"Fix QA issues: {entry_id}",
+                body=f"Assessment `{assessment_id}` found {error_count} error(s).\n\nSee assessment entry for details.",
+                priority=8,
+                tags=["qa", "auto-generated"],
+            )
+        except ImportError:
+            logger.debug("Task plugin not available, skipping task creation")
+        except Exception as e:
+            logger.debug("Task creation failed: %s", e)
+
+    # =========================================================================
+    # Query API
+    # =========================================================================
+
+    def get_assessments(
+        self,
+        kb_name: str,
+        target_entry: str | None = None,
+        qa_status: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Query assessment entries with optional filters."""
+        sql = (
+            "SELECT id, title, body, metadata FROM entry "
+            "WHERE kb_name = ? AND entry_type = 'qa_assessment'"
+        )
+        params: list[Any] = [kb_name]
+
+        if target_entry:
+            sql += " AND json_extract(metadata, '$.target_entry') = ?"
+            params.append(target_entry)
+        if qa_status:
+            sql += " AND json_extract(metadata, '$.qa_status') = ?"
+            params.append(qa_status)
+
+        sql += " ORDER BY json_extract(metadata, '$.assessed_at') DESC LIMIT ?"
+        params.append(limit)
+
+        rows = self.db._raw_conn.execute(sql, params).fetchall()
+        results = []
+        for row in rows:
+            meta = json.loads(row["metadata"]) if row["metadata"] else {}
+            results.append(
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "target_entry": meta.get("target_entry", ""),
+                    "target_kb": meta.get("target_kb", ""),
+                    "qa_status": meta.get("qa_status", "pass"),
+                    "tier": meta.get("tier", 1),
+                    "issues_found": meta.get("issues_found", 0),
+                    "assessed_at": meta.get("assessed_at", ""),
+                }
+            )
+        return results
+
+    def get_unassessed(self, kb_name: str) -> list[dict[str, Any]]:
+        """Get entries that have no assessment."""
+        rows = self.db._raw_conn.execute(
+            "SELECT e.id, e.entry_type, e.title FROM entry e "
+            "WHERE e.kb_name = ? AND e.entry_type != 'qa_assessment' "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM entry a WHERE a.kb_name = ? "
+            "  AND a.entry_type = 'qa_assessment' "
+            "  AND json_extract(a.metadata, '$.target_entry') = e.id"
+            ")",
+            (kb_name, kb_name),
+        ).fetchall()
+        return [{"id": row["id"], "entry_type": row["entry_type"], "title": row["title"]} for row in rows]
+
+    def get_coverage(self, kb_name: str) -> dict[str, Any]:
+        """Get assessment coverage stats for a KB."""
+        # Total non-assessment entries
+        total = self.db._raw_conn.execute(
+            "SELECT COUNT(*) FROM entry WHERE kb_name = ? AND entry_type != 'qa_assessment'",
+            (kb_name,),
+        ).fetchone()[0]
+
+        # Entries with at least one assessment
+        assessed = self.db._raw_conn.execute(
+            "SELECT COUNT(DISTINCT json_extract(metadata, '$.target_entry')) "
+            "FROM entry WHERE kb_name = ? AND entry_type = 'qa_assessment'",
+            (kb_name,),
+        ).fetchone()[0]
+
+        unassessed = total - assessed
+
+        # Status counts from latest assessments
+        by_status: dict[str, int] = {}
+        rows = self.db._raw_conn.execute(
+            "SELECT json_extract(metadata, '$.qa_status') as qs, COUNT(*) as cnt "
+            "FROM entry WHERE kb_name = ? AND entry_type = 'qa_assessment' "
+            "GROUP BY qs",
+            (kb_name,),
+        ).fetchall()
+        for row in rows:
+            status = row["qs"] or "pass"
+            by_status[status] = row["cnt"]
+
+        coverage_pct = round((assessed / total * 100), 1) if total > 0 else 0.0
+
+        return {
+            "total": total,
+            "assessed": assessed,
+            "unassessed": unassessed,
+            "coverage_pct": coverage_pct,
+            "by_status": by_status,
         }
 
     # =========================================================================

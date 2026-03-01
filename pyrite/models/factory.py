@@ -8,6 +8,7 @@ from .core_types import (
     EventEntry,
     OrganizationEntry,
     PersonEntry,
+    QAAssessmentEntry,
     get_entry_class,
 )
 from .generic import GenericEntry
@@ -70,6 +71,23 @@ def build_entry(
             title=title,
             body=body,
             importance=kwargs.get("importance", 5),
+            tags=kwargs.get("tags", []),
+            summary=kwargs.get("summary", ""),
+            metadata=kwargs.get("metadata", {}),
+        )
+    elif entry_type == "qa_assessment":
+        return QAAssessmentEntry(
+            id=entry_id,
+            title=title,
+            body=body,
+            target_entry=kwargs.get("target_entry", ""),
+            target_kb=kwargs.get("target_kb", ""),
+            tier=kwargs.get("tier", 1),
+            qa_status=kwargs.get("qa_status", "pass"),
+            issues=kwargs.get("issues", []),
+            issues_found=kwargs.get("issues_found", 0),
+            issues_resolved=kwargs.get("issues_resolved", 0),
+            assessed_at=kwargs.get("assessed_at", ""),
             tags=kwargs.get("tags", []),
             summary=kwargs.get("summary", ""),
             metadata=kwargs.get("metadata", {}),

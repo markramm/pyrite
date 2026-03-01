@@ -447,6 +447,36 @@ class PyriteMCPServer:
                     },
                     "handler": self._kb_link,
                 },
+                "kb_qa_assess": {
+                    "description": "Run QA assessment on an entry or entire KB. Creates qa_assessment entries recording results. Optionally creates tasks for failures.",
+                    "inputSchema": {
+                        "type": "object",
+                        "properties": {
+                            "kb_name": {
+                                "type": "string",
+                                "description": "KB to assess",
+                            },
+                            "entry_id": {
+                                "type": "string",
+                                "description": "Specific entry to assess (assesses entire KB if omitted)",
+                            },
+                            "tier": {
+                                "type": "integer",
+                                "description": "Assessment tier: 1=structural (default)",
+                            },
+                            "max_age_hours": {
+                                "type": "integer",
+                                "description": "Skip entries assessed within this many hours (default 24, 0 to reassess all)",
+                            },
+                            "create_tasks": {
+                                "type": "boolean",
+                                "description": "Create tasks for failed assessments (default false)",
+                            },
+                        },
+                        "required": ["kb_name"],
+                    },
+                    "handler": self._kb_qa_assess,
+                },
             }
         )
 
@@ -730,11 +760,34 @@ class PyriteMCPServer:
         }
 
     def _kb_qa_status(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get QA status dashboard."""
+        """Get QA status dashboard with coverage stats."""
         from ..services.qa_service import QAService
 
         qa = QAService(self.config, self.db)
-        return qa.get_status(kb_name=args.get("kb_name"))
+        status = qa.get_status(kb_name=args.get("kb_name"))
+
+        # Add coverage stats if a specific KB is requested
+        kb_name = args.get("kb_name")
+        if kb_name:
+            status["coverage"] = qa.get_coverage(kb_name)
+
+        return status
+
+    def _kb_qa_assess(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Assess entry or KB quality."""
+        from ..services.qa_service import QAService
+
+        qa = QAService(self.config, self.db)
+        kb_name = args["kb_name"]
+        entry_id = args.get("entry_id")
+        tier = args.get("tier", 1)
+        create_tasks = args.get("create_tasks", False)
+
+        if entry_id:
+            return qa.assess_entry(entry_id, kb_name, tier=tier, create_task_on_fail=create_tasks)
+        else:
+            max_age = args.get("max_age_hours", 24)
+            return qa.assess_kb(kb_name, tier=tier, max_age_hours=max_age, create_task_on_fail=create_tasks)
 
     # =========================================================================
     # Write handlers

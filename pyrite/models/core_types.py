@@ -462,6 +462,78 @@ class RelationshipEntry(Entry):
 
 
 @dataclass
+class QAAssessmentEntry(Entry):
+    """A QA assessment result — quality check on another entry."""
+
+    target_entry: str = ""
+    target_kb: str = ""
+    tier: int = 1  # 1=structural, 2=semantic, 3=factual
+    qa_status: str = "pass"  # pass/warn/fail
+    issues: list[dict] = field(default_factory=list)
+    issues_found: int = 0
+    issues_resolved: int = 0
+    assessed_at: str = ""  # ISO timestamp
+
+    @property
+    def entry_type(self) -> str:
+        return "qa_assessment"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = self._base_frontmatter()
+        if self.target_entry:
+            meta["target_entry"] = self.target_entry
+        if self.target_kb:
+            meta["target_kb"] = self.target_kb
+        if self.tier != 1:
+            meta["tier"] = self.tier
+        if self.qa_status != "pass":
+            meta["qa_status"] = self.qa_status
+        if self.issues:
+            meta["issues"] = self.issues
+        if self.issues_found:
+            meta["issues_found"] = self.issues_found
+        if self.issues_resolved:
+            meta["issues_resolved"] = self.issues_resolved
+        if self.assessed_at:
+            meta["assessed_at"] = self.assessed_at
+        if self.summary:
+            meta["summary"] = self.summary
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "QAAssessmentEntry":
+        prov_data = meta.get("provenance")
+        provenance = Provenance.from_dict(prov_data) if prov_data else None
+
+        entry_id = meta.get("id", "")
+        if not entry_id:
+            entry_id = generate_entry_id(meta.get("title", ""))
+
+        return cls(
+            id=entry_id,
+            title=meta.get("title", ""),
+            body=body,
+            summary=meta.get("summary", ""),
+            target_entry=meta.get("target_entry", ""),
+            target_kb=meta.get("target_kb", ""),
+            tier=int(meta.get("tier", 1)),
+            qa_status=meta.get("qa_status", "pass"),
+            issues=meta.get("issues", []) or [],
+            issues_found=int(meta.get("issues_found", 0)),
+            issues_resolved=int(meta.get("issues_resolved", 0)),
+            assessed_at=meta.get("assessed_at", ""),
+            tags=meta.get("tags", []) or [],
+            aliases=meta.get("aliases", []) or [],
+            sources=parse_sources(meta.get("sources")),
+            links=parse_links(meta.get("links")),
+            provenance=provenance,
+            metadata=meta.get("metadata", {}),
+            created_at=parse_datetime(meta.get("created_at")),
+            updated_at=parse_datetime(meta.get("updated_at")),
+        )
+
+
+@dataclass
 class TimelineEntry(Entry):
     """An ordered sequence of events."""
 
@@ -516,6 +588,7 @@ ENTRY_TYPE_REGISTRY: dict[str, type[Entry]] = {
     "relationship": RelationshipEntry,
     "timeline": TimelineEntry,
     "collection": CollectionEntry,
+    "qa_assessment": QAAssessmentEntry,
 }
 
 
