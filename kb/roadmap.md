@@ -60,23 +60,9 @@ Internal quality pass across 8 waves. Key results: `mcp_server.py` 32% smaller (
 
 ---
 
-## 0.11 — ODM Completion
+## 0.11 — ODM Completion (done)
 
-**Theme:** Finish the storage abstraction story. Schema evolution without breakage, document-aware load/save. Interleave remaining hardening items.
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[schema-versioning]] | `_schema_version` tracking, `since_version` field semantics, `MigrationRegistry`, `pyrite schema migrate` | M |
-| [[odm-layer]] DocumentManager | Route `KBService` through `DocumentManager` for load/save paths | M |
-| [[docs-kb-fixes]] | Fix stale counts, broken links, KB entry accuracy | S |
-| [[architecture-hardening]] | DDL validation, layer violations, stale docs | M |
-| [[test-infrastructure]] | pytest-xdist, extension tests in default run | S |
-
-### Definition of done
-
-- Schema versioning works: `since_version` on fields, `pyrite schema migrate` produces reviewable git diff
-- `DocumentManager` routes KBService load/save — direct PyriteDB usage eliminated from services
-- Hardening items merged (docs, architecture, test infra)
+Schema versioning (`_schema_version` tracking, `since_version` field semantics, `MigrationRegistry`, `pyrite schema migrate`). DocumentManager for write-path coordination. Architecture hardening (DDL validation, MCP constants extraction). Test infrastructure (pytest-xdist, extension tests). Docs KB fixes. 1505 tests.
 
 ---
 

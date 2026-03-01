@@ -47,6 +47,10 @@ pyrite create --kb=research --type=person --title="Jane Doe" \
 pyrite index sync          # Incremental re-index after file edits
 pyrite index health        # Check for stale/missing entries
 pyrite kb discover         # Auto-find KBs by kb.yaml presence
+
+# Schema versioning
+pyrite schema diff --kb=research      # Show type versions and field annotations
+pyrite schema migrate --kb=research   # Migrate entries to current schema version
 ```
 
 ## MCP Server
@@ -126,13 +130,28 @@ types:
           type: text
 ```
 
+Types support versioning for safe schema evolution:
+
+```yaml
+types:
+  case:
+    version: 2
+    fields:
+      methodology:
+        type: text
+        required: true
+        since_version: 2  # required for new entries, warning-only for legacy
+```
+
+Entries track their schema version in `_schema_version` frontmatter. `pyrite schema migrate` applies registered migrations and produces a reviewable git diff.
+
 Field types: `text`, `number`, `date`, `datetime`, `checkbox`, `select`, `multi-select`, `object-ref`, `list`, `tags`.
 
 Eight built-in entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`. Entries support `aliases` for alternate names that resolve in wikilinks and autocomplete.
 
 ## Plugin Protocol
 
-Extensions implement a Python protocol class with up to 12 methods:
+Extensions implement a Python protocol class with up to 16 methods:
 
 - `get_entry_classes()` — custom entry types with serialization
 - `get_type_metadata()` — field definitions, AI instructions, presets
@@ -140,6 +159,7 @@ Extensions implement a Python protocol class with up to 12 methods:
 - `get_mcp_tools(tier)` — per-tier MCP tools
 - `get_cli_app()` — Typer sub-commands
 - `get_validators()` — entry validation rules
+- `get_migrations()` — schema migration functions for entry type upgrades
 - `get_relationship_types()` — semantic relationship definitions
 - Lifecycle hooks: `before_save`, `after_save`, `before_delete`, `after_delete`
 
@@ -151,6 +171,7 @@ Five extensions ship: `software-kb` (ADRs, components, backlog), `zettelkasten` 
 pyrite/
 ├── models/          # Entry types (base, core_types, factory, generic, collection)
 ├── schema.py        # YAML-driven type definitions, field validation
+├── migrations.py    # Schema migration registry (on-load entry transforms)
 ├── config.py        # Multi-KB and repo configuration
 ├── server/
 │   ├── api.py       # FastAPI REST API factory (role-based tier enforcement)
@@ -184,7 +205,7 @@ pip install -e ".[all]"
 for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
-# Tests (1786 tests)
+# Tests (1505 tests)
 pytest tests/ -v
 
 # Frontend

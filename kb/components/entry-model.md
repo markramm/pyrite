@@ -37,6 +37,7 @@ The entry model defines the base data classes for all knowledge entries. Located
 | `updated_at` | datetime | UTC modification timestamp |
 | `kb_name` | str | KB reference (set when loaded) |
 | `file_path` | Path | Filesystem path (set when loaded) |
+| `_schema_version` | int | Schema version when entry was created/migrated (0 = unversioned) |
 
 Abstract methods: `entry_type` (property), `to_frontmatter()`, `from_frontmatter()`.
 

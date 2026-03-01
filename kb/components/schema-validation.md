@@ -27,6 +27,29 @@ tags: [core, validation]
 - **Enforced** (`validation.enforce: true` in kb.yaml): mismatches become errors that block saves.
 - Unknown entry types produce errors only when enforce is true.
 
+## Schema Versioning
+
+Schemas evolve via version tracking and on-load migration. Three version markers:
+
+- **`KBSchema.schema_version`** — top-level version in kb.yaml, increments when any type changes
+- **`TypeSchema.version`** — per-type version in kb.yaml (e.g., `version: 3`)
+- **`FieldSchema.since_version`** — marks when a required field was introduced
+
+### Version-Aware Validation
+
+`validate_entry()` checks `_schema_version` in the context dict. When a required field has `since_version` set and the entry's schema version predates it, the missing-field error is downgraded to a warning. Entries at or above the `since_version` get the normal error.
+
+### Migration Registry
+
+`pyrite/migrations.py` provides `MigrationRegistry` with decorator-based registration. Migrations operate on raw frontmatter dicts (before Entry construction). Chain resolution sorts by `from_version` and raises `ValueError` on gaps.
+
+`KBRepository._maybe_migrate()` applies pending migrations on load. `KBRepository.save()` stamps `_schema_version` with the current type version.
+
+### CLI Commands
+
+- `pyrite schema diff --kb <name>` — shows types with version annotations and `since_version` highlights
+- `pyrite schema migrate --kb <name> [--dry-run]` — forces load+save of all entries, applying migrations
+
 ## Plugin Validator Registration
 
 Plugins implement `get_validators() -> list[Callable]`. Each validator receives `(entry_type, fields, context)` and returns `list[dict]` with keys: `field`, `rule`, `expected`, `got`, optional `severity`.

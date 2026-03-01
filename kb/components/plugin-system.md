@@ -11,11 +11,11 @@ tags: [core, extensibility]
 The plugin system enables extensions to add entry types, CLI commands, MCP tools, validators, workflows, relationship types, DB tables, hooks, and KB presets.
 
 ## Key Files
-- `protocol.py` — PyritePlugin Protocol class with 15 methods + `name` attribute
+- `protocol.py` — PyritePlugin Protocol class with 16 methods + `name` attribute
 - `registry.py` — PluginRegistry: discovery via entry points, registration, and aggregation helpers
 - `context.py` — PluginContext: DI container injected via `set_context()` (DB, config, services)
 
-## Protocol Methods (15)
+## Protocol Methods (16)
 
 | # | Method | Purpose |
 |---|--------|---------|
@@ -34,6 +34,7 @@ The plugin system enables extensions to add entry types, CLI commands, MCP tools
 | 13 | `get_type_metadata()` | AI instructions, field descriptions, display hints per type |
 | 14 | `get_collection_types()` | Custom collection type definitions |
 | 15 | `set_context(ctx)` | Receive PluginContext with DB, config, services (DI) |
+| 16 | `get_migrations()` | Schema migration functions for entry type version upgrades |
 
 All methods are optional — implement only what you need.
 

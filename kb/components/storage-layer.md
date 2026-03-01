@@ -18,11 +18,13 @@ The storage layer provides pluggable search indexing over git-native markdown co
 | `index.py` | IndexManager: builds/syncs index from markdown, wikilink extraction |
 | `models.py` | SQLAlchemy ORM models: Entry, Link, Tag, StarredEntry, Setting |
 | `queries.py` | Complex queries: graph BFS, tag tree, wanted pages |
-| `repository.py` | KBRepository: reads/writes markdown files with YAML frontmatter |
-| `migrations.py` | MigrationManager: custom schema versioning |
+| `repository.py` | KBRepository: reads/writes markdown files with YAML frontmatter, on-load schema migration, version stamping on save |
+| `migrations.py` | MigrationManager: custom schema versioning (database DDL) |
 | `backends/protocol.py` | `SearchBackend` protocol: structural interface for all index backends (ADR-0014) |
 | `backends/sqlite_backend.py` | `SQLiteBackend`: wraps PyriteDB + FTS5 + sqlite-vec behind SearchBackend |
 | `backends/postgres_backend.py` | `PostgresBackend`: tsvector (weighted FTS) + pgvector (HNSW cosine) |
+
+Note: `storage/migrations.py` handles **database** schema migrations (DDL). `pyrite/migrations.py` (top-level) handles **entry** schema migrations (frontmatter transforms between type versions).
 
 ## ORM Models
 
