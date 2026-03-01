@@ -21,6 +21,7 @@ from ..models import Entry
 from ..models.factory import build_entry
 from ..plugins.context import PluginContext
 from ..storage.database import PyriteDB
+from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
 from .wikilink_service import WikilinkService
@@ -38,10 +39,16 @@ class KBService:
     - Index synchronization
     """
 
-    def __init__(self, config: PyriteConfig, db: PyriteDB):
+    def __init__(
+        self,
+        config: PyriteConfig,
+        db: PyriteDB,
+        doc_mgr: DocumentManager | None = None,
+    ):
         self.config = config
         self.db = db
         self._index_mgr = IndexManager(db, config)
+        self._doc_mgr = doc_mgr or DocumentManager(db, self._index_mgr)
         self._embedding_svc = None
         self._embedding_checked = False
         self._embedding_worker = None  # Set externally to enable queue-based embedding
@@ -188,8 +195,6 @@ class KBService:
         if kb_config.read_only:
             raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
-        repo = KBRepository(kb_config)
-
         # Resolve generic core type to plugin subtype if one exists
         entry_type = self._resolve_entry_type(entry_type)
 
@@ -207,19 +212,8 @@ class KBService:
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
-        # Save to file
-        file_path = repo.save(entry)
-
-        # Ensure KB is registered before indexing
-        self.db.register_kb(
-            name=kb_name,
-            kb_type=kb_config.kb_type,
-            path=str(kb_config.path),
-            description=kb_config.description,
-        )
-
-        # Index the entry
-        self._index_mgr.index_entry(entry, kb_name, file_path)
+        # Save to file, register KB, and index
+        self._doc_mgr.save_entry(entry, kb_name, kb_config)
 
         # Auto-embed for semantic search
         self._auto_embed(entry.id, kb_name)
@@ -252,15 +246,6 @@ class KBService:
         if kb_config.read_only:
             raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
-        # Register KB once
-        self.db.register_kb(
-            name=kb_name,
-            kb_type=kb_config.kb_type,
-            path=str(kb_config.path),
-            description=kb_config.description,
-        )
-
-        repo = KBRepository(kb_config)
         hook_ctx = PluginContext(
             config=self.config,
             db=self.db,
@@ -299,8 +284,7 @@ class KBService:
                 )
                 entry = self._run_hooks("before_save", entry, hook_ctx)
 
-                file_path = repo.save(entry)
-                self._index_mgr.index_entry(entry, kb_name, file_path)
+                self._doc_mgr.save_entry(entry, kb_name, kb_config)
                 self._run_hooks("after_save", entry, hook_ctx)
 
                 created_ids.append((entry.id, kb_name))
@@ -397,9 +381,8 @@ class KBService:
                 f"Validation errors: {validation_result['errors']}"
             )
 
-        repo = KBRepository(kb_config)
-
         # Check for ID collision
+        repo = KBRepository(kb_config)
         if repo.exists(entry.id):
             raise ValidationError(f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'")
 
@@ -414,19 +397,8 @@ class KBService:
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
-        # Save to file
-        file_path = repo.save(entry)
-
-        # Ensure KB is registered before indexing
-        self.db.register_kb(
-            name=kb_name,
-            kb_type=kb_config.kb_type,
-            path=str(kb_config.path),
-            description=kb_config.description,
-        )
-
-        # Index the entry
-        self._index_mgr.index_entry(entry, kb_name, file_path)
+        # Save to file, register KB, and index
+        self._doc_mgr.save_entry(entry, kb_name, kb_config)
 
         # Auto-embed for semantic search
         self._auto_embed(entry.id, kb_name)
@@ -487,11 +459,8 @@ class KBService:
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
-        # Save to file
-        file_path = repo.save(entry)
-
-        # Re-index
-        self._index_mgr.index_entry(entry, kb_name, file_path)
+        # Save to file, register KB, and re-index
+        self._doc_mgr.save_entry(entry, kb_name, kb_config)
 
         # Auto-embed for semantic search
         self._auto_embed(entry.id, kb_name)
@@ -518,9 +487,8 @@ class KBService:
         if kb_config.read_only:
             raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
-        repo = KBRepository(kb_config)
-
         # Load entry for hooks before deleting
+        repo = KBRepository(kb_config)
         entry = repo.load(entry_id)
         hook_ctx = PluginContext(
             config=self.config,
@@ -533,11 +501,8 @@ class KBService:
         if entry:
             entry = self._run_hooks("before_delete", entry, hook_ctx)
 
-        # Delete from file system
-        file_deleted = repo.delete(entry_id)
-
-        # Delete from index
-        self.db.delete_entry(entry_id, kb_name)
+        # Delete from file system and index
+        file_deleted = self._doc_mgr.delete_entry(entry_id, kb_name, kb_config)
 
         # Run after_delete hooks
         if entry:
@@ -586,8 +551,7 @@ class KBService:
 
         entry.add_link(target=target_id, relation=relation, note=note, kb=tkb)
         entry.updated_at = datetime.now(UTC)
-        file_path = repo.save(entry)
-        self._index_mgr.index_entry(entry, source_kb, file_path)
+        self._doc_mgr.save_entry(entry, source_kb, kb_config)
 
     # =========================================================================
     # Query Operations (read-only, delegate to db)
@@ -869,7 +833,7 @@ class KBService:
         repo = KBRepository(kb_config)
         file_path = repo.find_file(entry.id)
         if file_path:
-            self._index_mgr.index_entry(entry, kb_name, file_path)
+            self._doc_mgr.index_entry(entry, kb_name, file_path)
 
     # =========================================================================
     # Version History
