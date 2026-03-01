@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseWikilinks, renderWikilinks } from './wikilink-utils';
+import { parseWikilinks, parseTransclusions, renderWikilinks } from './wikilink-utils';
 
 describe('parseWikilinks', () => {
 	it('parses simple wikilink', () => {
@@ -67,6 +67,89 @@ describe('parseWikilinks', () => {
 		expect(matches[2].kb).toBe('kb2');
 		expect(matches[2].target).toBe('entry-c');
 		expect(matches[2].display).toBe('Display');
+	});
+});
+
+describe('parseTransclusions', () => {
+	it('parses transclusion with block ID', () => {
+		const matches = parseTransclusions('![[entry-id^block-1]]');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('entry-id');
+		expect(matches[0].blockId).toBe('block-1');
+		expect(matches[0].heading).toBeUndefined();
+	});
+
+	it('parses transclusion with heading', () => {
+		const matches = parseTransclusions('![[entry-id#Some Heading]]');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('entry-id');
+		expect(matches[0].heading).toBe('Some Heading');
+		expect(matches[0].blockId).toBeUndefined();
+	});
+
+	it('parses transclusion with KB prefix and block ID', () => {
+		const matches = parseTransclusions('![[kb:entry-id^block-1]]');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].kb).toBe('kb');
+		expect(matches[0].target).toBe('entry-id');
+		expect(matches[0].blockId).toBe('block-1');
+	});
+
+	it('parses simple transclusion without fragment', () => {
+		const matches = parseTransclusions('![[entry-id]]');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('entry-id');
+		expect(matches[0].heading).toBeUndefined();
+		expect(matches[0].blockId).toBeUndefined();
+	});
+
+	it('does not match regular wikilinks', () => {
+		const matches = parseTransclusions('[[entry-id^block-1]]');
+		expect(matches).toHaveLength(0);
+	});
+
+	it('parses transclusion with KB prefix and heading', () => {
+		const matches = parseTransclusions('![[my-kb:entry-id#Introduction]]');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].kb).toBe('my-kb');
+		expect(matches[0].target).toBe('entry-id');
+		expect(matches[0].heading).toBe('Introduction');
+	});
+
+	it('tracks start and end positions', () => {
+		const text = 'before ![[entry^blk]] after';
+		const matches = parseTransclusions(text);
+		expect(matches[0].start).toBe(7);
+		expect(matches[0].end).toBe(21);
+	});
+});
+
+describe('block content extraction', () => {
+	it('finds matching block by block_id', () => {
+		const blocks = [
+			{ block_id: 'block-1', content: 'First block content', heading: null, position: 0, block_type: 'paragraph' },
+			{ block_id: 'block-2', content: 'Second block content', heading: null, position: 1, block_type: 'paragraph' },
+			{ block_id: 'block-3', content: 'Third block content', heading: null, position: 2, block_type: 'paragraph' }
+		];
+		const targetBlockId = 'block-2';
+		const matchingBlock = blocks.find((b) => b.block_id === targetBlockId);
+		expect(matchingBlock).toBeDefined();
+		expect(matchingBlock!.content).toBe('Second block content');
+	});
+
+	it('returns undefined when block_id does not match', () => {
+		const blocks = [
+			{ block_id: 'block-1', content: 'First block content', heading: null, position: 0, block_type: 'paragraph' }
+		];
+		const targetBlockId = 'nonexistent';
+		const matchingBlock = blocks.find((b) => b.block_id === targetBlockId);
+		expect(matchingBlock).toBeUndefined();
+	});
+
+	it('handles empty blocks array', () => {
+		const blocks: { block_id: string; content: string }[] = [];
+		const matchingBlock = blocks.find((b) => b.block_id === 'anything');
+		expect(matchingBlock).toBeUndefined();
 	});
 });
 

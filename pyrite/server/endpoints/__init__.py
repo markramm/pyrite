@@ -15,6 +15,7 @@ from .entries import router as entries_router
 from .git_ops import router as git_ops_router
 from .graph import router as graph_router
 from .kbs import router as kbs_router
+from .qa import router as qa_router
 from .search import router as search_router
 from .settings_ep import router as settings_router
 from .starred import router as starred_router
@@ -41,6 +42,7 @@ all_routers = [
     collections_router,
     blocks_router,
     clipper_router,
+    qa_router,
 ]
 
 __all__ = ["all_routers"]

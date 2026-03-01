@@ -337,6 +337,7 @@ class ApiClient {
 		type?: string;
 		depth?: number;
 		limit?: number;
+		include_centrality?: boolean;
 	} = {}): Promise<GraphResponse> {
 		const params = new URLSearchParams();
 		if (options.center) params.set('center', options.center);
@@ -345,6 +346,7 @@ class ApiClient {
 		if (options.type) params.set('type', options.type);
 		if (options.depth) params.set('depth', String(options.depth));
 		if (options.limit) params.set('limit', String(options.limit));
+		if (options.include_centrality) params.set('include_centrality', 'true');
 		const qs = params.toString();
 		return this.request(`/api/graph${qs ? `?${qs}` : ''}`);
 	}

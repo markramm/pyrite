@@ -334,22 +334,41 @@ class TransclusionWidget extends WidgetType {
 		try {
 			const res = await api.resolveEntry(this.target);
 			if (res.resolved && res.entry) {
-				const entryRes = await api.getEntry(res.entry.id, { kb: res.entry.kb_name });
-				let body = entryRes.body || '';
+				let body: string;
 
-				if (this.heading) {
-					const headingRegex = new RegExp(
-						`^##?#?#?#?#?\\s+${this.heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
-						'mi'
+				if (this.blockId) {
+					// Fetch specific block by ID
+					const blocksRes = await api.getEntryBlocks(res.entry.id, res.entry.kb_name, {
+						block_id: this.blockId
+					});
+					const matchingBlock = blocksRes.blocks?.find(
+						(b) => b.block_id === this.blockId
 					);
-					const match = headingRegex.exec(body);
-					if (match) {
-						const start = match.index + match[0].length;
-						const nextHeading = body.slice(start).search(/^##?#?#?#?#?\s+/m);
-						body =
-							nextHeading === -1
-								? body.slice(start).trim()
-								: body.slice(start, start + nextHeading).trim();
+					if (matchingBlock) {
+						body = matchingBlock.content;
+					} else {
+						// Fallback to full body if block not found
+						const entryRes = await api.getEntry(res.entry.id, { kb: res.entry.kb_name });
+						body = entryRes.body || '';
+					}
+				} else {
+					const entryRes = await api.getEntry(res.entry.id, { kb: res.entry.kb_name });
+					body = entryRes.body || '';
+
+					if (this.heading) {
+						const headingRegex = new RegExp(
+							`^##?#?#?#?#?\\s+${this.heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
+							'mi'
+						);
+						const match = headingRegex.exec(body);
+						if (match) {
+							const start = match.index + match[0].length;
+							const nextHeading = body.slice(start).search(/^##?#?#?#?#?\s+/m);
+							body =
+								nextHeading === -1
+									? body.slice(start).trim()
+									: body.slice(start, start + nextHeading).trim();
+						}
 					}
 				}
 				contentEl.textContent = body.slice(0, 500) + (body.length > 500 ? '...' : '');

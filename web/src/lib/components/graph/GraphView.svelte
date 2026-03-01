@@ -10,9 +10,10 @@
 		compact?: boolean;
 		layoutName?: string;
 		searchQuery?: string;
+		sizeByCentrality?: boolean;
 	}
 
-	let { nodes, edges, centerId, compact = false, layoutName = 'cose-bilkent', searchQuery = '' }: Props = $props();
+	let { nodes, edges, centerId, compact = false, layoutName = 'cose-bilkent', searchQuery = '', sizeByCentrality = false }: Props = $props();
 
 	let container: HTMLDivElement;
 	let tooltipEl: HTMLDivElement;
@@ -38,20 +39,32 @@
 	}
 
 	function buildElements() {
-		const nodeElements = nodes.map((n) => ({
-			data: {
-				id: `${n.kb_name}/${n.id}`,
-				label: n.title.length > 30 ? n.title.slice(0, 28) + '...' : n.title,
-				fullTitle: n.title,
-				entryType: n.entry_type,
-				kbName: n.kb_name,
-				entryId: n.id,
-				linkCount: n.link_count,
-				color: getColor(n.entry_type),
-				size: Math.max(20, Math.min(50, 20 + n.link_count * 3)),
-				isCenter: n.id === centerId
-			}
-		}));
+		const nodeElements = nodes.map((n) => {
+			const centrality = n.centrality ?? 0;
+			const useCentrality = sizeByCentrality && centrality > 0;
+			const size = useCentrality
+				? Math.max(15, Math.min(60, 15 + centrality * 45))
+				: Math.max(20, Math.min(50, 20 + n.link_count * 3));
+			const nodeOpacity = useCentrality
+				? Math.max(0.4, 0.4 + centrality * 0.6)
+				: 1;
+			return {
+				data: {
+					id: `${n.kb_name}/${n.id}`,
+					label: n.title.length > 30 ? n.title.slice(0, 28) + '...' : n.title,
+					fullTitle: n.title,
+					entryType: n.entry_type,
+					kbName: n.kb_name,
+					entryId: n.id,
+					linkCount: n.link_count,
+					centrality,
+					color: getColor(n.entry_type),
+					size,
+					nodeOpacity,
+					isCenter: n.id === centerId
+				}
+			};
+		});
 
 		const edgeElements = edges.map((e, i) => ({
 			data: {
@@ -123,6 +136,7 @@
 						color: '#a1a1aa',
 						width: 'data(size)',
 						height: 'data(size)',
+						opacity: 'data(nodeOpacity)',
 						'border-width': 0,
 						'overlay-padding': 4
 					}
@@ -179,10 +193,14 @@
 				'border-color': '#facc15'
 			});
 			const pos = evt.renderedPosition;
+			const centralityLine = data.centrality > 0
+				? `<div class="text-zinc-400">centrality: ${data.centrality.toFixed(3)}</div>`
+				: '';
 			showTooltip(pos.x, pos.y,
 				`<div class="font-semibold">${data.fullTitle}</div>` +
 				`<div class="text-zinc-400">${data.entryType} · ${data.kbName}</div>` +
-				`<div class="text-zinc-400">${data.linkCount} link${data.linkCount !== 1 ? 's' : ''}</div>`
+				`<div class="text-zinc-400">${data.linkCount} link${data.linkCount !== 1 ? 's' : ''}</div>` +
+				centralityLine
 			);
 		});
 

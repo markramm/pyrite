@@ -314,6 +314,7 @@ export interface GraphNode {
 	title: string;
 	entry_type: string;
 	link_count: number;
+	centrality?: number;
 }
 
 export interface GraphEdge {

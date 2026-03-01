@@ -128,31 +128,28 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.7 — Web UI Polish
+## 0.7 — Web UI Polish (in progress)
 
 **Theme:** Make the web experience demo-ready. Screenshots, screencasts, knowledge graph visualizations that tell the story.
 
-### Content Features
+### Wave 1 (done)
+
+- **QA dashboard**: 4 REST endpoints (`/api/qa/status`, `/validate`, `/validate/{id}`, `/coverage`), Svelte dashboard page with status cards, coverage stats, issues table with severity badges, KB/severity filters. 9 backend tests.
+- **Graph betweenness centrality**: Brandes' algorithm on the graph endpoint (`include_centrality=true`), node sizing by centrality in the frontend, opacity scaling, centrality toggle in graph controls. 10 backend tests.
+- **Block-ID transclusion fix**: `![[entry^block-id]]` now fetches the specific block via the blocks API in both CodeMirror and Tiptap editors, with fallback to full body. 10 frontend tests.
+
+### Remaining
 
 | Item | Description | Effort |
 |------|-------------|--------|
-| Block Refs Phase 3: Transclusion Rendering | Full `![[entry#heading]]` and `![[entry^block-id]]` rendering in Tiptap. WebSocket live updates, cycle detection. | L |
+| Block Refs Phase 3: Transclusion Rendering | WebSocket live updates, cycle detection. (block-ID rendering done in Wave 1) | M |
 | Collections Phase 4: Embedding | Embed collections in entries, nested collection support. | M |
-| QA dashboard | Web UI for QA status — verification rates, issue trends, entries needing review. | M |
-
-### Graph Enhancements (pick 1-2)
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| Graph betweenness centrality | Size nodes by BC to highlight bridging entries | M |
-| Graph community detection | Detect clusters, color by community | M |
-| Graph structural gap detection | Find missing links between distant clusters | L |
 
 ### Definition of done
 
-- Transclusions render inline in the web editor
-- QA assessment data visible in web UI
-- At least one graph enhancement shipped
+- ~~Transclusions render inline in the web editor~~ (done — heading + block-ID)
+- ~~QA assessment data visible in web UI~~ (done — QA dashboard)
+- ~~At least one graph enhancement shipped~~ (done — betweenness centrality)
 - Navigate a 1000+ entry KB smoothly
 
 ---

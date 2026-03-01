@@ -89,29 +89,53 @@ export const Transclusion = Node.create({
 									const { api } = await import('$lib/api/client');
 									const res = await api.resolveEntry(target);
 									if (res.resolved && res.entry) {
-										const entryRes = await api.getEntry(res.entry.id, {
-											kb: res.entry.kb_name
-										});
-										const body = entryRes.body || '';
 										// Extract relevant section
 										const heading = el.dataset.transclusionHeading;
 										const blockId = el.dataset.transclusionBlock;
-										let content = body;
-										if (heading) {
-											const headingRegex = new RegExp(
-												`^##?#?#?#?#?\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
-												'mi'
+										let content: string;
+
+										if (blockId) {
+											// Fetch specific block by ID
+											const blocksRes = await api.getEntryBlocks(
+												res.entry.id,
+												res.entry.kb_name,
+												{ block_id: blockId }
 											);
-											const match = headingRegex.exec(body);
-											if (match) {
-												const start = match.index + match[0].length;
-												const nextHeading = body
-													.slice(start)
-													.search(/^##?#?#?#?#?\s+/m);
-												content =
-													nextHeading === -1
-														? body.slice(start).trim()
-														: body.slice(start, start + nextHeading).trim();
+											const matchingBlock = blocksRes.blocks?.find(
+												(b) => b.block_id === blockId
+											);
+											if (matchingBlock) {
+												content = matchingBlock.content;
+											} else {
+												// Fallback to full body if block not found
+												const entryRes = await api.getEntry(res.entry.id, {
+													kb: res.entry.kb_name
+												});
+												content = entryRes.body || '';
+											}
+										} else {
+											const entryRes = await api.getEntry(res.entry.id, {
+												kb: res.entry.kb_name
+											});
+											content = entryRes.body || '';
+											if (heading) {
+												const headingRegex = new RegExp(
+													`^##?#?#?#?#?\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
+													'mi'
+												);
+												const match = headingRegex.exec(content);
+												if (match) {
+													const start = match.index + match[0].length;
+													const nextHeading = content
+														.slice(start)
+														.search(/^##?#?#?#?#?\s+/m);
+													content =
+														nextHeading === -1
+															? content.slice(start).trim()
+															: content
+																	.slice(start, start + nextHeading)
+																	.trim();
+												}
 											}
 										}
 										htmlNode.textContent =

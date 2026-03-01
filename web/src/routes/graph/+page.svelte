@@ -18,6 +18,7 @@
 	let selectedLayout = $state('cose-bilkent');
 	let searchQuery = $state('');
 	let entryTypes = $state<string[]>([]);
+	let sizeByCentrality = $state(false);
 
 	let graphView: GraphView | undefined = $state();
 
@@ -43,7 +44,8 @@
 			const res = await api.getGraph({
 				kb: selectedKb || undefined,
 				type: selectedType || undefined,
-				depth
+				depth,
+				include_centrality: sizeByCentrality || undefined
 			});
 			nodes = res.nodes;
 			edges = res.edges;
@@ -70,6 +72,8 @@
 
 	const kbNames = $derived(kbStore.kbs.map((kb) => kb.name));
 
+	const hasCentrality = $derived(nodes.some((n) => (n.centrality ?? 0) > 0));
+
 	// Derive type counts from nodes for the legend
 	const typeCounts = $derived(() => {
 		const counts = new Map<string, number>();
@@ -90,11 +94,14 @@
 		{selectedType}
 		{depth}
 		{selectedLayout}
+		{hasCentrality}
+		{sizeByCentrality}
 		onKbChange={(kb) => { selectedKb = kb; loadGraph(); loadEntryTypes(); }}
 		onTypeChange={(type) => { selectedType = type; loadGraph(); }}
 		onDepthChange={(d) => { depth = d; loadGraph(); }}
 		onLayoutChange={(layout) => { selectedLayout = layout; }}
 		onSearch={(q) => { searchQuery = q; }}
+		onCentralityToggle={(enabled) => { sizeByCentrality = enabled; loadGraph(); }}
 		onResetLayout={() => graphView?.resetLayout()}
 		onFit={() => graphView?.fit()}
 	/>
@@ -109,7 +116,7 @@
 				No linked entries found. Create links between entries to see the graph.
 			</div>
 		{:else}
-			<GraphView bind:this={graphView} {nodes} {edges} layoutName={selectedLayout} {searchQuery} />
+			<GraphView bind:this={graphView} {nodes} {edges} layoutName={selectedLayout} {searchQuery} {sizeByCentrality} />
 		{/if}
 	</div>
 

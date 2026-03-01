@@ -116,7 +116,11 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/api/settings` | GET/PUT | settings_ep.py | Get/bulk-update settings |
 | `/api/settings/{key}` | GET/PUT/DELETE | settings_ep.py | Single setting CRUD |
 | `/api/versions/{entry_id}` | GET | versions.py | Entry version history |
-| `/api/graph` | GET | graph.py | Knowledge graph (nodes + edges) |
+| `/api/graph` | GET | graph.py | Knowledge graph (nodes + edges + optional betweenness centrality) |
+| `/api/qa/status` | GET | qa.py | QA status summary (issue counts by severity/rule) |
+| `/api/qa/validate` | GET | qa.py | Validate KB or all KBs |
+| `/api/qa/validate/{id}` | GET | qa.py | Validate single entry |
+| `/api/qa/coverage` | GET | qa.py | QA assessment coverage stats |
 | `/api/kbs` | POST | admin.py | Create KB (incl. ephemeral) |
 | `/api/kbs/{name}` | DELETE | admin.py | Delete KB |
 | `/api/kbs/gc` | POST | admin.py | Garbage-collect ephemeral KBs |

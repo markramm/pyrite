@@ -181,6 +181,7 @@ class GraphNode(BaseModel):
     title: str
     entry_type: str
     link_count: int = 0
+    centrality: float = 0.0
 
 
 class GraphEdge(BaseModel):

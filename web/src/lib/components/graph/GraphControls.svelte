@@ -6,6 +6,8 @@
 		selectedType: string;
 		depth: number;
 		selectedLayout: string;
+		hasCentrality?: boolean;
+		sizeByCentrality?: boolean;
 		onKbChange: (kb: string) => void;
 		onTypeChange: (type: string) => void;
 		onDepthChange: (depth: number) => void;
@@ -13,6 +15,7 @@
 		onFit: () => void;
 		onSearch: (query: string) => void;
 		onLayoutChange: (layout: string) => void;
+		onCentralityToggle?: (enabled: boolean) => void;
 	}
 
 	let {
@@ -22,13 +25,16 @@
 		selectedType,
 		depth,
 		selectedLayout,
+		hasCentrality = false,
+		sizeByCentrality = false,
 		onKbChange,
 		onTypeChange,
 		onDepthChange,
 		onResetLayout,
 		onFit,
 		onSearch,
-		onLayoutChange
+		onLayoutChange,
+		onCentralityToggle
 	}: Props = $props();
 
 	const layouts = [
@@ -93,6 +99,18 @@
 			{/each}
 		</select>
 	</label>
+
+	{#if hasCentrality}
+		<label class="flex items-center gap-1.5 text-sm text-zinc-400">
+			<input
+				type="checkbox"
+				checked={sizeByCentrality}
+				onchange={(e) => onCentralityToggle?.((e.target as HTMLInputElement).checked)}
+				class="rounded border-zinc-300 dark:border-zinc-700"
+			/>
+			Size by centrality
+		</label>
+	{/if}
 
 	<input
 		type="search"
