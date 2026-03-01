@@ -161,6 +161,14 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 **Theme:** Distribution and first impressions. Everything a stranger needs to go from "interesting" to "I'm trying this."
 
+### Schema Versioning (pre-launch critical)
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| [[schema-versioning]] | `_schema_version` tracking, `since_version` field semantics, `MigrationRegistry`, `pyrite schema migrate` command | M |
+
+Decoupled from the full ODM refactor (see ADR-0015 addendum). Hooks into existing `KBRepository` load/save paths. Without this, the first schema change after launch breaks every existing KB.
+
 ### Packaging & Distribution
 
 | Item | Description | Effort |
@@ -176,12 +184,17 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - `pip install pyrite && pyrite init --template software` works from a clean venv
 - `pip install pyrite-mcp` works and connects to Claude Desktop
 - An autonomous agent can: install Pyrite, create a KB, build an extension, test it, install it, and start populating — entirely via CLI
+- Schema versioning works: `since_version` on fields, `pyrite schema migrate` produces reviewable git diff
 - README, tutorial, and docs are accurate and newcomer-friendly
 - Demo screencast recorded
 
 ---
 
 ## Future (0.9+)
+
+### ODM Layer + Backend Abstraction
+
+- **[[odm-layer]]** — `SearchBackend` protocol, `DocumentManager`, `SQLiteBackend` wrapping existing code. Relocate schema versioning hooks from `KBRepository` into `DocumentManager`. Then LanceDB and Postgres backends as configuration choices.
 
 ### Agent Swarm Infrastructure
 
