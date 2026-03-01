@@ -79,9 +79,9 @@ where = ["."]
 include = ["pyrite*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "extensions"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short -m 'not slow'"
 markers = [
     "integration: tests requiring full environment setup (DB, indexing, network)",
     "api: REST API endpoint tests",

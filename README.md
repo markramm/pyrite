@@ -184,7 +184,7 @@ pip install -e ".[all]"
 for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
-# Tests (1258 tests)
+# Tests (1654 tests)
 pytest tests/ -v
 
 # Frontend

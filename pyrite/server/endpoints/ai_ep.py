@@ -95,7 +95,7 @@ async def ai_auto_tag(
     existing_tags = entry.get("tags", [])
 
     # Get the tag vocabulary
-    all_tags_raw = svc.get_all_tags(kb_name=req.kb_name)
+    all_tags_raw = svc.get_tags(kb_name=req.kb_name)
     tag_vocab = [t["name"] for t in all_tags_raw][:200]  # limit to 200 tags
 
     system = """You are a knowledge management assistant. Suggest relevant tags for the entry.

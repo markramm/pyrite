@@ -1,5 +1,7 @@
 """Tests for Web Clipper feature."""
 
+import pytest
+
 
 class TestClipperSchemas:
     """Test clipper request/response schemas."""
@@ -107,3 +109,96 @@ class TestClipperService:
 
         html = '<meta property="og:description" content="OG desc">'
         assert _extract_description(html) == "OG desc"
+
+
+class TestClipUrl:
+    """Test full clip_url with mocked HTTP."""
+
+    def test_clip_url_fetches_and_converts(self):
+        """clip_url fetches HTML, extracts title and body as Markdown."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from pyrite.services.clipper import ClipperService
+
+        html = """<html>
+        <head><title>Test Article</title>
+        <meta name="description" content="A test article about testing.">
+        </head>
+        <body>
+        <nav>Menu</nav>
+        <main>
+        <h1>Test Article</h1>
+        <p>This is the article content with <strong>bold text</strong>.</p>
+        </main>
+        <footer>Footer</footer>
+        </body>
+        </html>"""
+
+        mock_response = MagicMock()
+        mock_response.text = html
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("pyrite.services.clipper.httpx.AsyncClient", return_value=mock_client):
+            svc = ClipperService()
+            result = asyncio.run(svc.clip_url("https://example.com/article"))
+
+        assert result.title == "Test Article"
+        assert result.source_url == "https://example.com/article"
+        assert result.description == "A test article about testing."
+        assert "article content" in result.body
+        assert "<nav" not in result.body
+        assert "<footer" not in result.body
+
+    def test_clip_url_with_title_override(self):
+        """clip_url uses provided title instead of HTML title."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from pyrite.services.clipper import ClipperService
+
+        html = "<html><head><title>Original</title></head><body><p>Content</p></body></html>"
+
+        mock_response = MagicMock()
+        mock_response.text = html
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("pyrite.services.clipper.httpx.AsyncClient", return_value=mock_client):
+            svc = ClipperService()
+            result = asyncio.run(svc.clip_url("https://example.com", title="Custom Title"))
+
+        assert result.title == "Custom Title"
+
+    def test_clip_url_http_error(self):
+        """clip_url raises on HTTP error."""
+        import asyncio
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        import httpx
+
+        from pyrite.services.clipper import ClipperService
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock(
+            side_effect=httpx.HTTPStatusError("404", request=MagicMock(), response=MagicMock())
+        )
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("pyrite.services.clipper.httpx.AsyncClient", return_value=mock_client):
+            svc = ClipperService()
+            with pytest.raises(httpx.HTTPStatusError):
+                asyncio.run(svc.clip_url("https://example.com/404"))
