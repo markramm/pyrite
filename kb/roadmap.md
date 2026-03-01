@@ -145,9 +145,14 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - **Cycle detection**: Module-level `activeTransclusions` set prevents A→B→A infinite loops. Shows "⚠ Circular reference detected" warning. 7 tests.
 - **1000+ entry performance test**: 1050 entries (notes + events), validates index sync <30s, FTS <500ms, list <200ms, graph+centrality <5s, QA validate <10s. All pass well within limits. 6 tests.
 
+### Wave 3 (done)
+
+- **Transclusion view options**: `![[collection-id]]{ view: "table", limit: 5 }` syntax parsed and rendered in both CodeMirror and Tiptap editors. Supports `list` (default) and `table` views with configurable `limit`. `parseOptionsString()` handles JSON-like syntax with unquoted keys. 7 frontend tests.
+- **Collection nesting**: Sub-collections in a collection entry list render as collapsible `<details><summary>` elements with lazy-loaded nested entries on expand. Limited to 1 level deep to prevent recursion.
+
 ### Definition of done
 
-- ~~Transclusions render inline in the web editor~~ (done — heading + block-ID + collections)
+- ~~Transclusions render inline in the web editor~~ (done — heading + block-ID + collections + view options)
 - ~~QA assessment data visible in web UI~~ (done — QA dashboard)
 - ~~At least one graph enhancement shipped~~ (done — betweenness centrality)
 - ~~Navigate a 1000+ entry KB smoothly~~ (done — 1050-entry perf test passes)

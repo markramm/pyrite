@@ -10,6 +10,9 @@ export const WIKILINK_REGEX = /\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?)
 /** Regex matching transclusions: ![[target]], ![[target#heading]], ![[target^block-id]] */
 export const TRANSCLUSION_REGEX = /!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
 
+/** Regex matching transclusions with optional view options: ![[target]]{ view: "table", limit: 5 } */
+export const TRANSCLUSION_OPTIONS_REGEX = /!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\](?:\{([^}]*)\})?/g;
+
 /** Single wikilink match result */
 export interface WikilinkMatch {
 	/** Full match including brackets */
@@ -24,6 +27,8 @@ export interface WikilinkMatch {
 	heading?: string;
 	/** Block ID fragment (after ^) */
 	blockId?: string;
+	/** View options from trailing { ... } block */
+	options?: Record<string, string | number | boolean>;
 	/** Start index in source string */
 	start: number;
 	/** End index in source string */
@@ -53,14 +58,35 @@ export function parseWikilinks(text: string): WikilinkMatch[] {
 }
 
 /**
+ * Parse a transclusion options string (content inside { ... }) into a record.
+ * Accepts JSON-like syntax with unquoted keys: `view: "table", limit: 5`.
+ * Returns undefined if parsing fails.
+ */
+function parseOptionsString(optionsStr: string | undefined): Record<string, string | number | boolean> | undefined {
+	if (!optionsStr) return undefined;
+	try {
+		// Quote bare keys: `view: "table"` -> `"view": "table"`
+		const jsonStr = optionsStr.replace(/([a-zA-Z_]\w*)\s*:/g, '"$1":');
+		const parsed = JSON.parse(`{${jsonStr}}`);
+		if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+			return parsed as Record<string, string | number | boolean>;
+		}
+		return undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
  * Extract all transclusions from a string.
  */
 export function parseTransclusions(text: string): WikilinkMatch[] {
 	const matches: WikilinkMatch[] = [];
-	const regex = new RegExp(TRANSCLUSION_REGEX.source, 'g');
+	const regex = new RegExp(TRANSCLUSION_OPTIONS_REGEX.source, 'g');
 	let match: RegExpExecArray | null;
 	while ((match = regex.exec(text)) !== null) {
-		matches.push({
+		const options = parseOptionsString(match[6]);
+		const result: WikilinkMatch = {
 			full: match[0],
 			kb: match[1]?.trim(),
 			target: match[2].trim(),
@@ -69,7 +95,11 @@ export function parseTransclusions(text: string): WikilinkMatch[] {
 			display: match[5]?.trim(),
 			start: match.index,
 			end: match.index + match[0].length
-		});
+		};
+		if (options) {
+			result.options = options;
+		}
+		matches.push(result);
 	}
 	return matches;
 }

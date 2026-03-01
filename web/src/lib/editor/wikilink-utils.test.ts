@@ -128,6 +128,53 @@ describe('parseTransclusions', () => {
 		expect(matches[0].start).toBe(7);
 		expect(matches[0].end).toBe(21);
 	});
+
+	it('parses transclusion with view option', () => {
+		const matches = parseTransclusions('![[col-id]]{ view: "table" }');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('col-id');
+		expect(matches[0].options).toEqual({ view: 'table' });
+	});
+
+	it('parses transclusion with multiple options', () => {
+		const matches = parseTransclusions('![[col-id]]{ view: "table", limit: 5 }');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('col-id');
+		expect(matches[0].options).toEqual({ view: 'table', limit: 5 });
+	});
+
+	it('parses transclusion without options (backwards compat)', () => {
+		const matches = parseTransclusions('![[entry-id]]');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('entry-id');
+		expect(matches[0].options).toBeUndefined();
+	});
+
+	it('parses numeric option values as numbers', () => {
+		const matches = parseTransclusions('![[col-id]]{ limit: 20 }');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].options).toEqual({ limit: 20 });
+	});
+
+	it('parses boolean option values as booleans', () => {
+		const matches = parseTransclusions('![[col-id]]{ compact: true }');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].options).toEqual({ compact: true });
+	});
+
+	it('ignores malformed options block', () => {
+		const matches = parseTransclusions('![[col-id]]{ invalid json }');
+		expect(matches).toHaveLength(1);
+		expect(matches[0].target).toBe('col-id');
+		expect(matches[0].options).toBeUndefined();
+	});
+
+	it('tracks end position including options block', () => {
+		const text = '![[col-id]]{ view: "table" }';
+		const matches = parseTransclusions(text);
+		expect(matches[0].start).toBe(0);
+		expect(matches[0].end).toBe(text.length);
+	});
 });
 
 describe('block content extraction', () => {

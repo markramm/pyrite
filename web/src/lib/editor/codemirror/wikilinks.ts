@@ -292,7 +292,8 @@ class TransclusionWidget extends WidgetType {
 	constructor(
 		readonly target: string,
 		readonly heading?: string,
-		readonly blockId?: string
+		readonly blockId?: string,
+		readonly options?: Record<string, string | number | boolean>
 	) {
 		super();
 	}
@@ -366,7 +367,7 @@ class TransclusionWidget extends WidgetType {
 			if (res.resolved && res.entry) {
 				// Collection transclusion: render compact entry list
 				if (res.entry.entry_type === 'collection') {
-					this._renderCollection(contentEl, res.entry.id, res.entry.kb_name, res.entry.title);
+					this._renderCollection(contentEl, res.entry.id, res.entry.kb_name, res.entry.title, this.options);
 					return;
 				}
 
@@ -422,8 +423,12 @@ class TransclusionWidget extends WidgetType {
 		contentEl: HTMLElement,
 		collectionId: string,
 		kb: string,
-		title: string
+		title: string,
+		options?: Record<string, string | number | boolean>
 	): Promise<void> {
+		const limit = typeof options?.limit === 'number' ? options.limit : 10;
+		const view = typeof options?.view === 'string' ? options.view : 'list';
+
 		// Update the label to show collection indicator
 		const label = contentEl.parentElement?.querySelector('div');
 		if (label && label.style.fontSize === '0.85em') {
@@ -442,7 +447,7 @@ class TransclusionWidget extends WidgetType {
 		}
 
 		try {
-			const collRes = await api.getCollectionEntries(collectionId, kb, { limit: 10 });
+			const collRes = await api.getCollectionEntries(collectionId, kb, { limit });
 			contentEl.textContent = '';
 
 			if (collRes.entries.length === 0) {
@@ -452,26 +457,179 @@ class TransclusionWidget extends WidgetType {
 				return;
 			}
 
-			// Compact list of entry titles
-			const list = document.createElement('ul');
-			list.style.cssText = 'margin: 0; padding: 0 0 0 1.2rem; list-style: disc;';
-			for (const entry of collRes.entries) {
-				const li = document.createElement('li');
-				li.style.cssText = 'margin: 0.15rem 0;';
-				const link = document.createElement('a');
-				link.href = `/entries/${encodeURIComponent(entry.id)}`;
-				link.textContent = entry.title;
-				link.style.cssText = 'color: #3b82f6; text-decoration: none;';
-				link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
-				link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
-				link.addEventListener('click', (e) => {
-					e.preventDefault();
-					window.location.href = link.href;
-				});
-				li.appendChild(link);
-				list.appendChild(li);
+			if (view === 'table') {
+				// Table view
+				const table = document.createElement('table');
+				table.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 0.9em;';
+				const thead = document.createElement('thead');
+				const headerRow = document.createElement('tr');
+				for (const col of ['Title', 'Type', 'Date']) {
+					const th = document.createElement('th');
+					th.textContent = col;
+					th.style.cssText = 'text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid #374151; color: #9ca3af; font-weight: 600;';
+					headerRow.appendChild(th);
+				}
+				thead.appendChild(headerRow);
+				table.appendChild(thead);
+
+				const tbody = document.createElement('tbody');
+				for (const entry of collRes.entries) {
+					const row = document.createElement('tr');
+
+					// Title cell
+					const titleCell = document.createElement('td');
+					titleCell.style.cssText = 'padding: 0.25rem 0.5rem; border-bottom: 1px solid #1f2937;';
+					if (entry.entry_type === 'collection') {
+						// Nested collection: collapsible card
+						const details = document.createElement('details');
+						const summary = document.createElement('summary');
+						summary.style.cssText = 'cursor: pointer; color: #3b82f6;';
+						summary.textContent = `\u{1F4C2} ${entry.title}`;
+						details.appendChild(summary);
+						const nestedContent = document.createElement('div');
+						nestedContent.style.cssText = 'padding: 0.25rem 0 0 1rem; font-size: 0.9em;';
+						nestedContent.textContent = 'Loading...';
+						details.appendChild(nestedContent);
+						titleCell.appendChild(details);
+						// Lazy load nested entries on expand
+						details.addEventListener('toggle', async () => {
+							if (details.open && nestedContent.textContent === 'Loading...') {
+								try {
+									const nestedRes = await api.getCollectionEntries(entry.id, kb, { limit: 10 });
+									nestedContent.textContent = '';
+									if (nestedRes.entries.length === 0) {
+										nestedContent.textContent = 'Empty collection';
+										nestedContent.style.color = '#9ca3af';
+										nestedContent.style.fontStyle = 'italic';
+									} else {
+										const nestedList = document.createElement('ul');
+										nestedList.style.cssText = 'margin: 0; padding: 0 0 0 1rem; list-style: disc;';
+										for (const nestedEntry of nestedRes.entries) {
+											const nli = document.createElement('li');
+											nli.style.cssText = 'margin: 0.1rem 0;';
+											const nlink = document.createElement('a');
+											nlink.href = `/entries/${encodeURIComponent(nestedEntry.id)}`;
+											nlink.textContent = nestedEntry.title;
+											nlink.style.cssText = 'color: #3b82f6; text-decoration: none;';
+											nlink.addEventListener('click', (e) => { e.preventDefault(); window.location.href = nlink.href; });
+											nli.appendChild(nlink);
+											nestedList.appendChild(nli);
+										}
+										nestedContent.appendChild(nestedList);
+										if (nestedRes.total > nestedRes.entries.length) {
+											const more = document.createElement('div');
+											more.style.cssText = 'font-size: 0.85em; color: #9ca3af; margin-top: 0.2rem;';
+											more.textContent = `${nestedRes.total - nestedRes.entries.length} more...`;
+											nestedContent.appendChild(more);
+										}
+									}
+								} catch {
+									nestedContent.textContent = '\u26A0 Failed to load';
+								}
+							}
+						});
+					} else {
+						const link = document.createElement('a');
+						link.href = `/entries/${encodeURIComponent(entry.id)}`;
+						link.textContent = entry.title;
+						link.style.cssText = 'color: #3b82f6; text-decoration: none;';
+						link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+						link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+						link.addEventListener('click', (e) => { e.preventDefault(); window.location.href = link.href; });
+						titleCell.appendChild(link);
+					}
+					row.appendChild(titleCell);
+
+					// Type cell
+					const typeCell = document.createElement('td');
+					typeCell.style.cssText = 'padding: 0.25rem 0.5rem; border-bottom: 1px solid #1f2937; color: #9ca3af;';
+					typeCell.textContent = entry.entry_type || '';
+					row.appendChild(typeCell);
+
+					// Date cell
+					const dateCell = document.createElement('td');
+					dateCell.style.cssText = 'padding: 0.25rem 0.5rem; border-bottom: 1px solid #1f2937; color: #9ca3af;';
+					dateCell.textContent = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : '';
+					row.appendChild(dateCell);
+
+					tbody.appendChild(row);
+				}
+				table.appendChild(tbody);
+				contentEl.appendChild(table);
+			} else {
+				// List view (default)
+				const list = document.createElement('ul');
+				list.style.cssText = 'margin: 0; padding: 0 0 0 1.2rem; list-style: disc;';
+				for (const entry of collRes.entries) {
+					const li = document.createElement('li');
+					li.style.cssText = 'margin: 0.15rem 0;';
+
+					if (entry.entry_type === 'collection') {
+						// Nested collection: collapsible card
+						const details = document.createElement('details');
+						const summary = document.createElement('summary');
+						summary.style.cssText = 'cursor: pointer; color: #3b82f6;';
+						summary.textContent = `\u{1F4C2} ${entry.title}`;
+						details.appendChild(summary);
+						const nestedContent = document.createElement('div');
+						nestedContent.style.cssText = 'padding: 0.25rem 0 0 0.5rem; font-size: 0.9em;';
+						nestedContent.textContent = 'Loading...';
+						details.appendChild(nestedContent);
+						li.appendChild(details);
+						// Lazy load nested entries on expand
+						details.addEventListener('toggle', async () => {
+							if (details.open && nestedContent.textContent === 'Loading...') {
+								try {
+									const nestedRes = await api.getCollectionEntries(entry.id, kb, { limit: 10 });
+									nestedContent.textContent = '';
+									if (nestedRes.entries.length === 0) {
+										nestedContent.textContent = 'Empty collection';
+										nestedContent.style.color = '#9ca3af';
+										nestedContent.style.fontStyle = 'italic';
+									} else {
+										const nestedList = document.createElement('ul');
+										nestedList.style.cssText = 'margin: 0; padding: 0 0 0 1rem; list-style: disc;';
+										for (const nestedEntry of nestedRes.entries) {
+											const nli = document.createElement('li');
+											nli.style.cssText = 'margin: 0.1rem 0;';
+											const nlink = document.createElement('a');
+											nlink.href = `/entries/${encodeURIComponent(nestedEntry.id)}`;
+											nlink.textContent = nestedEntry.title;
+											nlink.style.cssText = 'color: #3b82f6; text-decoration: none;';
+											nlink.addEventListener('click', (e) => { e.preventDefault(); window.location.href = nlink.href; });
+											nli.appendChild(nlink);
+											nestedList.appendChild(nli);
+										}
+										nestedContent.appendChild(nestedList);
+										if (nestedRes.total > nestedRes.entries.length) {
+											const more = document.createElement('div');
+											more.style.cssText = 'font-size: 0.85em; color: #9ca3af; margin-top: 0.2rem;';
+											more.textContent = `${nestedRes.total - nestedRes.entries.length} more...`;
+											nestedContent.appendChild(more);
+										}
+									}
+								} catch {
+									nestedContent.textContent = '\u26A0 Failed to load';
+								}
+							}
+						});
+					} else {
+						const link = document.createElement('a');
+						link.href = `/entries/${encodeURIComponent(entry.id)}`;
+						link.textContent = entry.title;
+						link.style.cssText = 'color: #3b82f6; text-decoration: none;';
+						link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+						link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+						link.addEventListener('click', (e) => {
+							e.preventDefault();
+							window.location.href = link.href;
+						});
+						li.appendChild(link);
+					}
+					list.appendChild(li);
+				}
+				contentEl.appendChild(list);
 			}
-			contentEl.appendChild(list);
 
 			// Count and "View all" link
 			const footer = document.createElement('div');
@@ -502,7 +660,8 @@ class TransclusionWidget extends WidgetType {
 		return (
 			this.target === other.target &&
 			this.heading === other.heading &&
-			this.blockId === other.blockId
+			this.blockId === other.blockId &&
+			JSON.stringify(this.options) === JSON.stringify(other.options)
 		);
 	}
 
@@ -511,9 +670,25 @@ class TransclusionWidget extends WidgetType {
 	}
 }
 
-/** Regex for matching transclusions in the document (supports ![[kb:target#heading^block|display]]). */
+/** Regex for matching transclusions in the document (supports ![[kb:target#heading^block|display]]{ options }). */
 const transclusionPattern =
-	/!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g;
+	/!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\](?:\{([^}]*)\})?/g;
+
+/** Parse a transclusion options string (content inside { ... }) into a record. */
+function parseOptionsString(optionsStr: string | undefined): Record<string, string | number | boolean> | undefined {
+	if (!optionsStr) return undefined;
+	try {
+		// Quote bare keys: `view: "table"` -> `"view": "table"`
+		const jsonStr = optionsStr.replace(/([a-zA-Z_]\w*)\s*:/g, '"$1":');
+		const parsed = JSON.parse(`{${jsonStr}}`);
+		if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+			return parsed as Record<string, string | number | boolean>;
+		}
+		return undefined;
+	} catch {
+		return undefined;
+	}
+}
 
 const transclusionMatcher = new MatchDecorator({
 	regexp: transclusionPattern,
@@ -521,9 +696,10 @@ const transclusionMatcher = new MatchDecorator({
 		const target = match[2].trim();
 		const heading = match[3]?.trim();
 		const blockId = match[4]?.trim();
+		const options = parseOptionsString(match[6]);
 
 		return Decoration.replace({
-			widget: new TransclusionWidget(target, heading, blockId)
+			widget: new TransclusionWidget(target, heading, blockId, options)
 		});
 	}
 });

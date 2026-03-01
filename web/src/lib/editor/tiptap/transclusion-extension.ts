@@ -23,7 +23,8 @@ export const Transclusion = Node.create({
 			target: { default: '' },
 			heading: { default: null },
 			blockId: { default: null },
-			kb: { default: null }
+			kb: { default: null },
+			options: { default: null }
 		};
 	},
 
@@ -33,11 +34,21 @@ export const Transclusion = Node.create({
 				tag: 'div[data-transclusion]',
 				getAttrs(dom) {
 					const el = dom as HTMLElement;
+					let options: Record<string, string | number | boolean> | null = null;
+					const optionsStr = el.dataset.transclusionOptions;
+					if (optionsStr) {
+						try {
+							options = JSON.parse(optionsStr);
+						} catch {
+							// ignore malformed options
+						}
+					}
 					return {
 						target: el.dataset.transclusion || '',
 						heading: el.dataset.transclusionHeading || null,
 						blockId: el.dataset.transclusionBlock || null,
-						kb: el.dataset.transclusionKb || null
+						kb: el.dataset.transclusionKb || null,
+						options
 					};
 				}
 			}
@@ -48,6 +59,7 @@ export const Transclusion = Node.create({
 		const target = node.attrs.target as string;
 		const heading = node.attrs.heading as string | null;
 		const blockId = node.attrs.blockId as string | null;
+		const options = node.attrs.options as Record<string, string | number | boolean> | null;
 		const label = heading
 			? `${target} \u00A7 ${heading}`
 			: blockId
@@ -59,6 +71,7 @@ export const Transclusion = Node.create({
 				'data-transclusion': target,
 				'data-transclusion-heading': heading || '',
 				'data-transclusion-block': blockId || '',
+				'data-transclusion-options': options ? JSON.stringify(options) : '',
 				class: 'transclusion-embed',
 				style:
 					'border: 1px solid #374151; border-left: 3px solid #3b82f6; padding: 0.75rem; margin: 0.5rem 0; border-radius: 4px; background: rgba(59,130,246,0.05);'
@@ -125,6 +138,19 @@ export const Transclusion = Node.create({
 											const kb = res.entry.kb_name;
 											const collTitle = res.entry.title;
 
+											// Parse options from data attribute
+											let collOptions: Record<string, string | number | boolean> | undefined;
+											const optionsStr = el.dataset.transclusionOptions;
+											if (optionsStr) {
+												try {
+													collOptions = JSON.parse(optionsStr);
+												} catch {
+													// ignore malformed options
+												}
+											}
+											const limit = typeof collOptions?.limit === 'number' ? collOptions.limit : 10;
+											const viewMode = typeof collOptions?.view === 'string' ? collOptions.view : 'list';
+
 											// Update label to collection indicator
 											const labelEl = el.querySelector('p');
 											if (labelEl && labelEl.textContent?.startsWith('\u{1F4CE}')) {
@@ -132,7 +158,7 @@ export const Transclusion = Node.create({
 											}
 
 											try {
-												const collRes = await api.getCollectionEntries(collectionId, kb, { limit: 10 });
+												const collRes = await api.getCollectionEntries(collectionId, kb, { limit });
 												htmlNode.textContent = '';
 
 												if (collRes.entries.length === 0) {
@@ -142,26 +168,173 @@ export const Transclusion = Node.create({
 													return;
 												}
 
-												// Compact list of entry titles
-												const list = document.createElement('ul');
-												list.style.cssText = 'margin: 0; padding: 0 0 0 1.2rem; list-style: disc;';
-												for (const entry of collRes.entries) {
-													const li = document.createElement('li');
-													li.style.cssText = 'margin: 0.15rem 0;';
-													const link = document.createElement('a');
-													link.href = `/entries/${encodeURIComponent(entry.id)}`;
-													link.textContent = entry.title;
-													link.style.cssText = 'color: #3b82f6; text-decoration: none;';
-													link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
-													link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
-													link.addEventListener('click', (e) => {
-														e.preventDefault();
-														window.location.href = link.href;
-													});
-													li.appendChild(link);
-													list.appendChild(li);
+												if (viewMode === 'table') {
+													// Table view
+													const table = document.createElement('table');
+													table.style.cssText = 'width: 100%; border-collapse: collapse; font-size: 0.9em;';
+													const thead = document.createElement('thead');
+													const headerRow = document.createElement('tr');
+													for (const col of ['Title', 'Type', 'Date']) {
+														const th = document.createElement('th');
+														th.textContent = col;
+														th.style.cssText = 'text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid #374151; color: #9ca3af; font-weight: 600;';
+														headerRow.appendChild(th);
+													}
+													thead.appendChild(headerRow);
+													table.appendChild(thead);
+
+													const tbody = document.createElement('tbody');
+													for (const entry of collRes.entries) {
+														const row = document.createElement('tr');
+
+														// Title cell
+														const titleCell = document.createElement('td');
+														titleCell.style.cssText = 'padding: 0.25rem 0.5rem; border-bottom: 1px solid #1f2937;';
+														if (entry.entry_type === 'collection') {
+															const details = document.createElement('details');
+															const summary = document.createElement('summary');
+															summary.style.cssText = 'cursor: pointer; color: #3b82f6;';
+															summary.textContent = `\u{1F4C2} ${entry.title}`;
+															details.appendChild(summary);
+															const nestedContent = document.createElement('div');
+															nestedContent.style.cssText = 'padding: 0.25rem 0 0 1rem; font-size: 0.9em;';
+															nestedContent.textContent = 'Loading...';
+															details.appendChild(nestedContent);
+															titleCell.appendChild(details);
+															details.addEventListener('toggle', async () => {
+																if (details.open && nestedContent.textContent === 'Loading...') {
+																	try {
+																		const nestedRes = await api.getCollectionEntries(entry.id, kb, { limit: 10 });
+																		nestedContent.textContent = '';
+																		if (nestedRes.entries.length === 0) {
+																			nestedContent.textContent = 'Empty collection';
+																			nestedContent.style.color = '#9ca3af';
+																			nestedContent.style.fontStyle = 'italic';
+																		} else {
+																			const nestedList = document.createElement('ul');
+																			nestedList.style.cssText = 'margin: 0; padding: 0 0 0 1rem; list-style: disc;';
+																			for (const nestedEntry of nestedRes.entries) {
+																				const nli = document.createElement('li');
+																				nli.style.cssText = 'margin: 0.1rem 0;';
+																				const nlink = document.createElement('a');
+																				nlink.href = `/entries/${encodeURIComponent(nestedEntry.id)}`;
+																				nlink.textContent = nestedEntry.title;
+																				nlink.style.cssText = 'color: #3b82f6; text-decoration: none;';
+																				nlink.addEventListener('click', (e) => { e.preventDefault(); window.location.href = nlink.href; });
+																				nli.appendChild(nlink);
+																				nestedList.appendChild(nli);
+																			}
+																			nestedContent.appendChild(nestedList);
+																			if (nestedRes.total > nestedRes.entries.length) {
+																				const more = document.createElement('div');
+																				more.style.cssText = 'font-size: 0.85em; color: #9ca3af; margin-top: 0.2rem;';
+																				more.textContent = `${nestedRes.total - nestedRes.entries.length} more...`;
+																				nestedContent.appendChild(more);
+																			}
+																		}
+																	} catch {
+																		nestedContent.textContent = '\u26A0 Failed to load';
+																	}
+																}
+															});
+														} else {
+															const link = document.createElement('a');
+															link.href = `/entries/${encodeURIComponent(entry.id)}`;
+															link.textContent = entry.title;
+															link.style.cssText = 'color: #3b82f6; text-decoration: none;';
+															link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+															link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+															link.addEventListener('click', (e) => { e.preventDefault(); window.location.href = link.href; });
+															titleCell.appendChild(link);
+														}
+														row.appendChild(titleCell);
+
+														const typeCell = document.createElement('td');
+														typeCell.style.cssText = 'padding: 0.25rem 0.5rem; border-bottom: 1px solid #1f2937; color: #9ca3af;';
+														typeCell.textContent = entry.entry_type || '';
+														row.appendChild(typeCell);
+
+														const dateCell = document.createElement('td');
+														dateCell.style.cssText = 'padding: 0.25rem 0.5rem; border-bottom: 1px solid #1f2937; color: #9ca3af;';
+														dateCell.textContent = entry.updated_at ? new Date(entry.updated_at).toLocaleDateString() : '';
+														row.appendChild(dateCell);
+
+														tbody.appendChild(row);
+													}
+													table.appendChild(tbody);
+													htmlNode.appendChild(table);
+												} else {
+													// List view (default)
+													const list = document.createElement('ul');
+													list.style.cssText = 'margin: 0; padding: 0 0 0 1.2rem; list-style: disc;';
+													for (const entry of collRes.entries) {
+														const li = document.createElement('li');
+														li.style.cssText = 'margin: 0.15rem 0;';
+
+														if (entry.entry_type === 'collection') {
+															const details = document.createElement('details');
+															const summary = document.createElement('summary');
+															summary.style.cssText = 'cursor: pointer; color: #3b82f6;';
+															summary.textContent = `\u{1F4C2} ${entry.title}`;
+															details.appendChild(summary);
+															const nestedContent = document.createElement('div');
+															nestedContent.style.cssText = 'padding: 0.25rem 0 0 0.5rem; font-size: 0.9em;';
+															nestedContent.textContent = 'Loading...';
+															details.appendChild(nestedContent);
+															li.appendChild(details);
+															details.addEventListener('toggle', async () => {
+																if (details.open && nestedContent.textContent === 'Loading...') {
+																	try {
+																		const nestedRes = await api.getCollectionEntries(entry.id, kb, { limit: 10 });
+																		nestedContent.textContent = '';
+																		if (nestedRes.entries.length === 0) {
+																			nestedContent.textContent = 'Empty collection';
+																			nestedContent.style.color = '#9ca3af';
+																			nestedContent.style.fontStyle = 'italic';
+																		} else {
+																			const nestedList = document.createElement('ul');
+																			nestedList.style.cssText = 'margin: 0; padding: 0 0 0 1rem; list-style: disc;';
+																			for (const nestedEntry of nestedRes.entries) {
+																				const nli = document.createElement('li');
+																				nli.style.cssText = 'margin: 0.1rem 0;';
+																				const nlink = document.createElement('a');
+																				nlink.href = `/entries/${encodeURIComponent(nestedEntry.id)}`;
+																				nlink.textContent = nestedEntry.title;
+																				nlink.style.cssText = 'color: #3b82f6; text-decoration: none;';
+																				nlink.addEventListener('click', (e) => { e.preventDefault(); window.location.href = nlink.href; });
+																				nli.appendChild(nlink);
+																				nestedList.appendChild(nli);
+																			}
+																			nestedContent.appendChild(nestedList);
+																			if (nestedRes.total > nestedRes.entries.length) {
+																				const more = document.createElement('div');
+																				more.style.cssText = 'font-size: 0.85em; color: #9ca3af; margin-top: 0.2rem;';
+																				more.textContent = `${nestedRes.total - nestedRes.entries.length} more...`;
+																				nestedContent.appendChild(more);
+																			}
+																		}
+																	} catch {
+																		nestedContent.textContent = '\u26A0 Failed to load';
+																	}
+																}
+															});
+														} else {
+															const link = document.createElement('a');
+															link.href = `/entries/${encodeURIComponent(entry.id)}`;
+															link.textContent = entry.title;
+															link.style.cssText = 'color: #3b82f6; text-decoration: none;';
+															link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+															link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+															link.addEventListener('click', (e) => {
+																e.preventDefault();
+																window.location.href = link.href;
+															});
+															li.appendChild(link);
+														}
+														list.appendChild(li);
+													}
+													htmlNode.appendChild(list);
 												}
-												htmlNode.appendChild(list);
 
 												// Count and "View all" link
 												const footer = document.createElement('div');
