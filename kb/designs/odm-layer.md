@@ -48,9 +48,8 @@ The ODM does not replace the file-based source of truth. Files in git remain aut
 ├──────────────────────────────────┤
 │       Backend Interface          │
 │  SearchBackend (protocol)        │
-│  ├── SQLiteBackend (current)     │
-│  ├── LanceDBBackend (future)     │
-│  └── PostgresBackend (future)    │
+│  ├── SQLiteBackend (default)     │
+│  └── PostgresBackend (done)      │
 ├──────────────────────────────────┤
 │       App State (separate)       │
 │  SQLAlchemy ORM (unchanged)      │
@@ -232,20 +231,16 @@ Note: `SearchBackend` is itself a structural protocol (ADR-0014). A backend sati
 
 Wraps existing `PyriteDB` + `IndexManager` + FTS5 + embedding pipeline behind the `SearchBackend` interface. Minimal code changes — routing, not rewriting.
 
-### LanceDBBackend (future)
-
-- Entries stored as Lance records with all fields as columns
-- Embeddings as native vector column — no separate pipeline
-- FTS via LanceDB's built-in full-text search
-- Hybrid search via native RRF reranking
-- `rebuild()` creates table from entry iterator
-
-### PostgresBackend (future)
+### PostgresBackend (done)
 
 - Entries in a `knowledge_entries` table with JSONB metadata
-- pgvector for embeddings
-- tsvector/tsquery for FTS
-- Hybrid search combining both with application-level reranking
+- pgvector HNSW for cosine similarity embeddings
+- tsvector/tsquery with GIN index for weighted FTS
+- Hybrid search combining both with application-level RRF reranking
+- 66/66 conformance tests passing — full parity with SQLiteBackend
+- ~3x slower indexing, ~2x slower queries vs SQLite — acceptable for server deployments
+
+**Note:** LanceDB was evaluated and rejected (49-66x slower indexing, 60-280x slower queries). See [ADR-0016](../adrs/0016-lancedb-evaluation.md).
 
 ## Migration from Current Architecture
 
@@ -267,19 +262,15 @@ Wraps existing `PyriteDB` + `IndexManager` + FTS5 + embedding pipeline behind th
 - `pyrite schema migrate` command
 - `pyrite ci` schema-version-aware validation
 
-### Phase 3: LanceDB backend (L)
+### Phase 3: LanceDB backend — REJECTED
 
-- Implement `LanceDBBackend` satisfying `SearchBackend` protocol
-- Configuration toggle in pyrite.yaml
-- `pyrite index sync` works with LanceDB
-- Background embedding pipeline simplified or removed (vectors are native columns)
-- Benchmark: hybrid search quality vs current FTS5 + separate semantic
+Evaluated and rejected. 49-66x slower indexing, 60-280x slower queries, 25-54x larger disk. See [ADR-0016](../adrs/0016-lancedb-evaluation.md).
 
-### Phase 4: Postgres backend (M)
+### Phase 4: Postgres backend (M) — DONE
 
-- Implement `PostgresBackend` satisfying `SearchBackend` protocol
-- Configuration for app_backend (SQLAlchemy) + index_backend (Postgres) if desired
-- Demo site deployment on Postgres
+- Implemented `PostgresBackend` satisfying `SearchBackend` protocol (66/66 conformance tests)
+- tsvector/tsquery with GIN for FTS, pgvector HNSW for cosine similarity
+- ~3x slower indexing, ~2x slower queries vs SQLite — acceptable for server deployments
 
 ## Relationship to Existing Architecture
 
@@ -293,4 +284,4 @@ Wraps existing `PyriteDB` + `IndexManager` + FTS5 + embedding pipeline behind th
 - **Object versioning**: Should entries track modification history (v1 created, v2 migrated, v3 edited)? Or just current schema version? Ming tracked both.
 - **Partial migration**: If a migration fails on one entry, should the script continue or abort? Ming continued with error reporting.
 - **Index rebuild during migration**: After migrating files, should `pyrite schema migrate` also rebuild the search index? Probably yes — the index should reflect migrated content.
-- **LanceDB transaction semantics**: How does LanceDB handle concurrent writes from multiple agent sessions? Need to spike this before committing to the backend.
+- **Future backends**: DuckDB, Qdrant, etc. can reuse the 66-test conformance suite if needed.

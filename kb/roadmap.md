@@ -273,32 +273,45 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.10 — Schema Versioning + ODM + LanceDB
+## 0.10 — SearchBackend Protocol + PostgresBackend (done)
 
-**Theme:** Storage architecture that matches the data model. Schema evolution without breakage, document-native search. See [ADR-0015](adrs/0015-odm-layer-and-schema-migration.md) for the ODM + migration architecture. See [ADR-0014](adrs/0014-structural-protocols-for-extension-types.md) for extension type protocols that depend on schema stability.
+**Theme:** Pluggable storage backends via a clean protocol abstraction. See [ADR-0015](adrs/0015-odm-layer-and-schema-migration.md) for the ODM + migration architecture. See [ADR-0014](adrs/0014-structural-protocols-for-extension-types.md) for structural protocols. See [ADR-0016](adrs/0016-lancedb-evaluation.md) for LanceDB evaluation results.
 
-### Schema Versioning (pre-launch critical)
+### Delivered
+
+**SearchBackend Protocol + SQLiteBackend**
+
+- `SearchBackend` structural protocol in `pyrite/storage/backends/protocol.py` — 13 methods covering write, search, query, and metadata operations
+- `SQLiteBackend` wrapping existing PyriteDB + FTS5 + sqlite-vec behind the protocol
+- 66 conformance tests validating any SearchBackend implementation
+
+**LanceDB Evaluation — Rejected**
+
+- Implemented `LanceDBBackend` passing 66/66 conformance tests
+- Benchmarked: 49-66x slower indexing, 60-280x slower queries, 25-54x larger disk footprint
+- **Decision: No-Go** — LanceDB designed for large-scale ML workloads, not Pyrite's small interactive upsert-heavy pattern
+- Backend code removed from codebase — see [ADR-0016](adrs/0016-lancedb-evaluation.md)
+
+**PostgresBackend — Adopted**
+
+- `PostgresBackend` with tsvector (weighted FTS) + pgvector (HNSW cosine) passing 66/66 conformance tests
+- ~3x slower indexing, ~2x slower queries vs SQLite — acceptable for server/multi-user deployments
+- Configuration: `storage.backend: postgres` in pyrite.yaml
+
+### Still Planned (carries to next milestone)
 
 | Item | Description | Effort |
 |------|-------------|--------|
 | [[schema-versioning]] | `_schema_version` tracking, `since_version` field semantics, `MigrationRegistry`, `pyrite schema migrate` command | M |
-
-Hooks into existing `KBRepository` load/save paths. Without this, the first schema change after launch breaks every existing KB.
-
-### ODM Layer
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[odm-layer]] Phase 1 | `SearchBackend` protocol, `SQLiteBackend` wrapping existing code, `DocumentManager` | M |
-| LanceDB spike | Implement `LanceDBBackend` behind `SearchBackend`, benchmark hybrid search quality vs SQLite/FTS5 + separate semantic | M |
-
-**Hypothesis:** LanceDB is a better fit than SQLite for Pyrite's flexible schema system. Document-native columnar storage eliminates the impedance mismatch (`json_extract()` for metadata, separate FTS5 virtual tables, separate embedding pipeline). Native hybrid search (vector + FTS in a single query) should produce better results than the current duct-taped approach. The spike validates this.
+| [[odm-layer]] DocumentManager | Route `KBService` through `DocumentManager` for load/save paths | M |
 
 ### Definition of done
 
-- Schema versioning works: `since_version` on fields, `pyrite schema migrate` produces reviewable git diff
-- `SearchBackend` protocol defined, `SQLiteBackend` passes full test suite
-- LanceDB spike completed: benchmark results, go/no-go decision on replacing SQLite as default index backend
+- ~~`SearchBackend` protocol defined, `SQLiteBackend` passes full test suite~~ — DONE
+- ~~LanceDB spike completed: benchmark results, go/no-go decision~~ — DONE (No-Go, ADR-0016)
+- ~~At least one alternative backend passes conformance suite~~ — DONE (PostgresBackend, 66/66)
+- Schema versioning: `since_version` on fields, `pyrite schema migrate` produces reviewable git diff — STILL PLANNED
+- `DocumentManager` routes KBService load/save — STILL PLANNED
 
 ---
 
@@ -327,9 +340,10 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 
 ## Future (1.0+)
 
-### Storage Backends (contingent on LanceDB spike results)
+### Storage Backends
 
-- **Postgres backend** — Only if LanceDB doesn't cover multi-user / hosted deployment needs. If LanceDB works well, Postgres may never be needed.
+- **PostgresBackend** delivered in 0.10 — ready for multi-user / hosted / demo site deployments
+- Future backend experiments (DuckDB, Qdrant, etc.) can reuse the 66-test conformance suite
 
 ### Agent Swarm Infrastructure
 

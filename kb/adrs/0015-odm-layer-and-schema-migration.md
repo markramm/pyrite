@@ -123,7 +123,7 @@ The ODM splits storage into two concerns:
 - Vector embeddings
 - Block table
 - Backlink graph
-- Backend: pluggable — SQLite/FTS5 (current), LanceDB (future), Postgres/pgvector (future)
+- Backend: pluggable via `SearchBackend` protocol — SQLite/FTS5 (default), Postgres/pgvector (server deployments). LanceDB evaluated and rejected (ADR-0016).
 
 `pyrite index sync` rebuilds the knowledge index from source files, regardless of backend. Application state persists independently (backed up via `pyrite db backup`).
 
@@ -191,7 +191,7 @@ Step 1 is the risk-reducing deliverable — schemas can evolve without breaking 
 ## Related
 
 - [Schema Versioning backlog item](../backlog/schema-versioning.md) — the migration story (decoupled, pre-0.8)
-- [PostgreSQL Storage Backend](../backlog/postgres-storage-backend.md) — Postgres as app_backend and/or index_backend
+- [PostgreSQL Storage Backend](../backlog/done/postgres-storage-backend.md) — Postgres as app_backend and/or index_backend (done, 66/66 conformance)
 - [Extension Type Protocols (ADR-0014)](0014-structural-protocols-for-extension-types.md) — `SearchBackend` itself is a protocol
 - [ADR-0013: Unified Database Connection Model](0013-unified-database-connection-and-transaction-model.md) — current DB architecture being evolved
 - [ADR-0003: Two-Tier Data Durability](0003-two-tier-data-durability.md) — files as source of truth, DB as derived index (unchanged by this ADR)

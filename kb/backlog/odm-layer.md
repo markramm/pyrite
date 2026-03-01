@@ -11,7 +11,7 @@ tags:
 kind: feature
 priority: medium
 effort: L
-status: planned
+status: in_progress
 links:
 - schema-versioning
 - postgres-storage-backend
@@ -24,7 +24,7 @@ links:
 
 Pyrite stores knowledge as typed documents (markdown + YAML frontmatter) but indexes them through SQLAlchemy ORM on SQLite — a relational database. This creates an impedance mismatch: flexible frontmatter stored as JSON blobs queried via `json_extract()`, separate FTS5 virtual tables, a separate embedding pipeline, and three query systems duct-taped to a relational engine.
 
-Multiple storage backends are planned (SQLite, LanceDB, PostgreSQL). Without an abstraction layer, each backend requires rewriting the service layer.
+Multiple storage backends are supported (SQLite, PostgreSQL). Without an abstraction layer, each backend requires rewriting the service layer.
 
 ## Relationship to Schema Versioning
 
@@ -40,30 +40,27 @@ Introduce a Pyrite ODM layer between the service layer (KBService, TaskService, 
 
 See [ADR-0015](../adrs/0015-odm-layer-and-schema-migration.md) and [ODM design doc](../designs/odm-layer.md) for full details.
 
-### Phase 1: Define interfaces, wrap existing code (M)
+### Phase 1: Define interfaces, wrap existing code (M) — DONE
 
-- Define `SearchBackend` protocol (structural, per ADR-0014)
-- Implement `SQLiteBackend` wrapping existing `PyriteDB`, `IndexManager`, FTS5, embedding code
-- Define `DocumentManager` with load/save/search paths
-- Route `KBService` through `DocumentManager` for load/save
+- Define `SearchBackend` protocol (structural, per ADR-0014) — `pyrite/storage/backends/protocol.py`
+- Implement `SQLiteBackend` wrapping existing `PyriteDB`, `IndexManager`, FTS5, embedding code — `pyrite/storage/backends/sqlite_backend.py`
+- 66 conformance tests validating protocol compliance
 - Route search calls through `SearchBackend`
-- Relocate schema versioning hooks from `KBRepository` into `DocumentManager`
 - **No behavior change** — existing tests pass, same SQLite underneath
 
-### Phase 2: LanceDB backend (L)
+### Phase 2: LanceDB backend (L) — REJECTED
 
-- Implement `LanceDBBackend` satisfying `SearchBackend` protocol
-- Configuration toggle in pyrite.yaml
-- `pyrite index sync` works with LanceDB
-- Background embedding pipeline simplified (vectors are native columns)
-- Benchmark: hybrid search quality vs current FTS5 + separate semantic
+- Implemented `LanceDBBackend` satisfying `SearchBackend` protocol (66/66 conformance tests)
+- Benchmarked: 49-66x slower indexing, 60-280x slower queries, 25-54x larger disk footprint
+- **Decision: No-Go** — see [ADR-0016](../adrs/0016-lancedb-evaluation.md)
+- LanceDB backend code removed from codebase
 
-### Phase 3: Postgres backend (M) — contingent
+### Phase 3: Postgres backend (M) — DONE
 
-Only if LanceDB doesn't cover multi-user / hosted deployment needs. If the LanceDB spike succeeds and handles the demo site, Postgres may never be needed.
-
-- Implement `PostgresBackend` satisfying `SearchBackend` protocol
-- pgvector for embeddings, tsvector/tsquery for FTS
+- Implemented `PostgresBackend` satisfying `SearchBackend` protocol — `pyrite/storage/backends/postgres_backend.py`
+- tsvector/tsquery with GIN index for FTS, pgvector HNSW for cosine similarity
+- 66/66 conformance tests passing — full parity with SQLiteBackend
+- ~3x slower indexing, ~2x slower queries vs SQLite — acceptable for server deployments
 - See [[postgres-storage-backend]]
 
 ## Two-Layer Storage Architecture
@@ -72,7 +69,7 @@ The ODM formalizes the split between two storage concerns:
 
 **Application state** (relational, needs ACID): Settings, starred entries, API keys, session data. Backend: SQLite or Postgres via SQLAlchemy (existing code, minimal changes).
 
-**Knowledge index** (document-shaped, needs search): Entry metadata, FTS index, vector embeddings, block table, backlink graph. Backend: pluggable — SQLite/FTS5 (current), LanceDB (future), Postgres/pgvector (future).
+**Knowledge index** (document-shaped, needs search): Entry metadata, FTS index, vector embeddings, block table, backlink graph. Backend: pluggable via `SearchBackend` protocol — SQLite/FTS5 (default), Postgres/pgvector (server deployments).
 
 ## Prerequisites
 
@@ -83,15 +80,13 @@ The ODM formalizes the split between two storage concerns:
 
 ## Success Criteria
 
-- `SearchBackend` protocol defined and documented
-- `SQLiteBackend` wraps existing code behind the protocol (zero behavior change)
-- `KBService` routes through `DocumentManager` — direct `PyriteDB` usage eliminated from services
-- At least one alternative backend (LanceDB or Postgres) passes the protocol's test suite
+- ~~`SearchBackend` protocol defined and documented~~ — DONE (66 conformance tests)
+- ~~`SQLiteBackend` wraps existing code behind the protocol (zero behavior change)~~ — DONE
+- `KBService` routes through `DocumentManager` — direct `PyriteDB` usage eliminated from services — NOT YET
+- ~~At least one alternative backend passes the protocol's test suite~~ — DONE (PostgresBackend, 66/66)
 
 ## Launch Context
 
-Targets 0.8 (may swap with 0.9 depending on release prep timing after 0.7). Phase 1 (interfaces + SQLite wrapping) and the LanceDB spike can fill the gap between 0.7 completion and release prep.
+Phase 1 (SearchBackend protocol + SQLiteBackend) and Phase 3 (PostgresBackend) delivered in 0.10. Phase 2 (LanceDB) evaluated and rejected per [ADR-0016](../adrs/0016-lancedb-evaluation.md) — 49-280x slower across all performance metrics at Pyrite's scale.
 
-**Hypothesis:** LanceDB is a better fit than SQLite for Pyrite's flexible schema system. Document-native columnar storage eliminates the impedance mismatch (`json_extract()`, separate FTS5, separate embedding pipeline). Native hybrid search should produce better results than the current stitched-together approach. The spike validates this before committing to a backend switch.
-
-Schema versioning ships in the same milestone but is decoupled — it hooks into `KBRepository` directly and doesn't require the ODM abstraction.
+Remaining work: `DocumentManager` with load/save paths, routing `KBService` through it. Schema versioning ships in the same milestone but is decoupled — it hooks into `KBRepository` directly and doesn't require the ODM abstraction.

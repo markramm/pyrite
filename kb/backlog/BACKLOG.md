@@ -279,7 +279,7 @@ Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (Open
 | 88 | [Obsidian Vault Migration](obsidian-migration.md) | Core | feature | M | planned |
 | 89 | [Update MCP_SUBMISSION.md](mcp-submission-update.md) | both | improvement | XS | planned |
 | 90 | [PKM Capture Plugin (Wave 4)](pkm-capture-plugin.md) | AI | feature | L | planned |
-| 91 | [PostgreSQL Storage Backend](postgres-storage-backend.md) | Core | feature | M | planned |
+| 91 | [PostgreSQL Storage Backend](done/postgres-storage-backend.md) | Core | feature | M | **done** |
 | 92 | [Intent Layer: Guidelines, Goals, Rubrics](intent-layer.md) | Core | feature | M | planned |
 | 93 | [Schema Versioning and Migration](schema-versioning.md) | Core | feature | M | planned |
 | 94 | [Web UI Authentication](web-ui-auth.md) | UI | feature | M | planned |
@@ -288,9 +288,9 @@ Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (Open
 | 97 | [MCP Server Rate Limiting](mcp-rate-limiting.md) | Core | feature | S | planned |
 | 98 | [KB Orchestrator Skill](kb-orchestrator-skill.md) | AI | feature | M | planned |
 | 99 | [Extension Type Protocols](extension-type-protocols.md) | Core | feature | L | planned |
-| 100 | [ODM Layer: Backend Abstraction + Migration](odm-layer.md) | Core | feature | L | planned |
+| 100 | [ODM Layer: Backend Abstraction + Migration](odm-layer.md) | Core | feature | L | **in progress** |
 
-**Dependencies:** #82 evolves from existing `extensions/software-kb/`. #83 needs task plugin. #84 needs demo site (#85). #85 benefits from #91 (Postgres), #94 (auth), #97 (rate limiting). #90 needs waves 1-3 shipped. #92 phase 1 before 0.8. #93 before 0.8 (depends on #100 Phase 2 for migration). #94 phase 1 before demo site. #97 blocker for demo site. #98 needs task plugin phase 2 + intent layer. #99 phase 1 (definitions) with 0.8, phases 2-3 post-launch. #100 Phase 1 targets 0.7, Phase 2 before 0.8, Phase 3 (LanceDB) post-launch, Phase 4 (Postgres) enables demo site.
+**Dependencies:** #82 evolves from existing `extensions/software-kb/`. #83 needs task plugin. #84 needs demo site (#85). #85 benefits from #91 ✅ (Postgres done), #94 (auth), #97 (rate limiting). #90 needs waves 1-3 shipped. #92 phase 1 before 0.8. #93 before 0.8 (depends on #100 Phase 2 for migration). #94 phase 1 before demo site. #97 blocker for demo site. #98 needs task plugin phase 2 + intent layer. #99 phase 1 (definitions) with 0.8, phases 2-3 post-launch. #100 Phase 1 done ✅, Phase 2 = schema versioning, Phase 3 (LanceDB) rejected per ADR-0016, Phase 4 (Postgres) done ✅.
 
 ### Wave 14 — Documentation & KB Fixes (0.9 Wave 4)
 
@@ -338,13 +338,15 @@ Recommended execution order. Grouped by milestone.
 | **5** | [[ux-accessibility-fixes]] Wave 7: Frontend UX & accessibility | Demo-readiness — aria-labels, mobile overflow, sidebar titles |
 | **6** | [[architecture-hardening]] Wave 8: Architecture hardening | Security + quality — DDL validation, layer violations, stale docs |
 
-**0.10 — Schema Versioning + ODM + LanceDB:**
+**0.10 — SearchBackend Protocol + PostgresBackend (partially done):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
+| ~~**7**~~ | ~~#100 ODM Phase 1: SearchBackend + SQLiteBackend~~ | **DONE** — 66 conformance tests, clean protocol abstraction |
+| ~~**8**~~ | ~~#100 ODM Phase 3: LanceDB spike~~ | **REJECTED** — 49-280x slower, see ADR-0016 |
+| ~~**9**~~ | ~~#91 PostgresBackend~~ | **DONE** — 66/66 conformance, tsvector + pgvector |
 | **7** | #93 Schema Versioning | Pre-launch critical — first schema change after launch needs migration |
-| **8** | #100 ODM Layer Phase 1 | SearchBackend protocol + SQLite wrapping — foundation for backend flexibility |
-| **9** | #100 ODM Phase 3: LanceDB spike | Benchmark hybrid search quality vs current approach |
+| **8** | #100 ODM DocumentManager | Route KBService through DocumentManager for load/save |
 
 **0.11 — Announceable Alpha (packaging + launch):**
 
@@ -361,7 +363,7 @@ Recommended execution order. Grouped by milestone.
 |----------|------|-----------|
 | **14** | #82 Software Project Plugin (Wave 2) | Evolves from software-kb, grabs dev team eyeballs |
 | **15** | #83 Investigative Journalism Plugin (Wave 3) | Proves general-purpose, different audience |
-| **16** | #100 ODM Phase 4: Postgres Backend | Enables hosted deployments, demo site scalability |
+| ~~**16**~~ | ~~#100 ODM Phase 4: Postgres Backend~~ | **DONE** in 0.10 — #91 delivered, 66/66 conformance |
 | **17** | #95 Event Bus + Webhooks | Integration story, live graph updates |
 | **18** | #98 KB Orchestrator Skill | Multi-KB agent coordination pattern |
 
@@ -472,6 +474,7 @@ Items in [`done/`](done/):
 - [Entry Aliases](done/entry-aliases.md) — `aliases` field on all entry types, autocomplete search, wikilink resolution
 - [Web Clipper](done/web-clipper.md) — `POST /api/clip` endpoint, clipper service, web clip page
 - [Capture Lane Validation](done/capture-lane-validation-via-kb-yaml-controlled-vocabulary.md) — `allow_other` flag on FieldSchema for flexible vocabulary validation, schema validation on `_kb_update`/`_kb_bulk_create`
+- [PostgreSQL Storage Backend](done/postgres-storage-backend.md) — `PostgresBackend` with tsvector + pgvector, 66/66 conformance tests via SearchBackend protocol
 
 ---
 
@@ -572,7 +575,7 @@ byok-ai-gap-analysis (#87)          [13] — no blockers
 obsidian-migration (#88)             [13] — no blockers
 mcp-submission-update (#89)          [13] — no blockers
 pkm-capture-plugin (#90)            [13] — needs waves 1-3 shipped
-postgres-storage-backend (#91)      [13] — no blockers, enables demo site + hosted
+postgres-storage-backend (#91) ✅   [13] — done (66/66 conformance, ADR-0016)
 intent-layer (#92)                  [13] — phase 1 before 0.8, phases 2-3 enhance QA
   Phase 1: schema + storage          — no blockers
   Phase 2: QA rubric evaluation      — after #73 Phase 1
@@ -591,10 +594,10 @@ extension-type-protocols (#99)      [13] — phase 1 with 0.8, phases 2-3 post-l
   Phase 2: satisfaction checking     — needs Phase 1
   Phase 3: registry integration      — needs #84 (extension registry)
 
-odm-layer (#100)                    [13] — Phase 1 targets 0.7, foundation for everything below
-  Phase 1: interfaces + SQLite wrap  — no blockers, wraps existing code
+odm-layer (#100)                    [13] — Phase 1 done, Phase 3 rejected, Phase 4 done
+  Phase 1: interfaces + SQLite wrap ✅ — SearchBackend protocol, 66 conformance tests
   Phase 2: schema versioning         — = #93, on-load migration + MigrationRegistry
-  Phase 3: LanceDB backend           — post-launch, optional search backend
-  Phase 4: Postgres backend          — post-launch, enables hosted + demo site
-  └── postgres-storage-backend (#91) — overlaps with Phase 4
+  Phase 3: LanceDB backend ✗         — rejected per ADR-0016 (49-280x slower)
+  Phase 4: Postgres backend ✅       — 66/66 conformance, ~3x/~2x overhead
+  └── postgres-storage-backend (#91) ✅
 ```

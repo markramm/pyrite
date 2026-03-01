@@ -31,6 +31,7 @@ pip install -e extensions/zettelkasten
 pip install -e extensions/social
 pip install -e extensions/encyclopedia
 pip install -e extensions/software-kb
+pip install -e extensions/task
 ```
 
 ### 4. Install pre-commit hooks
@@ -42,7 +43,7 @@ pre-commit install
 ```bash
 python -m pytest tests/ extensions/*/tests/ -q
 ```
-Expected: 557+ tests passing.
+Expected: 1654+ tests passing.
 
 ## Troubleshooting
 - If pre-commit pytest fails: ensure extensions are installed in `.venv/` not just system Python

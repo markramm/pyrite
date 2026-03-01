@@ -116,6 +116,33 @@ class MyExtensionPlugin:
     def get_workflows(self) -> dict[str, dict]:
         from .workflows import MY_WORKFLOW
         return {"my_workflow": MY_WORKFLOW}
+
+    def get_field_schemas(self) -> dict[str, dict[str, dict]]:
+        return {
+            "my_type": {
+                "category": {
+                    "type": "select",
+                    "options": ["a", "b", "c"],
+                    "default": "a",
+                    "description": "Entry category",
+                },
+            },
+        }
+
+    def get_type_metadata(self) -> dict[str, dict]:
+        return {
+            "my_type": {
+                "ai_instructions": "Guidance for AI agents creating this type",
+                "field_descriptions": {"category": "The entry's classification"},
+            },
+        }
+
+    def get_collection_types(self) -> dict[str, dict]:
+        return {}  # Only if your plugin defines custom collection types
+
+    def set_context(self, ctx) -> None:
+        """Receive PluginContext with DB, config, services."""
+        self._ctx = ctx
 ```
 
 ## Entry Type Contract
@@ -315,7 +342,26 @@ def after_save_update(entry: Entry, context: dict[str, Any]) -> None:
     pass
 ```
 
-**Known limitation:** Hooks don't receive the DB instance. See [gotchas.md](gotchas.md) for the `hooks-db-access-gap` issue.
+**DB access in hooks:** Hooks receive DB and config via `PluginContext`, injected by `set_context()` after plugin discovery. Store the context in your plugin class and use it in hooks and MCP handlers:
+
+```python
+class MyExtensionPlugin:
+    name = "my_extension"
+
+    def set_context(self, ctx):
+        """Receive DI context — store for use in hooks and MCP handlers."""
+        self._ctx = ctx
+
+    def get_hooks(self):
+        def after_save_update(entry, context):
+            if entry.entry_type != "my_type":
+                return
+            # Access DB via the injected context
+            self._ctx.db.execute_raw("INSERT INTO my_table ...")
+        return {"after_save": [after_save_update]}
+```
+
+See `pyrite/plugins/context.py` for `PluginContext` fields (db, config, kb_type, etc.).
 
 ## Workflow Pattern
 

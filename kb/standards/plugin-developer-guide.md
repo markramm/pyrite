@@ -24,6 +24,10 @@ Pyrite plugins extend the platform with domain-specific functionality. A plugin 
 | Custom relationship types | `get_relationship_types()` | Zettelkasten adds `elaborates`, `branches_from`, `synthesizes` |
 | KB presets | `get_kb_presets()` | Each extension provides a scaffold for `pyrite kb init --preset` |
 | KB type identifiers | `get_kb_types()` | Social registers `"social"` as a KB type |
+| Rich field schemas | `get_field_schemas()` | Zettelkasten declares `zettel_type` as a select with options |
+| Type metadata / AI instructions | `get_type_metadata()` | Encyclopedia provides AI guidance for writing articles |
+| Collection types | `get_collection_types()` | Investigation adds `evidence-board` collection type |
+| DI context injection | `set_context(ctx)` | Plugin receives DB, config, KB type via PluginContext |
 
 ### When to write a plugin vs. use kb.yaml config types
 
@@ -180,7 +184,7 @@ The format is: `<entry_point_name> = "<package>.<module>:<ClassName>"`
 
 ### Plugin class pattern
 
-The plugin class is a plain Python class (not a subclass — it uses structural subtyping via `Protocol`). It must have a `name` attribute and can implement any subset of the 11 protocol methods:
+The plugin class is a plain Python class (not a subclass — it uses structural subtyping via `Protocol`). It must have a `name` attribute and can implement any subset of the 15 protocol methods:
 
 ```python
 # From extensions/zettelkasten/src/pyrite_zettelkasten/plugin.py
@@ -1837,7 +1841,7 @@ The project's `.pre-commit-config.yaml` has a pytest hook that runs via `.venv/`
 
 ## Appendix: Protocol Reference
 
-All 11 methods of the `PyritePlugin` protocol (from `pyrite/plugins/protocol.py`):
+All 15 methods of the `PyritePlugin` protocol (from `pyrite/plugins/protocol.py`), plus the `name` attribute:
 
 | Method | Returns | Description |
 |---|---|---|
@@ -1851,6 +1855,10 @@ All 11 methods of the `PyritePlugin` protocol (from `pyrite/plugins/protocol.py`
 | `get_db_tables()` | `list[dict]` | Custom DB table definitions |
 | `get_hooks()` | `dict[str, list[Callable]]` | Lifecycle hooks by hook name |
 | `get_kb_presets()` | `dict[str, dict]` | KB preset configurations |
-| `get_validators()` | `list[Callable]` | Validation functions |
+| `get_validators()` | `list[Callable]` | Validation functions: `(entry_type, data, context) -> list[dict]` |
+| `get_field_schemas()` | `dict[str, dict[str, dict]]` | Rich field schema definitions (FieldSchema format) per type |
+| `get_type_metadata()` | `dict[str, dict]` | AI instructions, field descriptions, display hints per type |
+| `get_collection_types()` | `dict[str, dict]` | Custom collection type definitions |
+| `set_context(ctx)` | `None` | Receive `PluginContext` with DB, config, services (DI injection) |
 
 All methods are optional. Implement only what your plugin needs.

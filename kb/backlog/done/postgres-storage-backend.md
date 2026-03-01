@@ -11,7 +11,7 @@ tags:
 kind: feature
 priority: medium
 effort: M
-status: planned
+status: completed
 links:
 - demo-site-deployment
 - ephemeral-kbs
@@ -105,6 +105,24 @@ This isn't on the immediate roadmap, but having the backend ready keeps the opti
 - `pyrite index sync` populates Postgres from git-backed files
 - Demo site runs on Postgres
 - All existing tests pass against both backends (parameterized test suite)
+
+## Delivered (0.10)
+
+Implemented as `PostgresBackend` in `pyrite/storage/backends/postgres_backend.py` via the `SearchBackend` protocol (ADR-0014).
+
+- **66/66 conformance tests** passing — full protocol parity with SQLiteBackend
+- **tsvector/tsquery** with GIN index for weighted full-text search
+- **pgvector** with HNSW index for cosine similarity semantic search
+- **Hybrid search** combining both with application-level RRF reranking
+- **Performance**: ~3x slower indexing, ~2x slower queries vs SQLite — acceptable for server deployments where SQLite's single-writer lock is the real bottleneck
+- LanceDB evaluated as alternative but rejected (49-66x slower) — see [ADR-0016](../adrs/0016-lancedb-evaluation.md)
+
+### What's Deferred
+
+- Demo site deployment on Postgres (#85)
+- Multi-tenant schema-per-KB or row-level security
+- Ephemeral KBs on Postgres
+- pgvector managed hosting optimization
 
 ## Launch Context
 
