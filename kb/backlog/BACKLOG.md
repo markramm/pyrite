@@ -250,7 +250,7 @@ Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (Open
 
 **Delivered (0.5):** `--format json/markdown/csv/yaml` on 11 CLI commands. `pyrite init --template <name>` with 4 built-in templates (software, zettelkasten, research, empty). `pyrite extension init/install/list/uninstall` — full extension lifecycle. 1086 tests passing.
 
-### Wave 12 — Agent Coordination (0.6, in progress)
+### Wave 12 — Agent Coordination (0.6) ✅
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
@@ -292,63 +292,82 @@ Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (Open
 
 **Dependencies:** #82 evolves from existing `extensions/software-kb/`. #83 needs task plugin. #84 needs demo site (#85). #85 benefits from #91 (Postgres), #94 (auth), #97 (rate limiting). #90 needs waves 1-3 shipped. #92 phase 1 before 0.8. #93 before 0.8 (depends on #100 Phase 2 for migration). #94 phase 1 before demo site. #97 blocker for demo site. #98 needs task plugin phase 2 + intent layer. #99 phase 1 (definitions) with 0.8, phases 2-3 post-launch. #100 Phase 1 targets 0.7, Phase 2 before 0.8, Phase 3 (LanceDB) post-launch, Phase 4 (Postgres) enables demo site.
 
+### Wave 14 — Documentation & KB Fixes (0.9 Wave 4)
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 101 | [Documentation & KB Fixes](docs-kb-fixes.md) | both | improvement | S | planned |
+
+### Wave 15 — Silent Error Logging (0.9 Wave 5)
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 102 | [Silent Error Logging](silent-error-logging.md) | Core | improvement | M | planned |
+
+### Wave 16 — Test Coverage Gaps (0.9 Wave 6)
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 103 | [Test Coverage Gaps](test-coverage-gaps.md) | Core | improvement | L | planned |
+| 104 | [Test Infrastructure Improvements](test-infrastructure.md) | Core | improvement | S | planned |
+
+### Wave 17 — Frontend UX & Accessibility (0.9 Wave 7)
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 105 | [Frontend UX & Accessibility Fixes](ux-accessibility-fixes.md) | UI | improvement | M | planned |
+
+### Wave 18 — Architecture Hardening (0.9 Wave 8)
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 106 | [Architecture Hardening](architecture-hardening.md) | Core | improvement | M | planned |
+
 ## Prioritized Next Up
 
 Recommended execution order. Grouped by milestone.
 
-**0.6 — Agent Coordination (in progress):**
+**0.9 — Code Hardening (active, Waves 4-8):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **1** | #73 QA Phase 1.5: Hooks + remediation | Post-save hook + `--fix` flag, completes QA story |
-| **2** | #79 Task Plugin Phase 2 | Atomic task_claim, task_decompose — swarm coordination |
-| **3** | #73 QA Phase 2 | Assessment entries, queryable quality |
+| **1** | [[docs-kb-fixes]] Wave 4: Doc & KB fixes | Zero risk, high impact — fix stale counts and broken links |
+| **2** | [[silent-error-logging]] Wave 5: Silent error logging | Code quality — replace `except: pass` with logging |
+| **3** | [[test-coverage-gaps]] Wave 6a: Test coverage gaps | Launch-critical — AI endpoints, admin CLI, wikilink service untested |
+| **4** | [[test-infrastructure]] Wave 6b: Test infrastructure | DX — pytest-xdist, extension tests in default run |
+| **5** | [[ux-accessibility-fixes]] Wave 7: Frontend UX & accessibility | Demo-readiness — aria-labels, mobile overflow, sidebar titles |
+| **6** | [[architecture-hardening]] Wave 8: Architecture hardening | Security + quality — DDL validation, layer violations, stale docs |
 
-**0.7 — Web UI Polish + Intent Layer + Pre-Launch Core:**
-
-| Priority | Item | Rationale |
-|----------|------|-----------|
-| **4** | #92 Intent Layer Phase 1 | Guidelines + goals in kb.yaml — the intent engineering story for launch |
-| **5** | #100 ODM Layer Phase 1 | SearchBackend protocol + SQLite wrapping — foundation for schema versioning + backend flexibility |
-| **6** | #93 Schema Versioning (#100 Phase 2) | Must ship before launch — first schema change after 0.8 needs migration. Depends on ODM. |
-| **7** | #60 Block Refs Phase 3 | Transclusion rendering, demo-ready editor |
-| **8** | #87 BYOK AI Gap Analysis | Identify what's missing for the AI portal vision |
-| **9** | QA Dashboard | Visual quality monitoring for operators |
-| **10** | Graph enhancements | Demo-ready knowledge graph |
-
-**0.8 — Announceable Alpha (packaging + launch):**
+**0.10 — Schema Versioning + ODM + LanceDB:**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **11** | #74 PyPI Publish | `pip install pyrite` as the golden path |
-| **12** | #97 MCP Rate Limiting | Blocker for demo site |
-| **13** | #94 Web UI Auth Phase 1 | Blocker for demo site (read-only anonymous, auth for write) |
-| **14** | #89 Update MCP_SUBMISSION.md | Accurate listing for MCP registry |
-| **15** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
-| **16** | #85 Demo Site Deployment | Live demo for visitors |
-| **17** | #86 pyrite ci | Quick win for corporate teams |
-| **18** | #84 Extension Registry | Ecosystem discovery |
+| **7** | #93 Schema Versioning | Pre-launch critical — first schema change after launch needs migration |
+| **8** | #100 ODM Layer Phase 1 | SearchBackend protocol + SQLite wrapping — foundation for backend flexibility |
+| **9** | #100 ODM Phase 3: LanceDB spike | Benchmark hybrid search quality vs current approach |
 
-**Post-0.8 — Launch Waves + Infrastructure:**
+**0.11 — Announceable Alpha (packaging + launch):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **19** | #82 Software Project Plugin (Wave 2) | Evolves from software-kb, grabs dev team eyeballs |
-| **20** | #83 Investigative Journalism Plugin (Wave 3) | Proves general-purpose, different audience |
-| **21** | #100 ODM Phase 3: LanceDB Backend | Document-native search, eliminates impedance mismatch |
-| **22** | #100 ODM Phase 4: Postgres Backend | Enables hosted deployments, demo site scalability |
-| **23** | #95 Event Bus + Webhooks | Integration story, live graph updates |
-| **24** | #96 DB Backup/Restore | Operational maturity |
-| **25** | #98 KB Orchestrator Skill | Multi-KB agent coordination pattern |
-| **26** | #88 Obsidian Migration | Onramp for PKM users |
-| **27** | #99 Extension Type Protocols Phase 1 | Protocol definitions as KB entries — ecosystem foundation |
-| **28** | #90 PKM Capture Plugin (Wave 4) | Opens aperture to everyone |
+| **10** | #74 PyPI Publish | `pip install pyrite` as the golden path |
+| **11** | #89 Update MCP_SUBMISSION.md | Accurate listing for MCP registry |
+| **12** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
+| **13** | #85 Demo Site Deployment | Live demo for visitors |
 
-**Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
+**Post-launch:**
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **14** | #82 Software Project Plugin (Wave 2) | Evolves from software-kb, grabs dev team eyeballs |
+| **15** | #83 Investigative Journalism Plugin (Wave 3) | Proves general-purpose, different audience |
+| **16** | #100 ODM Phase 4: Postgres Backend | Enables hosted deployments, demo site scalability |
+| **17** | #95 Event Bus + Webhooks | Integration story, live graph updates |
+| **18** | #98 KB Orchestrator Skill | Multi-KB agent coordination pattern |
 
 ## In Progress
 
-**0.6 — Agent Coordination:** Task plugin phase 1 done. Schema provisioning done. KB-type scoping done. Remaining: task plugin phase 2, QA phase 1.5, QA phase 2.
+**0.9 — Code Hardening:** Waves 1-3 done (refactoring, architecture cleanup, test hardening). Waves 4-8 planned (docs, error logging, test coverage, UX, architecture).
 
 ## Collaboration Bottleneck Notes
 

@@ -198,7 +198,7 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.9 — Code Hardening (done)
+## 0.9 — Code Hardening (active)
 
 **Theme:** Internal quality pass. Refactor, fix architecture gaps, and harden tests — before adding new capabilities.
 
@@ -226,12 +226,42 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - 18 integration tests for KB git operations (`commit_kb`, `push_kb`) with real temp git repos
 - Cytoscape type bindings: 6 `any` annotations replaced with `cytoscape.Core`, `EventObject`, `NodeSingular`
 
-### Results
+### Planned
+
+**Wave 4 — Documentation & KB Fixes** [[docs-kb-fixes]]
+
+Fix stale test counts, broken wikilinks, inaccurate MCP_SUBMISSION.md, and BACKLOG.md staleness. Doc-only, zero code changes.
+
+**Wave 5 — Silent Error Logging** [[silent-error-logging]]
+
+Replace `except Exception: pass` with `logger.warning()` across ~10 sites. Adds observability without behavioral changes.
+
+**Wave 6 — Test Coverage Gaps** [[test-coverage-gaps]] [[test-infrastructure]]
+
+Fill biggest untested areas: AI endpoints, admin CLI, wikilink service, web clipper. Add pytest-xdist, include extension tests in default run.
+
+**Wave 7 — Frontend UX & Accessibility** [[ux-accessibility-fixes]]
+
+Aria-labels on icon-only buttons, shared typeColors constant, dead code removal, mobile toolbar fix, sidebar entry titles, standardized error responses.
+
+**Wave 8 — Architecture Hardening** [[architecture-hardening]]
+
+Plugin DDL input validation (SQL injection prevention), extract hardcoded constants, fix storage→service layer violation, consolidate stale docs/.
+
+### Results (Waves 1-3)
 
 - 1258 tests passing (+76 over 0.8 baseline)
 - `mcp_server.py`: 1537 → 1046 lines (32% reduction); tool schemas in separate module
 - No `_raw_conn` usage outside `storage/`; SearchService uses proper FastAPI DI
 - `KBService`: 1204 → 1100 lines; wikilink logic extracted to standalone service
+
+### Definition of Done (Waves 4-8)
+
+- All doc inaccuracies fixed, zero broken wikilinks
+- Zero bare `except: pass` patterns in codebase
+- 40+ new tests covering AI endpoints, admin CLI, wikilink service
+- All icon-only buttons have aria-labels; consistent error response format
+- Plugin DDL inputs validated; no storage→service layer violations
 
 ---
 
