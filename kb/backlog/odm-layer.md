@@ -89,4 +89,90 @@ The ODM formalizes the split between two storage concerns:
 
 Phase 1 (SearchBackend protocol + SQLiteBackend) and Phase 3 (PostgresBackend) delivered in 0.10. Phase 2 (LanceDB) evaluated and rejected per [ADR-0016](../adrs/0016-lancedb-evaluation.md) — 49-280x slower across all performance metrics at Pyrite's scale.
 
-Remaining work: `DocumentManager` with load/save paths, routing `KBService` through it. Schema versioning ships in the same milestone but is decoupled — it hooks into `KBRepository` directly and doesn't require the ODM abstraction.
+### Phase 5: DocumentManager (M) — PLANNED
+
+Route `KBService` through a `DocumentManager` abstraction that owns the file→index coordination pattern currently scattered across `KBService` methods.
+
+#### What DocumentManager owns
+
+`DocumentManager` sits between the service layer and the two storage concerns:
+- **File storage**: `KBRepository` (load/save markdown files)
+- **Index storage**: `SearchBackend` (upsert/delete/query the search index)
+
+Currently `KBService` manually coordinates these two on every CRUD operation (load from repo, index via `_index_mgr`, embed via `_auto_embed`). `DocumentManager` consolidates that coordination.
+
+#### API surface
+
+```python
+class DocumentManager:
+    def __init__(self, backend: SearchBackend, config: PyriteConfig): ...
+
+    # Write operations (file + index coordination)
+    def save(self, entry: Entry, kb_config: KBConfig) -> Path
+    def delete(self, entry_id: str, kb_config: KBConfig) -> bool
+    def index_entry(self, entry: Entry, kb_name: str, file_path: Path) -> None
+
+    # Read operations — file-based
+    def load(self, entry_id: str, kb_config: KBConfig) -> Entry | None
+
+    # Read operations — index-based (delegate to SearchBackend)
+    def get_entry(self, entry_id: str, kb_name: str) -> dict | None
+    def list_entries(self, ...) -> list[dict]
+    def count_entries(self, ...) -> int
+    def search(self, query: str, ...) -> list[dict]
+    def get_backlinks(self, ...) -> list[dict]
+    def get_outlinks(self, ...) -> list[dict]
+    def get_graph_data(self, ...) -> dict
+    def get_timeline(self, ...) -> list[dict]
+    def get_tags(self, ...) -> list[dict]
+    # ... remaining SearchBackend delegations
+
+    # Index management
+    def sync_index(self, kb_name: str | None = None) -> dict
+    def get_index_stats(self) -> dict
+```
+
+#### What stays on PyriteDB
+
+App-state operations that are NOT knowledge-index concerns stay on `PyriteDB`:
+- `register_kb` / `unregister_kb` / `get_kb_stats` (KB registry — ORM table)
+- `execute_sql` (raw SQL escape hatch — used for daily notes query)
+- `get_entry_versions` (git-backed version history — ORM table)
+- Settings CRUD (`get_setting`, `set_setting`, etc.)
+- User/repo/workspace operations
+- `get_tag_tree` (hierarchical tag computation — reads from index but computes tree)
+
+#### Implementation steps
+
+**Step 1: Create `pyrite/storage/document_manager.py`**
+- Constructor takes `SearchBackend` + `PyriteConfig`
+- Absorbs `IndexManager` — it becomes an internal implementation detail
+- Write ops: `save()` calls `KBRepository.save()` → `IndexManager.index_entry()`
+- Read ops: thin delegation to `SearchBackend` methods
+- `load()` delegates to `KBRepository.load()`
+
+**Step 2: Wire into `KBService`**
+- Change `KBService.__init__(config, db)` → `KBService.__init__(config, db, doc_manager)`
+- Replace `self._index_mgr.*` calls with `self._doc_manager.*`
+- Replace `self.db.get_entry()`, `self.db.list_entries()`, etc. with `self._doc_manager.*`
+- Keep `self.db` for app-state operations only (`register_kb`, `execute_sql`, `get_entry_versions`)
+
+**Step 3: Update dependency injection**
+- `create_app()` in `pyrite/server/api.py` creates `DocumentManager` and passes it
+- CLI entry points create `DocumentManager` and pass it
+- MCP server receives `DocumentManager` through its service layer
+
+**Step 4: Wire other services**
+- `SearchService`, `WikilinkService`, `EmbeddingService` — update to use `DocumentManager` where they currently access `PyriteDB` for index queries
+- `QAService`, `RepoService` — check for direct `self.db` index calls
+
+**Step 5: Tests**
+- Unit tests for `DocumentManager` (mock `SearchBackend` + `KBRepository`)
+- Verify all 1404 existing tests still pass (behavioral equivalence)
+- No new conformance tests needed — the existing 66 backend tests validate the layer below
+
+#### Key constraints
+- **No behavior change** — pure refactor, same call paths, same results
+- **Embedding coordination** moves into `DocumentManager.save()` (currently manual `_auto_embed` in KBService)
+- **Hook execution** stays in `KBService` — hooks are a service-layer concern, not a storage concern
+- **Schema versioning hook point**: `DocumentManager.load()` is where `_schema_version` checking will plug in when #93 lands. For now it's a straight delegation to `KBRepository.load()`
