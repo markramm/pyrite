@@ -288,6 +288,8 @@ class Settings:
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
     search_mode: str = "keyword"
+    search_backend: str = "sqlite"  # "sqlite", "lancedb", or "postgres"
+    database_url: str = ""  # PostgreSQL connection string (for postgres backend)
     workspace_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "repos")
 
     def __post_init__(self):

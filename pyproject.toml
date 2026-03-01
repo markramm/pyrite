@@ -53,6 +53,14 @@ semantic = [
     "sentence-transformers>=2.2.0",
     "sqlite-vec>=0.1.0",
 ]
+lancedb = [
+    "lancedb>=0.29.0",
+    "pyarrow>=14.0.0",
+]
+postgres = [
+    "psycopg2-binary>=2.9.0",
+    "pgvector>=0.3.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
