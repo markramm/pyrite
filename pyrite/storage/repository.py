@@ -15,6 +15,7 @@ from ..exceptions import KBReadOnlyError
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
 from ..models.core_types import entry_from_frontmatter
+from ..migrations import get_migration_registry, load_plugin_migrations
 from ..schema import CORE_TYPES
 from ..utils.yaml import load_yaml_file
 
@@ -58,6 +59,7 @@ class KBRepository:
                     fm = load_yaml(text[3:end])
                     if fm and isinstance(fm, dict):
                         body = text[end + 3 :].strip()
+                        fm = self._maybe_migrate(fm)
                         fm["body"] = body
                         fm["file_path"] = file_path
                         return entry_from_frontmatter(fm, body)
@@ -67,6 +69,39 @@ class KBRepository:
         except Exception:
             logger.warning("Entry load failed for %s, trying EventEntry fallback", file_path, exc_info=True)
             return EventEntry.load(file_path)
+
+    def _maybe_migrate(self, fm: dict) -> dict:
+        """Apply pending schema migrations to frontmatter if needed."""
+        if not hasattr(self.config, "kb_yaml_path") or not self.config.kb_yaml_path.exists():
+            return fm
+
+        entry_type = fm.get("type", "")
+        if not entry_type:
+            return fm
+
+        type_schema = self.config.kb_schema.get_type_schema(entry_type)
+        if not type_schema or type_schema.version == 0:
+            return fm
+
+        entry_sv = int(fm.get("_schema_version", 0))
+        if entry_sv >= type_schema.version:
+            return fm
+
+        load_plugin_migrations()
+        registry = get_migration_registry()
+        if not registry.has_migrations(entry_type):
+            return fm
+
+        try:
+            fm = registry.apply(entry_type, fm, entry_sv, type_schema.version)
+        except ValueError:
+            logger.warning(
+                "Migration failed for %s (v%d -> v%d)",
+                entry_type, entry_sv, type_schema.version,
+                exc_info=True,
+            )
+
+        return fm
 
     def _get_file_path(self, entry_id: str, subdir: str | None = None) -> Path:
         """Get file path for an entry."""
@@ -168,6 +203,12 @@ class KBRepository:
 
         file_path = self._get_file_path(entry.id, subdir)
         file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Stamp current schema version on save
+        if hasattr(self.config, "kb_yaml_path") and self.config.kb_yaml_path.exists():
+            type_schema = self.config.kb_schema.get_type_schema(entry.entry_type)
+            if type_schema and type_schema.version > 0:
+                entry._schema_version = type_schema.version
 
         entry.updated_at = datetime.now(UTC)
         entry.save(file_path)

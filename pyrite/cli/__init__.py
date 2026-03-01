@@ -33,6 +33,7 @@ from .init_command import init_kb
 from .kb_commands import kb_app
 from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
+from .schema_commands import schema_app
 from .search_commands import register_search_command
 
 app = typer.Typer(
@@ -65,6 +66,7 @@ app.add_typer(repo_collab_app, name="repo")
 
 # Extension management
 app.add_typer(extension_app, name="extension")
+app.add_typer(schema_app, name="schema")
 
 # Init command (headless KB init)
 app.command("init")(init_kb)

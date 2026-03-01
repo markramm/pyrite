@@ -605,6 +605,7 @@ class FieldSchema:
     allow_other: bool = False  # when True, unknown select/multi-select values produce warnings not errors
     items: dict[str, Any] = field(default_factory=dict)  # for list type
     constraints: dict[str, Any] = field(default_factory=dict)  # min, max, format, target_type
+    since_version: int | None = None
 
     VALID_TYPES = frozenset(
         [
@@ -639,6 +640,7 @@ class FieldSchema:
             allow_other=data.get("allow_other", False),
             items=data.get("items", {}),
             constraints=constraints,
+            since_version=data.get("since_version"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -656,6 +658,8 @@ class FieldSchema:
             result["allow_other"] = True
         if self.items:
             result["items"] = self.items
+        if self.since_version is not None:
+            result["since_version"] = self.since_version
         result.update(self.constraints)
         return result
 
@@ -674,6 +678,7 @@ class TypeSchema:
     ai_instructions: str = ""
     field_descriptions: dict[str, str] = field(default_factory=dict)
     display: dict[str, Any] = field(default_factory=dict)
+    version: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"description": self.description}
@@ -693,6 +698,8 @@ class TypeSchema:
             result["field_descriptions"] = self.field_descriptions
         if self.display:
             result["display"] = self.display
+        if self.version > 0:
+            result["version"] = self.version
         return result
 
 
@@ -822,6 +829,7 @@ class KBSchema:
     types: dict[str, TypeSchema] = field(default_factory=dict)
     policies: dict[str, Any] = field(default_factory=dict)
     validation: dict[str, Any] = field(default_factory=dict)
+    schema_version: int = 0
 
     @classmethod
     def from_yaml(cls, path: Path) -> "KBSchema":
@@ -856,6 +864,7 @@ class KBSchema:
                     ai_instructions=type_data.get("ai_instructions", ""),
                     field_descriptions=type_data.get("field_descriptions", {}),
                     display=type_data.get("display", {}),
+                    version=type_data.get("version", 0),
                 )
             else:
                 types[type_name] = TypeSchema(name=type_name)
@@ -867,6 +876,7 @@ class KBSchema:
             types=types,
             policies=data.get("policies", {}),
             validation=data.get("validation", {}),
+            schema_version=data.get("schema_version", 0),
         )
 
     def get_type_schema(self, entry_type: str) -> TypeSchema | None:
@@ -958,6 +968,7 @@ class KBSchema:
         """Validate an entry against the schema. Returns structured validation result."""
         errors = []
         warnings = []
+        entry_sv = (context or {}).get("_schema_version", 0)
 
         type_schema = self.get_type_schema(entry_type)
         if not type_schema:
@@ -990,6 +1001,22 @@ class KBSchema:
             for field_name, field_schema in type_schema.fields.items():
                 # Check required fields from field schema
                 if field_schema.required and (field_name not in fields or not fields[field_name]):
+                    if (
+                        field_schema.since_version is not None
+                        and entry_sv > 0
+                        and entry_sv < field_schema.since_version
+                    ):
+                        warnings.append(
+                            {
+                                "field": field_name,
+                                "rule": "required",
+                                "severity": "warning",
+                                "expected": "non-empty value",
+                                "got": fields.get(field_name),
+                                "note": f"Required since version {field_schema.since_version}, entry is version {entry_sv}",
+                            }
+                        )
+                        continue
                     errors.append(
                         {
                             "field": field_name,

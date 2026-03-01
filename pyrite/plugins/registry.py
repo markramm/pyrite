@@ -356,6 +356,20 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_validators failed: %s", plugin.name, e)
         return validators
 
+    def get_all_migrations(self) -> list[dict]:
+        """Get all schema migrations from all plugins."""
+        self.discover()
+        migrations = []
+        for plugin in self._plugins.values():
+            if hasattr(plugin, "get_migrations"):
+                try:
+                    plugin_migrations = plugin.get_migrations()
+                    if plugin_migrations:
+                        migrations.extend(plugin_migrations)
+                except Exception as e:
+                    logger.warning("Plugin %s get_migrations failed: %s", plugin.name, e)
+        return migrations
+
     def _plugin_matches_kb_type(self, plugin: PyritePlugin, kb_type: str) -> bool:
         """Check if a plugin should be active for a given KB type.
 

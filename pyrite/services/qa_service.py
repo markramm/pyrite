@@ -690,8 +690,22 @@ class QAService:
         # Build fields dict for validation
         fields = {k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")}
 
+        # Extract _schema_version from metadata for version-aware validation
+        metadata = entry.get("metadata")
+        schema_version = 0
+        if metadata:
+            if isinstance(metadata, str):
+                import json
+                try:
+                    meta_dict = json.loads(metadata)
+                    schema_version = int(meta_dict.get("_schema_version", 0))
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            elif isinstance(metadata, dict):
+                schema_version = int(metadata.get("_schema_version", 0))
+
         result = schema.validate_entry(
-            entry_type, fields, context={"kb_type": kb_config.kb_type}
+            entry_type, fields, context={"kb_type": kb_config.kb_type, "_schema_version": schema_version}
         )
 
         for err in result.get("errors", []):
@@ -754,8 +768,21 @@ class QAService:
             entry_type = entry.get("entry_type", "")
             fields = {k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")}
 
+            metadata = entry.get("metadata")
+            schema_version = 0
+            if metadata:
+                if isinstance(metadata, str):
+                    import json
+                    try:
+                        meta_dict = json.loads(metadata)
+                        schema_version = int(meta_dict.get("_schema_version", 0))
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                elif isinstance(metadata, dict):
+                    schema_version = int(metadata.get("_schema_version", 0))
+
             result = schema.validate_entry(
-                entry_type, fields, context={"kb_type": kb_config.kb_type}
+                entry_type, fields, context={"kb_type": kb_config.kb_type, "_schema_version": schema_version}
             )
 
             for err in result.get("errors", []):

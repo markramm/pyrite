@@ -256,3 +256,17 @@ class PyritePlugin(Protocol):
                 existing_entry: Entry | None - the existing entry (for updates)
         """
         ...
+
+    def get_migrations(self) -> list[dict]:
+        """
+        Return schema migrations for plugin entry types.
+
+        Returns:
+            List of migration dicts, each with:
+                entry_type: str
+                from_version: int
+                to_version: int
+                fn: Callable[[dict], dict]
+                description: str
+        """
+        ...

@@ -53,6 +53,7 @@ class Entry(ABC):
     # KB reference (set when loaded)
     kb_name: str = ""
     file_path: Path | None = None
+    _schema_version: int = 0
 
     @property
     @abstractmethod
@@ -93,6 +94,8 @@ class Entry(ABC):
                 meta["provenance"] = prov
         if self.metadata:
             meta["metadata"] = self.metadata
+        if self._schema_version > 0:
+            meta["_schema_version"] = self._schema_version
 
         return meta
 

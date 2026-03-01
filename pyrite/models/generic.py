@@ -26,6 +26,7 @@ _KNOWN_KEYS = {
     "metadata",
     "created_at",
     "updated_at",
+    "_schema_version",
 }
 
 
@@ -83,4 +84,5 @@ class GenericEntry(Entry):
             _entry_type=meta.get("type", "note"),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )

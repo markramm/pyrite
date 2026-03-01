@@ -61,6 +61,7 @@ class NoteEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
 
@@ -123,6 +124,7 @@ class PersonEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
     @classmethod
@@ -200,6 +202,7 @@ class OrganizationEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
     @classmethod
@@ -275,6 +278,7 @@ class EventEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
     def validate(self) -> list[str]:
@@ -359,6 +363,7 @@ class DocumentEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
     @classmethod
@@ -409,6 +414,7 @@ class TopicEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
 
@@ -461,6 +467,7 @@ class RelationshipEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
 
@@ -533,6 +540,7 @@ class QAAssessmentEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
 
@@ -577,6 +585,7 @@ class TimelineEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
 

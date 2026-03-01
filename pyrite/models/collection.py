@@ -76,6 +76,7 @@ class CollectionEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
+            _schema_version=int(meta.get("_schema_version", 0)),
         )
 
     @classmethod
