@@ -214,9 +214,9 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 
 ## Future (1.0+)
 
-### Storage Backends
+### Storage Backends (contingent on LanceDB spike results)
 
-- **Postgres backend** — `PostgresBackend` behind `SearchBackend` protocol. pgvector for embeddings, tsvector for FTS. Enables demo site and hosted deployments.
+- **Postgres backend** — Only if LanceDB doesn't cover multi-user / hosted deployment needs. If LanceDB works well, Postgres may never be needed.
 
 ### Agent Swarm Infrastructure
 

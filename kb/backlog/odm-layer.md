@@ -58,12 +58,12 @@ See [ADR-0015](../adrs/0015-odm-layer-and-schema-migration.md) and [ODM design d
 - Background embedding pipeline simplified (vectors are native columns)
 - Benchmark: hybrid search quality vs current FTS5 + separate semantic
 
-### Phase 3: Postgres backend (M)
+### Phase 3: Postgres backend (M) — contingent
+
+Only if LanceDB doesn't cover multi-user / hosted deployment needs. If the LanceDB spike succeeds and handles the demo site, Postgres may never be needed.
 
 - Implement `PostgresBackend` satisfying `SearchBackend` protocol
-- Configuration for app_backend (SQLAlchemy) + index_backend (Postgres) if desired
 - pgvector for embeddings, tsvector/tsquery for FTS
-- Demo site deployment on Postgres
 - See [[postgres-storage-backend]]
 
 ## Two-Layer Storage Architecture
