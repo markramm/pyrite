@@ -525,5 +525,66 @@ class TestIntegrationWithExistingKBs:
             db.close()
 
 
+class TestDDLDefaultValidation:
+    """Tests for SQL DEFAULT clause validation in plugin DDL."""
+
+    @pytest.fixture
+    def db(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = PyriteDB(db_path)
+            yield db
+            db.close()
+
+    @pytest.mark.parametrize(
+        "default_val",
+        [
+            "NULL",
+            "null",
+            "0",
+            "42",
+            "3.14",
+            "'some text'",
+            "''",
+            "CURRENT_TIMESTAMP",
+            "current_timestamp",
+            "TRUE",
+            "FALSE",
+        ],
+    )
+    def test_valid_defaults_accepted(self, db, default_val):
+        table_def = {
+            "name": "test_defaults",
+            "columns": [
+                {"name": "id", "type": "INTEGER", "primary_key": True},
+                {"name": "col", "type": "TEXT", "default": default_val},
+            ],
+        }
+        db._create_table_from_def(table_def)
+        # Drop for next parametrize run
+        db._raw_conn.execute("DROP TABLE IF EXISTS test_defaults")
+        db._raw_conn.commit()
+
+    @pytest.mark.parametrize(
+        "default_val",
+        [
+            "1; DROP TABLE entry",
+            "'' OR 1=1",
+            "CURRENT_TIMESTAMP; --",
+            "(SELECT 1)",
+        ],
+    )
+    def test_invalid_defaults_rejected(self, db, default_val):
+        table_def = {
+            "name": "test_bad_defaults",
+            "columns": [
+                {"name": "id", "type": "INTEGER", "primary_key": True},
+                {"name": "col", "type": "TEXT", "default": default_val},
+            ],
+        }
+        with pytest.raises(ValueError, match="Invalid SQL DEFAULT"):
+            db._create_table_from_def(table_def)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

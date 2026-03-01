@@ -27,6 +27,7 @@ from ..storage.index import IndexManager
 
 URI_SCHEME = "pyrite://"
 MAX_TIMELINE_EVENTS = 50
+MAX_BULK_CREATE_ENTRIES = 50
 MAX_RESOURCE_LIST_ENTRIES = 200
 
 
@@ -390,8 +391,8 @@ class PyriteMCPServer:
 
         if not entries:
             return {"error": "entries array is required and must not be empty"}
-        if len(entries) > 50:
-            return {"error": "Maximum 50 entries per call"}
+        if len(entries) > MAX_BULK_CREATE_ENTRIES:
+            return {"error": f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call"}
 
         # Pre-validate each entry against schema
         kb_config = self.config.get_kb(kb_name)

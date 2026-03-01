@@ -116,6 +116,10 @@ class ConnectionMixin:
     _VALID_SQL_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
     _VALID_SQL_TYPE = re.compile(r"^[A-Z][A-Z0-9_ ()]*$")
     _VALID_FK_REF = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*\([a-zA-Z_][a-zA-Z0-9_]*\)$")
+    _VALID_SQL_DEFAULT = re.compile(
+        r"^(?:NULL|TRUE|FALSE|CURRENT_TIMESTAMP|[0-9]+(?:\.[0-9]+)?|'[^']*')$",
+        re.IGNORECASE,
+    )
 
     def _validate_identifier(self, value: str, context: str) -> str:
         """Validate a SQL identifier to prevent injection."""
@@ -143,7 +147,12 @@ class ConnectionMixin:
             if col.get("nullable") is False:
                 parts.append("NOT NULL")
             if "default" in col:
-                parts.append(f"DEFAULT {col['default']}")
+                default_val = str(col["default"])
+                if not self._VALID_SQL_DEFAULT.match(default_val):
+                    raise ValueError(
+                        f"Invalid SQL DEFAULT value: {default_val!r}"
+                    )
+                parts.append(f"DEFAULT {default_val}")
             col_defs.append(" ".join(parts))
 
         for fk in table_def.get("foreign_keys", []):
