@@ -68,16 +68,20 @@ class SearchService:
         """
         Sanitize a search query for FTS5.
 
-        FTS5 interprets hyphens as NOT operators, which breaks searches for
-        hyphenated terms like "alex-jones" or "2024-01-15".
+        FTS5 treats many punctuation characters as special syntax:
+        - Hyphens as NOT operators
+        - Dots as column filters (column.term)
+        - Colons as column prefixes
+        - @, #, /, !, ~, = as syntax errors
 
         This method:
-        - Quotes hyphenated words to treat them as literals
+        - Quotes tokens containing special characters to treat them as literals
         - Preserves explicit FTS5 operators (AND, OR, NOT)
-        - Preserves quoted phrases
+        - Preserves already-quoted phrases
 
         Examples:
             "alex-jones" -> '"alex-jones"'
+            "0.6 milestone" -> '"0.6" milestone'
             "alex jones" -> "alex jones" (unchanged)
             'alex AND "not-here"' -> 'alex AND "not-here"' (preserved)
         """
@@ -85,8 +89,9 @@ class SearchService:
         if any(op in query.upper() for op in [" AND ", " OR ", " NOT ", '"']):
             return query
 
-        # Quote hyphenated terms to prevent FTS5 interpreting hyphens as NOT
-        sanitized = re.sub(r"(\S*-\S*)", r'"\1"', query)
+        # Quote any token containing FTS5-special characters
+        # Matches tokens with at least one non-alphanumeric, non-space, non-underscore char
+        sanitized = re.sub(r'(\S*[^\w\s]\S*)', r'"\1"', query)
         return sanitized
 
     # =========================================================================

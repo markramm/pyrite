@@ -72,6 +72,13 @@ class TestSearchService:
             ("a-b-c-d", '"a-b-c-d"'),
             ("café résumé", "café résumé"),
             ("hello  world", "hello  world"),
+            ("0.6 milestone", '"0.6" milestone'),
+            ("test.py", '"test.py"'),
+            ("user@example.com", '"user@example.com"'),
+            ("path/to/file", '"path/to/file"'),
+            ("tag#name", '"tag#name"'),
+            ("a:b", '"a:b"'),
+            ("hello! world", '"hello!" world'),
         ],
         ids=[
             "simple-passthrough",
@@ -86,6 +93,13 @@ class TestSearchService:
             "multi-hyphen-chain",
             "unicode-passthrough",
             "double-space-passthrough",
+            "dot-in-number",
+            "dot-in-filename",
+            "at-sign-email",
+            "slash-in-path",
+            "hash-sign",
+            "colon-separator",
+            "exclamation-mark",
         ],
     )
     def test_sanitize_fts_query(self, input_query, expected):
