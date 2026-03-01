@@ -53,6 +53,15 @@ Resources are read via `_read_resource()` which dispatches based on URI prefix m
 
 `build_sdk_server()` creates an `mcp.server.Server` instance and registers async handlers for all MCP protocol methods (list_tools, call_tool, list_prompts, get_prompt, list_resources, list_resource_templates, read_resource). The server runs over stdio via `anyio` in `run_stdio()`.
 
+## Post-Save QA Validation
+
+Write tools (`kb_create`, `kb_update`) support opt-in QA validation via two mechanisms:
+
+1. **Per-request**: Pass `validate: true` to run `QAService.validate_entry()` after save
+2. **KB-level**: Set `validation.qa_on_write: true` in `kb.yaml` — all writes auto-validate
+
+When triggered, the `_maybe_validate()` helper runs structural QA and appends `qa_issues` to the response if any issues are found. Clean entries return no `qa_issues` key.
+
 ## Configuration and Startup
 
 - CLI: `pyrite mcp --tier write` or `pyrite-admin mcp`

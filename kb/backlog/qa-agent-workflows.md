@@ -154,9 +154,9 @@ These guidelines are passed to Tier 2/3 evaluations alongside type-level AI inst
 - Confidence-scored factual assessments
 - CLI: `pyrite qa verify [--kb <name>] [--entry <id>]`
 
-### Phase 5: Continuous QA pipeline (effort: L)
+### Phase 5: Continuous QA pipeline (effort: L) — partially done
 
-- Post-save hook triggers Tier 1 validation automatically
+- ~~Post-save hook triggers Tier 1 validation automatically~~ **Done**: `validate` param on `kb_create`/`kb_update` MCP tools + `qa_on_write: true` KB-level setting in `kb.yaml`. Issues returned as `qa_issues` in MCP response.
 - Scheduled batch runs for Tier 2/3 (configurable frequency)
 - QA dashboard in web UI: verification rates, issue trends, coverage gaps
 - "Entries needing review" collection (virtual collection with QA-based query)
