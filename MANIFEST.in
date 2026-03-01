@@ -1,0 +1,10 @@
+include LICENSE README.md CHANGELOG.md
+include pyproject.toml
+recursive-include pyrite *.py *.yaml *.json *.html *.css *.js
+prune tests
+prune extensions
+prune web
+prune kb
+prune pyrite-mcp
+prune .github
+prune pyrite.egg-info

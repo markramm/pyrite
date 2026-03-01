@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyrite"
-version = "0.3.0"
+version = "0.12.0"
 description = "Knowledge-as-Code for you and your agents"
 readme = "README.md"
 license = {text = "MIT"}
@@ -17,6 +17,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
 keywords = ["knowledge-base", "knowledge-management", "mcp", "ai", "knowledge-graph", "agent-memory", "zettelkasten"]
@@ -64,6 +65,7 @@ dev = [
     "mypy>=1.9.0",
     "ruff>=0.3.0",
     "pytest-xdist>=3.0.0",
+    "build>=1.0.0",
 ]
 all = [
     "pyrite[server,cli,ai,semantic,dev]",
@@ -82,7 +84,7 @@ Repository = "https://github.com/markramm/pyrite"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["pyrite*"]
+include = ["pyrite", "pyrite.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "extensions"]

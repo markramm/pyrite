@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyrite-mcp"
-version = "0.2.0"
+version = "0.12.0"
 description = "Standalone MCP server for Pyrite knowledge bases"
 readme = "README.md"
 license = {text = "MIT"}
@@ -17,7 +17,7 @@ classifiers = [
 keywords = ["mcp", "knowledge-base", "ai", "agent"]
 
 dependencies = [
-    "pyrite>=0.2.0",
+    "pyrite>=0.12.0",
 ]
 
 [project.scripts]
