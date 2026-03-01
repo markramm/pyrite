@@ -141,6 +141,7 @@ export interface StatsResponse {
 	kbs: Record<string, unknown>;
 	total_tags: number;
 	total_links: number;
+	type_counts: { entry_type: string; count: number }[];
 }
 
 export interface ApiError {

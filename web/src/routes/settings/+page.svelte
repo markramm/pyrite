@@ -63,6 +63,23 @@
 	const aiApiKey = $derived(settingsStore.get('ai.apiKey', ''));
 	const aiBaseUrl = $derived(settingsStore.get('ai.baseUrl', ''));
 
+	const editorMode = $derived(
+		typeof window !== 'undefined'
+			? (localStorage.getItem('pyrite-editor-mode') ?? 'source')
+			: 'source'
+	);
+	const searchMode = $derived(
+		typeof window !== 'undefined'
+			? (localStorage.getItem('pyrite-search-mode') ?? 'keyword')
+			: 'keyword'
+	);
+
+	function setLocalSetting(key: string, value: string) {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem(key, value);
+		}
+	}
+
 	const modelPlaceholders: Record<string, string> = {
 		anthropic: 'claude-sonnet-4-20250514',
 		openai: 'gpt-4o',
@@ -76,6 +93,7 @@
 
 <div class="flex-1 overflow-y-auto p-6">
 	<div class="mx-auto max-w-2xl space-y-8">
+		<h1 class="page-title mb-6 text-2xl font-bold">Settings</h1>
 		{#if settingsStore.loading}
 			<p class="text-zinc-400">Loading settings...</p>
 		{:else}
@@ -253,6 +271,119 @@
 							{testingConnection ? 'Testing...' : 'Test Connection'}
 						</button>
 					</div>
+				</div>
+			</section>
+
+			<!-- Editor -->
+			<section>
+				<h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">Editor</h2>
+				<div class="space-y-4">
+					<div class="flex items-center justify-between">
+						<div>
+							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+								>Default editor mode</label
+							>
+							<p class="text-xs text-zinc-500">How entries open for editing</p>
+						</div>
+						<select
+							value={editorMode}
+							onchange={(e) => setLocalSetting('pyrite-editor-mode', e.currentTarget.value)}
+							class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+						>
+							<option value="source">Source</option>
+							<option value="wysiwyg">WYSIWYG</option>
+						</select>
+					</div>
+					<div class="flex items-center justify-between">
+						<div>
+							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+								>Default search mode</label
+							>
+							<p class="text-xs text-zinc-500">Search strategy used when none is specified</p>
+						</div>
+						<select
+							value={searchMode}
+							onchange={(e) => setLocalSetting('pyrite-search-mode', e.currentTarget.value)}
+							class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+						>
+							<option value="keyword">Keyword</option>
+							<option value="semantic">Semantic</option>
+							<option value="hybrid">Hybrid</option>
+						</select>
+					</div>
+				</div>
+			</section>
+
+			<!-- Data -->
+			<section>
+				<h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">Data</h2>
+				<div class="space-y-4">
+					<div class="flex items-center justify-between">
+						<div>
+							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Import</label>
+							<p class="text-xs text-zinc-500">Import entries from an external source</p>
+						</div>
+						<div class="relative group">
+							<button
+								disabled
+								class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium opacity-50 cursor-not-allowed dark:border-zinc-600"
+							>
+								Import...
+							</button>
+							<span
+								class="pointer-events-none absolute right-0 top-full mt-1 w-28 rounded bg-zinc-800 px-2 py-1 text-center text-xs text-zinc-100 opacity-0 transition-opacity group-hover:opacity-100"
+							>
+								Coming soon
+							</span>
+						</div>
+					</div>
+					<div class="flex items-center justify-between">
+						<div>
+							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Export</label>
+							<p class="text-xs text-zinc-500">Export your knowledge base to a portable format</p>
+						</div>
+						<div class="relative group">
+							<button
+								disabled
+								class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium opacity-50 cursor-not-allowed dark:border-zinc-600"
+							>
+								Export...
+							</button>
+							<span
+								class="pointer-events-none absolute right-0 top-full mt-1 w-28 rounded bg-zinc-800 px-2 py-1 text-center text-xs text-zinc-100 opacity-0 transition-opacity group-hover:opacity-100"
+							>
+								Coming soon
+							</span>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<!-- Keyboard Shortcuts -->
+			<section>
+				<h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100"
+					>Keyboard Shortcuts</h2
+				>
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
+							>View all keyboard shortcuts</p
+						>
+						<p class="text-xs text-zinc-500">Press <kbd
+								class="rounded border border-zinc-300 bg-zinc-100 px-1 py-0.5 font-mono text-xs dark:border-zinc-600 dark:bg-zinc-800"
+								>?</kbd
+							> anywhere to open</p>
+					</div>
+					<button
+						onclick={() => {
+							if (typeof window !== 'undefined') {
+								window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' }));
+							}
+						}}
+						class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
+					>
+						View shortcuts
+					</button>
 				</div>
 			</section>
 

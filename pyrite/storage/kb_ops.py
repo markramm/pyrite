@@ -51,6 +51,19 @@ class KBOpsMixin:
             return None
         return dict(row._mapping)
 
+    def get_type_counts(self, kb_name: str | None = None) -> list[dict[str, Any]]:
+        """Get entry counts grouped by entry_type."""
+        if kb_name:
+            rows = self.session.execute(
+                text("SELECT entry_type, COUNT(*) as count FROM entry WHERE kb_name = :kb GROUP BY entry_type ORDER BY count DESC"),
+                {"kb": kb_name},
+            ).fetchall()
+        else:
+            rows = self.session.execute(
+                text("SELECT entry_type, COUNT(*) as count FROM entry GROUP BY entry_type ORDER BY count DESC"),
+            ).fetchall()
+        return [dict(r._mapping) for r in rows]
+
     def update_kb_indexed(self, name: str, entry_count: int) -> None:
         """Update KB last indexed time and count."""
         kb = self.session.get(KB, name)

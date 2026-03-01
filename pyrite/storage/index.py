@@ -345,6 +345,8 @@ class IndexManager:
         stats["total_tags"] = global_counts["total_tags"]
         stats["total_links"] = global_counts["total_links"]
 
+        stats["type_counts"] = self.db.get_type_counts()
+
         return stats
 
     def _load_indexed_state(self, kb_name: str) -> dict[str, dict[str, str]]:

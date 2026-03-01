@@ -5,6 +5,7 @@
 	import QuickSwitcher from '$lib/components/QuickSwitcher.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import ChatSidebar from '$lib/components/ai/ChatSidebar.svelte';
+	import KeyboardShortcutsModal from '$lib/components/common/KeyboardShortcutsModal.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { wsClient } from '$lib/api/websocket';
@@ -16,6 +17,8 @@
 	import { fade } from 'svelte/transition';
 
 	let { children } = $props();
+
+	let shortcutsOpen = $state(false);
 
 	onMount(() => {
 		kbStore.load();
@@ -50,11 +53,33 @@
 			uiStore.toggleChatPanel();
 		});
 
+		// Global: Cmd+/ toggles sidebar
+		const unregisterSidebar = registerShortcut('/', ['mod'], () => {
+			uiStore.toggleSidebar();
+		});
+
+		// Global: ? opens keyboard shortcuts overlay
+		function handleQuestionMark(e: KeyboardEvent) {
+			if (e.key !== '?') return;
+			const target = e.target as HTMLElement;
+			if (
+				target.tagName === 'INPUT' ||
+				target.tagName === 'TEXTAREA' ||
+				target.isContentEditable
+			) {
+				return;
+			}
+			shortcutsOpen = !shortcutsOpen;
+		}
+		window.addEventListener('keydown', handleQuestionMark);
+
 		return () => {
 			wsClient.disconnect();
 			unregisterWS();
 			unregisterDaily();
 			unregisterChat();
+			unregisterSidebar();
+			window.removeEventListener('keydown', handleQuestionMark);
 		};
 	});
 </script>
@@ -76,3 +101,4 @@
 <Toast />
 <QuickSwitcher />
 <CommandPalette />
+<KeyboardShortcutsModal open={shortcutsOpen} onclose={() => (shortcutsOpen = false)} />

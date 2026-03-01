@@ -278,6 +278,7 @@ class StatsResponse(BaseModel):
     kbs: dict = {}
     total_tags: int = 0
     total_links: int = 0
+    type_counts: list[dict] = []
 
 
 class CreateResponse(BaseModel):

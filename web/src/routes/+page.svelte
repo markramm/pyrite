@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import TypeDistributionChart from '$lib/components/charts/TypeDistributionChart.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { api } from '$lib/api/client';
 	import { onMount } from 'svelte';
@@ -177,6 +178,16 @@
 					</a>
 				</div>
 			</div>
+
+			<!-- Entry Types -->
+			{#if stats && stats.type_counts && stats.type_counts.length > 0}
+				<div>
+					<h2 class="mb-3 text-lg font-semibold">Entry Types</h2>
+					<div class="rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
+						<TypeDistributionChart data={stats.type_counts} />
+					</div>
+				</div>
+			{/if}
 
 			<!-- Knowledge Bases -->
 			<div>
