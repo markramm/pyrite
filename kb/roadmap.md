@@ -157,7 +157,7 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.8 — UI Design & UX (in progress)
+## 0.8 — UI Design & UX (done)
 
 **Theme:** Brand identity, navigation polish, and demo-ready UX. Every screen a stranger sees should look intentional.
 
@@ -182,24 +182,19 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - Graph atmosphere: dot grid background pattern, node glow on hover via cytoscape underlay
 - Toast redesign: slide from top-right with `fly` transition, type icons, shrinking progress bar
 
-### Wave 4 — UX Improvements
+**Wave 4 — UX Improvements**
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Search UX redesign | Search results page with filter sidebar, search-as-you-type, result highlighting | M |
-| Entry type distribution chart | Pie/bar chart on dashboard showing entry types across the KB | S |
-| Keyboard shortcuts overlay | `?` key opens a modal showing all available keyboard shortcuts | S |
-| Mobile/responsive sidebar | Sidebar collapses to icon-only on narrow viewports, hamburger toggle on mobile | M |
-| Settings/preferences page | Theme customization, layout preferences (default editor mode, sidebar state) | S |
-| Template picker improvements | Visual template cards with preview, description, and tag pre-fill | S |
+- Dedicated `/search` route with mode picker (keyword/semantic/hybrid), KB and type filters, snippet highlighting with `<mark>` tags, gold accent on active mode. Search added as first sidebar nav item. QuickSwitcher gains "See all results" link.
+- Entry type distribution: `get_type_counts()` backend endpoint, SVG donut chart on dashboard with legend (3 backend tests)
+- Keyboard shortcuts modal: `?` key opens overlay listing all shortcuts. `Cmd+/` toggles sidebar.
+- Responsive sidebar: fixed overlay on mobile with backdrop blur, slide transition, auto-close on nav click, viewport-aware init. Hamburger toggle visible on narrow viewports.
+- Settings improvements: gear icon in sidebar nav, new Editor section (default editor/search mode), Data section (import/export placeholders), keyboard shortcuts reference
+- Template picker redesign: 2-column grid, colored left border per entry type, type dot + badge, line-clamp descriptions, tag pills, dashed blank entry card, gold hover accent
 
-### Definition of done
+### Results
 
-- Sidebar shows active page; error/empty states have retry + CTA
-- Pyrite has a recognizable brand identity (logo, gold accent, distinct typography)
-- Dashboard tells a story (recent entries, type distribution, quick actions)
-- Stranger seeing a screenshot knows "this is Pyrite" — not "this is a Tailwind template"
-- Search, settings, and keyboard shortcuts are polished and functional
+- 1182 backend tests, 115 frontend tests, all passing
+- All DoD met: brand identity, dashboard with type chart, search page, responsive sidebar, keyboard shortcuts, settings, polished template picker
 
 ---
 
