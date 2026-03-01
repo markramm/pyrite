@@ -538,7 +538,7 @@ class PostgresBackend:
         vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
         result = self._session.execute(
             text(
-                "UPDATE entry SET embedding = :vec::vector "
+                "UPDATE entry SET embedding = CAST(:vec AS vector) "
                 "WHERE id = :entry_id AND kb_name = :kb_name"
             ),
             {"vec": vec_str, "entry_id": entry_id, "kb_name": kb_name},
@@ -555,7 +555,7 @@ class PostgresBackend:
     ) -> list[dict[str, Any]]:
         vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
         sql = """
-            SELECT e.*, (e.embedding <=> :vec::vector) as distance
+            SELECT e.*, (e.embedding <=> CAST(:vec AS vector)) as distance
             FROM entry e
             WHERE e.embedding IS NOT NULL
         """
@@ -563,7 +563,7 @@ class PostgresBackend:
         if kb_name:
             sql += " AND e.kb_name = :kb_name"
             params["kb_name"] = kb_name
-        sql += " ORDER BY e.embedding <=> :vec2::vector LIMIT :limit"
+        sql += " ORDER BY e.embedding <=> CAST(:vec2 AS vector) LIMIT :limit"
         params["vec2"] = vec_str
         params["limit"] = limit
 

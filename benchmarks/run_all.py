@@ -34,12 +34,6 @@ def _make_sqlite_backend(tmpdir: Path):
     return db.backend, db
 
 
-def _make_lancedb_backend(tmpdir: Path):
-    from pyrite.storage.backends.lancedb_backend import LanceDBBackend
-
-    return LanceDBBackend(tmpdir / "lance_data"), None
-
-
 def _make_postgres_backend(tmpdir: Path):
     """Create a PostgresBackend for benchmarks.
 
@@ -71,7 +65,18 @@ def _make_postgres_backend(tmpdir: Path):
     session.add(KB(name="bench", kb_type="generic", path="/tmp/bench", description="Benchmark KB"))
     session.commit()
 
-    return PostgresBackend(session, engine), engine
+    class _PgHandle:
+        """Minimal wrapper so bench_* functions can call .close()."""
+
+        def __init__(self, engine, session):
+            self._engine = engine
+            self._session = session
+
+        def close(self):
+            self._session.close()
+            self._engine.dispose()
+
+    return PostgresBackend(session, engine), _PgHandle(engine, session)
 
 
 def _generate_fake_embedding(entry_id: str, dim: int = 384) -> list[float]:
@@ -263,7 +268,6 @@ def bench_disk(backend_factory, entries: list[dict], label: str) -> dict:
 def run_benchmarks(sizes: list[int], n_queries: int, repeats: int, backend_filter: list[str] | None = None) -> dict:
     all_backends = {
         "sqlite": _make_sqlite_backend,
-        "lancedb": _make_lancedb_backend,
         "postgres": _make_postgres_backend,
     }
     if backend_filter:
@@ -335,7 +339,7 @@ def main():
     parser.add_argument("--sizes", default="500,1000", help="Comma-separated corpus sizes")
     parser.add_argument("--queries", type=int, default=25, help="Number of test queries")
     parser.add_argument("--repeats", type=int, default=10, help="Latency measurement repeats")
-    parser.add_argument("--backends", default=None, help="Comma-separated backends (sqlite,lancedb,postgres)")
+    parser.add_argument("--backends", default=None, help="Comma-separated backends (sqlite,postgres)")
     parser.add_argument("--output", default=None, help="Output JSON path")
     args = parser.parse_args()
 

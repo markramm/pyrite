@@ -13,13 +13,7 @@ import pytest
 
 from pyrite.storage.database import PyriteDB
 
-_BACKENDS = ["sqlite", "lancedb", "postgres"]
-
-
-def _make_lancedb_backend(tmpdir):
-    from pyrite.storage.backends.lancedb_backend import LanceDBBackend
-
-    return LanceDBBackend(Path(tmpdir) / "lance_data")
+_BACKENDS = ["sqlite", "postgres"]
 
 
 def _pg_url():
@@ -79,9 +73,6 @@ def backend(request):
             db.register_kb("test", "generic", "/tmp/test", "Test KB")
             yield db.backend
             db.close()
-    elif request.param == "lancedb":
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield _make_lancedb_backend(tmpdir)
     elif request.param == "postgres":
         if not _pg_url():
             pytest.skip("PYRITE_TEST_PG_URL not set")
@@ -106,10 +97,6 @@ def backend_with_db(request):
             db.register_kb("other", "generic", "/tmp/other", "Other KB")
             yield db.backend, db
             db.close()
-    elif request.param == "lancedb":
-        with tempfile.TemporaryDirectory() as tmpdir:
-            be = _make_lancedb_backend(tmpdir)
-            yield be, None  # No PyriteDB for LanceDB
     elif request.param == "postgres":
         if not _pg_url():
             pytest.skip("PYRITE_TEST_PG_URL not set")
