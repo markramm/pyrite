@@ -87,9 +87,27 @@ class EmbeddingService:
     def _get_model(self):
         """Lazy-load the sentence-transformers model."""
         if self._model is None:
+            import logging
+            import os
+
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer(self.model_name)
+            # Suppress noisy output during model loading:
+            # - transformers.disable_progress_bar() silences weight-loading tqdm bars
+            # - Log levels silence the HF load report and auth warnings
+            import transformers.utils.logging as tf_logging
+
+            tf_logging.disable_progress_bar()
+            loggers = ["transformers", "huggingface_hub"]
+            old_levels = {name: logging.getLogger(name).level for name in loggers}
+            for name in loggers:
+                logging.getLogger(name).setLevel(logging.ERROR)
+            try:
+                self._model = SentenceTransformer(self.model_name)
+            finally:
+                for name, level in old_levels.items():
+                    logging.getLogger(name).setLevel(level)
+                tf_logging.enable_progress_bar()
         return self._model
 
     def embed_text(self, text: str) -> list[float]:
