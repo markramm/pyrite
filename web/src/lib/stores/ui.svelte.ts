@@ -27,6 +27,8 @@ class UIStore {
 				this.theme = saved;
 			}
 			this.applyTheme();
+			// Start sidebar closed on mobile, open on desktop
+			this.sidebarOpen = window.innerWidth >= 1024;
 		}
 	}
 

@@ -140,6 +140,19 @@
 						</li>
 					{/each}
 				</ul>
+			<div class="border-t border-zinc-200 px-4 py-2 dark:border-zinc-700">
+				<a
+					href="/search?q={encodeURIComponent(query)}"
+					onclick={hide}
+					class="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+					data-testid="quick-switcher-see-all"
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+					</svg>
+					See all results for "{query}"
+				</a>
+			</div>
 			{:else if query.trim()}
 				<div class="px-4 py-3 text-sm text-zinc-500" data-testid="quick-switcher-empty">No results found</div>
 			{:else}

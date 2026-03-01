@@ -6,6 +6,7 @@
 	import { page } from '$app/stores';
 
 	const navItems = [
+		{ href: '/search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
 		{ href: '/', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
 		{ href: '/entries', label: 'Entries', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
 		{ href: '/collections', label: 'Collections', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
@@ -23,11 +24,28 @@
 		}
 		return currentPath.startsWith(href);
 	}
+
+	function handleNavClick() {
+		if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+			uiStore.sidebarOpen = false;
+		}
+	}
 </script>
 
+<!-- Mobile overlay backdrop -->
+{#if uiStore.sidebarOpen}
+	<div
+		class="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+		onclick={() => uiStore.toggleSidebar()}
+		role="presentation"
+	></div>
+{/if}
+
 <aside
-	class="flex h-full w-64 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900"
-	class:hidden={!uiStore.sidebarOpen}
+	class="flex h-full w-64 flex-col border-r border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900
+		fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-in-out
+		lg:static lg:translate-x-0 lg:transform-none lg:transition-none
+		{uiStore.sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
 >
 	<!-- Logo / Brand -->
 	<div class="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
@@ -48,6 +66,7 @@
 		{#each navItems as item}
 			<a
 				href={item.href}
+				onclick={handleNavClick}
 				class="flex items-center gap-3 rounded-md px-3 py-2 text-sm {isActive(item.href)
 					? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium'
 					: 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800'}"
@@ -67,6 +86,7 @@
 			{#each entryStore.recentIds.slice(0, 5) as id}
 				<a
 					href="/entries/{id}"
+					onclick={handleNavClick}
 					class="block truncate rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"
 				>
 					{id}
