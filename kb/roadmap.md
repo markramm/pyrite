@@ -267,7 +267,7 @@ Plugin DDL input validation (SQL injection prevention), extract hardcoded consta
 
 ## 0.10 — Schema Versioning + ODM + LanceDB
 
-**Theme:** Storage architecture that matches the data model. Schema evolution without breakage, document-native search.
+**Theme:** Storage architecture that matches the data model. Schema evolution without breakage, document-native search. See [ADR-0015](adrs/0015-odm-layer-and-schema-migration.md) for the ODM + migration architecture. See [ADR-0014](adrs/0014-structural-protocols-for-extension-types.md) for extension type protocols that depend on schema stability.
 
 ### Schema Versioning (pre-launch critical)
 

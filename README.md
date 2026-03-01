@@ -55,9 +55,9 @@ Three permission tiers. Each tier includes the tools from lower tiers.
 
 | Tier | Tools |
 |------|-------|
-| **read** | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema` |
-| **write** | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link` |
-| **admin** | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push` |
+| **read** (10) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_qa_validate`, `kb_qa_status` |
+| **write** (+6) | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link`, `kb_qa_assess` |
+| **admin** (+4) | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push` |
 
 All paginated tools (`kb_search`, `kb_timeline`, `kb_backlinks`, `kb_tags`) support `limit`/`offset` params and return a `has_more` flag. `kb_bulk_create` handles up to 50 entries per call with best-effort per-entry semantics.
 
@@ -82,7 +82,7 @@ Use `pyrite-admin mcp --tier read` for a read-only server.
 
 ## Web UI
 
-SvelteKit 5 frontend with:
+SvelteKit 2 with Svelte 5 frontend:
 
 - WYSIWYG + markdown editor (Tiptap + CodeMirror dual mode)
 - `[[wikilinks]]` with autocomplete, alias resolution, and pill decorations
@@ -166,7 +166,7 @@ pyrite/
 └── formats/         # Content negotiation (JSON, Markdown, CSV, YAML)
 
 extensions/          # Domain-specific plugins (software-kb, zettelkasten, encyclopedia, social, cascade)
-web/                 # SvelteKit 5 frontend (TypeScript + Tailwind)
+web/                 # SvelteKit 2 + Svelte 5 frontend (TypeScript + Tailwind)
 kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 ```
 
@@ -184,7 +184,7 @@ pip install -e ".[all]"
 for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
-# Tests (1030+ tests)
+# Tests (1258 tests)
 pytest tests/ -v
 
 # Frontend
@@ -198,7 +198,7 @@ Pyrite's own backlog and architecture docs live in `kb/`:
 
 ```bash
 pyrite sw backlog        # Prioritized backlog
-pyrite sw adrs           # Architecture Decision Records (13 ADRs)
+pyrite sw adrs           # Architecture Decision Records (15 ADRs)
 pyrite sw components     # Module documentation
 pyrite sw standards      # Coding conventions
 ```

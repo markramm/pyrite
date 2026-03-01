@@ -50,19 +50,18 @@ pip install -e ".[all]"
 {
   "mcpServers": {
     "pyrite": {
-      "command": "pyrite-server",
-      "args": ["--mcp", "--tier", "write"],
-      "env": {}
+      "command": "pyrite",
+      "args": ["mcp", "--tier", "write"]
     }
   }
 }
 ```
 
-Set `--tier read` for untrusted agents, `--tier write` for trusted research workflows, `--tier admin` for human-supervised KB management.
+Set `--tier read` for untrusted agents, `--tier write` for trusted research workflows, `--tier admin` for human-supervised KB management. Use `pyrite-admin mcp` for admin-tier access.
 
 ### MCP Tools by Tier
 
-#### Read Tier (safe for any agent)
+#### Read Tier (10 tools — safe for any agent)
 
 | Tool | Description |
 |------|-------------|
@@ -72,36 +71,40 @@ Set `--tier read` for untrusted agents, `--tier write` for trusted research work
 | `kb_timeline` | Query events by date range and importance threshold |
 | `kb_tags` | List all tags with frequency counts |
 | `kb_backlinks` | Find all entries linking to a given entry |
+| `kb_stats` | Index statistics (entry counts, type distribution) |
 | `kb_schema` | Get type definitions with AI instructions and field descriptions |
+| `kb_qa_validate` | Run structural QA validation on entries |
+| `kb_qa_status` | Get QA status summary for a KB |
 
-#### Write Tier (trusted agents)
+#### Write Tier (6 tools — trusted agents)
 
 All read tools, plus:
 
 | Tool | Description |
 |------|-------------|
 | `kb_create` | Create typed entry with auto-validation and indexing |
+| `kb_bulk_create` | Batch create up to 50 entries with best-effort semantics |
 | `kb_update` | Update entry fields, body, or metadata |
 | `kb_delete` | Delete entry with cascade link cleanup |
-| `kb_create_link` | Create typed relationship between entries |
+| `kb_link` | Create typed relationship between entries |
+| `kb_qa_assess` | Create QA assessment entry for an entry |
 
-#### Admin Tier (human-supervised)
+#### Admin Tier (4 tools — human-supervised)
 
 All write tools, plus:
 
 | Tool | Description |
 |------|-------------|
-| `kb_init` | Initialize a new knowledge base |
-| `kb_remove` | Remove a mounted knowledge base |
-| `index_sync` | Rebuild search index from markdown files |
-| `repo_sync` | Sync git remotes |
+| `kb_index_sync` | Rebuild search index from markdown files |
+| `kb_manage` | KB lifecycle management (init, remove, schema operations) |
+| `kb_commit` | Commit KB changes to git |
+| `kb_push` | Push KB git repository to remote |
 
 #### Plugin Tools
 
 Extensions register additional MCP tools per tier. Shipped examples:
-- Zettelkasten: `zettel_inbox`, `zettel_graph`
-- Encyclopedia: `article_review_workflow`
-- Software-KB: accessed via `pyrite sw` commands
+- Software-KB: `sw_adrs`, `sw_backlog`, `sw_components`, `sw_standards`, `sw_new_adr`
+- Task: `task_list`, `task_status`, `task_create`, `task_update`
 
 ### MCP Prompts
 
@@ -152,20 +155,20 @@ Custom types defined in `kb.yaml` without code — 10 field types with validatio
 - **Storage**: Markdown files in git (source of truth) + SQLite FTS5 index (queryable)
 - **Search**: Full-text (BM25), semantic (sentence-transformers + sqlite-vec), hybrid
 - **Validation**: Pydantic models + YAML-defined field schemas with 4-layer resolution
-- **Extensions**: Plugin protocol with 12 extension points (entry types, MCP tools, hooks, workflows, DB tables, relationship types, validators, KB presets, field schemas, type metadata, CLI commands)
+- **Extensions**: Plugin protocol with 12 extension points (entry types, MCP tools, hooks, collection types, DB tables, relationship types, validators, KB presets, field schemas, type metadata, CLI commands, search)
 - **APIs**: REST (FastAPI with OpenAPI), MCP (STDIO), CLI (Typer)
-- **Frontend**: SvelteKit 5 + Tailwind (entries, search, backlinks, daily notes, graph, templates, slash commands)
-- **Tests**: 583 passing, covering CRUD, FTS5, REST API, MCP protocol, plugins, migrations, schema validation, collaboration, security
+- **Frontend**: SvelteKit 2 + Svelte 5 + Tailwind (entries, search, backlinks, daily notes, graph, templates, slash commands, collections, AI chat)
+- **Tests**: 1258 passing, covering CRUD, FTS5, REST API, MCP protocol, plugins, migrations, schema validation, collections, QA, task coordination
 
 ## Submission Checklist
 
 - [x] MCP server with STDIO transport and three permission tiers
-- [x] 7 read tools, 4 write tools, 4 admin tools, extensible via plugins
+- [x] 10 read tools, 6 write tools, 4 admin tools, extensible via plugins
 - [x] 4 built-in MCP prompts for common research workflows
 - [x] MCP resources via `pyrite://` URIs
-- [x] 583 tests including MCP protocol tests
+- [x] 1258 tests including MCP protocol tests
 - [x] MIT license
-- [x] Comprehensive documentation (README, 11 ADRs, plugin developer guide)
+- [x] Comprehensive documentation (README, 15 ADRs, plugin developer guide)
 - [x] Active development with detailed changelog
 
 ## Value Proposition

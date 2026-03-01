@@ -16,8 +16,8 @@ Each server instance runs at a single tier, which determines which tools are ava
 
 | Tier | Access Level | Tools |
 |------|-------------|-------|
-| **read** | Safe for any agent | kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema |
-| **write** | Trusted agents | read + kb_create, kb_update, kb_delete |
+| **read** | Safe for any agent | kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema, kb_qa_validate, kb_qa_status |
+| **write** | Trusted agents | read + kb_create, kb_bulk_create, kb_update, kb_delete, kb_link, kb_qa_assess |
 | **admin** | Full control | write + kb_index_sync, kb_manage, kb_commit, kb_push |
 
 Tier is set at construction time via the `tier` parameter and validated against `VALID_TIERS`. Invalid tiers raise `ConfigError`.
@@ -80,5 +80,5 @@ When triggered, the `_maybe_validate()` helper runs structural QA and appends `q
 
 - [[rest-api]] — HTTP equivalent of MCP tools
 - [[kb-service]] — business logic layer used by all tool handlers
-- [[pyrite-db]] — database access
+- [[storage-layer]] — database access
 - [[schema-validation]] — `kb_schema` tool uses `KBSchema.to_agent_schema()`

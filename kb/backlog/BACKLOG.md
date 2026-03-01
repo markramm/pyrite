@@ -264,7 +264,7 @@ Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (Open
 
 **Schema provisioning delivered:** `SchemaService` with show/add_type/remove_type/set_schema. MCP: `kb_manage` with 4 new actions. CLI: `kb schema show/add-type/remove-type/set`. 11 tests.
 
-**Remaining:** Task plugin phase 2 (atomic task_claim, task_decompose, task_checkpoint). QA Phase 2 (assessment entries).
+**Delivered (0.6):** Task plugin phases 1-2 (atomic task_claim, task_decompose, task_checkpoint). QA phases 1-2 (structural validation, assessment entries, post-save validation). Schema provisioning. KB-type scoping. 1154 tests.
 
 ### Wave 13 — Launch Infrastructure
 
