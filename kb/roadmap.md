@@ -198,7 +198,7 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.9 — Code Hardening (active)
+## 0.9 — Code Hardening (done)
 
 **Theme:** Internal quality pass. Refactor, fix architecture gaps, and harden tests — before adding new capabilities.
 
@@ -226,42 +226,50 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - 18 integration tests for KB git operations (`commit_kb`, `push_kb`) with real temp git repos
 - Cytoscape type bindings: 6 `any` annotations replaced with `cytoscape.Core`, `EventObject`, `NodeSingular`
 
-### Planned
+**Wave 4 — Documentation & KB Fixes**
 
-**Wave 4 — Documentation & KB Fixes** [[docs-kb-fixes]]
+- Fixed stale test counts in README, CLAUDE.md, MCP_SUBMISSION.md
+- Fixed broken wikilinks, BACKLOG.md staleness, README "SvelteKit 5" → "SvelteKit 2 with Svelte 5"
 
-Fix stale test counts, broken wikilinks, inaccurate MCP_SUBMISSION.md, and BACKLOG.md staleness. Doc-only, zero code changes.
+**Wave 5 — Silent Error Logging**
 
-**Wave 5 — Silent Error Logging** [[silent-error-logging]]
+- 43 bare `except: pass` blocks replaced with `logger.warning()` across 10 files
+- Adds observability without behavioral changes
 
-Replace `except Exception: pass` with `logger.warning()` across ~10 sites. Adds observability without behavioral changes.
+**Wave 6 — Test Coverage Gaps**
 
-**Wave 6 — Test Coverage Gaps** [[test-coverage-gaps]] [[test-infrastructure]]
+- 20 tests for AI endpoints (summarize, auto-tag, suggest-links, chat) with mock LLM
+- 28 tests for admin CLI commands with patched config
+- 20 tests for WikilinkService (resolve, batch, wanted pages)
+- 3 clip_url tests with mocked HTTP
+- Extension tests included in default run; slow tests excluded by default
+- Found and fixed production bug: `svc.get_all_tags()` → `svc.get_tags()` in ai_ep.py
 
-Fill biggest untested areas: AI endpoints, admin CLI, wikilink service, web clipper. Add pytest-xdist, include extension tests in default run.
+**Wave 7 — Frontend UX & Accessibility**
 
-**Wave 7 — Frontend UX & Accessibility** [[ux-accessibility-fixes]]
+- Aria-labels on 5 icon-only buttons
+- Shared `typeColors` constant extracted to `$lib/constants.ts`
+- Dead `renderMarkdown` function deleted
+- Entries toolbar flex-wrap for mobile
+- Sidebar shows entry titles instead of IDs in recent entries
+- Standardized HTTP error response format across 3 endpoint files
 
-Aria-labels on icon-only buttons, shared typeColors constant, dead code removal, mobile toolbar fix, sidebar entry titles, standardized error responses.
+**Wave 8 — Architecture Hardening**
 
-**Wave 8 — Architecture Hardening** [[architecture-hardening]]
+- SQL identifier validation in `_create_table_from_def` (plugin DDL injection prevention)
+- Extracted `URI_SCHEME`, `MAX_TIMELINE_EVENTS`, `MAX_RESOURCE_LIST_ENTRIES` constants in mcp_server.py
+- Removed storage→service layer violation (GitService import from index.py)
+- Deleted stale `docs/` directory (9 files, 1136 lines duplicating KB content)
 
-Plugin DDL input validation (SQL injection prevention), extract hardcoded constants, fix storage→service layer violation, consolidate stale docs/.
+### Results
 
-### Results (Waves 1-3)
-
-- 1258 tests passing (+76 over 0.8 baseline)
+- 1654 tests passing (+472 over 0.8 baseline), 115 frontend tests
 - `mcp_server.py`: 1537 → 1046 lines (32% reduction); tool schemas in separate module
 - No `_raw_conn` usage outside `storage/`; SearchService uses proper FastAPI DI
 - `KBService`: 1204 → 1100 lines; wikilink logic extracted to standalone service
-
-### Definition of Done (Waves 4-8)
-
-- All doc inaccuracies fixed, zero broken wikilinks
-- Zero bare `except: pass` patterns in codebase
-- 40+ new tests covering AI endpoints, admin CLI, wikilink service
-- All icon-only buttons have aria-labels; consistent error response format
-- Plugin DDL inputs validated; no storage→service layer violations
+- Zero bare `except: pass` patterns; zero storage→service layer violations
+- All icon-only buttons have aria-labels; consistent structured error responses
+- Plugin DDL inputs validated against SQL injection
 
 ---
 
@@ -304,7 +312,6 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 |------|-------------|--------|
 | [[pypi-publish]] | Publish `pyrite` and `pyrite-mcp` to PyPI | S |
 | Update MCP_SUBMISSION.md | Accurate tool count, test count, configuration examples | S |
-| Consolidate docs/ | Trim to essentials: install, tutorial, MCP setup | S |
 | Getting Started tutorial | Zero to working MCP connection in 5 minutes | S |
 | Release notes | CHANGELOG for 0.11 tag | S |
 
