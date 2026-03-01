@@ -3,7 +3,7 @@ id: adr-0016
 type: adr
 title: "ADR-0016: LanceDB Backend Evaluation — No-Go"
 adr_number: 16
-status: accepted
+status: rejected
 date: 2026-03-01
 tags: [architecture, storage, search, evaluation]
 ---
@@ -12,7 +12,7 @@ tags: [architecture, storage, search, evaluation]
 
 ## Status
 
-**Accepted** — Decision: **No-Go** for LanceDB as default backend. Keep as optional/experimental.
+**Rejected** — LanceDB backend removed. PostgresBackend (tsvector + pgvector) adopted as the second backend alongside SQLite.
 
 ## Context
 
@@ -116,19 +116,17 @@ LanceDB is **not suitable as Pyrite's default backend** at current scale (100–
 3. **Query overhead** — Each query creates new Arrow readers; SQLite's page cache is much faster for small datasets
 4. **FTS limitations** — Native Lance FTS only supports single-field indexing; multi-field requires tantivy+pylance
 
-### Recommendation
+### Outcome
 
-1. **Merge Phase 1 to main** — The SearchBackend protocol + SQLiteBackend refactor is a clear win regardless of LanceDB outcome. Cleaner architecture, better testability, decoupled services.
+1. **SearchBackend protocol merged to main** — 66 conformance tests, clean abstraction, decoupled services.
 
-2. **Keep LanceDBBackend as experimental** — Available via `pip install pyrite[lancedb]` and `search_backend: lancedb` in config. May become viable for users with very large KBs (100k+ entries) where vector indexing matters more than per-entry upsert speed.
+2. **LanceDB backend removed** — Code deleted after evaluation. Not worth maintaining given 49-280x performance penalties across all metrics.
 
-3. **Revisit when** — LanceDB adds native multi-field FTS, improves single-row upsert performance, or Pyrite's typical corpus grows to 10k+ entries where columnar advantages emerge.
-
-4. **Consider alternatives** — For native hybrid search at small scale, consider DuckDB+FTS or sqlite-vec improvements rather than LanceDB.
+3. **PostgresBackend adopted instead** — PostgreSQL with tsvector (weighted FTS) + pgvector (HNSW cosine) passes 66/66 conformance tests. Benchmarks show ~3x slower indexing and ~2x slower queries vs SQLite — acceptable overhead for multi-user/server deployments where SQLite's single-writer lock is the real bottleneck.
 
 ## Consequences
 
-- SearchBackend protocol becomes the stable abstraction for all knowledge-index operations
-- SQLite remains the default and only recommended backend
-- LanceDB code stays on branch or as optional extra, not in default install path
+- SearchBackend protocol is the stable abstraction for all knowledge-index operations
+- SQLite remains the default backend for local/single-user use
+- PostgresBackend is the production backend for multi-user/server deployments
 - Future backend experiments (DuckDB, Qdrant, etc.) can reuse the 66-test conformance suite
