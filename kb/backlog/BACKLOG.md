@@ -71,7 +71,6 @@ Recommended execution order. Grouped by milestone.
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
 | 93 | [[schema-versioning]] | feature | M | 0.11 |
-| 106 | [[architecture-hardening]] | improvement | M | 0.11 |
 
 ### Planned — 0.12
 
@@ -266,4 +265,4 @@ All items below are done. Detail lives in the individual backlog item files in [
 [[coordination-task-plugin]] Phases 1-2, [[programmatic-schema-provisioning]], Plugin KB-Type Scoping
 
 ### Also Completed
-[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[docs-kb-fixes]], [[test-infrastructure]]
+[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[docs-kb-fixes]], [[test-infrastructure]], [[architecture-hardening]]

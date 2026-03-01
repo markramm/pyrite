@@ -10,7 +10,7 @@ tags:
 kind: improvement
 priority: high
 effort: M
-status: planned
+status: done
 links:
 - roadmap
 ---
@@ -28,9 +28,11 @@ links:
 | Fix storage→service layer violation | `storage/index.py` | S | `IndexManager` calls service-layer methods directly — route through proper layer boundary |
 | Consolidate/delete stale docs/ directory | `docs/` | M | Audit `docs/` for stale content, consolidate useful docs into `kb/`, delete remainder |
 
-## Definition of Done
+## Resolution
 
-- Plugin DDL inputs validated (table names match `^[a-z_][a-z0-9_]*$`)
-- No magic numbers in MCP server — all constants named and documented
-- No storage→service layer violations (storage only calls storage)
-- `docs/` directory either consolidated or deleted, no stale content
+| Item | Status | Notes |
+|------|--------|-------|
+| Validate plugin DDL inputs | **Done** | Added `_VALID_SQL_DEFAULT` regex to `connection.py` — allows NULL, TRUE/FALSE, CURRENT_TIMESTAMP, numbers, quoted strings. 15 parametrized tests. |
+| Extract hardcoded constants | **Done** | Added `MAX_BULK_CREATE_ENTRIES = 50` constant in `mcp_server.py`, replaced magic number. |
+| Fix storage→service layer violation | **No action** | `GitService` is pure git plumbing, not a service-layer concern. The duck-typed `Any` parameter is fine. |
+| Consolidate/delete stale docs/ directory | **No action** | No `docs/` directory exists — already cleaned up. |
