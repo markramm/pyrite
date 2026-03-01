@@ -157,9 +157,9 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.8 — UI Design & UX (done)
+## 0.8 — UI Design, UX & Code Hardening (in progress)
 
-**Theme:** Brand identity, navigation polish, and demo-ready first impressions. Every screen a stranger sees should look intentional.
+**Theme:** Brand identity, navigation polish, demo-ready first impressions, and internal code quality. Every screen a stranger sees should look intentional — and the code behind it should be clean, testable, and well-structured.
 
 ### Delivered
 
@@ -182,10 +182,54 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - Graph atmosphere: dot grid background pattern, node glow on hover via cytoscape underlay
 - Toast redesign: slide from top-right with `fly` transition, type icons, shrinking progress bar
 
-### Results
+### Wave 4 — Refactoring & Deduplication
 
-- 1179 backend tests, 115 frontend tests, all passing
-- All DoD met: active sidebar, error/empty states, gold brand identity, dashboard redesign, page transitions, toolbar polish
+| Item | Description | Effort |
+|------|-------------|--------|
+| Extract MCP tool schemas | Move ~520 lines of inline dict literals from `mcp_server.py` to `pyrite/server/tool_schemas.py` | M |
+| Cache `KBSchema.from_yaml()` | Add `@lru_cache` or cache on `KBConfig`; eliminate 12 redundant filesystem reads across MCP, QA, CLI | S |
+| Shared CLI context manager | Replace ~18 duplicated `PyriteDB + KBService` construction sites with shared `get_cli_context()` | M |
+| Consistent MCP service instantiation | Add lazy `self._qa_svc` and `self._search_svc` properties; drop duplicate `self.index_mgr` | S |
+
+### Wave 5 — Architecture Cleanup
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Fix REST DI bypass | Make `SearchService` and `QAService` proper FastAPI `Depends()` in all endpoints (currently bypassed in `search.py`, `ai_ep.py`) | S |
+| Eliminate `_raw_conn` usage | Move ~20 raw SQL calls in `QAService` and `RepoService` into `PyriteDB` public methods | M |
+| Slim down `KBService` | Extract settings wrappers (delegate to DB directly), extract wikilink resolution to standalone module | M |
+| Extract entry detail AI logic | Move AI state + handlers from 500-line `[id]/+page.svelte` into `<AIPanel>` component | S |
+
+### Wave 6 — Test Hardening
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| MCP tests use shared fixtures | Refactor `test_mcp_server.py` to use `conftest.py` fixtures instead of ~80 lines of duplicated setup | M |
+| Unit tests for QA `_check_*` rules | Isolated tests for each of the 11 validation rules with targeted fixtures | M |
+| Integration tests for KB git ops | Test `KBService.commit_kb` and `push_kb` with real temp git repos | S |
+| Type Cytoscape bindings | Replace 7 `any` annotations in `GraphView.svelte` with proper `cytoscape.Core` types | S |
+
+### Wave 7 — UX Improvements
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Search UX redesign | Search results page with filter sidebar, search-as-you-type, result highlighting | M |
+| Entry type distribution chart | Pie/bar chart on dashboard showing entry types across the KB | S |
+| Keyboard shortcuts overlay | `?` key opens a modal showing all available keyboard shortcuts | S |
+| Mobile/responsive sidebar | Sidebar collapses to icon-only on narrow viewports, hamburger toggle on mobile | M |
+| Settings/preferences page | Theme customization, layout preferences (default editor mode, sidebar state) | S |
+| Template picker improvements | Visual template cards with preview, description, and tag pre-fill | S |
+
+### Definition of done
+
+- Sidebar shows active page; error/empty states have retry + CTA
+- Pyrite has a recognizable brand identity (logo, gold accent, distinct typography)
+- Dashboard tells a story (recent entries, type distribution, quick actions)
+- Stranger seeing a screenshot knows "this is Pyrite" — not "this is a Tailwind template"
+- `mcp_server.py` under 1000 lines; tool schemas in separate module
+- No `_raw_conn` usage outside `storage/`; all services use proper DI in REST layer
+- QA validation rules have isolated unit tests; MCP tests use shared fixtures
+- Search, settings, and keyboard shortcuts are polished and functional
 
 ---
 
