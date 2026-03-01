@@ -9,7 +9,7 @@ tags:
 - git
 kind: feature
 priority: high
-effort: L
+effort: M
 status: planned
 links:
 - per-kb-permissions
@@ -32,22 +32,42 @@ Visitor (anonymous)
 
 Registered user (GitHub OAuth)
   └─ creates ephemeral sandbox (configurable TTL)
-  └─ connects a public GitHub repo → personal KB becomes permanent
-     - Pyrite clones repo, indexes it, user gets admin on their KB
-     - Changes sync back to GitHub (push on save or manual commit)
-     - KB survives across sessions — it's their repo
+  └─ exports ephemeral KB entries to a GitHub repo → permanent personal KB
+     - User selects a public repo or forks a curated KB
+     - Pyrite exports markdown files, commits, and pushes
+     - Repo can be mounted as a regular KB on any Pyrite instance
+     - Ephemeral KB cleaned up on its normal TTL
 ```
 
-### Connect Repo Flow
+### Two Flows: Export and Fork
 
-1. User has an ephemeral KB (or starts fresh)
-2. Clicks "Connect GitHub Repo" in KB settings
-3. Selects a public repo from their GitHub account (OAuth scope: `public_repo`)
-4. Backend clones repo into workspace, discovers KB structure
-5. If repo has `kb.yaml` → imports as-is; if empty → initializes with user's ephemeral KB content
-6. Ephemeral KB is replaced with the repo-backed KB (same name, new path)
-7. `KBConfig.ephemeral` set to `False`, `remote` set to repo URL
-8. `kb_permission` entry preserved (user stays admin)
+#### Flow A: Export to New Repo
+
+For users who built entries in their ephemeral sandbox and want to keep them:
+
+1. User has an ephemeral KB with entries they want to keep
+2. Clicks "Export to GitHub Repo" in KB settings
+3. Selects an existing public repo from their GitHub account (OAuth scope: `public_repo`)
+4. Backend clones repo, exports ephemeral KB entries as markdown files into the checkout
+5. If repo already has `kb.yaml` → entries conform to existing schema; if empty → exports `kb.yaml` + entries
+6. Backend commits and pushes to the repo (or presents a PR for user review)
+7. Ephemeral KB remains until TTL expiry — no in-place swap needed
+8. User can mount the repo as a regular KB on their own Pyrite instance, or submit to the awesome-list for demo site inclusion
+
+#### Flow B: Fork a Curated KB
+
+For users who want to contribute to or build on an existing curated KB:
+
+1. User browses a curated KB on the demo site
+2. Clicks "Fork & Edit" on the KB or on a specific entry
+3. Pyrite forks the upstream repo to the user's GitHub account (OAuth scope: `public_repo`)
+4. The fork becomes a personal KB the user can edit freely in their ephemeral sandbox
+5. When ready, the user clicks "Submit PR" — Pyrite creates a pull request from their fork to the upstream repo
+6. The upstream maintainer reviews via normal GitHub PR flow (CODEOWNERS, CI checks, `pyrite ci` validation)
+
+**Side benefit:** curated KBs accumulate GitHub forks from contributors — visible social proof of community engagement. A KB with 50 forks tells a stronger story than one with 50 stars.
+
+This maps directly onto how open source already works. Contributors don't need write access to the upstream KB — Layer 1 (git) handles the entire contribution model through fork/PR. No per-KB write permissions needed on curated KBs.
 
 ### Usage Tiers (configurable resource limits)
 
@@ -98,44 +118,45 @@ Migration (combined with earlier auth migrations if not yet shipped):
 ALTER TABLE local_user ADD COLUMN usage_tier TEXT DEFAULT 'default';
 ```
 
-`KBConfig` additions:
-```python
-owner_id: int | None = None   # local_user.id of the KB owner
-```
-
 ### What This Does NOT Include
 
 - Billing/payment integration (operator's concern)
 - GitHub App installation (uses user's OAuth token for repo access)
+- In-place ephemeral-to-permanent KB swap (export is simpler and avoids state migration complexity)
 - Multi-tenant isolation (all KBs share one SQLite DB — fine for demo, revisit for scale)
 
 ## Files
 
 | File | Action | Summary |
 |------|--------|---------|
-| `pyrite/config.py` | Edit | Add `UsageTierConfig`, `usage_tiers` to `AuthConfig`, `owner_id` to `KBConfig` |
+| `pyrite/config.py` | Edit | Add `UsageTierConfig`, `usage_tiers` to `AuthConfig` |
 | `pyrite/storage/migrations.py` | Edit | Add `usage_tier` column to `local_user` |
 | `pyrite/services/auth_service.py` | Edit | Add usage-tier-aware limit checks |
-| `pyrite/services/kb_service.py` | Edit | `connect_repo_to_kb()` — clone, replace ephemeral, set remote |
-| `pyrite/server/endpoints/admin.py` | Edit | New endpoint: `POST /api/kbs/{name}/connect-repo` |
+| `pyrite/services/kb_service.py` | Edit | `export_kb_to_repo()` and `fork_kb_repo()` — export/fork, commit/push, create PR |
+| `pyrite/server/endpoints/admin.py` | Edit | New endpoints: `POST /api/kbs/{name}/export-to-repo`, `POST /api/kbs/{name}/fork` |
 | `pyrite/server/auth_endpoints.py` | Edit | Expose usage tier info in `/auth/me` |
-| `web/src/routes/login/+page.svelte` | Edit | Post-login redirect shows personal KB or sandbox |
-| `web/src/lib/components/KBSettings.svelte` | Edit | "Connect GitHub Repo" button |
-| `tests/test_personal_kb.py` | Create | Repo connection, usage tier limits, ephemeral-to-permanent upgrade |
+| `web/src/lib/components/KBSettings.svelte` | Edit | "Export to GitHub Repo" and "Fork & Edit" buttons |
+| `tests/test_personal_kb.py` | Create | Export flow, fork flow, PR creation, usage tier limits |
+
+## OAuth Scope Note
+
+Initial GitHub OAuth login uses `read:user,read:org` (no repo access). When the user clicks "Export to GitHub Repo," a separate OAuth authorization request with `public_repo` scope is triggered. This avoids asking for write access to all public repos at initial sign-in — scope escalation happens only when the user explicitly wants it.
 
 ## Prerequisites
 
 - OAuth providers (#110) — needs GitHub OAuth for repo access
-- Per-KB permissions (#112) — ownership model for personal KBs
+- Per-KB permissions (#112) — ephemeral KB sandbox support
 
 ## Success Criteria
 
-- GitHub user signs in, creates sandbox, connects public repo, KB persists
-- Ephemeral KB content migrates to repo-backed KB seamlessly
+- **Export flow:** GitHub user signs in, creates sandbox, exports entries to public repo
+- **Fork flow:** GitHub user forks a curated KB, edits in their sandbox, submits PR to upstream
+- Exported/forked entries are valid markdown files that any Pyrite instance can mount
+- PRs from forks include `pyrite ci` validation results (when CI is configured on upstream)
 - Usage tier limits enforced when configured (entry count, storage, number of KBs)
 - Operator can define usage tiers in config without code changes
 - No limits enforced when `usage_tiers` not configured (local dev, self-hosted)
 
 ## Launch Context
 
-Ships after OAuth (#110) and per-KB permissions (#112). Core demo site feature — "try Pyrite, then connect your repo to keep your work."
+Ships after OAuth (#110) and per-KB permissions (#112). Core demo site feature — "try Pyrite, then fork a KB or export your sandbox to keep your work." The fork model also drives community engagement: curated KBs accumulate GitHub forks from contributors, providing visible social proof and a familiar open-source contribution workflow.

@@ -86,7 +86,7 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 | [[web-ui-auth]] Phase 1 | Local auth + API key tiers — **done** (#94) | M |
 | [[oauth-providers]] Phase 1 | GitHub/Google OAuth for demo site | L |
 | [[per-kb-permissions]] | Per-KB ACL + ephemeral KB sandbox for demo visitors | L |
-| [[personal-kb-repo-backing]] | Connect GitHub repo to make personal KB permanent + usage tiers | L |
+| [[personal-kb-repo-backing]] | Export ephemeral KB to GitHub repo + usage tiers | M |
 | [[mcp-rate-limiting]] | Rate limiting for public-facing MCP server | S |
 | [[pyrite-website]] | Marketing site + docs at pyrite.dev (separate repo) | M |
 | [[demo-site-deployment]] | Live demo at demo.pyrite.dev with curated awesome-list KBs | M |

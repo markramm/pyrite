@@ -33,7 +33,7 @@ Recommended execution order. Grouped by milestone.
 | **4** | [[web-ui-auth]] Phase 1 | M | Local auth + tiers — **done** (#94) |
 | **4a** | [[oauth-providers]] Phase 1 | L | GitHub/Google OAuth — "Sign in with GitHub" for demo site |
 | **4b** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox for demo visitors |
-| **4c** | [[personal-kb-repo-backing]] | L | Connect GitHub repo to make personal KB permanent + usage tiers |
+| **4c** | [[personal-kb-repo-backing]] | M | Export ephemeral KB to GitHub repo + usage tiers |
 | **5** | [[mcp-rate-limiting]] | S | Required for public-facing demo site |
 | **6** | [[pyrite-website]] | M | Marketing site + docs at pyrite.dev (separate repo) |
 | **7** | [[demo-site-deployment]] | M | Live demo at demo.pyrite.dev with curated awesome-list KBs |
@@ -89,7 +89,7 @@ Recommended execution order. Grouped by milestone.
 | 94 | [[web-ui-auth]] Phase 1 | feature | M | Public Demo | 0.12 | **done** |
 | 110 | [[oauth-providers]] | feature | L | Public Demo | 0.12 |
 | 112 | [[per-kb-permissions]] | feature | L | Public Demo | 0.12 |
-| 113 | [[personal-kb-repo-backing]] | feature | L | Public Demo | 0.12 |
+| 113 | [[personal-kb-repo-backing]] | feature | M | Public Demo | 0.12 |
 | 97 | [[mcp-rate-limiting]] | feature | S | Public Demo | 0.12 |
 | 85 | [[demo-site-deployment]] | feature | M | Public Demo | 0.12 |
 | 111 | [[pyrite-website]] | feature | M | Public Demo | 0.12 |
