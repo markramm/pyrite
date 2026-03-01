@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import type { GraphNode, GraphEdge } from '$lib/api/types';
+	import type cytoscape from 'cytoscape';
 
 	interface Props {
 		nodes: GraphNode[];
@@ -17,7 +18,7 @@
 
 	let container: HTMLDivElement;
 	let tooltipEl: HTMLDivElement;
-	let cy: any;
+	let cy: cytoscape.Core | undefined;
 
 	const typeColors: Record<string, string> = {
 		event: '#3b82f6',
@@ -89,7 +90,7 @@
 			case 'grid':
 				return { ...base, name: 'grid' };
 			case 'concentric':
-				return { ...base, name: 'concentric', concentric: (node: any) => node.data('linkCount') || 1, levelWidth: () => 2 };
+				return { ...base, name: 'concentric', concentric: (node: cytoscape.NodeSingular) => node.data('linkCount') || 1, levelWidth: () => 2 };
 			default:
 				return {
 					...base,
@@ -180,12 +181,12 @@
 			wheelSensitivity: 0.3
 		});
 
-		cy.on('tap', 'node', (evt: any) => {
+		cy.on('tap', 'node', (evt: cytoscape.EventObject) => {
 			const data = evt.target.data();
 			goto(`/entries/${encodeURIComponent(data.entryId)}`);
 		});
 
-		cy.on('mouseover', 'node', (evt: any) => {
+		cy.on('mouseover', 'node', (evt: cytoscape.EventObject) => {
 			container.style.cursor = 'pointer';
 			const data = evt.target.data();
 			evt.target.style({
@@ -207,7 +208,7 @@
 			);
 		});
 
-		cy.on('mouseout', 'node', (evt: any) => {
+		cy.on('mouseout', 'node', (evt: cytoscape.EventObject) => {
 			container.style.cursor = 'default';
 			const isCenter = evt.target.data('isCenter');
 			if (!isCenter) {
@@ -219,7 +220,7 @@
 			hideTooltip();
 		});
 
-		cy.on('mouseover', 'edge', (evt: any) => {
+		cy.on('mouseover', 'edge', (evt: cytoscape.EventObject) => {
 			const relation = evt.target.data('relation');
 			if (relation) {
 				const pos = evt.renderedPosition || evt.target.midpoint();
@@ -260,7 +261,7 @@
 			cy.edges().style({ opacity: 0.6 });
 			return;
 		}
-		cy.nodes().forEach((node: any) => {
+		cy.nodes().forEach((node: cytoscape.NodeSingular) => {
 			const label = (node.data('fullTitle') || '').toLowerCase();
 			if (label.includes(q)) {
 				node.style({ opacity: 1, 'border-width': 3, 'border-color': '#facc15' });
