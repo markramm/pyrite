@@ -2,8 +2,12 @@
 
 @theme {
 	--color-zinc-850: #1f1f23;
+	--color-gold-400: #D4A843;
+	--color-gold-500: #C9A84C;
+	--color-gold-600: #B8942F;
 	--font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 	--font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+	--font-display: 'DM Serif Display', 'Georgia', serif;
 }
 
 /* Scrollbar styling */
@@ -170,3 +174,9 @@
 .prose blockquote { margin-top: 1.25em; margin-bottom: 1.25em; }
 .prose table { margin-top: 1.25em; margin-bottom: 1.25em; }
 .prose hr { margin-top: 2em; margin-bottom: 2em; }
+
+/* Display font for major headings */
+h1.page-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}

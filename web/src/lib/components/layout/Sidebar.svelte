@@ -30,7 +30,10 @@
 >
 	<!-- Logo / Brand -->
 	<div class="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-		<a href="/" class="text-lg font-bold tracking-tight">Pyrite</a>
+		<a href="/" class="flex items-center gap-2">
+			<span class="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-zinc-900">Py</span>
+			<span class="font-display text-lg tracking-tight text-zinc-100">Pyrite</span>
+		</a>
 		<ThemeToggle />
 	</div>
 
