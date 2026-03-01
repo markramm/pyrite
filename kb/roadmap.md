@@ -77,51 +77,54 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.6 — Agent Coordination
+## 0.6 — Agent Coordination (done)
 
 **Theme:** Task management as a coordination primitive for agent swarms. Not a project management tool — an orchestration substrate.
 
-### Coordination/Task Plugin (Phases 1-2)
+### Delivered
 
-| Phase | Description | Effort | Status |
-|-------|-------------|--------|--------|
-| Phase 1 | Core TaskEntry type, workflow state machine, CLI commands, MCP tools, validators, hooks | M | done |
-| Phase 2 | Atomic task_claim, task_decompose, task_checkpoint, parent auto-rollup | M | done |
+**Coordination/Task Plugin (Phases 1-2)**
 
-Phase 1 delivered: `extensions/task/` with TaskEntry (7-state workflow), 4 CLI commands (`task create/list/status/update`), 4 MCP tools (read: `task_list`/`task_status`, write: `task_create`/`task_update`), before_save workflow validation hook, after_save parent rollup detection, 36 tests.
+- `extensions/task/` with TaskEntry (7-state workflow), 7 CLI commands, 7 MCP tools
+- Atomic `task_claim` via CAS (compare-and-swap on SQLite metadata JSON)
+- Bulk `task_decompose` for subtask creation
+- `task_checkpoint` with timestamped progress logging and evidence tracking
+- Parent auto-rollup with cascading (grandparent rolls up when parent completes)
+- `old_status` propagation via `PluginContext.extra` for workflow transition validation
 
-Phase 2 delivered: `TaskService` wrapping KBService for task-specific atomic operations. Operative MCP tools (7 total: read: `task_list`/`task_status`, write: `task_create`/`task_update`/`task_claim`/`task_decompose`/`task_checkpoint`). Atomic `task_claim` via CAS (compare-and-swap on SQLite metadata JSON). Bulk `task_decompose` for subtask creation. `task_checkpoint` with timestamped progress logging and evidence tracking. Parent auto-rollup with cascading (grandparent rolls up when parent completes). CLI commands wired to TaskService (7 commands: `create/list/status/update/claim/decompose/checkpoint`). `old_status` propagation via `PluginContext.extra` for workflow transition validation. 64 tests (28 new).
+**Plugin KB-Type Scoping**
 
-### Plugin KB-Type Scoping (done)
+- `PluginRegistry.get_validators_for_kb(kb_type)`, `get_hooks_for_kb(kb_type)`, `run_hooks_for_kb()`
+- `KBSchema.kb_type` and `PluginContext.kb_type` fields
+- All validate_entry and hook call sites threaded with `kb_type`
 
-| Item | Description | Effort | Status |
-|------|-------------|--------|--------|
-| Plugin KB-type scoping | Validators and hooks scoped by KB type at registry level | M | done |
+**Programmatic Schema Provisioning**
 
-Delivered: `PluginRegistry.get_validators_for_kb(kb_type)`, `get_hooks_for_kb(kb_type)`, `run_hooks_for_kb()`. `KBSchema.kb_type` field. `PluginContext.kb_type` field. All `validate_entry` and hook call sites threaded with `kb_type`. Removed fragile field-sniffing heuristic from task validator. 8 new integration tests.
+- `SchemaService` with show/add_type/remove_type/set_schema
+- MCP: extended `kb_manage` with 4 new actions
+- CLI: `kb schema show/add-type/remove-type/set`
 
-### Programmatic Schema Provisioning (done)
+**QA Phase 2 — Assessment Entries**
 
-| Item | Description | Effort | Status |
-|------|-------------|--------|--------|
-| [[programmatic-schema-provisioning]] | MCP and CLI tools to define types and fields without editing YAML | M | done |
+- `qa_assessment` entry type with target_entry, tier, status, issues list
+- `QAService.assess_entry()` and `assess_kb()` with tiered evaluation
+- `QAService.get_coverage()` for verification rate tracking
+- MCP tools: `kb_qa_assess` (write tier)
 
-Delivered: `SchemaService` with show/add_type/remove_type/set_schema. MCP: extended `kb_manage` with 4 new actions. CLI: `kb schema show/add-type/remove-type/set`. 11 tests.
+**Post-Save QA Validation**
 
-### QA Phase 2 — Assessment Entries
+- `validate` param on `kb_create`/`kb_update` MCP tools for opt-in QA
+- `qa_on_write: true` KB-level setting in `kb.yaml` for automatic validation
+- `_maybe_validate()` helper runs `QAService.validate_entry()` after save, returns `qa_issues` in response
 
-| Deliverable | Description |
-|-------------|-------------|
-| `qa_assessment` entry type | Schema with target_entry, tier, status, issues list |
-| Query interface | Entries with open issues, unassessed entries, verification rates |
-| QA tasks | QA agent creates tasks via coordination plugin, links assessments as evidence |
+### Results
 
-### Definition of done
-
-- An orchestrator agent can decompose a research question into subtasks, dispatch to agents, and track completion
-- `task_claim` is atomic (no double-claims in concurrent swarms)
-- Agent-authored entries are automatically validated on write
-- QA assessments are queryable KB entries linked to targets and tasks
+- 1154 tests passing (+68 over 0.5 baseline)
+- All 0.6 DoD criteria met:
+  - Orchestrator agent can decompose, dispatch, and track via task tools
+  - `task_claim` is atomic (no double-claims in concurrent swarms)
+  - Agent-authored entries are automatically validated on write
+  - QA assessments are queryable KB entries linked to targets and tasks
 
 ---
 
