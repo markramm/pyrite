@@ -21,7 +21,7 @@ class TestObjectRefs:
 
     def test_entry_ref_table_exists(self, db):
         """entry_ref table should be created."""
-        row = db.conn.execute(
+        row = db._raw_conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='entry_ref'"
         ).fetchone()
         assert row is not None
@@ -45,7 +45,7 @@ class TestObjectRefs:
         }
         db.upsert_entry(entry_data)
 
-        rows = db.conn.execute(
+        rows = db._raw_conn.execute(
             "SELECT * FROM entry_ref WHERE source_id = 'meeting-1' AND source_kb = 'test-kb'"
         ).fetchall()
         assert len(rows) == 2
@@ -161,7 +161,7 @@ class TestObjectRefs:
             }
         )
 
-        rows = db.conn.execute(
+        rows = db._raw_conn.execute(
             "SELECT target_id FROM entry_ref WHERE source_id = 'meeting-1'"
         ).fetchall()
         assert len(rows) == 1
@@ -187,7 +187,7 @@ class TestObjectRefs:
         )
         db.delete_entry("meeting-1", "test-kb")
 
-        rows = db.conn.execute("SELECT * FROM entry_ref WHERE source_id = 'meeting-1'").fetchall()
+        rows = db._raw_conn.execute("SELECT * FROM entry_ref WHERE source_id = 'meeting-1'").fetchall()
         assert len(rows) == 0
 
     def test_no_refs_when_none_provided(self, db):
@@ -206,5 +206,5 @@ class TestObjectRefs:
             }
         )
 
-        rows = db.conn.execute("SELECT * FROM entry_ref WHERE source_id = 'note-1'").fetchall()
+        rows = db._raw_conn.execute("SELECT * FROM entry_ref WHERE source_id = 'note-1'").fetchall()
         assert len(rows) == 0

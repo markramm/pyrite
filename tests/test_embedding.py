@@ -179,7 +179,7 @@ class TestEmbeddingService:
         assert result is True
 
         # Verify it's stored
-        count = populated_db.conn.execute("SELECT COUNT(*) FROM vec_entry").fetchone()[0]
+        count = populated_db._raw_conn.execute("SELECT COUNT(*) FROM vec_entry").fetchone()[0]
         assert count == 1
 
     def test_embed_entry_not_found(self, test_db):

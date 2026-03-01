@@ -4,6 +4,9 @@ Background Embedding Worker
 Manages a SQLite-backed queue of entries to embed asynchronously.
 Decouples write latency from embedding computation.
 
+The embed_queue table is app-state (not in SearchBackend) — it manages
+internal processing state, not knowledge-index data.
+
 Usage:
     worker = EmbeddingWorker(db)
     worker.enqueue("entry-id", "kb-name")
@@ -30,7 +33,7 @@ class EmbeddingWorker:
 
     def _ensure_table(self):
         """Create the embed_queue table if it doesn't exist."""
-        self.db.conn.execute("""
+        self.db._raw_conn.execute("""
             CREATE TABLE IF NOT EXISTS embed_queue (
                 entry_id TEXT NOT NULL,
                 kb_name TEXT NOT NULL,
@@ -41,23 +44,23 @@ class EmbeddingWorker:
                 PRIMARY KEY (entry_id, kb_name)
             )
         """)
-        self.db.conn.commit()
+        self.db._raw_conn.commit()
 
     def enqueue(self, entry_id: str, kb_name: str) -> None:
         """Add an entry to the embedding queue. Idempotent — skips if already queued."""
         now = datetime.now(UTC).isoformat()
-        self.db.conn.execute(
+        self.db._raw_conn.execute(
             """
             INSERT OR IGNORE INTO embed_queue (entry_id, kb_name, queued_at, status, attempts)
             VALUES (?, ?, ?, 'pending', 0)
             """,
             (entry_id, kb_name, now),
         )
-        self.db.conn.commit()
+        self.db._raw_conn.commit()
 
     def process_batch(self, batch_size: int = 10) -> int:
         """Process up to batch_size pending entries. Returns count of successfully embedded."""
-        rows = self.db.conn.execute(
+        rows = self.db._raw_conn.execute(
             """
             SELECT entry_id, kb_name, attempts FROM embed_queue
             WHERE status = 'pending' AND attempts < ?
@@ -81,7 +84,7 @@ class EmbeddingWorker:
             try:
                 svc.embed_entry(entry_id, kb_name)
                 # Mark as done — delete from queue
-                self.db.conn.execute(
+                self.db._raw_conn.execute(
                     "DELETE FROM embed_queue WHERE entry_id = ? AND kb_name = ?",
                     (entry_id, kb_name),
                 )
@@ -89,7 +92,7 @@ class EmbeddingWorker:
             except Exception as e:
                 new_attempts = attempts + 1
                 new_status = "failed" if new_attempts >= self.max_attempts else "pending"
-                self.db.conn.execute(
+                self.db._raw_conn.execute(
                     """
                     UPDATE embed_queue
                     SET attempts = ?, status = ?, error = ?
@@ -102,12 +105,12 @@ class EmbeddingWorker:
                     entry_id, new_attempts, self.max_attempts, e,
                 )
 
-        self.db.conn.commit()
+        self.db._raw_conn.commit()
         return success_count
 
     def get_status(self) -> dict:
         """Get queue status: counts by status."""
-        rows = self.db.conn.execute(
+        rows = self.db._raw_conn.execute(
             "SELECT status, COUNT(*) FROM embed_queue GROUP BY status"
         ).fetchall()
         counts = {r[0]: r[1] for r in rows}
