@@ -68,6 +68,9 @@ class TestPluginRegistration:
         tools = registry.get_all_mcp_tools("write")
         assert "task_create" in tools
         assert "task_update" in tools
+        assert "task_claim" in tools
+        assert "task_decompose" in tools
+        assert "task_checkpoint" in tools
         # Read tools also available at write tier
         assert "task_list" in tools
 
@@ -77,6 +80,9 @@ class TestPluginRegistration:
         tools = registry.get_all_mcp_tools("read")
         assert "task_create" not in tools
         assert "task_update" not in tools
+        assert "task_claim" not in tools
+        assert "task_decompose" not in tools
+        assert "task_checkpoint" not in tools
 
     def test_relationship_types_registered(self):
         registry = PluginRegistry()
@@ -286,6 +292,109 @@ class TestValidators:
         """All task entries are validated regardless of fields present."""
         errors = validate_task("task", {"status": "todo"}, {})
         assert any(e["field"] == "status" for e in errors)
+
+
+# =========================================================================
+# Core integration
+# =========================================================================
+
+
+class TestHooks:
+    def test_before_save_validates_transition_with_old_status(self):
+        plugin = TaskPlugin()
+        entry = TaskEntry(id="t1", title="Test", status="done")
+        # Simulate a PluginContext-like dict with old_status in extra
+        from unittest.mock import MagicMock
+
+        from pyrite.plugins.context import PluginContext
+
+        ctx = PluginContext(
+            config=MagicMock(),
+            db=MagicMock(),
+            kb_name="test",
+            operation="update",
+            kb_type="task",
+            extra={"old_status": "open"},
+        )
+        # open → done is not a valid transition
+        import pytest
+
+        with pytest.raises(ValueError, match="Invalid task transition"):
+            plugin._hook_validate_transition(entry, ctx)
+
+    def test_before_save_allows_valid_transition(self):
+        plugin = TaskPlugin()
+        entry = TaskEntry(id="t1", title="Test", status="claimed")
+        from unittest.mock import MagicMock
+
+        from pyrite.plugins.context import PluginContext
+
+        ctx = PluginContext(
+            config=MagicMock(),
+            db=MagicMock(),
+            kb_name="test",
+            operation="update",
+            kb_type="task",
+            extra={"old_status": "open"},
+        )
+        # open → claimed is valid
+        result = plugin._hook_validate_transition(entry, ctx)
+        assert result.status == "claimed"
+
+    def test_before_save_ignores_non_update(self):
+        plugin = TaskPlugin()
+        entry = TaskEntry(id="t1", title="Test", status="done")
+        from unittest.mock import MagicMock
+
+        from pyrite.plugins.context import PluginContext
+
+        ctx = PluginContext(
+            config=MagicMock(),
+            db=MagicMock(),
+            kb_name="test",
+            operation="create",
+            kb_type="task",
+            extra={"old_status": "open"},
+        )
+        # Should not validate on create
+        result = plugin._hook_validate_transition(entry, ctx)
+        assert result.status == "done"
+
+
+class TestMCPToolSchemas:
+    def test_task_create_requires_kb_name_and_title(self):
+        plugin = TaskPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["task_create"]["inputSchema"]
+        assert "kb_name" in schema["required"]
+        assert "title" in schema["required"]
+
+    def test_task_update_requires_task_id_and_kb_name(self):
+        plugin = TaskPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["task_update"]["inputSchema"]
+        assert "task_id" in schema["required"]
+        assert "kb_name" in schema["required"]
+
+    def test_task_claim_requires_all_fields(self):
+        plugin = TaskPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["task_claim"]["inputSchema"]
+        assert set(schema["required"]) == {"task_id", "kb_name", "assignee"}
+
+    def test_task_decompose_schema(self):
+        plugin = TaskPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["task_decompose"]["inputSchema"]
+        assert "parent_id" in schema["required"]
+        assert "children" in schema["required"]
+
+    def test_task_checkpoint_schema(self):
+        plugin = TaskPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["task_checkpoint"]["inputSchema"]
+        assert "task_id" in schema["required"]
+        assert "message" in schema["required"]
 
 
 # =========================================================================

@@ -237,70 +237,106 @@ Items subsumed by larger features:
 | 29 | [Database Views (Table/Board/Gallery)](database-views.md) | #51 Collections (Phase 3) | Collection view types cover table, kanban, gallery |
 | 43 | [Display Hints for Types](display-hints-for-types.md) | #51 Collections (Phase 1) | View configuration is per-collection, not just per-type |
 
-### Wave 11 — Agent CLI Completeness (0.5)
+### Wave 11 — Agent CLI Completeness (0.5) ✅
 
 Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (OpenClaw, Claude Code, Codex) without human setup. See [[bhag-self-configuring-knowledge-infrastructure]] for the motivating vision.
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 75 | [Headless KB Initialization with Templates](headless-kb-init.md) | Core | feature | M | none | proposed |
-| 76 | [CLI --format json Audit and Consistency](cli-json-output-audit.md) | Core | improvement | M | none | proposed |
-| 77 | [pyrite extension init CLI Command](extension-init-cli.md) | Core | feature | S | none | proposed |
-| 78 | [pyrite extension install CLI Command](extension-install-cli.md) | Core | feature | S | none | proposed |
+| 75 | [Headless KB Initialization with Templates](headless-kb-init.md) | Core | feature | M | none | **done** |
+| 76 | [CLI --format json Audit and Consistency](cli-json-output-audit.md) | Core | improvement | M | none | **done** |
+| 77 | [pyrite extension init CLI Command](extension-init-cli.md) | Core | feature | S | none | **done** |
+| 78 | [pyrite extension install CLI Command](extension-install-cli.md) | Core | feature | S | none | **done** |
 
-**Parallelism:** #76 and #77 touch different files. #75 is new code (cli/init_commands.py). #78 depends on #77 conceptually but not at the file level.
+**Delivered (0.5):** `--format json/markdown/csv/yaml` on 11 CLI commands. `pyrite init --template <name>` with 4 built-in templates (software, zettelkasten, research, empty). `pyrite extension init/install/list/uninstall` — full extension lifecycle. 1086 tests passing.
 
-### Wave 12 — Agent Coordination
+### Wave 12 — Agent Coordination (0.6, in progress)
 
 | # | Item | Track | Kind | Effort | Blocked by | Status |
 |---|------|-------|------|--------|------------|--------|
-| 79 | [Coordination/Task Plugin (Phases 1-2)](../coordination-task-plugin.md) | AI | feature | L | none | proposed |
-| 80 | [Programmatic Schema Provisioning](programmatic-schema-provisioning.md) | Core | feature | M | none | proposed |
+| 79 | [Coordination/Task Plugin (Phases 1-2)](../coordination-task-plugin.md) | AI | feature | L | none | **Phase 1 done** |
+| 80 | [Programmatic Schema Provisioning](programmatic-schema-provisioning.md) | Core | feature | M | none | **done** |
+| 81 | Plugin KB-Type Scoping | Core | feature | M | none | **done** |
 
-**Dependencies:** #79 benefits from #73 Phase 1 (QA) and #75 (headless init) but neither is a hard blocker.
+**Phase 1 delivered:** `extensions/task/` with TaskEntry (7-state workflow), 4 CLI commands (`task create/list/status/update`), 4 MCP tools (read: `task_list`/`task_status`, write: `task_create`/`task_update`), workflow validation hook, parent rollup detection. 36 tests.
+
+**Plugin KB-type scoping delivered:** `PluginRegistry.get_validators_for_kb(kb_type)`, `get_hooks_for_kb(kb_type)`, `run_hooks_for_kb()`. 8 new integration tests.
+
+**Schema provisioning delivered:** `SchemaService` with show/add_type/remove_type/set_schema. MCP: `kb_manage` with 4 new actions. CLI: `kb schema show/add-type/remove-type/set`. 11 tests.
+
+**Remaining:** Task plugin phase 2 (atomic task_claim, task_decompose, task_checkpoint). QA Phase 2 (assessment entries).
+
+### Wave 13 — Launch Infrastructure
+
+| # | Item | Track | Kind | Effort | Status |
+|---|------|-------|------|--------|--------|
+| 82 | [Software Project Plugin (Wave 2)](software-project-plugin.md) | AI | feature | L | planned |
+| 83 | [Investigative Journalism Plugin (Wave 3)](investigative-journalism-plugin.md) | AI | feature | XL | planned |
+| 84 | [Extension Registry / Public KB Directory](extension-registry.md) | Core | feature | M | planned |
+| 85 | [Demo Site Deployment](demo-site-deployment.md) | Core | feature | M | planned |
+| 86 | [pyrite ci — CI/CD Validation](pyrite-ci-command.md) | Core | feature | S | planned |
+| 87 | [BYOK AI Gap Analysis](byok-ai-gap-analysis.md) | AI | improvement | M | planned |
+| 88 | [Obsidian Vault Migration](obsidian-migration.md) | Core | feature | M | planned |
+| 89 | [Update MCP_SUBMISSION.md](mcp-submission-update.md) | both | improvement | XS | planned |
+| 90 | [PKM Capture Plugin (Wave 4)](pkm-capture-plugin.md) | AI | feature | L | planned |
+| 91 | [PostgreSQL Storage Backend](postgres-storage-backend.md) | Core | feature | M | planned |
+| 92 | [Intent Layer: Guidelines, Goals, Rubrics](intent-layer.md) | Core | feature | M | planned |
+| 93 | [Schema Versioning and Migration](schema-versioning.md) | Core | feature | M | planned |
+| 94 | [Web UI Authentication](web-ui-auth.md) | UI | feature | M | planned |
+| 95 | [Event Bus and Webhook System](event-bus-webhooks.md) | Core | feature | M | planned |
+| 96 | [Database Backup and Restore](db-backup-restore.md) | Core | feature | S | planned |
+| 97 | [MCP Server Rate Limiting](mcp-rate-limiting.md) | Core | feature | S | planned |
+| 98 | [KB Orchestrator Skill](kb-orchestrator-skill.md) | AI | feature | M | planned |
+
+**Dependencies:** #82 evolves from existing `extensions/software-kb/`. #83 needs task plugin. #84 needs demo site (#85). #85 benefits from #91 (Postgres), #94 (auth), #97 (rate limiting). #90 needs waves 1-3 shipped. #92 phase 1 before 0.8. #93 before 0.8 (schema changes after launch need migration). #94 phase 1 before demo site. #97 blocker for demo site. #98 needs task plugin phase 2 + intent layer.
 
 ## Prioritized Next Up
 
 Recommended execution order. Grouped by milestone.
 
-**0.5 — QA & Agent CLI (in progress):**
+**0.6 — Agent Coordination (in progress):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **1** | #73 QA Phase 1.5: Hooks + remediation | Post-save hook + `--fix` flag, small effort, completes QA story |
-| **2** | #75 Headless KB Init | `pyrite init --template software` is the golden path for humans and agents |
-| **3** | #76 CLI JSON Audit | Every agent interaction depends on parseable output |
-| **4** | #77 Extension Init CLI | Enables the self-configuring agent loop |
-| **5** | #78 Extension Install CLI | Completes the extension lifecycle |
+| **1** | #73 QA Phase 1.5: Hooks + remediation | Post-save hook + `--fix` flag, completes QA story |
+| **2** | #79 Task Plugin Phase 2 | Atomic task_claim, task_decompose — swarm coordination |
+| **3** | #73 QA Phase 2 | Assessment entries, queryable quality |
 
-**0.6 — Agent Coordination:**
+**0.7 — Web UI Polish + Intent Layer:**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **6** | #79 Coordination/Task Plugin | Agent swarm coordination primitive |
-| **7** | #80 Programmatic Schema Provisioning | Closes the schema-as-API gap |
-| **8** | #73 QA Phase 2 | Assessment entries, queryable quality |
+| **4** | #92 Intent Layer Phase 1 | Guidelines + goals in kb.yaml — the intent engineering story for launch |
+| **5** | #60 Block Refs Phase 3 | Transclusion rendering, demo-ready editor |
+| **6** | #87 BYOK AI Gap Analysis | Identify what's missing for the AI portal vision |
+| **7** | QA Dashboard | Visual quality monitoring for operators |
+| **8** | Graph enhancements | Demo-ready knowledge graph |
 
-**0.7 — Web UI Polish:**
-
-| Priority | Item | Rationale |
-|----------|------|-----------|
-| **9** | #60 Block Refs Phase 3 | Transclusion rendering, demo-ready editor |
-| **10** | QA Dashboard | Visual quality monitoring for operators |
-| **11** | Graph enhancements | Demo-ready knowledge graph |
-
-**0.8 — Announceable Alpha (packaging):**
+**0.8 — Announceable Alpha (packaging + launch):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **12** | #74 PyPI Publish | `pip install pyrite` as the golden path |
-| **13** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
+| **9** | #74 PyPI Publish | `pip install pyrite` as the golden path |
+| **10** | #89 Update MCP_SUBMISSION.md | Accurate listing for MCP registry |
+| **11** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
+| **12** | #85 Demo Site Deployment | Live demo for visitors |
+| **13** | #86 pyrite ci | Quick win for corporate teams |
+| **14** | #84 Extension Registry | Ecosystem discovery |
+
+**Post-0.8 — Launch Waves:**
+
+| Priority | Item | Rationale |
+|----------|------|-----------|
+| **15** | #82 Software Project Plugin (Wave 2) | Evolves from software-kb, grabs dev team eyeballs |
+| **16** | #83 Investigative Journalism Plugin (Wave 3) | Proves general-purpose, different audience |
+| **17** | #88 Obsidian Migration | Onramp for PKM users |
+| **18** | #90 PKM Capture Plugin (Wave 4) | Opens aperture to everyone |
 
 **Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
 
 ## In Progress
 
-*No items currently in progress.*
+**0.6 — Agent Coordination:** Task plugin phase 1 done. Schema provisioning done. KB-type scoping done. Remaining: task plugin phase 2, QA phase 1.5, QA phase 2.
 
 ## Collaboration Bottleneck Notes
 
@@ -482,15 +518,32 @@ qa-agent-workflows (#73)              [10]
   Phase 5: continuous QA pipeline     [10, after Phase 4]
 
 pypi-publish (#74)                    [11] — no blockers
-headless-kb-init (#75)                [11] — no blockers
-cli-json-output-audit (#76)           [11] — no blockers
-extension-init-cli (#77)              [11] — no blockers
-extension-install-cli (#78)           [11] — after #77
-  └── programmatic-schema-provisioning (#80) [12]
+headless-kb-init (#75) ✅             [11] — done
+cli-json-output-audit (#76) ✅       [11] — done
+extension-init-cli (#77) ✅          [11] — done
+extension-install-cli (#78) ✅       [11] — done
 
-coordination-task-plugin (#79)        [12] — benefits from #73 Phase 1, #75
-  Phase 1: core type + CLI            [12]
-  Phase 2: MCP tools + atomic ops     [12, after Phase 1]
+programmatic-schema-provisioning (#80) ✅ [12] — done
+plugin-kb-type-scoping (#81) ✅      [12] — done
+
+coordination-task-plugin (#79)        [12] — Phase 1 done
+  Phase 1: core type + CLI ✅        [12]
+  Phase 2: atomic ops + MCP           [12, after Phase 1]
   Phase 3: DAG queries                [future]
   Phase 4: QA integration             [future, after #73 Phase 2]
+
+software-project-plugin (#82)        [13] — evolves from extensions/software-kb/
+investigative-journalism-plugin (#83) [13] — needs task plugin
+extension-registry (#84)             [13] — needs demo site (#85)
+demo-site-deployment (#85)           [13] — benefits from #91 (Postgres)
+pyrite-ci (#86)                      [13] — no blockers
+byok-ai-gap-analysis (#87)          [13] — no blockers
+obsidian-migration (#88)             [13] — no blockers
+mcp-submission-update (#89)          [13] — no blockers
+pkm-capture-plugin (#90)            [13] — needs waves 1-3 shipped
+postgres-storage-backend (#91)      [13] — no blockers, enables demo site + hosted
+intent-layer (#92)                  [13] — phase 1 before 0.8, phases 2-3 enhance QA
+  Phase 1: schema + storage          — no blockers
+  Phase 2: QA rubric evaluation      — after #73 Phase 1
+  Phase 3: LLM rubric evaluation     — after #73 Phase 2
 ```

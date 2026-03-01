@@ -86,9 +86,11 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 | Phase | Description | Effort | Status |
 |-------|-------------|--------|--------|
 | Phase 1 | Core TaskEntry type, workflow state machine, CLI commands, MCP tools, validators, hooks | M | done |
-| Phase 2 | Atomic task_claim, task_decompose, task_checkpoint, parent auto-rollup | M | pending |
+| Phase 2 | Atomic task_claim, task_decompose, task_checkpoint, parent auto-rollup | M | done |
 
 Phase 1 delivered: `extensions/task/` with TaskEntry (7-state workflow), 4 CLI commands (`task create/list/status/update`), 4 MCP tools (read: `task_list`/`task_status`, write: `task_create`/`task_update`), before_save workflow validation hook, after_save parent rollup detection, 36 tests.
+
+Phase 2 delivered: `TaskService` wrapping KBService for task-specific atomic operations. Operative MCP tools (7 total: read: `task_list`/`task_status`, write: `task_create`/`task_update`/`task_claim`/`task_decompose`/`task_checkpoint`). Atomic `task_claim` via CAS (compare-and-swap on SQLite metadata JSON). Bulk `task_decompose` for subtask creation. `task_checkpoint` with timestamped progress logging and evidence tracking. Parent auto-rollup with cascading (grandparent rolls up when parent completes). CLI commands wired to TaskService (7 commands: `create/list/status/update/claim/decompose/checkpoint`). `old_status` propagation via `PluginContext.extra` for workflow transition validation. 64 tests (28 new).
 
 ### Plugin KB-Type Scoping (done)
 

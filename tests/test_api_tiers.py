@@ -33,7 +33,7 @@ def _make_client(tmpdir, api_key="", api_keys=None):
     """Create a TestClient with tier enforcement config."""
     db_path = tmpdir / "index.db"
     kb_path = tmpdir / "kb"
-    kb_path.mkdir(exist_ok=True)
+    kb_path.mkdir(parents=True, exist_ok=True)
 
     settings_kwargs = dict(
         index_path=db_path,
@@ -57,12 +57,6 @@ def _make_client(tmpdir, api_key="", api_keys=None):
     return TestClient(application), config
 
 
-@pytest.fixture
-def tmpdir():
-    with tempfile.TemporaryDirectory() as d:
-        yield Path(d)
-
-
 # =============================================================================
 # resolve_api_key_role unit tests
 # =============================================================================
@@ -71,72 +65,79 @@ def tmpdir():
 class TestResolveAPIKeyRole:
     """Test the key → role resolution logic."""
 
-    def test_no_auth_returns_admin(self, tmpdir):
+    @pytest.fixture(scope="class")
+    def configs(self):
+        """Create configs once for all role resolution tests."""
+        with tempfile.TemporaryDirectory() as d:
+            tmpdir = Path(d)
+            _, no_auth_config = _make_client(tmpdir / "no-auth", api_key="", api_keys=[])
+            _, single_key_config = _make_client(tmpdir / "single", api_key="secret123")
+            keys = [{"key_hash": _hash_key("list-key"), "role": "read", "label": "Reader"}]
+            _, list_config = _make_client(tmpdir / "list", api_keys=keys)
+            keys_coexist = [{"key_hash": _hash_key("list-key"), "role": "read", "label": "Reader"}]
+            _, coexist_config = _make_client(tmpdir / "coexist", api_key="legacy-key", api_keys=keys_coexist)
+            yield {
+                "no_auth": no_auth_config,
+                "single_key": single_key_config,
+                "list": list_config,
+                "coexist": coexist_config,
+            }
+
+    def test_no_auth_returns_admin(self, configs):
         """When auth is disabled (no api_key, no api_keys), everyone gets admin."""
-        _, config = _make_client(tmpdir, api_key="", api_keys=[])
-        role = resolve_api_key_role("anything", config)
+        role = resolve_api_key_role("anything", configs["no_auth"])
         assert role == "admin"
 
-    def test_no_auth_empty_key_returns_admin(self, tmpdir):
+    def test_no_auth_empty_key_returns_admin(self, configs):
         """When auth is disabled, even empty key gives admin."""
-        _, config = _make_client(tmpdir, api_key="", api_keys=[])
-        role = resolve_api_key_role("", config)
+        role = resolve_api_key_role("", configs["no_auth"])
         assert role == "admin"
 
-    def test_single_api_key_correct_returns_admin(self, tmpdir):
+    def test_single_api_key_correct_returns_admin(self, configs):
         """Legacy single api_key: correct key returns admin."""
-        _, config = _make_client(tmpdir, api_key="secret123")
-        role = resolve_api_key_role("secret123", config)
+        role = resolve_api_key_role("secret123", configs["single_key"])
         assert role == "admin"
 
-    def test_single_api_key_wrong_returns_none(self, tmpdir):
+    def test_single_api_key_wrong_returns_none(self, configs):
         """Legacy single api_key: wrong key returns None."""
-        _, config = _make_client(tmpdir, api_key="secret123")
-        role = resolve_api_key_role("wrong", config)
+        role = resolve_api_key_role("wrong", configs["single_key"])
         assert role is None
 
-    def test_single_api_key_missing_returns_none(self, tmpdir):
+    def test_single_api_key_missing_returns_none(self, configs):
         """Legacy single api_key: missing key returns None."""
-        _, config = _make_client(tmpdir, api_key="secret123")
-        role = resolve_api_key_role(None, config)
+        role = resolve_api_key_role(None, configs["single_key"])
         assert role is None
 
-    def test_api_keys_list_read_role(self, tmpdir):
+    def test_api_keys_list_read_role(self, configs):
         """api_keys list: key with read role returns 'read'."""
-        keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "Reader"}]
-        _, config = _make_client(tmpdir, api_keys=keys)
-        role = resolve_api_key_role("read-key", config)
+        role = resolve_api_key_role("list-key", configs["list"])
         assert role == "read"
 
-    def test_api_keys_list_write_role(self, tmpdir):
+    def test_api_keys_list_write_role(self):
         """api_keys list: key with write role returns 'write'."""
         keys = [{"key_hash": _hash_key("write-key"), "role": "write", "label": "Writer"}]
-        _, config = _make_client(tmpdir, api_keys=keys)
+        config = PyriteConfig(settings=Settings(api_keys=keys))
         role = resolve_api_key_role("write-key", config)
         assert role == "write"
 
-    def test_api_keys_list_admin_role(self, tmpdir):
+    def test_api_keys_list_admin_role(self):
         """api_keys list: key with admin role returns 'admin'."""
         keys = [{"key_hash": _hash_key("admin-key"), "role": "admin", "label": "Admin"}]
-        _, config = _make_client(tmpdir, api_keys=keys)
+        config = PyriteConfig(settings=Settings(api_keys=keys))
         role = resolve_api_key_role("admin-key", config)
         assert role == "admin"
 
-    def test_api_keys_list_wrong_key_returns_none(self, tmpdir):
+    def test_api_keys_list_wrong_key_returns_none(self, configs):
         """api_keys list: unrecognized key returns None."""
-        keys = [{"key_hash": _hash_key("admin-key"), "role": "admin", "label": "Admin"}]
-        _, config = _make_client(tmpdir, api_keys=keys)
-        role = resolve_api_key_role("unknown-key", config)
+        role = resolve_api_key_role("unknown-key", configs["list"])
         assert role is None
 
-    def test_api_keys_and_single_key_coexist(self, tmpdir):
+    def test_api_keys_and_single_key_coexist(self, configs):
         """When both api_key and api_keys are set, api_keys takes precedence."""
-        keys = [{"key_hash": _hash_key("list-key"), "role": "read", "label": "Reader"}]
-        _, config = _make_client(tmpdir, api_key="legacy-key", api_keys=keys)
         # The list key works
-        assert resolve_api_key_role("list-key", config) == "read"
+        assert resolve_api_key_role("list-key", configs["coexist"]) == "read"
         # Legacy key also works as admin (backwards compat)
-        assert resolve_api_key_role("legacy-key", config) == "admin"
+        assert resolve_api_key_role("legacy-key", configs["coexist"]) == "admin"
 
 
 # =============================================================================
@@ -147,43 +148,46 @@ class TestResolveAPIKeyRole:
 class TestTierHierarchy:
     """Test that tier hierarchy (admin > write > read) is enforced correctly."""
 
-    def test_read_key_can_access_read_endpoints(self, tmpdir):
+    @pytest.fixture(scope="class")
+    def three_key_client(self):
+        """One client with read, write, admin keys — shared across all tests."""
+        with tempfile.TemporaryDirectory() as d:
+            tmpdir = Path(d)
+            keys = [
+                {"key_hash": _hash_key("read-key"), "role": "read", "label": "R"},
+                {"key_hash": _hash_key("write-key"), "role": "write", "label": "W"},
+                {"key_hash": _hash_key("admin-key"), "role": "admin", "label": "A"},
+            ]
+            client, _ = _make_client(tmpdir, api_keys=keys)
+            yield client
+
+    def test_read_key_can_access_read_endpoints(self, three_key_client):
         """Read-tier key can access read-only endpoints (GET /api/kbs)."""
-        keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "R"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.get("/api/kbs", headers={"X-API-Key": "read-key"})
+        resp = three_key_client.get("/api/kbs", headers={"X-API-Key": "read-key"})
         assert resp.status_code == 200
 
-    def test_read_key_cannot_access_write_endpoints(self, tmpdir):
+    def test_read_key_cannot_access_write_endpoints(self, three_key_client):
         """Read-tier key is denied write-tier endpoints (POST /api/entries)."""
-        keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "R"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.post(
+        resp = three_key_client.post(
             "/api/entries",
             json={"title": "test", "body": "test", "kb": "test-kb"},
             headers={"X-API-Key": "read-key"},
         )
         assert resp.status_code == 403
 
-    def test_read_key_cannot_access_admin_endpoints(self, tmpdir):
+    def test_read_key_cannot_access_admin_endpoints(self, three_key_client):
         """Read-tier key is denied admin-tier endpoints (POST /api/index/sync)."""
-        keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "R"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.post("/api/index/sync", headers={"X-API-Key": "read-key"})
+        resp = three_key_client.post("/api/index/sync", headers={"X-API-Key": "read-key"})
         assert resp.status_code == 403
 
-    def test_write_key_can_access_read_endpoints(self, tmpdir):
+    def test_write_key_can_access_read_endpoints(self, three_key_client):
         """Write-tier key can access read-only endpoints."""
-        keys = [{"key_hash": _hash_key("write-key"), "role": "write", "label": "W"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.get("/api/kbs", headers={"X-API-Key": "write-key"})
+        resp = three_key_client.get("/api/kbs", headers={"X-API-Key": "write-key"})
         assert resp.status_code == 200
 
-    def test_write_key_can_access_write_endpoints(self, tmpdir):
+    def test_write_key_can_access_write_endpoints(self, three_key_client):
         """Write-tier key can create entries."""
-        keys = [{"key_hash": _hash_key("write-key"), "role": "write", "label": "W"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.post(
+        resp = three_key_client.post(
             "/api/entries",
             json={"title": "test", "body": "hello", "kb": "test-kb"},
             headers={"X-API-Key": "write-key"},
@@ -191,25 +195,21 @@ class TestTierHierarchy:
         # 200 or 201 — just not 403
         assert resp.status_code != 403
 
-    def test_write_key_cannot_access_admin_endpoints(self, tmpdir):
+    def test_write_key_cannot_access_admin_endpoints(self, three_key_client):
         """Write-tier key is denied admin endpoints."""
-        keys = [{"key_hash": _hash_key("write-key"), "role": "write", "label": "W"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.post("/api/index/sync", headers={"X-API-Key": "write-key"})
+        resp = three_key_client.post("/api/index/sync", headers={"X-API-Key": "write-key"})
         assert resp.status_code == 403
 
-    def test_admin_key_can_access_all_tiers(self, tmpdir):
+    def test_admin_key_can_access_all_tiers(self, three_key_client):
         """Admin-tier key can access read, write, and admin endpoints."""
-        keys = [{"key_hash": _hash_key("admin-key"), "role": "admin", "label": "A"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
         headers = {"X-API-Key": "admin-key"}
 
         # Read
-        resp = client.get("/api/kbs", headers=headers)
+        resp = three_key_client.get("/api/kbs", headers=headers)
         assert resp.status_code == 200
 
         # Write (create entry)
-        resp = client.post(
+        resp = three_key_client.post(
             "/api/entries",
             json={"title": "test", "body": "hello", "kb": "test-kb"},
             headers=headers,
@@ -217,7 +217,7 @@ class TestTierHierarchy:
         assert resp.status_code != 403
 
         # Admin (index sync)
-        resp = client.post("/api/index/sync", headers=headers)
+        resp = three_key_client.post("/api/index/sync", headers=headers)
         assert resp.status_code != 403
 
 
@@ -229,31 +229,43 @@ class TestTierHierarchy:
 class TestBackwardsCompatibility:
     """Existing behavior must not break."""
 
-    def test_no_auth_all_endpoints_accessible(self, tmpdir):
+    @pytest.fixture(scope="class")
+    def no_auth_client(self):
+        """Client with no auth configured."""
+        with tempfile.TemporaryDirectory() as d:
+            client, _ = _make_client(Path(d), api_key="")
+            yield client
+
+    @pytest.fixture(scope="class")
+    def single_key_client(self):
+        """Client with legacy single api_key."""
+        with tempfile.TemporaryDirectory() as d:
+            client, _ = _make_client(Path(d), api_key="my-key")
+            yield client
+
+    def test_no_auth_all_endpoints_accessible(self, no_auth_client):
         """When api_key is empty and no api_keys, everything works (current behavior)."""
-        client, _ = _make_client(tmpdir, api_key="")
-        assert client.get("/api/kbs").status_code == 200
-        assert client.get("/api/stats").status_code == 200
-        assert client.post("/api/index/sync").status_code == 200
+        assert no_auth_client.get("/api/kbs").status_code == 200
+        assert no_auth_client.get("/api/stats").status_code == 200
+        assert no_auth_client.post("/api/index/sync").status_code == 200
 
-    def test_single_api_key_all_endpoints_with_key(self, tmpdir):
+    def test_single_api_key_all_endpoints_with_key(self, single_key_client):
         """Legacy single api_key grants admin access to all endpoints."""
-        client, _ = _make_client(tmpdir, api_key="my-key")
         headers = {"X-API-Key": "my-key"}
-        assert client.get("/api/kbs", headers=headers).status_code == 200
-        assert client.get("/api/stats", headers=headers).status_code == 200
-        assert client.post("/api/index/sync", headers=headers).status_code == 200
+        assert single_key_client.get("/api/kbs", headers=headers).status_code == 200
+        assert single_key_client.get("/api/stats", headers=headers).status_code == 200
+        assert single_key_client.post("/api/index/sync", headers=headers).status_code == 200
 
-    def test_single_api_key_no_key_rejected(self, tmpdir):
+    def test_single_api_key_no_key_rejected(self, single_key_client):
         """Legacy single api_key: missing key still returns 401."""
-        client, _ = _make_client(tmpdir, api_key="my-key")
-        assert client.get("/api/kbs").status_code == 401
+        assert single_key_client.get("/api/kbs").status_code == 401
 
-    def test_health_always_accessible(self, tmpdir):
+    def test_health_always_accessible(self):
         """Health endpoint never requires auth, regardless of config."""
-        keys = [{"key_hash": _hash_key("k"), "role": "read", "label": "R"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        assert client.get("/health").status_code == 200
+        with tempfile.TemporaryDirectory() as d:
+            keys = [{"key_hash": _hash_key("k"), "role": "read", "label": "R"}]
+            client, _ = _make_client(Path(d), api_keys=keys)
+            assert client.get("/health").status_code == 200
 
 
 # =============================================================================
@@ -264,20 +276,24 @@ class TestBackwardsCompatibility:
 class TestTierErrorResponses:
     """Test that tier enforcement returns clear error messages."""
 
-    def test_403_includes_required_tier(self, tmpdir):
+    @pytest.fixture(scope="class")
+    def read_only_client(self):
+        """Client with only a read-tier key."""
+        with tempfile.TemporaryDirectory() as d:
+            keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "R"}]
+            client, _ = _make_client(Path(d), api_keys=keys)
+            yield client
+
+    def test_403_includes_required_tier(self, read_only_client):
         """403 response should indicate which tier is required."""
-        keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "R"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.post("/api/index/sync", headers={"X-API-Key": "read-key"})
+        resp = read_only_client.post("/api/index/sync", headers={"X-API-Key": "read-key"})
         assert resp.status_code == 403
         body = resp.json()
         assert "admin" in body["detail"].lower() or "tier" in body["detail"].lower()
 
-    def test_401_still_returned_for_missing_key(self, tmpdir):
+    def test_401_still_returned_for_missing_key(self, read_only_client):
         """When auth is enabled and no key provided, still get 401 not 403."""
-        keys = [{"key_hash": _hash_key("k"), "role": "admin", "label": "A"}]
-        client, _ = _make_client(tmpdir, api_keys=keys)
-        resp = client.get("/api/kbs")
+        resp = read_only_client.get("/api/kbs")
         assert resp.status_code == 401
 
 

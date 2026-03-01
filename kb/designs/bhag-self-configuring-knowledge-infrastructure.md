@@ -37,18 +37,36 @@ An autonomous agent runtime (OpenClaw, Claude Code, Codex, custom orchestrators)
 
 The human's role shifts from "user" to "operator" — deploying the agent, monitoring quality, setting trust tiers.
 
-## Why This Is Credible
+## Three Portals, One Knowledge Base
 
-Almost all the pieces already exist:
+The knowledge an agent builds is accessible from everywhere:
 
-- **Plugin protocol** with 15 extension points covering every aspect an agent would need
-- **Extension builder skill** with scaffolding recipes, entry type contracts, and test templates
-- **Pyrite-dev skill** with TDD protocol, debugging methodology, and verification requirements
-- **Five shipped extensions** proving the pattern produces working, tested code
-- **CLI that works headlessly** — `--format json` on every command, no interactive prompts required
+**CLI** — the agent-native path. OpenClaw, Claude Code, Codex, shell scripts. Every command outputs structured JSON. Agents do the heavy lifting here: bulk creation, extension management, headless provisioning, JSON pipelines.
+
+**MCP** — the conversational path. Claude Desktop, Cowork, any MCP-compatible client. Humans and agents talk to the knowledge base in natural language. Three permission tiers control access.
+
+**Web UI** — the visual path. Knowledge graph exploration, rich entry editor, QA dashboard, BYOK AI integration. The operator interface — watch the graph grow as agents populate a KB, explore relationships, trigger workflows.
+
+An agent builds the KB through CLI at 3am. You review what it produced in the web UI over coffee. You ask follow-up questions through Claude Desktop. All hitting the same typed, validated, versioned knowledge.
+
+## Why This Is Credible (closer than you think)
+
+This isn't aspirational — almost all the pieces already ship:
+
+- **`pyrite extension init legal --types case,statute,ruling`** — agent scaffolds a full extension in one command
+- **Extension builder skill** guides the agent through implementation, following the same TDD protocol used to build Pyrite itself
+- **`pyrite extension install extensions/legal --verify`** — installs and optionally runs tests
+- **`pyrite init --template <domain>`** — provisions a KB with zero interactive prompts
+- **`--format json` on every CLI command** (11 commands and counting) — agents consume output programmatically
+- **QA validation on every write** — agents validate their own output against the schema
 - **Three-tier MCP server** with schema self-discovery (`kb_schema` tool)
-- **Ephemeral KBs** with TTL and garbage collection for session-scoped memory
-- **Capture lane validation** enforcing controlled vocabulary on agent writes
+- **Task/coordination plugin** with 7-state workflow, atomic operations, 4 MCP tools
+- **Programmatic schema provisioning** — agents define types and fields via MCP/CLI without editing YAML
+- **Plugin protocol** with 15 extension points covering every aspect an agent would need
+- **Six shipped extensions** (zettelkasten, social, encyclopedia, software-kb, task, and Pyrite's own KB) proving the pattern produces working, tested code
+- **1086 tests** across the platform
+
+The gap between "human defines schema" and "agent defines schema" is one skill file and a few CLI commands. The BHAG isn't a 2-year plan — it's a closing sprint.
 
 ## The Self-Improving Loop
 
@@ -76,9 +94,23 @@ Every other knowledge tool assumes a human defines the schema and agents fill it
 
 Anytype's insight that knowledge should be typed and relational, but reoriented for programmatic consumers. Anytype optimizes for a human dragging blocks on a canvas. Pyrite optimizes for an agent calling APIs. Anytype uses CRDTs for seamless convergence. Pyrite uses git for accountable change. In a world of agent swarms, accountable change wins.
 
+## Go-to-Market: Four Waves
+
+The BHAG is realized through progressive launch waves, each widening the audience and proving the platform with a domain-specific plugin:
+
+1. **Platform Launch (0.8)** — Agent builders, MCP users. "Pyrite turns your AI into a domain expert."
+2. **Software Project Plugin** — Dev teams. Agents collaborate on your project natively.
+3. **Investigative Journalism Plugin** — Researchers, OSINT. Follow the money. Different domain, same platform.
+4. **PKM Capture Plugin** — Everyone. Frictionless capture → auto-classification → structured knowledge.
+
+Each wave is a proof point. By wave 4, three shipping plugins demonstrate that Pyrite is genuinely general-purpose knowledge infrastructure. See [[launch-plan]] for the full content matrix and messaging.
+
 ## Related
 
+- [[launch-plan]] — Content matrix, messaging foundation, four-wave launch strategy
+- [[permissions-model]] — Three-layer permissions design sketch
 - [[coordination-task-plugin]] — Agent task coordination within the knowledge graph
+- [[pkm-capture-plugin]] — Frictionless knowledge ingestion for PKM users
 - [[qa-agent-workflows]] — Automated quality assurance for agent-authored content
 - [[roadmap]] — Release milestones toward the BHAG
 - [[kb/positioning/software-teams]] — Initial go-to-market positioning

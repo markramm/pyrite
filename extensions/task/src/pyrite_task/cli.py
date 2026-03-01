@@ -1,6 +1,7 @@
 """Task CLI commands."""
 
 import json
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -8,6 +9,8 @@ from rich.table import Table
 
 from pyrite.config import load_config
 from pyrite.storage.database import PyriteDB
+
+from .service import TaskService
 
 task_app = typer.Typer(help="Task management commands")
 console = Console()
@@ -21,6 +24,13 @@ def _format_output(data: dict, fmt: str) -> str | None:
 
     content, _ = format_response(data, fmt)
     return content
+
+
+def _get_service() -> tuple[TaskService, PyriteDB]:
+    """Create TaskService and return (service, db) for cleanup."""
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    return TaskService(config, db), db
 
 
 def _query_tasks(db: PyriteDB, kb_name: str | None = None) -> list[dict]:
@@ -53,34 +63,35 @@ def task_create(
     parent: str | None = typer.Option(None, "--parent", "-p", help="Parent task entry ID"),
     priority: int = typer.Option(5, "--priority", help="Priority 1-10"),
     assignee: str | None = typer.Option(None, "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"),
+    body: str | None = typer.Option(None, "--body", "-b", help="Task description"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Create a new task."""
-    slug = title.lower().replace(" ", "-")
-    result = {
-        "created": True,
-        "title": title,
-        "status": "open",
-        "priority": priority,
-        "filename": f"tasks/{slug}.md",
-    }
-    if parent:
-        result["parent_task"] = parent
-    if assignee:
-        result["assignee"] = assignee
+    svc, db = _get_service()
+    try:
+        result = svc.create_task(
+            kb_name=kb_name,
+            title=title,
+            body=body or "",
+            parent_task=parent or "",
+            priority=priority,
+            assignee=assignee or "",
+        )
 
-    formatted = _format_output(result, fmt)
-    if formatted is not None:
-        typer.echo(formatted)
-        return
+        formatted = _format_output(result, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
 
-    console.print(f"[green]Task created:[/green] {title}")
-    console.print(f"  File: {result['filename']}")
-    console.print(f"  Status: open, Priority: {priority}")
-    if parent:
-        console.print(f"  Parent: {parent}")
-    if assignee:
-        console.print(f"  Assignee: {assignee}")
+        console.print(f"[green]Task created:[/green] {result['title']}")
+        console.print(f"  ID: [cyan]{result['entry_id']}[/cyan]")
+        console.print(f"  Status: open, Priority: {priority}")
+        if parent:
+            console.print(f"  Parent: {parent}")
+        if assignee:
+            console.print(f"  Assignee: {assignee}")
+    finally:
+        db.close()
 
 
 @task_app.command("list")
@@ -92,29 +103,14 @@ def task_list(
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """List tasks with optional filters."""
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    svc, db = _get_service()
     try:
-        rows = _query_tasks(db, kb_name)
-        if status:
-            rows = [r for r in rows if r["_meta"].get("status", "open") == status]
-        if assignee:
-            rows = [r for r in rows if r["_meta"].get("assignee", "") == assignee]
-        if parent:
-            rows = [r for r in rows if r["_meta"].get("parent_task", "") == parent]
-
-        items = [
-            {
-                "id": r["id"],
-                "title": r["title"],
-                "status": r["_meta"].get("status", "open"),
-                "assignee": r["_meta"].get("assignee", ""),
-                "priority": r["_meta"].get("priority", 5),
-                "parent_task": r["_meta"].get("parent_task", ""),
-                "kb_name": r["kb_name"],
-            }
-            for r in rows
-        ]
+        items = svc.list_tasks(
+            kb_name=kb_name,
+            status=status,
+            assignee=assignee,
+            parent=parent,
+        )
 
         formatted = _format_output({"count": len(items), "tasks": items}, fmt)
         if formatted is not None:
@@ -150,25 +146,24 @@ def task_status(
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Show task details with children, dependencies, and evidence."""
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    svc, db = _get_service()
     try:
-        rows = _query_tasks(db, kb_name)
-        task = None
-        for r in rows:
-            if r["id"] == task_id:
-                task = r
-                break
-
+        task = svc.get_task(task_id, kb_name)
         if not task:
             console.print(f"[red]Error:[/red] Task '{task_id}' not found")
             raise typer.Exit(1)
 
-        meta = task["_meta"]
+        meta = task.get("metadata", {})
+        if isinstance(meta, str):
+            try:
+                meta = json.loads(meta)
+            except (json.JSONDecodeError, TypeError):
+                meta = {}
+
+        children_list = svc.list_tasks(kb_name=kb_name, parent=task_id)
         children = [
-            {"id": r["id"], "title": r["title"], "status": r["_meta"].get("status", "open")}
-            for r in rows
-            if r["_meta"].get("parent_task", "") == task_id
+            {"id": c["id"], "title": c["title"], "status": c["status"]}
+            for c in children_list
         ]
 
         result = {
@@ -183,7 +178,7 @@ def task_status(
             "due_date": meta.get("due_date", ""),
             "agent_context": meta.get("agent_context", {}),
             "children": children,
-            "kb_name": task["kb_name"],
+            "kb_name": task.get("kb_name", kb_name or ""),
         }
 
         formatted = _format_output(result, fmt)
@@ -223,7 +218,7 @@ def task_update(
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Update task fields (status, assignee, priority)."""
-    updates = {}
+    updates: dict[str, Any] = {}
     if status is not None:
         updates["status"] = status
     if assignee is not None:
@@ -235,13 +230,112 @@ def task_update(
         console.print("[yellow]No updates specified.[/yellow]")
         raise typer.Exit(1)
 
-    result = {"updated": True, "task_id": task_id, "updates": updates}
+    svc, db = _get_service()
+    try:
+        result = svc.update_task(task_id, kb_name, **updates)
 
-    formatted = _format_output(result, fmt)
-    if formatted is not None:
-        typer.echo(formatted)
-        return
+        formatted = _format_output(result, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
 
-    console.print(f"[green]Updated task:[/green] {task_id}")
-    for k, v in updates.items():
-        console.print(f"  {k}: {v}")
+        console.print(f"[green]Updated task:[/green] {task_id}")
+        for k, v in updates.items():
+            console.print(f"  {k}: {v}")
+    finally:
+        db.close()
+
+
+@task_app.command("claim")
+def task_claim(
+    task_id: str = typer.Argument(..., help="Task entry ID"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    assignee: str = typer.Option(..., "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+):
+    """Atomically claim an open task."""
+    svc, db = _get_service()
+    try:
+        result = svc.claim_task(task_id, kb_name, assignee)
+
+        formatted = _format_output(result, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        if result.get("claimed"):
+            console.print(f"[green]Claimed:[/green] {task_id}")
+            console.print(f"  Assignee: {assignee}")
+        else:
+            console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
+            raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+@task_app.command("decompose")
+def task_decompose(
+    parent_id: str = typer.Argument(..., help="Parent task entry ID"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    child: list[str] = typer.Option(..., "--child", "-c", help="Child task title (repeatable)"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+):
+    """Decompose a parent task into child tasks."""
+    children = [{"title": t} for t in child]
+    svc, db = _get_service()
+    try:
+        results = svc.decompose_task(parent_id, kb_name, children)
+
+        output = {"decomposed": True, "parent_id": parent_id, "children": results}
+        formatted = _format_output(output, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        console.print(f"[green]Decomposed:[/green] {parent_id}")
+        for r in results:
+            if r.get("created"):
+                console.print(f"  [green]+[/green] {r['entry_id']}")
+            else:
+                console.print(f"  [red]x[/red] {r.get('error', 'Unknown error')}")
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+@task_app.command("checkpoint")
+def task_checkpoint(
+    task_id: str = typer.Argument(..., help="Task entry ID"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    message: str = typer.Option(..., "--message", "-m", help="Checkpoint message"),
+    confidence: float = typer.Option(0.0, "--confidence", help="Confidence 0.0-1.0"),
+    evidence: list[str] | None = typer.Option(None, "--evidence", "-e", help="Evidence entry IDs (repeatable)"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+):
+    """Log a checkpoint on a task."""
+    svc, db = _get_service()
+    try:
+        result = svc.checkpoint_task(
+            task_id=task_id,
+            kb_name=kb_name,
+            message=message,
+            confidence=confidence,
+            partial_evidence=evidence,
+        )
+
+        formatted = _format_output(result, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        console.print(f"[green]Checkpoint logged:[/green] {task_id}")
+        console.print(f"  {message}")
+        if confidence > 0:
+            console.print(f"  Confidence: {int(confidence * 100)}%")
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1)
+    finally:
+        db.close()

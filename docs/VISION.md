@@ -86,19 +86,23 @@ pyrite create --kb legal --type case --title "Smith v. Jones" \
 pyrite search "immigration policy" --kb research --format json
 ```
 
-### Via MCP (primary path for Claude Desktop, custom integrations)
+### Via MCP (conversational path — Claude Desktop, Cowork, any MCP client)
 
-Three permission tiers. Each tier includes the tools from lower tiers.
+Humans and agents talk to the knowledge base in natural language. Three permission tiers, each including tools from lower tiers:
 
 | Tier | Access | Use Case |
 |------|--------|----------|
 | **read** | Search, browse, retrieve, schema discovery | Untrusted agents, research assistants |
 | **write** | Create, update, delete, link entries | Trusted research workflows |
-| **admin** | Index management, KB provisioning, git operations | Human-supervised, orchestrators |
+| **admin** | Index management, KB provisioning, schema changes, git operations | Human-supervised, orchestrators |
 
-### Via REST API and Web UI (monitoring and operator interface)
+### Via REST API and Web UI (visual path — exploration, monitoring, AI interaction)
 
-The web UI serves the human operator — the person deploying and monitoring agents. SvelteKit 5 frontend with entry editor, knowledge graph, collections, QA dashboard, and task monitoring.
+The web UI serves as both operator dashboard and interactive workspace. SvelteKit 5 frontend with entry editor, knowledge graph, collections, QA dashboard, task monitoring, and BYOK AI integration for asking questions and triggering workflows from the browser.
+
+### Three Portals, One Knowledge Base
+
+These aren't competing interfaces — they're complementary. An agent builds the KB through CLI at 3am. You review what it produced in the web UI over coffee. You ask follow-up questions through Claude Desktop. All hitting the same typed, validated, versioned knowledge. Your knowledge base is accessible from everywhere your AI already lives.
 
 ## The Self-Configuration Loop
 
@@ -174,16 +178,40 @@ Each user (or agent runtime) has a **workspace** — a local collection of KB re
 
 Anytype's insight that knowledge should be typed and relational, but reoriented for programmatic consumers. Anytype optimizes for a human dragging blocks on a canvas. Pyrite optimizes for an agent calling APIs. Anytype uses CRDTs for seamless convergence. Pyrite uses git for accountable change. In a world of agent swarms, accountable change wins.
 
+## Permissions: Three Layers
+
+Pyrite's permission model uses git as the security boundary and adds application-level controls on top:
+
+**Layer 1 — Git permissions (today):** Repository access, branch protection, CODEOWNERS, PR review. This gates changes to the source of truth. PRs let anyone suggest edits; the review process is where trust is established.
+
+**Layer 2 — MCP/API tiers (today):** Read, write, admin tiers control what agents and users can do through Pyrite's programmatic interfaces.
+
+**Layer 3 — Application-level fine-grained permissions (future):** Type-level and workflow-level controls enforced by Pyrite's service layer. "Contributors can create drafts; only reviewers can approve." This only affects users going through Pyrite — direct git edits are gated by layer 1.
+
+**The framing:** Git is your access control. Pyrite is your quality control. Together they enforce both who can change what and what changes are valid.
+
+See `kb/designs/permissions-model.md` for the full design sketch.
+
 ## Roadmap Alignment
 
 | Milestone | Theme | Status |
 |-----------|-------|--------|
 | 0.1–0.3 | Core infrastructure, CLI, MCP, REST API, Web UI, plugins | Done |
 | 0.4 | MCP server hardening for agent workflows | Done |
-| **0.5** | **QA & Agent CLI: structural validation, headless init, extension commands** | **In progress** |
-| 0.6 | Agent coordination: task plugin, programmatic schema provisioning | Planned |
+| 0.5 | QA & Agent CLI: structural validation, headless init, extension commands | Done |
+| 0.6 | Agent coordination: task plugin, programmatic schema provisioning | In progress |
 | 0.7 | Web UI polish: transclusions, QA dashboard, graph enhancements | Planned |
-| **0.8** | **Announceable alpha: PyPI publish, docs, tutorial, demo** | **Announce** |
+| **0.8** | **Announceable alpha: PyPI publish, docs, tutorial, demo** | **Wave 1 launch** |
+| Post-0.8 | Software project plugin, journalism plugin, PKM capture plugin | Waves 2-4 |
 | 0.9+ | Agent swarm infrastructure: provenance, conflict resolution, orchestrator events | Future |
 
-See `kb/roadmap.md` for detailed milestone definitions.
+### Launch Waves
+
+| Wave | Plugin | Audience | Message |
+|------|--------|----------|---------|
+| 1 | Platform (0.8) | Agent builders, MCP users | "Pyrite turns your AI into a domain expert" |
+| 2 | Software project | Dev teams, Claude Code/Codex users | "Agents that understand your architecture" |
+| 3 | Investigative journalism | Researchers, OSINT, journalists | "Follow the money" |
+| 4 | PKM capture | Personal knowledge workers | "Capture anything, get structured knowledge" |
+
+See `kb/roadmap.md` for detailed milestone definitions and `kb/designs/launch-plan.md` for the full content matrix.

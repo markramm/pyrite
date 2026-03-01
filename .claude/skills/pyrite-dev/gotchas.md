@@ -218,6 +218,28 @@ The `build_entry()` factory in `factory.py` introspects the resolved entry class
 
 **How to verify:** After creating an entry, check both `entry.my_field` and `entry.metadata.get("my_field")`. If the value is in metadata but not the field, your `from_frontmatter()` isn't extracting it.
 
+## Connection Management: session vs _raw_conn
+
+`PyriteDB` has **two separate** database connections that don't share transaction state:
+
+- `db.session` — SQLAlchemy ORM session (used by `execute_sql()`, ORM models)
+- `db._raw_conn` — Raw `sqlite3` connection (used by `conn` property, legacy code)
+
+**The gotcha:** ORM writes via `session` are NOT visible to `_raw_conn` until committed. They use different connections from different engines.
+
+```python
+# This will NOT see uncommitted ORM writes:
+db._raw_conn.execute("SELECT * FROM entry WHERE id = ?", (entry_id,))
+
+# This WILL see ORM writes (goes through session):
+db.execute_sql("SELECT * FROM entry WHERE id = ?", (entry_id,))
+```
+
+**Rules:**
+- Use `db.execute_sql()` for reads that need to see ORM writes
+- `db.conn` property returns `_raw_conn` — treat it as deprecated
+- In tests, if you must use `_raw_conn`, ensure prior ORM operations are committed first
+
 ## Hybrid Search Pagination: Both Legs Must Over-Fetch
 
 `_hybrid_search()` in `search_service.py` uses Reciprocal Rank Fusion to combine keyword and semantic results. Both legs fetch `max(limit * 2, offset + limit)` candidates because:

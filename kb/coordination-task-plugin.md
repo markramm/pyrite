@@ -167,12 +167,18 @@ TASK_WORKFLOW = {
 - Basic validators (status transitions, dependency resolution)
 - Tests: 8-section structure
 
-### Phase 2: MCP tools and atomic operations (effort: M)
+### Phase 2: MCP tools and atomic operations (effort: M) — done
 
-- All MCP tools listed above
-- Atomic `task_claim` with compare-and-swap
-- `task_decompose` for bulk subtask creation
-- `task_checkpoint` for progress reporting
+Delivered:
+- `TaskService` in `extensions/task/src/pyrite_task/service.py` — wraps KBService for task-specific atomic operations
+- 7 operative MCP tools (read: `task_list`/`task_status`, write: `task_create`/`task_update`/`task_claim`/`task_decompose`/`task_checkpoint`)
+- Atomic `task_claim` with CAS (compare-and-swap on SQLite `json_extract(metadata, '$.status')`)
+- `task_decompose` for bulk subtask creation with parent linking
+- `task_checkpoint` with timestamped progress logging, confidence tracking, and evidence accumulation
+- Parent auto-rollup with cascading (grandparent auto-completes when all its children finish)
+- `old_status` propagation via `PluginContext.extra` for workflow transition validation in before_save hook
+- 7 CLI commands wired to TaskService: `create/list/status/update/claim/decompose/checkpoint`
+- 64 tests total (28 new integration tests in `test_task_service.py`)
 
 ### Phase 3: DAG queries and orchestrator support (effort: L)
 

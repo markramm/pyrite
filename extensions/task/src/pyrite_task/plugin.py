@@ -38,6 +38,19 @@ class TaskPlugin:
         config = load_config()
         return PyriteDB(config.settings.index_path), True
 
+    def _get_task_service(self):
+        """Get a TaskService instance."""
+        from .service import TaskService
+
+        if self.ctx:
+            return TaskService(self.ctx.config, self.ctx.db)
+        from pyrite.config import load_config
+        from pyrite.storage.database import PyriteDB
+
+        config = load_config()
+        db = PyriteDB(config.settings.index_path)
+        return TaskService(config, db)
+
     def get_entry_types(self) -> dict[str, type]:
         return {"task": TaskEntry}
 
@@ -121,8 +134,13 @@ class TaskPlugin:
                             "description": "Assignee (e.g. agent:claude-code-7a3f)",
                         },
                         "body": {"type": "string", "description": "Task description"},
+                        "dependencies": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Dependency entry IDs",
+                        },
                     },
-                    "required": ["title"],
+                    "required": ["kb_name", "title"],
                 },
                 "handler": self._mcp_task_create,
             }
@@ -157,9 +175,75 @@ class TaskPlugin:
                             "maximum": 10,
                         },
                     },
-                    "required": ["task_id"],
+                    "required": ["task_id", "kb_name"],
                 },
                 "handler": self._mcp_task_update,
+            }
+            tools["task_claim"] = {
+                "description": "Atomically claim an open task. Fails if task is not open.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {"type": "string", "description": "Task entry ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "assignee": {
+                            "type": "string",
+                            "description": "Assignee (e.g. agent:claude-code-7a3f)",
+                        },
+                    },
+                    "required": ["task_id", "kb_name", "assignee"],
+                },
+                "handler": self._mcp_task_claim,
+            }
+            tools["task_decompose"] = {
+                "description": "Decompose a parent task into child tasks.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "parent_id": {"type": "string", "description": "Parent task entry ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "children": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string"},
+                                    "body": {"type": "string"},
+                                    "priority": {"type": "integer", "minimum": 1, "maximum": 10},
+                                    "assignee": {"type": "string"},
+                                },
+                                "required": ["title"],
+                            },
+                            "description": "Child task specs",
+                        },
+                    },
+                    "required": ["parent_id", "kb_name", "children"],
+                },
+                "handler": self._mcp_task_decompose,
+            }
+            tools["task_checkpoint"] = {
+                "description": "Log a checkpoint on a task with optional confidence and evidence.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {"type": "string", "description": "Task entry ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "message": {"type": "string", "description": "Checkpoint message"},
+                        "confidence": {
+                            "type": "number",
+                            "description": "Confidence 0.0-1.0",
+                            "minimum": 0,
+                            "maximum": 1,
+                        },
+                        "partial_evidence": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Evidence entry IDs",
+                        },
+                    },
+                    "required": ["task_id", "kb_name", "message"],
+                },
+                "handler": self._mcp_task_checkpoint,
             }
 
         return tools
@@ -226,21 +310,25 @@ class TaskPlugin:
         return entry
 
     def _hook_parent_rollup(self, entry: Any, context: dict) -> Any:
-        """Log when all children of a parent task are done."""
+        """Auto-complete parent when all children are done."""
         if not hasattr(entry, "entry_type") or entry.entry_type != "task":
+            return entry
+        if getattr(entry, "status", "") != "done":
             return entry
 
         parent_id = getattr(entry, "parent_task", "")
         if not parent_id:
             return entry
 
-        new_status = getattr(entry, "status", "")
-        if new_status == "done":
-            logger.info(
-                "Task %s (child of %s) marked done — check if all siblings complete",
-                getattr(entry, "id", "?"),
-                parent_id,
-            )
+        kb_name = context.get("kb_name", "")
+        if not kb_name:
+            return entry
+
+        try:
+            svc = self._get_task_service()
+            svc.rollup_parent(parent_id, kb_name)
+        except Exception as e:
+            logger.warning("Parent rollup failed for %s: %s", parent_id, e)
 
         return entry
 
@@ -250,148 +338,81 @@ class TaskPlugin:
 
     def _mcp_task_list(self, args: dict[str, Any]) -> dict[str, Any]:
         """List tasks with filters."""
-        import json as json_mod
-
-        db, should_close = self._get_db()
-        kb_name = args.get("kb_name")
-        status_filter = args.get("status")
-        assignee_filter = args.get("assignee")
-        parent_filter = args.get("parent")
-
-        try:
-            query = "SELECT * FROM entry WHERE entry_type = 'task'"
-            params: list = []
-            if kb_name:
-                query += " AND kb_name = ?"
-                params.append(kb_name)
-            query += " ORDER BY created_at DESC"
-
-            rows = db._raw_conn.execute(query, params).fetchall()
-            tasks = []
-            for row in rows:
-                meta = {}
-                if row["metadata"]:
-                    try:
-                        meta = json_mod.loads(row["metadata"])
-                    except (json_mod.JSONDecodeError, TypeError):
-                        pass
-                status = meta.get("status", "open")
-                assignee = meta.get("assignee", "")
-                parent_task = meta.get("parent_task", "")
-                if status_filter and status != status_filter:
-                    continue
-                if assignee_filter and assignee != assignee_filter:
-                    continue
-                if parent_filter and parent_task != parent_filter:
-                    continue
-                tasks.append(
-                    {
-                        "id": row["id"],
-                        "title": row["title"],
-                        "status": status,
-                        "assignee": assignee,
-                        "priority": meta.get("priority", 5),
-                        "parent_task": parent_task,
-                        "kb_name": row["kb_name"],
-                    }
-                )
-
-            return {"count": len(tasks), "tasks": tasks}
-        finally:
-            if should_close:
-                db.close()
+        svc = self._get_task_service()
+        tasks = svc.list_tasks(
+            kb_name=args.get("kb_name"),
+            status=args.get("status"),
+            assignee=args.get("assignee"),
+            parent=args.get("parent"),
+        )
+        return {"count": len(tasks), "tasks": tasks}
 
     def _mcp_task_status(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get task details with children, deps, evidence."""
-        import json as json_mod
-
-        db, should_close = self._get_db()
+        svc = self._get_task_service()
         task_id = args.get("task_id")
         kb_name = args.get("kb_name")
 
-        try:
-            query = "SELECT * FROM entry WHERE entry_type = 'task'"
-            params: list = []
-            if kb_name:
-                query += " AND kb_name = ?"
-                params.append(kb_name)
+        task = svc.get_task(task_id, kb_name)
+        if not task:
+            return {"error": f"Task '{task_id}' not found"}
 
-            rows = db._raw_conn.execute(query, params).fetchall()
-            task = None
-            all_tasks = []
-            for row in rows:
+        meta = task.get("metadata", {})
+        if isinstance(meta, str):
+            import json
+
+            try:
+                meta = json.loads(meta)
+            except (json.JSONDecodeError, TypeError):
                 meta = {}
-                if row["metadata"]:
-                    try:
-                        meta = json_mod.loads(row["metadata"])
-                    except (json_mod.JSONDecodeError, TypeError):
-                        pass
-                entry = {
-                    "id": row["id"],
-                    "title": row["title"],
-                    "meta": meta,
-                    "kb_name": row["kb_name"],
-                }
-                all_tasks.append(entry)
-                if row["id"] == task_id:
-                    task = entry
 
-            if not task:
-                return {"error": f"Task '{task_id}' not found"}
+        # Find children
+        children_list = svc.list_tasks(kb_name=kb_name, parent=task_id)
+        children = [
+            {"id": c["id"], "title": c["title"], "status": c["status"]}
+            for c in children_list
+        ]
 
-            meta = task["meta"]
-            children = [
-                {"id": t["id"], "title": t["title"], "status": t["meta"].get("status", "open")}
-                for t in all_tasks
-                if t["meta"].get("parent_task", "") == task_id
-            ]
-
-            return {
-                "id": task["id"],
-                "title": task["title"],
-                "status": meta.get("status", "open"),
-                "assignee": meta.get("assignee", ""),
-                "priority": meta.get("priority", 5),
-                "parent_task": meta.get("parent_task", ""),
-                "dependencies": meta.get("dependencies", []),
-                "evidence": meta.get("evidence", []),
-                "due_date": meta.get("due_date", ""),
-                "agent_context": meta.get("agent_context", {}),
-                "children": children,
-                "kb_name": task["kb_name"],
-            }
-        finally:
-            if should_close:
-                db.close()
+        return {
+            "id": task["id"],
+            "title": task["title"],
+            "status": meta.get("status", "open"),
+            "assignee": meta.get("assignee", ""),
+            "priority": meta.get("priority", 5),
+            "parent_task": meta.get("parent_task", ""),
+            "dependencies": meta.get("dependencies", []),
+            "evidence": meta.get("evidence", []),
+            "due_date": meta.get("due_date", ""),
+            "agent_context": meta.get("agent_context", {}),
+            "children": children,
+            "kb_name": task.get("kb_name", kb_name or ""),
+        }
 
     def _mcp_task_create(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a new task."""
+        svc = self._get_task_service()
+        kb_name = args["kb_name"]
         title = args["title"]
-        slug = title.lower().replace(" ", "-")
-        priority = args.get("priority", 5)
 
-        result = {
-            "created": True,
-            "title": title,
-            "status": "open",
-            "priority": priority,
-            "filename": f"tasks/{slug}.md",
-        }
-        if args.get("parent_task"):
-            result["parent_task"] = args["parent_task"]
-        if args.get("assignee"):
-            result["assignee"] = args["assignee"]
-        if args.get("body"):
-            result["body"] = args["body"]
-
-        result["note"] = "Create the markdown file with this frontmatter and body to complete."
-        return result
+        return svc.create_task(
+            kb_name=kb_name,
+            title=title,
+            body=args.get("body", ""),
+            parent_task=args.get("parent_task", ""),
+            priority=args.get("priority", 5),
+            assignee=args.get("assignee", ""),
+            dependencies=args.get("dependencies"),
+        )
 
     def _mcp_task_update(self, args: dict[str, Any]) -> dict[str, Any]:
         """Update task fields."""
+        svc = self._get_task_service()
         task_id = args.get("task_id")
+        kb_name = args.get("kb_name")
         if not task_id:
             return {"error": "task_id is required"}
+        if not kb_name:
+            return {"error": "kb_name is required"}
 
         updates = {}
         if "status" in args:
@@ -404,4 +425,40 @@ class TaskPlugin:
         if not updates:
             return {"error": "No updates specified"}
 
-        return {"updated": True, "task_id": task_id, "updates": updates}
+        return svc.update_task(task_id, kb_name, **updates)
+
+    def _mcp_task_claim(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Atomically claim an open task."""
+        svc = self._get_task_service()
+        return svc.claim_task(
+            task_id=args["task_id"],
+            kb_name=args["kb_name"],
+            assignee=args["assignee"],
+        )
+
+    def _mcp_task_decompose(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Decompose a parent task into children."""
+        svc = self._get_task_service()
+        try:
+            results = svc.decompose_task(
+                parent_id=args["parent_id"],
+                kb_name=args["kb_name"],
+                children=args["children"],
+            )
+            return {"decomposed": True, "parent_id": args["parent_id"], "children": results}
+        except ValueError as e:
+            return {"error": str(e)}
+
+    def _mcp_task_checkpoint(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Log a checkpoint on a task."""
+        svc = self._get_task_service()
+        try:
+            return svc.checkpoint_task(
+                task_id=args["task_id"],
+                kb_name=args["kb_name"],
+                message=args["message"],
+                confidence=args.get("confidence", 0.0),
+                partial_evidence=args.get("partial_evidence"),
+            )
+        except ValueError as e:
+            return {"error": str(e)}

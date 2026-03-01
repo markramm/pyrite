@@ -484,6 +484,7 @@ class TestIsStaleHelper:
         assert IndexManager._is_stale(f, indexed_at) is False
 
 
+@pytest.mark.integration
 class TestIntegrationWithExistingKBs:
     """Integration tests with actual CascadeSeries KBs."""
 

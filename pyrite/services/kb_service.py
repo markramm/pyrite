@@ -457,6 +457,9 @@ class KBService:
         if not entry:
             raise EntryNotFoundError(f"Entry not found: {entry_id}")
 
+        # Capture old_status before applying updates (for workflow hooks)
+        old_status = getattr(entry, "status", None)
+
         # Apply updates
         for key, value in updates.items():
             if hasattr(entry, key):
@@ -465,6 +468,7 @@ class KBService:
         entry.updated_at = datetime.now(UTC)
 
         # Run before_save hooks
+        extra = {"old_status": old_status} if old_status else {}
         hook_ctx = PluginContext(
             config=self.config,
             db=self.db,
@@ -472,6 +476,7 @@ class KBService:
             user="",
             operation="update",
             kb_type=kb_config.kb_type,
+            extra=extra,
         )
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
