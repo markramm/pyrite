@@ -87,6 +87,7 @@ markers = [
     "api: REST API endpoint tests",
     "mcp: MCP server protocol tests",
     "cli: CLI command tests",
+    "slow: long-running performance tests (1000+ entries)",
 ]
 
 [tool.mypy]

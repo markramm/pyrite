@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { parseWikilinks, parseTransclusions, renderWikilinks } from './wikilink-utils';
+import {
+	activeTransclusions,
+	isCircularTransclusion,
+	markTransclusionActive,
+	CIRCULAR_REF_MESSAGE
+} from './transclusion-utils';
 
 describe('parseWikilinks', () => {
 	it('parses simple wikilink', () => {
@@ -204,5 +210,65 @@ describe('renderWikilinks', () => {
 		const html = renderWikilinks('<p>[[exists]] and [[missing]]</p>', ids);
 		expect(html).toContain('class="wikilink"');
 		expect(html).toContain('class="wikilink wikilink-missing"');
+	});
+});
+
+describe('transclusion cycle detection', () => {
+	beforeEach(() => {
+		// Clear active transclusions between tests
+		activeTransclusions.clear();
+	});
+
+	it('detects no cycle when set is empty', () => {
+		expect(isCircularTransclusion('entry-a')).toBe(false);
+	});
+
+	it('detects cycle when target is already active', () => {
+		activeTransclusions.add('entry-a');
+		expect(isCircularTransclusion('entry-a')).toBe(true);
+	});
+
+	it('does not falsely detect cycle for different targets', () => {
+		activeTransclusions.add('entry-a');
+		expect(isCircularTransclusion('entry-b')).toBe(false);
+	});
+
+	it('markTransclusionActive adds and cleanup removes', () => {
+		const cleanup = markTransclusionActive('entry-x');
+		expect(activeTransclusions.has('entry-x')).toBe(true);
+		expect(isCircularTransclusion('entry-x')).toBe(true);
+
+		cleanup();
+		expect(activeTransclusions.has('entry-x')).toBe(false);
+		expect(isCircularTransclusion('entry-x')).toBe(false);
+	});
+
+	it('simulates A -> B -> A cycle detection', () => {
+		// A starts loading
+		const cleanupA = markTransclusionActive('entry-a');
+		expect(isCircularTransclusion('entry-a')).toBe(true);
+
+		// B starts loading (nested inside A)
+		const cleanupB = markTransclusionActive('entry-b');
+		expect(isCircularTransclusion('entry-b')).toBe(true);
+
+		// B tries to load A again -> circular
+		expect(isCircularTransclusion('entry-a')).toBe(true);
+
+		// Cleanup in reverse order
+		cleanupB();
+		cleanupA();
+		expect(activeTransclusions.size).toBe(0);
+	});
+
+	it('allows same target after cleanup completes', () => {
+		const cleanup = markTransclusionActive('entry-a');
+		cleanup();
+		// After cleanup, loading the same target again should be fine
+		expect(isCircularTransclusion('entry-a')).toBe(false);
+	});
+
+	it('exports CIRCULAR_REF_MESSAGE constant', () => {
+		expect(CIRCULAR_REF_MESSAGE).toContain('Circular reference');
 	});
 });

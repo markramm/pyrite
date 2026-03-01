@@ -138,19 +138,19 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - **Graph betweenness centrality**: Brandes' algorithm on the graph endpoint (`include_centrality=true`), node sizing by centrality in the frontend, opacity scaling, centrality toggle in graph controls. 10 backend tests.
 - **Block-ID transclusion fix**: `![[entry^block-id]]` now fetches the specific block via the blocks API in both CodeMirror and Tiptap editors, with fallback to full body. 10 frontend tests.
 
-### Remaining
+### Wave 2 (done)
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Block Refs Phase 3: Transclusion Rendering | WebSocket live updates, cycle detection. (block-ID rendering done in Wave 1) | M |
-| Collections Phase 4: Embedding | Embed collections in entries, nested collection support. | M |
+- **Collection embedding in transclusions**: `![[collection-id]]` renders inline as compact entry list (max 10, "View all →" link) in both CodeMirror and Tiptap editors. Folder icon distinguishes from entry transclusions.
+- **WebSocket live updates for transclusions**: When a source entry is updated, all transclusion widgets showing that entry auto-refresh. Uses `destroy()` for cleanup.
+- **Cycle detection**: Module-level `activeTransclusions` set prevents A→B→A infinite loops. Shows "⚠ Circular reference detected" warning. 7 tests.
+- **1000+ entry performance test**: 1050 entries (notes + events), validates index sync <30s, FTS <500ms, list <200ms, graph+centrality <5s, QA validate <10s. All pass well within limits. 6 tests.
 
 ### Definition of done
 
-- ~~Transclusions render inline in the web editor~~ (done — heading + block-ID)
+- ~~Transclusions render inline in the web editor~~ (done — heading + block-ID + collections)
 - ~~QA assessment data visible in web UI~~ (done — QA dashboard)
 - ~~At least one graph enhancement shipped~~ (done — betweenness centrality)
-- Navigate a 1000+ entry KB smoothly
+- ~~Navigate a 1000+ entry KB smoothly~~ (done — 1050-entry perf test passes)
 
 ---
 

@@ -6,6 +6,12 @@
 
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { wsClient } from '$lib/api/websocket';
+import {
+	isCircularTransclusion,
+	markTransclusionActive,
+	CIRCULAR_REF_MESSAGE
+} from '$lib/editor/transclusion-utils';
 
 export const Transclusion = Node.create({
 	name: 'transclusion',
@@ -71,6 +77,21 @@ export const Transclusion = Node.create({
 			new Plugin({
 				key: new PluginKey('transclusion-loader'),
 				view() {
+					// Subscribe to WebSocket updates to refresh transclusions
+					const unsubscribeWs = wsClient.onEvent((event) => {
+						if (event.type !== 'entry_updated') return;
+						const embeds = document.querySelectorAll(
+							`.transclusion-embed[data-transclusion="${event.entry_id}"]`
+						);
+						embeds.forEach((embed) => {
+							const contentEl = embed.querySelector('.transclusion-content') as HTMLElement;
+							if (!contentEl) return;
+							// Reset to trigger reload on next update cycle
+							contentEl.textContent = 'Loading...';
+							delete contentEl.dataset.loaded;
+						});
+					});
+
 					return {
 						update(view) {
 							const nodes = view.dom.querySelectorAll(
@@ -84,11 +105,90 @@ export const Transclusion = Node.create({
 									return;
 								const target = el.dataset.transclusion;
 								if (!target) return;
+
+								// Cycle detection
+								if (isCircularTransclusion(target)) {
+									htmlNode.textContent = CIRCULAR_REF_MESSAGE;
+									htmlNode.dataset.loaded = 'true';
+									return;
+								}
+
 								htmlNode.dataset.loaded = 'true';
+								const cleanup = markTransclusionActive(target);
 								try {
 									const { api } = await import('$lib/api/client');
 									const res = await api.resolveEntry(target);
 									if (res.resolved && res.entry) {
+										// Collection transclusion: render compact entry list
+										if (res.entry.entry_type === 'collection') {
+											const collectionId = res.entry.id;
+											const kb = res.entry.kb_name;
+											const collTitle = res.entry.title;
+
+											// Update label to collection indicator
+											const labelEl = el.querySelector('p');
+											if (labelEl && labelEl.textContent?.startsWith('\u{1F4CE}')) {
+												labelEl.textContent = `\u{1F4C2} ${collTitle}`;
+											}
+
+											try {
+												const collRes = await api.getCollectionEntries(collectionId, kb, { limit: 10 });
+												htmlNode.textContent = '';
+
+												if (collRes.entries.length === 0) {
+													htmlNode.textContent = 'Empty collection';
+													htmlNode.style.color = '#9ca3af';
+													htmlNode.style.fontStyle = 'italic';
+													return;
+												}
+
+												// Compact list of entry titles
+												const list = document.createElement('ul');
+												list.style.cssText = 'margin: 0; padding: 0 0 0 1.2rem; list-style: disc;';
+												for (const entry of collRes.entries) {
+													const li = document.createElement('li');
+													li.style.cssText = 'margin: 0.15rem 0;';
+													const link = document.createElement('a');
+													link.href = `/entries/${encodeURIComponent(entry.id)}`;
+													link.textContent = entry.title;
+													link.style.cssText = 'color: #3b82f6; text-decoration: none;';
+													link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+													link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+													link.addEventListener('click', (e) => {
+														e.preventDefault();
+														window.location.href = link.href;
+													});
+													li.appendChild(link);
+													list.appendChild(li);
+												}
+												htmlNode.appendChild(list);
+
+												// Count and "View all" link
+												const footer = document.createElement('div');
+												footer.style.cssText = 'margin-top: 0.4rem; font-size: 0.85em; color: #9ca3af;';
+												const countText = collRes.total > collRes.entries.length
+													? `Showing ${collRes.entries.length} of ${collRes.total} entries. `
+													: `${collRes.total} ${collRes.total === 1 ? 'entry' : 'entries'}`;
+												footer.textContent = countText;
+
+												if (collRes.total > collRes.entries.length) {
+													const viewAll = document.createElement('a');
+													viewAll.href = `/collections/${encodeURIComponent(collectionId)}?kb=${encodeURIComponent(kb)}`;
+													viewAll.textContent = 'View all \u2192';
+													viewAll.style.cssText = 'color: #3b82f6; text-decoration: none;';
+													viewAll.addEventListener('click', (e) => {
+														e.preventDefault();
+														window.location.href = viewAll.href;
+													});
+													footer.appendChild(viewAll);
+												}
+												htmlNode.appendChild(footer);
+											} catch {
+												htmlNode.textContent = '\u26A0 Failed to load collection entries';
+											}
+											return;
+										}
+
 										// Extract relevant section
 										const heading = el.dataset.transclusionHeading;
 										const blockId = el.dataset.transclusionBlock;
@@ -145,8 +245,13 @@ export const Transclusion = Node.create({
 									}
 								} catch {
 									htmlNode.textContent = '\u26A0 Failed to load';
+								} finally {
+									cleanup();
 								}
 							});
+						},
+						destroy() {
+							unsubscribeWs();
 						}
 					};
 				}

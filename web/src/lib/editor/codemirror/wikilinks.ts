@@ -19,6 +19,12 @@ import {
 } from '@codemirror/view';
 import { api } from '$lib/api/client';
 import type { EntryTitle } from '$lib/api/types';
+import { wsClient } from '$lib/api/websocket';
+import {
+	isCircularTransclusion,
+	markTransclusionActive,
+	CIRCULAR_REF_MESSAGE
+} from '$lib/editor/transclusion-utils';
 
 // =============================================================================
 // Autocomplete
@@ -281,6 +287,8 @@ const wikilinkDecorations = ViewPlugin.fromClass(
 
 /** Widget that renders a transclusion as a read-only embedded card. */
 class TransclusionWidget extends WidgetType {
+	private unsubscribeWs: (() => void) | null = null;
+
 	constructor(
 		readonly target: string,
 		readonly heading?: string,
@@ -327,13 +335,41 @@ class TransclusionWidget extends WidgetType {
 		// Async load content
 		this._loadContent(content);
 
+		// Subscribe to WebSocket updates for this entry
+		this.unsubscribeWs = wsClient.onEvent((event) => {
+			if (event.type === 'entry_updated' && event.entry_id === this.target) {
+				content.textContent = 'Loading...';
+				this._loadContent(content);
+			}
+		});
+
 		return wrapper;
 	}
 
+	destroy(): void {
+		if (this.unsubscribeWs) {
+			this.unsubscribeWs();
+			this.unsubscribeWs = null;
+		}
+	}
+
 	private async _loadContent(contentEl: HTMLElement): Promise<void> {
+		// Cycle detection: check if this target is already being transcluded
+		if (isCircularTransclusion(this.target)) {
+			contentEl.textContent = CIRCULAR_REF_MESSAGE;
+			return;
+		}
+
+		const cleanup = markTransclusionActive(this.target);
 		try {
 			const res = await api.resolveEntry(this.target);
 			if (res.resolved && res.entry) {
+				// Collection transclusion: render compact entry list
+				if (res.entry.entry_type === 'collection') {
+					this._renderCollection(contentEl, res.entry.id, res.entry.kb_name, res.entry.title);
+					return;
+				}
+
 				let body: string;
 
 				if (this.blockId) {
@@ -377,6 +413,88 @@ class TransclusionWidget extends WidgetType {
 			}
 		} catch {
 			contentEl.textContent = '\u26A0 Failed to load';
+		} finally {
+			cleanup();
+		}
+	}
+
+	private async _renderCollection(
+		contentEl: HTMLElement,
+		collectionId: string,
+		kb: string,
+		title: string
+	): Promise<void> {
+		// Update the label to show collection indicator
+		const label = contentEl.parentElement?.querySelector('div');
+		if (label && label.style.fontSize === '0.85em') {
+			label.textContent = `\u{1F4C2} ${title}`;
+		}
+
+		// Update the source link to point to collection page
+		const cite = contentEl.parentElement?.querySelector('a');
+		if (cite) {
+			cite.href = `/collections/${encodeURIComponent(collectionId)}?kb=${encodeURIComponent(kb)}`;
+			cite.textContent = title;
+			cite.addEventListener('click', (e) => {
+				e.preventDefault();
+				window.location.href = cite.href;
+			});
+		}
+
+		try {
+			const collRes = await api.getCollectionEntries(collectionId, kb, { limit: 10 });
+			contentEl.textContent = '';
+
+			if (collRes.entries.length === 0) {
+				contentEl.textContent = 'Empty collection';
+				contentEl.style.color = '#9ca3af';
+				contentEl.style.fontStyle = 'italic';
+				return;
+			}
+
+			// Compact list of entry titles
+			const list = document.createElement('ul');
+			list.style.cssText = 'margin: 0; padding: 0 0 0 1.2rem; list-style: disc;';
+			for (const entry of collRes.entries) {
+				const li = document.createElement('li');
+				li.style.cssText = 'margin: 0.15rem 0;';
+				const link = document.createElement('a');
+				link.href = `/entries/${encodeURIComponent(entry.id)}`;
+				link.textContent = entry.title;
+				link.style.cssText = 'color: #3b82f6; text-decoration: none;';
+				link.addEventListener('mouseenter', () => { link.style.textDecoration = 'underline'; });
+				link.addEventListener('mouseleave', () => { link.style.textDecoration = 'none'; });
+				link.addEventListener('click', (e) => {
+					e.preventDefault();
+					window.location.href = link.href;
+				});
+				li.appendChild(link);
+				list.appendChild(li);
+			}
+			contentEl.appendChild(list);
+
+			// Count and "View all" link
+			const footer = document.createElement('div');
+			footer.style.cssText = 'margin-top: 0.4rem; font-size: 0.85em; color: #9ca3af;';
+			const countText = collRes.total > collRes.entries.length
+				? `Showing ${collRes.entries.length} of ${collRes.total} entries. `
+				: `${collRes.total} ${collRes.total === 1 ? 'entry' : 'entries'}`;
+			footer.textContent = countText;
+
+			if (collRes.total > collRes.entries.length) {
+				const viewAll = document.createElement('a');
+				viewAll.href = `/collections/${encodeURIComponent(collectionId)}?kb=${encodeURIComponent(kb)}`;
+				viewAll.textContent = 'View all \u2192';
+				viewAll.style.cssText = 'color: #3b82f6; text-decoration: none;';
+				viewAll.addEventListener('click', (e) => {
+					e.preventDefault();
+					window.location.href = viewAll.href;
+				});
+				footer.appendChild(viewAll);
+			}
+			contentEl.appendChild(footer);
+		} catch {
+			contentEl.textContent = '\u26A0 Failed to load collection entries';
 		}
 	}
 
