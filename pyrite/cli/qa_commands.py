@@ -8,8 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ..config import load_config
-from ..storage.database import PyriteDB
+from .context import cli_context
 
 qa_app = typer.Typer(help="Quality assurance validation and assessment")
 console = Console()
@@ -43,10 +42,7 @@ def qa_validate(
     """
     from ..services.qa_service import QAService
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with cli_context() as (config, db, svc):
         qa = QAService(config, db)
 
         if entry and kb_name:
@@ -114,9 +110,6 @@ def qa_validate(
         if error_count > 0:
             raise typer.Exit(1)
 
-    finally:
-        db.close()
-
 
 @qa_app.command("assess")
 def qa_assess(
@@ -136,10 +129,7 @@ def qa_assess(
     """
     from ..services.qa_service import QAService
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with cli_context() as (config, db, svc):
         qa = QAService(config, db)
 
         if entry:
@@ -207,9 +197,6 @@ def qa_assess(
                     )
                 console.print(table)
 
-    finally:
-        db.close()
-
 
 @qa_app.command("status")
 def qa_status(
@@ -221,10 +208,7 @@ def qa_status(
     """Show QA status dashboard with issue counts and coverage."""
     from ..services.qa_service import QAService
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with cli_context() as (config, db, svc):
         qa = QAService(config, db)
         status = qa.get_status(kb_name=kb_name)
 
@@ -255,7 +239,7 @@ def qa_status(
 
         if "coverage" in status:
             cov = status["coverage"]
-            console.print(f"\n[bold]Coverage:[/bold]")
+            console.print("\n[bold]Coverage:[/bold]")
             console.print(f"  Total entries: {cov['total']}")
             console.print(f"  Assessed: {cov['assessed']}")
             console.print(f"  Unassessed: {cov['unassessed']}")
@@ -264,6 +248,3 @@ def qa_status(
                 for s, cnt in cov["by_status"].items():
                     style = {"pass": "green", "warn": "yellow", "fail": "red"}.get(s, "")
                     console.print(f"    [{style}]{s}: {cnt}[/{style}]")
-
-    finally:
-        db.close()

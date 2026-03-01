@@ -4,19 +4,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .context import cli_context
+
 collections_app = typer.Typer(help="Collection management")
 console = Console()
-
-
-def _get_svc():
-    """Create a KBService instance for CLI commands."""
-    from ..config import load_config
-    from ..services.kb_service import KBService
-    from ..storage.database import PyriteDB
-
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    return KBService(config, db), db
 
 
 @collections_app.command("list")
@@ -29,8 +20,7 @@ def list_collections(
     """List all collections with entry counts."""
     import json as json_mod
 
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         results = svc.list_collections(kb_name=kb)
 
         if not results:
@@ -68,8 +58,6 @@ def list_collections(
             )
 
         console.print(table)
-    finally:
-        db.close()
 
 
 @collections_app.command("query")
@@ -90,8 +78,7 @@ def query_entries(
         validate_query,
     )
 
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         query = parse_query(query_str)
 
         # Override kb and limit from CLI flags
@@ -140,5 +127,3 @@ def query_entries(
             )
 
         console.print(table)
-    finally:
-        db.close()

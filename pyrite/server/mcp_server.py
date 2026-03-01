@@ -17,7 +17,7 @@ from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
 from ..exceptions import ConfigError, PyriteError
-from ..schema import KBSchema, generate_entry_id
+from ..schema import generate_entry_id
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
@@ -724,7 +724,7 @@ class PyriteMCPServer:
         if not kb_config:
             return {"error": f"KB '{kb_name}' not found"}
 
-        schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+        schema = kb_config.kb_schema
         return schema.to_agent_schema()
 
     def _kb_qa_validate(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -807,7 +807,7 @@ class PyriteMCPServer:
         if not should_validate:
             kb_config = self.config.get_kb(kb_name)
             if kb_config:
-                schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+                schema = kb_config.kb_schema
                 should_validate = schema.validation.get("qa_on_write", False)
         if should_validate:
             from ..services.qa_service import QAService
@@ -836,7 +836,7 @@ class PyriteMCPServer:
             return {"error": f"KB '{kb_name}' is read-only"}
 
         # Validate against schema
-        schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+        schema = kb_config.kb_schema
         validation = schema.validate_entry(
             entry_type, args, context={"kb_type": kb_config.kb_type}
         )
@@ -881,7 +881,7 @@ class PyriteMCPServer:
         kb_config = self.config.get_kb(kb_name)
         schema = None
         if kb_config:
-            schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+            schema = kb_config.kb_schema
 
         try:
             results = self.svc.bulk_create_entries(kb_name, entries)
@@ -923,7 +923,7 @@ class PyriteMCPServer:
         warnings: list[dict[str, Any]] = []
         kb_config = self.config.get_kb(kb_name)
         if kb_config:
-            schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+            schema = kb_config.kb_schema
             # Get the current entry to determine its type
             existing = self.svc.get_entry(entry_id, kb_name)
             if existing:
@@ -1020,7 +1020,7 @@ class PyriteMCPServer:
             kb_config = self.config.get_kb(kb_name)
             if not kb_config:
                 return {"error": f"KB '{kb_name}' not found"}
-            schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+            schema = kb_config.kb_schema
             return {"valid": True, "types": list(schema.types.keys())}
 
         elif action in ("show_schema", "add_type", "remove_type", "set_schema"):

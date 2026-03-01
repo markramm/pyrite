@@ -70,10 +70,17 @@ def cli_env():
 
 
 def _patch_config(cli_env):
-    """Patch load_config to return test config."""
+    """Patch load_config to return test config in all CLI modules."""
+    import contextlib
     from unittest.mock import patch
 
-    return patch("pyrite.cli.load_config", return_value=cli_env["config"])
+    @contextlib.contextmanager
+    def _multi_patch():
+        with patch("pyrite.cli.load_config", return_value=cli_env["config"]):
+            with patch("pyrite.cli.context.load_config", return_value=cli_env["config"]):
+                yield
+
+    return _multi_patch()
 
 
 @pytest.mark.cli

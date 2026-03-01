@@ -8,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ..config import load_config
+from .context import get_config_and_db
 
 index_app = typer.Typer(help="Search index management")
 console = Console()
@@ -36,10 +36,9 @@ def index_build(
     """Build or rebuild the search index."""
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
-    from ..storage import IndexManager, PyriteDB
+    from ..storage import IndexManager
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    config, db = get_config_and_db()
     index_mgr = IndexManager(db, config)
 
     if kb_name:
@@ -116,10 +115,9 @@ def index_sync(
     no_embed: bool = typer.Option(False, "--no-embed", help="Skip auto-embedding after sync"),
 ):
     """Incremental sync: update index for changed files only."""
-    from ..storage import IndexManager, PyriteDB
+    from ..storage import IndexManager
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    config, db = get_config_and_db()
     index_mgr = IndexManager(db, config)
 
     results = index_mgr.sync_incremental(kb_name)
@@ -151,10 +149,9 @@ def index_stats(
     ),
 ):
     """Show index statistics."""
-    from ..storage import IndexManager, PyriteDB
+    from ..storage import IndexManager
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    config, db = get_config_and_db()
     index_mgr = IndexManager(db, config)
 
     stats = index_mgr.get_index_stats()
@@ -194,15 +191,13 @@ def index_embed(
 ):
     """Generate vector embeddings for semantic search."""
     from ..services.embedding_service import EmbeddingService, is_available
-    from ..storage import PyriteDB
 
     if not is_available():
         console.print("[red]Error:[/red] sentence-transformers is not installed.")
         console.print("Install with: pip install pyrite[semantic]")
         raise typer.Exit(1)
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    config, db = get_config_and_db()
 
     if not db.vec_available:
         console.print("[red]Error:[/red] sqlite-vec is not installed or failed to load.")
@@ -251,10 +246,9 @@ def index_health(
     ),
 ):
     """Check index health and consistency."""
-    from ..storage import IndexManager, PyriteDB
+    from ..storage import IndexManager
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    config, db = get_config_and_db()
     index_mgr = IndexManager(db, config)
 
     health = index_mgr.check_health()

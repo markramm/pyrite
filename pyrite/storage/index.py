@@ -181,11 +181,9 @@ class IndexManager:
         # Extract object-ref fields for entry_ref table
         refs = []
         try:
-            from ..schema import KBSchema
-
             kb_config = self.config.get_kb(kb_name)
-            if kb_config and (kb_config.path / "kb.yaml").exists():
-                schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+            if kb_config and kb_config.kb_yaml_path.exists():
+                schema = kb_config.kb_schema
                 entry_type_name = entry.entry_type
                 type_schema = schema.types.get(entry_type_name)
                 if type_schema:

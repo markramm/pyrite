@@ -372,9 +372,7 @@ class KBService:
         kb_yaml = kb_config.path / "kb.yaml"
         if kb_yaml.exists():
             try:
-                from ..schema import KBSchema
-
-                schema = KBSchema.from_yaml(kb_yaml)
+                schema = kb_config.kb_schema
                 validation_result = schema.validate_entry(
                     entry.entry_type, meta,
                     context={"kb_name": kb_name, "kb_type": kb_config.kb_type},

@@ -499,8 +499,8 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("pyrite.cli.qa_commands.load_config", return_value=qa_env["config"]), patch(
-            "pyrite.cli.qa_commands.PyriteDB", return_value=qa_env["db"]
+        with patch("pyrite.cli.context.load_config", return_value=qa_env["config"]), patch(
+            "pyrite.cli.context.PyriteDB", return_value=qa_env["db"]
         ):
             result = runner.invoke(qa_app, ["assess", "test-kb", "--format", "json"])
             assert result.exit_code == 0
@@ -516,8 +516,8 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("pyrite.cli.qa_commands.load_config", return_value=qa_env["config"]), patch(
-            "pyrite.cli.qa_commands.PyriteDB", return_value=qa_env["db"]
+        with patch("pyrite.cli.context.load_config", return_value=qa_env["config"]), patch(
+            "pyrite.cli.context.PyriteDB", return_value=qa_env["db"]
         ):
             result = runner.invoke(
                 qa_app, ["assess", "test-kb", "--entry", "good-note", "--format", "json"]
@@ -534,8 +534,8 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("pyrite.cli.qa_commands.load_config", return_value=qa_env["config"]), patch(
-            "pyrite.cli.qa_commands.PyriteDB", return_value=qa_env["db"]
+        with patch("pyrite.cli.context.load_config", return_value=qa_env["config"]), patch(
+            "pyrite.cli.context.PyriteDB", return_value=qa_env["db"]
         ):
             result = runner.invoke(qa_app, ["status", "test-kb", "--format", "json"])
             assert result.exit_code == 0

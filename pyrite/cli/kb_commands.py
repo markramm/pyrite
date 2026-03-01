@@ -17,6 +17,7 @@ from ..config import (
     load_config,
     save_config,
 )
+from .context import cli_context
 
 kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
@@ -277,36 +278,30 @@ def kb_create(
     ttl: int = typer.Option(3600, "--ttl", help="TTL in seconds for ephemeral KBs"),
 ):
     """Create a new knowledge base."""
-    from ..services.kb_service import KBService
-    from ..storage.database import PyriteDB
+    with cli_context() as (config, db, svc):
+        if ephemeral:
+            kb = svc.create_ephemeral_kb(name, ttl=ttl, description=description)
+            console.print(f"[green]Created ephemeral KB:[/green] {name} (TTL: {ttl}s) at {kb.path}")
+            return
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    svc = KBService(config, db)
+        if not path:
+            console.print("[red]Error:[/red] --path is required for non-ephemeral KBs")
+            raise typer.Exit(1)
 
-    if ephemeral:
-        kb = svc.create_ephemeral_kb(name, ttl=ttl, description=description)
-        console.print(f"[green]Created ephemeral KB:[/green] {name} (TTL: {ttl}s) at {kb.path}")
-        return
+        resolved_path = path.expanduser().resolve()
+        resolved_path.mkdir(parents=True, exist_ok=True)
 
-    if not path:
-        console.print("[red]Error:[/red] --path is required for non-ephemeral KBs")
-        raise typer.Exit(1)
-
-    resolved_path = path.expanduser().resolve()
-    resolved_path.mkdir(parents=True, exist_ok=True)
-
-    kb = KBConfig(
-        name=name,
-        path=resolved_path,
-        kb_type=kb_type,
-        description=description,
-        shortname=shortname,
-    )
-    config.add_kb(kb)
-    save_config(config)
-    db.register_kb(name=name, kb_type=kb_type, path=str(resolved_path), description=description)
-    console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
+        kb = KBConfig(
+            name=name,
+            path=resolved_path,
+            kb_type=kb_type,
+            description=description,
+            shortname=shortname,
+        )
+        config.add_kb(kb)
+        save_config(config)
+        db.register_kb(name=name, kb_type=kb_type, path=str(resolved_path), description=description)
+        console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
 
 
 @kb_app.command("commit")
@@ -317,28 +312,20 @@ def kb_commit(
     sign_off: bool = typer.Option(False, "--signoff", "-s", help="Add Signed-off-by line"),
 ):
     """Commit changes in a KB's git repository."""
-    from ..services.kb_service import KBService
-    from ..storage.database import PyriteDB
-
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    svc = KBService(config, db)
-
-    try:
-        result = svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
-        if result["success"]:
-            console.print(f"[green]Committed:[/green] {result['commit_hash'][:8]}")
-            console.print(f"  {result['files_changed']} file(s) changed")
-            if result.get("files"):
-                for f in result["files"]:
-                    console.print(f"  [dim]{f}[/dim]")
-        else:
-            console.print(f"[yellow]No commit:[/yellow] {result.get('error', 'Unknown error')}")
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
+    with cli_context() as (config, db, svc):
+        try:
+            result = svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
+            if result["success"]:
+                console.print(f"[green]Committed:[/green] {result['commit_hash'][:8]}")
+                console.print(f"  {result['files_changed']} file(s) changed")
+                if result.get("files"):
+                    for f in result["files"]:
+                        console.print(f"  [dim]{f}[/dim]")
+            else:
+                console.print(f"[yellow]No commit:[/yellow] {result.get('error', 'Unknown error')}")
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 @kb_app.command("push")
@@ -348,44 +335,31 @@ def kb_push(
     branch: str | None = typer.Option(None, "--branch", "-b", help="Branch to push"),
 ):
     """Push KB commits to a remote repository."""
-    from ..services.kb_service import KBService
-    from ..storage.database import PyriteDB
-
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    svc = KBService(config, db)
-
-    try:
-        result = svc.push_kb(kb_name, remote=remote, branch=branch)
-        if result["success"]:
-            console.print(f"[green]Pushed:[/green] {result['message']}")
-        else:
-            console.print(f"[red]Push failed:[/red] {result['message']}")
+    with cli_context() as (config, db, svc):
+        try:
+            result = svc.push_kb(kb_name, remote=remote, branch=branch)
+            if result["success"]:
+                console.print(f"[green]Pushed:[/green] {result['message']}")
+            else:
+                console.print(f"[red]Push failed:[/red] {result['message']}")
+                raise typer.Exit(1)
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
 
 
 @kb_app.command("gc")
 def kb_gc():
     """Garbage-collect expired ephemeral KBs."""
-    from ..services.kb_service import KBService
-    from ..storage.database import PyriteDB
+    with cli_context() as (config, db, svc):
+        removed = svc.gc_ephemeral_kbs()
 
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    svc = KBService(config, db)
-    removed = svc.gc_ephemeral_kbs()
-
-    if removed:
-        for name in removed:
-            console.print(f"  [red]Removed:[/red] {name}")
-        console.print(f"[green]Garbage collected {len(removed)} expired KB(s).[/green]")
-    else:
-        console.print("[dim]No expired ephemeral KBs found.[/dim]")
+        if removed:
+            for name in removed:
+                console.print(f"  [red]Removed:[/red] {name}")
+            console.print(f"[green]Garbage collected {len(removed)} expired KB(s).[/green]")
+        else:
+            console.print("[dim]No expired ephemeral KBs found.[/dim]")
 
 
 # =========================================================================

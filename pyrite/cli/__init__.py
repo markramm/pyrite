@@ -26,6 +26,7 @@ from ..exceptions import PyriteError, ValidationError
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from .collection_commands import collections_app
+from .context import cli_context
 from .extension_commands import extension_app
 from .index_commands import index_app
 from .init_command import init_kb
@@ -43,7 +44,10 @@ console = Console()
 
 
 def _get_svc():
-    """Create a KBService instance for CLI commands."""
+    """Create a KBService instance for CLI commands.
+
+    Deprecated: use cli_context() directly in new code.
+    """
     config = load_config()
     db = PyriteDB(config.settings.index_path)
     return KBService(config, db), db
@@ -111,8 +115,7 @@ def get_entry(
     ),
 ):
     """Get a specific entry by ID."""
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         result = svc.get_entry(entry_id, kb_name=kb_name)
 
         if not result:
@@ -145,8 +148,6 @@ def get_entry(
                     console.print(f"  • {src.get('title', '')}: {src.get('url', '')}")
                 else:
                     console.print(f"  • {src.title}: {src.url}")
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -255,29 +256,27 @@ def create_entry(
                 pass
             extra[k] = v
 
-    svc, db = _get_svc()
-    try:
-        entry = svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
-        console.print(f"[green]Created:[/green] {entry.id}")
-        console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+    with cli_context() as (config, db, svc):
+        try:
+            entry = svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
+            console.print(f"[green]Created:[/green] {entry.id}")
+            console.print(f"[dim]Type: {entry.entry_type}[/dim]")
 
-        # Add links after creation
-        if link:
-            for link_spec in link:
-                if ":" in link_spec:
-                    target, relation = link_spec.split(":", 1)
-                else:
-                    target, relation = link_spec, "related_to"
-                try:
-                    svc.add_link(entry.id, kb_name, target.strip(), relation.strip())
-                    console.print(f"  [dim]Linked to {target} ({relation})[/dim]")
-                except (PyriteError, ValueError) as e:
-                    console.print(f"  [yellow]Link failed:[/yellow] {e}")
-    except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
+            # Add links after creation
+            if link:
+                for link_spec in link:
+                    if ":" in link_spec:
+                        target, relation = link_spec.split(":", 1)
+                    else:
+                        target, relation = link_spec, "related_to"
+                    try:
+                        svc.add_link(entry.id, kb_name, target.strip(), relation.strip())
+                        console.print(f"  [dim]Linked to {target} ({relation})[/dim]")
+                    except (PyriteError, ValueError) as e:
+                        console.print(f"  [yellow]Link failed:[/yellow] {e}")
+        except (PyriteError, ValueError) as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 # =============================================================================
@@ -303,35 +302,33 @@ def add_entry(
         console.print(f"[red]Error:[/red] File not found: {file_path}")
         raise typer.Exit(1)
 
-    svc, db = _get_svc()
-    try:
-        entry, result = svc.add_entry_from_file(
-            kb_name, file_path, validate_only=validate_only
-        )
+    with cli_context() as (config, db, svc):
+        try:
+            entry, result = svc.add_entry_from_file(
+                kb_name, file_path, validate_only=validate_only
+            )
 
-        # Show warnings
-        for warning in result.get("warnings", []):
-            console.print(f"[yellow]Warning:[/yellow] {warning}")
+            # Show warnings
+            for warning in result.get("warnings", []):
+                console.print(f"[yellow]Warning:[/yellow] {warning}")
 
-        if validate_only:
-            errors = result.get("errors", [])
-            if errors:
-                for err in errors:
-                    console.print(f"[red]Error:[/red] {err}")
-                raise typer.Exit(1)
-            console.print(f"[green]Valid:[/green] {entry.id}")
-            console.print(f"[dim]Type: {entry.entry_type}[/dim]")
-        else:
-            console.print(f"[green]Added:[/green] {entry.id}")
-            console.print(f"[dim]Type: {entry.entry_type}[/dim]")
-    except ValidationError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    except PyriteError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
+            if validate_only:
+                errors = result.get("errors", [])
+                if errors:
+                    for err in errors:
+                        console.print(f"[red]Error:[/red] {err}")
+                    raise typer.Exit(1)
+                console.print(f"[green]Valid:[/green] {entry.id}")
+                console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+            else:
+                console.print(f"[green]Added:[/green] {entry.id}")
+                console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+        except ValidationError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+        except PyriteError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 # =============================================================================
@@ -359,15 +356,13 @@ def update_entry(
     if tags is not None:
         updates["tags"] = [t.strip() for t in tags.split(",")]
 
-    svc, db = _get_svc()
-    try:
-        entry = svc.update_entry(entry_id, kb_name, **updates)
-        console.print(f"[green]Updated:[/green] {entry.id}")
-    except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
+    with cli_context() as (config, db, svc):
+        try:
+            entry = svc.update_entry(entry_id, kb_name, **updates)
+            console.print(f"[green]Updated:[/green] {entry.id}")
+        except (PyriteError, ValueError) as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 # =============================================================================
@@ -386,18 +381,16 @@ def delete_entry(
         if not typer.confirm(f"Delete entry '{entry_id}' from KB '{kb_name}'?"):
             raise typer.Abort()
 
-    svc, db = _get_svc()
-    try:
-        deleted = svc.delete_entry(entry_id, kb_name)
-        if not deleted:
-            console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
+    with cli_context() as (config, db, svc):
+        try:
+            deleted = svc.delete_entry(entry_id, kb_name)
+            if not deleted:
+                console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
+                raise typer.Exit(1)
+            console.print(f"[green]Deleted:[/green] {entry_id}")
+        except (PyriteError, ValueError) as e:
+            console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
-        console.print(f"[green]Deleted:[/green] {entry_id}")
-    except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -416,23 +409,21 @@ def link_entries(
     bidirectional: bool = typer.Option(False, "--bidi", help="Create link in both directions"),
 ):
     """Create a link between two entries."""
-    svc, db = _get_svc()
-    try:
-        svc.add_link(source, kb_name, target, relation, target_kb=target_kb, note=note)
-        tkb = target_kb or kb_name
-        console.print(f"[green]Linked:[/green] {source} --[{relation}]--> {target} (in {tkb})")
+    with cli_context() as (config, db, svc):
+        try:
+            svc.add_link(source, kb_name, target, relation, target_kb=target_kb, note=note)
+            tkb = target_kb or kb_name
+            console.print(f"[green]Linked:[/green] {source} --[{relation}]--> {target} (in {tkb})")
 
-        if bidirectional:
-            from ..schema import get_inverse_relation
+            if bidirectional:
+                from ..schema import get_inverse_relation
 
-            inverse = get_inverse_relation(relation)
-            svc.add_link(target, tkb, source, inverse, target_kb=kb_name, note=note)
-            console.print(f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})")
-    except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
-    finally:
-        db.close()
+                inverse = get_inverse_relation(relation)
+                svc.add_link(target, tkb, source, inverse, target_kb=kb_name, note=note)
+                console.print(f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})")
+        except (PyriteError, ValueError) as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 # =============================================================================
@@ -447,8 +438,7 @@ def list_kbs(
     ),
 ):
     """List all knowledge bases."""
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         kbs = svc.list_kbs()
 
         if not kbs:
@@ -472,8 +462,6 @@ def list_kbs(
             )
 
         console.print(table)
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -492,8 +480,7 @@ def timeline(
     ),
 ):
     """Query timeline events."""
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         results = svc.get_timeline(
             date_from=date_from,
             date_to=date_to,
@@ -525,8 +512,6 @@ def timeline(
             )
 
         console.print(table)
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -544,8 +529,7 @@ def tags_cmd(
     ),
 ):
     """List tags with counts."""
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         tag_list = svc.get_tags(kb_name=kb_name, limit=limit)
 
         # Apply prefix filter
@@ -570,8 +554,6 @@ def tags_cmd(
             table.add_row(tag.get("name", ""), str(tag.get("count", 0)))
 
         console.print(table)
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -588,8 +570,7 @@ def backlinks_cmd(
     ),
 ):
     """Find entries that link to a given entry."""
-    svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         links = svc.get_backlinks(entry_id, kb_name)
 
         if not links:
@@ -618,8 +599,6 @@ def backlinks_cmd(
             )
 
         console.print(table)
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -814,8 +793,7 @@ def auth_whoami(
     ),
 ):
     """Show current user identity."""
-    _svc, db = _get_svc()
-    try:
+    with cli_context() as (config, db, svc):
         from ..services.user_service import UserService
 
         user_service = UserService(db)
@@ -837,8 +815,6 @@ def auth_whoami(
             if user.get("email"):
                 console.print(f"  Email: {user['email']}")
             console.print(f"  GitHub ID: {user['github_id']}")
-    finally:
-        db.close()
 
 
 @auth_app.command("github-login")

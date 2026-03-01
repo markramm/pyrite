@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ..config import PyriteConfig
-from ..schema import KBSchema, validate_date, validate_importance
+from ..schema import validate_date, validate_importance
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
@@ -678,11 +678,10 @@ class QAService:
         if not kb_config:
             return
 
-        kb_yaml = kb_config.path / "kb.yaml"
-        if not kb_yaml.exists():
+        if not kb_config.kb_yaml_path.exists():
             return
 
-        schema = KBSchema.from_yaml(kb_yaml)
+        schema = kb_config.kb_schema
         entry_type = entry.get("entry_type", "")
 
         # Build fields dict for validation
@@ -736,11 +735,10 @@ class QAService:
         if not kb_config:
             return
 
-        kb_yaml = kb_config.path / "kb.yaml"
-        if not kb_yaml.exists():
+        if not kb_config.kb_yaml_path.exists():
             return
 
-        schema = KBSchema.from_yaml(kb_yaml)
+        schema = kb_config.kb_schema
 
         rows = self.db._raw_conn.execute(
             "SELECT id, kb_name, entry_type, title, date, importance, status, metadata "

@@ -52,7 +52,27 @@ def cli_env():
 
 
 def _patch_config(module_path, cli_env):
-    return patch(module_path, return_value=cli_env["config"])
+    """Patch load_config in both the given module and cli_context.
+
+    After the cli_context refactor, commands that go through cli_context
+    call load_config from pyrite.cli.context, not from their own module.
+    We patch both locations to keep tests working.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _multi_patch():
+        # Always patch the context module (used by all refactored commands)
+        with patch("pyrite.cli.context.load_config", return_value=cli_env["config"]):
+            # Also patch the original module path (may no longer exist for some
+            # modules after refactoring, so guard with a try/except)
+            try:
+                with patch(module_path, return_value=cli_env["config"]):
+                    yield
+            except AttributeError:
+                yield
+
+    return _multi_patch()
 
 
 @pytest.mark.cli

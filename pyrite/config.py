@@ -56,16 +56,37 @@ class KBConfig:
     types: dict[str, Any] | None = None
     policies: dict[str, Any] | None = None
 
+    # Internal cache — not serialized
+    _schema_cache: Any = field(default=None, init=False, repr=False)
+
     def __post_init__(self):
         self.path = Path(self.path).expanduser().resolve()
         # Accept enum or string
         if hasattr(self.kb_type, "value"):
             self.kb_type = self.kb_type.value
+        self._schema_cache = None
 
     @property
     def kb_yaml_path(self) -> Path:
         """Path to kb.yaml config file."""
         return self.path / "kb.yaml"
+
+    @property
+    def kb_schema(self) -> "Any":
+        """Lazily load and cache the KBSchema object for this KB."""
+        if self._schema_cache is None:
+            from .schema import KBSchema
+
+            schema_path = self.path / "kb.yaml"
+            if schema_path.exists():
+                self._schema_cache = KBSchema.from_yaml(schema_path)
+            else:
+                self._schema_cache = KBSchema()
+        return self._schema_cache
+
+    def invalidate_schema_cache(self) -> None:
+        """Clear cached KBSchema — call after kb.yaml changes."""
+        self._schema_cache = None
 
     @property
     def local_db_path(self) -> Path:

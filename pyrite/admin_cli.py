@@ -555,8 +555,6 @@ def schema_show(kb_name: str = typer.Argument(..., help="KB name")):
     """Show schema for a KB (agent-friendly output)."""
     import json
 
-    from .schema import KBSchema
-
     config = load_config()
     kb = config.get_kb(kb_name)
 
@@ -564,7 +562,7 @@ def schema_show(kb_name: str = typer.Argument(..., help="KB name")):
         console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
         raise typer.Exit(1)
 
-    schema = KBSchema.from_yaml(kb.kb_yaml_path)
+    schema = kb.kb_schema
     agent_schema = schema.to_agent_schema()
 
     console.print(json.dumps(agent_schema, indent=2))
