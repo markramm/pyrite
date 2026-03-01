@@ -128,42 +128,77 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.7 — Web UI Polish (in progress)
+## 0.7 — Web UI Polish (done)
 
 **Theme:** Make the web experience demo-ready. Screenshots, screencasts, knowledge graph visualizations that tell the story.
 
-### Wave 1 (done)
+### Wave 1
 
 - **QA dashboard**: 4 REST endpoints (`/api/qa/status`, `/validate`, `/validate/{id}`, `/coverage`), Svelte dashboard page with status cards, coverage stats, issues table with severity badges, KB/severity filters. 9 backend tests.
 - **Graph betweenness centrality**: Brandes' algorithm on the graph endpoint (`include_centrality=true`), node sizing by centrality in the frontend, opacity scaling, centrality toggle in graph controls. 10 backend tests.
 - **Block-ID transclusion fix**: `![[entry^block-id]]` now fetches the specific block via the blocks API in both CodeMirror and Tiptap editors, with fallback to full body. 10 frontend tests.
 
-### Wave 2 (done)
+### Wave 2
 
 - **Collection embedding in transclusions**: `![[collection-id]]` renders inline as compact entry list (max 10, "View all →" link) in both CodeMirror and Tiptap editors. Folder icon distinguishes from entry transclusions.
 - **WebSocket live updates for transclusions**: When a source entry is updated, all transclusion widgets showing that entry auto-refresh. Uses `destroy()` for cleanup.
 - **Cycle detection**: Module-level `activeTransclusions` set prevents A→B→A infinite loops. Shows "⚠ Circular reference detected" warning. 7 tests.
 - **1000+ entry performance test**: 1050 entries (notes + events), validates index sync <30s, FTS <500ms, list <200ms, graph+centrality <5s, QA validate <10s. All pass well within limits. 6 tests.
 
-### Wave 3 (done)
+### Wave 3
 
 - **Transclusion view options**: `![[collection-id]]{ view: "table", limit: 5 }` syntax parsed and rendered in both CodeMirror and Tiptap editors. Supports `list` (default) and `table` views with configurable `limit`. `parseOptionsString()` handles JSON-like syntax with unquoted keys. 7 frontend tests.
 - **Collection nesting**: Sub-collections in a collection entry list render as collapsible `<details><summary>` elements with lazy-loaded nested entries on expand. Limited to 1 level deep to prevent recursion.
 
-### Definition of done
+### Results
 
-- ~~Transclusions render inline in the web editor~~ (done — heading + block-ID + collections + view options)
-- ~~QA assessment data visible in web UI~~ (done — QA dashboard)
-- ~~At least one graph enhancement shipped~~ (done — betweenness centrality)
-- ~~Navigate a 1000+ entry KB smoothly~~ (done — 1050-entry perf test passes)
+- 1179 backend tests, 115 frontend tests, all passing
+- All DoD met: transclusions (heading + block-ID + collections + view options), QA dashboard, graph centrality, 1050-entry perf test
 
 ---
 
-## 0.8 — Schema Versioning + ODM + LanceDB
+## 0.8 — UI Design & UX (in progress)
+
+**Theme:** Brand identity, navigation polish, and demo-ready first impressions. Every screen a stranger sees should look intentional.
+
+### P0 — Navigation & Error States
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Sidebar active state | Highlight current page in nav using `$page.url.pathname` | S |
+| Error state components | Retry button, icon, helpful message for API errors (not just red text) | S |
+| Empty state components | Illustration/icon + action CTA for Collections, Daily Notes, New Entry | S |
+
+### P1 — Brand & Dashboard
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Brand identity | Pyrite logo (gold crystalline mark), warm gold accent (`#C9A84C`), replace generic blue as primary | M |
+| Dashboard redesign | Recent entries, entry type distribution chart, quick actions, activity indicators | M |
+| Typography upgrade | Distinctive heading font (not Inter), clean sans for body | S |
+| Stat card redesign | Icons, colored accents, trend indicators on Dashboard + QA | S |
+
+### P2 — Polish
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Page transitions | Svelte `{#key}` fade/slide on route change | S |
+| Entry toolbar grouping | Semantic clusters with dividers, icon-only panel toggles | S |
+| Graph atmosphere | Subtle grid pattern, node glow on hover | S |
+| Toast redesign | Slide from top-right with auto-dismiss progress bar | S |
+
+### Definition of done
+
+- Sidebar shows active page; error/empty states have retry + CTA
+- Pyrite has a recognizable brand identity (logo, gold accent, distinct typography)
+- Dashboard tells a story (recent entries, type distribution, quick actions)
+- Stranger seeing a screenshot knows "this is Pyrite" — not "this is a Tailwind template"
+
+---
+
+## 0.9 — Schema Versioning + ODM + LanceDB
 
 **Theme:** Storage architecture that matches the data model. Schema evolution without breakage, document-native search.
-
-**Note:** 0.8 and 0.9 ordering is flexible — may swap depending on how long release prep (demos, videos, docs) takes after 0.7. If there's a week between 0.7 completion and wanting to cut the release, use it for 0.8 work. Current velocity suggests ODM + LanceDB spike is feasible in that window.
 
 ### Schema Versioning (pre-launch critical)
 
@@ -190,7 +225,7 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 
 ---
 
-## 0.9 — Announceable Alpha
+## 0.10 — Announceable Alpha
 
 **Theme:** Distribution and first impressions. Everything a stranger needs to go from "interesting" to "I'm trying this."
 
@@ -202,7 +237,7 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 | Update MCP_SUBMISSION.md | Accurate tool count, test count, configuration examples | S |
 | Consolidate docs/ | Trim to essentials: install, tutorial, MCP setup | S |
 | Getting Started tutorial | Zero to working MCP connection in 5 minutes | S |
-| Release notes | CHANGELOG for 0.9 tag | S |
+| Release notes | CHANGELOG for 0.10 tag | S |
 
 ### Definition of done
 
