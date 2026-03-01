@@ -9,11 +9,12 @@ tags:
 - ux
 - code-hardening
 kind: improvement
-priority: medium
+priority: high
 effort: M
 status: planned
 links:
 - roadmap
+- web-ui-review-hardening
 ---
 
 # Frontend UX & Accessibility Fixes
