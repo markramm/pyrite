@@ -228,6 +228,7 @@
 						<div class="flex items-center justify-between border-b border-zinc-200 px-6 py-2 dark:border-zinc-800">
 							<h1 class="text-xl font-bold">{entryStore.current?.title}</h1>
 							<div class="flex items-center gap-2">
+								<!-- Group 1: Edit actions -->
 								{#if editing}
 									<button
 										onclick={save}
@@ -255,7 +256,10 @@
 									</button>
 								{/if}
 
-								<!-- AI menu -->
+								<!-- Divider -->
+								<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+
+								<!-- Group 2: AI menu -->
 								<div class="ai-menu-container relative">
 									<button
 										onclick={() => (aiMenuOpen = !aiMenuOpen)}
@@ -296,41 +300,53 @@
 									{/if}
 								</div>
 
+								<!-- Divider -->
+								<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+
+								<!-- Group 3: Panel toggles (icon-only) -->
 								<button
 									onclick={() => uiStore.toggleOutlinePanel()}
-									class="rounded-md border px-3 py-1 text-sm {uiStore.outlinePanelOpen
+									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.outlinePanelOpen
 										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 										: 'border-zinc-300 dark:border-zinc-600'}"
 									title="Toggle outline panel (Cmd+Shift+O)"
 								>
-									Outline
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+									</svg>
 								</button>
 								<button
 									onclick={() => uiStore.toggleBacklinksPanel()}
-									class="rounded-md border px-3 py-1 text-sm {uiStore.backlinksPanelOpen
+									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.backlinksPanelOpen
 										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 										: 'border-zinc-300 dark:border-zinc-600'}"
 									title="Toggle backlinks panel (Cmd+Shift+B)"
 								>
-									Backlinks
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+									</svg>
 								</button>
 								<button
 									onclick={() => uiStore.toggleLocalGraphPanel()}
-									class="rounded-md border px-3 py-1 text-sm {uiStore.localGraphPanelOpen
+									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.localGraphPanelOpen
 										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 										: 'border-zinc-300 dark:border-zinc-600'}"
 									title="Toggle local graph (Cmd+Shift+G)"
 								>
-									Graph
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+									</svg>
 								</button>
 								<button
 									onclick={() => uiStore.toggleVersionHistoryPanel()}
-									class="rounded-md border px-3 py-1 text-sm {uiStore.versionHistoryPanelOpen
+									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.versionHistoryPanelOpen
 										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 										: 'border-zinc-300 dark:border-zinc-600'}"
 									title="Toggle version history (Cmd+Shift+H)"
 								>
-									History
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+										<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
 								</button>
 							</div>
 						</div>

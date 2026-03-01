@@ -190,7 +190,10 @@
 			const data = evt.target.data();
 			evt.target.style({
 				'border-width': 2,
-				'border-color': '#facc15'
+				'border-color': '#facc15',
+				'underlay-color': '#facc15',
+				'underlay-opacity': 0.15,
+				'underlay-padding': 8
 			});
 			const pos = evt.renderedPosition;
 			const centralityLine = data.centrality > 0
@@ -209,7 +212,8 @@
 			const isCenter = evt.target.data('isCenter');
 			if (!isCenter) {
 				evt.target.style({
-					'border-width': 0
+					'border-width': 0,
+					'underlay-opacity': 0
 				});
 			}
 			hideTooltip();
@@ -280,10 +284,18 @@
 	}
 </script>
 
+<style>
+	.graph-container {
+		background-color: #09090b;
+		background-image: radial-gradient(circle, #27272a 1px, transparent 1px);
+		background-size: 24px 24px;
+	}
+</style>
+
 <div class="relative h-full w-full">
 	<div
 		bind:this={container}
-		class="h-full w-full {compact ? '' : 'rounded-lg border border-zinc-200 dark:border-zinc-800'} bg-zinc-950"
+		class="graph-container h-full w-full {compact ? '' : 'rounded-lg border border-zinc-200 dark:border-zinc-800'}"
 	></div>
 	<div
 		bind:this={tooltipEl}

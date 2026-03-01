@@ -11,7 +11,9 @@
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { registerShortcut } from '$lib/utils/keyboard';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 
 	let { children } = $props();
 
@@ -60,7 +62,11 @@
 <div class="flex h-screen overflow-hidden">
 	<Sidebar />
 	<main class="flex flex-1 flex-col overflow-hidden">
-		{@render children()}
+		{#key $page.url.pathname}
+			<div class="flex-1 overflow-hidden" in:fade={{ duration: 150, delay: 50 }} out:fade={{ duration: 100 }}>
+				{@render children()}
+			</div>
+		{/key}
 	</main>
 	{#if uiStore.chatPanelOpen}
 		<ChatSidebar />
