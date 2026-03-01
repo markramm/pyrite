@@ -157,9 +157,11 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.8 — Announceable Alpha
+## 0.8 — Schema Versioning + ODM + LanceDB
 
-**Theme:** Distribution and first impressions. Everything a stranger needs to go from "interesting" to "I'm trying this."
+**Theme:** Storage architecture that matches the data model. Schema evolution without breakage, document-native search.
+
+**Note:** 0.8 and 0.9 ordering is flexible — may swap depending on how long release prep (demos, videos, docs) takes after 0.7. If there's a week between 0.7 completion and wanting to cut the release, use it for 0.8 work. Current velocity suggests ODM + LanceDB spike is feasible in that window.
 
 ### Schema Versioning (pre-launch critical)
 
@@ -167,7 +169,28 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 |------|-------------|--------|
 | [[schema-versioning]] | `_schema_version` tracking, `since_version` field semantics, `MigrationRegistry`, `pyrite schema migrate` command | M |
 
-Decoupled from the full ODM refactor (see ADR-0015 addendum). Hooks into existing `KBRepository` load/save paths. Without this, the first schema change after launch breaks every existing KB.
+Hooks into existing `KBRepository` load/save paths. Without this, the first schema change after launch breaks every existing KB.
+
+### ODM Layer
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| [[odm-layer]] Phase 1 | `SearchBackend` protocol, `SQLiteBackend` wrapping existing code, `DocumentManager` | M |
+| LanceDB spike | Implement `LanceDBBackend` behind `SearchBackend`, benchmark hybrid search quality vs SQLite/FTS5 + separate semantic | M |
+
+**Hypothesis:** LanceDB is a better fit than SQLite for Pyrite's flexible schema system. Document-native columnar storage eliminates the impedance mismatch (`json_extract()` for metadata, separate FTS5 virtual tables, separate embedding pipeline). Native hybrid search (vector + FTS in a single query) should produce better results than the current duct-taped approach. The spike validates this.
+
+### Definition of done
+
+- Schema versioning works: `since_version` on fields, `pyrite schema migrate` produces reviewable git diff
+- `SearchBackend` protocol defined, `SQLiteBackend` passes full test suite
+- LanceDB spike completed: benchmark results, go/no-go decision on replacing SQLite as default index backend
+
+---
+
+## 0.9 — Announceable Alpha
+
+**Theme:** Distribution and first impressions. Everything a stranger needs to go from "interesting" to "I'm trying this."
 
 ### Packaging & Distribution
 
@@ -177,24 +200,23 @@ Decoupled from the full ODM refactor (see ADR-0015 addendum). Hooks into existin
 | Update MCP_SUBMISSION.md | Accurate tool count, test count, configuration examples | S |
 | Consolidate docs/ | Trim to essentials: install, tutorial, MCP setup | S |
 | Getting Started tutorial | Zero to working MCP connection in 5 minutes | S |
-| Release notes | CHANGELOG for 0.8 tag | S |
+| Release notes | CHANGELOG for 0.9 tag | S |
 
 ### Definition of done
 
 - `pip install pyrite && pyrite init --template software` works from a clean venv
 - `pip install pyrite-mcp` works and connects to Claude Desktop
 - An autonomous agent can: install Pyrite, create a KB, build an extension, test it, install it, and start populating — entirely via CLI
-- Schema versioning works: `since_version` on fields, `pyrite schema migrate` produces reviewable git diff
 - README, tutorial, and docs are accurate and newcomer-friendly
 - Demo screencast recorded
 
 ---
 
-## Future (0.9+)
+## Future (1.0+)
 
-### ODM Layer + Backend Abstraction
+### Storage Backends
 
-- **[[odm-layer]]** — `SearchBackend` protocol, `DocumentManager`, `SQLiteBackend` wrapping existing code. Relocate schema versioning hooks from `KBRepository` into `DocumentManager`. Then LanceDB and Postgres backends as configuration choices.
+- **Postgres backend** — `PostgresBackend` behind `SearchBackend` protocol. pgvector for embeddings, tsvector for FTS. Enables demo site and hosted deployments.
 
 ### Agent Swarm Infrastructure
 

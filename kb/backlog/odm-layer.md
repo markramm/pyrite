@@ -90,6 +90,8 @@ The ODM formalizes the split between two storage concerns:
 
 ## Launch Context
 
-Post-launch (0.9+). The ODM is the right architecture for backend abstraction and resolving the impedance mismatch, but it's the largest architectural change since service layer enforcement — routing 24+ direct `PyriteDB` usages across services, CLI, plugins, and MCP handlers through a new abstraction layer. Not appropriate for the critical path to 0.8 (Announceable Alpha).
+Targets 0.8 (may swap with 0.9 depending on release prep timing after 0.7). Phase 1 (interfaces + SQLite wrapping) and the LanceDB spike can fill the gap between 0.7 completion and release prep.
 
-Schema versioning ships independently pre-0.8. The ODM ships when backend flexibility is actually needed (Postgres for demo site, LanceDB for improved hybrid search).
+**Hypothesis:** LanceDB is a better fit than SQLite for Pyrite's flexible schema system. Document-native columnar storage eliminates the impedance mismatch (`json_extract()`, separate FTS5, separate embedding pipeline). Native hybrid search should produce better results than the current stitched-together approach. The spike validates this before committing to a backend switch.
+
+Schema versioning ships in the same milestone but is decoupled — it hooks into `KBRepository` directly and doesn't require the ODM abstraction.
