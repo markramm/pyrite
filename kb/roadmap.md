@@ -75,6 +75,7 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 | Item | Description | Effort |
 |------|-------------|--------|
 | [[pypi-publish]] | Publish `pyrite` and `pyrite-mcp` to PyPI | S |
+| [[container-deployment]] | Dockerfile, Docker Compose, deploy-to buttons (Railway/Render/Fly) | M |
 | [[plugin-repo-extraction]] | Extract 5 extensions to separate repos, publish to PyPI | M |
 | [[mcp-submission-update]] | Accurate tool count, test count, configuration examples | XS |
 
@@ -82,8 +83,10 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 
 | Item | Description | Effort |
 |------|-------------|--------|
-| [[web-ui-auth]] Phase 1 | Local auth + API key tiers | M |
+| [[web-ui-auth]] Phase 1 | Local auth + API key tiers — **done** (#94) | M |
 | [[oauth-providers]] Phase 1 | GitHub/Google OAuth for demo site | L |
+| [[per-kb-permissions]] | Per-KB ACL + ephemeral KB sandbox for demo visitors | L |
+| [[personal-kb-repo-backing]] | Connect GitHub repo to make personal KB permanent + usage tiers | L |
 | [[mcp-rate-limiting]] | Rate limiting for public-facing MCP server | S |
 | [[pyrite-website]] | Marketing site + docs at pyrite.dev (separate repo) | M |
 | [[demo-site-deployment]] | Live demo at demo.pyrite.dev with curated awesome-list KBs | M |
@@ -101,8 +104,10 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 ### Definition of done
 
 - `pip install pyrite && pyrite init --template software` works from a clean venv
+- `docker compose up` → working Pyrite instance in < 2 minutes
 - `pip install pyrite-software-kb` (and all 5 plugins) works from PyPI
-- Demo site live with auth + rate limiting
+- Demo site live with auth, per-KB permissions, ephemeral sandboxes, and rate limiting
+- Registered users can create an ephemeral KB sandbox; GitHub OAuth users can connect a repo to make it permanent
 - An autonomous agent can: install Pyrite, create a KB, build an extension, test it, install it, and start populating — entirely via Claude Code
 - Plugin writing tutorial published — builds a plugin end-to-end using the extension-builder skill
 - BYOK audit complete — all AI features work with user-provided keys
@@ -154,7 +159,7 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 
 - **[[event-bus-webhooks]]** — Integration story, live graph updates
 - **[[db-backup-restore]]** — Database backup and restore tooling
-- **[[web-ui-auth]] Phase 2** — OAuth/OIDC for hosted deployments
+- **[[oauth-providers]] Phase 3** — Generic OIDC for corporate SSO (Keycloak, Auth0, Okta, Azure AD)
 - **[[extension-type-protocols]] Phases 2-3** — Satisfaction checking, registry integration
 
 ### Polish and Scale

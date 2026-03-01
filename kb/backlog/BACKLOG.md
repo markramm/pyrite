@@ -21,7 +21,9 @@ Recommended execution order. Grouped by milestone.
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
 | **1** | [[pypi-publish]] | S | `pip install pyrite` — unblocks everything |
+| **1a** | [[container-deployment]] Phase 1 | M | `docker compose up` — the self-hosting story |
 | **2** | [[plugin-repo-extraction]] | M | Plugins as standalone PyPI packages |
+| **2a** | [[container-deployment]] Phase 2 | S | Deploy-to-Railway/Render/Fly buttons |
 | **3** | [[mcp-submission-update]] | XS | Accurate listing for MCP registry |
 
 *Track 2 — Public Demo & Web Presence:*
@@ -81,6 +83,7 @@ Recommended execution order. Grouped by milestone.
 | # | Item | Kind | Effort | Track | Milestone |
 |---|------|------|--------|-------|-----------|
 | 74 | [[pypi-publish]] | feature | S | Distribution | 0.12 |
+| 114 | [[container-deployment]] | feature | M | Distribution | 0.12 |
 | 107 | [[plugin-repo-extraction]] | feature | M | Distribution | 0.12 |
 | 89 | [[mcp-submission-update]] | improvement | XS | Distribution | 0.12 |
 | 94 | [[web-ui-auth]] Phase 1 | feature | M | Public Demo | 0.12 | **done** |
@@ -140,6 +143,9 @@ schema-versioning (#93)              [0.11] ✅
   └── depends on odm-layer (#100) ✅
 
 pypi-publish (#74)                   [0.12] — no blockers
+  ├── container-deployment (#114)    [0.12] — Phase 1 can start before #74 (COPY source)
+  │   Phase 1: Dockerfile + Compose  — no hard blockers
+  │   Phase 2: Deploy buttons        — benefits from Phase 1
   └── plugin-repo-extraction (#107)  [0.12] — needs #74
       ├── awesome-plugins-page (#109) [0.12] — needs #107
       └── plugin-writing-tutorial (#108) [0.12] — needs #107
@@ -155,7 +161,7 @@ web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
       — needs #110 (GitHub OAuth), #112 (per-KB perms)
 
 pyrite-website (#111)                [0.12] — no blockers
-demo-site-deployment (#85)           [0.12] — needs #94 ✅, #97, #111, #112, #113
+demo-site-deployment (#85)           [0.12] — needs #94 ✅, #97, #111, #112, #113, #114
 
 extension-type-protocols (#99)       [0.13]
   Phase 1: protocol definitions      — needs #92 (intent layer)

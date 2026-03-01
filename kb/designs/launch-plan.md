@@ -13,7 +13,7 @@ links:
 
 # Launch Plan: Content Matrix & User Acquisition Strategy
 
-Target: 0.8 Announceable Alpha release.
+Target: 0.12 Launch Prep release.
 
 This document maps user types × channels × content pieces into a full matrix of launch content. The goal is to identify every plausible content piece, then edit down and stage for execution.
 
@@ -526,8 +526,18 @@ Which content serves which channel for which audience:
 
 #### Pre-Launch (2-3 weeks before)
 
+**Infrastructure (dependency chain — must complete in order):**
+- [ ] PyPI publish (#74) — `pip install pyrite` works
+- [ ] Container deployment (#114) — Dockerfile, `docker-compose.yml`, deploy buttons
+- [ ] Plugin repo extraction (#107) — extensions installable from PyPI
+- [ ] GitHub OAuth (#110) — "Sign in with GitHub" on demo site
+- [ ] Per-KB permissions (#112) — ephemeral KB sandboxes, per-KB ACL
+- [ ] Personal KB repo backing (#113) — connect GitHub repo, usage tiers
+- [ ] Rate limiting (#97) — required for public-facing demo site
+- [ ] Deploy demo site (#85) — depends on all above
+
+**Content & community:**
 - [ ] Set up Discord server (channels: #general, #getting-started, #extensions, #agent-builders, #feedback)
-- [ ] Set up demo site (see Demo Site Hosting below)
 - [ ] Finalize tutorial, verify install flow on clean machine
 - [ ] Record priority demo videos (Claude Desktop demo, agentic teams intro)
 - [ ] Write wave 1 blog post, get 2-3 people to review
@@ -677,7 +687,7 @@ Someone migrates an existing Obsidian/markdown vault into Pyrite and uses the ca
 
 ## Web Presence: Three-Layer Architecture
 
-See [[pyrite-website]] (backlog item #110) and [[demo-site-deployment]] (backlog item #85) for details.
+See [[pyrite-website]] (backlog item #111) and [[demo-site-deployment]] (backlog item #85) for details.
 
 ### Layer 1 — Marketing Site (pyrite.dev)
 
@@ -721,23 +731,31 @@ The demo site loads KBs from curated git repos on the awesome-list — no user-g
 
 #### Access Model
 
+See [[per-kb-permissions]] (#112) and [[personal-kb-repo-backing]] (#113) for full design.
+
 | Role | Access | Auth |
 |------|--------|------|
 | Anonymous | Browse, search, explore graph on curated KBs | No |
-| Registered | All anonymous + BYOK AI features | Yes |
+| Registered (local) | All anonymous + create one ephemeral KB sandbox (private, 24h TTL) + BYOK AI features | Yes (local or GitHub OAuth) |
+| Registered (GitHub OAuth) | All above + connect a public GitHub repo to make KB permanent | Yes (GitHub OAuth) |
+| Admin | Manage curated KBs, user roles, KB permissions | Yes |
+
+**User funnel:** Anonymous browsing → register → ephemeral sandbox → invest time building a KB → connect GitHub repo → permanent personal KB. Each step upgrades commitment.
+
+Ephemeral KB policy is configurable per deployment (see [[per-kb-permissions]]): `ephemeral_min_tier`, `ephemeral_max_per_user`, `ephemeral_default_ttl`. Usage tiers (see [[personal-kb-repo-backing]]) let the operator set resource limits per tier (max KBs, max entries, storage, rate limits).
 
 #### Cost Model
 
-No AI inference server-side. All AI features are BYOK. Hosting costs: compute + Postgres only. ~$5-20/month. Architecture supports federation or paid tiers if usage grows.
+No AI inference server-side. All AI features are BYOK. Hosting costs: compute + Postgres only. ~$6/month on a basic VPS. For context: Notion Team costs $10/user/month — a 5-person team on Pyrite runs on a single $6 VPS with unlimited users.
 
 ### Content needed:
 - [ ] Set up `pyrite-website` repo with static site generator
 - [ ] Domain acquisition (pyrite.dev or alternative)
 - [ ] Landing page design and content
 - [ ] Docs section — decide: static generation vs Pyrite read-only instance
-- [ ] Updated Dockerfile for demo site with PostgresBackend
-- [ ] `docker-compose.yml` for local testing
-- [ ] `fly.toml` or `railway.json` deploy config
+- [ ] Production Dockerfile + `docker-compose.yml` + `docker-compose.prod.yml` — see [[container-deployment]] (#114)
+- [ ] Deploy-to buttons: `railway.json`, `render.yaml`, `fly.toml`
+- [ ] Environment variable configuration for auth, AI keys, data dir (no config file editing)
 - [ ] KB seeding pipeline (clone awesome-list repos, index, serve)
 - [ ] CI pipeline to rebuild on site or KB updates
 
