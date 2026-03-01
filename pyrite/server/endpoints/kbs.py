@@ -45,7 +45,7 @@ def get_kb_schema(
     """Get the schema for a knowledge base including type metadata."""
     kb_config = config.get_kb(kb_name)
     if not kb_config:
-        raise HTTPException(status_code=404, detail=f"KB '{kb_name}' not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"})
 
     schema = kb_config.kb_schema
     return schema.to_agent_schema()

@@ -187,6 +187,7 @@
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle outline panel (Cmd+Shift+O)"
+										aria-label="Toggle outline panel"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -198,6 +199,7 @@
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle backlinks panel (Cmd+Shift+B)"
+										aria-label="Toggle backlinks panel"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -209,6 +211,7 @@
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle local graph (Cmd+Shift+G)"
+										aria-label="Toggle local graph"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -220,6 +223,7 @@
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle version history (Cmd+Shift+H)"
+										aria-label="Toggle version history"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -303,13 +307,6 @@
 			.trim();
 		return `<h${depth} id="${slug}">${text}</h${depth}>`;
 	};
-
-	function renderMarkdown(md: string): string {
-		let html = marked.parse(md, { async: false, renderer }) as string;
-		html = renderCallouts(html);
-		html = renderWikilinks(html);
-		return html;
-	}
 
 	function renderMarkdownWithLinks(md: string, existingIds: Set<string>): string {
 		let html = marked.parse(md, { async: false, renderer }) as string;

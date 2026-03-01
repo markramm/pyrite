@@ -24,9 +24,9 @@ def commit_kb(
         result = svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
         return result
     except KBNotFoundError:
-        raise HTTPException(status_code=404, detail=f"KB '{kb_name}' not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"})
     except PyriteError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail={"code": "COMMIT_FAILED", "message": str(e)})
 
 
 @router.post("/kbs/{kb_name}/push")
@@ -43,6 +43,6 @@ def push_kb(
         result = svc.push_kb(kb_name, remote=remote, branch=branch)
         return result
     except KBNotFoundError:
-        raise HTTPException(status_code=404, detail=f"KB '{kb_name}' not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"})
     except PyriteError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail={"code": "PUSH_FAILED", "message": str(e)})

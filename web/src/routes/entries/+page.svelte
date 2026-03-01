@@ -77,9 +77,9 @@
 <Topbar breadcrumbs={[{ label: 'Entries' }]} />
 
 <div class="flex-1 overflow-y-auto p-6">
-	<div class="mb-4 flex items-center justify-between">
+	<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
 		<h1 class="text-2xl font-bold">Entries</h1>
-		<div class="flex items-center gap-3">
+		<div class="flex flex-wrap items-center gap-3">
 			<!-- Sort -->
 			<select
 				value={entryStore.sortBy}
@@ -95,6 +95,7 @@
 				onclick={toggleSortOrder}
 				class="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700"
 				title="Toggle sort direction"
+				aria-label="Toggle sort direction"
 			>
 				{entryStore.sortOrder === 'desc' ? '↓' : '↑'}
 			</button>

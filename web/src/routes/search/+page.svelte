@@ -4,6 +4,7 @@
 	import { searchStore } from '$lib/stores/search.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { api } from '$lib/api/client';
+	import { typeColor } from '$lib/constants';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 
@@ -11,22 +12,6 @@
 	let selectedKb = $state('');
 	let selectedType = $state('');
 	let entryTypes = $state<string[]>([]);
-
-	const typeColors: Record<string, string> = {
-		event: '#3b82f6',
-		person: '#8b5cf6',
-		organization: '#f59e0b',
-		note: '#6b7280',
-		topic: '#10b981',
-		component: '#06b6d4',
-		adr: '#ec4899',
-		backlog_item: '#f97316',
-		standard: '#14b8a6',
-	};
-
-	function typeColor(type: string): string {
-		return typeColors[type] ?? '#71717a';
-	}
 
 	function highlightSnippet(snippet: string, query: string): string {
 		if (!query.trim()) return snippet;

@@ -14,6 +14,7 @@ class EntryStore {
 	error = $state<string | null>(null);
 	dirty = $state(false);
 	recentIds = $state<string[]>([]);
+	recentTitles = $state<Record<string, string>>({});
 	sortBy = $state('updated_at');
 	sortOrder = $state<'asc' | 'desc'>('desc');
 
@@ -82,6 +83,9 @@ class EntryStore {
 
 	private addRecent(id: string) {
 		this.recentIds = [id, ...this.recentIds.filter((r) => r !== id)].slice(0, 10);
+		if (this.current?.title) {
+			this.recentTitles = { ...this.recentTitles, [id]: this.current.title };
+		}
 	}
 }
 

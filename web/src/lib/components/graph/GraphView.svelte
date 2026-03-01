@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import type { GraphNode, GraphEdge } from '$lib/api/types';
+	import { typeColor } from '$lib/constants';
 	import type cytoscape from 'cytoscape';
 
 	interface Props {
@@ -19,25 +20,6 @@
 	let container: HTMLDivElement;
 	let tooltipEl: HTMLDivElement;
 	let cy: cytoscape.Core | undefined;
-
-	const typeColors: Record<string, string> = {
-		event: '#3b82f6',
-		person: '#8b5cf6',
-		organization: '#f59e0b',
-		topic: '#10b981',
-		note: '#6b7280',
-		place: '#ef4444',
-		source: '#06b6d4',
-		document: '#84cc16',
-		standard: '#f472b6',
-		component: '#22d3ee',
-		adr: '#a78bfa',
-		backlog_item: '#fb923c'
-	};
-
-	function getColor(entryType: string): string {
-		return typeColors[entryType] || '#6b7280';
-	}
 
 	function buildElements() {
 		const nodeElements = nodes.map((n) => {
@@ -59,7 +41,7 @@
 					entryId: n.id,
 					linkCount: n.link_count,
 					centrality,
-					color: getColor(n.entry_type),
+					color: typeColor(n.entry_type),
 					size,
 					nodeOpacity,
 					isCenter: n.id === centerId

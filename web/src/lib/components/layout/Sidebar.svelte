@@ -88,8 +88,9 @@
 					href="/entries/{id}"
 					onclick={handleNavClick}
 					class="block truncate rounded px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-200 dark:hover:bg-zinc-800"
-				>
-					{id}
+				title={id}
+			>
+					{entryStore.recentTitles[id] ?? id}
 				</a>
 			{/each}
 		</div>

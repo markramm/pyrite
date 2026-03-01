@@ -122,7 +122,7 @@ def delete_kb(
     config = svc.config
     kb = config.get_kb(name)
     if not kb:
-        raise HTTPException(status_code=404, detail=f"KB '{name}' not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{name}' not found"})
     svc.db.unregister_kb(name)
     config.remove_kb(name)
     save_config(config)
@@ -214,7 +214,7 @@ def get_plugin_detail(request: Request, name: str):
     registry = get_registry()
     plugin = registry.get_plugin(name)
     if not plugin:
-        raise HTTPException(status_code=404, detail=f"Plugin '{name}' not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Plugin '{name}' not found"})
 
     info: dict = {"name": name}
 
