@@ -20,9 +20,7 @@ Recommended execution order. Grouped by milestone.
 |----------|------|--------|-----------|
 | **1** | [[schema-versioning]] | M | Pre-launch critical — first schema change after launch breaks every KB |
 | **2** | [[odm-layer]] DocumentManager | M | Route KBService through DocumentManager — completes the abstraction |
-| **3** | [[docs-kb-fixes]] | S | Zero risk, high impact — fix stale counts and broken links |
-| **4** | [[architecture-hardening]] | M | DDL validation, layer violations, stale docs |
-| **5** | [[test-infrastructure]] | S | pytest-xdist, extension tests in default run |
+| **3** | [[architecture-hardening]] | M | DDL validation, layer violations, stale docs |
 
 **0.12 — Launch Prep:**
 
@@ -73,8 +71,6 @@ Recommended execution order. Grouped by milestone.
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
 | 93 | [[schema-versioning]] | feature | M | 0.11 |
-| 101 | [[docs-kb-fixes]] | improvement | S | 0.11 |
-| 104 | [[test-infrastructure]] | improvement | S | 0.11 |
 | 106 | [[architecture-hardening]] | improvement | M | 0.11 |
 
 ### Planned — 0.12
@@ -270,4 +266,4 @@ All items below are done. Detail lives in the individual backlog item files in [
 [[coordination-task-plugin]] Phases 1-2, [[programmatic-schema-provisioning]], Plugin KB-Type Scoping
 
 ### Also Completed
-[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]
+[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[docs-kb-fixes]], [[test-infrastructure]]
