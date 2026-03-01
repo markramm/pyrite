@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 5
+CURRENT_VERSION = 6
 
 
 @dataclass
@@ -169,6 +169,39 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS block;
+        """,
+    ),
+    Migration(
+        version=6,
+        description="Add local_user and session tables for web authentication",
+        up="""
+        CREATE TABLE IF NOT EXISTS local_user (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            display_name TEXT,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'read',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS session (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_hash TEXT NOT NULL UNIQUE,
+            user_id INTEGER NOT NULL REFERENCES local_user(id) ON DELETE CASCADE,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT NOT NULL,
+            last_used TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_token ON session(token_hash);
+        CREATE INDEX IF NOT EXISTS idx_session_user ON session(user_id);
+        CREATE INDEX IF NOT EXISTS idx_session_expires ON session(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_local_user_username ON local_user(username);
+        """,
+        down="""
+        DROP TABLE IF EXISTS session;
+        DROP TABLE IF EXISTS local_user;
         """,
     ),
 ]

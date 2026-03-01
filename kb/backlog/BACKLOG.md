@@ -24,23 +24,27 @@ Recommended execution order. Grouped by milestone.
 | **2** | [[plugin-repo-extraction]] | M | Plugins as standalone PyPI packages |
 | **3** | [[mcp-submission-update]] | XS | Accurate listing for MCP registry |
 
-*Track 2 — Public Demo:*
+*Track 2 — Public Demo & Web Presence:*
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **4** | [[web-ui-auth]] Phase 1 | M | Local auth + tiers — required for demo site |
+| **4** | [[web-ui-auth]] Phase 1 | M | Local auth + tiers — **done** (#94) |
+| **4a** | [[oauth-providers]] Phase 1 | L | GitHub/Google OAuth — "Sign in with GitHub" for demo site |
+| **4b** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox for demo visitors |
+| **4c** | [[personal-kb-repo-backing]] | L | Connect GitHub repo to make personal KB permanent + usage tiers |
 | **5** | [[mcp-rate-limiting]] | S | Required for public-facing demo site |
-| **6** | [[demo-site-deployment]] | M | Live demo for visitors (needs #94, #97) |
-| **7** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
+| **6** | [[pyrite-website]] | M | Marketing site + docs at pyrite.dev (separate repo) |
+| **7** | [[demo-site-deployment]] | M | Live demo at demo.pyrite.dev with curated awesome-list KBs |
+| **8** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
 
 *Track 3 — Onboarding:*
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **8** | Getting Started tutorial | S | Newcomer-friendly onboarding |
-| **9** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code + extension-builder skill |
-| **10** | [[awesome-plugins-page]] | XS | Curated plugin listing (bridges gap before extension registry) |
-| **11** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
+| **9** | Getting Started tutorial | S | Newcomer-friendly onboarding |
+| **10** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code + extension-builder skill |
+| **11** | [[awesome-plugins-page]] | XS | Curated plugin listing (bridges gap before extension registry) |
+| **12** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
 
 **0.13 — Ecosystem:**
 
@@ -79,9 +83,13 @@ Recommended execution order. Grouped by milestone.
 | 74 | [[pypi-publish]] | feature | S | Distribution | 0.12 |
 | 107 | [[plugin-repo-extraction]] | feature | M | Distribution | 0.12 |
 | 89 | [[mcp-submission-update]] | improvement | XS | Distribution | 0.12 |
-| 94 | [[web-ui-auth]] | feature | M | Public Demo | 0.12 |
+| 94 | [[web-ui-auth]] Phase 1 | feature | M | Public Demo | 0.12 | **done** |
+| 110 | [[oauth-providers]] | feature | L | Public Demo | 0.12 |
+| 112 | [[per-kb-permissions]] | feature | L | Public Demo | 0.12 |
+| 113 | [[personal-kb-repo-backing]] | feature | L | Public Demo | 0.12 |
 | 97 | [[mcp-rate-limiting]] | feature | S | Public Demo | 0.12 |
 | 85 | [[demo-site-deployment]] | feature | M | Public Demo | 0.12 |
+| 111 | [[pyrite-website]] | feature | M | Public Demo | 0.12 |
 | 87 | [[byok-ai-gap-analysis]] | improvement | M | Public Demo | 0.12 |
 | 108 | [[plugin-writing-tutorial]] | feature | S | Onboarding | 0.12 |
 | 109 | [[awesome-plugins-page]] | feature | XS | Onboarding | 0.12 |
@@ -136,11 +144,18 @@ pypi-publish (#74)                   [0.12] — no blockers
       ├── awesome-plugins-page (#109) [0.12] — needs #107
       └── plugin-writing-tutorial (#108) [0.12] — needs #107
 
-web-ui-auth (#94)                    [0.12]
-  Phase 1: local auth + tiers        — needs #56 ✅ (REST tier enforcement)
-  Phase 2: OAuth/OIDC                — post-launch
+web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
+  ├── oauth-providers (#110)         [0.12] — GitHub/Google OAuth
+  │   Phase 1: GitHub OAuth          — needs #94 ✅
+  │   Phase 2: Google OAuth          — needs Phase 1
+  │   Phase 3: Generic OIDC          — post-launch
+  ├── per-kb-permissions (#112)      [0.12] — per-KB ACL + ephemeral sandboxes
+  │   — needs #94 ✅, benefits from #110
+  └── personal-kb-repo-backing (#113) [0.12] — repo-backed KBs + plan tiers
+      — needs #110 (GitHub OAuth), #112 (per-KB perms)
 
-demo-site-deployment (#85)           [0.12] — needs #94, #97
+pyrite-website (#111)                [0.12] — no blockers
+demo-site-deployment (#85)           [0.12] — needs #94 ✅, #97, #111, #112, #113
 
 extension-type-protocols (#99)       [0.13]
   Phase 1: protocol definitions      — needs #92 (intent layer)

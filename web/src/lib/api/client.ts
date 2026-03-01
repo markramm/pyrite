@@ -5,6 +5,7 @@
  * In production, both are served from the same origin.
  */
 
+import type { AuthConfig, AuthUser } from '$lib/types/auth';
 import type {
 	AIAutoTagResponse,
 	AILinkSuggestResponse,
@@ -65,6 +66,7 @@ class ApiClient {
 				'Content-Type': 'application/json',
 				...options.headers
 			},
+			credentials: 'include',
 			...options
 		});
 
@@ -418,6 +420,37 @@ class ApiClient {
 		return this.request(`/api/plugins/${encodeURIComponent(name)}`);
 	}
 
+	// Auth
+	async login(username: string, password: string): Promise<AuthUser> {
+		return this.request('/auth/login', {
+			method: 'POST',
+			body: JSON.stringify({ username, password })
+		});
+	}
+
+	async register(username: string, password: string, display_name?: string): Promise<AuthUser> {
+		return this.request('/auth/register', {
+			method: 'POST',
+			body: JSON.stringify({ username, password, display_name })
+		});
+	}
+
+	async logout(): Promise<void> {
+		await this.request('/auth/logout', { method: 'POST' });
+	}
+
+	async getMe(): Promise<AuthUser | null> {
+		try {
+			return await this.request('/auth/me');
+		} catch {
+			return null;
+		}
+	}
+
+	async getAuthConfig(): Promise<AuthConfig> {
+		return this.request('/auth/config');
+	}
+
 	// Import/Export
 	async importEntries(file: File, kb: string, format?: string): Promise<ImportResult> {
 		const formData = new FormData();
@@ -427,6 +460,7 @@ class ApiClient {
 		const url = `${this.baseUrl}/api/entries/import?${params}`;
 		const res = await fetch(url, {
 			method: 'POST',
+			credentials: 'include',
 			body: formData
 		});
 		if (!res.ok) {
@@ -445,7 +479,7 @@ class ApiClient {
 		if (options.entry_type) params.set('entry_type', options.entry_type);
 		if (options.tag) params.set('tag', options.tag);
 		const url = `${this.baseUrl}/api/entries/export?${params}`;
-		const res = await fetch(url);
+		const res = await fetch(url, { credentials: 'include' });
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
 			throw new ApiError(res.status, error.detail ?? error.message ?? res.statusText);

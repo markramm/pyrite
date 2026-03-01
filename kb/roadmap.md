@@ -78,13 +78,15 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 | [[plugin-repo-extraction]] | Extract 5 extensions to separate repos, publish to PyPI | M |
 | [[mcp-submission-update]] | Accurate tool count, test count, configuration examples | XS |
 
-**Track 2 — Public Demo:**
+**Track 2 — Public Demo & Web Presence:**
 
 | Item | Description | Effort |
 |------|-------------|--------|
 | [[web-ui-auth]] Phase 1 | Local auth + API key tiers | M |
+| [[oauth-providers]] Phase 1 | GitHub/Google OAuth for demo site | L |
 | [[mcp-rate-limiting]] | Rate limiting for public-facing MCP server | S |
-| [[demo-site-deployment]] | Live demo on Fly.io/Railway with PostgresBackend | M |
+| [[pyrite-website]] | Marketing site + docs at pyrite.dev (separate repo) | M |
+| [[demo-site-deployment]] | Live demo at demo.pyrite.dev with curated awesome-list KBs | M |
 | [[byok-ai-gap-analysis]] | Audit AI features for bring-your-own-key completeness | M |
 
 **Track 3 — Onboarding:**

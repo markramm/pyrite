@@ -675,57 +675,71 @@ Someone migrates an existing Obsidian/markdown vault into Pyrite and uses the ca
 
 ---
 
-## Demo Site
+## Web Presence: Three-Layer Architecture
 
-### What It Is
+See [[pyrite-website]] (backlog item #110) and [[demo-site-deployment]] (backlog item #85) for details.
 
-A public read-only Pyrite instance loaded with one or more demo KBs. Visitors can browse entries, explore the knowledge graph, and run searches without installing anything. This is the "try before you install" experience — link to it from the blog post, HN comment, and README.
+### Layer 1 — Marketing Site (pyrite.dev)
 
-### Hosting Architecture
+Static site telling the Pyrite story. Separate repo (`pyrite-website`). Landing page, use cases, how-it-works, plugins page, blog for launch content. Hosted free on GitHub Pages / Netlify / Cloudflare Pages.
 
-The entire system is self-contained: static SvelteKit frontend + single FastAPI/Uvicorn process + SQLite database + markdown files. No external databases, no caching layer, no load balancer required.
+Key pages:
+- Landing page: elevator pitch, key visuals, call-to-action
+- How it works: three portals (CLI, MCP, Web UI)
+- Use cases: software teams, investigators, PKM, community hubs, wiki/encyclopedia
+- Plugins: links to awesome-plugins-page and extension registry
+- Blog: hosts all launch content pieces (resolves the "where to host the blog post" open question)
+- Links: demo site, GitHub, Discord, PyPI
+
+### Layer 2 — Docs (pyrite.dev/docs)
+
+Documentation rendered from the Pyrite KB itself — "dogfooding as documentation." Read-only access to the project KB (ADRs, components, standards), getting started tutorial, plugin writing tutorial, API reference. Could be a Pyrite read-only instance or static pages generated from KB markdown.
+
+### Layer 3 — Demo Site (demo.pyrite.dev)
+
+Live Pyrite instance running the full web UI on PostgresBackend:
 
 ```
-Internet → [Reverse proxy (Caddy/nginx)] → [Uvicorn :8088]
-                                                ↓
-                                    [SQLite FTS5 index]
-                                    [Markdown KB files (read-only)]
-                                    [Static SvelteKit frontend]
+Internet → [Reverse proxy (Caddy)] → [Uvicorn :8088]
+                                          ↓
+                              [PostgresBackend (knowledge index)]
+                              [App state DB]
+                              [Static SvelteKit frontend]
 ```
 
-### Hosting Options & Cost Estimates
+#### Curated KB Loading (Awesome-List Model)
 
-| Option | Monthly Cost | Pros | Cons |
-|--------|-------------|------|------|
-| **Railway / Render** | $5-7/mo | Easiest deploy, Docker support, auto-SSL | Cold starts on free tier, limited disk |
-| **Fly.io** | $3-5/mo | Persistent volumes for SQLite, global edge | Slightly more config |
-| **DigitalOcean droplet** | $6/mo (1GB) | Full control, persistent, no cold starts | Manual setup, maintenance |
-| **Hetzner VPS** | $4/mo (2GB) | Best price/performance, EU hosting | Manual setup |
-| **Oracle Cloud free tier** | $0 | Free forever ARM instance (24GB RAM!) | Oracle, more setup, reliability concerns |
-| **GitHub Pages + separate API** | $5/mo (API only) | Static frontend free, CDN-backed | Split architecture, CORS config |
+The demo site loads KBs from curated git repos on the awesome-list — no user-generated content to moderate:
 
-**Recommendation:** Fly.io or Railway for simplicity. A single container with a persistent volume for the SQLite index. Pre-populate the KB and index at build time. Total cost: ~$5/mo.
+1. Author creates a KB locally, pushes to GitHub
+2. Submits to the awesome-list (PR reviewed for quality)
+3. Demo site pulls the repo, indexes it, makes it searchable
 
-### Demo Site Content
+**Launch KBs:** Journalism KBs (CaptureCascade), Pyrite's own KB.
 
-Load with the most impressive KBs:
-- 4800-event timeline (wow factor for search)
-- Pyrite's own KB (dogfooding credibility)
-- One community dataset (Awesome Python or RFC summaries)
+**Post-launch:** Community KBs accumulate as the awesome-list grows. Visitors see breadth without us building everything.
 
-### Configuration
+#### Access Model
 
-- Read-only mode (no auth needed, no write endpoints exposed)
-- Disable git operations
-- Pre-built index included in Docker image
-- No semantic search (avoids needing GPU/large model — FTS5 is impressive enough for demo)
+| Role | Access | Auth |
+|------|--------|------|
+| Anonymous | Browse, search, explore graph on curated KBs | No |
+| Registered | All anonymous + BYOK AI features | Yes |
+
+#### Cost Model
+
+No AI inference server-side. All AI features are BYOK. Hosting costs: compute + Postgres only. ~$5-20/month. Architecture supports federation or paid tiers if usage grows.
 
 ### Content needed:
-- [ ] Updated Dockerfile (current one references stale `cascade_research` module name)
+- [ ] Set up `pyrite-website` repo with static site generator
+- [ ] Domain acquisition (pyrite.dev or alternative)
+- [ ] Landing page design and content
+- [ ] Docs section — decide: static generation vs Pyrite read-only instance
+- [ ] Updated Dockerfile for demo site with PostgresBackend
 - [ ] `docker-compose.yml` for local testing
 - [ ] `fly.toml` or `railway.json` deploy config
-- [ ] Pre-built demo KBs committed to a demo repo
-- [ ] CI pipeline to rebuild and deploy on KB updates
+- [ ] KB seeding pipeline (clone awesome-list repos, index, serve)
+- [ ] CI pipeline to rebuild on site or KB updates
 
 ---
 
@@ -839,10 +853,12 @@ Set up 1-2 weeks before launch. Link in README, blog post, and all channel posts
 
 ## Open Questions
 
-- Where to host the blog post? Personal blog, GitHub Pages, dedicated site?
+- ~~Where to host the blog post?~~ **Resolved:** Blog section on pyrite.dev (the marketing site)
 - YouTube vs embedded video hosting?
 - Pricing/licensing messaging — is MIT sufficient or does it need explicit "free forever" language?
 - Should we target Product Hunt as well? (probably week 3-4, not launch day)
 - Is there a launch week "challenge" angle? ("Build a KB for your domain in 10 minutes")
-- Should the extension registry be its own repo or a directory in the main repo?
-- Demo site domain name? (demo.pyrite.dev? try.pyrite.dev?)
+- ~~Should the extension registry be its own repo or a directory in the main repo?~~ **Resolved:** Awesome-list approach first (curated markdown), evolves into full registry (#84) in 0.13
+- ~~Demo site domain name?~~ **Resolved:** demo.pyrite.dev for the live demo, pyrite.dev for the marketing site
+- ~~Demo site content moderation?~~ **Resolved:** No user-generated content. Demo loads curated awesome-list KBs only. Users publish their own KBs via git repos.
+- ~~Demo site AI costs?~~ **Resolved:** All AI features are BYOK. No server-side inference. Hosting is compute + Postgres only.

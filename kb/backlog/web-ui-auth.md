@@ -10,11 +10,12 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: planned
+status: done
 links:
 - permissions-model
 - demo-site-deployment
 - roadmap
+- oauth-providers
 ---
 
 ## Problem
@@ -27,18 +28,19 @@ The web UI has no authentication. The REST API has tier enforcement with API key
 
 ## Solution
 
-### Phase 1: Simple Auth (for demo site and small teams)
+### Phase 1: Simple Auth (for demo site and small teams) -- DONE
 
 - Session-based authentication with configurable auth backend
 - Local user/password as the default (stored in DB, bcrypt hashed)
 - API key mapping: authenticated users get a tier (read/write/admin) that maps to the existing REST API tier system
 - Demo site runs with anonymous=read-tier, authenticated=write-tier
+- Implementation: `AuthService`, `auth_endpoints.py`, migration v6, login/register pages
 
-### Phase 2: SSO / OAuth (for corporate teams)
+### Phase 2: SSO / OAuth (for corporate teams) -- see [[oauth-providers]]
 
 - OAuth2/OIDC provider support (GitHub, Google, generic OIDC)
 - Group-to-tier mapping (e.g., GitHub org members → write tier)
-- JWT tokens for API access
+- Tracked as separate backlog item [[oauth-providers]] (#110)
 
 ### Configuration
 

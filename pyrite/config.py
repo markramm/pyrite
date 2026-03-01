@@ -260,6 +260,17 @@ class Subscription:
 
 
 @dataclass
+class AuthConfig:
+    """Authentication configuration."""
+
+    enabled: bool = False
+    anonymous_tier: str | None = None
+    session_ttl_hours: int = 168
+    max_sessions_per_user: int = 5
+    allow_registration: bool = True
+
+
+@dataclass
 class Settings:
     """Global application settings."""
 
@@ -283,6 +294,7 @@ class Settings:
     )
     api_key: str = ""  # Empty = auth disabled (backwards-compatible)
     api_keys: list[dict[str, str]] = field(default_factory=list)  # [{key_hash, role, label}]
+    auth: AuthConfig = field(default_factory=AuthConfig)
     rate_limit_read: str = "100/minute"
     rate_limit_write: str = "30/minute"
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -476,6 +488,13 @@ class PyriteConfig:
             "cors_origins": self.settings.cors_origins,
             "api_key": self.settings.api_key,
             **({"api_keys": self.settings.api_keys} if self.settings.api_keys else {}),
+            "auth": {
+                "enabled": self.settings.auth.enabled,
+                "anonymous_tier": self.settings.auth.anonymous_tier,
+                "session_ttl_hours": self.settings.auth.session_ttl_hours,
+                "max_sessions_per_user": self.settings.auth.max_sessions_per_user,
+                "allow_registration": self.settings.auth.allow_registration,
+            },
             "rate_limit_read": self.settings.rate_limit_read,
             "rate_limit_write": self.settings.rate_limit_write,
             "embedding_model": self.settings.embedding_model,
@@ -546,6 +565,7 @@ class PyriteConfig:
                 logger.warning("Failed to load GitHub auth from %s", github_auth_file, exc_info=True)
 
         settings_data = data.get("settings", {})
+        auth_data = settings_data.get("auth", {})
         settings = Settings(
             default_editor=settings_data.get("default_editor", os.environ.get("EDITOR", "vim")),
             ai_provider=settings_data.get("ai_provider", "stub"),
@@ -561,6 +581,13 @@ class PyriteConfig:
             ),
             api_key=settings_data.get("api_key", ""),
             api_keys=settings_data.get("api_keys", []),
+            auth=AuthConfig(
+                enabled=auth_data.get("enabled", False),
+                anonymous_tier=auth_data.get("anonymous_tier"),
+                session_ttl_hours=auth_data.get("session_ttl_hours", 168),
+                max_sessions_per_user=auth_data.get("max_sessions_per_user", 5),
+                allow_registration=auth_data.get("allow_registration", True),
+            ),
             rate_limit_read=settings_data.get("rate_limit_read", "100/minute"),
             rate_limit_write=settings_data.get("rate_limit_write", "30/minute"),
             embedding_model=settings_data.get("embedding_model", "all-MiniLM-L6-v2"),

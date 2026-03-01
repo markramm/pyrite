@@ -211,6 +211,39 @@ class User(Base):
     )
 
 
+class LocalUser(Base):
+    """Local username/password user for web UI authentication."""
+
+    __tablename__ = "local_user"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    display_name = Column(String)
+    password_hash = Column(String, nullable=False)
+    role = Column(String, nullable=False, server_default="read")
+    created_at = Column(String, server_default="CURRENT_TIMESTAMP")
+    updated_at = Column(String)
+
+    sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+
+
+class AuthSession(Base):
+    """Session token for authenticated web UI users."""
+
+    __tablename__ = "session"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token_hash = Column(String, unique=True, nullable=False, index=True)
+    user_id = Column(
+        Integer, ForeignKey("local_user.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at = Column(String, server_default="CURRENT_TIMESTAMP")
+    expires_at = Column(String, nullable=False)
+    last_used = Column(String)
+
+    user = relationship("LocalUser", back_populates="sessions")
+
+
 class Repo(Base):
     __tablename__ = "repo"
 

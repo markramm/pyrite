@@ -149,17 +149,51 @@ def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
     return None
 
 
-async def verify_api_key(request: Request, config: PyriteConfig = Depends(get_config)):
-    """Verify API key and resolve role. Stores role in request.state.
+async def verify_api_key(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+):
+    """Verify API key, session cookie, or anonymous tier. Stores role in request.state.
 
-    When auth is disabled (no api_key, no api_keys), all requests get admin role.
-    When enabled, requires valid key via X-API-Key header or api_key query param.
+    Checks in order:
+    1. X-API-Key header / api_key query param (existing behaviour)
+    2. Session cookie (web UI auth)
+    3. Anonymous tier (configurable public access)
+    4. No auth configured → admin (backwards-compatible)
     """
+    # 1. API key (header or query param)
     key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
-    role = resolve_api_key_role(key, config)
-    if role is None:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    request.state.api_role = role
+    if key:
+        role = resolve_api_key_role(key, config)
+        if role is not None:
+            request.state.api_role = role
+            return
+
+    # 2. Session cookie (when auth enabled)
+    if config.settings.auth.enabled:
+        token = request.cookies.get("pyrite_session")
+        if token:
+            from ..services.auth_service import AuthService
+
+            auth_service = AuthService(db, config.settings.auth)
+            user = auth_service.verify_session(token)
+            if user:
+                request.state.api_role = user["role"]
+                request.state.auth_user = user
+                return
+
+    # 3. Anonymous tier
+    if config.settings.auth.enabled and config.settings.auth.anonymous_tier:
+        request.state.api_role = config.settings.auth.anonymous_tier
+        return
+
+    # 4. No auth configured → admin (existing behavior)
+    if not config.settings.api_key and not config.settings.api_keys and not config.settings.auth.enabled:
+        request.state.api_role = "admin"
+        return
+
+    raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 def requires_tier(tier: str):
@@ -278,6 +312,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             headers={"Retry-After": str(getattr(exc, "retry_after", 60))},
         ),
     )
+
+    # Auth router (mounted outside /api, no verify_api_key dependency)
+    from .auth_endpoints import auth_router
+
+    application.include_router(auth_router)
 
     # Collect endpoint routers under /api with auth + read-tier baseline
     api_router = APIRouter(
