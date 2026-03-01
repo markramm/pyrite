@@ -157,42 +157,35 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.8 — UI Design & UX (in progress)
+## 0.8 — UI Design & UX (done)
 
 **Theme:** Brand identity, navigation polish, and demo-ready first impressions. Every screen a stranger sees should look intentional.
 
-### P0 — Navigation & Error States
+### Delivered
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Sidebar active state | Highlight current page in nav using `$page.url.pathname` | S |
-| Error state components | Retry button, icon, helpful message for API errors (not just red text) | S |
-| Empty state components | Illustration/icon + action CTA for Collections, Daily Notes, New Entry | S |
+**P0 — Navigation & Error States**
 
-### P1 — Brand & Dashboard
+- Sidebar active state highlighting via `$page.url.pathname` with conditional styling
+- Reusable `ErrorState` component: red icon, message, retry button
+- Reusable `EmptyState` component: icon, title, description, action CTA (used in Entries + Collections)
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Brand identity | Pyrite logo (gold crystalline mark), warm gold accent (`#C9A84C`), replace generic blue as primary | M |
-| Dashboard redesign | Recent entries, entry type distribution chart, quick actions, activity indicators | M |
-| Typography upgrade | Distinctive heading font (not Inter), clean sans for body | S |
-| Stat card redesign | Icons, colored accents, trend indicators on Dashboard + QA | S |
+**P1 — Brand & Dashboard**
 
-### P2 — Polish
+- Gold accent palette (`--color-gold-400/500/600`), "Py" monogram with gold gradient in sidebar
+- DM Serif Display heading font via Google Fonts, `--font-display` CSS variable
+- Dashboard redesign: stat cards with colored top stripes and icons, two-column layout (recent entries + quick actions), clickable top tags
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Page transitions | Svelte `{#key}` fade/slide on route change | S |
-| Entry toolbar grouping | Semantic clusters with dividers, icon-only panel toggles | S |
-| Graph atmosphere | Subtle grid pattern, node glow on hover | S |
-| Toast redesign | Slide from top-right with auto-dismiss progress bar | S |
+**P2 — Polish**
 
-### Definition of done
+- Page transitions: `{#key}` fade on route change in layout
+- Entry toolbar: semantic button groups with dividers, icon-only panel toggles (Outline, Backlinks, Graph, History)
+- Graph atmosphere: dot grid background pattern, node glow on hover via cytoscape underlay
+- Toast redesign: slide from top-right with `fly` transition, type icons, shrinking progress bar
 
-- Sidebar shows active page; error/empty states have retry + CTA
-- Pyrite has a recognizable brand identity (logo, gold accent, distinct typography)
-- Dashboard tells a story (recent entries, type distribution, quick actions)
-- Stranger seeing a screenshot knows "this is Pyrite" — not "this is a Tailwind template"
+### Results
+
+- 1179 backend tests, 115 frontend tests, all passing
+- All DoD met: active sidebar, error/empty states, gold brand identity, dashboard redesign, page transitions, toolbar polish
 
 ---
 
