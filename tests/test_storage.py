@@ -41,7 +41,7 @@ class TestPyriteDB:
         assert "link" in table_names
 
         # Virtual tables are in sqlite_master but not in SQLAlchemy inspector
-        row = db.conn.execute(
+        row = db._raw_conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='entry_fts'"
         ).fetchone()
         assert row is not None

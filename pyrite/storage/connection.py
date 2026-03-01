@@ -15,6 +15,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 
+from .backends.sqlite_backend import SQLiteBackend
 from .models import Base
 from .virtual_tables import create_fts_tables, create_vec_table
 
@@ -69,6 +70,13 @@ class ConnectionMixin:
 
         self._run_migrations()
         self._create_plugin_tables()
+
+        # Instantiate the search backend
+        self._backend = SQLiteBackend(
+            session=self.session,
+            raw_conn=self._raw_conn,
+            vec_available=self.vec_available,
+        )
 
     def _load_extensions(self):
         """Try to load sqlite-vec extension for vector search."""

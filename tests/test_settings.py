@@ -21,7 +21,7 @@ class TestSettingsDB:
 
     def test_setting_table_exists(self, db):
         """setting table should be created."""
-        row = db.conn.execute(
+        row = db._raw_conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='setting'"
         ).fetchone()
         assert row is not None

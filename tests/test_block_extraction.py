@@ -299,7 +299,7 @@ class TestBlockCRUD:
         db.upsert_entry(_make_entry("b1", _blocks=blocks))
 
         # Query blocks directly via raw SQL
-        rows = db.conn.execute(
+        rows = db._raw_conn.execute(
             "SELECT block_id, heading, content, position, block_type "
             "FROM block WHERE entry_id = 'b1' AND kb_name = 'test' "
             "ORDER BY position"
@@ -341,7 +341,7 @@ class TestBlockCRUD:
         db.upsert_entry(_make_entry("b2", _blocks=blocks_v1))
         db.upsert_entry(_make_entry("b2", _blocks=blocks_v2))
 
-        rows = db.conn.execute(
+        rows = db._raw_conn.execute(
             "SELECT block_id FROM block WHERE entry_id = 'b2' AND kb_name = 'test' "
             "ORDER BY position"
         ).fetchall()
@@ -352,7 +352,7 @@ class TestBlockCRUD:
     def test_upsert_without_blocks(self, db):
         """Upserting without _blocks doesn't create block rows."""
         db.upsert_entry(_make_entry("b3"))
-        rows = db.conn.execute(
+        rows = db._raw_conn.execute(
             "SELECT COUNT(*) FROM block WHERE entry_id = 'b3' AND kb_name = 'test'"
         ).fetchone()
         assert rows[0] == 0
@@ -371,7 +371,7 @@ class TestBlockCRUD:
         db.upsert_entry(_make_entry("b4", _blocks=blocks))
         db.delete_entry("b4", "test")
 
-        rows = db.conn.execute(
+        rows = db._raw_conn.execute(
             "SELECT COUNT(*) FROM block WHERE entry_id = 'b4' AND kb_name = 'test'"
         ).fetchone()
         assert rows[0] == 0

@@ -33,17 +33,17 @@ def tmp_db():
         db.register_kb(name="test-kb", kb_type="generic", path=str(kb_path))
 
         # Insert some test entries directly
-        db.conn.execute(
+        db._raw_conn.execute(
             "INSERT INTO entry (id, kb_name, title, body, entry_type, file_path, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
             ("entry-1", "test-kb", "Test Entry 1", "Some content here", "note", str(kb_path / "entry-1.md")),
         )
-        db.conn.execute(
+        db._raw_conn.execute(
             "INSERT INTO entry (id, kb_name, title, body, entry_type, file_path, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
             ("entry-2", "test-kb", "Test Entry 2", "More content here", "note", str(kb_path / "entry-2.md")),
         )
-        db.conn.commit()
+        db._raw_conn.commit()
 
         config = PyriteConfig(
             knowledge_bases=[KBConfig(name="test-kb", path=kb_path)],
@@ -69,7 +69,7 @@ class TestEmbedQueueTable:
         worker = EmbeddingWorker(db)
         tables = [
             r[0]
-            for r in db.conn.execute(
+            for r in db._raw_conn.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
         ]
@@ -83,7 +83,7 @@ class TestEmbedQueueTable:
         worker = EmbeddingWorker(db)
         worker.enqueue("entry-1", "test-kb")
 
-        rows = db.conn.execute("SELECT entry_id, kb_name, status FROM embed_queue").fetchall()
+        rows = db._raw_conn.execute("SELECT entry_id, kb_name, status FROM embed_queue").fetchall()
         assert len(rows) == 1
         assert rows[0][0] == "entry-1"
         assert rows[0][1] == "test-kb"
@@ -98,7 +98,7 @@ class TestEmbedQueueTable:
         worker.enqueue("entry-1", "test-kb")
         worker.enqueue("entry-1", "test-kb")
 
-        count = db.conn.execute("SELECT COUNT(*) FROM embed_queue WHERE entry_id = 'entry-1'").fetchone()[0]
+        count = db._raw_conn.execute("SELECT COUNT(*) FROM embed_queue WHERE entry_id = 'entry-1'").fetchone()[0]
         assert count == 1
 
     def test_queue_status(self, tmp_db):
@@ -159,7 +159,7 @@ class TestEmbeddingWorkerProcessing:
         processed = worker.process_batch(batch_size=10)
         assert processed == 0
 
-        row = db.conn.execute(
+        row = db._raw_conn.execute(
             "SELECT attempts, status, error FROM embed_queue WHERE entry_id = 'entry-1'"
         ).fetchone()
         assert row[0] == 1  # attempts incremented
@@ -182,7 +182,7 @@ class TestEmbeddingWorkerProcessing:
         for _ in range(3):
             worker.process_batch(batch_size=10)
 
-        row = db.conn.execute(
+        row = db._raw_conn.execute(
             "SELECT status, attempts FROM embed_queue WHERE entry_id = 'entry-1'"
         ).fetchone()
         assert row[0] == "failed"
@@ -229,7 +229,7 @@ class TestKBServiceQueueIntegration:
         svc._auto_embed("entry-1", "test-kb")
 
         # Should be in queue
-        count = db.conn.execute(
+        count = db._raw_conn.execute(
             "SELECT COUNT(*) FROM embed_queue WHERE entry_id = 'entry-1'"
         ).fetchone()[0]
         assert count == 1

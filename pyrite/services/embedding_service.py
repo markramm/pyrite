@@ -39,6 +39,17 @@ def _entry_text(entry: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _embedding_to_blob(embedding: list[float]) -> bytes:
+    """Serialize float32 list to bytes for sqlite-vec."""
+    return struct.pack(f"{len(embedding)}f", *embedding)
+
+
+def _blob_to_embedding(blob: bytes) -> list[float]:
+    """Deserialize bytes to float32 list from sqlite-vec."""
+    n = len(blob) // 4
+    return list(struct.unpack(f"{n}f", blob))
+
+
 def _generate_snippet(entry: dict[str, Any], max_len: int = 200) -> str:
     """Generate a text snippet from an entry for search results."""
     # Prefer summary if available
@@ -60,23 +71,12 @@ def _generate_snippet(entry: dict[str, Any], max_len: int = 200) -> str:
     return text[:max_len] + "..." if len(text) > max_len else text
 
 
-def _embedding_to_blob(embedding: list[float]) -> bytes:
-    """Serialize float32 list to bytes for sqlite-vec."""
-    return struct.pack(f"{len(embedding)}f", *embedding)
-
-
-def _blob_to_embedding(blob: bytes) -> list[float]:
-    """Deserialize bytes to float32 list from sqlite-vec."""
-    n = len(blob) // 4
-    return list(struct.unpack(f"{n}f", blob))
-
-
 class EmbeddingService:
     """
     Service for generating and querying vector embeddings.
 
     Uses sentence-transformers for local embedding generation and
-    sqlite-vec for vector storage and KNN search.
+    the SearchBackend for vector storage and KNN search.
     """
 
     def __init__(self, db: PyriteDB, model_name: str = "all-MiniLM-L6-v2"):
@@ -117,8 +117,9 @@ class EmbeddingService:
         return embedding.tolist()
 
     def embed_entry(self, entry_id: str, kb_name: str) -> bool:
-        """Embed a single entry and store in vec_entry. Returns True on success."""
-        if not self.db.vec_available:
+        """Embed a single entry and store via backend. Returns True on success."""
+        backend = self.db.backend
+        if not backend.vec_available:
             return False
 
         entry = self.db.get_entry(entry_id, kb_name)
@@ -130,26 +131,7 @@ class EmbeddingService:
             return False
 
         embedding = self.embed_text(text)
-        blob = _embedding_to_blob(embedding)
-
-        # Get the rowid for this entry
-        row = self.db.conn.execute(
-            "SELECT rowid FROM entry WHERE id = ? AND kb_name = ?",
-            (entry_id, kb_name),
-        ).fetchone()
-        if not row:
-            return False
-
-        rowid = row[0]
-
-        # Upsert into vec_entry
-        self.db.conn.execute("DELETE FROM vec_entry WHERE rowid = ?", (rowid,))
-        self.db.conn.execute(
-            "INSERT INTO vec_entry(rowid, embedding) VALUES (?, ?)",
-            (rowid, blob),
-        )
-        self.db.conn.commit()
-        return True
+        return backend.upsert_embedding(entry_id, kb_name, embedding)
 
     def embed_all(
         self,
@@ -168,61 +150,41 @@ class EmbeddingService:
         Returns:
             Dict with embedded, skipped, errors counts
         """
-        if not self.db.vec_available:
+        backend = self.db.backend
+        if not backend.vec_available:
             return {"embedded": 0, "skipped": 0, "errors": 0}
 
         stats = {"embedded": 0, "skipped": 0, "errors": 0}
 
-        # Get all entries
-        if kb_name:
-            rows = self.db.conn.execute(
-                "SELECT rowid, id, kb_name, title, summary, body FROM entry WHERE kb_name = ?",
-                (kb_name,),
-            ).fetchall()
-        else:
-            rows = self.db.conn.execute(
-                "SELECT rowid, id, kb_name, title, summary, body FROM entry"
-            ).fetchall()
-
+        rows = backend.get_entries_for_embedding(kb_name)
         total = len(rows)
 
         # Get already-embedded rowids (unless force)
         embedded_rowids = set()
         if not force:
-            vec_rows = self.db.conn.execute("SELECT rowid FROM vec_entry").fetchall()
-            embedded_rowids = {r[0] for r in vec_rows}
+            embedded_rowids = backend.get_embedded_rowids()
 
         for i, row in enumerate(rows):
             if progress_callback:
                 progress_callback(i, total)
 
-            rowid = row[0]
-
+            rowid = row.get("rowid")
             if not force and rowid in embedded_rowids:
                 stats["skipped"] += 1
                 continue
 
             try:
-                entry_dict = dict(row)
-                text = _entry_text(entry_dict)
+                text = _entry_text(row)
                 if not text.strip():
                     stats["skipped"] += 1
                     continue
 
                 embedding = self.embed_text(text)
-                blob = _embedding_to_blob(embedding)
-
-                self.db.conn.execute("DELETE FROM vec_entry WHERE rowid = ?", (rowid,))
-                self.db.conn.execute(
-                    "INSERT INTO vec_entry(rowid, embedding) VALUES (?, ?)",
-                    (rowid, blob),
-                )
+                backend.upsert_embedding(row["id"], row["kb_name"], embedding)
                 stats["embedded"] += 1
             except Exception as e:
-                logger.warning("Failed to embed entry %s: %s", row[1], e)
+                logger.warning("Failed to embed entry %s: %s", row.get("id"), e)
                 stats["errors"] += 1
-
-        self.db.conn.commit()
 
         if progress_callback:
             progress_callback(total, total)
@@ -248,63 +210,29 @@ class EmbeddingService:
 
         Returns list of entry dicts with 'distance' and 'snippet' fields.
         """
-        if not self.db.vec_available:
+        backend = self.db.backend
+        if not backend.vec_available:
             return []
 
         embedding = self.embed_text(query)
-        blob = _embedding_to_blob(embedding)
+        results = backend.search_semantic(
+            embedding=embedding,
+            kb_name=kb_name,
+            limit=limit,
+            max_distance=max_distance,
+        )
 
-        # Use sqlite-vec KNN query with k constraint
-        # Fetch more than limit to allow for kb_name filtering + distance cutoff
-        fetch_limit = limit * 3 if kb_name else limit * 2
-
-        rows = self.db.conn.execute(
-            """
-            SELECT v.rowid, v.distance, e.*
-            FROM vec_entry v
-            JOIN entry e ON v.rowid = e.rowid
-            WHERE v.embedding MATCH ? AND k = ?
-            ORDER BY v.distance
-            """,
-            (blob, fetch_limit),
-        ).fetchall()
-
-        results = []
-        for row in rows:
-            entry = dict(row)
-            # Apply relevance cutoff
-            distance = entry.get("distance", 0)
-            if distance > max_distance:
-                continue
-            if kb_name and entry.get("kb_name") != kb_name:
-                continue
-            # Generate snippet for semantic results
+        # Add snippets to results
+        for entry in results:
             if not entry.get("snippet"):
                 entry["snippet"] = _generate_snippet(entry)
-            results.append(entry)
-            if len(results) >= limit:
-                break
 
         return results
 
     def has_embeddings(self) -> bool:
         """Check if any embeddings exist in the database."""
-        if not self.db.vec_available:
-            return False
-        row = self.db.conn.execute("SELECT COUNT(*) FROM vec_entry").fetchone()
-        return row[0] > 0
+        return self.db.backend.has_embeddings()
 
     def embedding_stats(self) -> dict[str, Any]:
         """Get embedding statistics."""
-        if not self.db.vec_available:
-            return {"available": False, "count": 0, "total_entries": 0}
-
-        vec_count = self.db.conn.execute("SELECT COUNT(*) FROM vec_entry").fetchone()[0]
-        entry_count = self.db.conn.execute("SELECT COUNT(*) FROM entry").fetchone()[0]
-
-        return {
-            "available": True,
-            "count": vec_count,
-            "total_entries": entry_count,
-            "coverage": f"{vec_count / entry_count * 100:.1f}%" if entry_count > 0 else "0%",
-        }
+        return self.db.backend.embedding_stats()

@@ -12,13 +12,19 @@ All external code imports PyriteDB from this module. The public API is
 unchanged; implementation is split across mixins for maintainability.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .connection import ConnectionMixin
 from .crud import CRUDMixin
 from .kb_ops import KBOpsMixin
 from .queries import QueryMixin
 from .user_ops import UserOpsMixin
+
+if TYPE_CHECKING:
+    from .backends.protocol import SearchBackend
 
 
 class PyriteDB(ConnectionMixin, KBOpsMixin, CRUDMixin, QueryMixin, UserOpsMixin):
@@ -32,3 +38,8 @@ class PyriteDB(ConnectionMixin, KBOpsMixin, CRUDMixin, QueryMixin, UserOpsMixin)
 
     def __init__(self, db_path: Path):
         self._init_connection(db_path)
+
+    @property
+    def backend(self) -> SearchBackend:
+        """The search backend powering all knowledge-index operations."""
+        return self._backend

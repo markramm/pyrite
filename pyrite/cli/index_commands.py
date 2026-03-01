@@ -209,7 +209,7 @@ def index_embed(
         raise typer.Exit(1)
 
     # Check index has entries
-    row = db.conn.execute("SELECT COUNT(*) FROM entry").fetchone()
+    row = db._raw_conn.execute("SELECT COUNT(*) FROM entry").fetchone()
     if row[0] == 0:
         console.print("[yellow]Index is empty. Run 'pyrite index build' first.[/yellow]")
         raise typer.Exit(1)

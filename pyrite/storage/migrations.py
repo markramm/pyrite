@@ -180,7 +180,7 @@ class MigrationManager:
 
     Usage:
         db = PyriteDB(path)
-        mgr = MigrationManager(db.conn)
+        mgr = MigrationManager(db._raw_conn)
         mgr.migrate()  # Apply all pending migrations
     """
 
