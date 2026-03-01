@@ -23,6 +23,7 @@ from ..plugins.context import PluginContext
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
+from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class KBService:
         self._embedding_svc = None
         self._embedding_checked = False
         self._embedding_worker = None  # Set externally to enable queue-based embedding
+        self._wikilink_svc: WikilinkService | None = None
 
     def _get_embedding_svc(self):
         """Lazy-load embedding service if available."""
@@ -72,6 +74,13 @@ class KBService:
                 svc.embed_entry(entry_id, kb_name)
             except Exception as e:
                 logger.debug("Auto-embed failed for %s: %s", entry_id, e)
+
+    @property
+    def wikilinks(self) -> WikilinkService:
+        """Lazy WikilinkService instance."""
+        if self._wikilink_svc is None:
+            self._wikilink_svc = WikilinkService(self.config, self.db)
+        return self._wikilink_svc
 
     # =========================================================================
     # KB Operations
@@ -787,25 +796,8 @@ class KBService:
         """Get entries this entry references via object-ref fields."""
         return self.db.get_refs_from(entry_id, kb_name)
 
-    # =========================================================================
-    # Settings
-    # =========================================================================
-
-    def get_setting(self, key: str) -> str | None:
-        """Get a setting value by key."""
-        return self.db.get_setting(key)
-
-    def set_setting(self, key: str, value: str) -> None:
-        """Set a setting value (upsert)."""
-        self.db.set_setting(key, value)
-
-    def get_all_settings(self) -> dict[str, str]:
-        """Get all settings as a dict."""
-        return self.db.get_all_settings()
-
-    def delete_setting(self, key: str) -> bool:
-        """Delete a setting. Returns True if deleted."""
-        return self.db.delete_setting(key)
+    # Settings: use db.get_setting / db.set_setting / db.get_all_settings /
+    # db.delete_setting directly — thin wrappers removed in 0.9.
 
     def get_backlinks(
         self,
@@ -821,6 +813,10 @@ class KBService:
         """Get entries that this entry links TO."""
         return self.db.get_outlinks(entry_id, kb_name)
 
+    # =========================================================================
+    # Wikilink delegation (implementation in WikilinkService)
+    # =========================================================================
+
     def list_entry_titles(
         self,
         kb_name: str | None = None,
@@ -828,127 +824,27 @@ class KBService:
         limit: int = 500,
     ) -> list[dict[str, Any]]:
         """Lightweight listing of entry IDs and titles for wikilink autocomplete."""
-        sql = "SELECT id, kb_name, entry_type, title, json_extract(metadata, '$.aliases') as aliases FROM entry WHERE 1=1"
-        params: list[str | int] = []
-
-        if kb_name:
-            sql += " AND kb_name = ?"
-            params.append(kb_name)
-        if query:
-            sql += " AND (title LIKE ? OR json_extract(metadata, '$.aliases') LIKE ?)"
-            params.append(f"%{query}%")
-            params.append(f"%{query}%")
-
-        sql += " ORDER BY title COLLATE NOCASE LIMIT ?"
-        params.append(limit)
-
-        rows = self.db._raw_conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return self.wikilinks.list_entry_titles(kb_name=kb_name, query=query, limit=limit)
 
     def resolve_entry(self, target: str, kb_name: str | None = None) -> dict[str, Any] | None:
         """Resolve a wikilink target to an entry. Supports kb:id format for cross-KB links."""
-        # Parse cross-KB format
-        actual_target = target
-        actual_kb = kb_name
-        if ":" in target and not target.startswith("http"):
-            prefix, rest = target.split(":", 1)
-            # Look up KB by shortname
-            kb_by_short = self.config.get_kb_by_shortname(prefix)
-            if kb_by_short:
-                actual_target = rest
-                actual_kb = kb_by_short.name
-            elif self.config.get_kb(prefix):
-                actual_target = rest
-                actual_kb = prefix
-
-        sql = "SELECT id, kb_name, entry_type, title FROM entry WHERE id = ?"
-        params: list[str] = [actual_target]
-        if actual_kb:
-            sql += " AND kb_name = ?"
-            params.append(actual_kb)
-        sql += " LIMIT 1"
-
-        row = self.db._raw_conn.execute(sql, params).fetchone()
-
-        if not row:
-            sql = "SELECT id, kb_name, entry_type, title FROM entry WHERE title LIKE ?"
-            params = [actual_target]
-            if actual_kb:
-                sql += " AND kb_name = ?"
-                params.append(actual_kb)
-            sql += " LIMIT 1"
-            row = self.db._raw_conn.execute(sql, params).fetchone()
-
-        if not row:
-            # Third pass: search aliases
-            sql = """
-                SELECT id, kb_name, entry_type, title FROM entry
-                WHERE json_extract(metadata, '$.aliases') LIKE ?
-            """
-            params = [f'%{actual_target}%']
-            if actual_kb:
-                sql += " AND kb_name = ?"
-                params.append(actual_kb)
-            sql += " LIMIT 1"
-            row = self.db._raw_conn.execute(sql, params).fetchone()
-
-        return dict(row) if row else None
+        return self.wikilinks.resolve_entry(target, kb_name=kb_name)
 
     def resolve_batch(self, targets: list[str], kb_name: str | None = None) -> dict[str, bool]:
         """Batch-resolve wikilink targets. Supports kb:id format."""
-        if not targets:
-            return {}
-        result: dict[str, bool] = {}
-
-        # Separate cross-KB targets from same-KB targets
-        simple_targets = []
-        for t in targets:
-            if ":" in t and not t.startswith("http"):
-                # Resolve cross-KB targets individually
-                resolved = self.resolve_entry(t, kb_name)
-                result[t] = resolved is not None
-            else:
-                simple_targets.append(t)
-
-        if simple_targets:
-            placeholders = ",".join(["?"] * len(simple_targets))
-            sql = f"SELECT id FROM entry WHERE id IN ({placeholders})"
-            params: list[str] = list(simple_targets)
-            if kb_name:
-                sql += " AND kb_name = ?"
-                params.append(kb_name)
-            rows = self.db._raw_conn.execute(sql, params).fetchall()
-            existing_ids = {r["id"] for r in rows}
-            for t in simple_targets:
-                result[t] = t in existing_ids
-
-        return result
+        return self.wikilinks.resolve_batch(targets, kb_name=kb_name)
 
     def get_wanted_pages(
         self, kb_name: str | None = None, limit: int = 100
     ) -> list[dict[str, Any]]:
         """Get link targets that don't exist as entries (wanted pages)."""
-        sql = """
-            SELECT l.target_id, l.target_kb, COUNT(*) as ref_count,
-                   GROUP_CONCAT(DISTINCT l.source_id) as referenced_by
-            FROM link l
-            LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
-            WHERE e.id IS NULL
-        """
-        params: list[Any] = []
-        if kb_name:
-            sql += " AND l.target_kb = ?"
-            params.append(kb_name)
-        sql += " GROUP BY l.target_id, l.target_kb ORDER BY ref_count DESC LIMIT ?"
-        params.append(limit)
-        rows = self.db._raw_conn.execute(sql, params).fetchall()
-        return [dict(r) for r in rows]
+        return self.wikilinks.get_wanted_pages(kb_name=kb_name, limit=limit)
 
     def list_daily_dates(self, kb_name: str, month: str) -> list[str]:
         """List dates that have daily notes for a given month (YYYY-MM)."""
         prefix = f"daily-{month}"
-        sql = "SELECT id FROM entry WHERE kb_name = ? AND id LIKE ? ORDER BY id"
-        rows = self.db._raw_conn.execute(sql, (kb_name, f"{prefix}%")).fetchall()
+        sql = "SELECT id FROM entry WHERE kb_name = :kb_name AND id LIKE :prefix ORDER BY id"
+        rows = self.db.execute_sql(sql, {"kb_name": kb_name, "prefix": f"{prefix}%"})
 
         dates = []
         for row in rows:

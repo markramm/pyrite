@@ -173,6 +173,23 @@ class UserOpsMixin:
         self.session.commit()
         return count > 0
 
+    def set_repo_upstream(self, repo_id: int, upstream_repo_id: int) -> None:
+        """Mark a repo as a fork of an upstream repo."""
+        repo = self.session.get(Repo, repo_id)
+        if repo:
+            repo.upstream_repo_id = upstream_repo_id
+            repo.is_fork = 1
+            self.session.commit()
+
+    def update_workspace_role(self, user_id: int, repo_id: int, role: str) -> None:
+        """Update the role for a user's workspace repo."""
+        wr = self.session.query(WorkspaceRepo).filter_by(
+            user_id=user_id, repo_id=repo_id
+        ).first()
+        if wr:
+            wr.role = role
+            self.session.commit()
+
     def update_repo_synced(self, name: str, commit_hash: str) -> None:
         """Update repo's last synced commit and timestamp."""
         now = datetime.now(UTC).isoformat()

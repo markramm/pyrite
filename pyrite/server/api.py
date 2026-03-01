@@ -22,6 +22,7 @@ from slowapi.util import get_remote_address
 from ..config import PyriteConfig, Settings, load_config
 from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
+from ..services.search_service import SearchService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
@@ -82,13 +83,10 @@ def get_llm_service(
     """Get or create LLM service, using DB settings with config file fallback."""
     global _llm_service
     if _llm_service is None:
-        from ..services.kb_service import KBService  # noqa: N814
-
-        svc = KBService(config, db)
-        provider = svc.get_setting("ai.provider") or config.settings.ai_provider
-        api_key = svc.get_setting("ai.apiKey") or config.settings.ai_api_key
-        model = svc.get_setting("ai.model") or config.settings.ai_model
-        base_url = svc.get_setting("ai.baseUrl") or config.settings.ai_api_base
+        provider = db.get_setting("ai.provider") or config.settings.ai_provider
+        api_key = db.get_setting("ai.apiKey") or config.settings.ai_api_key
+        model = db.get_setting("ai.model") or config.settings.ai_model
+        base_url = db.get_setting("ai.baseUrl") or config.settings.ai_api_base
         settings = Settings(
             ai_provider=provider,
             ai_api_key=api_key,
@@ -97,6 +95,14 @@ def get_llm_service(
         )
         _llm_service = LLMService(settings)
     return _llm_service
+
+
+def get_search_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> SearchService:
+    """Get SearchService instance via DI."""
+    return SearchService(db, settings=config.settings)
 
 
 def invalidate_llm_service():

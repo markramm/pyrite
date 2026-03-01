@@ -5,7 +5,8 @@ import sqlite3
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...services.kb_service import KBService
-from ..api import get_config, get_db, get_kb_service, limiter, negotiate_response
+from ...services.search_service import SearchService
+from ..api import get_kb_service, get_search_service, limiter, negotiate_response
 from ..schemas import SearchResponse, SearchResult
 
 router = APIRouter(tags=["Search"])
@@ -25,6 +26,7 @@ def search(
     mode: str = Query("keyword", description="Search mode: keyword, semantic, hybrid"),
     expand: bool = Query(False, description="Use AI query expansion for additional search terms"),
     svc: KBService = Depends(get_kb_service),
+    search_svc: SearchService = Depends(get_search_service),
 ):
     """Full-text search across knowledge bases."""
     if svc.count_entries() == 0:
@@ -40,11 +42,6 @@ def search(
     tag_list = tags.split(",") if tags else None
 
     try:
-        from ...services.search_service import SearchService
-
-        cfg = get_config()
-        db = get_db()
-        search_svc = SearchService(db, settings=cfg.settings)
         results = search_svc.search(
             query=q,
             kb_name=kb,

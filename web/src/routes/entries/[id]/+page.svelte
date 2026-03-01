@@ -8,26 +8,17 @@
 	import Editor from '$lib/editor/Editor.svelte';
 	import TiptapEditor from '$lib/editor/TiptapEditor.svelte';
 	import OutlinePanel from '$lib/components/entry/OutlinePanel.svelte';
+	import AIPanel from '$lib/components/entry/AIPanel.svelte';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
-	import { aiChatStore } from '$lib/stores/ai.svelte';
 	import { api } from '$lib/api/client';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { parseWikilinks } from '$lib/editor/wikilink-utils';
-	import type { AITagSuggestion, AILinkSuggestion } from '$lib/api/types';
 
 	let editing = $state(false);
 	let editorContent = $state('');
-	let aiMenuOpen = $state(false);
-	let aiLoading = $state(false);
 	let resolvedIds = $state<Set<string>>(new Set());
-
-	// AI results
-	let summaryResult = $state<string | null>(null);
-	let tagSuggestions = $state<AITagSuggestion[]>([]);
-	let linkSuggestions = $state<AILinkSuggestion[]>([]);
-	let aiResultType = $state<'summary' | 'tags' | 'links' | null>(null);
 
 	const entryId = $derived($page.params.id);
 
@@ -54,19 +45,8 @@
 		}
 		window.addEventListener('keydown', handleKeydown);
 
-		function handleClickOutside(e: MouseEvent) {
-			if (aiMenuOpen) {
-				const target = e.target as HTMLElement;
-				if (!target.closest('.ai-menu-container')) {
-					aiMenuOpen = false;
-				}
-			}
-		}
-		document.addEventListener('click', handleClickOutside);
-
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
-			document.removeEventListener('click', handleClickOutside);
 		};
 	});
 
@@ -119,88 +99,15 @@
 		}
 	}
 
-	async function aiSummarize() {
+	async function handleTagsChanged(newTags: string[]) {
 		if (!entryStore.current) return;
-		aiMenuOpen = false;
-		aiLoading = true;
-		aiResultType = 'summary';
-		summaryResult = null;
-		try {
-			const res = await api.aiSummarize(entryStore.current.id, entryStore.current.kb_name);
-			summaryResult = res.summary;
-		} catch (e) {
-			uiStore.toast(e instanceof Error ? e.message : 'Summarize failed', 'error');
-			aiResultType = null;
-		} finally {
-			aiLoading = false;
-		}
-	}
-
-	async function aiAutoTag() {
-		if (!entryStore.current) return;
-		aiMenuOpen = false;
-		aiLoading = true;
-		aiResultType = 'tags';
-		tagSuggestions = [];
-		try {
-			const res = await api.aiAutoTag(entryStore.current.id, entryStore.current.kb_name);
-			tagSuggestions = res.suggested_tags;
-		} catch (e) {
-			uiStore.toast(e instanceof Error ? e.message : 'Auto-tag failed', 'error');
-			aiResultType = null;
-		} finally {
-			aiLoading = false;
-		}
-	}
-
-	async function aiSuggestLinks() {
-		if (!entryStore.current) return;
-		aiMenuOpen = false;
-		aiLoading = true;
-		aiResultType = 'links';
-		linkSuggestions = [];
-		try {
-			const res = await api.aiSuggestLinks(entryStore.current.id, entryStore.current.kb_name);
-			linkSuggestions = res.suggestions;
-		} catch (e) {
-			uiStore.toast(e instanceof Error ? e.message : 'Suggest links failed', 'error');
-			aiResultType = null;
-		} finally {
-			aiLoading = false;
-		}
-	}
-
-	async function acceptTag(tag: AITagSuggestion) {
-		if (!entryStore.current) return;
-		const currentTags = entryStore.current.tags ?? [];
-		if (currentTags.includes(tag.name)) return;
 		try {
 			await entryStore.save(entryStore.current.id, entryStore.current.kb_name, {
-				tags: [...currentTags, tag.name]
+				tags: newTags
 			});
-			tagSuggestions = tagSuggestions.filter((t) => t.name !== tag.name);
-			uiStore.toast(`Tag "${tag.name}" added`, 'success');
 		} catch {
 			uiStore.toast('Failed to add tag', 'error');
 		}
-	}
-
-	function dismissAIResult() {
-		aiResultType = null;
-		summaryResult = null;
-		tagSuggestions = [];
-		linkSuggestions = [];
-	}
-
-	function askAboutEntry() {
-		if (!entryStore.current) return;
-		aiChatStore.clear();
-		uiStore.chatPanelOpen = true;
-		aiChatStore.entryContext = {
-			id: entryStore.current.id,
-			kb: entryStore.current.kb_name,
-			title: entryStore.current.title
-		};
 	}
 
 	const breadcrumbs = $derived([
@@ -224,191 +131,104 @@
 				<div class="flex h-full overflow-hidden">
 					<!-- Main content -->
 					<div class="flex-1 overflow-y-auto">
-						<!-- Toolbar -->
-						<div class="flex items-center justify-between border-b border-zinc-200 px-6 py-2 dark:border-zinc-800">
-							<h1 class="text-xl font-bold">{entryStore.current?.title}</h1>
-							<div class="flex items-center gap-2">
-								<!-- Group 1: Edit actions -->
-								{#if editing}
-									<button
-										onclick={save}
-										disabled={entryStore.saving}
-										class="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-									>
-										{entryStore.saving ? 'Saving...' : 'Save'}
-									</button>
-								{/if}
-								<button
-									onclick={toggleEdit}
-									class="rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-600"
-								>
-									{editing ? 'View' : 'Edit'}
-								</button>
-								{#if editing}
-									<button
-										onclick={() => uiStore.toggleEditorMode()}
-										class="rounded-md border px-3 py-1 text-sm {uiStore.editorMode === 'wysiwyg'
-											? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-											: 'border-zinc-300 dark:border-zinc-600'}"
-										title="Toggle between source and rich text editing"
-									>
-										{uiStore.editorMode === 'source' ? 'Rich Text' : 'Source'}
-									</button>
-								{/if}
-
-								<!-- Divider -->
-								<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
-
-								<!-- Group 2: AI menu -->
-								<div class="ai-menu-container relative">
-									<button
-										onclick={() => (aiMenuOpen = !aiMenuOpen)}
-										class="rounded-md border px-3 py-1 text-sm {aiMenuOpen
-											? 'border-purple-500 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300'
-											: 'border-zinc-300 dark:border-zinc-600'}"
-									>
-										AI
-									</button>
-									{#if aiMenuOpen}
-										<div class="absolute right-0 top-full z-50 mt-1 w-48 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+						<!-- Toolbar + AI results -->
+						<AIPanel
+							entryId={entryStore.current?.id ?? ''}
+							kbName={entryStore.current?.kb_name ?? ''}
+							entryTitle={entryStore.current?.title ?? ''}
+							tags={entryStore.current?.tags ?? []}
+							onTagsChanged={handleTagsChanged}
+						>
+							{#snippet toolbar({ aiMenuButton })}
+								<div class="flex items-center justify-between border-b border-zinc-200 px-6 py-2 dark:border-zinc-800">
+									<h1 class="text-xl font-bold">{entryStore.current?.title}</h1>
+									<div class="flex items-center gap-2">
+										<!-- Group 1: Edit actions -->
+										{#if editing}
 											<button
-												onclick={aiSummarize}
-												class="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
+												onclick={save}
+												disabled={entryStore.saving}
+												class="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
 											>
-												Summarize
+												{entryStore.saving ? 'Saving...' : 'Save'}
 											</button>
-											<button
-												onclick={aiAutoTag}
-												class="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
-											>
-												Suggest Tags
-											</button>
-											<button
-												onclick={aiSuggestLinks}
-												class="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
-											>
-												Find Links
-											</button>
-											<hr class="my-1 border-zinc-200 dark:border-zinc-700" />
-											<button
-												onclick={askAboutEntry}
-												class="w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
-											>
-												Ask AI about this
-											</button>
-										</div>
-									{/if}
-								</div>
-
-								<!-- Divider -->
-								<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
-
-								<!-- Group 3: Panel toggles (icon-only) -->
-								<button
-									onclick={() => uiStore.toggleOutlinePanel()}
-									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.outlinePanelOpen
-										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-										: 'border-zinc-300 dark:border-zinc-600'}"
-									title="Toggle outline panel (Cmd+Shift+O)"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-									</svg>
-								</button>
-								<button
-									onclick={() => uiStore.toggleBacklinksPanel()}
-									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.backlinksPanelOpen
-										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-										: 'border-zinc-300 dark:border-zinc-600'}"
-									title="Toggle backlinks panel (Cmd+Shift+B)"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-									</svg>
-								</button>
-								<button
-									onclick={() => uiStore.toggleLocalGraphPanel()}
-									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.localGraphPanelOpen
-										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-										: 'border-zinc-300 dark:border-zinc-600'}"
-									title="Toggle local graph (Cmd+Shift+G)"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-									</svg>
-								</button>
-								<button
-									onclick={() => uiStore.toggleVersionHistoryPanel()}
-									class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.versionHistoryPanelOpen
-										? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-										: 'border-zinc-300 dark:border-zinc-600'}"
-									title="Toggle version history (Cmd+Shift+H)"
-								>
-									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-										<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-									</svg>
-								</button>
-							</div>
-						</div>
-
-						<!-- AI Results banner -->
-						{#if aiResultType}
-							<div class="border-b border-zinc-200 bg-purple-50 px-6 py-3 dark:border-zinc-800 dark:bg-purple-900/20">
-								<div class="flex items-start justify-between">
-									<div class="flex-1">
-										{#if aiLoading}
-											<p class="text-sm text-purple-700 dark:text-purple-300">Processing...</p>
-										{:else if aiResultType === 'summary' && summaryResult}
-											<p class="mb-1 text-xs font-semibold uppercase text-purple-600 dark:text-purple-400">AI Summary</p>
-											<p class="text-sm text-zinc-800 dark:text-zinc-200">{summaryResult}</p>
-										{:else if aiResultType === 'tags' && tagSuggestions.length > 0}
-											<p class="mb-2 text-xs font-semibold uppercase text-purple-600 dark:text-purple-400">Suggested Tags</p>
-											<div class="flex flex-wrap gap-2">
-												{#each tagSuggestions as tag}
-													<button
-														onclick={() => acceptTag(tag)}
-														class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium {tag.is_new
-															? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-															: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'} hover:opacity-80"
-														title="{tag.reason}{tag.is_new ? ' (new tag)' : ''}"
-													>
-														{tag.name}
-														<span class="text-[10px] opacity-60">+</span>
-													</button>
-												{/each}
-											</div>
-										{:else if aiResultType === 'tags'}
-											<p class="text-sm text-zinc-500">No tag suggestions.</p>
-										{:else if aiResultType === 'links' && linkSuggestions.length > 0}
-											<p class="mb-2 text-xs font-semibold uppercase text-purple-600 dark:text-purple-400">Link Suggestions</p>
-											<div class="space-y-1">
-												{#each linkSuggestions as link}
-													<div class="flex items-center gap-2 text-sm">
-														<a
-															href="/entries/{link.target_id}"
-															class="font-medium text-blue-600 hover:underline dark:text-blue-400"
-														>
-															{link.target_title || link.target_id}
-														</a>
-														<span class="text-xs text-zinc-500">{link.reason}</span>
-													</div>
-												{/each}
-											</div>
-										{:else if aiResultType === 'links'}
-											<p class="text-sm text-zinc-500">No link suggestions.</p>
 										{/if}
-									</div>
-									{#if !aiLoading}
 										<button
-											onclick={dismissAIResult}
-											class="ml-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+											onclick={toggleEdit}
+											class="rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-600"
 										>
-											&times;
+											{editing ? 'View' : 'Edit'}
 										</button>
-									{/if}
+										{#if editing}
+											<button
+												onclick={() => uiStore.toggleEditorMode()}
+												class="rounded-md border px-3 py-1 text-sm {uiStore.editorMode === 'wysiwyg'
+													? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+													: 'border-zinc-300 dark:border-zinc-600'}"
+												title="Toggle between source and rich text editing"
+											>
+												{uiStore.editorMode === 'source' ? 'Rich Text' : 'Source'}
+											</button>
+										{/if}
+
+										<!-- Divider -->
+										<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+
+										<!-- Group 2: AI menu -->
+										{@render aiMenuButton()}
+
+										<!-- Divider -->
+										<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+
+										<!-- Group 3: Panel toggles (icon-only) -->
+										<button
+											onclick={() => uiStore.toggleOutlinePanel()}
+											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.outlinePanelOpen
+												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+												: 'border-zinc-300 dark:border-zinc-600'}"
+											title="Toggle outline panel (Cmd+Shift+O)"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+											</svg>
+										</button>
+										<button
+											onclick={() => uiStore.toggleBacklinksPanel()}
+											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.backlinksPanelOpen
+												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+												: 'border-zinc-300 dark:border-zinc-600'}"
+											title="Toggle backlinks panel (Cmd+Shift+B)"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+											</svg>
+										</button>
+										<button
+											onclick={() => uiStore.toggleLocalGraphPanel()}
+											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.localGraphPanelOpen
+												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+												: 'border-zinc-300 dark:border-zinc-600'}"
+											title="Toggle local graph (Cmd+Shift+G)"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+											</svg>
+										</button>
+										<button
+											onclick={() => uiStore.toggleVersionHistoryPanel()}
+											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.versionHistoryPanelOpen
+												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+												: 'border-zinc-300 dark:border-zinc-600'}"
+											title="Toggle version history (Cmd+Shift+H)"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+											</svg>
+										</button>
+									</div>
 								</div>
-							</div>
-						{/if}
+							{/snippet}
+						</AIPanel>
 
 						<!-- Editor or rendered view -->
 						<div class="flex h-full flex-1 overflow-hidden">

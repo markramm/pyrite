@@ -38,13 +38,13 @@ class QAService:
         """Validate a single entry. Returns {entry_id, kb_name, issues: [...]}."""
         issues: list[dict[str, Any]] = []
 
-        row = self.db._raw_conn.execute(
+        rows = self.db.execute_sql(
             "SELECT id, kb_name, entry_type, title, date, importance, body, status, metadata "
-            "FROM entry WHERE id = ? AND kb_name = ?",
-            (entry_id, kb_name),
-        ).fetchone()
+            "FROM entry WHERE id = :entry_id AND kb_name = :kb_name",
+            {"entry_id": entry_id, "kb_name": kb_name},
+        )
 
-        if not row:
+        if not rows:
             return {
                 "entry_id": entry_id,
                 "kb_name": kb_name,
@@ -60,7 +60,7 @@ class QAService:
                 ],
             }
 
-        entry = dict(row)
+        entry = rows[0]
         self._check_entry_fields(entry, issues)
         self._check_entry_links(entry_id, kb_name, issues)
         self._check_schema_validation(entry, issues)
@@ -72,9 +72,10 @@ class QAService:
         issues: list[dict[str, Any]] = []
 
         # Count entries
-        total = self.db._raw_conn.execute(
-            "SELECT COUNT(*) FROM entry WHERE kb_name = ?", (kb_name,)
-        ).fetchone()[0]
+        total_rows = self.db.execute_sql(
+            "SELECT COUNT(*) as cnt FROM entry WHERE kb_name = :kb_name", {"kb_name": kb_name}
+        )
+        total = total_rows[0]["cnt"] if total_rows else 0
 
         # Bulk SQL pass — fast structural checks
         self._check_missing_titles(issues, kb_name)
@@ -216,10 +217,10 @@ class QAService:
 
         Returns dict with kb_name, assessed count, skipped count, and results list.
         """
-        rows = self.db._raw_conn.execute(
-            "SELECT id, entry_type FROM entry WHERE kb_name = ?",
-            (kb_name,),
-        ).fetchall()
+        rows = self.db.execute_sql(
+            "SELECT id, entry_type FROM entry WHERE kb_name = :kb_name",
+            {"kb_name": kb_name},
+        )
 
         results = []
         skipped = 0
@@ -270,19 +271,19 @@ class QAService:
 
     def _is_recently_assessed(self, entry_id: str, kb_name: str, max_age_hours: int) -> bool:
         """Check if entry was assessed within max_age_hours."""
-        row = self.db._raw_conn.execute(
+        rows = self.db.execute_sql(
             "SELECT json_extract(metadata, '$.assessed_at') as assessed_at "
-            "FROM entry WHERE kb_name = ? AND entry_type = 'qa_assessment' "
-            "AND json_extract(metadata, '$.target_entry') = ? "
+            "FROM entry WHERE kb_name = :kb_name AND entry_type = 'qa_assessment' "
+            "AND json_extract(metadata, '$.target_entry') = :entry_id "
             "ORDER BY json_extract(metadata, '$.assessed_at') DESC LIMIT 1",
-            (kb_name, entry_id),
-        ).fetchone()
+            {"kb_name": kb_name, "entry_id": entry_id},
+        )
 
-        if not row or not row["assessed_at"]:
+        if not rows or not rows[0]["assessed_at"]:
             return False
 
         try:
-            assessed = datetime.fromisoformat(row["assessed_at"])
+            assessed = datetime.fromisoformat(rows[0]["assessed_at"])
             age_hours = (datetime.now(UTC) - assessed).total_seconds() / 3600
             return age_hours < max_age_hours
         except (ValueError, TypeError):
@@ -323,21 +324,21 @@ class QAService:
         """Query assessment entries with optional filters."""
         sql = (
             "SELECT id, title, body, metadata FROM entry "
-            "WHERE kb_name = ? AND entry_type = 'qa_assessment'"
+            "WHERE kb_name = :kb_name AND entry_type = 'qa_assessment'"
         )
-        params: list[Any] = [kb_name]
+        params: dict[str, Any] = {"kb_name": kb_name}
 
         if target_entry:
-            sql += " AND json_extract(metadata, '$.target_entry') = ?"
-            params.append(target_entry)
+            sql += " AND json_extract(metadata, '$.target_entry') = :target_entry"
+            params["target_entry"] = target_entry
         if qa_status:
-            sql += " AND json_extract(metadata, '$.qa_status') = ?"
-            params.append(qa_status)
+            sql += " AND json_extract(metadata, '$.qa_status') = :qa_status"
+            params["qa_status"] = qa_status
 
-        sql += " ORDER BY json_extract(metadata, '$.assessed_at') DESC LIMIT ?"
-        params.append(limit)
+        sql += " ORDER BY json_extract(metadata, '$.assessed_at') DESC LIMIT :limit"
+        params["limit"] = limit
 
-        rows = self.db._raw_conn.execute(sql, params).fetchall()
+        rows = self.db.execute_sql(sql, params)
         results = []
         for row in rows:
             meta = json.loads(row["metadata"]) if row["metadata"] else {}
@@ -357,43 +358,45 @@ class QAService:
 
     def get_unassessed(self, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that have no assessment."""
-        rows = self.db._raw_conn.execute(
+        rows = self.db.execute_sql(
             "SELECT e.id, e.entry_type, e.title FROM entry e "
-            "WHERE e.kb_name = ? AND e.entry_type != 'qa_assessment' "
+            "WHERE e.kb_name = :kb_name AND e.entry_type != 'qa_assessment' "
             "AND NOT EXISTS ("
-            "  SELECT 1 FROM entry a WHERE a.kb_name = ? "
+            "  SELECT 1 FROM entry a WHERE a.kb_name = :kb_name2 "
             "  AND a.entry_type = 'qa_assessment' "
             "  AND json_extract(a.metadata, '$.target_entry') = e.id"
             ")",
-            (kb_name, kb_name),
-        ).fetchall()
+            {"kb_name": kb_name, "kb_name2": kb_name},
+        )
         return [{"id": row["id"], "entry_type": row["entry_type"], "title": row["title"]} for row in rows]
 
     def get_coverage(self, kb_name: str) -> dict[str, Any]:
         """Get assessment coverage stats for a KB."""
         # Total non-assessment entries
-        total = self.db._raw_conn.execute(
-            "SELECT COUNT(*) FROM entry WHERE kb_name = ? AND entry_type != 'qa_assessment'",
-            (kb_name,),
-        ).fetchone()[0]
+        total_rows = self.db.execute_sql(
+            "SELECT COUNT(*) as cnt FROM entry WHERE kb_name = :kb_name AND entry_type != 'qa_assessment'",
+            {"kb_name": kb_name},
+        )
+        total = total_rows[0]["cnt"] if total_rows else 0
 
         # Entries with at least one assessment
-        assessed = self.db._raw_conn.execute(
-            "SELECT COUNT(DISTINCT json_extract(metadata, '$.target_entry')) "
-            "FROM entry WHERE kb_name = ? AND entry_type = 'qa_assessment'",
-            (kb_name,),
-        ).fetchone()[0]
+        assessed_rows = self.db.execute_sql(
+            "SELECT COUNT(DISTINCT json_extract(metadata, '$.target_entry')) as cnt "
+            "FROM entry WHERE kb_name = :kb_name AND entry_type = 'qa_assessment'",
+            {"kb_name": kb_name},
+        )
+        assessed = assessed_rows[0]["cnt"] if assessed_rows else 0
 
         unassessed = total - assessed
 
         # Status counts from latest assessments
         by_status: dict[str, int] = {}
-        rows = self.db._raw_conn.execute(
+        rows = self.db.execute_sql(
             "SELECT json_extract(metadata, '$.qa_status') as qs, COUNT(*) as cnt "
-            "FROM entry WHERE kb_name = ? AND entry_type = 'qa_assessment' "
+            "FROM entry WHERE kb_name = :kb_name AND entry_type = 'qa_assessment' "
             "GROUP BY qs",
-            (kb_name,),
-        ).fetchall()
+            {"kb_name": kb_name},
+        )
         for row in rows:
             status = row["qs"] or "pass"
             by_status[status] = row["cnt"]
@@ -416,12 +419,12 @@ class QAService:
         self, issues: list[dict[str, Any]], kb_name: str | None = None
     ) -> None:
         sql = "SELECT id, kb_name, entry_type FROM entry WHERE (title IS NULL OR title = '')"
-        params: list[Any] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            sql += " AND kb_name = ?"
-            params.append(kb_name)
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
 
-        for row in self.db._raw_conn.execute(sql, params).fetchall():
+        for row in self.db.execute_sql(sql, params):
             issues.append(
                 {
                     "entry_id": row["id"],
@@ -441,12 +444,12 @@ class QAService:
             "WHERE (body IS NULL OR body = '') "
             "AND entry_type NOT IN ('collection', 'relationship')"
         )
-        params: list[Any] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            sql += " AND kb_name = ?"
-            params.append(kb_name)
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
 
-        for row in self.db._raw_conn.execute(sql, params).fetchall():
+        for row in self.db.execute_sql(sql, params):
             issues.append(
                 {
                     "entry_id": row["id"],
@@ -465,12 +468,12 @@ class QAService:
             "SELECT id, kb_name, title FROM entry "
             "WHERE entry_type = 'event' AND (date IS NULL OR date = '')"
         )
-        params: list[Any] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            sql += " AND kb_name = ?"
-            params.append(kb_name)
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
 
-        for row in self.db._raw_conn.execute(sql, params).fetchall():
+        for row in self.db.execute_sql(sql, params):
             issues.append(
                 {
                     "entry_id": row["id"],
@@ -486,12 +489,12 @@ class QAService:
         self, issues: list[dict[str, Any]], kb_name: str | None = None
     ) -> None:
         sql = "SELECT id, kb_name, entry_type, date FROM entry WHERE date IS NOT NULL AND date != ''"
-        params: list[Any] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            sql += " AND kb_name = ?"
-            params.append(kb_name)
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
 
-        for row in self.db._raw_conn.execute(sql, params).fetchall():
+        for row in self.db.execute_sql(sql, params):
             if not validate_date(row["date"]):
                 issues.append(
                     {
@@ -508,12 +511,12 @@ class QAService:
         self, issues: list[dict[str, Any]], kb_name: str | None = None
     ) -> None:
         sql = "SELECT id, kb_name, entry_type, importance FROM entry WHERE importance IS NOT NULL"
-        params: list[Any] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            sql += " AND kb_name = ?"
-            params.append(kb_name)
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
 
-        for row in self.db._raw_conn.execute(sql, params).fetchall():
+        for row in self.db.execute_sql(sql, params):
             if not validate_importance(row["importance"]):
                 issues.append(
                     {
@@ -534,12 +537,12 @@ class QAService:
             "FROM link l LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name "
             "WHERE e.id IS NULL"
         )
-        params: list[Any] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            sql += " AND l.source_kb = ?"
-            params.append(kb_name)
+            sql += " AND l.source_kb = :kb_name"
+            params["kb_name"] = kb_name
 
-        for row in self.db._raw_conn.execute(sql, params).fetchall():
+        for row in self.db.execute_sql(sql, params):
             issues.append(
                 {
                     "entry_id": row["source_id"],
@@ -740,11 +743,11 @@ class QAService:
 
         schema = kb_config.kb_schema
 
-        rows = self.db._raw_conn.execute(
+        rows = self.db.execute_sql(
             "SELECT id, kb_name, entry_type, title, date, importance, status, metadata "
-            "FROM entry WHERE kb_name = ?",
-            (kb_name,),
-        ).fetchall()
+            "FROM entry WHERE kb_name = :kb_name",
+            {"kb_name": kb_name},
+        )
 
         for row in rows:
             entry = dict(row)

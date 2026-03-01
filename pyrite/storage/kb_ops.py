@@ -64,6 +64,19 @@ class KBOpsMixin:
             ).fetchall()
         return [dict(r._mapping) for r in rows]
 
+    def link_kb_to_repo(self, kb_name: str, repo_id: int, repo_subpath: str) -> None:
+        """Associate a KB with a repo."""
+        kb = self.session.get(KB, kb_name)
+        if kb:
+            kb.repo_id = repo_id
+            kb.repo_subpath = repo_subpath
+            self.session.commit()
+
+    def get_kbs_for_repo(self, repo_id: int) -> list[dict[str, Any]]:
+        """Get KBs associated with a repo."""
+        kbs = self.session.query(KB).filter_by(repo_id=repo_id).all()
+        return [{"name": kb.name, "path": kb.path, "repo_subpath": kb.repo_subpath} for kb in kbs]
+
     def update_kb_indexed(self, name: str, entry_count: int) -> None:
         """Update KB last indexed time and count."""
         kb = self.session.get(KB, name)

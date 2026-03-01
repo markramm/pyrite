@@ -112,11 +112,7 @@ class RepoService:
             )
             # Link KB to repo in DB
             if repo_row.get("id"):
-                self.db._raw_conn.execute(
-                    "UPDATE kb SET repo_id = ?, repo_subpath = ? WHERE name = ?",
-                    (repo_row["id"], kb_config.repo_subpath, kb_config.name),
-                )
-                self.db._raw_conn.commit()
+                self.db.link_kb_to_repo(kb_config.name, repo_row["id"], kb_config.repo_subpath)
 
             # Index with attribution
             index_mgr.index_with_attribution(kb_config.name, self.git)
@@ -172,11 +168,7 @@ class RepoService:
         upstream_repo = self.db.get_repo(name=f"{owner}/{repo_name}")
         fork_repo = self.db.get_repo(name=fork_full_name)
         if upstream_repo and fork_repo:
-            self.db._raw_conn.execute(
-                "UPDATE repo SET upstream_repo_id = ?, is_fork = 1 WHERE id = ?",
-                (upstream_repo["id"], fork_repo["id"]),
-            )
-            self.db._raw_conn.commit()
+            self.db.set_repo_upstream(fork_repo["id"], upstream_repo["id"])
 
         # Add upstream remote
         workspace_path = Path(result["path"])
@@ -185,11 +177,7 @@ class RepoService:
         # Update workspace role
         user = self.user_service.get_current_user()
         if fork_repo:
-            self.db._raw_conn.execute(
-                "UPDATE workspace_repo SET role = 'contributor' WHERE user_id = ? AND repo_id = ?",
-                (user["id"], fork_repo["id"]),
-            )
-            self.db._raw_conn.commit()
+            self.db.update_workspace_role(user["id"], fork_repo["id"], "contributor")
 
         result["is_fork"] = True
         result["upstream"] = f"{owner}/{repo_name}"
@@ -243,10 +231,7 @@ class RepoService:
             total_reindexed = 0
 
             # Find KBs in this repo
-            kb_rows = self.db._raw_conn.execute(
-                "SELECT name, path, repo_subpath FROM kb WHERE repo_id = ?",
-                (repo["id"],),
-            ).fetchall()
+            kb_rows = self.db.get_kbs_for_repo(repo["id"])
 
             for kb_row in kb_rows:
                 kb_name = kb_row["name"]
@@ -283,9 +268,7 @@ class RepoService:
             return {"success": False, "error": f"Repo '{repo_name}' not found"}
 
         # Remove KBs associated with this repo
-        kb_rows = self.db._raw_conn.execute(
-            "SELECT name FROM kb WHERE repo_id = ?", (repo["id"],)
-        ).fetchall()
+        kb_rows = self.db.get_kbs_for_repo(repo["id"])
         for kb_row in kb_rows:
             self.config.remove_kb(kb_row["name"])
             self.db.unregister_kb(kb_row["name"])
@@ -337,9 +320,7 @@ class RepoService:
             status["path_exists"] = False
 
         # Count KBs and entries
-        kb_rows = self.db._raw_conn.execute(
-            "SELECT name FROM kb WHERE repo_id = ?", (repo["id"],)
-        ).fetchall()
+        kb_rows = self.db.get_kbs_for_repo(repo["id"])
         status["kb_count"] = len(kb_rows)
         status["kb_names"] = [r["name"] for r in kb_rows]
 
@@ -432,11 +413,7 @@ class RepoService:
                 description=kb_config.description,
             )
             if repo_row.get("id"):
-                self.db._raw_conn.execute(
-                    "UPDATE kb SET repo_id = ?, repo_subpath = ? WHERE name = ?",
-                    (repo_row["id"], kb_config.repo_subpath, kb_config.name),
-                )
-                self.db._raw_conn.commit()
+                self.db.link_kb_to_repo(kb_config.name, repo_row["id"], kb_config.repo_subpath)
             index_mgr.index_with_attribution(kb_config.name, self.git)
             kb_names.append(kb_config.name)
 

@@ -30,7 +30,7 @@ def get_all_settings(
     svc: KBService = Depends(get_kb_service),
 ):
     """Get all settings."""
-    settings = svc.get_all_settings()
+    settings = svc.db.get_all_settings()
     return SettingsResponse(settings=settings)
 
 
@@ -43,9 +43,9 @@ def bulk_update_settings(
 ):
     """Bulk update settings."""
     for key, value in req.settings.items():
-        svc.set_setting(key, value)
+        svc.db.set_setting(key, value)
         _maybe_invalidate_llm(key)
-    return SettingsResponse(settings=svc.get_all_settings())
+    return SettingsResponse(settings=svc.db.get_all_settings())
 
 
 @router.get("/settings/{key}", response_model=SettingResponse)
@@ -56,7 +56,7 @@ def get_setting(
     svc: KBService = Depends(get_kb_service),
 ):
     """Get a single setting."""
-    value = svc.get_setting(key)
+    value = svc.db.get_setting(key)
     return SettingResponse(key=key, value=value)
 
 
@@ -69,7 +69,7 @@ def set_setting(
     svc: KBService = Depends(get_kb_service),
 ):
     """Set a single setting."""
-    svc.set_setting(key, req.value)
+    svc.db.set_setting(key, req.value)
     _maybe_invalidate_llm(key)
     return SettingResponse(key=key, value=req.value)
 
@@ -82,7 +82,7 @@ def delete_setting(
     svc: KBService = Depends(get_kb_service),
 ):
     """Delete a setting."""
-    deleted = svc.delete_setting(key)
+    deleted = svc.db.delete_setting(key)
     if not deleted:
         raise HTTPException(
             status_code=404,

@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
-from ..api import get_config, get_db, get_kb_service, get_llm_service, limiter, requires_tier
+from ...services.search_service import SearchService
+from ..api import get_kb_service, get_llm_service, get_search_service, limiter, requires_tier
 from ..schemas import (
     AIAutoTagResponse,
     AIChatRequest,
@@ -137,6 +138,7 @@ async def ai_suggest_links(
     req: AIEntryRequest,
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
+    search_svc: SearchService = Depends(get_search_service),
 ):
     """Suggest wikilinks for an entry using AI + search."""
     _require_configured(llm)
@@ -144,13 +146,6 @@ async def ai_suggest_links(
 
     body = entry.get("body", "") or ""
     title = entry.get("title", "")
-
-    # Search for related entries
-    from ...services.search_service import SearchService
-
-    cfg = get_config()
-    db = get_db()
-    search_svc = SearchService(db, settings=cfg.settings)
 
     try:
         related = search_svc.search(
@@ -222,6 +217,7 @@ async def ai_chat(
     req: AIChatRequest,
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
+    search_svc: SearchService = Depends(get_search_service),
 ):
     """Chat with your knowledge base using RAG. Returns SSE stream."""
     _require_configured(llm)
@@ -237,12 +233,6 @@ async def ai_chat(
     sources = []
     context_text = ""
     try:
-        from ...services.search_service import SearchService
-
-        cfg = get_config()
-        db = get_db()
-        search_svc = SearchService(db, settings=cfg.settings)
-
         try:
             results = search_svc.search(
                 query=last_msg,
