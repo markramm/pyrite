@@ -2,7 +2,7 @@
 type: backlog_item
 title: "Block References and Transclusion"
 kind: feature
-status: proposed
+status: retired
 priority: high
 effort: XL
 tags: [web, editor, linking]

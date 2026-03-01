@@ -44,9 +44,9 @@ Phases are organized by deliverable value, not by track. Each phase delivers usa
 
 ---
 
-## Phase 2: Linking, Navigation & AI Foundation
+## Phase 2: Linking, Navigation & AI Foundation ✅ COMPLETE
 
-**Delivers:** Wikilinks, quick switcher, command palette, backlinks. Plus the AI foundation layer, Claude Code plugin, and structured data foundation.
+**Delivered:** Wikilinks, quick switcher, command palette, backlinks. Plus the AI foundation layer, Claude Code plugin, and structured data foundation.
 
 ### UI Track
 - **Wikilinks with autocomplete** — `[[` triggers search, renders as clickable pills
@@ -82,9 +82,9 @@ Phases are organized by deliverable value, not by track. Each phase delivers usa
 
 ---
 
-## Phase 3: Graph, Daily Notes, Research Skills
+## Phase 3: Graph, Daily Notes, Research Skills ✅ COMPLETE
 
-**Delivers:** Interactive knowledge graph, daily notes workflow, real-time multi-tab awareness. Plus research and investigation skills for Claude Code, and typed object references.
+**Delivered:** Interactive knowledge graph, daily notes workflow, real-time multi-tab awareness. Plus research and investigation skills for Claude Code, and typed object references.
 
 ### UI Track
 - **Knowledge Graph** — Cytoscape.js with cose-bilkent layout, color-coded nodes, filters
@@ -119,9 +119,9 @@ Phases are organized by deliverable value, not by track. Each phase delivers usa
 
 ---
 
-## Phase 4: WYSIWYG, Settings, Web AI Features
+## Phase 4: WYSIWYG, Settings, Web AI Features ✅ COMPLETE
 
-**Delivers:** Dual editor mode, settings persistence, timeline visualization, plugin UI hooks. Plus AI features in the web UI, and schema-driven forms.
+**Delivered:** Dual editor mode, settings persistence, timeline visualization, plugin UI hooks. Plus AI features in the web UI, and schema-driven forms.
 
 ### UI Track
 - **Tiptap WYSIWYG** — toggle between CodeMirror source and Tiptap WYSIWYG, shared Markdown string
@@ -154,9 +154,9 @@ Phases are organized by deliverable value, not by track. Each phase delivers usa
 
 ---
 
-## Phase 5: Advanced Features, Chat, Polish
+## Phase 5: Advanced Features, Chat, Polish ✅ COMPLETE
 
-**Delivers:** Chat with KB (RAG), version history, dataview queries, database views, import/export. Production polish.
+**Delivered:** Chat with KB (RAG), version history, collections (replacing dataview/database views), import/export. Production polish.
 
 ### UI Track
 - **Dataview-Style Queries** — embedded queries in entries rendering as live tables
@@ -201,8 +201,8 @@ Items in `kb/backlog/future-ideas/`:
 
 - AI Writing Assistant in editor (select text → summarize/expand/rewrite)
 - Offline support with IndexedDB + service worker
-- Web Clipper (bookmarklet + in-app)
-- Entry Aliases
+- Web Clipper (bookmarklet + in-app) ✅ Done
+- Entry Aliases ✅ Done
 - Canvas/Whiteboard view
 - Git sync conflict resolution UI
 - Semantic search for plugins (vector embeddings) ✅ Done in 0.3

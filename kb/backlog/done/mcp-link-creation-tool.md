@@ -7,6 +7,7 @@ tags:
 - mcp
 kind: feature
 status: completed
+priority: medium
 effort: M
 ---
 

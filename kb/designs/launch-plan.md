@@ -83,7 +83,7 @@ Every one of those agents needs what Pyrite provides. The market exists *right n
 
 ### The "Why Us" Argument
 
-This isn't a prototype or a weekend project. Pyrite has 1086 tests. Five shipped extensions proving the plugin protocol works. A 4800-entry timeline KB proving it works at scale. 13 architecture decision records documenting every major choice. We use Pyrite to build Pyrite — the project's own knowledge base runs on the tool. The plugin protocol has 15 extension points. The MCP server has three permission tiers. The CLI outputs structured JSON on every command. This is infrastructure you can build on.
+This isn't a prototype or a weekend project. Pyrite has 1780+ tests. Five shipped extensions proving the plugin protocol works. A 4800-entry timeline KB proving it works at scale. 13 architecture decision records documenting every major choice. We use Pyrite to build Pyrite — the project's own knowledge base runs on the tool. The plugin protocol has 15 extension points. The MCP server has three permission tiers. The CLI outputs structured JSON on every command. This is infrastructure you can build on.
 
 ### Three Portals, One Knowledge Base
 
@@ -138,7 +138,7 @@ Obsidian is a fantastic tool for humans writing notes. Pyrite is for agents prod
 Notion and Confluence are SaaS tools that own your data. Your docs live in their database, searched by their algorithm, organized by their UI. Pyrite is Knowledge-as-Code: your docs are markdown files in git. You own them. You version them. You review them with PRs. You validate them with CI. And AI agents can read and write them through a real API, not a screen-scraping hack.
 
 **"Is this production-ready?"**
-It's an alpha — honest about that. But it's a *tested* alpha: 1086 tests, five shipped extensions, a 4800-entry KB in daily use. The architecture is solid. The rough edges are in packaging and docs, not in the core.
+It's an alpha — honest about that. But it's a *tested* alpha: 1780+ tests, six shipped extensions, a 4800-entry KB in daily use. The architecture is solid. The rough edges are in packaging and docs, not in the core.
 
 **"Seems over-engineered for notes"**
 It's not for notes. It's for knowledge infrastructure. The difference: notes are for one person to read later. Knowledge infrastructure is for agents to query, validate, extend, and build on. The "over-engineering" is exactly the point — schema validation, plugin protocol, three-tier permissions, QA automation. That's what makes it infrastructure instead of another note-taking app.
@@ -272,7 +272,7 @@ The blog post, every demo video, and every Reddit post should make at least one 
 **Key capabilities to demo:**
 - Plugin protocol architecture (runtime checkable, 15 extension points)
 - Dual storage model (markdown source of truth, SQLite derived index)
-- Test suite (1060+ tests, TDD culture)
+- Test suite (1780+ tests, TDD culture)
 - Extension system (pip-installable domain plugins)
 - Clean CLI with Click
 

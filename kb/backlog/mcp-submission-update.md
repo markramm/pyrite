@@ -25,7 +25,7 @@ Update MCP_SUBMISSION.md with current stats:
 
 ### Items to Update
 
-1. **Test count**: Currently says some older number — actual count is 1086+ and growing
+1. **Test count**: Currently says some older number — actual count is 1780+ and growing
 2. **MCP tool count**: Enumerate all current tools across read/write/admin tiers
 3. **Configuration examples**: Verify `claude_desktop_config.json` examples are accurate
 4. **Feature list**: Add recent features (task tools, QA tools, programmatic schema provisioning, bulk create, etc.)

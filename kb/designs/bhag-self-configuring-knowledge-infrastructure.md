@@ -64,7 +64,7 @@ This isn't aspirational — almost all the pieces already ship:
 - **Programmatic schema provisioning** — agents define types and fields via MCP/CLI without editing YAML
 - **Plugin protocol** with 15 extension points covering every aspect an agent would need
 - **Six shipped extensions** (zettelkasten, social, encyclopedia, software-kb, task, and Pyrite's own KB) proving the pattern produces working, tested code
-- **1086 tests** across the platform
+- **1780+ tests** across the platform
 
 The gap between "human defines schema" and "agent defines schema" is one skill file and a few CLI commands. The BHAG isn't a 2-year plan — it's a closing sprint.
 

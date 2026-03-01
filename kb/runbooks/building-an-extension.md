@@ -4,7 +4,11 @@ title: "Building a Pyrite Extension"
 runbook_kind: howto
 audience: "developers"
 tags: [extensions, howto]
+links:
+- plugin-developer-guide
 ---
+
+Quick-start guide for building extensions. See [[plugin-developer-guide]] for the comprehensive reference.
 
 ## Prerequisites
 - Python 3.11+

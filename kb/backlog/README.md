@@ -44,7 +44,7 @@ Every item uses this frontmatter:
 type: backlog_item
 title: "Human-readable title"
 kind: feature | improvement | bug
-status: proposed | in_progress | completed
+status: proposed | in_progress | completed | retired
 priority: high | medium | low
 effort: S | M | L | XL
 tags: [relevant, tags]

@@ -10,6 +10,7 @@ tags:
 - schema
 - agents
 links:
+- intent-layer
 - launch-plan
 - bhag-self-configuring-knowledge-infrastructure
 - qa-agent-workflows

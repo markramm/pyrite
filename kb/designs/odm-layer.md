@@ -2,7 +2,7 @@
 id: odm-layer
 title: "Pyrite ODM: Object-Document Mapper with Schema Migration and Backend Abstraction"
 type: design_doc
-status: draft
+status: active
 tags:
 - design
 - odm

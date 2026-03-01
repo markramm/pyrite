@@ -82,3 +82,4 @@ When triggered, the `_maybe_validate()` helper runs structural QA and appends `q
 - [[kb-service]] — business logic layer used by all tool handlers
 - [[storage-layer]] — database access
 - [[schema-validation]] — `kb_schema` tool uses `KBSchema.to_agent_schema()`
+- [ADR-0006: MCP Three-Tier Tool Model](../adrs/0006-mcp-three-tier-tool-model.md) — defines the read/write/admin tier architecture

@@ -61,3 +61,5 @@ Initialized with a `PyriteDB` instance and an optional model name (defaults to `
 
 - [[search-service]] — orchestrates keyword + semantic search modes
 - [[storage-layer]] — `PyriteDB` manages the `vec_entry` virtual table and `vec_available` flag
+- [[background-embedding-worker]] — async embed_queue processor
+- [[background-embedding-pipeline]] — backlog item that delivered the pipeline

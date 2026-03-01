@@ -77,3 +77,4 @@ Events are fire-and-forget: the broadcast is awaited but failures on individual 
 - [[rest-api]] -- endpoints that trigger broadcasts
 - [[web-frontend]] -- WebSocket client consumer
 - [[kb-service]] -- the service whose operations trigger the events
+- [[websocket-multi-tab]] -- backlog item that delivered this component

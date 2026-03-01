@@ -43,7 +43,7 @@ pre-commit install
 ```bash
 python -m pytest tests/ extensions/*/tests/ -q
 ```
-Expected: 1654+ tests passing.
+Expected: 1780+ tests passing.
 
 ## Troubleshooting
 - If pre-commit pytest fails: ensure extensions are installed in `.venv/` not just system Python

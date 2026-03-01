@@ -69,6 +69,8 @@ Parameters:
 
 ## Related
 
-- [Storage Layer](storage-layer.md) — PyriteDB with FTS5 tables
+- [[storage-layer]] — PyriteDB with FTS5 tables, SearchBackend protocol
+- [[embedding-service]] — Provides vector embeddings for semantic/hybrid search
+- [[background-embedding-worker]] — Async embedding queue
 - [LLM Service](llm-service.md) — Powers query expansion and AI-driven search features
 - [REST API Server](rest-api.md) — Hosts the search endpoint

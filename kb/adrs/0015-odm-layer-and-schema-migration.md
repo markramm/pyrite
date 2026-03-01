@@ -42,7 +42,7 @@ Multiple storage backends are planned or desirable:
 
 - **SQLite**: Current default, good for single-user and agent workflows
 - **PostgreSQL**: Multi-user deployments, demo site (#91)
-- **LanceDB**: Document-native columnar store with native vector + FTS + hybrid search. Eliminates the impedance mismatch — documents stored as documents, embeddings as native columns, hybrid search in a single query
+- ~~**LanceDB**~~: Evaluated and rejected — 49-66x slower indexing, 60-280x slower queries, 25-54x larger disk. See [ADR-0016](0016-lancedb-evaluation.md)
 
 Without an abstraction layer, each backend requires rewriting the service layer. With an ODM, the service layer talks to a stable API and backends are configuration choices.
 
@@ -66,7 +66,7 @@ The ODM sits between the service layer (KBService, TaskService, etc.) and the st
 2. **Validation on save**: Entry → validate against current schema → serialize → write file + update index
 3. **Object versioning**: Track which schema version created an entry, which version last modified it
 4. **Migration registry**: Ordered chain of migration functions per type, keyed by version range
-5. **Backend abstraction**: Index operations delegated to pluggable backends (SQLite, LanceDB, Postgres)
+5. **Backend abstraction**: Index operations delegated to pluggable backends (SQLite, Postgres)
 
 ### On-load migration pattern (from Ming)
 
@@ -145,7 +145,7 @@ class SearchBackend(Protocol):
     def rebuild(self, entries: Iterable[Entry]) -> None: ...
 ```
 
-Current SQLite/FTS5 implementation wraps existing code behind this interface. LanceDB backend implements the same interface with native hybrid search. Postgres/pgvector backend implements it with pgvector and tsvector. The service layer calls `search_backend.search_hybrid()` and doesn't know which engine is underneath.
+Current SQLite/FTS5 implementation wraps existing code behind this interface. Postgres/pgvector backend implements it with tsvector and pgvector. The service layer calls `search_backend.search_hybrid()` and doesn't know which engine is underneath.
 
 ### Configuration
 
@@ -157,34 +157,32 @@ storage:
   app_url: .pyrite/app.db  # or postgresql://...
 
   # Knowledge index (document search)
-  index_backend: sqlite  # or lancedb or postgres
-  index_path: .pyrite/index.db  # or .pyrite/lance/ or postgresql://...
+  index_backend: sqlite  # or postgres
+  index_path: .pyrite/index.db  # or postgresql://...
 ```
 
-Default is SQLite for both (current behavior, zero config). LanceDB or Postgres are opt-in.
+Default is SQLite for both (current behavior, zero config). Postgres is opt-in for server deployments.
 
 ## Consequences
 
 ### Positive
 
 - **Schema migration works.** On-load migration with a forced-load script, reviewable via git diff. Proven pattern from Ming/Allura.
-- **Backend flexibility.** SQLite, LanceDB, Postgres as configuration choices. No service layer changes when switching backends.
+- **Backend flexibility.** SQLite and Postgres as configuration choices. No service layer changes when switching backends.
 - **Impedance mismatch resolved.** Document-shaped data through a document-native API. No more `json_extract()` for metadata queries.
-- **Search simplification.** With LanceDB, the background embedding pipeline, FTS5 virtual tables, and separate similarity queries collapse into single hybrid search calls.
 - **Clean abstraction boundary.** The ODM is the stable API. Backends can evolve, be replaced, or run side-by-side without rippling through application code.
 
 ### Negative
 
 - **Significant refactor.** The current `PyriteDB` class, `IndexManager`, and direct SQLAlchemy usage in services all need to route through the ODM. This is the largest architectural change since the service layer enforcement (#47).
-- **Two data stores in production.** Application state in SQLite/Postgres + knowledge index potentially in LanceDB. Two things to back up, monitor, and debug.
-- **LanceDB maturity risk.** Active bugs in hybrid search filtering, young transaction model. Mitigated by: LanceDB is optional, SQLite backend remains the default, and the abstraction means you can switch back without service layer changes.
+- **Two data stores in production.** Application state in SQLite/Postgres + knowledge index potentially in a different backend. Two things to back up, monitor, and debug.
 - **Migration complexity.** On-load migration is elegant but has edge cases: what if a migration fails mid-entry? What if the migration script is interrupted? Need rollback strategy (git provides this — the files haven't been committed yet).
 
 ### Implementation sequence (revised)
 
 1. **Schema versioning (pre-0.8)**: `MigrationRegistry`, `_schema_version` tracking, `since_version` field semantics, `pyrite schema migrate` command. Hooks into existing `KBRepository` load/save paths. No new abstraction layer required.
 2. **ODM interfaces + SQLite wrapping (0.9+)**: Define `SearchBackend` protocol, implement `SQLiteBackend` wrapping existing code, introduce `DocumentManager`. Route services through ODM. Move schema versioning hooks from `KBRepository` into `DocumentManager`.
-3. **Alternative backends (0.9+)**: LanceDB and/or Postgres backends implementing `SearchBackend`. Configuration toggle.
+3. **Alternative backends (0.9+)**: Postgres backend implementing `SearchBackend` (done, 66/66 conformance tests). LanceDB evaluated and rejected (ADR-0016).
 
 Step 1 is the risk-reducing deliverable — schemas can evolve without breaking existing KBs. Steps 2-3 are architectural improvements that enable backend flexibility but aren't blocking launch.
 
