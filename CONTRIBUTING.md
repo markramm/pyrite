@@ -34,7 +34,7 @@ pre-commit install
 
 # Verify installation
 .venv/bin/pytest tests/ extensions/*/tests/ -q
-# Expected: 1654+ tests passing
+# Expected: 1786+ tests passing
 ```
 
 See [Setting Up the Development Environment](kb/runbooks/setting-up-dev-environment.md) for troubleshooting.

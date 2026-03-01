@@ -5,7 +5,7 @@ type: component
 kind: service
 path: pyrite/services/collection_query.py
 owner: core
-dependencies: [kb-service, pyrite-db]
+dependencies: [kb-service, storage-layer]
 tags:
 - core
 - collections

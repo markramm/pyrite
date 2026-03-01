@@ -5,7 +5,7 @@ type: component
 kind: endpoint
 path: pyrite/server/endpoints/blocks.py
 owner: core
-dependencies: [pyrite-db, block-model]
+dependencies: [storage-layer, block-model]
 tags:
 - api
 - block-refs

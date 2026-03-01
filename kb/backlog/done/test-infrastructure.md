@@ -10,7 +10,7 @@ tags:
 kind: improvement
 priority: medium
 effort: S
-status: planned
+status: done
 links:
 - roadmap
 - test-coverage-gaps

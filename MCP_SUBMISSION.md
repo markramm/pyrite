@@ -155,10 +155,10 @@ Custom types defined in `kb.yaml` without code — 10 field types with validatio
 - **Storage**: Markdown files in git (source of truth) + SQLite FTS5 index (queryable)
 - **Search**: Full-text (BM25), semantic (sentence-transformers + sqlite-vec), hybrid
 - **Validation**: Pydantic models + YAML-defined field schemas with 4-layer resolution
-- **Extensions**: Plugin protocol with 12 extension points (entry types, MCP tools, hooks, collection types, DB tables, relationship types, validators, KB presets, field schemas, type metadata, CLI commands, search)
+- **Extensions**: Plugin protocol with 15 extension points (entry types, MCP tools, hooks, collection types, DB tables, relationship types, validators, KB presets, field schemas, type metadata, CLI commands, search)
 - **APIs**: REST (FastAPI with OpenAPI), MCP (STDIO), CLI (Typer)
 - **Frontend**: SvelteKit 2 + Svelte 5 + Tailwind (entries, search, backlinks, daily notes, graph, templates, slash commands, collections, AI chat)
-- **Tests**: 1654 passing, covering CRUD, FTS5, REST API, MCP protocol, plugins, migrations, schema validation, collections, QA, task coordination
+- **Tests**: 1786 passing, covering CRUD, FTS5, REST API, MCP protocol, plugins, migrations, schema validation, collections, QA, task coordination
 
 ## Submission Checklist
 
@@ -166,9 +166,9 @@ Custom types defined in `kb.yaml` without code — 10 field types with validatio
 - [x] 10 read tools, 6 write tools, 4 admin tools, extensible via plugins
 - [x] 4 built-in MCP prompts for common research workflows
 - [x] MCP resources via `pyrite://` URIs
-- [x] 1654 tests including MCP protocol tests
+- [x] 1786 tests including MCP protocol tests
 - [x] MIT license
-- [x] Comprehensive documentation (README, 15 ADRs, plugin developer guide)
+- [x] Comprehensive documentation (README, 16 ADRs, plugin developer guide)
 - [x] Active development with detailed changelog
 
 ## Value Proposition
