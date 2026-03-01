@@ -157,9 +157,9 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.8 — UI Design, UX & Code Hardening (in progress)
+## 0.8 — UI Design & UX (in progress)
 
-**Theme:** Brand identity, navigation polish, demo-ready first impressions, and internal code quality. Every screen a stranger sees should look intentional — and the code behind it should be clean, testable, and well-structured.
+**Theme:** Brand identity, navigation polish, and demo-ready UX. Every screen a stranger sees should look intentional.
 
 ### Delivered
 
@@ -182,34 +182,7 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - Graph atmosphere: dot grid background pattern, node glow on hover via cytoscape underlay
 - Toast redesign: slide from top-right with `fly` transition, type icons, shrinking progress bar
 
-### Wave 4 — Refactoring & Deduplication
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| Extract MCP tool schemas | Move ~520 lines of inline dict literals from `mcp_server.py` to `pyrite/server/tool_schemas.py` | M |
-| Cache `KBSchema.from_yaml()` | Add `@lru_cache` or cache on `KBConfig`; eliminate 12 redundant filesystem reads across MCP, QA, CLI | S |
-| Shared CLI context manager | Replace ~18 duplicated `PyriteDB + KBService` construction sites with shared `get_cli_context()` | M |
-| Consistent MCP service instantiation | Add lazy `self._qa_svc` and `self._search_svc` properties; drop duplicate `self.index_mgr` | S |
-
-### Wave 5 — Architecture Cleanup
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| Fix REST DI bypass | Make `SearchService` and `QAService` proper FastAPI `Depends()` in all endpoints (currently bypassed in `search.py`, `ai_ep.py`) | S |
-| Eliminate `_raw_conn` usage | Move ~20 raw SQL calls in `QAService` and `RepoService` into `PyriteDB` public methods | M |
-| Slim down `KBService` | Extract settings wrappers (delegate to DB directly), extract wikilink resolution to standalone module | M |
-| Extract entry detail AI logic | Move AI state + handlers from 500-line `[id]/+page.svelte` into `<AIPanel>` component | S |
-
-### Wave 6 — Test Hardening
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| MCP tests use shared fixtures | Refactor `test_mcp_server.py` to use `conftest.py` fixtures instead of ~80 lines of duplicated setup | M |
-| Unit tests for QA `_check_*` rules | Isolated tests for each of the 11 validation rules with targeted fixtures | M |
-| Integration tests for KB git ops | Test `KBService.commit_kb` and `push_kb` with real temp git repos | S |
-| Type Cytoscape bindings | Replace 7 `any` annotations in `GraphView.svelte` with proper `cytoscape.Core` types | S |
-
-### Wave 7 — UX Improvements
+### Wave 4 — UX Improvements
 
 | Item | Description | Effort |
 |------|-------------|--------|
@@ -226,14 +199,51 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 - Pyrite has a recognizable brand identity (logo, gold accent, distinct typography)
 - Dashboard tells a story (recent entries, type distribution, quick actions)
 - Stranger seeing a screenshot knows "this is Pyrite" — not "this is a Tailwind template"
-- `mcp_server.py` under 1000 lines; tool schemas in separate module
-- No `_raw_conn` usage outside `storage/`; all services use proper DI in REST layer
-- QA validation rules have isolated unit tests; MCP tests use shared fixtures
 - Search, settings, and keyboard shortcuts are polished and functional
 
 ---
 
-## 0.9 — Schema Versioning + ODM + LanceDB
+## 0.9 — Code Hardening
+
+**Theme:** Internal quality pass. Refactor, fix architecture gaps, and harden tests — before adding new capabilities.
+
+### Wave 1 — Refactoring & Deduplication
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Extract MCP tool schemas | Move ~520 lines of inline dict literals from `mcp_server.py` to `pyrite/server/tool_schemas.py` | M |
+| Cache `KBSchema.from_yaml()` | Add `@lru_cache` or cache on `KBConfig`; eliminate 12 redundant filesystem reads across MCP, QA, CLI | S |
+| Shared CLI context manager | Replace ~18 duplicated `PyriteDB + KBService` construction sites with shared `get_cli_context()` | M |
+| Consistent MCP service instantiation | Add lazy `self._qa_svc` and `self._search_svc` properties; drop duplicate `self.index_mgr` | S |
+
+### Wave 2 — Architecture Cleanup
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| Fix REST DI bypass | Make `SearchService` and `QAService` proper FastAPI `Depends()` in all endpoints (currently bypassed in `search.py`, `ai_ep.py`) | S |
+| Eliminate `_raw_conn` usage | Move ~20 raw SQL calls in `QAService` and `RepoService` into `PyriteDB` public methods | M |
+| Slim down `KBService` | Extract settings wrappers (delegate to DB directly), extract wikilink resolution to standalone module | M |
+| Extract entry detail AI logic | Move AI state + handlers from 500-line `[id]/+page.svelte` into `<AIPanel>` component | S |
+
+### Wave 3 — Test Hardening
+
+| Item | Description | Effort |
+|------|-------------|--------|
+| MCP tests use shared fixtures | Refactor `test_mcp_server.py` to use `conftest.py` fixtures instead of ~80 lines of duplicated setup | M |
+| Unit tests for QA `_check_*` rules | Isolated tests for each of the 11 validation rules with targeted fixtures | M |
+| Integration tests for KB git ops | Test `KBService.commit_kb` and `push_kb` with real temp git repos | S |
+| Type Cytoscape bindings | Replace 7 `any` annotations in `GraphView.svelte` with proper `cytoscape.Core` types | S |
+
+### Definition of done
+
+- `mcp_server.py` under 1000 lines; tool schemas in separate module
+- No `_raw_conn` usage outside `storage/`; all services use proper DI in REST layer
+- QA validation rules have isolated unit tests; MCP tests use shared fixtures
+- All existing tests still pass; test count increases
+
+---
+
+## 0.10 — Schema Versioning + ODM + LanceDB
 
 **Theme:** Storage architecture that matches the data model. Schema evolution without breakage, document-native search.
 
@@ -262,7 +272,7 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 
 ---
 
-## 0.10 — Announceable Alpha
+## 0.11 — Announceable Alpha
 
 **Theme:** Distribution and first impressions. Everything a stranger needs to go from "interesting" to "I'm trying this."
 
@@ -274,7 +284,7 @@ Hooks into existing `KBRepository` load/save paths. Without this, the first sche
 | Update MCP_SUBMISSION.md | Accurate tool count, test count, configuration examples | S |
 | Consolidate docs/ | Trim to essentials: install, tutorial, MCP setup | S |
 | Getting Started tutorial | Zero to working MCP connection in 5 minutes | S |
-| Release notes | CHANGELOG for 0.10 tag | S |
+| Release notes | CHANGELOG for 0.11 tag | S |
 
 ### Definition of done
 
