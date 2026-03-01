@@ -5,12 +5,15 @@ Defines core types, validation, and extensible schema system.
 Supports per-KB schema customization via kb.yaml.
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from pyrite.utils.yaml import load_yaml_file
 
@@ -417,7 +420,7 @@ def get_all_relationship_types() -> dict[str, dict[str, Any]]:
 
         all_types.update(get_registry().get_all_relationship_types())
     except Exception:
-        pass
+        logger.warning("Failed to load plugin relationship types", exc_info=True)
     return all_types
 
 
@@ -462,7 +465,7 @@ def resolve_type_metadata(type_name: str, kb_schema: "KBSchema | None" = None) -
             result["field_descriptions"].update(pm.get("field_descriptions", {}))
             result["display"].update(pm.get("display", {}))
     except Exception:
-        pass
+        logger.warning("Failed to load plugin type metadata for %s", type_name, exc_info=True)
 
     # Layer 3: KB-level overrides (highest priority)
     if kb_schema and type_name in kb_schema.types:
@@ -1091,10 +1094,10 @@ class KBSchema:
                             else:
                                 errors.append(item)
                     except Exception:
-                        pass
+                        logger.warning("Validator fallback failed for %s", entry_type, exc_info=True)
                 except Exception:
-                    pass
+                    logger.warning("Validator execution failed for %s", entry_type, exc_info=True)
         except Exception:
-            pass
+            logger.warning("Schema validation failed for %s", entry_type, exc_info=True)
 
         return {"valid": len(errors) == 0, "errors": errors, "warnings": warnings}

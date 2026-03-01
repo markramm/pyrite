@@ -4,12 +4,15 @@ Base Entry Model
 Abstract base for all KB entry types.
 """
 
+import logging
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from ..schema import Link, Provenance, Source
 from ..utils.yaml import dump_yaml, load_yaml
@@ -177,7 +180,7 @@ def parse_datetime(s: Any) -> datetime:
             s = s.replace("Z", "+00:00")
             return datetime.fromisoformat(s)
     except Exception:
-        pass
+        logger.warning("Failed to parse datetime: %s", s, exc_info=True)
     return _utcnow()
 
 

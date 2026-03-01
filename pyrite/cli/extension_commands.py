@@ -4,6 +4,7 @@ Extension management CLI commands.
 Commands: init, install, list, uninstall
 """
 
+import logging
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +12,8 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 
 extension_app = typer.Typer(help="Extension management")
 console = Console()
@@ -302,6 +305,7 @@ def extension_install(
             toml_data = tomllib.load(f)
         plugin_name = toml_data.get("project", {}).get("name", path.name)
     except Exception:
+        logger.debug("Could not parse pyproject.toml for %s, using directory name", path)
         plugin_name = path.name
 
     # Install via pip in editable mode
@@ -358,6 +362,7 @@ def extension_list(
         registry = get_registry()
         plugin_names = registry.list_plugins()
     except Exception:
+        logger.warning("Failed to load plugin registry", exc_info=True)
         plugin_names = []
 
     if not plugin_names:
@@ -381,13 +386,14 @@ def extension_list(
                     tools = plugin.get_mcp_tools("read")
                     tool_count = len(tools) if tools else 0
                 except Exception:
-                    pass
+                    logger.warning("Failed to get MCP tools for plugin %s", name, exc_info=True)
             plugins_data.append({
                 "name": name,
                 "entry_types": entry_types,
                 "tool_count": tool_count,
             })
         except Exception:
+            logger.warning("Failed to inspect plugin %s", name, exc_info=True)
             plugins_data.append({"name": name, "entry_types": [], "tool_count": 0})
 
     result = {"plugins": plugins_data, "count": len(plugins_data)}

@@ -5,9 +5,12 @@ Pyrite ships these ~8 base types that any KB can use out of the box.
 Every field is optional except title.
 """
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from ..schema import (
     EventStatus,
@@ -608,7 +611,7 @@ def get_entry_class(entry_type: str) -> type[Entry]:
         if entry_type in plugin_types:
             return plugin_types[entry_type]
     except Exception:
-        pass
+        logger.warning("Plugin type lookup failed for %s", entry_type, exc_info=True)
 
     from .generic import GenericEntry
 

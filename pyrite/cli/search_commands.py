@@ -4,9 +4,13 @@ Search command for pyrite CLI.
 Commands: search (with file-based fallback)
 """
 
+import logging
+
 import typer
 from rich.console import Console
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 
 from ..config import load_config
 from ..storage.repository import KBRepository
@@ -156,6 +160,7 @@ def _search_files(config, query, kb_name, entry_type, limit):
                     if len(results) >= limit:
                         break
             except Exception:
+                logger.warning("Search failed for KB %s", kb.name, exc_info=True)
                 continue
 
         if len(results) >= limit:

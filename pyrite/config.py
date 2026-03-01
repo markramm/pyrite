@@ -207,7 +207,7 @@ class GitHubAuth:
                 if datetime.now(expiry.tzinfo) >= expiry:
                     return False
             except Exception:
-                pass
+                logger.warning("Failed to parse token expiry: %s", self.token_expiry, exc_info=True)
         return True
 
     @property
@@ -541,7 +541,7 @@ class PyriteConfig:
                 auth_data = load_yaml_file(github_auth_file)
                 github_auth = GitHubAuth.from_dict(auth_data)
             except Exception:
-                pass
+                logger.warning("Failed to load GitHub auth from %s", github_auth_file, exc_info=True)
 
         settings_data = data.get("settings", {})
         settings = Settings(

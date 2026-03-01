@@ -88,7 +88,8 @@ try:
             # It's a single command callback
             app.command(name)(command)
 except Exception:
-    pass  # Plugin loading shouldn't break the CLI
+    import logging
+    logging.getLogger(__name__).warning("Plugin CLI loading failed", exc_info=True)
 
 
 # =============================================================================

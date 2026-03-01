@@ -1,7 +1,10 @@
 """Markdown format importer -- parse markdown files with YAML frontmatter."""
 
+import logging
 import re
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
@@ -74,6 +77,7 @@ def _parse_single_md(text: str) -> dict[str, Any] | None:
     try:
         fm = load_yaml(frontmatter_text)
     except Exception:
+        logger.warning("Failed to parse YAML frontmatter", exc_info=True)
         fm = {}
 
     if not isinstance(fm, dict):

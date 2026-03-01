@@ -129,5 +129,5 @@ class EmbeddingWorker:
                 self._embedding_svc = EmbeddingService(self.db)
                 return self._embedding_svc
         except Exception:
-            pass
+            logger.warning("Embedding service initialization failed in worker", exc_info=True)
         return None

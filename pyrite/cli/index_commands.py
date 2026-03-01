@@ -4,9 +4,13 @@ Index management commands for pyrite CLI.
 Commands: build, sync, stats, embed, health
 """
 
+import logging
+
 import typer
 from rich.console import Console
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 
 from .context import get_config_and_db
 
@@ -106,7 +110,7 @@ def index_build(
                         f"(skipped {stats['skipped']})"
                     )
         except Exception:
-            pass  # Embedding is optional
+            logger.debug("Embedding not available, skipping")
 
 
 @index_app.command("sync")
@@ -139,7 +143,7 @@ def index_sync(
                 if stats["embedded"] > 0:
                     console.print(f"  Embedded: {stats['embedded']}")
         except Exception:
-            pass  # Embedding is optional
+            logger.debug("Embedding not available, skipping")
 
 
 @index_app.command("stats")

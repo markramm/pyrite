@@ -95,7 +95,7 @@ class GitService:
             if result.returncode == 0:
                 return result.stdout.strip()
         except Exception:
-            pass
+            logger.warning("Failed to get remote URL for %s", local_path, exc_info=True)
         return None
 
     @staticmethod
@@ -111,7 +111,7 @@ class GitService:
             if result.returncode == 0:
                 return result.stdout.strip()
         except Exception:
-            pass
+            logger.warning("Failed to get current branch for %s", local_path, exc_info=True)
         return "main"
 
     @staticmethod
@@ -127,7 +127,7 @@ class GitService:
             if result.returncode == 0:
                 return result.stdout.strip()
         except Exception:
-            pass
+            logger.warning("Failed to get HEAD commit for %s", local_path, exc_info=True)
         return ""
 
     @staticmethod
@@ -181,6 +181,7 @@ class GitService:
                 )
             return entries
         except Exception:
+            logger.warning("Failed to parse git log for %s", file_path, exc_info=True)
             return []
 
     @staticmethod
@@ -216,7 +217,7 @@ class GitService:
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
         except Exception:
-            pass
+            logger.warning("Failed to get changed files for %s", local_path, exc_info=True)
         return []
 
     @staticmethod
@@ -231,6 +232,7 @@ class GitService:
             )
             return result.returncode == 0
         except Exception:
+            logger.debug("Not a git repo: %s", path)
             return False
 
     @staticmethod
@@ -480,6 +482,7 @@ class GitService:
 
             return result
         except Exception:
+            logger.warning("Failed to get git status for repo", exc_info=True)
             return result
 
     @staticmethod

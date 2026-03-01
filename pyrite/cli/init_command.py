@@ -4,10 +4,13 @@ Headless KB init command.
 Creates a new knowledge base from a template with zero prompts.
 """
 
+import logging
 from pathlib import Path
 
 import typer
 from rich.console import Console
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
@@ -190,7 +193,7 @@ def init_kb(
             if template in plugin_presets:
                 preset = plugin_presets[template]
         except Exception:
-            pass
+            logger.warning("Failed to load plugin presets for template '%s'", template, exc_info=True)
 
         if preset is None:
             if template not in BUILTIN_TEMPLATES:
@@ -234,7 +237,7 @@ def init_kb(
         entries_indexed = index_mgr.index_kb(kb_name)
         db.close()
     except Exception:
-        pass  # Indexing is best-effort during init
+        logger.warning("Initial indexing failed for %s", kb_name, exc_info=True)
 
     # Result
     type_names = list(preset.get("types", {}).keys())

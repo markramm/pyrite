@@ -65,7 +65,7 @@ class KBRepository:
             # Fallback: try EventEntry.load for backward compat
             return EventEntry.load(file_path)
         except Exception:
-            # Last resort: EventEntry.load
+            logger.warning("Entry load failed for %s, trying EventEntry fallback", file_path, exc_info=True)
             return EventEntry.load(file_path)
 
     def _get_file_path(self, entry_id: str, subdir: str | None = None) -> Path:
@@ -257,6 +257,7 @@ class KBRepository:
                     entry.file_path = file_path
                     yield entry, file_path
             except Exception:
+                logger.warning("Skipping unreadable entry: %s", file_path, exc_info=True)
                 continue
 
     def get_by_tag(self, tag: str) -> Iterator[Entry]:

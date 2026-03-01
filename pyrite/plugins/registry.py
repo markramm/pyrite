@@ -374,6 +374,7 @@ class PluginRegistry:
                 return True
             return kb_type in plugin_kb_types
         except Exception:
+            logger.warning("Failed to check KB type compatibility for plugin", exc_info=True)
             return True
 
     def get_validators_for_kb(self, kb_type: str = "") -> list[Callable]:

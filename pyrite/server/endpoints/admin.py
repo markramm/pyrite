@@ -1,6 +1,10 @@
 """Admin endpoints: stats, index sync, AI status, KB management, plugins."""
 
+import logging
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
+
+logger = logging.getLogger(__name__)
 
 from ...config import KBConfig, save_config
 from ...services.kb_service import KBService
@@ -167,28 +171,28 @@ def list_plugins(request: Request):
                 if types:
                     info["entry_types"] = list(types.keys())
         except Exception:
-            pass
+            logger.warning("Failed to get entry types for plugin %s", name, exc_info=True)
         try:
             if hasattr(plugin, "get_kb_types"):
                 kb_types = plugin.get_kb_types()
                 if kb_types:
                     info["kb_types"] = kb_types
         except Exception:
-            pass
+            logger.warning("Failed to get kb types for plugin %s", name, exc_info=True)
         try:
             if hasattr(plugin, "get_cli_commands"):
                 cmds = plugin.get_cli_commands()
                 if cmds:
                     info["has_cli"] = True
         except Exception:
-            pass
+            logger.warning("Failed to get CLI commands for plugin %s", name, exc_info=True)
         try:
             if hasattr(plugin, "get_hooks"):
                 hooks = plugin.get_hooks()
                 if hooks:
                     info["hooks"] = list(hooks.keys())
         except Exception:
-            pass
+            logger.warning("Failed to get hooks for plugin %s", name, exc_info=True)
         try:
             for tier in ("read", "write", "admin"):
                 if hasattr(plugin, "get_mcp_tools"):
@@ -196,7 +200,7 @@ def list_plugins(request: Request):
                     if tools:
                         info["tools"].extend(list(tools.keys()))
         except Exception:
-            pass
+            logger.warning("Failed to get MCP tools for plugin %s", name, exc_info=True)
         plugins.append(info)
     return {"plugins": plugins, "total": len(plugins)}
 
@@ -219,12 +223,14 @@ def get_plugin_detail(request: Request, name: str):
             types = plugin.get_entry_types()
             info["entry_types"] = {k: str(v) for k, v in types.items()} if types else {}
     except Exception:
+        logger.warning("Failed to get entry types for plugin %s", name, exc_info=True)
         info["entry_types"] = {}
 
     try:
         if hasattr(plugin, "get_kb_types"):
             info["kb_types"] = plugin.get_kb_types() or []
     except Exception:
+        logger.warning("Failed to get kb types for plugin %s", name, exc_info=True)
         info["kb_types"] = []
 
     try:
@@ -232,6 +238,7 @@ def get_plugin_detail(request: Request, name: str):
             hooks = plugin.get_hooks()
             info["hooks"] = {k: len(v) for k, v in hooks.items()} if hooks else {}
     except Exception:
+        logger.warning("Failed to get hooks for plugin %s", name, exc_info=True)
         info["hooks"] = {}
 
     tools_all: dict = {}
@@ -246,7 +253,7 @@ def get_plugin_detail(request: Request, name: str):
                             "description": tool_def.get("description", ""),
                         }
     except Exception:
-        pass
+        logger.warning("Failed to get MCP tools for plugin %s", name, exc_info=True)
     info["tools"] = tools_all
 
     return info

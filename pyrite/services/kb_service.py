@@ -60,7 +60,7 @@ class KBService:
                     self.db, model_name=self.config.settings.embedding_model
                 )
         except Exception:
-            pass
+            logger.warning("Embedding service initialization failed", exc_info=True)
         return self._embedding_svc
 
     def _auto_embed(self, entry_id: str, kb_name: str) -> None:
@@ -158,7 +158,7 @@ class KBService:
                 if ptype_name != entry_type and issubclass(ptype_cls, core_cls):
                     return ptype_name
         except Exception:
-            pass
+            logger.warning("Plugin type resolution failed for %s", entry_type, exc_info=True)
         return entry_type
 
     def create_entry(
@@ -917,7 +917,7 @@ class KBService:
             if result.returncode == 0:
                 return result.stdout
         except Exception:
-            pass
+            logger.warning("Git diff failed for KB", exc_info=True)
         return None
 
     # =========================================================================

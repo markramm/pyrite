@@ -126,6 +126,7 @@ class IndexManager:
             if ext_fields:
                 data["metadata"] = ext_fields  # stored as dict; upsert_entry JSON-encodes
         except Exception:
+            logger.warning("Metadata extraction failed for %s, using fallback", entry.id, exc_info=True)
             # Fallback: just store the metadata dict
             if hasattr(entry, "metadata") and entry.metadata:
                 data["metadata"] = entry.metadata
@@ -212,7 +213,7 @@ class IndexManager:
                                         }
                                     )
         except Exception:
-            pass  # Schema not available; skip ref extraction
+            logger.debug("Schema not available for ref extraction: %s", entry.id)
         if refs:
             data["_refs"] = refs
 
@@ -414,6 +415,7 @@ class IndexManager:
                                 }
                             )
                 except Exception:
+                    logger.warning("Health check failed for entry %s", entry.id, exc_info=True)
                     continue
 
             # Check for missing files
@@ -467,7 +469,7 @@ class IndexManager:
                                 self.index_entry(entry, kb.name, file_path)
                                 results["updated"] += 1
                         except Exception:
-                            pass
+                            logger.warning("Stale check failed for %s", entry.id, exc_info=True)
 
             # Remove deleted entries
             for entry_id in indexed:

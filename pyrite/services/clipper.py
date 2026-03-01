@@ -47,7 +47,7 @@ def _extract_title(html: str) -> str:
     try:
         parser.feed(html)
     except Exception:
-        pass
+        logger.warning("HTML title extraction failed", exc_info=True)
     return parser.title.strip()
 
 

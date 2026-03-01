@@ -6,8 +6,11 @@ Provides shared dependencies to plugins, replacing per-handler self-bootstrappin
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..config import PyriteConfig
@@ -74,7 +77,7 @@ class PluginContext:
                 if results:
                     return results
         except Exception:
-            pass
+            logger.warning("Semantic search failed, falling back to keyword", exc_info=True)
 
         # Fallback to FTS5 keyword search
         try:
@@ -83,4 +86,5 @@ class PluginContext:
             search_svc = SearchService(self.db)
             return search_svc.search(query, kb_name=kb, limit=limit)
         except Exception:
+            logger.warning("Keyword search fallback also failed", exc_info=True)
             return []

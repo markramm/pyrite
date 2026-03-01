@@ -11,7 +11,10 @@ Tiers:
 """
 
 import json
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from pydantic import AnyUrl
 
@@ -98,7 +101,7 @@ class PyriteMCPServer:
             plugin_tools = registry.get_all_mcp_tools(self.tier)
             self.tools.update(plugin_tools)
         except Exception:
-            pass  # Plugin loading shouldn't break the MCP server
+            logger.warning("Plugin MCP tool loading failed", exc_info=True)
 
     # =========================================================================
     # Lazy service properties

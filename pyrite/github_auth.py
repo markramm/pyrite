@@ -5,6 +5,7 @@ Handles OAuth flow for accessing private GitHub repositories.
 Supports both OAuth App and GitHub App authentication methods.
 """
 
+import logging
 import os
 import secrets
 import time
@@ -12,6 +13,8 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
+
+logger = logging.getLogger(__name__)
 
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
@@ -86,7 +89,7 @@ def save_github_auth(auth: GitHubAuth) -> None:
     try:
         os.chmod(auth_file, 0o600)
     except Exception:
-        pass
+        logger.debug("Could not set file permissions on %s (may be unsupported on this OS)", auth_file)
 
 
 def clear_github_auth() -> None:
@@ -259,7 +262,7 @@ def start_oauth_flow(
                 user = user_response.json()
                 return True, f"Authenticated as {user.get('login', 'unknown')}"
     except Exception:
-        pass
+        logger.warning("Failed to verify GitHub user identity", exc_info=True)
 
     return True, "Authentication successful"
 
@@ -332,7 +335,7 @@ def get_github_user_info(token: str) -> dict | None:
             if response.status_code == 200:
                 return response.json()
     except Exception:
-        pass
+        logger.warning("Failed to get GitHub user info", exc_info=True)
     return None
 
 
