@@ -1274,5 +1274,191 @@ class TestMCPQATools:
         assert result["total_entries"] > 0
 
 
+class TestMCPPostSaveValidation:
+    """Tests for post-save QA validation on MCP write paths."""
+
+    @pytest.fixture
+    def qa_write_server(self):
+        """Server for testing post-save QA validation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            from pyrite.utils.yaml import dump_yaml
+
+            schema = {
+                "name": "qa-write-kb",
+                "types": {"note": {}},
+            }
+            (kb_path / "kb.yaml").write_text(
+                dump_yaml(schema), encoding="utf-8"
+            )
+
+            kb_config = KBConfig(
+                name="qa-kb",
+                path=kb_path,
+                kb_type=KBType.GENERIC,
+                description="QA write test KB",
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb_config],
+                settings=Settings(index_path=db_path),
+            )
+            server = PyriteMCPServer(config, tier="write")
+            server.index_mgr.index_all()
+            yield {"server": server, "kb_path": kb_path}
+            server.close()
+
+    @pytest.fixture
+    def qa_on_write_server(self):
+        """Server with qa_on_write: true in kb.yaml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            from pyrite.utils.yaml import dump_yaml
+
+            schema = {
+                "name": "qa-auto-kb",
+                "types": {"note": {}},
+                "validation": {"qa_on_write": True},
+            }
+            (kb_path / "kb.yaml").write_text(
+                dump_yaml(schema), encoding="utf-8"
+            )
+
+            kb_config = KBConfig(
+                name="qa-auto",
+                path=kb_path,
+                kb_type=KBType.GENERIC,
+                description="QA auto-validate KB",
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb_config],
+                settings=Settings(index_path=db_path),
+            )
+            server = PyriteMCPServer(config, tier="write")
+            server.index_mgr.index_all()
+            yield {"server": server, "kb_path": kb_path}
+            server.close()
+
+    def test_kb_create_with_validate_clean(self, qa_write_server):
+        """Valid entry with validate=True returns no qa_issues."""
+        server = qa_write_server["server"]
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "qa-kb",
+                "entry_type": "note",
+                "title": "Clean Entry",
+                "body": "This entry has a proper body.",
+                "validate": True,
+            },
+        )
+        assert result.get("created") is True
+        assert "qa_issues" not in result
+
+    def test_kb_create_with_validate_has_issues(self, qa_write_server):
+        """Empty body with validate=True returns qa_issues."""
+        server = qa_write_server["server"]
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "qa-kb",
+                "entry_type": "note",
+                "title": "Empty Body Entry",
+                "body": "",
+                "validate": True,
+            },
+        )
+        assert result.get("created") is True
+        assert "qa_issues" in result
+        rules = [i["rule"] for i in result["qa_issues"]]
+        assert "empty_body" in rules
+
+    def test_kb_update_with_validate(self, qa_write_server):
+        """Update with validate=True returns qa_issues when entry has problems."""
+        server = qa_write_server["server"]
+        # Create an entry first
+        create_result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "qa-kb",
+                "entry_type": "note",
+                "title": "Will Update",
+                "body": "Original body.",
+            },
+        )
+        entry_id = create_result["entry_id"]
+
+        # Update to empty body with validation
+        update_result = server._dispatch_tool(
+            "kb_update",
+            {
+                "entry_id": entry_id,
+                "kb_name": "qa-kb",
+                "body": "",
+                "validate": True,
+            },
+        )
+        assert update_result.get("updated") is True
+        assert "qa_issues" in update_result
+        rules = [i["rule"] for i in update_result["qa_issues"]]
+        assert "empty_body" in rules
+
+    def test_kb_create_without_validate(self, qa_write_server):
+        """Default create (no validate param) returns no qa_issues key."""
+        server = qa_write_server["server"]
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "qa-kb",
+                "entry_type": "note",
+                "title": "No Validate Entry",
+                "body": "",
+            },
+        )
+        assert result.get("created") is True
+        assert "qa_issues" not in result
+
+    def test_kb_create_qa_on_write_kb(self, qa_on_write_server):
+        """KB with qa_on_write: true auto-validates even without explicit param."""
+        server = qa_on_write_server["server"]
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "qa-auto",
+                "entry_type": "note",
+                "title": "Auto Validate Entry",
+                "body": "",
+            },
+        )
+        assert result.get("created") is True
+        assert "qa_issues" in result
+        rules = [i["rule"] for i in result["qa_issues"]]
+        assert "empty_body" in rules
+
+    def test_kb_create_qa_on_write_kb_clean(self, qa_on_write_server):
+        """KB with qa_on_write: true, valid entry returns no qa_issues."""
+        server = qa_on_write_server["server"]
+        result = server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "qa-auto",
+                "entry_type": "note",
+                "title": "Clean Auto Entry",
+                "body": "This entry has proper content.",
+            },
+        )
+        assert result.get("created") is True
+        assert "qa_issues" not in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

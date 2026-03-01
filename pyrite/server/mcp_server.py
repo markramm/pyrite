@@ -330,6 +330,10 @@ class PyriteMCPServer:
                                 "type": "object",
                                 "description": "Additional fields for custom types or extension fields",
                             },
+                            "validate": {
+                                "type": "boolean",
+                                "description": "Run QA validation after save and return issues. Also runs automatically if KB has qa_on_write: true in kb.yaml.",
+                            },
                         },
                         "required": ["kb_name", "entry_type", "title"],
                     },
@@ -395,6 +399,10 @@ class PyriteMCPServer:
                             "metadata": {
                                 "type": "object",
                                 "description": "Additional/extension fields to update",
+                            },
+                            "validate": {
+                                "type": "boolean",
+                                "description": "Run QA validation after save and return issues. Also runs automatically if KB has qa_on_write: true in kb.yaml.",
                             },
                         },
                         "required": ["entry_id", "kb_name"],
@@ -790,6 +798,27 @@ class PyriteMCPServer:
             return qa.assess_kb(kb_name, tier=tier, max_age_hours=max_age, create_task_on_fail=create_tasks)
 
     # =========================================================================
+    # Post-save QA validation
+    # =========================================================================
+
+    def _maybe_validate(self, entry_id: str, kb_name: str, args: dict) -> list[dict] | None:
+        """Run post-save QA validation if requested or KB has qa_on_write."""
+        should_validate = args.get("validate", False)
+        if not should_validate:
+            kb_config = self.config.get_kb(kb_name)
+            if kb_config:
+                schema = KBSchema.from_yaml(kb_config.path / "kb.yaml")
+                should_validate = schema.validation.get("qa_on_write", False)
+        if should_validate:
+            from ..services.qa_service import QAService
+
+            qa = QAService(self.config, self.db)
+            result = qa.validate_entry(entry_id, kb_name)
+            if result["issues"]:
+                return result["issues"]
+        return None
+
+    # =========================================================================
     # Write handlers
     # =========================================================================
 
@@ -820,7 +849,9 @@ class PyriteMCPServer:
 
         # Filter out keys already passed as explicit arguments
         extra = {
-            k: v for k, v in args.items() if k not in ("kb_name", "entry_type", "title", "body")
+            k: v
+            for k, v in args.items()
+            if k not in ("kb_name", "entry_type", "title", "body", "validate")
         }
 
         try:
@@ -831,6 +862,9 @@ class PyriteMCPServer:
         result = {"created": True, "entry_id": entry.id, "file_path": ""}
         if warnings:
             result["warnings"] = warnings
+        qa_issues = self._maybe_validate(entry.id, kb_name, args)
+        if qa_issues:
+            result["qa_issues"] = qa_issues
         return result
 
     def _kb_bulk_create(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -909,6 +943,9 @@ class PyriteMCPServer:
         result: dict[str, Any] = {"updated": True, "entry_id": entry.id, "file_path": ""}
         if warnings:
             result["warnings"] = warnings
+        qa_issues = self._maybe_validate(entry.id, kb_name, args)
+        if qa_issues:
+            result["qa_issues"] = qa_issues
         return result
 
     def _kb_delete(self, args: dict[str, Any]) -> dict[str, Any]:
