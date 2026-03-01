@@ -14,13 +14,11 @@ Active items in priority order across three tracks: **UI** (web application feat
 
 Recommended execution order. Grouped by milestone.
 
-**0.11 — ODM Completion:**
+**0.11 — Schema & Launch Prep:**
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
 | **1** | [[schema-versioning]] | M | Pre-launch critical — first schema change after launch breaks every KB |
-| **2** | [[odm-layer]] DocumentManager | M | Route KBService through DocumentManager — completes the abstraction |
-| **3** | [[architecture-hardening]] | M | DDL validation, layer violations, stale docs |
 
 **0.12 — Launch Prep:**
 
@@ -63,7 +61,6 @@ Recommended execution order. Grouped by milestone.
 
 | # | Item | Kind | Effort | Status | Notes |
 |---|------|------|--------|--------|-------|
-| 100 | [[odm-layer]] | feature | L | in progress | Phase 1 (SearchBackend) done, Phase 3 (LanceDB) rejected, Phase 4 (Postgres) done. Remaining: DocumentManager |
 | 79 | [[coordination-task-plugin]] | feature | XL | in progress | Phases 1-2 done. Remaining: Phase 3 (DAG queries), Phase 4 (QA integration) |
 
 ### Planned — 0.11
@@ -126,10 +123,7 @@ Recommended execution order. Grouped by milestone.
 
 ```
 schema-versioning (#93)              [0.11]
-  └── depends on odm-layer (#100) Phase 1 ✅
-
-odm-layer (#100)                     [0.11] — Phase 1 ✅, Phase 3 ✗, Phase 4 ✅
-  └── Phase 2: DocumentManager       — remaining work
+  └── depends on odm-layer (#100) Phase 1 ✅ (odm-layer fully done)
 
 web-ui-auth (#94)                    [0.12]
   Phase 1: local auth + tiers        — needs #56 ✅ (REST tier enforcement)
@@ -265,4 +259,4 @@ All items below are done. Detail lives in the individual backlog item files in [
 [[coordination-task-plugin]] Phases 1-2, [[programmatic-schema-provisioning]], Plugin KB-Type Scoping
 
 ### Also Completed
-[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[docs-kb-fixes]], [[test-infrastructure]], [[architecture-hardening]]
+[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[docs-kb-fixes]], [[test-infrastructure]], [[architecture-hardening]], [[odm-layer]]
