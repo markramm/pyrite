@@ -198,43 +198,40 @@ Key deliverables: multi-KB support, FTS5 search, plugin protocol (15 methods), s
 
 ---
 
-## 0.9 — Code Hardening
+## 0.9 — Code Hardening (done)
 
 **Theme:** Internal quality pass. Refactor, fix architecture gaps, and harden tests — before adding new capabilities.
 
-### Wave 1 — Refactoring & Deduplication
+### Delivered
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Extract MCP tool schemas | Move ~520 lines of inline dict literals from `mcp_server.py` to `pyrite/server/tool_schemas.py` | M |
-| Cache `KBSchema.from_yaml()` | Add `@lru_cache` or cache on `KBConfig`; eliminate 12 redundant filesystem reads across MCP, QA, CLI | S |
-| Shared CLI context manager | Replace ~18 duplicated `PyriteDB + KBService` construction sites with shared `get_cli_context()` | M |
-| Consistent MCP service instantiation | Add lazy `self._qa_svc` and `self._search_svc` properties; drop duplicate `self.index_mgr` | S |
+**Wave 1 — Refactoring & Deduplication**
 
-### Wave 2 — Architecture Cleanup
+- `kb_schema` cached property on `KBConfig`, eliminating 12 redundant `KBSchema.from_yaml()` filesystem reads
+- `pyrite/cli/context.py` with `cli_context()` context manager, replacing ~18 duplicated `PyriteDB + KBService` construction sites
+- `pyrite/server/tool_schemas.py` with ~500 lines of extracted MCP tool schemas (READ_TOOLS, WRITE_TOOLS, ADMIN_TOOLS)
+- Lazy `qa_svc` and `search_svc` properties on `PyriteMCPServer`, replacing 5 duplicate service constructions
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| Fix REST DI bypass | Make `SearchService` and `QAService` proper FastAPI `Depends()` in all endpoints (currently bypassed in `search.py`, `ai_ep.py`) | S |
-| Eliminate `_raw_conn` usage | Move ~20 raw SQL calls in `QAService` and `RepoService` into `PyriteDB` public methods | M |
-| Slim down `KBService` | Extract settings wrappers (delegate to DB directly), extract wikilink resolution to standalone module | M |
-| Extract entry detail AI logic | Move AI state + handlers from 500-line `[id]/+page.svelte` into `<AIPanel>` component | S |
+**Wave 2 — Architecture Cleanup**
 
-### Wave 3 — Test Hardening
+- `get_search_service()` FastAPI dependency factory, fixing DI bypass in `search.py` and `ai_ep.py`
+- 24 `_raw_conn` calls eliminated across `qa_service.py` (12), `repo_service.py` (7), `kb_service.py` (5)
+- `WikilinkService` extracted from `KBService` (148 lines: `list_entry_titles`, `resolve_entry`, `resolve_batch`, `get_wanted_pages`)
+- 4 thin settings wrappers removed from `KBService`; callers use `db.*` directly
+- `AIPanel.svelte` extracted from entry detail page (228 lines, 36% reduction in `+page.svelte`)
 
-| Item | Description | Effort |
-|------|-------------|--------|
-| MCP tests use shared fixtures | Refactor `test_mcp_server.py` to use `conftest.py` fixtures instead of ~80 lines of duplicated setup | M |
-| Unit tests for QA `_check_*` rules | Isolated tests for each of the 11 validation rules with targeted fixtures | M |
-| Integration tests for KB git ops | Test `KBService.commit_kb` and `push_kb` with real temp git repos | S |
-| Type Cytoscape bindings | Replace 7 `any` annotations in `GraphView.svelte` with proper `cytoscape.Core` types | S |
+**Wave 3 — Test Hardening**
 
-### Definition of done
+- `_make_mcp_server()` context manager consolidating 7 duplicated MCP test setup sites (~105 lines removed)
+- 58 unit tests for all 10 QA `_check_*` validation rules with targeted fixtures
+- 18 integration tests for KB git operations (`commit_kb`, `push_kb`) with real temp git repos
+- Cytoscape type bindings: 6 `any` annotations replaced with `cytoscape.Core`, `EventObject`, `NodeSingular`
 
-- `mcp_server.py` under 1000 lines; tool schemas in separate module
-- No `_raw_conn` usage outside `storage/`; all services use proper DI in REST layer
-- QA validation rules have isolated unit tests; MCP tests use shared fixtures
-- All existing tests still pass; test count increases
+### Results
+
+- 1258 tests passing (+76 over 0.8 baseline)
+- `mcp_server.py`: 1537 → 1046 lines (32% reduction); tool schemas in separate module
+- No `_raw_conn` usage outside `storage/`; SearchService uses proper FastAPI DI
+- `KBService`: 1204 → 1100 lines; wikilink logic extracted to standalone service
 
 ---
 
