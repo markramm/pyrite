@@ -41,5 +41,8 @@ Thumbs.db
 *.db-shm
 *.db-wal
 
+# Benchmark output
+benchmarks/results.json
+
 # Data directory
 data/
