@@ -7,10 +7,17 @@ You define domain-specific entry types and field schemas in YAML. Pyrite validat
 ## Install
 
 ```bash
-pip install -e "."            # Core
-pip install -e ".[all]"       # Core + AI + semantic search + dev tools
-pip install -e ".[ai]"        # OpenAI + Anthropic SDKs
-pip install -e ".[semantic]"  # sentence-transformers + sqlite-vec
+pip install pyrite             # Core
+pip install "pyrite[all]"      # Core + AI + semantic search + dev tools
+pip install "pyrite[ai]"       # OpenAI + Anthropic SDKs
+pip install "pyrite[semantic]" # sentence-transformers + sqlite-vec
+```
+
+For development (editable install from source):
+
+```bash
+git clone https://github.com/markramm/pyrite.git && cd pyrite
+pip install -e ".[all]"
 ```
 
 Extensions are installed separately:

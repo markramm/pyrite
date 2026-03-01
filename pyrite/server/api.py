@@ -283,7 +283,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     application = FastAPI(
         title="pyrite API",
         description="REST API for pyrite knowledge management",
-        version="0.2.0",
+        version="0.12.0",
         docs_url="/docs",
         redoc_url="/redoc",
     )
