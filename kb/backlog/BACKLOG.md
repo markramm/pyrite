@@ -287,8 +287,10 @@ Agent-as-user CLI infrastructure. Makes Pyrite usable by autonomous agents (Open
 | 96 | [Database Backup and Restore](db-backup-restore.md) | Core | feature | S | planned |
 | 97 | [MCP Server Rate Limiting](mcp-rate-limiting.md) | Core | feature | S | planned |
 | 98 | [KB Orchestrator Skill](kb-orchestrator-skill.md) | AI | feature | M | planned |
+| 99 | [Extension Type Protocols](extension-type-protocols.md) | Core | feature | L | planned |
+| 100 | [ODM Layer: Backend Abstraction + Migration](odm-layer.md) | Core | feature | L | planned |
 
-**Dependencies:** #82 evolves from existing `extensions/software-kb/`. #83 needs task plugin. #84 needs demo site (#85). #85 benefits from #91 (Postgres), #94 (auth), #97 (rate limiting). #90 needs waves 1-3 shipped. #92 phase 1 before 0.8. #93 before 0.8 (schema changes after launch need migration). #94 phase 1 before demo site. #97 blocker for demo site. #98 needs task plugin phase 2 + intent layer.
+**Dependencies:** #82 evolves from existing `extensions/software-kb/`. #83 needs task plugin. #84 needs demo site (#85). #85 benefits from #91 (Postgres), #94 (auth), #97 (rate limiting). #90 needs waves 1-3 shipped. #92 phase 1 before 0.8. #93 before 0.8 (depends on #100 Phase 2 for migration). #94 phase 1 before demo site. #97 blocker for demo site. #98 needs task plugin phase 2 + intent layer. #99 phase 1 (definitions) with 0.8, phases 2-3 post-launch. #100 Phase 1 targets 0.7, Phase 2 before 0.8, Phase 3 (LanceDB) post-launch, Phase 4 (Postgres) enables demo site.
 
 ## Prioritized Next Up
 
@@ -302,35 +304,45 @@ Recommended execution order. Grouped by milestone.
 | **2** | #79 Task Plugin Phase 2 | Atomic task_claim, task_decompose — swarm coordination |
 | **3** | #73 QA Phase 2 | Assessment entries, queryable quality |
 
-**0.7 — Web UI Polish + Intent Layer:**
+**0.7 — Web UI Polish + Intent Layer + Pre-Launch Core:**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
 | **4** | #92 Intent Layer Phase 1 | Guidelines + goals in kb.yaml — the intent engineering story for launch |
-| **5** | #60 Block Refs Phase 3 | Transclusion rendering, demo-ready editor |
-| **6** | #87 BYOK AI Gap Analysis | Identify what's missing for the AI portal vision |
-| **7** | QA Dashboard | Visual quality monitoring for operators |
-| **8** | Graph enhancements | Demo-ready knowledge graph |
+| **5** | #100 ODM Layer Phase 1 | SearchBackend protocol + SQLite wrapping — foundation for schema versioning + backend flexibility |
+| **6** | #93 Schema Versioning (#100 Phase 2) | Must ship before launch — first schema change after 0.8 needs migration. Depends on ODM. |
+| **7** | #60 Block Refs Phase 3 | Transclusion rendering, demo-ready editor |
+| **8** | #87 BYOK AI Gap Analysis | Identify what's missing for the AI portal vision |
+| **9** | QA Dashboard | Visual quality monitoring for operators |
+| **10** | Graph enhancements | Demo-ready knowledge graph |
 
 **0.8 — Announceable Alpha (packaging + launch):**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **9** | #74 PyPI Publish | `pip install pyrite` as the golden path |
-| **10** | #89 Update MCP_SUBMISSION.md | Accurate listing for MCP registry |
-| **11** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
-| **12** | #85 Demo Site Deployment | Live demo for visitors |
-| **13** | #86 pyrite ci | Quick win for corporate teams |
-| **14** | #84 Extension Registry | Ecosystem discovery |
+| **11** | #74 PyPI Publish | `pip install pyrite` as the golden path |
+| **12** | #97 MCP Rate Limiting | Blocker for demo site |
+| **13** | #94 Web UI Auth Phase 1 | Blocker for demo site (read-only anonymous, auth for write) |
+| **14** | #89 Update MCP_SUBMISSION.md | Accurate listing for MCP registry |
+| **15** | Docs consolidation + tutorial | Newcomer-friendly onboarding |
+| **16** | #85 Demo Site Deployment | Live demo for visitors |
+| **17** | #86 pyrite ci | Quick win for corporate teams |
+| **18** | #84 Extension Registry | Ecosystem discovery |
 
-**Post-0.8 — Launch Waves:**
+**Post-0.8 — Launch Waves + Infrastructure:**
 
 | Priority | Item | Rationale |
 |----------|------|-----------|
-| **15** | #82 Software Project Plugin (Wave 2) | Evolves from software-kb, grabs dev team eyeballs |
-| **16** | #83 Investigative Journalism Plugin (Wave 3) | Proves general-purpose, different audience |
-| **17** | #88 Obsidian Migration | Onramp for PKM users |
-| **18** | #90 PKM Capture Plugin (Wave 4) | Opens aperture to everyone |
+| **19** | #82 Software Project Plugin (Wave 2) | Evolves from software-kb, grabs dev team eyeballs |
+| **20** | #83 Investigative Journalism Plugin (Wave 3) | Proves general-purpose, different audience |
+| **21** | #100 ODM Phase 3: LanceDB Backend | Document-native search, eliminates impedance mismatch |
+| **22** | #100 ODM Phase 4: Postgres Backend | Enables hosted deployments, demo site scalability |
+| **23** | #95 Event Bus + Webhooks | Integration story, live graph updates |
+| **24** | #96 DB Backup/Restore | Operational maturity |
+| **25** | #98 KB Orchestrator Skill | Multi-KB agent coordination pattern |
+| **26** | #88 Obsidian Migration | Onramp for PKM users |
+| **27** | #99 Extension Type Protocols Phase 1 | Protocol definitions as KB entries — ecosystem foundation |
+| **28** | #90 PKM Capture Plugin (Wave 4) | Opens aperture to everyone |
 
 **Graph enhancements** (betweenness centrality, community detection, structural gaps, influence-per-occurrence) are independent quality-of-life improvements — do any time when there's a lull.
 
@@ -546,4 +558,24 @@ intent-layer (#92)                  [13] — phase 1 before 0.8, phases 2-3 enha
   Phase 1: schema + storage          — no blockers
   Phase 2: QA rubric evaluation      — after #73 Phase 1
   Phase 3: LLM rubric evaluation     — after #73 Phase 2
+schema-versioning (#93)             [13] — before 0.8, depends on #100 Phase 1
+  └── depends on odm-layer (#100) Phase 2
+web-ui-auth (#94)                   [13] — phase 1 before demo site
+  Phase 1: local auth + tiers        — needs #56 ✅ (REST tier enforcement)
+  Phase 2: OAuth/OIDC                — post-launch
+event-bus-webhooks (#95)            [13] — post-0.8, benefits from #23 ✅ (WebSocket)
+db-backup-restore (#96)             [13] — no blockers
+mcp-rate-limiting (#97)             [13] — blocker for demo site, no code blockers
+kb-orchestrator-skill (#98)         [13] — needs #79 Phase 2, #92 Phase 1
+extension-type-protocols (#99)      [13] — phase 1 with 0.8, phases 2-3 post-launch
+  Phase 1: protocol definitions      — needs #92 (intent layer)
+  Phase 2: satisfaction checking     — needs Phase 1
+  Phase 3: registry integration      — needs #84 (extension registry)
+
+odm-layer (#100)                    [13] — Phase 1 targets 0.7, foundation for everything below
+  Phase 1: interfaces + SQLite wrap  — no blockers, wraps existing code
+  Phase 2: schema versioning         — = #93, on-load migration + MigrationRegistry
+  Phase 3: LanceDB backend           — post-launch, optional search backend
+  Phase 4: Postgres backend          — post-launch, enables hosted + demo site
+  └── postgres-storage-backend (#91) — overlaps with Phase 4
 ```
