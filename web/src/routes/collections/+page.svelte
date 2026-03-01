@@ -3,6 +3,8 @@
 	import { collectionStore } from '$lib/stores/collections.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { onMount } from 'svelte';
+	import ErrorState from '$lib/components/common/ErrorState.svelte';
+	import EmptyState from '$lib/components/common/EmptyState.svelte';
 
 	onMount(() => {
 		const kb = kbStore.activeKB ?? undefined;
@@ -35,14 +37,15 @@
 			<div class="h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-blue-600"></div>
 		</div>
 	{:else if collectionStore.error}
-		<div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
-			{collectionStore.error}
-		</div>
+		<ErrorState message={collectionStore.error} onretry={() => collectionStore.loadCollections(kbStore.activeKB ?? undefined)} />
 	{:else if collectionStore.collections.length === 0}
-		<div class="py-12 text-center text-zinc-400">
-			<p class="mb-2 text-lg">No collections found</p>
-			<p class="text-sm">Add a <code class="rounded bg-zinc-100 px-1 dark:bg-zinc-800">__collection.yaml</code> file to any folder in your KB to create a collection.</p>
-		</div>
+		<EmptyState
+			icon="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+			title="No collections found"
+			description="Add a __collection.yaml file to any folder in your KB, or create a virtual collection."
+			actionLabel="New Virtual Collection"
+			actionHref="/collections/new"
+		/>
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 			{#each collectionStore.collections as collection}
