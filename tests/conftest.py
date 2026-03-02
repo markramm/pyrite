@@ -18,6 +18,19 @@ from pyrite.storage.index import IndexManager
 from pyrite.storage.repository import KBRepository
 
 
+@pytest.fixture(autouse=True)
+def _isolate_global_config(tmp_path_factory, monkeypatch):
+    """Redirect CONFIG_FILE and CONFIG_DIR to a temp directory.
+
+    Prevents tests that call save_config() from clobbering ~/.pyrite/config.yaml.
+    """
+    import pyrite.config as config_module
+
+    safe_dir = tmp_path_factory.mktemp("pyrite_config")
+    monkeypatch.setattr(config_module, "CONFIG_DIR", safe_dir)
+    monkeypatch.setattr(config_module, "CONFIG_FILE", safe_dir / "config.yaml")
+
+
 @pytest.fixture
 def tmp_kb_dir():
     """Temporary directory with KB subdirectories."""
