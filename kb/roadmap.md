@@ -98,17 +98,7 @@ Remaining loose ends (no version bump needed):
 | [[ux-accessibility-fixes]] | M |
 | [[playwright-integration-tests]] | M |
 
-**Agent DX (CLI + MCP + REST):**
-
-| Item | Effort |
-|------|--------|
-| [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | S |
-| [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | S |
-| [[mcp-search-add-fields-parameter-for-token-efficient-results]] | M |
-| [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | M |
-| [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | M |
-| [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | M |
-| [[agent-oriented-error-responses-across-cli-and-mcp]] | L |
+**Agent DX (CLI + MCP + REST):** Done — PosixPath fix, batch-read, list-entries, kb_recent, search fields, smart field routing, structured errors, file placement fix.
 
 ### Definition of done
 

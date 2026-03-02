@@ -28,6 +28,7 @@ pip install -e extensions/zettelkasten
 pip install -e extensions/encyclopedia
 pip install -e extensions/social
 pip install -e extensions/cascade
+pip install -e extensions/task
 ```
 
 ## Usage
@@ -66,11 +67,11 @@ Three permission tiers. Each tier includes the tools from lower tiers.
 
 | Tier | Tools |
 |------|-------|
-| **read** (10) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_qa_validate`, `kb_qa_status` |
+| **read** (14) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_orient`, `kb_batch_read`, `kb_list_entries`, `kb_recent`, `kb_qa_validate`, `kb_qa_status` |
 | **write** (+6) | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link`, `kb_qa_assess` |
 | **admin** (+4) | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push` |
 
-All paginated tools (`kb_search`, `kb_timeline`, `kb_backlinks`, `kb_tags`) support `limit`/`offset` params and return a `has_more` flag. `kb_bulk_create` handles up to 50 entries per call with best-effort per-entry semantics.
+All paginated tools (`kb_search`, `kb_timeline`, `kb_backlinks`, `kb_tags`) support `limit`/`offset` params and return a `has_more` flag. `kb_bulk_create` handles up to 50 entries per call with best-effort per-entry semantics. `kb_orient` provides a one-shot KB summary for agent onboarding. `kb_batch_read` fetches multiple entries in one call. Search results return snippets by default (use `include_body` for full text, `fields` for projection).
 
 Plugins add their own tools per tier (e.g., software-kb adds `sw_adrs`, `sw_backlog`, `sw_new_adr`).
 
@@ -154,7 +155,7 @@ Entries track their schema version in `_schema_version` frontmatter. `pyrite sch
 
 Field types: `text`, `number`, `date`, `datetime`, `checkbox`, `select`, `multi-select`, `object-ref`, `list`, `tags`.
 
-Eight built-in entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`. Entries support `aliases` for alternate names that resolve in wikilinks and autocomplete.
+Ten built-in entry types: `note`, `person`, `organization`, `event`, `document`, `topic`, `relationship`, `timeline`, `collection`, `qa_assessment`. Entries support `aliases` for alternate names that resolve in wikilinks and autocomplete.
 
 ## Plugin Protocol
 
@@ -170,7 +171,7 @@ Extensions implement a Python protocol class with up to 16 methods:
 - `get_relationship_types()` — semantic relationship definitions
 - Lifecycle hooks: `before_save`, `after_save`, `before_delete`, `after_delete`
 
-Five extensions ship: `software-kb` (ADRs, components, backlog), `zettelkasten` (CEQRC maturity workflow), `encyclopedia` (articles, reviews, voting), `social` (engagement tracking), `cascade` (timeline events and migration).
+Six extensions ship: `software-kb` (ADRs, components, backlog), `zettelkasten` (CEQRC maturity workflow), `encyclopedia` (articles, reviews, voting), `social` (engagement tracking), `cascade` (timeline events and migration), `task` (7-state task workflow with atomic claim and decomposition).
 
 ## Architecture
 
@@ -193,7 +194,7 @@ pyrite/
 ├── plugins/         # Plugin discovery and protocol
 └── formats/         # Content negotiation (JSON, Markdown, CSV, YAML)
 
-extensions/          # Domain-specific plugins (software-kb, zettelkasten, encyclopedia, social, cascade)
+extensions/          # Domain-specific plugins (software-kb, zettelkasten, encyclopedia, social, cascade, task)
 web/                 # SvelteKit 2 + Svelte 5 frontend (TypeScript + Tailwind)
 kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 ```
@@ -212,7 +213,7 @@ pip install -e ".[all]"
 for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
-# Tests (1505 tests)
+# Tests (1468 tests)
 pytest tests/ -v
 
 # Frontend
@@ -226,7 +227,7 @@ Pyrite's own backlog and architecture docs live in `kb/`:
 
 ```bash
 pyrite sw backlog        # Prioritized backlog
-pyrite sw adrs           # Architecture Decision Records (15 ADRs)
+pyrite sw adrs           # Architecture Decision Records (16 ADRs)
 pyrite sw components     # Module documentation
 pyrite sw standards      # Coding conventions
 ```

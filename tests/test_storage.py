@@ -295,6 +295,46 @@ class TestKBRepository:
         assert loaded is not None
         assert loaded.title == "John Smith"
 
+    def test_save_plugin_type_uses_schema_subdirectory(self):
+        """Test that plugin types use subdirectory from kb.yaml schema."""
+        from pyrite.utils.yaml import dump_yaml_file
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kb_path = Path(tmpdir)
+            # Write a kb.yaml with backlog_item type that has subdirectory
+            kb_yaml_data = {
+                "name": "test-software",
+                "description": "Test software KB",
+                "types": {
+                    "backlog_item": {
+                        "description": "Backlog item",
+                        "subdirectory": "backlog",
+                        "required": ["title"],
+                    },
+                },
+            }
+            dump_yaml_file(kb_yaml_data, kb_path / "kb.yaml")
+
+            config = KBConfig(
+                name="test-software",
+                path=kb_path,
+                kb_type="software",
+                description="Test software KB",
+            )
+
+            repo = KBRepository(config)
+
+            # Create a generic entry with entry_type "backlog_item"
+            from pyrite.models.generic import GenericEntry
+
+            entry = GenericEntry(id="test-bug-fix", title="Fix the bug")
+            entry._entry_type = "backlog_item"
+            entry.body = "Description of the bug fix."
+
+            path = repo.save(entry)
+            assert path.exists()
+            assert "/backlog/" in str(path), f"Expected /backlog/ in path, got: {path}"
+
     def test_list_entries(self, events_kb):
         """Test listing all entries."""
         # Create some entries

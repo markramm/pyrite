@@ -12,10 +12,10 @@ from pathlib import Path
 
 from ..config import KBConfig
 from ..exceptions import KBReadOnlyError
+from ..migrations import get_migration_registry, load_plugin_migrations
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
 from ..models.core_types import entry_from_frontmatter
-from ..migrations import get_migration_registry, load_plugin_migrations
 from ..schema import CORE_TYPES
 from ..utils.yaml import load_yaml_file
 
@@ -110,11 +110,25 @@ class KBRepository:
         return self.path / f"{entry_id}.md"
 
     def _infer_subdir(self, entry: Entry) -> str | None:
-        """Infer subdirectory for entries based on type."""
+        """Infer subdirectory for entries based on type.
+
+        Checks (in order):
+        1. KB schema (kb.yaml types with subdirectory)
+        2. Core types (built-in type → subdirectory mapping)
+        3. Plugin subtypes (walk MRO to find parent core type)
+        """
         entry_type = entry.entry_type
+
+        # Check KB schema first — covers kb.yaml-defined types with subdirectory
+        schema = self.config.kb_schema
+        type_schema = schema.get_type_schema(entry_type)
+        if type_schema and type_schema.subdirectory:
+            return type_schema.subdirectory
+
         # Check core types for subdirectory mapping
         if entry_type in CORE_TYPES:
             return CORE_TYPES[entry_type].get("subdirectory")
+
         # Plugin subtype: walk MRO to find the parent core type's subdirectory
         from ..models.core_types import ENTRY_TYPE_REGISTRY
 

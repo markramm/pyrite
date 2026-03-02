@@ -16,7 +16,7 @@ Each server instance runs at a single tier, which determines which tools are ava
 
 | Tier | Access Level | Tools |
 |------|-------------|-------|
-| **read** | Safe for any agent | kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema, kb_qa_validate, kb_qa_status |
+| **read** | Safe for any agent | kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema, kb_orient, kb_batch_read, kb_list_entries, kb_recent, kb_qa_validate, kb_qa_status |
 | **write** | Trusted agents | read + kb_create, kb_bulk_create, kb_update, kb_delete, kb_link, kb_qa_assess |
 | **admin** | Full control | write + kb_index_sync, kb_manage, kb_commit, kb_push |
 

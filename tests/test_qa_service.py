@@ -245,6 +245,8 @@ class TestSchemaValidation:
             "        options: [low, medium, high]\n"
             "        required: true\n"
         )
+        # Invalidate cached schema so the new kb.yaml is picked up
+        qa_setup["events_kb"].invalidate_schema_cache()
 
         # Insert an entry that violates required field
         db = qa_setup["db"]

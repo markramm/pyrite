@@ -7,7 +7,7 @@ tags:
 - mcp
 - agents
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: s
 milestone: "0.13"

@@ -10,4 +10,4 @@ tags:
 - service
 ---
 
-Git operations service wrapping gitpython. Provides commit log, diff, blame, and push operations. Used by version history endpoint, kb_commit/kb_push MCP tools, and CLI git commands.
+Git operations service using subprocess. Provides commit log, diff, blame, and push operations. Deliberately avoids gitpython/pygit2. Used by version history endpoint, kb_commit/kb_push MCP tools, and CLI git commands.

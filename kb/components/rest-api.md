@@ -31,6 +31,7 @@ pyrite/server/
     daily.py                # /api/daily/{date}, /api/daily/dates
     settings_ep.py          # CRUD /api/settings
     versions.py             # GET /api/versions/{entry_id}
+  auth_endpoints.py          # Auth routes (register, login, logout) — mounted at /auth, outside /api
   schemas.py                # Pydantic request/response models
   websocket.py              # WebSocket connection manager for real-time events
   static.py                 # Static file serving for SvelteKit dist
@@ -95,6 +96,7 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/api/entries/resolve` | GET | entries.py | Wikilink target resolution |
 | `/api/entries/{id}` | GET/PUT/DELETE | entries.py | Entry CRUD |
 | `/api/entries` | POST | entries.py | Create entry |
+| `/api/entries/batch` | POST | entries.py | Batch-read multiple entries |
 | `/api/timeline` | GET | timeline.py | Timeline events |
 | `/api/tags` | GET | tags.py | Tags with counts |
 | `/api/tags/tree` | GET | tags.py | Hierarchical tag tree |
@@ -121,6 +123,7 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/api/qa/validate` | GET | qa.py | Validate KB or all KBs |
 | `/api/qa/validate/{id}` | GET | qa.py | Validate single entry |
 | `/api/qa/coverage` | GET | qa.py | QA assessment coverage stats |
+| `/api/kbs/{kb}/orient` | GET | kbs.py | One-shot KB summary for agent onboarding |
 | `/api/kbs` | POST | admin.py | Create KB (incl. ephemeral) |
 | `/api/kbs/{name}` | DELETE | admin.py | Delete KB |
 | `/api/kbs/gc` | POST | admin.py | Garbage-collect ephemeral KBs |
@@ -133,6 +136,10 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/ws` | WebSocket | websocket.py | Real-time entry/sync events |
 | `/api/kbs/{kb}/commit` | POST | git_ops.py | Commit KB changes to git |
 | `/api/kbs/{kb}/push` | POST | git_ops.py | Push KB commits to remote |
+| `/auth/register` | POST | auth_endpoints.py | Register new user |
+| `/auth/login` | POST | auth_endpoints.py | Login (returns session token) |
+| `/auth/logout` | POST | auth_endpoints.py | Logout (invalidates session) |
+| `/auth/me` | GET | auth_endpoints.py | Session introspection |
 | `/health` | GET | api.py | Health check (not behind /api) |
 
 ## Adding New Endpoints

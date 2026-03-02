@@ -41,18 +41,18 @@ Recommended execution order. Grouped by milestone.
 | **12** | [[ux-accessibility-fixes]] | M | Original accessibility audit items |
 | **13** | [[playwright-integration-tests]] | M | E2E test coverage |
 
-*Agent DX (CLI + MCP + REST):*
+*Agent DX (CLI + MCP + REST):* **All done.**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **14** | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | S | Entries land at KB root instead of type directory |
-| **15** | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | S | Blocks all MCP updates |
-| **16** | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | S | N entries in one call vs N round-trips |
-| **17** | [[mcp-search-add-fields-parameter-for-token-efficient-results]] | M | `fields` + `body_limit` to reduce token bloat |
-| **18** | [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | M | "Table of contents" orientation query |
-| **19** | [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | M | "What changed?" re-orientation query |
-| **20** | [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | M | Smart field routing — agents don't need to know metadata dict |
-| **21** | [[agent-oriented-error-responses-across-cli-and-mcp]] | L | Structured errors with `suggestion` + `retryable` |
+| Priority | Item | Effort | Status |
+|----------|------|--------|--------|
+| **14** | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | S | **done** |
+| **15** | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | S | **done** |
+| **16** | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | S | **done** |
+| **17** | [[mcp-search-add-fields-parameter-for-token-efficient-results]] | M | **done** |
+| **18** | [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | M | **done** |
+| **19** | [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | M | **done** |
+| **20** | [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | M | **done** |
+| **21** | [[agent-oriented-error-responses-across-cli-and-mcp]] | L | **done** |
 
 **0.14 — Auth & Rate Limiting:**
 
@@ -147,14 +147,14 @@ Recommended execution order. Grouped by milestone.
 | — | [[web-ui-starred-entries]] | improvement | S | 0.13 |
 | 105 | [[ux-accessibility-fixes]] | improvement | M | 0.13 |
 | — | [[playwright-integration-tests]] | feature | M | 0.13 |
-| — | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | bug | S | 0.13 |
-| — | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | bug | S | 0.13 |
-| — | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | feature | S | 0.13 |
-| — | [[mcp-search-add-fields-parameter-for-token-efficient-results]] | enhancement | M | 0.13 |
-| — | [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | feature | M | 0.13 |
-| — | [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | feature | M | 0.13 |
-| — | [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | improvement | M | 0.13 |
-| — | [[agent-oriented-error-responses-across-cli-and-mcp]] | enhancement | L | 0.13 |
+| — | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | bug | S | 0.13 | **done** |
+| — | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | bug | S | 0.13 | **done** |
+| — | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | feature | S | 0.13 | **done** |
+| — | [[mcp-search-add-fields-parameter-for-token-efficient-results]] | enhancement | M | 0.13 | **done** |
+| — | [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | feature | M | 0.13 | **done** |
+| — | [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | feature | M | 0.13 | **done** |
+| — | [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | improvement | M | 0.13 | **done** |
+| — | [[agent-oriented-error-responses-across-cli-and-mcp]] | enhancement | L | 0.13 | **done** |
 
 ### Planned — 0.14 (Auth & Rate Limiting)
 
@@ -393,6 +393,9 @@ All items below are done. Detail lives in the individual backlog item files in [
 
 ### Wave 13 — ODM Completion (0.11)
 [[schema-versioning]], [[odm-layer]] DocumentManager, [[docs-kb-fixes]], [[architecture-hardening]], [[test-infrastructure]]
+
+### Wave 14 — Agent DX (0.13)
+[[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]], [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]], [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]], [[mcp-search-add-fields-parameter-for-token-efficient-results]], [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]], [[mcp-tool-kb-recent-for-what-changed-orientation-queries]], [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]], [[agent-oriented-error-responses-across-cli-and-mcp]]
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]

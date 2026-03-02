@@ -13,7 +13,7 @@ The entry model defines the base data classes for all knowledge entries. Located
 ## Key Files
 
 - `base.py` — `Entry` abstract base dataclass and parsing utilities
-- `core_types.py` — 9 built-in types + `ENTRY_TYPE_REGISTRY` + `get_entry_class()` + `entry_from_frontmatter()`
+- `core_types.py` — 10 built-in types + `ENTRY_TYPE_REGISTRY` + `get_entry_class()` + `entry_from_frontmatter()`
 - `collection.py` — `CollectionEntry` for folder-backed and virtual collections (added in 0.3)
 - `generic.py` — `GenericEntry` fallback for unknown/plugin types
 - `factory.py` — `build_entry()` factory for programmatic creation
@@ -43,7 +43,7 @@ Abstract methods: `entry_type` (property), `to_frontmatter()`, `from_frontmatter
 
 Concrete methods: `_base_frontmatter()`, `to_db_dict()`, `to_markdown()`, `from_markdown()`, `load()`, `save()`, `add_link()`, `add_source()`, `validate()`.
 
-## Core Types (9)
+## Core Types (10)
 
 | Type | Class | Key Fields |
 |------|-------|------------|
@@ -56,6 +56,7 @@ Concrete methods: `_base_frontmatter()`, `to_db_dict()`, `to_markdown()`, `from_
 | relationship | `RelationshipEntry` | source_entity, target_entity, relationship_type |
 | timeline | `TimelineEntry` | date_range |
 | collection | `CollectionEntry` | source_type, query, description, icon, view_config, folder_path |
+| qa_assessment | `QAAssessmentEntry` | assessment_type, target_entry, severity, status |
 
 ## CollectionEntry (Added in 0.3)
 
