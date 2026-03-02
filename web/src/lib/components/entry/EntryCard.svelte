@@ -2,6 +2,7 @@
 	import TagBadge from '$lib/components/common/TagBadge.svelte';
 	import type { EntryResponse } from '$lib/api/types';
 	import { goto } from '$app/navigation';
+	import { typeColor } from '$lib/constants';
 
 	interface Props {
 		entry: EntryResponse;
@@ -9,19 +10,7 @@
 
 	let { entry }: Props = $props();
 
-	const typeColors: Record<string, string> = {
-		event: '#3b82f6',
-		person: '#8b5cf6',
-		organization: '#f59e0b',
-		note: '#6b7280',
-		topic: '#10b981',
-		component: '#06b6d4',
-		adr: '#ec4899',
-		backlog_item: '#f97316',
-		standard: '#14b8a6',
-	};
-
-	const borderColor = $derived(typeColors[entry.entry_type] ?? '#71717a');
+	const borderColor = $derived(typeColor(entry.entry_type));
 
 	function onTagClick(tag: string) {
 		return (e: MouseEvent) => {

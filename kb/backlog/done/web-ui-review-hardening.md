@@ -11,8 +11,8 @@ tags:
 kind: improvement
 priority: high
 effort: S
-status: proposed
-milestone: "0.15"
+status: done
+milestone: "0.13"
 links:
 - ux-accessibility-fixes
 - playwright-integration-tests

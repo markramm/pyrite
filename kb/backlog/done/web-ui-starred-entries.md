@@ -9,7 +9,7 @@ tags:
 kind: feature
 priority: medium
 effort: S
-status: proposed
+status: done
 milestone: "0.13"
 links:
 - web-ui-review-hardening

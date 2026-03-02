@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import StarButton from '$lib/components/StarButton.svelte';
 	import EntryMeta from '$lib/components/entry/EntryMeta.svelte';
 	import BacklinksPanel from '$lib/components/entry/BacklinksPanel.svelte';
 	import VersionHistoryPanel from '$lib/components/entry/VersionHistoryPanel.svelte';
@@ -116,6 +117,8 @@
 	]);
 </script>
 
+<svelte:head><title>{entryStore.current?.title ?? 'Entry'} — Pyrite</title></svelte:head>
+
 <Topbar {breadcrumbs} />
 
 <div class="flex flex-1 overflow-hidden">
@@ -141,7 +144,10 @@
 						>
 							{#snippet toolbar({ aiMenuButton })}
 								<div class="flex items-center justify-between border-b border-zinc-200 px-6 py-2 dark:border-zinc-800">
-									<h1 class="text-xl font-bold">{entryStore.current?.title}</h1>
+									<div class="flex items-center gap-2">
+										<StarButton entryId={entryStore.current?.id ?? ''} kbName={entryStore.current?.kb_name ?? ''} size="sm" />
+										<h1 class="text-xl font-bold">{entryStore.current?.title}</h1>
+									</div>
 									<div class="flex items-center gap-2">
 										<!-- Group 1: Edit actions -->
 										{#if editing}
@@ -172,22 +178,22 @@
 										{/if}
 
 										<!-- Divider -->
-										<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+										<div class="mx-1 hidden h-5 w-px bg-zinc-300 dark:bg-zinc-700 lg:block"></div>
 
 										<!-- Group 2: AI menu -->
 										{@render aiMenuButton()}
 
 										<!-- Divider -->
-										<div class="mx-1 h-5 w-px bg-zinc-300 dark:bg-zinc-700"></div>
+										<div class="mx-1 hidden h-5 w-px bg-zinc-300 dark:bg-zinc-700 lg:block"></div>
 
-										<!-- Group 3: Panel toggles (icon-only) -->
+										<!-- Group 3: Panel toggles (icon-only) — hidden on mobile -->
 										<button
 											onclick={() => uiStore.toggleOutlinePanel()}
-											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.outlinePanelOpen
+											class="hidden h-8 w-8 items-center justify-center rounded-md border lg:flex {uiStore.outlinePanelOpen
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle outline panel (Cmd+Shift+O)"
-										aria-label="Toggle outline panel"
+											aria-label="Toggle outline panel"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
@@ -195,11 +201,11 @@
 										</button>
 										<button
 											onclick={() => uiStore.toggleBacklinksPanel()}
-											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.backlinksPanelOpen
+											class="hidden h-8 w-8 items-center justify-center rounded-md border lg:flex {uiStore.backlinksPanelOpen
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle backlinks panel (Cmd+Shift+B)"
-										aria-label="Toggle backlinks panel"
+											aria-label="Toggle backlinks panel"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -207,11 +213,11 @@
 										</button>
 										<button
 											onclick={() => uiStore.toggleLocalGraphPanel()}
-											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.localGraphPanelOpen
+											class="hidden h-8 w-8 items-center justify-center rounded-md border lg:flex {uiStore.localGraphPanelOpen
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle local graph (Cmd+Shift+G)"
-										aria-label="Toggle local graph"
+											aria-label="Toggle local graph"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -219,11 +225,11 @@
 										</button>
 										<button
 											onclick={() => uiStore.toggleVersionHistoryPanel()}
-											class="flex h-8 w-8 items-center justify-center rounded-md border {uiStore.versionHistoryPanelOpen
+											class="hidden h-8 w-8 items-center justify-center rounded-md border lg:flex {uiStore.versionHistoryPanelOpen
 												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
 												: 'border-zinc-300 dark:border-zinc-600'}"
 											title="Toggle version history (Cmd+Shift+H)"
-										aria-label="Toggle version history"
+											aria-label="Toggle version history"
 										>
 											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
 												<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -259,8 +265,8 @@
 						</div>
 					</div>
 
-					<!-- Metadata sidebar -->
-					<aside class="w-64 shrink-0 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800">
+					<!-- Metadata sidebar — hidden on mobile -->
+					<aside class="hidden w-64 shrink-0 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800 lg:block">
 						{#if entryStore.current}
 							<EntryMeta entry={entryStore.current} />
 						{/if}

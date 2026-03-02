@@ -23,6 +23,7 @@
 	let ratio = $state(DEFAULT_RATIO);
 	let dragging = $state(false);
 	let container: HTMLDivElement | undefined = $state();
+	let isMobile = $state(false);
 
 	onMount(() => {
 		const saved = localStorage.getItem(STORAGE_KEY);
@@ -32,6 +33,13 @@
 				ratio = parsed;
 			}
 		}
+
+		function checkMobile() {
+			isMobile = window.innerWidth < 1024;
+		}
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+		return () => window.removeEventListener('resize', checkMobile);
 	});
 
 	function onPointerDown(e: PointerEvent) {
@@ -68,8 +76,34 @@
 		}
 	}
 
+	function onHandleKeydown(e: KeyboardEvent) {
+		const step = 0.02;
+		let handled = false;
+		if (isHorizontal) {
+			if (e.key === 'ArrowLeft') {
+				ratio = Math.max(0.2, ratio - step);
+				handled = true;
+			} else if (e.key === 'ArrowRight') {
+				ratio = Math.min(0.8, ratio + step);
+				handled = true;
+			}
+		} else {
+			if (e.key === 'ArrowUp') {
+				ratio = Math.max(0.2, ratio - step);
+				handled = true;
+			} else if (e.key === 'ArrowDown') {
+				ratio = Math.min(0.8, ratio + step);
+				handled = true;
+			}
+		}
+		if (handled) {
+			e.preventDefault();
+			localStorage.setItem(STORAGE_KEY, ratio.toString());
+		}
+	}
+
 	const gridStyle = $derived.by(() => {
-		if (!open) return '';
+		if (!open || isMobile) return '';
 		if (position === 'right') {
 			return `grid-template-columns: ${ratio}fr ${1 - ratio}fr`;
 		}
@@ -81,8 +115,7 @@
 
 <div
 	bind:this={container}
-	class="relative flex-1 overflow-hidden"
-	class:grid={open}
+	class="relative flex-1 overflow-hidden {open && !isMobile ? 'grid' : ''}"
 	style={gridStyle}
 	role="group"
 >
@@ -92,27 +125,37 @@
 	</div>
 
 	{#if open && panel}
-		<!-- Drag handle -->
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class="absolute z-10 {isHorizontal
-				? 'inset-y-0 w-1 cursor-col-resize hover:w-1.5'
-				: 'inset-x-0 h-1 cursor-row-resize hover:h-1.5'} bg-zinc-200 transition-all hover:bg-zinc-400 dark:bg-zinc-700 dark:hover:bg-zinc-500"
-			class:bg-blue-500={dragging}
-			class:dark:bg-blue-500={dragging}
-			style={isHorizontal
-				? `left: calc(${ratio * 100}% - 2px)`
-				: `top: calc(${ratio * 100}% - 2px)`}
-			onpointerdown={onPointerDown}
-			onpointermove={onPointerMove}
-			onpointerup={onPointerUp}
-		></div>
+		<!-- Drag handle — hidden on mobile -->
+		{#if !isMobile}
+			<div
+				class="absolute z-10 {isHorizontal
+					? 'inset-y-0 w-1 cursor-col-resize hover:w-1.5'
+					: 'inset-x-0 h-1 cursor-row-resize hover:h-1.5'} bg-zinc-200 transition-all hover:bg-zinc-400 dark:bg-zinc-700 dark:hover:bg-zinc-500"
+				class:bg-blue-500={dragging}
+				class:dark:bg-blue-500={dragging}
+				style={isHorizontal
+					? `left: calc(${ratio * 100}% - 2px)`
+					: `top: calc(${ratio * 100}% - 2px)`}
+				role="separator"
+				aria-orientation={isHorizontal ? 'vertical' : 'horizontal'}
+				aria-valuenow={Math.round(ratio * 100)}
+				aria-valuemin="20"
+				aria-valuemax="80"
+				tabindex="0"
+				onpointerdown={onPointerDown}
+				onpointermove={onPointerMove}
+				onpointerup={onPointerUp}
+				onkeydown={onHandleKeydown}
+			></div>
+		{/if}
 
-		<!-- Panel content -->
+		<!-- Panel content — full-width section below main content on mobile -->
 		<div
-			class="min-h-0 min-w-0 overflow-hidden border-zinc-200 dark:border-zinc-800 {isHorizontal
-				? 'border-l'
-				: 'border-t'}"
+			class="min-h-0 min-w-0 overflow-hidden border-zinc-200 dark:border-zinc-800 {isMobile
+				? 'border-t'
+				: isHorizontal
+					? 'border-l'
+					: 'border-t'}"
 		>
 			{@render panel()}
 		</div>

@@ -11,7 +11,7 @@ tags:
 kind: improvement
 priority: high
 effort: M
-status: planned
+status: done
 milestone: "0.13"
 links:
 - roadmap

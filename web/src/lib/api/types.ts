@@ -358,6 +358,13 @@ export interface EntryVersion {
 	change_type?: string;
 }
 
+export interface VersionListResponse {
+	entry_id: string;
+	kb_name: string;
+	count: number;
+	versions: EntryVersion[];
+}
+
 // Plugins
 
 export interface PluginInfo {

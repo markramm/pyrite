@@ -93,6 +93,8 @@
 	});
 </script>
 
+<svelte:head><title>Search — Pyrite</title></svelte:head>
+
 <Topbar breadcrumbs={[{ label: 'Search' }]} />
 
 <div class="flex flex-1 flex-col overflow-hidden">

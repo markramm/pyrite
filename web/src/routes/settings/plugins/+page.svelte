@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import LoadingState from '$lib/components/common/LoadingState.svelte';
 	import { api } from '$lib/api/client';
 	import { onMount } from 'svelte';
 	import type { PluginInfo, PluginDetail } from '$lib/api/types';
@@ -33,6 +34,8 @@
 	}
 </script>
 
+<svelte:head><title>Plugins — Pyrite</title></svelte:head>
+
 <Topbar title="Plugins" />
 
 <div class="flex-1 overflow-y-auto p-6">
@@ -45,7 +48,7 @@
 		</div>
 
 		{#if loading}
-			<p class="text-zinc-400">Loading plugins...</p>
+			<LoadingState message="Loading plugins..." />
 		{:else if error}
 			<p class="text-red-500">{error}</p>
 		{:else if plugins.length === 0}

@@ -33,13 +33,13 @@
 
 <button
 	onclick={toggle}
-	class="inline-flex items-center justify-center rounded-md transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 {sizeClasses[size]}"
+	class="inline-flex items-center justify-center rounded-md transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 {sizeClasses[size]}"
 	aria-label={active ? 'Unstar entry' : 'Star entry'}
 	title={active ? 'Remove from starred' : 'Add to starred'}
 >
 	{#if active}
 		<span class="text-yellow-500">&#9733;</span>
 	{:else}
-		<span class="text-gray-400 hover:text-yellow-400">&#9734;</span>
+		<span class="text-zinc-400 hover:text-yellow-400">&#9734;</span>
 	{/if}
 </button>

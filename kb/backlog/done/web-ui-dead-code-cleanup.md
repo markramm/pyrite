@@ -10,7 +10,7 @@ tags:
 kind: improvement
 priority: low
 effort: XS
-status: proposed
+status: done
 milestone: "0.13"
 links:
 - web-ui-review-hardening

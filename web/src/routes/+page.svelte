@@ -43,8 +43,33 @@
 	});
 </script>
 
+<svelte:head><title>Dashboard — Pyrite</title></svelte:head>
+
 <Topbar title="Dashboard" />
 
+{#if stats && stats.total_entries === 0}
+	<div class="flex flex-1 flex-col items-center justify-center py-16 text-center">
+		<div class="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-600">
+			<span class="text-2xl font-bold text-zinc-900">Py</span>
+		</div>
+		<h2 class="mb-2 text-2xl font-bold">Welcome to Pyrite</h2>
+		<p class="mb-6 max-w-md text-sm text-zinc-400">
+			Your knowledge infrastructure is ready. Start by creating your first entry
+			or importing existing notes.
+		</p>
+		<div class="flex gap-3">
+			<a href="/entries/new" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+				Create First Entry
+			</a>
+			<a href="/entries/clip" class="rounded-md border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-300 hover:border-zinc-400">
+				Clip a Web Page
+			</a>
+		</div>
+		<p class="mt-8 text-xs text-zinc-600">
+			Or use the CLI: <code class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono">pyrite create -k my-kb -t note --title "My First Note"</code>
+		</p>
+	</div>
+{:else}
 <div class="flex-1 overflow-y-auto p-6">
 	<h1 class="page-title mb-6 text-2xl font-bold">Dashboard</h1>
 
@@ -232,3 +257,4 @@
 		</div>
 	{/if}
 </div>
+{/if}

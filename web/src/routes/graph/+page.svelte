@@ -2,10 +2,12 @@
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import GraphView from '$lib/components/graph/GraphView.svelte';
 	import GraphControls from '$lib/components/graph/GraphControls.svelte';
+	import LoadingState from '$lib/components/common/LoadingState.svelte';
 	import { api } from '$lib/api/client';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { onMount } from 'svelte';
 	import type { GraphNode, GraphEdge } from '$lib/api/types';
+	import { typeColor } from '$lib/constants';
 
 	let nodes = $state<GraphNode[]>([]);
 	let edges = $state<GraphEdge[]>([]);
@@ -21,21 +23,6 @@
 	let sizeByCentrality = $state(false);
 
 	let graphView: GraphView | undefined = $state();
-
-	const typeColors: Record<string, string> = {
-		event: '#3b82f6',
-		person: '#8b5cf6',
-		organization: '#f59e0b',
-		topic: '#10b981',
-		note: '#6b7280',
-		place: '#ef4444',
-		source: '#06b6d4',
-		document: '#84cc16',
-		standard: '#f472b6',
-		component: '#22d3ee',
-		adr: '#a78bfa',
-		backlog_item: '#fb923c'
-	};
 
 	async function loadGraph() {
 		loading = true;
@@ -84,6 +71,8 @@
 	});
 </script>
 
+<svelte:head><title>Graph — Pyrite</title></svelte:head>
+
 <Topbar title="Knowledge Graph" />
 
 <div class="flex flex-1 flex-col gap-3 overflow-hidden p-4">
@@ -108,7 +97,7 @@
 
 	<div class="flex-1 overflow-hidden">
 		{#if loading}
-			<div class="flex h-full items-center justify-center text-zinc-400">Loading graph...</div>
+			<LoadingState message="Loading graph..." />
 		{:else if error}
 			<div class="flex h-full items-center justify-center text-red-500">{error}</div>
 		{:else if nodes.length === 0}
@@ -126,7 +115,7 @@
 			<span class="text-zinc-700 dark:text-zinc-600">|</span>
 			{#each typeCounts() as [type, count]}
 				<span class="flex items-center gap-1">
-					<span class="inline-block h-2.5 w-2.5 rounded-full" style="background-color: {typeColors[type] || '#6b7280'}"></span>
+					<span class="inline-block h-2.5 w-2.5 rounded-full" style="background-color: {typeColor(type)}"></span>
 					{type}
 					<span class="text-zinc-600">({count})</span>
 				</span>

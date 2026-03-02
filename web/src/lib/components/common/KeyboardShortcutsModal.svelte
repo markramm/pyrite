@@ -8,10 +8,38 @@
 
 	let { open, onclose }: Props = $props();
 
+	let dialogEl = $state<HTMLElement | null>(null);
+	let closeButtonEl = $state<HTMLButtonElement | null>(null);
+
+	$effect(() => {
+		if (open && closeButtonEl) {
+			// Auto-focus the close button when modal opens
+			setTimeout(() => closeButtonEl?.focus(), 10);
+		}
+	});
+
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			onclose();
+		} else if (e.key === 'Tab' && dialogEl) {
+			// Focus trap: cycle focus within the modal
+			const focusable = dialogEl.querySelectorAll<HTMLElement>(
+				'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+			);
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			if (e.shiftKey) {
+				if (document.activeElement === first) {
+					e.preventDefault();
+					last?.focus();
+				}
+			} else {
+				if (document.activeElement === last) {
+					e.preventDefault();
+					first?.focus();
+				}
+			}
 		}
 	}
 
@@ -65,15 +93,18 @@
 		out:fly={{ y: -8, duration: 120 }}
 	>
 		<div
+			bind:this={dialogEl}
 			class="w-full max-w-lg rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl"
 			role="dialog"
 			aria-modal="true"
 			aria-label="Keyboard shortcuts"
+			onkeydown={handleKeydown}
 		>
 			<!-- Header -->
 			<div class="flex items-center justify-between border-b border-zinc-700 px-6 py-4">
 				<h2 class="text-base font-semibold text-zinc-100">Keyboard Shortcuts</h2>
 				<button
+					bind:this={closeButtonEl}
 					onclick={onclose}
 					class="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
 					aria-label="Close keyboard shortcuts"

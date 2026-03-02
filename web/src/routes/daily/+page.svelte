@@ -23,6 +23,8 @@
 	]);
 </script>
 
+<svelte:head><title>Daily Notes — Pyrite</title></svelte:head>
+
 <Topbar {breadcrumbs} />
 
 <div class="flex flex-1 overflow-hidden">

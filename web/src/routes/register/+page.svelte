@@ -42,6 +42,8 @@
 	}
 </script>
 
+<svelte:head><title>Register — Pyrite</title></svelte:head>
+
 <div class="flex min-h-screen items-center justify-center bg-zinc-900">
 	<div class="w-full max-w-sm space-y-6 px-4">
 		<div class="text-center">

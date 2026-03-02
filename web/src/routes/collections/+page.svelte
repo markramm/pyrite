@@ -19,6 +19,8 @@
 	});
 </script>
 
+<svelte:head><title>Collections — Pyrite</title></svelte:head>
+
 <Topbar breadcrumbs={[{ label: 'Collections' }]} />
 
 <div class="flex-1 overflow-y-auto p-6">

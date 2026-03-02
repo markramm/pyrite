@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import LoadingState from '$lib/components/common/LoadingState.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { settingsStore } from '$lib/stores/settings.svelte';
 	import { api } from '$lib/api/client';
@@ -89,13 +90,15 @@
 	};
 </script>
 
+<svelte:head><title>Settings — Pyrite</title></svelte:head>
+
 <Topbar title="Settings" />
 
 <div class="flex-1 overflow-y-auto p-6">
 	<div class="mx-auto max-w-2xl space-y-8">
 		<h1 class="page-title mb-6 text-2xl font-bold">Settings</h1>
 		{#if settingsStore.loading}
-			<p class="text-zinc-400">Loading settings...</p>
+			<LoadingState message="Loading settings..." />
 		{:else}
 			<!-- Appearance -->
 			<section>

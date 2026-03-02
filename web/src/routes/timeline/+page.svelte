@@ -1,5 +1,7 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import LoadingState from '$lib/components/common/LoadingState.svelte';
+	import EmptyState from '$lib/components/common/EmptyState.svelte';
 	import { api } from '$lib/api/client';
 	import { onMount } from 'svelte';
 	import type { TimelineEvent } from '$lib/api/types';
@@ -81,6 +83,8 @@
 	});
 </script>
 
+<svelte:head><title>Timeline — Pyrite</title></svelte:head>
+
 <Topbar title="Timeline" />
 <div class="flex-1 overflow-y-auto p-6">
 	<h1 class="mb-4 text-2xl font-bold">Timeline</h1>
@@ -126,9 +130,15 @@
 	</div>
 
 	{#if loading}
-		<p class="text-zinc-400">Loading...</p>
+		<LoadingState message="Loading timeline..." />
 	{:else if filteredEvents.length === 0}
-		<p class="text-zinc-400">No timeline events found.</p>
+		<EmptyState
+			icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+			title="No timeline events found"
+			description="Add dates to your entries to see them on the timeline."
+			actionLabel="Browse Entries"
+			actionHref="/entries"
+		/>
 	{:else}
 		<!-- Visual timeline -->
 		<div class="relative ml-4">

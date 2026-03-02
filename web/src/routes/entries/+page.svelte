@@ -74,6 +74,8 @@
 	}
 </script>
 
+<svelte:head><title>Entries — Pyrite</title></svelte:head>
+
 <Topbar breadcrumbs={[{ label: 'Entries' }]} />
 
 <div class="flex-1 overflow-y-auto p-6">

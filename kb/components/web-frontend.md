@@ -29,6 +29,14 @@ web/
       timeline/+page.svelte    # Timeline visualization
       graph/+page.svelte       # Interactive knowledge graph (Cytoscape.js)
       entries/wanted/+page.svelte # Wanted pages (broken wikilinks)
+      entries/clip/+page.svelte  # Web clipper capture page
+      search/+page.svelte        # Dedicated search page
+      collections/+page.svelte   # Collections list
+      collections/new/+page.svelte # Create new collection
+      collections/[id]/+page.svelte # View/edit collection
+      login/+page.svelte         # Login page
+      register/+page.svelte      # Registration page
+      qa/+page.svelte             # QA validation dashboard
       settings/plugins/+page.svelte # Plugin management
     lib/
       api/
@@ -58,16 +66,20 @@ web/
           TemplatePicker.svelte # Template selection for new entries
         ai/
           ChatSidebar.svelte   # AI chat panel with SSE streaming
-          SearchResults.svelte # Reusable search results component
         common/
           Toast.svelte         # Toast notifications
           TagBadge.svelte      # Tag pill component
           TagTree.svelte       # Hierarchical tag tree
           ThemeToggle.svelte   # Dark/light theme toggle
           KBSwitcher.svelte    # KB dropdown selector
+          LoadingState.svelte  # Reusable loading spinner
+          EmptyState.svelte    # Empty state with contextual guidance
+          ErrorState.svelte    # Error state display
+          KeyboardShortcutsModal.svelte # Keyboard shortcuts help modal
         QuickSwitcher.svelte   # Cmd+O fuzzy entry finder
         CommandPalette.svelte  # Cmd+K command palette
         StarButton.svelte      # Star/unstar toggle
+        StarredSidebar.svelte  # Starred entries in sidebar
         Calendar.svelte        # Calendar for daily notes
       editor/
         Editor.svelte          # CodeMirror 6 markdown editor (source mode)

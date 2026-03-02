@@ -52,14 +52,14 @@
 </svelte:head>
 
 <div class="mx-auto max-w-2xl p-6">
-	<h1 class="mb-6 text-2xl font-bold text-gray-900 dark:text-gray-100">Web Clipper</h1>
-	<p class="mb-6 text-gray-600 dark:text-gray-400">
+	<h1 class="mb-6 text-2xl font-bold text-zinc-900 dark:text-zinc-100">Web Clipper</h1>
+	<p class="mb-6 text-zinc-600 dark:text-zinc-400">
 		Clip a web page and save it as a knowledge base entry.
 	</p>
 
 	<form onsubmit={(e) => { e.preventDefault(); handleClip(); }} class="space-y-4">
 		<div>
-			<label for="url" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+			<label for="url" class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
 				>URL</label
 			>
 			<input
@@ -68,18 +68,18 @@
 				bind:value={url}
 				placeholder="https://example.com/article"
 				required
-				class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+				class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
 
 		<div>
-			<label for="kb" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+			<label for="kb" class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
 				>Knowledge Base</label
 			>
 			<select
 				id="kb"
 				bind:value={selectedKb}
-				class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+				class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
 			>
 				{#each kbStore.kbs as kb}
 					<option value={kb.name}>{kb.name}</option>
@@ -88,7 +88,7 @@
 		</div>
 
 		<div>
-			<label for="title" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+			<label for="title" class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
 				>Title (optional, auto-detected)</label
 			>
 			<input
@@ -96,12 +96,12 @@
 				type="text"
 				bind:value={title}
 				placeholder="Override page title"
-				class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+				class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
 
 		<div>
-			<label for="tags" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+			<label for="tags" class="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
 				>Tags (comma-separated)</label
 			>
 			<input
@@ -109,7 +109,7 @@
 				type="text"
 				bind:value={tags}
 				placeholder="research, web-clip"
-				class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+				class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
 

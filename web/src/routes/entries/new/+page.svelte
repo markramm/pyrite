@@ -85,6 +85,8 @@
 	const breadcrumbs = [{ label: 'Entries', href: '/entries' }, { label: 'New Entry' }];
 </script>
 
+<svelte:head><title>New Entry — Pyrite</title></svelte:head>
+
 <Topbar {breadcrumbs} />
 
 <div class="flex-1 overflow-y-auto p-6">

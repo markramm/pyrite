@@ -1,22 +1,5 @@
 <script lang="ts">
-	const typeColors: Record<string, string> = {
-		event: '#3b82f6',
-		person: '#8b5cf6',
-		organization: '#f59e0b',
-		topic: '#10b981',
-		note: '#6b7280',
-		place: '#ef4444',
-		source: '#06b6d4',
-		document: '#84cc16',
-		standard: '#f472b6',
-		component: '#22d3ee',
-		adr: '#a78bfa',
-		backlog_item: '#fb923c',
-		actor: '#6b7280',
-		cascade_org: '#f59e0b',
-	};
-
-	const DEFAULT_COLOR = '#94a3b8';
+	import { typeColor } from '$lib/constants';
 
 	interface TypeCount {
 		entry_type: string;
@@ -54,7 +37,7 @@
 			const seg: Segment = {
 				entry_type: d.entry_type,
 				count: d.count,
-				color: typeColors[d.entry_type] ?? DEFAULT_COLOR,
+				color: typeColor(d.entry_type),
 				dasharray: `${dash} ${gap}`,
 				// Offset: circumference/4 rotates start to top, then add cumulative offset
 				dashoffset: quarterCirc - offset,
@@ -107,7 +90,7 @@
 					<div class="flex min-w-0 items-center gap-2">
 						<span
 							class="h-2.5 w-2.5 shrink-0 rounded-full"
-							style="background-color: {typeColors[d.entry_type] ?? DEFAULT_COLOR}"
+							style="background-color: {typeColor(d.entry_type)}"
 						></span>
 						<span class="truncate text-sm text-zinc-700 dark:text-zinc-300">{d.entry_type}</span>
 					</div>

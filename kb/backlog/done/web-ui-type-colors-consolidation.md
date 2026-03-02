@@ -9,7 +9,7 @@ tags:
 kind: improvement
 priority: high
 effort: XS
-status: proposed
+status: done
 milestone: "0.13"
 links:
 - ux-accessibility-fixes

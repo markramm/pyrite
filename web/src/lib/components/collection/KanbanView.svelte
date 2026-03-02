@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { EntryResponse } from '$lib/api/types';
 	import { goto } from '$app/navigation';
+	import { typeBgColor } from '$lib/constants';
 
 	interface Props {
 		entries: EntryResponse[];
@@ -38,14 +39,6 @@
 
 		return groups;
 	});
-
-	const typeColors: Record<string, string> = {
-		event: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-		person: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-		organization: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-		note: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
-		topic: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-	};
 
 	function handleDragStart(e: DragEvent, entryId: string) {
 		if (e.dataTransfer) {
@@ -113,7 +106,7 @@
 					>
 						<p class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{entry.title}</p>
 						<div class="mt-2 flex flex-wrap items-center gap-1.5">
-							<span class="rounded-full px-1.5 py-0.5 text-xs font-medium {typeColors[entry.entry_type] ?? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400'}">
+							<span class="rounded-full px-1.5 py-0.5 text-xs font-medium {typeBgColor(entry.entry_type)}">
 								{entry.entry_type}
 							</span>
 							{#each entry.tags.slice(0, 2) as tag}

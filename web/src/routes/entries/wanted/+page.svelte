@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import LoadingState from '$lib/components/common/LoadingState.svelte';
 	import { api } from '$lib/api/client';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { onMount } from 'svelte';
@@ -22,6 +23,8 @@
 	});
 </script>
 
+<svelte:head><title>Wanted Pages — Pyrite</title></svelte:head>
+
 <Topbar breadcrumbs={[{ label: 'Entries', href: '/entries' }, { label: 'Wanted Pages' }]} />
 
 <div class="flex-1 overflow-y-auto p-6">
@@ -33,7 +36,7 @@
 	</div>
 
 	{#if loading}
-		<p class="text-zinc-400">Loading...</p>
+		<LoadingState message="Loading wanted pages..." />
 	{:else if error}
 		<p class="text-red-500">{error}</p>
 	{:else if pages.length === 0}

@@ -11,6 +11,7 @@
 	import { wsClient } from '$lib/api/websocket';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { useStarred } from '$lib/stores/starred.svelte';
 	import { registerShortcut } from '$lib/utils/keyboard';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -20,6 +21,8 @@
 	let { children } = $props();
 
 	let shortcutsOpen = $state(false);
+
+	const starredStore = useStarred();
 
 	const AUTH_ROUTES = ['/login', '/register'];
 
@@ -40,6 +43,7 @@
 		});
 
 		kbStore.load();
+		starredStore.load();
 
 		// WebSocket for multi-tab awareness
 		wsClient.connect();

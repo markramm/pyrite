@@ -2,6 +2,9 @@
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import QueryBuilder from '$lib/components/collection/QueryBuilder.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
+	import { api } from '$lib/api/client';
+	import { goto } from '$app/navigation';
+	import { uiStore } from '$lib/stores/ui.svelte';
 
 	let title = $state('');
 	let description = $state('');
@@ -10,6 +13,8 @@
 	let collectionTypes: Record<string, { description: string; default_view: string; fields?: Record<string, unknown>; ai_instructions?: string; icon?: string }> = $state({
 		generic: { description: 'General-purpose collection', default_view: 'list', icon: 'folder' }
 	});
+	let saving = $state(false);
+	let saveError = $state<string | null>(null);
 
 	const kb = $derived(kbStore.activeKB ?? '');
 
@@ -35,7 +40,30 @@
 	];
 
 	const canSave = $derived(title.trim() !== '' && query.trim() !== '');
+
+	async function handleSave() {
+		if (!canSave) return;
+		saving = true;
+		saveError = null;
+		try {
+			const result = await api.createCollection({
+				kb,
+				title: title.trim(),
+				query: query.trim(),
+				description: description.trim() || undefined,
+				collection_type: collectionType,
+			});
+			uiStore.toast('Collection created', 'success');
+			goto(`/collections/${encodeURIComponent(result.id)}?kb=${encodeURIComponent(result.kb_name)}`);
+		} catch (e) {
+			saveError = e instanceof Error ? e.message : 'Failed to create collection';
+		} finally {
+			saving = false;
+		}
+	}
 </script>
+
+<svelte:head><title>New Collection — Pyrite</title></svelte:head>
 
 <Topbar {breadcrumbs} />
 
@@ -92,14 +120,15 @@
 		<div class="flex items-center gap-3 border-t border-zinc-200 pt-6 dark:border-zinc-700">
 			<button
 				type="button"
-				disabled={!canSave}
+				disabled={!canSave || saving}
+				onclick={handleSave}
 				class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
 			>
-				Create Collection
+				{saving ? 'Creating…' : 'Create Collection'}
 			</button>
-			<span class="text-xs text-zinc-400">
-				Save is not yet wired up — backend create-collection endpoint coming soon.
-			</span>
+			{#if saveError}
+				<span class="text-sm text-red-500">{saveError}</span>
+			{/if}
 		</div>
 	</div>
 </div>

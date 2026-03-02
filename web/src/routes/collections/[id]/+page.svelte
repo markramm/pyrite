@@ -71,6 +71,8 @@
 	});
 </script>
 
+<svelte:head><title>{collectionStore.activeCollection?.title ?? 'Collection'} — Pyrite</title></svelte:head>
+
 <Topbar {breadcrumbs} />
 
 <div class="flex-1 overflow-y-auto p-6">

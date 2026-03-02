@@ -645,6 +645,18 @@ class CollectionEntriesResponse(BaseModel):
     collection_id: str
 
 
+class CreateCollectionRequest(BaseModel):
+    """Request body for creating a new virtual collection."""
+
+    kb: str
+    title: str
+    query: str
+    description: str | None = None
+    icon: str | None = None
+    view_config: dict | None = None
+    collection_type: str = "generic"
+
+
 class QueryPreviewRequest(BaseModel):
     """Request to preview a collection query without saving."""
 

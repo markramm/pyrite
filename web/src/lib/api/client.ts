@@ -49,7 +49,8 @@ import type {
 	ClipRequest,
 	ClipResponse,
 	UpdateEntryRequest,
-	UpdateResponse
+	UpdateResponse,
+	VersionListResponse
 } from './types';
 
 class ApiClient {
@@ -381,6 +382,21 @@ class ApiClient {
 		});
 	}
 
+	async createCollection(req: {
+		kb: string;
+		title: string;
+		query: string;
+		description?: string;
+		icon?: string;
+		view_config?: Record<string, unknown>;
+		collection_type?: string;
+	}): Promise<CollectionResponse> {
+		return this.request('/api/collections', {
+			method: 'POST',
+			body: JSON.stringify(req)
+		});
+	}
+
 	async getCollectionEntries(
 		id: string,
 		kb: string,
@@ -401,6 +417,13 @@ class ApiClient {
 		if (options?.block_type) params.set('block_type', options.block_type);
 		if (options?.block_id) params.set('block_id', options.block_id);
 		return this.request(`/api/entries/${encodeURIComponent(entryId)}/blocks?${params}`);
+	}
+
+	// Versions
+	async getEntryVersions(entryId: string, kb: string, limit?: number): Promise<VersionListResponse> {
+		const params = new URLSearchParams({ kb });
+		if (limit) params.set('limit', String(limit));
+		return this.request(`/api/entries/${encodeURIComponent(entryId)}/versions?${params}`);
 	}
 
 	// Web Clipper

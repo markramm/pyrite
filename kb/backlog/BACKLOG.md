@@ -25,21 +25,22 @@ Recommended execution order. Grouped by milestone.
 
 *Web UI:*
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[web-ui-logout-button]] | XS | No logout = blocked users |
-| **2** | [[web-ui-version-history-fix]] | XS | Broken feature |
-| **3** | [[web-ui-type-colors-consolidation]] | XS | Deduplicate type→color mappings |
-| **4** | [[web-ui-page-titles]] | XS | Missing browser tab titles |
-| **5** | [[web-ui-dead-code-cleanup]] | XS | Remove unused code |
-| **6** | [[web-ui-loading-states]] | S | Standardize loading indicators |
-| **7** | [[web-ui-accessibility-fixes]] | S | aria-labels, keyboard nav |
-| **8** | [[web-ui-mobile-responsive]] | S | Mobile viewport fixes |
-| **9** | [[web-ui-collections-save]] | S | Save collection views |
-| **10** | [[web-ui-first-run-experience]] | S | Empty-state onboarding |
-| **11** | [[web-ui-starred-entries]] | S | Restore starred entries feature |
-| **12** | [[ux-accessibility-fixes]] | M | Original accessibility audit items |
-| **13** | [[playwright-integration-tests]] | M | E2E test coverage |
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[web-ui-logout-button]] | XS | No logout = blocked users | **done** |
+| **2** | [[web-ui-version-history-fix]] | XS | Broken feature | **done** |
+| **3** | [[web-ui-type-colors-consolidation]] | XS | Deduplicate type→color mappings | **done** |
+| **4** | [[web-ui-page-titles]] | XS | Missing browser tab titles | **done** |
+| **5** | [[web-ui-dead-code-cleanup]] | XS | Remove unused code | **done** |
+| **6** | [[web-ui-loading-states]] | S | Standardize loading indicators | **done** |
+| **7** | [[web-ui-accessibility-fixes]] | S | aria-labels, keyboard nav | **done** |
+| **8** | [[web-ui-mobile-responsive]] | S | Mobile viewport fixes | **done** |
+| **9** | [[web-ui-collections-save]] | S | Save collection views | **done** |
+| **10** | [[web-ui-first-run-experience]] | S | Empty-state onboarding | **done** |
+| **11** | [[web-ui-starred-entries]] | S | Restore starred entries feature | **done** |
+| **12** | [[ux-accessibility-fixes]] | M | Original accessibility audit items | **done** |
+| **13** | [[playwright-integration-tests]] | M | E2E test coverage | **done** |
+| **14** | [[web-ui-review-hardening]] | S | Final pre-launch UI gate | **done** |
 
 *Agent DX (CLI + MCP + REST):* **All done.**
 
@@ -71,7 +72,6 @@ Recommended execution order. Grouped by milestone.
 | **2** | [[pyrite-website]] | M | Marketing site + docs at pyrite.dev |
 | **3** | [[demo-site-deployment]] | M | Live demo at demo.pyrite.dev |
 | **4** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
-| **5** | [[web-ui-review-hardening]] | S | Final pre-launch UI gate |
 
 **0.16 — Ecosystem & Onboarding (launch release):**
 
@@ -130,23 +130,24 @@ Recommended execution order. Grouped by milestone.
 | 89 | [[mcp-submission-update]] | improvement | XS | 0.12 | pending |
 | 94 | [[web-ui-auth]] Phase 1 | feature | M | 0.12 | **done** |
 
-### Planned — 0.13 (Human & Agent UX Hardening)
+### Planned — 0.13 (Human & Agent UX Hardening) — all done
 
-| # | Item | Kind | Effort | Milestone |
-|---|------|------|--------|-----------|
-| — | [[web-ui-logout-button]] | bug | XS | 0.13 |
-| — | [[web-ui-version-history-fix]] | bug | XS | 0.13 |
-| — | [[web-ui-type-colors-consolidation]] | improvement | XS | 0.13 |
-| — | [[web-ui-page-titles]] | improvement | XS | 0.13 |
-| — | [[web-ui-dead-code-cleanup]] | improvement | XS | 0.13 |
-| — | [[web-ui-loading-states]] | improvement | S | 0.13 |
-| — | [[web-ui-accessibility-fixes]] | improvement | S | 0.13 |
-| — | [[web-ui-mobile-responsive]] | improvement | S | 0.13 |
-| — | [[web-ui-collections-save]] | improvement | S | 0.13 |
-| — | [[web-ui-first-run-experience]] | improvement | S | 0.13 |
-| — | [[web-ui-starred-entries]] | improvement | S | 0.13 |
-| 105 | [[ux-accessibility-fixes]] | improvement | M | 0.13 |
-| — | [[playwright-integration-tests]] | feature | M | 0.13 |
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| — | [[web-ui-logout-button]] | bug | XS | 0.13 | **done** |
+| — | [[web-ui-version-history-fix]] | bug | XS | 0.13 | **done** |
+| — | [[web-ui-type-colors-consolidation]] | improvement | XS | 0.13 | **done** |
+| — | [[web-ui-page-titles]] | improvement | XS | 0.13 | **done** |
+| — | [[web-ui-dead-code-cleanup]] | improvement | XS | 0.13 | **done** |
+| — | [[web-ui-loading-states]] | improvement | S | 0.13 | **done** |
+| — | [[web-ui-accessibility-fixes]] | improvement | S | 0.13 | **done** |
+| — | [[web-ui-mobile-responsive]] | improvement | S | 0.13 | **done** |
+| — | [[web-ui-collections-save]] | improvement | S | 0.13 | **done** |
+| — | [[web-ui-first-run-experience]] | improvement | S | 0.13 | **done** |
+| — | [[web-ui-starred-entries]] | improvement | S | 0.13 | **done** |
+| 105 | [[ux-accessibility-fixes]] | improvement | M | 0.13 | **done** |
+| — | [[playwright-integration-tests]] | feature | M | 0.13 | **done** |
+| — | [[web-ui-review-hardening]] | improvement | S | 0.13 | **done** |
 | — | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | bug | S | 0.13 | **done** |
 | — | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | bug | S | 0.13 | **done** |
 | — | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | feature | S | 0.13 | **done** |
@@ -172,7 +173,6 @@ Recommended execution order. Grouped by milestone.
 | 111 | [[pyrite-website]] | feature | M | 0.15 |
 | 85 | [[demo-site-deployment]] | feature | M | 0.15 |
 | 87 | [[byok-ai-gap-analysis]] | improvement | M | 0.15 |
-| — | [[web-ui-review-hardening]] | improvement | S | 0.15 |
 
 ### Planned — 0.16 (Ecosystem & Onboarding — launch release)
 
@@ -239,9 +239,9 @@ pypi-publish (#74)                   [0.12] ✅
       ├── awesome-plugins-page (#109) [0.16] — needs #107
       └── plugin-writing-tutorial (#108) [0.16] — needs #107
 
-web-ui-* items                       [0.13] — no cross-milestone deps
-  └── playwright-integration-tests   [0.13] — validates all UI fixes
-      └── web-ui-review-hardening    [0.15] — final gate, after all 0.13 items
+web-ui-* items                       [0.13] ✅ — all done
+  └── playwright-integration-tests   [0.13] ✅ — validates all UI fixes
+      └── web-ui-review-hardening    [0.13] ✅ — final gate, moved from 0.15, done
 
 web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
   ├── oauth-providers (#110)         [0.14] — GitHub OAuth
@@ -396,6 +396,9 @@ All items below are done. Detail lives in the individual backlog item files in [
 
 ### Wave 14 — Agent DX (0.13)
 [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]], [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]], [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]], [[mcp-search-add-fields-parameter-for-token-efficient-results]], [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]], [[mcp-tool-kb-recent-for-what-changed-orientation-queries]], [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]], [[agent-oriented-error-responses-across-cli-and-mcp]]
+
+### Wave 15 — Web UI Hardening (0.13)
+[[web-ui-logout-button]], [[web-ui-version-history-fix]], [[web-ui-type-colors-consolidation]], [[web-ui-page-titles]], [[web-ui-dead-code-cleanup]], [[web-ui-loading-states]], [[web-ui-accessibility-fixes]], [[web-ui-mobile-responsive]], [[web-ui-collections-save]], [[web-ui-first-run-experience]], [[web-ui-starred-entries]], [[ux-accessibility-fixes]], [[playwright-integration-tests]], [[web-ui-review-hardening]]
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]

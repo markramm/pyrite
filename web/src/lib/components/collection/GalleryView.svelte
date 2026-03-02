@@ -2,6 +2,7 @@
 	import TagBadge from '$lib/components/common/TagBadge.svelte';
 	import type { EntryResponse } from '$lib/api/types';
 	import { goto } from '$app/navigation';
+	import { typeBgColor } from '$lib/constants';
 
 	interface Props {
 		entries: EntryResponse[];
@@ -15,14 +16,6 @@
 		const plain = body.replace(/[#*_\[\]`]/g, '').trim();
 		return plain.length > maxLen ? plain.slice(0, maxLen) + '...' : plain;
 	}
-
-	const typeColors: Record<string, string> = {
-		event: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-		person: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-		organization: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-		note: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300',
-		topic: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-	};
 
 	function formatDate(dateStr?: string): string {
 		if (!dateStr) return '';
@@ -62,7 +55,7 @@
 			<div class="mt-auto flex flex-col gap-2 pt-3">
 				<div class="flex items-center gap-2">
 					{#if cardFields.includes('entry_type')}
-						<span class="rounded-full px-2 py-0.5 text-xs font-medium {typeColors[entry.entry_type] ?? 'bg-zinc-100 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400'}">
+						<span class="rounded-full px-2 py-0.5 text-xs font-medium {typeBgColor(entry.entry_type)}">
 							{entry.entry_type}
 						</span>
 					{/if}

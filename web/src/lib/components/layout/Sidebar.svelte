@@ -1,9 +1,54 @@
 <script lang="ts">
 	import KBSwitcher from '$lib/components/common/KBSwitcher.svelte';
 	import ThemeToggle from '$lib/components/common/ThemeToggle.svelte';
+	import StarredSidebar from '$lib/components/StarredSidebar.svelte';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { api } from '$lib/api/client';
+	import type { AuthUser } from '$lib/types/auth';
+
+	let currentUser = $state<AuthUser | null>(null);
+	let authEnabled = $state(false);
+
+	onMount(() => {
+		api.getAuthConfig().then((config) => {
+			authEnabled = config.enabled;
+			if (config.enabled) {
+				api.getMe().then((user) => {
+					currentUser = user;
+				});
+			}
+		});
+	});
+
+	let userInitials = $derived.by(() => {
+		if (!currentUser) return '';
+		const name = currentUser.display_name ?? currentUser.username;
+		return name
+			.split(' ')
+			.map((w) => w[0])
+			.slice(0, 2)
+			.join('')
+			.toUpperCase();
+	});
+
+	let displayName = $derived(
+		currentUser ? (currentUser.display_name ?? currentUser.username) : ''
+	);
+
+	let showUserMenu = $derived(authEnabled && currentUser !== null);
+
+	async function handleLogout() {
+		try {
+			await api.logout();
+		} catch {
+			// proceed to redirect even if the request fails
+		}
+		goto('/login');
+	}
 
 	const navItems = [
 		{ href: '/search', label: 'Search', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
@@ -62,12 +107,13 @@
 	</div>
 
 	<!-- Navigation -->
-	<nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
+	<nav class="flex-1 space-y-0.5 overflow-y-auto px-2 py-2" aria-label="Main navigation">
 		{#each navItems as item}
 			<a
 				href={item.href}
 				onclick={handleNavClick}
-				class="flex items-center gap-3 rounded-md px-3 py-2 text-sm {isActive(item.href)
+				aria-current={isActive(item.href) ? 'page' : undefined}
+				class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm {isActive(item.href)
 					? 'bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium'
 					: 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800'}"
 			>
@@ -78,6 +124,11 @@
 			</a>
 		{/each}
 	</nav>
+
+	<!-- Starred Entries -->
+	<div class="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+		<StarredSidebar />
+	</div>
 
 	<!-- Recent Entries -->
 	{#if entryStore.recentIds.length > 0}
@@ -93,6 +144,32 @@
 					{entryStore.recentTitles[id] ?? id}
 				</a>
 			{/each}
+		</div>
+	{/if}
+
+	<!-- User Menu -->
+	{#if showUserMenu}
+		<div class="border-t border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
+			<div class="flex items-center gap-2.5">
+				<!-- Avatar -->
+				<span class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-zinc-300 text-xs font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
+					{userInitials()}
+				</span>
+				<!-- Name -->
+				<span class="flex-1 truncate text-xs text-zinc-600 dark:text-zinc-400" title={displayName}>
+					{displayName}
+				</span>
+				<!-- Logout button -->
+				<button
+					onclick={handleLogout}
+					title="Log out"
+					class="flex-shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+				>
+					<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+					</svg>
+				</button>
+			</div>
 		</div>
 	{/if}
 </aside>

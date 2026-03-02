@@ -12,6 +12,7 @@ from ..schemas import (
     CollectionEntriesResponse,
     CollectionListResponse,
     CollectionResponse,
+    CreateCollectionRequest,
     EntryResponse,
     QueryPreviewRequest,
     QueryPreviewResponse,
@@ -88,6 +89,52 @@ def list_collections(
     if neg is not None:
         return neg
     return CollectionListResponse(collections=collections, total=len(collections))
+
+
+@router.post("/collections", response_model=CollectionResponse)
+@limiter.limit("60/minute")
+def create_collection(
+    request: Request,
+    body: CreateCollectionRequest = Body(...),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Create a new virtual collection."""
+    metadata = {
+        "description": body.description or "",
+        "source_type": "query",
+        "query": body.query,
+        "icon": body.icon or "",
+        "view_config": body.view_config or {},
+    }
+
+    # Generate a slug-style entry_id from the title
+    import re
+    slug = re.sub(r"[^a-z0-9]+", "-", body.title.lower()).strip("-")
+    if not slug:
+        slug = "collection"
+
+    result = svc.create_entry(
+        kb_name=body.kb,
+        entry_id=slug,
+        entry_type="collection",
+        title=body.title,
+        body="",
+        metadata=metadata,
+    )
+
+    return CollectionResponse(
+        id=result["id"],
+        title=body.title,
+        description=body.description or "",
+        source_type="query",
+        icon=body.icon or "",
+        view_config=body.view_config or {},
+        entry_count=0,
+        kb_name=body.kb,
+        folder_path="",
+        query=body.query,
+        tags=[],
+    )
 
 
 @router.get("/collections/{collection_id}", response_model=CollectionResponse)

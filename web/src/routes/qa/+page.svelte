@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
+	import LoadingState from '$lib/components/common/LoadingState.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { onMount } from 'svelte';
 	import {
@@ -70,7 +71,7 @@
 </script>
 
 <svelte:head>
-	<title>QA Dashboard - Pyrite</title>
+	<title>QA Dashboard — Pyrite</title>
 </svelte:head>
 
 <div class="flex h-full flex-col">
@@ -101,9 +102,7 @@
 		</div>
 
 		{#if loading}
-			<div class="flex items-center justify-center py-12">
-				<div class="text-zinc-500">Loading QA data...</div>
-			</div>
+			<LoadingState message="Loading QA data..." />
 		{:else if error}
 			<div class="rounded-md bg-red-50 p-4 text-red-700 dark:bg-red-900/20 dark:text-red-400">
 				{error}
