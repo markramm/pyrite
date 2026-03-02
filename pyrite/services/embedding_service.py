@@ -88,14 +88,12 @@ class EmbeddingService:
         """Lazy-load the sentence-transformers model."""
         if self._model is None:
             import logging
-            import os
-
-            from sentence_transformers import SentenceTransformer
 
             # Suppress noisy output during model loading:
             # - transformers.disable_progress_bar() silences weight-loading tqdm bars
             # - Log levels silence the HF load report and auth warnings
             import transformers.utils.logging as tf_logging
+            from sentence_transformers import SentenceTransformer
 
             tf_logging.disable_progress_bar()
             loggers = ["transformers", "huggingface_hub"]

@@ -10,8 +10,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from ..schema import (
     EventStatus,
     Provenance,
@@ -23,6 +21,8 @@ from ..schema import (
 )
 from .base import Entry, parse_datetime, parse_links, parse_sources
 from .collection import CollectionEntry
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass

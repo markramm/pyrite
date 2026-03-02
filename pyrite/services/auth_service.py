@@ -12,7 +12,8 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt as _bcrypt
 
-from ..config import AuthConfig
+from ..config import AuthConfig, OAuthProviderConfig
+from ..services.oauth_providers import OAuthProfile
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
@@ -59,8 +60,9 @@ class AuthService:
         now = datetime.now(UTC).isoformat()
 
         conn.execute(
-            """INSERT INTO local_user (username, display_name, password_hash, role, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO local_user
+            (username, display_name, password_hash, role, auth_provider, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 'local', ?, ?)""",
             (username, display_name, password_hash, role, now, now),
         )
         conn.commit()
@@ -74,6 +76,8 @@ class AuthService:
             "username": username,
             "display_name": display_name,
             "role": role,
+            "auth_provider": "local",
+            "avatar_url": None,
         }
 
     def login(self, username: str, password: str) -> tuple[dict, str]:
@@ -84,13 +88,18 @@ class AuthService:
         conn = self.db._raw_conn
 
         row = conn.execute(
-            "SELECT id, username, display_name, password_hash, role FROM local_user WHERE username = ?",
+            "SELECT id, username, display_name, password_hash, role, auth_provider, avatar_url"
+            " FROM local_user WHERE username = ?",
             (username,),
         ).fetchone()
         if not row:
             raise ValueError("Invalid username or password")
 
-        user_id, uname, display_name, password_hash, role = row
+        user_id, uname, display_name, password_hash, role, auth_provider, avatar_url = row
+
+        # Block password login for OAuth-only users
+        if auth_provider != "local":
+            raise ValueError("This account uses external authentication")
 
         if not self._verify_password(password, password_hash):
             raise ValueError("Invalid username or password")
@@ -115,6 +124,108 @@ class AuthService:
             "username": uname,
             "display_name": display_name,
             "role": role,
+            "auth_provider": auth_provider,
+            "avatar_url": avatar_url,
+        }
+        return user, raw_token
+
+    def oauth_login(
+        self, profile: OAuthProfile, provider_config: OAuthProviderConfig
+    ) -> tuple[dict, str]:
+        """Create or update an OAuth user and return (user_dict, raw_token).
+
+        Raises ValueError if the user's orgs don't match allowed_orgs.
+        """
+        conn = self.db._raw_conn
+
+        # 1. Check org restrictions
+        if provider_config.allowed_orgs:
+            if not set(profile.orgs) & set(provider_config.allowed_orgs):
+                raise ValueError(
+                    "Your GitHub account is not a member of an allowed organization"
+                )
+
+        # 2. Determine role from org_tier_map or default_tier
+        role = provider_config.default_tier
+        if provider_config.org_tier_map:
+            role_priority = {"read": 0, "write": 1, "admin": 2}
+            for org in profile.orgs:
+                mapped = provider_config.org_tier_map.get(org)
+                if mapped and role_priority.get(mapped, -1) > role_priority.get(role, -1):
+                    role = mapped
+
+        # 3. Look up existing OAuth user
+        row = conn.execute(
+            "SELECT id, username, display_name, role, avatar_url"
+            " FROM local_user WHERE auth_provider = ? AND provider_id = ?",
+            (profile.provider, profile.provider_id),
+        ).fetchone()
+
+        now = datetime.now(UTC).isoformat()
+
+        if row:
+            user_id, username, display_name, existing_role, _ = row
+            # Update avatar and display name
+            conn.execute(
+                "UPDATE local_user SET avatar_url = ?, display_name = ?, updated_at = ? WHERE id = ?",
+                (profile.avatar_url, profile.display_name or display_name, now, user_id),
+            )
+            conn.commit()
+            role = existing_role  # preserve existing role
+        else:
+            # 4. New user — handle username conflict with local users
+            username = profile.username
+            conflict = conn.execute(
+                "SELECT id FROM local_user WHERE username = ?", (username,)
+            ).fetchone()
+            if conflict:
+                username = f"{profile.provider}:{profile.username}"
+
+            # First OAuth user gets admin if no users exist at all
+            count = conn.execute("SELECT COUNT(*) FROM local_user").fetchone()[0]
+            if count == 0:
+                role = "admin"
+
+            conn.execute(
+                """INSERT INTO local_user
+                (username, display_name, password_hash, role, auth_provider, provider_id,
+                 avatar_url, created_at, updated_at)
+                VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)""",
+                (
+                    username,
+                    profile.display_name,
+                    role,
+                    profile.provider,
+                    profile.provider_id,
+                    profile.avatar_url,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+            user_id = conn.execute(
+                "SELECT id FROM local_user WHERE username = ?", (username,)
+            ).fetchone()[0]
+
+        # 5. Create session
+        self._enforce_max_sessions(user_id)
+        raw_token, token_hash = self._generate_token()
+        now_dt = datetime.now(UTC)
+        expires_at = now_dt + timedelta(hours=self.config.session_ttl_hours)
+        conn.execute(
+            """INSERT INTO session (token_hash, user_id, created_at, expires_at, last_used)
+            VALUES (?, ?, ?, ?, ?)""",
+            (token_hash, user_id, now_dt.isoformat(), expires_at.isoformat(), now_dt.isoformat()),
+        )
+        conn.commit()
+
+        user = {
+            "id": user_id,
+            "username": username,
+            "display_name": profile.display_name,
+            "role": role,
+            "auth_provider": profile.provider,
+            "avatar_url": profile.avatar_url,
         }
         return user, raw_token
 
@@ -131,7 +242,8 @@ class AuthService:
             self._cleanup_expired()
 
         row = conn.execute(
-            """SELECT s.id, s.user_id, s.expires_at, u.username, u.display_name, u.role
+            """SELECT s.id, s.user_id, s.expires_at,
+                      u.username, u.display_name, u.role, u.auth_provider, u.avatar_url
             FROM session s JOIN local_user u ON s.user_id = u.id
             WHERE s.token_hash = ?""",
             (token_hash,),
@@ -140,7 +252,9 @@ class AuthService:
         if not row:
             return None
 
-        session_id, user_id, expires_at, username, display_name, role = row
+        session_id, user_id, expires_at, username, display_name, role, auth_provider, avatar_url = (
+            row
+        )
 
         # Check expiry
         if datetime.fromisoformat(expires_at) < datetime.now(UTC):
@@ -160,6 +274,8 @@ class AuthService:
             "username": username,
             "display_name": display_name,
             "role": role,
+            "auth_provider": auth_provider,
+            "avatar_url": avatar_url,
         }
 
     def logout(self, token: str) -> bool:
@@ -181,7 +297,8 @@ class AuthService:
         """Get user by ID."""
         conn = self.db._raw_conn
         row = conn.execute(
-            "SELECT id, username, display_name, role FROM local_user WHERE id = ?",
+            "SELECT id, username, display_name, role, auth_provider, avatar_url"
+            " FROM local_user WHERE id = ?",
             (user_id,),
         ).fetchone()
         if not row:
@@ -191,6 +308,8 @@ class AuthService:
             "username": row[1],
             "display_name": row[2],
             "role": row[3],
+            "auth_provider": row[4],
+            "avatar_url": row[5],
         }
 
     def set_role(self, user_id: int, role: str) -> bool:

@@ -14,8 +14,6 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
-logger = logging.getLogger(__name__)
-
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
 try:
@@ -26,6 +24,8 @@ except ImportError:
     HAS_HTTPX = False
 
 from .config import CONFIG_DIR, GitHubAuth, ensure_config_dir
+
+logger = logging.getLogger(__name__)
 
 # GitHub OAuth endpoints
 GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"

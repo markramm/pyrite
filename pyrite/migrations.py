@@ -7,9 +7,8 @@ Migrations transform raw frontmatter dicts between schema versions.
 
 import logging
 from collections import defaultdict
-from dataclasses import dataclass, field
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 

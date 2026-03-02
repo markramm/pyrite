@@ -223,6 +223,9 @@ class LocalUser(Base):
     role = Column(String, nullable=False, server_default="read")
     created_at = Column(String, server_default="CURRENT_TIMESTAMP")
     updated_at = Column(String)
+    auth_provider = Column(String, server_default="local")
+    provider_id = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
 
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
 

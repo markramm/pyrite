@@ -4,8 +4,6 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-logger = logging.getLogger(__name__)
-
 from ...config import KBConfig, save_config
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
@@ -13,6 +11,8 @@ from ...storage.database import PyriteDB
 from ...storage.index import IndexManager
 from ..api import get_db, get_index_mgr, get_kb_service, get_llm_service, limiter, requires_tier
 from ..schemas import AIStatusResponse, StatsResponse, SyncResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Admin"])
 

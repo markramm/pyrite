@@ -12,10 +12,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from ..schema import Link, Provenance, Source
 from ..utils.yaml import dump_yaml, load_yaml
+
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:

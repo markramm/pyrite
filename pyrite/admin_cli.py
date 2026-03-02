@@ -578,9 +578,9 @@ def mcp_server(
     tier: str = typer.Option("admin", "--tier", "-t", help="Permission tier: read, write, admin"),
 ):
     """Start an MCP server at the specified permission tier."""
-    from .server.mcp_server import PyriteMCPServer
-
     import sys
+
+    from .server.mcp_server import PyriteMCPServer
     print(f"Starting MCP server (tier={tier}) on stdio...", file=sys.stderr)
     server = PyriteMCPServer(tier=tier)
     try:

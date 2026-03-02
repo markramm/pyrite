@@ -13,9 +13,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from pyrite.utils.yaml import load_yaml_file
+
+logger = logging.getLogger(__name__)
 
 
 class VerificationStatus(StrEnum):

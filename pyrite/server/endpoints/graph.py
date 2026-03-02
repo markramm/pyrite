@@ -27,7 +27,7 @@ def compute_betweenness_centrality(
     n = len(node_keys)
 
     if n < 3:
-        return {k: 0.0 for k in node_keys}
+        return dict.fromkeys(node_keys, 0.0)
 
     adj: dict[tuple[str, str], list[tuple[str, str]]] = {k: [] for k in node_keys}
     for e in edges:
@@ -37,16 +37,16 @@ def compute_betweenness_centrality(
             adj[src].append(tgt)
             adj[tgt].append(src)
 
-    centrality: dict[tuple[str, str], float] = {k: 0.0 for k in node_keys}
+    centrality: dict[tuple[str, str], float] = dict.fromkeys(node_keys, 0.0)
 
     # Brandes' algorithm: BFS from each source
     for s in node_keys:
         # BFS
         stack: list[tuple[str, str]] = []
         pred: dict[tuple[str, str], list[tuple[str, str]]] = {k: [] for k in node_keys}
-        sigma: dict[tuple[str, str], int] = {k: 0 for k in node_keys}
+        sigma: dict[tuple[str, str], int] = dict.fromkeys(node_keys, 0)
         sigma[s] = 1
-        dist: dict[tuple[str, str], int] = {k: -1 for k in node_keys}
+        dist: dict[tuple[str, str], int] = dict.fromkeys(node_keys, -1)
         dist[s] = 0
 
         queue: deque[tuple[str, str]] = deque([s])
@@ -64,7 +64,7 @@ def compute_betweenness_centrality(
                     pred[w].append(v)
 
         # Accumulation
-        delta: dict[tuple[str, str], float] = {k: 0.0 for k in node_keys}
+        delta: dict[tuple[str, str], float] = dict.fromkeys(node_keys, 0.0)
         while stack:
             w = stack.pop()
             for v in pred[w]:

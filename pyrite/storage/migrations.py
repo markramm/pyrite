@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 6
+CURRENT_VERSION = 7
 
 
 @dataclass
@@ -204,6 +204,17 @@ MIGRATIONS: list[Migration] = [
         DROP TABLE IF EXISTS local_user;
         """,
     ),
+    Migration(
+        version=7,
+        description="Add OAuth columns to local_user for GitHub OAuth",
+        # NOTE: up SQL is empty because columns may already exist from ORM create_all.
+        # The actual ALTER is handled conditionally in _apply_migration_v7().
+        up="",
+        down="""
+        DROP INDEX IF EXISTS idx_local_user_provider;
+        -- SQLite does not support DROP COLUMN before 3.35; columns remain but are unused.
+        """,
+    ),
 ]
 
 
@@ -278,6 +289,11 @@ class MigrationManager:
     def _apply_migration(self, migration: Migration) -> None:
         """Apply a single migration."""
         try:
+            # Version-specific handlers for migrations that can't use plain SQL
+            handler = getattr(self, f"_apply_v{migration.version}", None)
+            if handler:
+                handler()
+
             # Execute the migration SQL
             if migration.up.strip():
                 self.conn.executescript(migration.up)
@@ -295,6 +311,27 @@ class MigrationManager:
         except Exception as e:
             self.conn.rollback()
             raise MigrationError(f"Failed to apply migration v{migration.version}: {e}") from e
+
+    def _apply_v7(self) -> None:
+        """Conditionally add OAuth columns to local_user (may already exist from ORM)."""
+        existing = {
+            row[1]
+            for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()
+        }
+        if "auth_provider" not in existing:
+            self.conn.execute(
+                "ALTER TABLE local_user ADD COLUMN auth_provider TEXT DEFAULT 'local'"
+            )
+        if "provider_id" not in existing:
+            self.conn.execute("ALTER TABLE local_user ADD COLUMN provider_id TEXT")
+        if "avatar_url" not in existing:
+            self.conn.execute("ALTER TABLE local_user ADD COLUMN avatar_url TEXT")
+        self.conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_local_user_provider
+                ON local_user(auth_provider, provider_id)
+                WHERE provider_id IS NOT NULL
+        """)
+        self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:
         """

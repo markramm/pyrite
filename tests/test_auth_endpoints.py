@@ -1,7 +1,8 @@
-"""Tests for auth API endpoints: register, login, logout, session."""
+"""Tests for auth API endpoints: register, login, logout, session, OAuth."""
 
 import tempfile
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -10,12 +11,13 @@ passlib = pytest.importorskip("passlib", reason="passlib not installed")
 
 from fastapi.testclient import TestClient
 
-from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
+from pyrite.config import AuthConfig, KBConfig, OAuthProviderConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app, get_config, get_db
+from pyrite.services.oauth_providers import OAuthProfile, OAuthToken
 from pyrite.storage.database import PyriteDB
 
 
-def _make_client(tmpdir, auth_enabled=True, allow_registration=True):
+def _make_client(tmpdir, auth_enabled=True, allow_registration=True, providers=None):
     """Create TestClient with auth-enabled config."""
     db_path = tmpdir / "index.db"
     kb_path = tmpdir / "kb"
@@ -28,6 +30,7 @@ def _make_client(tmpdir, auth_enabled=True, allow_registration=True):
             auth=AuthConfig(
                 enabled=auth_enabled,
                 allow_registration=allow_registration,
+                providers=providers or {},
             ),
         ),
     )
@@ -185,3 +188,145 @@ class TestAPIWithAuth:
         """Default behavior preserved: no auth = admin access."""
         r = noauth_client.get("/api/kbs")
         assert r.status_code == 200
+
+
+class TestOAuthEndpoints:
+    @pytest.fixture
+    def oauth_client(self, tmpdir):
+        providers = {
+            "github": OAuthProviderConfig(
+                client_id="test-client-id",
+                client_secret="test-client-secret",
+            )
+        }
+        client, config, db = _make_client(tmpdir, providers=providers)
+        return client
+
+    def test_github_redirect(self, oauth_client):
+        r = oauth_client.get("/auth/github", follow_redirects=False)
+        assert r.status_code == 302
+        assert "github.com/login/oauth/authorize" in r.headers["location"]
+        assert "client_id=test-client-id" in r.headers["location"]
+
+    def test_github_not_configured(self, auth_client):
+        r = auth_client.get("/auth/github")
+        assert r.status_code == 404
+
+    def test_callback_invalid_state(self, oauth_client):
+        r = oauth_client.get(
+            "/auth/github/callback?code=abc&state=invalid",
+            follow_redirects=False,
+        )
+        assert r.status_code == 302
+        assert "error=oauth_failed" in r.headers["location"]
+
+    def test_callback_success(self, tmpdir):
+        providers = {
+            "github": OAuthProviderConfig(
+                client_id="test-client-id",
+                client_secret="test-client-secret",
+            )
+        }
+        client, config, db = _make_client(tmpdir, providers=providers)
+
+        # First, get a valid state by hitting /auth/github
+        r = client.get("/auth/github", follow_redirects=False)
+        location = r.headers["location"]
+        # Extract state from URL
+        import urllib.parse
+        parsed = urllib.parse.urlparse(location)
+        qs = urllib.parse.parse_qs(parsed.query)
+        state = qs["state"][0]
+
+        mock_token = OAuthToken(access_token="gho_test")
+        mock_profile = OAuthProfile(
+            provider="github",
+            provider_id="12345",
+            username="testuser",
+            display_name="Test User",
+            email="test@example.com",
+            avatar_url="https://example.com/avatar.png",
+            orgs=[],
+        )
+
+        with (
+            patch(
+                "pyrite.server.auth_endpoints.GitHubOAuthProvider.exchange_code",
+                new_callable=AsyncMock,
+                return_value=mock_token,
+            ),
+            patch(
+                "pyrite.server.auth_endpoints.GitHubOAuthProvider.get_user_profile",
+                new_callable=AsyncMock,
+                return_value=mock_profile,
+            ),
+        ):
+            r = client.get(
+                f"/auth/github/callback?code=testcode&state={state}",
+                follow_redirects=False,
+            )
+
+        assert r.status_code == 302
+        assert r.headers["location"] == "/"
+        assert "pyrite_session" in r.cookies
+
+    def test_auth_config_includes_providers(self, oauth_client):
+        r = oauth_client.get("/auth/config")
+        assert r.status_code == 200
+        data = r.json()
+        assert "github" in data["providers"]
+
+    def test_auth_config_no_providers(self, auth_client):
+        r = auth_client.get("/auth/config")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["providers"] == []
+
+    def test_me_includes_avatar(self, tmpdir):
+        providers = {
+            "github": OAuthProviderConfig(
+                client_id="test-client-id",
+                client_secret="test-client-secret",
+            )
+        }
+        client, config, db = _make_client(tmpdir, providers=providers)
+
+        # Get valid state
+        r = client.get("/auth/github", follow_redirects=False)
+        import urllib.parse
+        parsed = urllib.parse.urlparse(r.headers["location"])
+        qs = urllib.parse.parse_qs(parsed.query)
+        state = qs["state"][0]
+
+        mock_token = OAuthToken(access_token="gho_test")
+        mock_profile = OAuthProfile(
+            provider="github",
+            provider_id="99999",
+            username="avataruser",
+            display_name="Avatar User",
+            avatar_url="https://example.com/avatar.png",
+            orgs=[],
+        )
+
+        with (
+            patch(
+                "pyrite.server.auth_endpoints.GitHubOAuthProvider.exchange_code",
+                new_callable=AsyncMock,
+                return_value=mock_token,
+            ),
+            patch(
+                "pyrite.server.auth_endpoints.GitHubOAuthProvider.get_user_profile",
+                new_callable=AsyncMock,
+                return_value=mock_profile,
+            ),
+        ):
+            client.get(
+                f"/auth/github/callback?code=testcode&state={state}",
+                follow_redirects=False,
+            )
+
+        r = client.get("/auth/me")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["avatar_url"] == "https://example.com/avatar.png"
+        assert data["auth_provider"] == "github"

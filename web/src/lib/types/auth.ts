@@ -5,11 +5,14 @@ export interface AuthUser {
 	username: string;
 	display_name: string | null;
 	role: 'read' | 'write' | 'admin';
+	auth_provider: string;
+	avatar_url: string | null;
 }
 
 export interface AuthConfig {
 	enabled: boolean;
 	allow_registration: boolean;
+	providers: string[];
 }
 
 export interface LoginRequest {

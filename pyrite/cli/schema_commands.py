@@ -1,6 +1,5 @@
 """Schema versioning CLI commands."""
 
-import json
 import logging
 
 import typer

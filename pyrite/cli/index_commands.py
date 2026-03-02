@@ -10,9 +10,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-logger = logging.getLogger(__name__)
-
 from .context import get_config_and_db
+
+logger = logging.getLogger(__name__)
 
 index_app = typer.Typer(help="Search index management")
 console = Console()

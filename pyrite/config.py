@@ -260,6 +260,17 @@ class Subscription:
 
 
 @dataclass
+class OAuthProviderConfig:
+    """Configuration for a single OAuth provider (e.g. GitHub)."""
+
+    client_id: str = ""
+    client_secret: str = ""
+    allowed_orgs: list[str] = field(default_factory=list)  # empty = allow all
+    org_tier_map: dict[str, str] = field(default_factory=dict)  # org → role
+    default_tier: str = "read"
+
+
+@dataclass
 class AuthConfig:
     """Authentication configuration."""
 
@@ -268,6 +279,7 @@ class AuthConfig:
     session_ttl_hours: int = 168
     max_sessions_per_user: int = 5
     allow_registration: bool = True
+    providers: dict[str, OAuthProviderConfig] = field(default_factory=dict)
 
 
 @dataclass
@@ -297,6 +309,8 @@ class Settings:
     auth: AuthConfig = field(default_factory=AuthConfig)
     rate_limit_read: str = "100/minute"
     rate_limit_write: str = "30/minute"
+    rate_limit_admin: str = "10/minute"
+    mcp_rate_limit_exempt_local: bool = True
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
     search_mode: str = "keyword"
@@ -494,9 +508,27 @@ class PyriteConfig:
                 "session_ttl_hours": self.settings.auth.session_ttl_hours,
                 "max_sessions_per_user": self.settings.auth.max_sessions_per_user,
                 "allow_registration": self.settings.auth.allow_registration,
+                **(
+                    {
+                        "providers": {
+                            name: {
+                                "client_id": p.client_id,
+                                "client_secret": p.client_secret,
+                                "allowed_orgs": p.allowed_orgs,
+                                "org_tier_map": p.org_tier_map,
+                                "default_tier": p.default_tier,
+                            }
+                            for name, p in self.settings.auth.providers.items()
+                        }
+                    }
+                    if self.settings.auth.providers
+                    else {}
+                ),
             },
             "rate_limit_read": self.settings.rate_limit_read,
             "rate_limit_write": self.settings.rate_limit_write,
+            "rate_limit_admin": self.settings.rate_limit_admin,
+            "mcp_rate_limit_exempt_local": self.settings.mcp_rate_limit_exempt_local,
             "embedding_model": self.settings.embedding_model,
             "embedding_dimensions": self.settings.embedding_dimensions,
             "search_mode": self.settings.search_mode,
@@ -566,6 +598,32 @@ class PyriteConfig:
 
         settings_data = data.get("settings", {})
         auth_data = settings_data.get("auth", {})
+
+        # Parse OAuth providers
+        providers: dict[str, OAuthProviderConfig] = {}
+        for pname, pdata in auth_data.get("providers", {}).items():
+            providers[pname] = OAuthProviderConfig(
+                client_id=pdata.get("client_id", ""),
+                client_secret=pdata.get("client_secret", ""),
+                allowed_orgs=pdata.get("allowed_orgs", []),
+                org_tier_map=pdata.get("org_tier_map", {}),
+                default_tier=pdata.get("default_tier", "read"),
+            )
+        # Env var fallback for GitHub provider
+        if "github" not in providers:
+            gh_id = os.environ.get("PYRITE_GITHUB_CLIENT_ID", "")
+            gh_secret = os.environ.get("PYRITE_GITHUB_CLIENT_SECRET", "")
+            if gh_id and gh_secret:
+                providers["github"] = OAuthProviderConfig(
+                    client_id=gh_id, client_secret=gh_secret
+                )
+        else:
+            gh = providers["github"]
+            if not gh.client_id:
+                gh.client_id = os.environ.get("PYRITE_GITHUB_CLIENT_ID", "")
+            if not gh.client_secret:
+                gh.client_secret = os.environ.get("PYRITE_GITHUB_CLIENT_SECRET", "")
+
         settings = Settings(
             default_editor=settings_data.get("default_editor", os.environ.get("EDITOR", "vim")),
             ai_provider=settings_data.get("ai_provider", "stub"),
@@ -587,9 +645,12 @@ class PyriteConfig:
                 session_ttl_hours=auth_data.get("session_ttl_hours", 168),
                 max_sessions_per_user=auth_data.get("max_sessions_per_user", 5),
                 allow_registration=auth_data.get("allow_registration", True),
+                providers=providers,
             ),
             rate_limit_read=settings_data.get("rate_limit_read", "100/minute"),
             rate_limit_write=settings_data.get("rate_limit_write", "30/minute"),
+            rate_limit_admin=settings_data.get("rate_limit_admin", "10/minute"),
+            mcp_rate_limit_exempt_local=settings_data.get("mcp_rate_limit_exempt_local", True),
             embedding_model=settings_data.get("embedding_model", "all-MiniLM-L6-v2"),
             embedding_dimensions=settings_data.get("embedding_dimensions", 384),
             search_mode=settings_data.get("search_mode", "keyword"),

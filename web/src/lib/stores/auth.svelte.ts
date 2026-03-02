@@ -5,7 +5,7 @@ import type { AuthConfig, AuthUser } from '$lib/types/auth';
 
 class AuthStore {
 	user = $state<AuthUser | null>(null);
-	authConfig = $state<AuthConfig>({ enabled: false, allow_registration: false });
+	authConfig = $state<AuthConfig>({ enabled: false, allow_registration: false, providers: [] });
 	loading = $state(true);
 	error = $state<string | null>(null);
 
@@ -26,7 +26,7 @@ class AuthStore {
 			}
 		} catch {
 			// Auth endpoint not available — auth is disabled
-			this.authConfig = { enabled: false, allow_registration: false };
+			this.authConfig = { enabled: false, allow_registration: false, providers: [] };
 		} finally {
 			this.loading = false;
 		}
