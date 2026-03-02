@@ -14,7 +14,7 @@ metadata:
   priority: high
   effort: l
 kind: enhancement
-status: proposed
+status: done
 priority: high
 effort: l
 milestone: "0.13"

@@ -13,7 +13,7 @@ metadata:
   priority: medium
   effort: m
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: m
 milestone: "0.13"

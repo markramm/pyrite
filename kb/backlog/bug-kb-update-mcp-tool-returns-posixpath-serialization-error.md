@@ -12,7 +12,7 @@ metadata:
   priority: high
   effort: s
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: s
 milestone: "0.13"
