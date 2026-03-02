@@ -19,7 +19,7 @@ Recommended execution order. Grouped by milestone.
 | Priority | Item | Effort | Status |
 |----------|------|--------|--------|
 | **1** | [[pypi-publish]] | S | **done** |
-| **2** | [[mcp-submission-update]] | XS | pending |
+| **2** | [[mcp-submission-update]] | XS | **done** |
 
 **0.13 — Human & Agent UX Hardening:**
 
@@ -57,11 +57,11 @@ Recommended execution order. Grouped by milestone.
 
 **0.14 — Auth & Rate Limiting:**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[mcp-rate-limiting]] | S | Required for public-facing endpoints |
-| **2** | [[oauth-providers]] Phase 1 | L | GitHub OAuth — "Sign in with GitHub" |
-| **3** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox |
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[mcp-rate-limiting]] | S | Required for public-facing endpoints | **done** |
+| **2** | [[oauth-providers]] Phase 1 | L | GitHub OAuth — "Sign in with GitHub" | **done** |
+| **3** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox | |
 
 **0.15 — Deployment & Demo:**
 
@@ -127,7 +127,7 @@ Recommended execution order. Grouped by milestone.
 | # | Item | Kind | Effort | Milestone | Status |
 |---|------|------|--------|-----------|--------|
 | 74 | [[pypi-publish]] | feature | S | 0.12 | **done** |
-| 89 | [[mcp-submission-update]] | improvement | XS | 0.12 | pending |
+| 89 | [[mcp-submission-update]] | improvement | XS | 0.12 | **done** |
 | 94 | [[web-ui-auth]] Phase 1 | feature | M | 0.12 | **done** |
 
 ### Planned — 0.13 (Human & Agent UX Hardening) — all done
@@ -159,11 +159,11 @@ Recommended execution order. Grouped by milestone.
 
 ### Planned — 0.14 (Auth & Rate Limiting)
 
-| # | Item | Kind | Effort | Milestone |
-|---|------|------|--------|-----------|
-| 97 | [[mcp-rate-limiting]] | feature | S | 0.14 |
-| 110 | [[oauth-providers]] Phase 1 | feature | L | 0.14 |
-| 112 | [[per-kb-permissions]] | feature | L | 0.14 |
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| 97 | [[mcp-rate-limiting]] | feature | S | 0.14 | **done** |
+| 110 | [[oauth-providers]] Phase 1 | feature | L | 0.14 | **done** |
+| 112 | [[per-kb-permissions]] | feature | L | 0.14 | |
 
 ### Planned — 0.15 (Deployment & Demo)
 
@@ -399,6 +399,9 @@ All items below are done. Detail lives in the individual backlog item files in [
 
 ### Wave 15 — Web UI Hardening (0.13)
 [[web-ui-logout-button]], [[web-ui-version-history-fix]], [[web-ui-type-colors-consolidation]], [[web-ui-page-titles]], [[web-ui-dead-code-cleanup]], [[web-ui-loading-states]], [[web-ui-accessibility-fixes]], [[web-ui-mobile-responsive]], [[web-ui-collections-save]], [[web-ui-first-run-experience]], [[web-ui-starred-entries]], [[ux-accessibility-fixes]], [[playwright-integration-tests]], [[web-ui-review-hardening]]
+
+### Wave 16 — Auth & Rate Limiting (0.14, partial)
+[[mcp-rate-limiting]], [[oauth-providers]] Phase 1 (GitHub OAuth), [[mcp-submission-update]]
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]
