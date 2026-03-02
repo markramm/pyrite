@@ -282,6 +282,30 @@ class TestOAuthEndpoints:
         data = r.json()
         assert data["providers"] == []
 
+    def test_me_includes_kb_permissions(self, tmpdir):
+        client, config, db = _make_client(tmpdir)
+        # Register and login as admin
+        client.post("/auth/register", json={
+            "username": "admin", "password": "password123",
+        })
+        client.post("/auth/login", json={
+            "username": "admin", "password": "password123",
+        })
+
+        # Grant a KB permission via service
+        from pyrite.services.auth_service import AuthService
+
+        auth = AuthService(db, config.settings.auth)
+        # Get admin user id
+        user = auth.verify_session(client.cookies.get("pyrite_session"))
+        auth.grant_kb_permission(user["id"], "test-kb", "admin", user["id"])
+
+        r = client.get("/auth/me")
+        assert r.status_code == 200
+        data = r.json()
+        assert "kb_permissions" in data
+        assert data["kb_permissions"]["test-kb"] == "admin"
+
     def test_me_includes_avatar(self, tmpdir):
         providers = {
             "github": OAuthProviderConfig(
@@ -330,3 +354,109 @@ class TestOAuthEndpoints:
         data = r.json()
         assert data["avatar_url"] == "https://example.com/avatar.png"
         assert data["auth_provider"] == "github"
+
+
+class TestEphemeralKBEndpoint:
+    def test_ephemeral_kb_create(self, tmpdir):
+        client, config, db = _make_client(tmpdir)
+        # Register admin (first user gets admin role which >= write)
+        client.post("/auth/register", json={
+            "username": "admin", "password": "password123",
+        })
+        client.post("/auth/login", json={
+            "username": "admin", "password": "password123",
+        })
+
+        r = client.post("/api/kbs/ephemeral", json={})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["created"] is True
+        assert data["ephemeral"] is True
+
+    def test_ephemeral_kb_limit(self, tmpdir):
+        client, config, db = _make_client(tmpdir)
+        # Register admin
+        client.post("/auth/register", json={
+            "username": "admin", "password": "password123",
+        })
+        client.post("/auth/login", json={
+            "username": "admin", "password": "password123",
+        })
+
+        # First should succeed
+        r = client.post("/api/kbs/ephemeral", json={})
+        assert r.status_code == 200
+
+        # Second should fail (limit=1 from default config)
+        r = client.post("/api/kbs/ephemeral", json={})
+        assert r.status_code == 403
+
+    def test_ephemeral_kb_unauthenticated(self, tmpdir):
+        client, config, db = _make_client(tmpdir)
+        r = client.post("/api/kbs/ephemeral", json={})
+        assert r.status_code == 401
+
+
+class TestKBPermissionsCRUD:
+    def _setup_admin(self, tmpdir):
+        client, config, db = _make_client(tmpdir)
+        client.post("/auth/register", json={
+            "username": "admin", "password": "password123",
+        })
+        client.post("/auth/login", json={
+            "username": "admin", "password": "password123",
+        })
+        return client, config, db
+
+    def test_list_permissions(self, tmpdir):
+        client, config, db = self._setup_admin(tmpdir)
+        r = client.get("/api/kbs/test-kb/permissions")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["kb_name"] == "test-kb"
+        assert data["permissions"] == []
+
+    def test_grant_and_list(self, tmpdir):
+        client, config, db = self._setup_admin(tmpdir)
+
+        # Register a second user
+        from pyrite.services.auth_service import AuthService
+        auth = AuthService(db, config.settings.auth)
+        user2 = auth.register("bob", "password123", "Bob")
+
+        # Grant permission
+        r = client.post("/api/kbs/test-kb/permissions", json={
+            "user_id": user2["id"],
+            "role": "write",
+        })
+        assert r.status_code == 200
+        assert r.json()["granted"] is True
+
+        # List and verify
+        r = client.get("/api/kbs/test-kb/permissions")
+        perms = r.json()["permissions"]
+        assert len(perms) == 1
+        assert perms[0]["role"] == "write"
+
+    def test_revoke_permission(self, tmpdir):
+        client, config, db = self._setup_admin(tmpdir)
+
+        from pyrite.services.auth_service import AuthService
+        auth = AuthService(db, config.settings.auth)
+        user2 = auth.register("bob", "password123", "Bob")
+
+        # Grant then revoke
+        client.post("/api/kbs/test-kb/permissions", json={
+            "user_id": user2["id"],
+            "role": "write",
+        })
+        r = client.post("/api/kbs/test-kb/permissions", json={
+            "user_id": user2["id"],
+            "revoke": True,
+        })
+        assert r.status_code == 200
+        assert r.json()["revoked"] is True
+
+        # Verify empty
+        r = client.get("/api/kbs/test-kb/permissions")
+        assert r.json()["permissions"] == []

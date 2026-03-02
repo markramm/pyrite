@@ -7,6 +7,7 @@ export interface AuthUser {
 	role: 'read' | 'write' | 'admin';
 	auth_provider: string;
 	avatar_url: string | null;
+	kb_permissions: Record<string, string>;
 }
 
 export interface AuthConfig {

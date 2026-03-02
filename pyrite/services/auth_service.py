@@ -367,3 +367,180 @@ class AuthService:
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         return raw_token, token_hash
+
+    # =====================================================================
+    # Per-KB Permissions
+    # =====================================================================
+
+    def get_kb_role(
+        self, user_id: int | None, kb_name: str, kb_default_role: str | None = None
+    ) -> str | None:
+        """Resolve effective role for a user on a KB.
+
+        Resolution chain:
+        1. Global admin always returns "admin"
+        2. Explicit kb_permission grant
+        3. KB default_role
+        4. User global role
+        5. Anonymous tier (when user_id is None)
+        """
+        conn = self.db._raw_conn
+
+        if user_id is not None:
+            # Check if global admin
+            row = conn.execute(
+                "SELECT role FROM local_user WHERE id = ?", (user_id,)
+            ).fetchone()
+            if row and row[0] == "admin":
+                return "admin"
+
+            # Check explicit KB grant
+            row = conn.execute(
+                "SELECT role FROM kb_permission WHERE user_id = ? AND kb_name = ?",
+                (user_id, kb_name),
+            ).fetchone()
+            if row:
+                return row[0]
+
+            # KB default_role
+            if kb_default_role is not None and kb_default_role != "none":
+                return kb_default_role
+
+            # Fall back to user's global role
+            row = conn.execute(
+                "SELECT role FROM local_user WHERE id = ?", (user_id,)
+            ).fetchone()
+            if row:
+                # If KB is private (default_role="none"), deny unless explicit grant
+                if kb_default_role == "none":
+                    return None
+                return row[0]
+
+        # Anonymous user
+        if kb_default_role is not None and kb_default_role != "none":
+            return kb_default_role
+        if kb_default_role == "none":
+            return None
+        return self.config.anonymous_tier
+
+    def grant_kb_permission(
+        self, user_id: int, kb_name: str, role: str, granted_by: int
+    ) -> None:
+        """Grant or update a per-KB permission."""
+        if role not in ("read", "write", "admin"):
+            raise ValueError(f"Invalid role: {role}")
+        conn = self.db._raw_conn
+        now = datetime.now(UTC).isoformat()
+        conn.execute(
+            """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, kb_name) DO UPDATE SET role = ?, granted_by = ?, created_at = ?""",
+            (user_id, kb_name, role, granted_by, now, role, granted_by, now),
+        )
+        conn.commit()
+
+    def revoke_kb_permission(self, user_id: int, kb_name: str) -> bool:
+        """Revoke a per-KB permission. Returns True if found."""
+        conn = self.db._raw_conn
+        cursor = conn.execute(
+            "DELETE FROM kb_permission WHERE user_id = ? AND kb_name = ?",
+            (user_id, kb_name),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+    def list_kb_permissions(self, kb_name: str) -> list[dict]:
+        """List all permission grants for a KB."""
+        conn = self.db._raw_conn
+        rows = conn.execute(
+            """SELECT kp.user_id, u.username, kp.role, kp.granted_by, kp.created_at
+            FROM kb_permission kp
+            JOIN local_user u ON kp.user_id = u.id
+            WHERE kp.kb_name = ?
+            ORDER BY kp.created_at""",
+            (kb_name,),
+        ).fetchall()
+        return [
+            {
+                "user_id": r[0],
+                "username": r[1],
+                "role": r[2],
+                "granted_by": r[3],
+                "created_at": r[4],
+            }
+            for r in rows
+        ]
+
+    def get_user_kb_permissions(self, user_id: int) -> dict[str, str]:
+        """Get all explicit KB grants for a user. Returns {kb_name: role}."""
+        conn = self.db._raw_conn
+        rows = conn.execute(
+            "SELECT kb_name, role FROM kb_permission WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def create_user_ephemeral_kb(
+        self, user_id: int, kb_service, name: str | None = None
+    ) -> dict:
+        """Create an ephemeral KB for a user with per-KB admin grant.
+
+        Checks ephemeral_min_tier, ephemeral_max_per_user limits.
+        Raises ValueError on policy violation.
+        """
+        conn = self.db._raw_conn
+
+        # Check user tier against ephemeral_min_tier
+        row = conn.execute(
+            "SELECT role, ephemeral_kb_count FROM local_user WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("User not found")
+
+        user_role, current_count = row[0], row[1] or 0
+
+        tier_levels = {"read": 0, "write": 1, "admin": 2}
+        min_tier = self.config.ephemeral_min_tier
+        if tier_levels.get(user_role, -1) < tier_levels.get(min_tier, 99):
+            raise ValueError(
+                f"Insufficient tier: requires '{min_tier}', your role is '{user_role}'"
+            )
+
+        # Check per-user limit
+        if current_count >= self.config.ephemeral_max_per_user:
+            raise ValueError(
+                f"Ephemeral KB limit reached ({self.config.ephemeral_max_per_user})"
+            )
+
+        # Generate name if not provided
+        if not name:
+            name = f"ephemeral-{user_id}-{secrets.token_hex(4)}"
+
+        ttl = self.config.ephemeral_default_ttl
+        kb = kb_service.create_ephemeral_kb(name, ttl=ttl, description=f"Ephemeral KB for user {user_id}")
+
+        # Set KB as private by default
+        kb.default_role = "none"
+
+        # Grant creator admin on the KB
+        now = datetime.now(UTC).isoformat()
+        conn.execute(
+            """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
+            VALUES (?, ?, 'admin', ?, ?)""",
+            (user_id, name, user_id, now),
+        )
+
+        # Increment ephemeral_kb_count
+        conn.execute(
+            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1 WHERE id = ?",
+            (user_id,),
+        )
+        conn.commit()
+
+        return {
+            "name": kb.name,
+            "path": str(kb.path),
+            "ephemeral": True,
+            "ttl": ttl,
+        }

@@ -13,7 +13,7 @@ from ...exceptions import (
     ValidationError,
 )
 from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter, negotiate_response, requires_tier
+from ..api import get_kb_service, limiter, negotiate_response, requires_kb_tier
 from ..schemas import (
     CreateEntryRequest,
     CreateResponse,
@@ -315,7 +315,7 @@ def export_entries(
     )
 
 
-@router.post("/entries/import", dependencies=[Depends(requires_tier("write"))])
+@router.post("/entries/import", dependencies=[Depends(requires_kb_tier("write"))])
 @limiter.limit("30/minute")
 async def import_entries(
     request: Request,
@@ -450,7 +450,7 @@ def get_entry(
     return EntryResponse(**result)
 
 
-@router.post("/entries", response_model=CreateResponse, dependencies=[Depends(requires_tier("write"))])
+@router.post("/entries", response_model=CreateResponse, dependencies=[Depends(requires_kb_tier("write"))])
 @limiter.limit("30/minute")
 def create_entry(
     request: Request,
@@ -517,7 +517,7 @@ def create_entry(
     return CreateResponse(created=True, id=entry.id, kb_name=req.kb, file_path="")
 
 
-@router.put("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_tier("write"))])
+@router.put("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_kb_tier("write"))])
 @limiter.limit("30/minute")
 def update_entry(
     request: Request,
@@ -563,7 +563,7 @@ def update_entry(
     return UpdateResponse(updated=True, id=entry_id)
 
 
-@router.patch("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_tier("write"))])
+@router.patch("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_kb_tier("write"))])
 @limiter.limit("30/minute")
 def patch_entry_field(
     request: Request,
@@ -584,7 +584,7 @@ def patch_entry_field(
     return UpdateResponse(updated=True, id=entry_id)
 
 
-@router.delete("/entries/{entry_id}", response_model=DeleteResponse, dependencies=[Depends(requires_tier("write"))])
+@router.delete("/entries/{entry_id}", response_model=DeleteResponse, dependencies=[Depends(requires_kb_tier("write"))])
 @limiter.limit("30/minute")
 def delete_entry(
     request: Request,

@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 7
+CURRENT_VERSION = 8
 
 
 @dataclass
@@ -215,6 +215,26 @@ MIGRATIONS: list[Migration] = [
         -- SQLite does not support DROP COLUMN before 3.35; columns remain but are unused.
         """,
     ),
+    Migration(
+        version=8,
+        description="Add kb_permission table and ephemeral_kb_count column",
+        up="""
+        CREATE TABLE IF NOT EXISTS kb_permission (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES local_user(id) ON DELETE CASCADE,
+            kb_name TEXT NOT NULL,
+            role TEXT NOT NULL,
+            granted_by INTEGER REFERENCES local_user(id),
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, kb_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_kb_permission_user ON kb_permission(user_id);
+        CREATE INDEX IF NOT EXISTS idx_kb_permission_kb ON kb_permission(kb_name);
+        """,
+        down="""
+        DROP TABLE IF EXISTS kb_permission;
+        """,
+    ),
 ]
 
 
@@ -331,6 +351,18 @@ class MigrationManager:
                 ON local_user(auth_provider, provider_id)
                 WHERE provider_id IS NOT NULL
         """)
+        self.conn.commit()
+
+    def _apply_v8(self) -> None:
+        """Conditionally add ephemeral_kb_count column to local_user."""
+        existing = {
+            row[1]
+            for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()
+        }
+        if "ephemeral_kb_count" not in existing:
+            self.conn.execute(
+                "ALTER TABLE local_user ADD COLUMN ephemeral_kb_count INTEGER DEFAULT 0"
+            )
         self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:

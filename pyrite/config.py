@@ -46,6 +46,7 @@ class KBConfig:
     ephemeral: bool = False  # Marks KB as temporary
     ttl: int | None = None  # TTL in seconds for ephemeral KBs
     created_at_ts: float | None = None  # Creation timestamp for TTL calculation
+    default_role: str | None = None  # None=use global role, "read"=public, "none"=private
 
     # Repository reference (for multi-KB repos)
     repo: str | None = None  # Name of parent repo (if KB is inside a repo)
@@ -280,6 +281,10 @@ class AuthConfig:
     max_sessions_per_user: int = 5
     allow_registration: bool = True
     providers: dict[str, OAuthProviderConfig] = field(default_factory=dict)
+    ephemeral_min_tier: str = "write"
+    ephemeral_max_per_user: int = 1
+    ephemeral_default_ttl: int = 86400
+    ephemeral_max_ttl: int = 604800
 
 
 @dataclass
@@ -451,6 +456,7 @@ class PyriteConfig:
                     **({"ephemeral": kb.ephemeral} if kb.ephemeral else {}),
                     **({"ttl": kb.ttl} if kb.ttl else {}),
                     **({"created_at_ts": kb.created_at_ts} if kb.created_at_ts else {}),
+                    **({"default_role": kb.default_role} if kb.default_role is not None else {}),
                 }
                 for kb in self.knowledge_bases
             ],
@@ -508,6 +514,10 @@ class PyriteConfig:
                 "session_ttl_hours": self.settings.auth.session_ttl_hours,
                 "max_sessions_per_user": self.settings.auth.max_sessions_per_user,
                 "allow_registration": self.settings.auth.allow_registration,
+                "ephemeral_min_tier": self.settings.auth.ephemeral_min_tier,
+                "ephemeral_max_per_user": self.settings.auth.ephemeral_max_per_user,
+                "ephemeral_default_ttl": self.settings.auth.ephemeral_default_ttl,
+                "ephemeral_max_ttl": self.settings.auth.ephemeral_max_ttl,
                 **(
                     {
                         "providers": {
@@ -555,6 +565,7 @@ class PyriteConfig:
                     ephemeral=kb_data.get("ephemeral", False),
                     ttl=kb_data.get("ttl"),
                     created_at_ts=kb_data.get("created_at_ts"),
+                    default_role=kb_data.get("default_role"),
                 )
             )
 
@@ -646,6 +657,10 @@ class PyriteConfig:
                 max_sessions_per_user=auth_data.get("max_sessions_per_user", 5),
                 allow_registration=auth_data.get("allow_registration", True),
                 providers=providers,
+                ephemeral_min_tier=auth_data.get("ephemeral_min_tier", "write"),
+                ephemeral_max_per_user=auth_data.get("ephemeral_max_per_user", 1),
+                ephemeral_default_ttl=auth_data.get("ephemeral_default_ttl", 86400),
+                ephemeral_max_ttl=auth_data.get("ephemeral_max_ttl", 604800),
             ),
             rate_limit_read=settings_data.get("rate_limit_read", "100/minute"),
             rate_limit_write=settings_data.get("rate_limit_write", "30/minute"),

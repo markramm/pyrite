@@ -4,12 +4,21 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-from ...config import KBConfig, save_config
+from ...config import KBConfig, PyriteConfig, save_config
+from ...services.auth_service import AuthService
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...storage.database import PyriteDB
 from ...storage.index import IndexManager
-from ..api import get_db, get_index_mgr, get_kb_service, get_llm_service, limiter, requires_tier
+from ..api import (
+    get_config,
+    get_db,
+    get_index_mgr,
+    get_kb_service,
+    get_llm_service,
+    limiter,
+    requires_tier,
+)
 from ..schemas import AIStatusResponse, StatsResponse, SyncResponse
 
 logger = logging.getLogger(__name__)
@@ -138,6 +147,112 @@ def gc_ephemeral_kbs(
     """Garbage-collect expired ephemeral KBs."""
     removed = svc.gc_ephemeral_kbs()
     return {"removed": removed, "count": len(removed)}
+
+
+# =============================================================================
+# Ephemeral KB creation (authenticated users, not admin-only)
+# =============================================================================
+
+
+@router.post("/kbs/ephemeral")
+@limiter.limit("10/minute")
+def create_ephemeral_kb(
+    request: Request,
+    name: str | None = Body(None, embed=True),
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Create an ephemeral KB for the current user."""
+    auth_user = getattr(request.state, "auth_user", None)
+    if not auth_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    auth_service = AuthService(db, config.settings.auth)
+    try:
+        result = auth_service.create_user_ephemeral_kb(auth_user["id"], svc, name=name)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    return {"created": True, **result}
+
+
+# =============================================================================
+# Per-KB Permission CRUD
+# =============================================================================
+
+
+@router.get("/kbs/{name}/permissions")
+@limiter.limit("30/minute")
+def list_kb_permissions(
+    request: Request,
+    name: str,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+):
+    """List permission grants for a KB. Requires global admin or KB admin."""
+    auth_user = getattr(request.state, "auth_user", None)
+    global_role = getattr(request.state, "api_role", None)
+
+    if global_role != "admin":
+        # Check if user has KB-level admin
+        if not auth_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        auth_service = AuthService(db, config.settings.auth)
+        kb_config = config.get_kb(name)
+        kb_default_role = kb_config.default_role if kb_config else None
+        effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
+        if effective != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required for this KB")
+
+    auth_service = AuthService(db, config.settings.auth)
+    grants = auth_service.list_kb_permissions(name)
+    return {"kb_name": name, "permissions": grants}
+
+
+@router.post("/kbs/{name}/permissions")
+@limiter.limit("30/minute")
+def manage_kb_permission(
+    request: Request,
+    name: str,
+    user_id: int = Body(...),
+    role: str | None = Body(None),
+    revoke: bool = Body(False),
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+):
+    """Grant or revoke a per-KB permission. Requires global admin or KB admin."""
+    auth_user = getattr(request.state, "auth_user", None)
+    global_role = getattr(request.state, "api_role", None)
+
+    if global_role != "admin":
+        if not auth_user:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        auth_service = AuthService(db, config.settings.auth)
+        kb_config = config.get_kb(name)
+        kb_default_role = kb_config.default_role if kb_config else None
+        effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
+        if effective != "admin":
+            raise HTTPException(status_code=403, detail="Admin access required for this KB")
+
+    auth_service = AuthService(db, config.settings.auth)
+    granted_by = auth_user["id"] if auth_user else None
+
+    if revoke:
+        ok = auth_service.revoke_kb_permission(user_id, name)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Permission not found")
+        return {"revoked": True, "user_id": user_id, "kb_name": name}
+
+    if not role:
+        raise HTTPException(status_code=400, detail="role is required when not revoking")
+
+    try:
+        auth_service.grant_kb_permission(user_id, name, role, granted_by)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"granted": True, "user_id": user_id, "kb_name": name, "role": role}
 
 
 # =============================================================================

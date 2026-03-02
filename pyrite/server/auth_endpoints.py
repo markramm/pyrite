@@ -65,6 +65,7 @@ class AuthUserResponse(BaseModel):
     role: str
     auth_provider: str = "local"
     avatar_url: str | None = None
+    kb_permissions: dict[str, str] = {}
 
 
 class AuthConfigResponse(BaseModel):
@@ -225,6 +226,10 @@ async def get_current_user(
     user = auth_service.verify_session(token)
     if not user:
         raise HTTPException(status_code=401, detail="Session expired or invalid")
+
+    # Include per-KB permissions
+    kb_perms = auth_service.get_user_kb_permissions(user["id"])
+    user["kb_permissions"] = kb_perms
 
     return AuthUserResponse(**user)
 

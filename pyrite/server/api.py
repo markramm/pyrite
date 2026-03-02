@@ -215,6 +215,95 @@ def requires_tier(tier: str):
     return _check_tier
 
 
+async def _resolve_kb_name(request: Request) -> str | None:
+    """Extract KB name from request via query params, path params, or body."""
+    # 1. Query param (used by DELETE, import, export)
+    kb = request.query_params.get("kb")
+    if kb:
+        return kb
+
+    # 2. Path param (used by admin KB endpoints like /kbs/{name}/permissions)
+    name = request.path_params.get("name")
+    if name:
+        return name
+
+    # 3. Parse request body for "kb" key
+    try:
+        body = await request.body()
+        if body:
+            import json
+
+            data = json.loads(body)
+            if isinstance(data, dict):
+                return data.get("kb")
+    except Exception:
+        pass
+
+    return None
+
+
+def requires_kb_tier(tier: str):
+    """FastAPI dependency factory: enforce minimum tier on a per-KB basis.
+
+    Resolution chain:
+    1. Global admins always pass
+    2. Explicit KB grant → KB default_role → user global role → anonymous tier
+
+    Falls back to global role check when KB name cannot be resolved.
+    """
+
+    async def _check_kb_tier(
+        request: Request,
+        config: PyriteConfig = Depends(get_config),
+        db: PyriteDB = Depends(get_db),
+    ):
+        role = getattr(request.state, "api_role", None)
+        if role is None:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+        # Global admins always pass
+        if role == "admin":
+            return
+
+        # If no authenticated user (API key mode), fall back to global role check
+        auth_user = getattr(request.state, "auth_user", None)
+        if not auth_user:
+            if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
+                )
+            return
+
+        # Resolve KB name from request
+        kb_name = await _resolve_kb_name(request)
+        if not kb_name:
+            # Fall back to global tier check
+            if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
+                )
+            return
+
+        # Get KB config for default_role
+        kb_config = config.get_kb(kb_name)
+        kb_default_role = kb_config.default_role if kb_config else None
+
+        from ..services.auth_service import AuthService
+
+        auth_service = AuthService(db, config.settings.auth)
+        effective_role = auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
+
+        if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(tier, 99):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier",
+            )
+
+    return _check_kb_tier
+
+
 # =============================================================================
 # Content Negotiation
 # =============================================================================

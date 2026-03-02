@@ -227,7 +227,11 @@ class LocalUser(Base):
     provider_id = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
 
+    ephemeral_kb_count = Column(Integer, server_default="0")
+
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
+    kb_permissions = relationship("KBPermission", back_populates="user", cascade="all, delete-orphan",
+                                  foreign_keys="KBPermission.user_id")
 
 
 class AuthSession(Base):
@@ -245,6 +249,29 @@ class AuthSession(Base):
     last_used = Column(String)
 
     user = relationship("LocalUser", back_populates="sessions")
+
+
+class KBPermission(Base):
+    """Per-KB access control grant."""
+
+    __tablename__ = "kb_permission"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer, ForeignKey("local_user.id", ondelete="CASCADE"), nullable=False
+    )
+    kb_name = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+    granted_by = Column(Integer, ForeignKey("local_user.id"), nullable=True)
+    created_at = Column(String, server_default="CURRENT_TIMESTAMP")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "kb_name", name="uq_kb_permission_user_kb"),
+        Index("idx_kb_permission_user", "user_id"),
+        Index("idx_kb_permission_kb", "kb_name"),
+    )
+
+    user = relationship("LocalUser", back_populates="kb_permissions", foreign_keys=[user_id])
 
 
 class Repo(Base):
