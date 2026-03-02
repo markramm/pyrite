@@ -62,12 +62,24 @@
 		{ label: collectionStore.activeCollection?.title ?? collectionId }
 	]);
 
-	const tableColumns = $derived(() => {
+	// Typed accessors for view_config (which is Record<string, unknown>)
+	function vcGet<T>(path: string, fallback: T): T {
 		const vc = collectionStore.activeCollection?.view_config;
-		if (vc && Array.isArray(vc.table_columns)) {
-			return vc.table_columns as string[];
+		if (!vc) return fallback;
+		const parts = path.split('.');
+		let cur: unknown = vc;
+		for (const p of parts) {
+			if (cur && typeof cur === 'object' && p in cur) {
+				cur = (cur as Record<string, unknown>)[p];
+			} else {
+				return fallback;
+			}
 		}
-		return ['title', 'entry_type', 'tags', 'updated_at'];
+		return cur as T;
+	}
+
+	const tableColumns = $derived(() => {
+		return vcGet<string[]>('table_columns', ['title', 'entry_type', 'tags', 'updated_at']);
 	});
 </script>
 
@@ -113,13 +125,13 @@
 	{:else if collectionStore.viewMode === 'kanban'}
 		<KanbanView
 			entries={collectionStore.entries}
-			groupBy={collectionStore.activeCollection?.view_config?.kanban?.group_by ?? 'status'}
-			columnOrder={collectionStore.activeCollection?.view_config?.kanban?.column_order}
+			groupBy={vcGet<string>('kanban.group_by', 'status')}
+			columnOrder={vcGet<string[] | undefined>('kanban.column_order', undefined)}
 		/>
 	{:else if collectionStore.viewMode === 'gallery'}
 		<GalleryView
 			entries={collectionStore.entries}
-			cardFields={collectionStore.activeCollection?.view_config?.gallery?.card_fields}
+			cardFields={vcGet<string[] | undefined>('gallery.card_fields', undefined)}
 		/>
 	{:else}
 		<div class="space-y-2">

@@ -19,8 +19,12 @@
 			if (config.enabled) {
 				api.getMe().then((user) => {
 					currentUser = user;
+				}).catch(() => {
+					// Auth check failed — leave user menu hidden
 				});
 			}
+		}).catch(() => {
+			// API unavailable — leave auth disabled
 		});
 	});
 

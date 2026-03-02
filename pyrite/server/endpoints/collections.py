@@ -1,6 +1,7 @@
 """Collection endpoints — list and browse folder-backed and query-based collections."""
 
 import json
+import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
@@ -105,13 +106,27 @@ def create_collection(
         "query": body.query,
         "icon": body.icon or "",
         "view_config": body.view_config or {},
+        "collection_type": body.collection_type,
     }
 
     # Generate a slug-style entry_id from the title
-    import re
     slug = re.sub(r"[^a-z0-9]+", "-", body.title.lower()).strip("-")
     if not slug:
         slug = "collection"
+
+    # Check for duplicate slug and append suffix if needed
+    base_slug = slug
+    counter = 1
+    while True:
+        try:
+            existing = svc.get_entry(slug, kb_name=body.kb)
+            if existing:
+                counter += 1
+                slug = f"{base_slug}-{counter}"
+            else:
+                break
+        except Exception:
+            break
 
     result = svc.create_entry(
         kb_name=body.kb,

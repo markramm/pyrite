@@ -15,11 +15,19 @@
 	let dragEntryId = $state<string | null>(null);
 	let dragOverColumn = $state<string | null>(null);
 
+	function getEntryField(entry: EntryResponse, field: string): string {
+		// Access known fields directly, fall back to metadata for custom fields
+		if (field in entry) {
+			return String((entry as Record<string, unknown>)[field] ?? '');
+		}
+		return '';
+	}
+
 	const columns = $derived.by(() => {
 		const groups = new Map<string, EntryResponse[]>();
 
 		for (const entry of entries) {
-			const value = (entry as Record<string, unknown>)[groupBy] as string ?? '';
+			const value = getEntryField(entry, groupBy);
 			const key = value || 'Ungrouped';
 			if (!groups.has(key)) groups.set(key, []);
 			groups.get(key)!.push(entry);
