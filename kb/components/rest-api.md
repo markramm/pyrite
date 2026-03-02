@@ -81,6 +81,16 @@ Role-based access control enforces three tiers (read/write/admin), matching the 
 
 Key resolution: `api_keys` list in settings with `{key_hash, role, label}` (SHA-256 hashed). Legacy single `api_key` grants admin access. `resolve_api_key_role()` resolves key → role, `requires_tier(tier)` is a FastAPI dependency that enforces minimum tier per endpoint.
 
+### Per-KB Authorization
+
+Write endpoints on entries use `requires_kb_tier(tier)` instead of `requires_tier(tier)`. This resolves the effective role per-KB via the `kb_permission` table:
+
+1. API key users → fall back to global role (no per-KB resolution)
+2. Session users → resolve via: global admin → explicit KB grant → KB `default_role` → user global role → anonymous tier
+3. Global admins always pass regardless of KB-level settings
+
+KB name is extracted from the request via `_resolve_kb_name()`: query params → path params → request body JSON.
+
 ### CORS
 
 Configured from `config.settings.cors_origins`. Credentials disabled when wildcard origin is used (spec compliance).
@@ -139,7 +149,13 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/auth/register` | POST | auth_endpoints.py | Register new user |
 | `/auth/login` | POST | auth_endpoints.py | Login (returns session token) |
 | `/auth/logout` | POST | auth_endpoints.py | Logout (invalidates session) |
-| `/auth/me` | GET | auth_endpoints.py | Session introspection |
+| `/auth/me` | GET | auth_endpoints.py | Session introspection (includes kb_permissions) |
+| `/auth/config` | GET | auth_endpoints.py | Public auth configuration |
+| `/auth/github` | GET | auth_endpoints.py | Start GitHub OAuth flow |
+| `/auth/github/callback` | GET | auth_endpoints.py | GitHub OAuth callback |
+| `/api/kbs/ephemeral` | POST | admin.py | Create ephemeral KB for current user |
+| `/api/kbs/{name}/permissions` | GET | admin.py | List per-KB permission grants |
+| `/api/kbs/{name}/permissions` | POST | admin.py | Grant or revoke per-KB permission |
 | `/health` | GET | api.py | Health check (not behind /api) |
 
 ## Adding New Endpoints

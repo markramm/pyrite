@@ -24,7 +24,7 @@ The configuration system manages multi-KB setups, global application settings, r
 ## Key Classes
 
 ### `KBConfig`
-Dataclass for a single knowledge base. Fields include `name`, `path`, `kb_type` (free-form string, default `"generic"`), `description`, `read_only`, `remote`, `shortname` (alias for cross-KB links), `ephemeral`, `ttl`, and `created_at_ts`. Provides `load_kb_yaml()` to pull in per-KB schema/types/policies and `validate()` for path checking. Properties expose `kb_yaml_path` and `local_db_path` (the per-KB SQLite index under `<kb>/.pyrite/index.db`).
+Dataclass for a single knowledge base. Fields include `name`, `path`, `kb_type` (free-form string, default `"generic"`), `description`, `read_only`, `remote`, `shortname` (alias for cross-KB links), `ephemeral`, `ttl`, `created_at_ts`, and `default_role`. The `default_role` field controls per-KB access: `None` = use global role, `"read"` = public, `"none"` = private. Provides `load_kb_yaml()` to pull in per-KB schema/types/policies and `validate()` for path checking. Properties expose `kb_yaml_path` and `local_db_path` (the per-KB SQLite index under `<kb>/.pyrite/index.db`).
 
 ### `PyriteConfig`
 Root configuration aggregating `knowledge_bases`, `repositories`, `subscriptions`, `github_auth`, and `settings`. Maintains internal `_kb_by_name` and `_repo_by_name` lookup dicts rebuilt on init. Methods: `get_kb()`, `get_kb_by_shortname()`, `list_kbs()`, `add_kb()`, `remove_kb()`, `get_repo()`, `add_repo()`, `remove_repo()`, `get_kbs_in_repo()`, `validate()`, `to_dict()`, `from_dict()`.

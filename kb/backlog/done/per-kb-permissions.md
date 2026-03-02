@@ -11,7 +11,7 @@ tags:
 kind: feature
 priority: high
 effort: L
-status: planned
+status: completed
 links:
 - web-ui-auth
 - oauth-providers

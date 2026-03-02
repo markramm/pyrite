@@ -14,14 +14,37 @@ tags:
 - auth
 ---
 
-Local username/password authentication with session tokens for the web UI. Uses bcrypt for password hashing and SHA-256 hashed opaque tokens for sessions.
+Local username/password authentication with session tokens for the web UI. Uses bcrypt for password hashing and SHA-256 hashed opaque tokens for sessions. Supports per-KB permissions via the `kb_permission` table and ephemeral KB access control.
 
 ## Key Methods
 
+### User & Session Management
+
 - `register(username, password)` — creates a new user, returns user dict
 - `login(username, password)` — validates credentials, creates session token
+- `oauth_login(profile, provider_config)` — create/update OAuth user, returns session
 - `logout(token)` — invalidates a session
-- `get_session(token)` — returns user info if token is valid
+- `verify_session(token)` — returns user info if token is valid
+
+### Per-KB Permissions
+
+- `get_kb_role(user_id, kb_name, kb_default_role)` — resolve effective role via: global admin → explicit grant → KB default_role → user global role → anonymous tier
+- `grant_kb_permission(user_id, kb_name, role, granted_by)` — INSERT OR REPLACE per-KB grant
+- `revoke_kb_permission(user_id, kb_name)` — remove per-KB grant
+- `list_kb_permissions(kb_name)` — all grants for a KB
+- `get_user_kb_permissions(user_id)` — all grants for a user (used by `/auth/me`)
+- `create_user_ephemeral_kb(user_id, kb_service, name)` — create ephemeral KB with policy checks (min tier, max per user), auto-grants creator admin
+
+## Permission Resolution Chain
+
+```
+effective_role(user, kb) =
+    1. Global admin → always "admin"
+    2. kb_permission[user_id, kb_name]   -- explicit per-KB grant
+    3. kb.default_role                   -- KB-level default
+    4. user.role                         -- user's global role fallback
+    5. anonymous_tier                    -- anonymous fallback (if no user)
+```
 
 ## REST Endpoints
 
@@ -32,9 +55,16 @@ Mounted at `/auth` (outside `/api` prefix) via `auth_endpoints.py`:
 | `/auth/register` | POST | Create new user |
 | `/auth/login` | POST | Login, returns session token |
 | `/auth/logout` | POST | Invalidate session |
-| `/auth/me` | GET | Session introspection |
+| `/auth/me` | GET | Session introspection (includes `kb_permissions`) |
+| `/auth/config` | GET | Public auth configuration |
+| `/auth/github` | GET | Start GitHub OAuth flow |
+| `/auth/github/callback` | GET | GitHub OAuth callback |
+
+KB permission management endpoints live under `/api/kbs/{name}/permissions` (see [[rest-api]]).
 
 ## Related
 
-- [[rest-api]] — auth endpoints are mounted at root level
+- [[rest-api]] — auth endpoints at root, KB permission endpoints under /api
 - [[web-frontend]] — web UI consumes auth endpoints
+- [[per-kb-permissions]] — design doc for per-KB ACL system
+- [[configuration-system]] — `AuthConfig` ephemeral policy fields, `KBConfig.default_role`

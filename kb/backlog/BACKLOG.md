@@ -61,7 +61,7 @@ Recommended execution order. Grouped by milestone.
 |----------|------|--------|-----------|--------|
 | **1** | [[mcp-rate-limiting]] | S | Required for public-facing endpoints | **done** |
 | **2** | [[oauth-providers]] Phase 1 | L | GitHub OAuth — "Sign in with GitHub" | **done** |
-| **3** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox | |
+| **3** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox | **done** |
 
 **0.15 — Deployment & Demo:**
 
@@ -163,7 +163,7 @@ Recommended execution order. Grouped by milestone.
 |---|------|------|--------|-----------|--------|
 | 97 | [[mcp-rate-limiting]] | feature | S | 0.14 | **done** |
 | 110 | [[oauth-providers]] Phase 1 | feature | L | 0.14 | **done** |
-| 112 | [[per-kb-permissions]] | feature | L | 0.14 | |
+| 112 | [[per-kb-permissions]] | feature | L | 0.14 | **done** |
 
 ### Planned — 0.15 (Deployment & Demo)
 
@@ -400,8 +400,8 @@ All items below are done. Detail lives in the individual backlog item files in [
 ### Wave 15 — Web UI Hardening (0.13)
 [[web-ui-logout-button]], [[web-ui-version-history-fix]], [[web-ui-type-colors-consolidation]], [[web-ui-page-titles]], [[web-ui-dead-code-cleanup]], [[web-ui-loading-states]], [[web-ui-accessibility-fixes]], [[web-ui-mobile-responsive]], [[web-ui-collections-save]], [[web-ui-first-run-experience]], [[web-ui-starred-entries]], [[ux-accessibility-fixes]], [[playwright-integration-tests]], [[web-ui-review-hardening]]
 
-### Wave 16 — Auth & Rate Limiting (0.14, partial)
-[[mcp-rate-limiting]], [[oauth-providers]] Phase 1 (GitHub OAuth), [[mcp-submission-update]]
+### Wave 16 — Auth & Rate Limiting (0.14)
+[[mcp-rate-limiting]], [[oauth-providers]] Phase 1 (GitHub OAuth), [[mcp-submission-update]], [[per-kb-permissions]]
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]
