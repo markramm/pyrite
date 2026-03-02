@@ -10,10 +10,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-logger = logging.getLogger(__name__)
-
 from ..config import load_config
 from ..storage.repository import KBRepository
+
+logger = logging.getLogger(__name__)
 
 console = Console()
 
@@ -35,6 +35,8 @@ def register_search_command(app: typer.Typer):
         ),
         use_files: bool = typer.Option(False, "--files", help="Search files directly (skip index)"),
         expand: bool = typer.Option(False, "--expand", "-x", help="Use AI query expansion"),
+        include_body: bool = typer.Option(False, "--include-body", help="Include full body text (default: snippet only)"),
+        fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return (e.g. id,title,tags)"),
         output_format: str = typer.Option(
             "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
         ),
@@ -89,6 +91,14 @@ def register_search_command(app: typer.Typer):
                 console.print("[yellow]No results found.[/yellow]")
                 return
 
+            # Apply field projection
+            fields_list = [f.strip() for f in fields.split(",")] if fields else None
+            if fields_list:
+                results = [{k: r[k] for k in fields_list if k in r} for r in results]
+            elif not include_body:
+                for r in results:
+                    r.pop("body", None)
+
             if output_format != "rich":
                 from ..formats import format_response
 
@@ -118,6 +128,11 @@ def register_search_command(app: typer.Typer):
             console.print(table)
 
         except Exception as e:
+            if output_format != "rich":
+                import json
+
+                typer.echo(json.dumps({"error": str(e)}))
+                raise typer.Exit(1)
             console.print(f"[red]Search error:[/red] {e}")
             console.print("[dim]Falling back to file search...[/dim]")
             _search_files(config, query, kb_name, entry_type, limit)

@@ -557,6 +557,10 @@ class KBService:
     # Query Operations (read-only, delegate to db)
     # =========================================================================
 
+    def get_entries(self, ids: list[tuple[str, str]]) -> list[dict[str, Any]]:
+        """Batch-get multiple entries by (entry_id, kb_name) pairs."""
+        return self.db.get_entries(ids)
+
     def list_entries(
         self,
         kb_name: str | None = None,
@@ -759,6 +763,66 @@ class KBService:
     def get_refs_from(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries this entry references via object-ref fields."""
         return self.db.get_refs_from(entry_id, kb_name)
+
+    def orient(self, kb_name: str, recent_limit: int = 5) -> dict[str, Any]:
+        """One-shot KB orientation summary for agents entering a new KB."""
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB '{kb_name}' not found")
+
+        total = self.count_entries(kb_name=kb_name)
+        distinct_types = self.get_distinct_types(kb_name=kb_name)
+
+        # Per-type counts
+        types = []
+        for t in distinct_types:
+            count = self.count_entries(kb_name=kb_name, entry_type=t)
+            types.append({"type": t, "count": count})
+        types.sort(key=lambda x: x["count"], reverse=True)
+
+        # Top tags
+        top_tags = self.get_tags(kb_name=kb_name, limit=10)
+
+        # Recent entries (slim)
+        recent = self.list_entries(
+            kb_name=kb_name,
+            sort_by="updated_at",
+            sort_order="desc",
+            limit=recent_limit,
+        )
+        recent_slim = [
+            {
+                "id": e.get("id"),
+                "title": e.get("title"),
+                "entry_type": e.get("entry_type"),
+                "updated_at": e.get("updated_at"),
+            }
+            for e in recent
+        ]
+
+        # Schema info
+        schema_info = {}
+        if kb_config.kb_schema:
+            try:
+                schema_info = kb_config.kb_schema.to_agent_schema()
+            except Exception:
+                pass
+
+        # Guidelines from config (if available)
+        guidelines = getattr(kb_config, "guidelines", None) or {}
+
+        return {
+            "kb": kb_name,
+            "description": kb_config.description or "",
+            "kb_type": kb_config.kb_type or "default",
+            "read_only": kb_config.read_only,
+            "guidelines": guidelines,
+            "total_entries": total,
+            "types": types,
+            "top_tags": top_tags,
+            "recent": recent_slim,
+            "schema": schema_info,
+        }
 
     # Settings: use db.get_setting / db.set_setting / db.get_all_settings /
     # db.delete_setting directly — thin wrappers removed in 0.9.

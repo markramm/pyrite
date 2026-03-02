@@ -49,3 +49,27 @@ def get_kb_schema(
 
     schema = kb_config.kb_schema
     return schema.to_agent_schema()
+
+
+@router.get("/kbs/{kb_name}/orient")
+@limiter.limit("60/minute")
+def orient_kb(
+    kb_name: str,
+    request: Request,
+    recent: int = 5,
+    svc: KBService = Depends(get_kb_service),
+):
+    """One-shot KB orientation summary — types, tags, recent changes, and schema."""
+    from ...exceptions import KBNotFoundError
+
+    try:
+        result = svc.orient(kb_name, recent_limit=recent)
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
+        )
+    neg = negotiate_response(request, result)
+    if neg is not None:
+        return neg
+    return result

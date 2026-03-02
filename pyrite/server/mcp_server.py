@@ -14,8 +14,6 @@ import json
 import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
-
 from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
@@ -25,7 +23,35 @@ from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
+logger = logging.getLogger(__name__)
+
 URI_SCHEME = "pyrite://"
+MAX_BATCH_READ_ENTRIES = 50
+_UPDATE_FIELDS = frozenset({
+    "title", "body", "importance", "tags", "participants", "metadata",
+    "status", "date", "location", "summary",
+})
+
+
+def _project_fields(entry: dict, fields: list[str] | None) -> dict:
+    """Project only requested fields from an entry dict."""
+    if not fields:
+        return entry
+    return {k: entry[k] for k in fields if k in entry}
+
+
+def _error(
+    code: str,
+    message: str,
+    *,
+    suggestion: str | None = None,
+    retryable: bool = False,
+) -> dict:
+    """Build a structured error response for MCP tools."""
+    r: dict = {"error": message, "error_code": code, "retryable": retryable}
+    if suggestion:
+        r["suggestion"] = suggestion
+    return r
 MAX_TIMELINE_EVENTS = 50
 MAX_BULK_CREATE_ENTRIES = 50
 MAX_RESOURCE_LIST_ENTRIES = 200
@@ -152,6 +178,8 @@ class PyriteMCPServer:
         """Full-text search with optional semantic/hybrid mode."""
         query = args.get("query", "")
         limit = args.get("limit", 20)
+        fields = args.get("fields")
+        include_body = args.get("include_body", False)
         results = self.search_svc.search(
             query=query,
             kb_name=args.get("kb_name"),
@@ -165,6 +193,13 @@ class PyriteMCPServer:
             expand=args.get("expand", False),
         )
 
+        if fields:
+            results = [_project_fields(r, fields) for r in results]
+        elif not include_body:
+            # Strip body by default to save tokens — snippet is included instead
+            for r in results:
+                r.pop("body", None)
+
         return {
             "query": query,
             "count": len(results),
@@ -176,11 +211,15 @@ class PyriteMCPServer:
         """Get entry by ID."""
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
+        fields = args.get("fields")
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
 
         if not result:
-            return {"error": f"Entry '{entry_id}' not found"}
+            return _error("NOT_FOUND", f"Entry '{entry_id}' not found", suggestion="Use kb_list_entries or kb_search to find entries")
+
+        if fields:
+            result = _project_fields(result, fields)
 
         return {"entry": result}
 
@@ -303,6 +342,105 @@ class PyriteMCPServer:
 
         return status
 
+    def _kb_batch_read(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Fetch multiple entries in one call."""
+        entries_spec = args.get("entries", [])
+        fields = args.get("fields")
+
+        if not entries_spec:
+            return _error("VALIDATION_FAILED", "entries array is required and must not be empty")
+        if len(entries_spec) > MAX_BATCH_READ_ENTRIES:
+            return _error("VALIDATION_FAILED", f"Maximum {MAX_BATCH_READ_ENTRIES} entries per call")
+
+        ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
+        results = self.svc.get_entries(ids)
+
+        if fields:
+            results = [_project_fields(r, fields) for r in results]
+
+        found_ids = {(r["id"], r["kb_name"]) for r in results}
+        not_found = [
+            {"entry_id": eid, "kb_name": kb}
+            for eid, kb in ids
+            if (eid, kb) not in found_ids
+        ]
+
+        return {
+            "entries": results,
+            "found": len(results),
+            "not_found": not_found,
+        }
+
+    def _kb_list_entries(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Browse entries with optional filters and pagination."""
+        kb_name = args.get("kb_name")
+        entry_type = args.get("entry_type")
+        tag = args.get("tag")
+        sort_by = args.get("sort_by", "updated_at")
+        sort_order = args.get("sort_order", "desc")
+        limit = min(args.get("limit", 50), 200)
+        offset = args.get("offset", 0)
+        fields = args.get("fields")
+
+        entries = self.svc.list_entries(
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tag=tag,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+        )
+        total = self.svc.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag)
+
+        if fields:
+            entries = [_project_fields(e, fields) for e in entries]
+
+        return {
+            "entries": entries,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + limit < total,
+        }
+
+    def _kb_orient(self, args: dict[str, Any]) -> dict[str, Any]:
+        """One-shot KB orientation summary."""
+        kb_name = args.get("kb_name")
+        recent_limit = args.get("recent_limit", 5)
+        try:
+            return self.svc.orient(kb_name, recent_limit=recent_limit)
+        except PyriteError as e:
+            return {"error": str(e)}
+
+    def _kb_recent(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get recently changed entries."""
+        kb_name = args.get("kb_name")
+        entry_type = args.get("entry_type")
+        limit = min(args.get("limit", 20), 200)
+        since = args.get("since")
+        fields = args.get("fields")
+
+        entries = self.svc.list_entries(
+            kb_name=kb_name,
+            entry_type=entry_type,
+            sort_by="updated_at",
+            sort_order="desc",
+            limit=limit,
+        )
+
+        # Post-filter by `since` if provided
+        if since:
+            entries = [e for e in entries if (e.get("updated_at") or "") >= since]
+
+        if fields:
+            entries = [_project_fields(e, fields) for e in entries]
+
+        return {
+            "entries": entries,
+            "count": len(entries),
+        }
+
     def _kb_qa_assess(self, args: dict[str, Any]) -> dict[str, Any]:
         """Assess entry or KB quality."""
         qa = self.qa_svc
@@ -348,9 +486,9 @@ class PyriteMCPServer:
 
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            return {"error": f"KB '{kb_name}' not found"}
+            return _error("KB_NOT_FOUND", f"KB '{kb_name}' not found", suggestion="Use kb_list to see available KBs")
         if kb_config.read_only:
-            return {"error": f"KB '{kb_name}' is read-only"}
+            return _error("READ_ONLY", f"KB '{kb_name}' is read-only")
 
         # Validate against schema
         schema = kb_config.kb_schema
@@ -360,7 +498,7 @@ class PyriteMCPServer:
         warnings = validation.get("warnings", [])
 
         if entry_type == "event" and not args.get("date"):
-            return {"error": "Date is required for events"}
+            return _error("VALIDATION_FAILED", "Date is required for events", suggestion="Add a 'date' field in YYYY-MM-DD format")
 
         entry_id = generate_entry_id(title)
 
@@ -374,9 +512,13 @@ class PyriteMCPServer:
         try:
             entry = self.svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
         except PyriteError as e:
-            return {"error": str(e)}
+            return _error("CREATE_FAILED", str(e), retryable=True)
 
-        result = {"created": True, "entry_id": entry.id, "file_path": ""}
+        result = {
+            "created": True,
+            "entry_id": entry.id,
+            "file_path": str(entry.file_path) if entry.file_path else "",
+        }
         if warnings:
             result["warnings"] = warnings
         qa_issues = self._maybe_validate(entry.id, kb_name, args)
@@ -390,9 +532,9 @@ class PyriteMCPServer:
         entries = args.get("entries", [])
 
         if not entries:
-            return {"error": "entries array is required and must not be empty"}
+            return _error("VALIDATION_FAILED", "entries array is required and must not be empty")
         if len(entries) > MAX_BULK_CREATE_ENTRIES:
-            return {"error": f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call"}
+            return _error("VALIDATION_FAILED", f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call")
 
         # Pre-validate each entry against schema
         kb_config = self.config.get_kb(kb_name)
@@ -403,7 +545,7 @@ class PyriteMCPServer:
         try:
             results = self.svc.bulk_create_entries(kb_name, entries)
         except PyriteError as e:
-            return {"error": str(e)}
+            return _error("BULK_CREATE_FAILED", str(e), retryable=True)
 
         # Attach per-entry validation warnings
         if schema:
@@ -432,7 +574,7 @@ class PyriteMCPServer:
         kb_name = args.get("kb_name")
 
         updates = {}
-        for key in ("title", "body", "importance", "tags", "participants", "metadata"):
+        for key in _UPDATE_FIELDS:
             if key in args:
                 updates[key] = args[key]
 
@@ -455,9 +597,13 @@ class PyriteMCPServer:
         try:
             entry = self.svc.update_entry(entry_id, kb_name, **updates)
         except PyriteError as e:
-            return {"error": str(e)}
+            return _error("UPDATE_FAILED", str(e), retryable=True)
 
-        result: dict[str, Any] = {"updated": True, "entry_id": entry.id, "file_path": ""}
+        result: dict[str, Any] = {
+            "updated": True,
+            "entry_id": entry.id,
+            "file_path": str(entry.file_path) if entry.file_path else "",
+        }
         if warnings:
             result["warnings"] = warnings
         qa_issues = self._maybe_validate(entry.id, kb_name, args)
@@ -473,10 +619,10 @@ class PyriteMCPServer:
         try:
             deleted = self.svc.delete_entry(entry_id, kb_name)
         except PyriteError as e:
-            return {"error": str(e)}
+            return _error("DELETE_FAILED", str(e), retryable=True)
 
         if not deleted:
-            return {"error": f"Entry '{entry_id}' not found in {kb_name}"}
+            return _error("NOT_FOUND", f"Entry '{entry_id}' not found in {kb_name}", suggestion="Use kb_list_entries or kb_search to find entries")
 
         return {"deleted": True, "entry_id": entry_id}
 
@@ -499,7 +645,7 @@ class PyriteMCPServer:
                 note=note,
             )
         except PyriteError as e:
-            return {"error": str(e)}
+            return _error("LINK_FAILED", str(e), retryable=True)
 
         return {
             "linked": True,
@@ -891,13 +1037,13 @@ class PyriteMCPServer:
     def _dispatch_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Execute a tool and return result."""
         if name not in self.tools:
-            return {"error": f"Unknown tool: {name}"}
+            return _error("UNKNOWN_TOOL", f"Unknown tool: {name}", suggestion="Use list_tools to see available tools")
 
         try:
             handler = self.tools[name]["handler"]
             return handler(arguments)
         except Exception as e:
-            return {"error": str(e)}
+            return _error("INTERNAL", str(e), retryable=True)
 
     def build_sdk_server(self):
         """Build an mcp.server.Server wired to this instance's business logic."""

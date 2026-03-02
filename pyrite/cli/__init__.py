@@ -9,7 +9,9 @@ Split into submodules for maintainability:
 - repo_commands: Repository collaboration (subscribe, fork, sync, unsubscribe, status)
 """
 
+import json as _json
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -109,10 +111,23 @@ def _format_output(data: dict, fmt: str) -> str | None:
     return content
 
 
+def _cli_error(message: str, output_format: str = "rich", error_code: str | None = None) -> None:
+    """Print an error and exit. Uses JSON when output_format is not rich."""
+    if output_format != "rich":
+        payload: dict[str, Any] = {"error": message}
+        if error_code:
+            payload["error_code"] = error_code
+        typer.echo(_json.dumps(payload))
+    else:
+        console.print(f"[red]Error:[/red] {message}")
+    raise typer.Exit(1)
+
+
 @app.command("get")
 def get_entry(
     entry_id: str = typer.Argument(..., help="Entry ID"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to search in"),
+    fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
     ),
@@ -122,8 +137,12 @@ def get_entry(
         result = svc.get_entry(entry_id, kb_name=kb_name)
 
         if not result:
-            console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
-            raise typer.Exit(1)
+            _cli_error(f"Entry '{entry_id}' not found", output_format, "NOT_FOUND")
+
+        # Apply field projection
+        if fields:
+            fields_list = [f.strip() for f in fields.split(",")]
+            result = {k: result[k] for k in fields_list if k in result}
 
         formatted = _format_output(result, output_format)
         if formatted is not None:
@@ -278,8 +297,7 @@ def create_entry(
                     except (PyriteError, ValueError) as e:
                         console.print(f"  [yellow]Link failed:[/yellow] {e}")
         except (PyriteError, ValueError) as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _cli_error(str(e), "rich")
 
 
 # =============================================================================
@@ -347,9 +365,13 @@ def update_entry(
     body: str = typer.Option(None, "--body", "-b", help="New body text"),
     tags: str = typer.Option(None, "--tags", help="New comma-separated tags"),
     importance: int = typer.Option(None, "--importance", "-i", help="New importance (1-10)"),
+    field: list[str] | None = typer.Option(None, "--field", "-f", help="Extra field as key=value"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Update an existing entry."""
-    updates = {}
+    updates: dict[str, Any] = {}
     if title is not None:
         updates["title"] = title
     if body is not None:
@@ -359,13 +381,27 @@ def update_entry(
     if tags is not None:
         updates["tags"] = [t.strip() for t in tags.split(",")]
 
+    # Parse --field key=value pairs
+    if field:
+        for fv in field:
+            if "=" not in fv:
+                _cli_error(f"--field must be key=value, got '{fv}'", output_format, "VALIDATION_FAILED")
+            k, v = fv.split("=", 1)
+            try:
+                v = int(v)
+            except ValueError:
+                pass
+            updates[k] = v
+
     with cli_context() as (config, db, svc):
         try:
             entry = svc.update_entry(entry_id, kb_name, **updates)
-            console.print(f"[green]Updated:[/green] {entry.id}")
+            if output_format != "rich":
+                typer.echo(_json.dumps({"updated": True, "entry_id": entry.id}))
+            else:
+                console.print(f"[green]Updated:[/green] {entry.id}")
         except (PyriteError, ValueError) as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _cli_error(str(e), output_format)
 
 
 # =============================================================================
@@ -462,6 +498,253 @@ def list_kbs(
         for kb in kbs:
             table.add_row(
                 kb["name"], kb.get("type", ""), str(kb.get("entries", 0)), kb.get("path", "")
+            )
+
+        console.print(table)
+
+
+# =============================================================================
+# List-entries command
+# =============================================================================
+
+
+@app.command("list-entries")
+def list_entries(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="Filter by KB"),
+    entry_type: str | None = typer.Option(None, "--type", "-t", help="Filter by entry type"),
+    tag: str | None = typer.Option(None, "--tag", help="Filter by tag"),
+    sort_by: str = typer.Option("updated_at", "--sort-by", help="Sort column: title, updated_at, created_at, entry_type"),
+    sort_order: str = typer.Option("desc", "--sort-order", help="Sort direction: asc, desc"),
+    limit: int = typer.Option(50, "--limit", "-n", help="Max entries (max 200)"),
+    offset: int = typer.Option(0, "--offset", help="Pagination offset"),
+    fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
+    """Browse entries with filters and pagination."""
+    limit = min(limit, 200)
+    with cli_context() as (config, db, svc):
+        entries = svc.list_entries(
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tag=tag,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
+        )
+        total = svc.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag)
+
+        # Apply field projection
+        fields_list = [f.strip() for f in fields.split(",")] if fields else None
+        if fields_list:
+            entries = [{k: e[k] for k in fields_list if k in e} for e in entries]
+
+        resp_data = {
+            "entries": entries,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + limit < total,
+        }
+
+        formatted = _format_output(resp_data, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        if not entries:
+            console.print("[yellow]No entries found.[/yellow]")
+            return
+
+        table = Table(title=f"Entries ({total} total)")
+        table.add_column("KB", style="cyan", width=12)
+        table.add_column("Type", style="green", width=12)
+        table.add_column("Title", width=40)
+        table.add_column("Updated", width=20, style="dim")
+
+        for e in entries:
+            table.add_row(
+                e.get("kb_name", ""),
+                e.get("entry_type", ""),
+                (e.get("title", "") or "")[:40],
+                (e.get("updated_at", "") or "")[:19],
+            )
+
+        console.print(table)
+
+
+# =============================================================================
+# Batch-read command
+# =============================================================================
+
+
+@app.command("batch-read")
+def batch_read(
+    ids: list[str] = typer.Argument(..., help="Entry IDs as kb_name:entry_id (e.g. mydb:alice-smith)"),
+    fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
+    """Fetch multiple entries in one call."""
+    parsed_ids: list[tuple[str, str]] = []
+    for spec in ids:
+        if ":" not in spec:
+            _cli_error(f"Invalid format '{spec}' — use kb_name:entry_id", output_format, "VALIDATION_FAILED")
+        kb, eid = spec.split(":", 1)
+        parsed_ids.append((eid.strip(), kb.strip()))
+
+    with cli_context() as (config, db, svc):
+        results = svc.get_entries(parsed_ids)
+
+        # Apply field projection
+        fields_list = [f.strip() for f in fields.split(",")] if fields else None
+        if fields_list:
+            results = [{k: r[k] for k in fields_list if k in r} for r in results]
+
+        found_ids = {(r.get("id"), r.get("kb_name")) for r in results}
+        not_found = [
+            {"entry_id": eid, "kb_name": kb}
+            for eid, kb in parsed_ids
+            if (eid, kb) not in found_ids
+        ]
+
+        resp_data = {
+            "entries": results,
+            "found": len(results),
+            "not_found": not_found,
+        }
+
+        formatted = _format_output(resp_data, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        if not results:
+            console.print("[yellow]No entries found.[/yellow]")
+            return
+
+        for r in results:
+            console.print(f"\n[bold cyan]{r.get('title', '')}[/bold cyan]")
+            console.print(f"[dim]KB: {r.get('kb_name', '')} | ID: {r.get('id', '')}[/dim]")
+
+        if not_found:
+            console.print(f"\n[yellow]Not found: {len(not_found)} entries[/yellow]")
+            for nf in not_found:
+                console.print(f"  [dim]{nf['kb_name']}:{nf['entry_id']}[/dim]")
+
+
+# =============================================================================
+# Orient command
+# =============================================================================
+
+
+@app.command("orient")
+def orient_kb(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base to orient in"),
+    recent: int = typer.Option(5, "--recent", "-r", help="Number of recent entries to include"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
+    """One-shot KB orientation summary — types, tags, recent changes, and schema."""
+    with cli_context() as (config, db, svc):
+        try:
+            result = svc.orient(kb_name, recent_limit=recent)
+        except PyriteError as e:
+            _cli_error(str(e), output_format, "KB_NOT_FOUND")
+
+        formatted = _format_output(result, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        console.print(f"\n[bold cyan]{result['kb']}[/bold cyan]  [dim]{result.get('description', '')}[/dim]")
+        console.print(f"Type: {result.get('kb_type', 'default')}  |  Entries: {result['total_entries']}  |  Read-only: {result.get('read_only', False)}\n")
+
+        # Types table
+        types = result.get("types", [])
+        if types:
+            type_table = Table(title="Entry Types")
+            type_table.add_column("Type", style="green")
+            type_table.add_column("Count", justify="right")
+            for t in types:
+                type_table.add_row(t["type"], str(t["count"]))
+            console.print(type_table)
+
+        # Top tags
+        top_tags = result.get("top_tags", [])
+        if top_tags:
+            tag_strs = [f"{t.get('name', '')} ({t.get('count', 0)})" for t in top_tags[:10]]
+            console.print(f"\n[bold]Top Tags:[/bold] {', '.join(tag_strs)}")
+
+        # Recent
+        recent_entries = result.get("recent", [])
+        if recent_entries:
+            console.print("\n[bold]Recent Changes:[/bold]")
+            for e in recent_entries:
+                console.print(f"  {e.get('updated_at', '')[:19]}  [{e.get('entry_type', '')}]  {e.get('title', '')}")
+
+
+# =============================================================================
+# Recent command
+# =============================================================================
+
+
+@app.command("recent")
+def recent_entries(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="Filter by KB"),
+    entry_type: str | None = typer.Option(None, "--type", "-t", help="Filter by entry type"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max entries"),
+    since: str = typer.Option(None, "--since", help="Only entries updated after this ISO datetime"),
+    fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
+):
+    """Show recently changed entries."""
+    with cli_context() as (config, db, svc):
+        entries = svc.list_entries(
+            kb_name=kb_name,
+            entry_type=entry_type,
+            sort_by="updated_at",
+            sort_order="desc",
+            limit=min(limit, 200),
+        )
+
+        if since:
+            entries = [e for e in entries if (e.get("updated_at") or "") >= since]
+
+        # Apply field projection
+        fields_list = [f.strip() for f in fields.split(",")] if fields else None
+        if fields_list:
+            entries = [{k: e[k] for k in fields_list if k in e} for e in entries]
+
+        resp_data = {"entries": entries, "count": len(entries)}
+
+        formatted = _format_output(resp_data, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        if not entries:
+            console.print("[yellow]No recent entries found.[/yellow]")
+            return
+
+        table = Table(title=f"Recent Entries ({len(entries)})")
+        table.add_column("KB", style="cyan", width=12)
+        table.add_column("Type", style="green", width=12)
+        table.add_column("Title", width=40)
+        table.add_column("Updated", width=20, style="dim")
+
+        for e in entries:
+            table.add_row(
+                e.get("kb_name", ""),
+                e.get("entry_type", ""),
+                (e.get("title", "") or "")[:40],
+                (e.get("updated_at", "") or "")[:19],
             )
 
         console.print(table)

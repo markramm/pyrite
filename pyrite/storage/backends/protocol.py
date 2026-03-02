@@ -35,6 +35,12 @@ class SearchBackend(Protocol):
         """Get a single entry with tags, sources, and links."""
         ...
 
+    def get_entries(
+        self, ids: list[tuple[str, str]]
+    ) -> list[dict[str, Any]]:
+        """Batch-get multiple entries by (entry_id, kb_name) pairs."""
+        ...
+
     def list_entries(
         self,
         kb_name: str | None = None,

@@ -57,6 +57,15 @@ READ_TOOLS = {
                     "type": "boolean",
                     "description": "Use AI query expansion for additional search terms. Default: false",
                 },
+                "include_body": {
+                    "type": "boolean",
+                    "description": "Include full body text in results. Default: false (returns snippet instead, saving tokens).",
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Return only these fields per result (e.g. ['id','title','tags']). Omit for default fields. Overrides include_body.",
+                },
             },
             "required": ["query"],
         },
@@ -73,6 +82,11 @@ READ_TOOLS = {
                 "kb_name": {
                     "type": "string",
                     "description": "KB name (optional - searches all KBs if not provided)",
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields.",
                 },
             },
             "required": ["entry_id"],
@@ -172,6 +186,17 @@ READ_TOOLS = {
             "required": ["kb_name"],
         },
     },
+    "kb_orient": {
+        "description": "Use this first when entering a new KB. Returns a one-shot summary: description, entry counts by type, top tags, recent changes, and schema. Saves multiple round-trips.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kb_name": {"type": "string", "description": "KB to orient in"},
+                "recent_limit": {"type": "integer", "description": "Number of recent entries to include (default 5)"},
+            },
+            "required": ["kb_name"],
+        },
+    },
     "kb_qa_validate": {
         "description": "Validate KB structural integrity. Checks missing titles, empty bodies, broken links, orphans, invalid dates, importance range, and schema violations.",
         "inputSchema": {
@@ -193,6 +218,80 @@ READ_TOOLS = {
                 "limit": {
                     "type": "integer",
                     "description": "Maximum issues to return (default 50)",
+                },
+            },
+            "required": [],
+        },
+    },
+    "kb_batch_read": {
+        "description": "Fetch multiple entries in one call. Faster than sequential kb_get when you need 2+ entries. Returns found entries and lists any IDs not found. Max 50 entries per call.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "description": "List of entries to fetch (max 50)",
+                    "maxItems": 50,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "entry_id": {"type": "string", "description": "Entry ID"},
+                            "kb_name": {"type": "string", "description": "KB name"},
+                        },
+                        "required": ["entry_id", "kb_name"],
+                    },
+                },
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Return only these fields per entry. Omit for all fields.",
+                },
+            },
+            "required": ["entries"],
+        },
+    },
+    "kb_list_entries": {
+        "description": "Browse entries in a KB with optional filters. Use for orientation — see what types exist, browse by tag, or paginate through entries. Lighter than kb_search when you don't need full-text matching.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kb_name": {"type": "string", "description": "KB to browse (optional — lists all KBs if omitted)"},
+                "entry_type": {"type": "string", "description": "Filter by entry type"},
+                "tag": {"type": "string", "description": "Filter by tag"},
+                "sort_by": {
+                    "type": "string",
+                    "enum": ["title", "updated_at", "created_at", "entry_type"],
+                    "description": "Sort column (default: updated_at)",
+                },
+                "sort_order": {
+                    "type": "string",
+                    "enum": ["asc", "desc"],
+                    "description": "Sort direction (default: desc)",
+                },
+                "limit": {"type": "integer", "description": "Max entries to return (default 50, max 200)"},
+                "offset": {"type": "integer", "description": "Pagination offset (default 0)"},
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Return only these fields per entry. Omit for all fields.",
+                },
+            },
+            "required": [],
+        },
+    },
+    "kb_recent": {
+        "description": "Get recently changed entries. Use to see what's new or changed in a KB. Thin wrapper over list-entries sorted by updated_at desc.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kb_name": {"type": "string", "description": "KB to query (optional)"},
+                "entry_type": {"type": "string", "description": "Filter by entry type"},
+                "limit": {"type": "integer", "description": "Max entries to return (default 20)"},
+                "since": {"type": "string", "description": "Only entries updated after this ISO datetime (e.g. 2025-01-01T00:00:00)"},
+                "fields": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Return only these fields per entry. Omit for all fields.",
                 },
             },
             "required": [],
@@ -323,6 +422,10 @@ WRITE_TOOLS = {
                     "type": "object",
                     "description": "Additional/extension fields to update",
                 },
+                "status": {"type": "string", "description": "Status field (e.g. draft, confirmed, done)"},
+                "date": {"type": "string", "description": "Date (YYYY-MM-DD)"},
+                "location": {"type": "string", "description": "Location/venue"},
+                "summary": {"type": "string", "description": "Short summary or subtitle"},
                 "validate": {
                     "type": "boolean",
                     "description": "Run QA validation after save and return issues. Also runs automatically if KB has qa_on_write: true in kb.yaml.",

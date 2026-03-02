@@ -53,9 +53,9 @@ class TestUpsertEntry:
     def test_metadata_json_stored(self, db):
         db.upsert_entry(_make_entry("m1", metadata={"custom": "value"}))
         entry = db.get_entry("m1", "test")
-        import json
-        meta = json.loads(entry["metadata"])
-        assert meta["custom"] == "value"
+        # metadata should be returned as a dict, not a JSON string
+        assert isinstance(entry["metadata"], dict)
+        assert entry["metadata"]["custom"] == "value"
 
     def test_created_by_preserved_on_update(self, db):
         db.upsert_entry(_make_entry("cb1", created_by="alice"))

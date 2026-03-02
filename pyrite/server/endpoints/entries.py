@@ -139,6 +139,42 @@ def resolve_batch(
     return ResolveBatchResponse(resolved=resolved)
 
 
+@router.post("/entries/batch")
+@limiter.limit("60/minute")
+def batch_read_entries(
+    request: Request,
+    body: dict,
+    svc: KBService = Depends(get_kb_service),
+):
+    """Batch-read multiple entries in one call."""
+    entries_spec = body.get("entries", [])
+    fields_param = body.get("fields")
+
+    if not entries_spec:
+        raise HTTPException(status_code=400, detail={"code": "VALIDATION_FAILED", "message": "entries array is required"})
+    if len(entries_spec) > 50:
+        raise HTTPException(status_code=400, detail={"code": "VALIDATION_FAILED", "message": "Maximum 50 entries per call"})
+
+    ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
+    results = svc.get_entries(ids)
+
+    if fields_param:
+        results = [{k: r[k] for k in fields_param if k in r} for r in results]
+
+    found_ids = {(r.get("id"), r.get("kb_name")) for r in results}
+    not_found = [
+        {"entry_id": eid, "kb_name": kb}
+        for eid, kb in ids
+        if (eid, kb) not in found_ids
+    ]
+
+    resp_data = {"entries": results, "found": len(results), "not_found": not_found}
+    neg = negotiate_response(request, resp_data)
+    if neg is not None:
+        return neg
+    return resp_data
+
+
 @router.get("/entries/wanted", response_model=WantedPagesResponse)
 @limiter.limit("100/minute")
 def list_wanted_pages(
@@ -372,6 +408,7 @@ def get_entry(
     entry_id: str,
     kb: str | None = Query(None, description="KB name (optional)"),
     with_links: bool = Query(False, description="Include links"),
+    fields: str | None = Query(None, description="Comma-separated fields to return"),
     svc: KBService = Depends(get_kb_service),
 ):
     """Get entry by ID."""
@@ -397,6 +434,15 @@ def get_entry(
 
     result.setdefault("sources", [])
     result.setdefault("tags", [])
+
+    # Apply field projection
+    if fields:
+        fields_list = [f.strip() for f in fields.split(",")]
+        result = {k: result[k] for k in fields_list if k in result}
+        neg = negotiate_response(request, result)
+        if neg is not None:
+            return neg
+        return result
 
     neg = negotiate_response(request, result)
     if neg is not None:

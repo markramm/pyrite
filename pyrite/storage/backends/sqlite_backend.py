@@ -193,6 +193,42 @@ class SQLiteBackend:
         result["links"] = self._get_entry_links(entry_id, kb_name)
         return result
 
+    def get_entries(self, ids: list[tuple[str, str]]) -> list[dict[str, Any]]:
+        """Batch-get multiple entries by (entry_id, kb_name) pairs."""
+        if not ids:
+            return []
+        from sqlalchemy import tuple_
+
+        entries = (
+            self._session.query(Entry)
+            .filter(tuple_(Entry.id, Entry.kb_name).in_(ids))
+            .all()
+        )
+        tag_map = self._get_tags_for_entries(ids)
+        results = []
+        for entry in entries:
+            d = self._entry_to_dict(entry)
+            d["tags"] = tag_map.get((entry.id, entry.kb_name), [])
+            d["sources"] = self._get_entry_sources(entry.id, entry.kb_name)
+            d["links"] = self._get_entry_links(entry.id, entry.kb_name)
+            results.append(d)
+        return results
+
+    @staticmethod
+    def _parse_metadata(raw: Any) -> dict:
+        """Parse extra_data into a dict, handling JSON strings and edge cases."""
+        if not raw:
+            return {}
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, str):
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, dict) else {}
+            except (json.JSONDecodeError, TypeError):
+                return {}
+        return {}
+
     def _entry_to_dict(self, entry: Entry) -> dict[str, Any]:
         return {
             "id": entry.id,
@@ -206,7 +242,7 @@ class SQLiteBackend:
             "importance": entry.importance,
             "status": entry.status,
             "location": entry.location,
-            "metadata": entry.extra_data,
+            "metadata": self._parse_metadata(entry.extra_data),
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
             "indexed_at": entry.indexed_at,
@@ -222,6 +258,27 @@ class SQLiteBackend:
             .all()
         )
         return [r[0] for r in results]
+
+    def _get_tags_for_entries(
+        self, entry_ids: list[tuple[str, str]]
+    ) -> dict[tuple[str, str], list[str]]:
+        """Batch-fetch tags for multiple entries. Returns {(entry_id, kb_name): [tag_names]}."""
+        if not entry_ids:
+            return {}
+        from sqlalchemy import tuple_
+
+        result: dict[tuple[str, str], list[str]] = {k: [] for k in entry_ids}
+        rows = (
+            self._session.query(EntryTag.entry_id, EntryTag.kb_name, Tag.name)
+            .join(Tag, Tag.id == EntryTag.tag_id)
+            .filter(
+                tuple_(EntryTag.entry_id, EntryTag.kb_name).in_(entry_ids)
+            )
+            .all()
+        )
+        for entry_id, kb_name, tag_name in rows:
+            result[(entry_id, kb_name)].append(tag_name)
+        return result
 
     def _get_entry_sources(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         sources = self._session.query(Source).filter_by(entry_id=entry_id, kb_name=kb_name).all()
@@ -262,8 +319,6 @@ class SQLiteBackend:
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        from sqlalchemy import func  # noqa: F811
-
         query = self._session.query(Entry)
         if tag:
             query = (

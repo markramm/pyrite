@@ -23,6 +23,10 @@ class CRUDMixin:
         """Get a single entry with all metadata."""
         return self._backend.get_entry(entry_id, kb_name)
 
+    def get_entries(self, ids: list[tuple[str, str]]) -> list[dict[str, Any]]:
+        """Batch-get multiple entries by (entry_id, kb_name) pairs."""
+        return self._backend.get_entries(ids)
+
     # Allowed sort columns to prevent SQL injection
     _SORT_COLUMNS = {"title", "updated_at", "created_at", "entry_type"}
 
