@@ -9,7 +9,7 @@ tags:
 kind: bug
 priority: medium
 effort: XS
-status: proposed
+status: done
 ---
 
 ## Problem
