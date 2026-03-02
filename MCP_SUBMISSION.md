@@ -16,7 +16,7 @@ Knowledge lives as markdown files in git repositories with YAML frontmatter. Pyr
 
 ## What Makes This Different
 
-**Three-tier permission model** — Most MCP knowledge servers expose flat read/write access. Pyrite separates tools into read (safe for untrusted agents), write (for trusted workflows), and admin (human-supervised). This solves the "I want my agent to use the KB but not corrupt it" problem.
+**Three-tier permission model with rate limiting** — Most MCP knowledge servers expose flat read/write access. Pyrite separates tools into read (safe for untrusted agents), write (for trusted workflows), and admin (human-supervised). Per-client, per-tier rate limiting prevents runaway agents from hammering the server. This solves the "I want my agent to use the KB but not corrupt it" problem.
 
 **Typed entries, not text chunks** — Agents write structured entries (person, organization, event, document, or custom types defined in YAML) with field-level validation. Retrieval returns structured data, not similarity-ranked text fragments.
 
@@ -61,15 +61,19 @@ Set `--tier read` for untrusted agents, `--tier write` for trusted research work
 
 ### MCP Tools by Tier
 
-#### Read Tier (10 tools — safe for any agent)
+#### Read Tier (14 tools — safe for any agent)
 
 | Tool | Description |
 |------|-------------|
 | `kb_list` | List mounted knowledge bases with stats |
 | `kb_search` | Full-text, semantic, or hybrid search with filters |
 | `kb_get` | Retrieve entry by ID with metadata, links, sources |
+| `kb_batch_read` | Fetch multiple entries in one call (up to 50) |
+| `kb_list_entries` | Browse entries with type/tag/date filters for orientation |
+| `kb_recent` | Get recently changed entries across KBs |
+| `kb_orient` | One-shot KB summary: description, types, stats, recent entries |
 | `kb_timeline` | Query events by date range and importance threshold |
-| `kb_tags` | List all tags with frequency counts |
+| `kb_tags` | List all tags with frequency counts and hierarchy |
 | `kb_backlinks` | Find all entries linking to a given entry |
 | `kb_stats` | Index statistics (entry counts, type distribution) |
 | `kb_schema` | Get type definitions with AI instructions and field descriptions |
@@ -102,9 +106,15 @@ All write tools, plus:
 
 #### Plugin Tools
 
-Extensions register additional MCP tools per tier. Shipped examples:
-- Software-KB: `sw_adrs`, `sw_backlog`, `sw_components`, `sw_standards`, `sw_new_adr`
-- Task: `task_list`, `task_status`, `task_create`, `task_update`
+Extensions register additional MCP tools per tier. Up to 32 plugin tools at admin tier across 7 shipped extensions:
+
+- **Software-KB**: `sw_adrs`, `sw_backlog`, `sw_component`, `sw_standards`, `sw_create_adr`, `sw_create_backlog_item`
+- **Task Coordination**: `task_list`, `task_status`, `task_create`, `task_update`, `task_claim`, `task_checkpoint`, `task_decompose`
+- **Zettelkasten**: `zettel_inbox`, `zettel_graph`
+- **Encyclopedia**: `wiki_stubs`, `wiki_review_queue`, `wiki_quality_stats`, `wiki_assess_quality`, `wiki_submit_review`, `wiki_protect`
+- **Social**: `social_top`, `social_newest`, `social_reputation`, `social_post`, `social_vote`
+- **Cascade Series**: `cascade_timeline`, `cascade_actors`, `cascade_capture_lanes`, `cascade_network`
+- **Solidarity**: `solidarity_timeline`, `solidarity_infrastructure_types`
 
 ### MCP Prompts
 
@@ -158,15 +168,17 @@ Custom types defined in `kb.yaml` without code — 10 field types with validatio
 - **Extensions**: Plugin protocol with 15 extension points (entry types, MCP tools, hooks, collection types, DB tables, relationship types, validators, KB presets, field schemas, type metadata, CLI commands, search)
 - **APIs**: REST (FastAPI with OpenAPI), MCP (STDIO), CLI (Typer)
 - **Frontend**: SvelteKit 2 + Svelte 5 + Tailwind (entries, search, backlinks, daily notes, graph, templates, slash commands, collections, AI chat)
-- **Tests**: 1786 passing, covering CRUD, FTS5, REST API, MCP protocol, plugins, migrations, schema validation, collections, QA, task coordination
+- **Rate Limiting**: In-memory token bucket rate limiting on the MCP server, per-client per-tier, with configurable exemptions for local stdio connections
+- **Tests**: 1550+ passing, covering CRUD, FTS5, REST API, MCP protocol, plugins, migrations, schema validation, collections, QA, task coordination, rate limiting
 
 ## Submission Checklist
 
 - [x] MCP server with STDIO transport and three permission tiers
-- [x] 10 read tools, 6 write tools, 4 admin tools, extensible via plugins
+- [x] 14 read tools, 6 write tools, 4 admin tools + 32 plugin tools across 7 extensions
+- [x] Per-client per-tier rate limiting on the MCP server
 - [x] 4 built-in MCP prompts for common research workflows
 - [x] MCP resources via `pyrite://` URIs
-- [x] 1786 tests including MCP protocol tests
+- [x] 1550+ tests including MCP protocol tests
 - [x] MIT license
 - [x] Comprehensive documentation (README, 16 ADRs, plugin developer guide)
 - [x] Active development with detailed changelog
