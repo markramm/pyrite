@@ -1404,5 +1404,51 @@ class TestMCPPostSaveValidation:
         assert "qa_issues" not in result
 
 
+class TestDispatchRateLimiting:
+    """Rate limiting integration tests."""
+
+    def test_dispatch_rate_limited(self):
+        """Exhaust rate limit and verify RATE_LIMITED error."""
+        kb_defs = [{"name": "rl", "kb_type": "generic"}]
+        with _make_mcp_server(
+            kb_defs,
+            tier="read",
+            extra_setup=lambda cfg, _: setattr(cfg.settings, "rate_limit_read", "2/minute"),
+        ) as ctx:
+            server = ctx["server"]
+            # Re-init limiter with updated settings
+            from pyrite.server.mcp_rate_limiter import MCPRateLimiter
+
+            server.rate_limiter = MCPRateLimiter(server.config.settings)
+
+            # First 2 calls succeed (client_id != "stdio" so not exempt)
+            for _ in range(2):
+                result = server._dispatch_tool("kb_list", {}, client_id="remote")
+                assert "error_code" not in result
+
+            # 3rd call should be rate limited
+            result = server._dispatch_tool("kb_list", {}, client_id="remote")
+            assert result["error_code"] == "RATE_LIMITED"
+            assert result["retryable"] is True
+
+    def test_dispatch_exempt_stdio(self):
+        """Stdio client bypasses rate limits when configured."""
+        kb_defs = [{"name": "rl", "kb_type": "generic"}]
+        with _make_mcp_server(
+            kb_defs,
+            tier="read",
+            extra_setup=lambda cfg, _: setattr(cfg.settings, "rate_limit_read", "1/minute"),
+        ) as ctx:
+            server = ctx["server"]
+            from pyrite.server.mcp_rate_limiter import MCPRateLimiter
+
+            server.rate_limiter = MCPRateLimiter(server.config.settings)
+
+            # Stdio should be exempt — call many times without hitting limit
+            for _ in range(10):
+                result = server._dispatch_tool("kb_list", {}, client_id="stdio")
+                assert "error_code" not in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -22,6 +22,7 @@ from ..schema import generate_entry_id
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
+from .mcp_rate_limiter import MCPRateLimiter
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +78,10 @@ class PyriteMCPServer:
         self.index_mgr = IndexManager(self.db, self.config)
         self.svc = KBService(self.config, self.db)
 
+        # Rate limiter and tool→tier map
+        self.rate_limiter = MCPRateLimiter(self.config.settings)
+        self._tool_tiers: dict[str, str] = {}
+
         # Build tool registry based on tier
         self.tools = {}
         self._build_read_tools()
@@ -103,6 +108,7 @@ class PyriteMCPServer:
 
         for name, schema in READ_TOOLS.items():
             self.tools[name] = {**schema, "handler": getattr(self, f"_{name}")}
+            self._tool_tiers[name] = "read"
 
     def _build_write_tools(self):
         """Register write tools (available in write and admin tiers)."""
@@ -110,6 +116,7 @@ class PyriteMCPServer:
 
         for name, schema in WRITE_TOOLS.items():
             self.tools[name] = {**schema, "handler": getattr(self, f"_{name}")}
+            self._tool_tiers[name] = "write"
 
     def _build_admin_tools(self):
         """Register admin tools (available only in admin tier)."""
@@ -117,6 +124,7 @@ class PyriteMCPServer:
 
         for name, schema in ADMIN_TOOLS.items():
             self.tools[name] = {**schema, "handler": getattr(self, f"_{name}")}
+            self._tool_tiers[name] = "admin"
 
     def _register_plugin_tools(self):
         """Register MCP tools from plugins for the current tier."""
@@ -130,6 +138,8 @@ class PyriteMCPServer:
             registry.set_context(ctx)
 
             plugin_tools = registry.get_all_mcp_tools(self.tier)
+            for name in plugin_tools:
+                self._tool_tiers[name] = self.tier
             self.tools.update(plugin_tools)
         except Exception:
             logger.warning("Plugin MCP tool loading failed", exc_info=True)
@@ -1034,10 +1044,24 @@ class PyriteMCPServer:
             for name, meta in self.tools.items()
         ]
 
-    def _dispatch_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    def _dispatch_tool(
+        self, name: str, arguments: dict[str, Any], *, client_id: str = "local"
+    ) -> dict[str, Any]:
         """Execute a tool and return result."""
         if name not in self.tools:
             return _error("UNKNOWN_TOOL", f"Unknown tool: {name}", suggestion="Use list_tools to see available tools")
+
+        # Rate limiting (skip for local stdio when configured)
+        if not (client_id == "stdio" and self.config.settings.mcp_rate_limit_exempt_local):
+            tool_tier = self._tool_tiers.get(name, "read")
+            allowed, info = self.rate_limiter.check(client_id, tool_tier)
+            if not allowed:
+                return _error(
+                    "RATE_LIMITED",
+                    f"Rate limit exceeded for {tool_tier} tier. Retry after {info['retry_after']}s.",
+                    suggestion=f"Wait {info['retry_after']} seconds",
+                    retryable=True,
+                )
 
         try:
             handler = self.tools[name]["handler"]
@@ -1078,7 +1102,7 @@ class PyriteMCPServer:
 
         @sdk.call_tool()
         async def _call_tool(name: str, arguments: dict):
-            result = mcp_server._dispatch_tool(name, arguments or {})
+            result = mcp_server._dispatch_tool(name, arguments or {}, client_id="stdio")
             return [TextContent(type="text", text=json.dumps(result, separators=(",", ":"), default=str))]
 
         @sdk.list_prompts()
