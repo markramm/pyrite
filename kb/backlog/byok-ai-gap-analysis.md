@@ -30,15 +30,19 @@ Audit current AI features against the launch plan's web UI vision and identify g
 - **Summarize, Auto-Tag, Suggest Links** (#26): AI dropdown menu on entry pages
 - **RAG Chat Sidebar** (#32): SSE streaming chat with KB context, Cmd+Shift+K toggle
 
-### Likely Gaps to Evaluate
+### Shipped (as of 0.13)
+
+4. ~~**QA dashboard**~~: Shipped in 0.13 — `/qa` route with validation status, issue trends, entries needing review.
+
+### Remaining Gaps
 
 1. **Live graph growth visualization**: WebSocket-driven graph updates when agents create entries (partial — WebSocket infrastructure exists from #23, but graph doesn't subscribe to live updates)
 2. **Workflow triggering from UI**: Start agent workflows (research flow, investigation) from the web UI, monitor progress
 3. **Task monitoring dashboard**: See active tasks, agent assignments, completion status (depends on task plugin)
-4. **QA dashboard**: Visual QA status — verification rates, issue trends, entries needing review (listed in 0.7 roadmap)
 5. **Multi-model support in chat**: Switch between providers mid-conversation, compare responses
 6. **AI-assisted entry creation**: "Describe what you want to capture" → AI creates the structured entry with correct type and fields
 7. **Batch AI operations**: Run summarize/tag/link-suggest across multiple entries (useful after agent bulk creates)
+8. **Gemini provider support**: Add Google Gemini as a BYOK provider, mapping MCP tools to Function Calling schema (see [[gemini-byok-integration]])
 
 ### Deliverable
 
