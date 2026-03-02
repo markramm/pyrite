@@ -90,6 +90,53 @@ Every other knowledge tool assumes a human defines the schema and agents fill it
 | **Pyrite (current)** | **Human** | **Human + Agent** | **Schema + Agent** |
 | **Pyrite (BHAG)** | **Agent** | **Agent** | **Schema + QA Agent** |
 
+## Truth-Functionality: The Foundational Commitment
+
+Pyrite is named after fool's gold. The aspiration is to build something that isn't.
+
+In a world where AI generates plausible-sounding knowledge at scale, most of it is pyrite — it looks like knowledge but has no epistemic backing. The foundational commitment of Pyrite-the-platform is **truth-functionality**: every KB inherits a posture of validation, provenance tracking, and structured accountability from the system itself. This isn't a feature you enable — it's the default.
+
+**What truth-functionality means in practice:**
+
+- **Schema validation on every write** — the operator defines what "well-formed" means for their domain, and the system enforces it. An entry that doesn't conform to the schema is rejected or flagged, not silently accepted.
+- **QA as immune system** — structural validation, consistency checks, and factual verification run continuously. The knowledge base actively resists degradation.
+- **Source chains** — claims link to evidence. Entries link to sources. The graph structure *is* the evidence structure. An isolated claim with no links, no sources, and no QA assessment is epistemically weaker than one embedded in a web of corroborating entries.
+- **Cross-linking as epistemic infrastructure** — truth in a knowledge base isn't a property of individual entries, it's a property of the graph. The more connected and mutually consistent a cluster of entries is, the stronger the epistemic foundation.
+- **Lifecycle and freshness** — knowledge ages. Component docs go stale. The system tracks currency and warns when entries may no longer reflect reality. See [[entry-lifecycle-field-and-search-filtering]] and [[kb-compaction-command-and-freshness-qa-rules]].
+
+This commitment is domain-agnostic. A legal KB defines truth through citation chains and jurisdictional validity. A journalism KB defines truth through source verification and evidence standards. A software KB defines truth through test results and architecture consistency. Pyrite provides the infrastructure; the schema encodes what "true" means for each domain.
+
+**The [[intent-layer-guidelines-and-goals|intent layer]] is the mechanism** through which truth-functionality becomes operational. Every KB inherits system-level truth-functional defaults — source chain expectations, cross-linking norms, QA baselines — before the operator adds any domain-specific configuration. The operator extends the baseline; the baseline is inherited from the platform.
+
+Anyone can fork. But merges require validation. Truth is enforced at the repo boundary.
+
+**This is already operational**, not aspirational. Two KBs in daily use demonstrate truth-functionality across different domains:
+
+- **Investigative journalism** (4800+ entries) — timeline events with capture lanes, source citations, importance scores, cross-linked entities and organizations. When an agent or human queries "what happened with voter purges in Georgia," the answer comes from validated, sourced, linked entries — not hallucinated context. Schema enforces sourcing standards; QA catches broken links and missing citations.
+- **Software development** (200+ entries) — ADRs recording decisions with rationale, component docs describing current architecture, backlog items tracking work with dependencies. Schema enforces per-type fields; QA catches staleness. The project's own KB runs on the tool it builds.
+
+Both run today as MCP servers over git repos. No demo site needed, no OAuth, no Docker. The truth-functional infrastructure is the daily workflow, not a launch feature.
+
+## Trust as a Measurable Property
+
+Trust in Pyrite isn't binary — it's accumulated over time and measured at the credential level.
+
+**Signed commits as provenance chain:** When all commits to a KB are signed, every entry has verifiable provenance — who created it, which credential, when. The credential might be a human, an agent, or a swarm sharing a key. The system doesn't need to distinguish — it measures output quality.
+
+**Trust-over-time:** A credential that consistently produces entries that pass QA, get linked by other entries, survive freshness checks, and don't get contradicted earns implicit trust. One that produces entries that get flagged, archived, or contradicted doesn't. This creates a trust score derived from the KB's own assessment history — not from external identity verification.
+
+**Trust tiers compose with git:**
+
+| Layer | Mechanism | What It Controls |
+|-------|-----------|-----------------|
+| Git | Signed commits, branch protection, CODEOWNERS | Who can write to the repo |
+| QA | Schema validation, assessment entries, `pyrite ci` | What quality bar must be met |
+| Trust | Credential history, QA pass rates, link density | How much scrutiny a contribution gets |
+
+A new contributor's PR gets full QA scrutiny and manual review. A credential with a long history of high-quality contributions might get lighter review. The trust signal comes from the KB's own data, not from an external reputation system.
+
+**For agent swarms**, this is essential. An orchestrator deploying 10 agents against a KB needs to know which agents are producing reliable output and which need tighter supervision. Signed commits + QA history per credential provides that signal without requiring the orchestrator to inspect every entry.
+
 ## Inspiration
 
 Anytype's insight that knowledge should be typed and relational, but reoriented for programmatic consumers. Anytype optimizes for a human dragging blocks on a canvas. Pyrite optimizes for an agent calling APIs. Anytype uses CRDTs for seamless convergence. Pyrite uses git for accountable change. In a world of agent swarms, accountable change wins.
@@ -98,7 +145,7 @@ Anytype's insight that knowledge should be typed and relational, but reoriented 
 
 The BHAG is realized through progressive launch waves, each widening the audience and proving the platform with a domain-specific plugin:
 
-1. **Platform Launch (0.8)** — Agent builders, MCP users. "Pyrite turns your AI into a domain expert."
+1. **Platform Launch (0.16)** — Agent builders, MCP users. "Pyrite turns your AI into a domain expert."
 2. **Software Project Plugin** — Dev teams. Agents collaborate on your project natively.
 3. **Investigative Journalism Plugin** — Researchers, OSINT. Follow the money. Different domain, same platform.
 4. **PKM Capture Plugin** — Everyone. Frictionless capture → auto-classification → structured knowledge.

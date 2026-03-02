@@ -14,59 +14,103 @@ Active items in priority order across three tracks: **UI** (web application feat
 
 Recommended execution order. Grouped by milestone.
 
-**0.12 — Launch Prep (3 tracks):**
+**0.12 — Distribution (done):**
 
-*Track 1 — Distribution:*
+| Priority | Item | Effort | Status |
+|----------|------|--------|--------|
+| **1** | [[pypi-publish]] | S | **done** |
+| **2** | [[mcp-submission-update]] | XS | pending |
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[pypi-publish]] | S | `pip install pyrite` — unblocks everything |
-| **1a** | [[container-deployment]] Phase 1 | M | `docker compose up` — the self-hosting story |
-| **2** | [[plugin-repo-extraction]] | M | Plugins as standalone PyPI packages |
-| **2a** | [[container-deployment]] Phase 2 | S | Deploy-to-Railway/Render/Fly buttons |
-| **3** | [[mcp-submission-update]] | XS | Accurate listing for MCP registry |
+**0.13 — Human & Agent UX Hardening:**
 
-*Track 2 — Public Demo & Web Presence:*
+*Web UI:*
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **4** | [[web-ui-auth]] Phase 1 | M | Local auth + tiers — **done** (#94) |
-| **4a** | [[oauth-providers]] Phase 1 | L | GitHub/Google OAuth — "Sign in with GitHub" for demo site |
-| **4b** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox for demo visitors |
-| **4c** | [[personal-kb-repo-backing]] | M | Export ephemeral KB to GitHub repo + usage tiers |
-| **5** | [[mcp-rate-limiting]] | S | Required for public-facing demo site |
-| **6** | [[pyrite-website]] | M | Marketing site + docs at pyrite.dev (separate repo) |
-| **7** | [[demo-site-deployment]] | M | Live demo at demo.pyrite.dev with curated awesome-list KBs |
-| **8** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
+| **1** | [[web-ui-logout-button]] | XS | No logout = blocked users |
+| **2** | [[web-ui-version-history-fix]] | XS | Broken feature |
+| **3** | [[web-ui-type-colors-consolidation]] | XS | Deduplicate type→color mappings |
+| **4** | [[web-ui-page-titles]] | XS | Missing browser tab titles |
+| **5** | [[web-ui-dead-code-cleanup]] | XS | Remove unused code |
+| **6** | [[web-ui-loading-states]] | S | Standardize loading indicators |
+| **7** | [[web-ui-accessibility-fixes]] | S | aria-labels, keyboard nav |
+| **8** | [[web-ui-mobile-responsive]] | S | Mobile viewport fixes |
+| **9** | [[web-ui-collections-save]] | S | Save collection views |
+| **10** | [[web-ui-first-run-experience]] | S | Empty-state onboarding |
+| **11** | [[web-ui-starred-entries]] | S | Restore starred entries feature |
+| **12** | [[ux-accessibility-fixes]] | M | Original accessibility audit items |
+| **13** | [[playwright-integration-tests]] | M | E2E test coverage |
 
-*Track 3 — Onboarding:*
-
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **9** | Getting Started tutorial | S | Newcomer-friendly onboarding |
-| **10** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code + extension-builder skill |
-| **11** | [[awesome-plugins-page]] | XS | Curated plugin listing (bridges gap before extension registry) |
-| **12** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
-
-**0.13 — Ecosystem:**
+*Agent DX (CLI + MCP + REST):*
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **14** | [[software-project-plugin]] | L | Evolves from software-kb, grabs dev team eyeballs |
-| **15** | [[investigative-journalism-plugin]] | XL | Proves general-purpose, different audience |
-| **16** | [[extension-registry]] | M | Public directory for sharing extensions |
-| **17** | [[extension-type-protocols]] Phase 1 | L | Protocol definitions for extension types |
-| **18** | [[obsidian-migration]] | M | Import from Obsidian vaults |
-| **19** | [[pkm-capture-plugin]] | L | Personal knowledge management capture |
+| **14** | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | S | Entries land at KB root instead of type directory |
+| **15** | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | S | Blocks all MCP updates |
+| **16** | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | S | N entries in one call vs N round-trips |
+| **17** | [[mcp-search-add-fields-parameter-for-token-efficient-results]] | M | `fields` + `body_limit` to reduce token bloat |
+| **18** | [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | M | "Table of contents" orientation query |
+| **19** | [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | M | "What changed?" re-orientation query |
+| **20** | [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | M | Smart field routing — agents don't need to know metadata dict |
+| **21** | [[agent-oriented-error-responses-across-cli-and-mcp]] | L | Structured errors with `suggestion` + `retryable` |
+
+**0.14 — Auth & Rate Limiting:**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[mcp-rate-limiting]] | S | Required for public-facing endpoints |
+| **2** | [[oauth-providers]] Phase 1 | L | GitHub OAuth — "Sign in with GitHub" |
+| **3** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox |
+
+**0.15 — Deployment & Demo:**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[container-deployment]] Phase 1 | M | Dockerfile + Docker Compose |
+| **1a** | [[container-deployment]] Phase 2 | S | Deploy-to-Railway/Render/Fly buttons |
+| **2** | [[pyrite-website]] | M | Marketing site + docs at pyrite.dev |
+| **3** | [[demo-site-deployment]] | M | Live demo at demo.pyrite.dev |
+| **4** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
+| **5** | [[web-ui-review-hardening]] | S | Final pre-launch UI gate |
+
+**0.16 — Ecosystem & Onboarding (launch release):**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[plugin-repo-extraction]] | M | Extract 5 extensions to PyPI |
+| **2** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers |
+| **3** | Getting Started tutorial | S | Newcomer-friendly onboarding |
+| **4** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code |
+| **5** | [[awesome-plugins-page]] | XS | Curated plugin listing |
+| **6** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
+
+**0.17 — Ecosystem:**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[software-project-plugin]] | L | Evolves from software-kb, grabs dev team eyeballs |
+| **2** | [[investigative-journalism-plugin]] | XL | Proves general-purpose, different audience |
+| **3** | [[extension-registry]] | M | Public directory for sharing extensions |
+| **4** | [[extension-type-protocols]] Phase 1 | L | Protocol definitions for extension types |
+| **5** | [[obsidian-migration]] | M | Import from Obsidian vaults |
+| **6** | [[pkm-capture-plugin]] | L | Personal knowledge management capture |
+
+**Post-launch — KB Quality & Lifecycle:**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[entry-lifecycle-field-and-search-filtering]] | S | Archive entries without deleting, filter from search |
+| **2** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness |
 
 **Future:**
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **20** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality |
-| **21** | [[event-bus-webhooks]] | M | Integration story, live graph updates |
-| **22** | [[kb-orchestrator-skill]] | M | Multi-KB agent coordination pattern |
-| **23** | [[db-backup-restore]] | S | Operational tooling |
+| **1** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality |
+| **2** | [[event-bus-webhooks]] | M | Integration story, live graph updates |
+| **3** | [[kb-orchestrator-skill]] | M | Multi-KB agent coordination pattern |
+| **4** | [[db-backup-restore]] | S | Operational tooling |
+| **5** | [[search-relevance-boost-by-entry-type]] | M | Type-aware search ranking + intent integration |
 
 ---
 
@@ -78,36 +122,87 @@ Recommended execution order. Grouped by milestone.
 |---|------|------|--------|--------|-------|
 | 79 | [[coordination-task-plugin]] | feature | XL | in progress | Phases 1-2 done. Remaining: Phase 3 (DAG queries), Phase 4 (QA integration) |
 
-### Planned — 0.12
+### Planned — 0.12 (done)
 
-| # | Item | Kind | Effort | Track | Milestone |
-|---|------|------|--------|-------|-----------|
-| 74 | [[pypi-publish]] | feature | S | Distribution | 0.12 |
-| 114 | [[container-deployment]] | feature | M | Distribution | 0.12 |
-| 107 | [[plugin-repo-extraction]] | feature | M | Distribution | 0.12 |
-| 89 | [[mcp-submission-update]] | improvement | XS | Distribution | 0.12 |
-| 94 | [[web-ui-auth]] Phase 1 | feature | M | Public Demo | 0.12 | **done** |
-| 110 | [[oauth-providers]] | feature | L | Public Demo | 0.12 |
-| 112 | [[per-kb-permissions]] | feature | L | Public Demo | 0.12 |
-| 113 | [[personal-kb-repo-backing]] | feature | M | Public Demo | 0.12 |
-| 97 | [[mcp-rate-limiting]] | feature | S | Public Demo | 0.12 |
-| 85 | [[demo-site-deployment]] | feature | M | Public Demo | 0.12 |
-| 111 | [[pyrite-website]] | feature | M | Public Demo | 0.12 |
-| 87 | [[byok-ai-gap-analysis]] | improvement | M | Public Demo | 0.12 |
-| 108 | [[plugin-writing-tutorial]] | feature | S | Onboarding | 0.12 |
-| 109 | [[awesome-plugins-page]] | feature | XS | Onboarding | 0.12 |
-| 86 | [[pyrite-ci-command]] | feature | S | Onboarding | 0.12 |
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| 74 | [[pypi-publish]] | feature | S | 0.12 | **done** |
+| 89 | [[mcp-submission-update]] | improvement | XS | 0.12 | pending |
+| 94 | [[web-ui-auth]] Phase 1 | feature | M | 0.12 | **done** |
 
-### Planned — 0.13
+### Planned — 0.13 (Human & Agent UX Hardening)
 
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
-| 82 | [[software-project-plugin]] | feature | L | 0.13 |
-| 83 | [[investigative-journalism-plugin]] | feature | XL | 0.13 |
-| 84 | [[extension-registry]] | feature | M | 0.13 |
-| 88 | [[obsidian-migration]] | feature | M | 0.13 |
-| 90 | [[pkm-capture-plugin]] | feature | L | 0.13 |
-| 99 | [[extension-type-protocols]] | feature | L | 0.13 |
+| — | [[web-ui-logout-button]] | bug | XS | 0.13 |
+| — | [[web-ui-version-history-fix]] | bug | XS | 0.13 |
+| — | [[web-ui-type-colors-consolidation]] | improvement | XS | 0.13 |
+| — | [[web-ui-page-titles]] | improvement | XS | 0.13 |
+| — | [[web-ui-dead-code-cleanup]] | improvement | XS | 0.13 |
+| — | [[web-ui-loading-states]] | improvement | S | 0.13 |
+| — | [[web-ui-accessibility-fixes]] | improvement | S | 0.13 |
+| — | [[web-ui-mobile-responsive]] | improvement | S | 0.13 |
+| — | [[web-ui-collections-save]] | improvement | S | 0.13 |
+| — | [[web-ui-first-run-experience]] | improvement | S | 0.13 |
+| — | [[web-ui-starred-entries]] | improvement | S | 0.13 |
+| 105 | [[ux-accessibility-fixes]] | improvement | M | 0.13 |
+| — | [[playwright-integration-tests]] | feature | M | 0.13 |
+| — | [[bug-mcp-kb-create-places-entries-at-kb-root-instead-of-type-directory]] | bug | S | 0.13 |
+| — | [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | bug | S | 0.13 |
+| — | [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | feature | S | 0.13 |
+| — | [[mcp-search-add-fields-parameter-for-token-efficient-results]] | enhancement | M | 0.13 |
+| — | [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | feature | M | 0.13 |
+| — | [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | feature | M | 0.13 |
+| — | [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | improvement | M | 0.13 |
+| — | [[agent-oriented-error-responses-across-cli-and-mcp]] | enhancement | L | 0.13 |
+
+### Planned — 0.14 (Auth & Rate Limiting)
+
+| # | Item | Kind | Effort | Milestone |
+|---|------|------|--------|-----------|
+| 97 | [[mcp-rate-limiting]] | feature | S | 0.14 |
+| 110 | [[oauth-providers]] Phase 1 | feature | L | 0.14 |
+| 112 | [[per-kb-permissions]] | feature | L | 0.14 |
+
+### Planned — 0.15 (Deployment & Demo)
+
+| # | Item | Kind | Effort | Milestone |
+|---|------|------|--------|-----------|
+| 114 | [[container-deployment]] | feature | M | 0.15 |
+| 111 | [[pyrite-website]] | feature | M | 0.15 |
+| 85 | [[demo-site-deployment]] | feature | M | 0.15 |
+| 87 | [[byok-ai-gap-analysis]] | improvement | M | 0.15 |
+| — | [[web-ui-review-hardening]] | improvement | S | 0.15 |
+
+### Planned — 0.16 (Ecosystem & Onboarding — launch release)
+
+| # | Item | Kind | Effort | Milestone |
+|---|------|------|--------|-----------|
+| 107 | [[plugin-repo-extraction]] | feature | M | 0.16 |
+| 113 | [[personal-kb-repo-backing]] | feature | M | 0.16 |
+| — | Getting Started tutorial | feature | S | 0.16 |
+| 108 | [[plugin-writing-tutorial]] | feature | S | 0.16 |
+| 109 | [[awesome-plugins-page]] | feature | XS | 0.16 |
+| 86 | [[pyrite-ci-command]] | feature | S | 0.16 |
+
+### Planned — 0.17 (Ecosystem)
+
+| # | Item | Kind | Effort | Milestone |
+|---|------|------|--------|-----------|
+| 82 | [[software-project-plugin]] | feature | L | 0.17 |
+| 83 | [[investigative-journalism-plugin]] | feature | XL | 0.17 |
+| 84 | [[extension-registry]] | feature | M | 0.17 |
+| 88 | [[obsidian-migration]] | feature | M | 0.17 |
+| 90 | [[pkm-capture-plugin]] | feature | L | 0.17 |
+| 99 | [[extension-type-protocols]] | feature | L | 0.17 |
+
+### Post-launch — KB Quality & Lifecycle
+
+| # | Item | Kind | Effort |
+|---|------|------|--------|
+| — | [[entry-lifecycle-field-and-search-filtering]] | feature | S |
+| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S |
+| — | [[knowledgeclaw-pyrite-powered-agent-for-openclaw-ecosystem]] | feature | XL |
 
 ### Planned — Future
 
@@ -117,6 +212,7 @@ Recommended execution order. Grouped by milestone.
 | 95 | [[event-bus-webhooks]] | feature | M |
 | 96 | [[db-backup-restore]] | feature | S |
 | 98 | [[kb-orchestrator-skill]] | feature | M |
+| — | [[search-relevance-boost-by-entry-type]] | feature | M |
 
 ### Open Phases (blocked or deferred)
 
@@ -132,43 +228,44 @@ Recommended execution order. Grouped by milestone.
 |---|------|------|--------|
 | 102 | [[silent-error-logging]] | improvement | M |
 | 103 | [[test-coverage-gaps]] | improvement | L |
-| 105 | [[ux-accessibility-fixes]] | improvement | M |
 
 ---
 
 ## Dependencies (open items only)
 
 ```
-schema-versioning (#93)              [0.11] ✅
-  └── depends on odm-layer (#100) ✅
+pypi-publish (#74)                   [0.12] ✅
+  └── plugin-repo-extraction (#107)  [0.16] — needs #74 ✅
+      ├── awesome-plugins-page (#109) [0.16] — needs #107
+      └── plugin-writing-tutorial (#108) [0.16] — needs #107
 
-pypi-publish (#74)                   [0.12] — no blockers
-  ├── container-deployment (#114)    [0.12] — Phase 1 can start before #74 (COPY source)
-  │   Phase 1: Dockerfile + Compose  — no hard blockers
-  │   Phase 2: Deploy buttons        — benefits from Phase 1
-  └── plugin-repo-extraction (#107)  [0.12] — needs #74
-      ├── awesome-plugins-page (#109) [0.12] — needs #107
-      └── plugin-writing-tutorial (#108) [0.12] — needs #107
+web-ui-* items                       [0.13] — no cross-milestone deps
+  └── playwright-integration-tests   [0.13] — validates all UI fixes
+      └── web-ui-review-hardening    [0.15] — final gate, after all 0.13 items
 
 web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
-  ├── oauth-providers (#110)         [0.12] — GitHub/Google OAuth
+  ├── oauth-providers (#110)         [0.14] — GitHub OAuth
   │   Phase 1: GitHub OAuth          — needs #94 ✅
   │   Phase 2: Google OAuth          — needs Phase 1
   │   Phase 3: Generic OIDC          — post-launch
-  ├── per-kb-permissions (#112)      [0.12] — per-KB ACL + ephemeral sandboxes
+  ├── per-kb-permissions (#112)      [0.14] — per-KB ACL + ephemeral sandboxes
   │   — needs #94 ✅, benefits from #110
-  └── personal-kb-repo-backing (#113) [0.12] — repo-backed KBs + plan tiers
+  └── personal-kb-repo-backing (#113) [0.16] — repo-backed KBs + plan tiers
       — needs #110 (GitHub OAuth), #112 (per-KB perms)
 
-pyrite-website (#111)                [0.12] — no blockers
-demo-site-deployment (#85)           [0.12] — needs #94 ✅, #97, #111, #112, #113, #114
+container-deployment (#114)          [0.15] — no hard blockers
+  Phase 1: Dockerfile + Compose      — no hard blockers
+  Phase 2: Deploy buttons            — benefits from Phase 1
 
-extension-type-protocols (#99)       [0.13]
+pyrite-website (#111)                [0.15] — no blockers
+demo-site-deployment (#85)           [0.15] — needs #94 ✅, #97, #111, #112, #114
+
+extension-type-protocols (#99)       [0.17]
   Phase 1: protocol definitions      — needs #92 (intent layer)
   Phase 2: satisfaction checking     — needs Phase 1
   Phase 3: registry integration      — needs #84 (extension registry)
 
-extension-registry (#84)             [0.13] — needs demo site (#85)
+extension-registry (#84)             [0.17] — needs demo site (#85)
 
 coordination-task-plugin (#79)       — Phases 1-2 ✅
   Phase 3: DAG queries               [future]
@@ -184,6 +281,10 @@ block-refs-phase3 (#60)              — ready to start
 
 kb-orchestrator-skill (#98)          [future] — needs #79 Phase 2, #92 Phase 1
 intent-layer (#92)                   [future] — phase 1 no blockers
+
+entry-lifecycle-field-and-search-filtering  [post-launch] — no blockers
+  └── kb-compaction-command-and-freshness-qa-rules  [post-launch] — needs lifecycle field
+      └── search-relevance-boost-by-entry-type      [future] — needs compaction + intent layer
 ```
 
 ---

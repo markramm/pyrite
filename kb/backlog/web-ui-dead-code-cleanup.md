@@ -11,6 +11,7 @@ kind: improvement
 priority: low
 effort: XS
 status: proposed
+milestone: "0.13"
 links:
 - web-ui-review-hardening
 ---

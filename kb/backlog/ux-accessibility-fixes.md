@@ -12,6 +12,7 @@ kind: improvement
 priority: high
 effort: M
 status: planned
+milestone: "0.13"
 links:
 - roadmap
 - web-ui-review-hardening

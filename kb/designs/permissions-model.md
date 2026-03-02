@@ -205,6 +205,8 @@ The right framing for corporate teams: "Git is your access control. Pyrite is yo
 
 ## Timeline
 
-Not scheduled. This is post-0.8, probably 0.9+ alongside the other agent swarm infrastructure. The launch story for corporate teams is: "Git permissions today, application-level permissions on the roadmap."
+**Layer 2 extensions** are now concretely scheduled: OAuth providers (#110) in 0.14, per-KB ACL with ephemeral sandboxes (#112) in 0.14, personal KB repo backing with fork/PR workflow (#113) in 0.16. These implement the per-KB permission resolution chain and the demo site user funnel described above.
 
-A quick win that could ship earlier: **`pyrite ci` command** — a single CLI command that validates schema, runs QA checks, and exits non-zero on failure. Teams add it to their GitHub Actions. This gives corporate teams enforcement at the git layer (PR checks) without building a full application-level permission system.
+**Layer 3** (application-layer fine-grained permissions) remains unscheduled — probably post-launch alongside other agent swarm infrastructure. The launch story for corporate teams is: "Git permissions today, per-KB ACL today, application-level type/workflow permissions on the roadmap."
+
+A quick win shipping in 0.16: **`pyrite ci` command** (#86) — a single CLI command that validates schema, runs QA checks, and exits non-zero on failure. Teams add it to their GitHub Actions. This gives corporate teams enforcement at the git layer (PR checks) without building a full application-level permission system.

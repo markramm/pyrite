@@ -18,6 +18,23 @@ links:
 - permissions-model
 ---
 
+## Foundational Commitment: Truth-Functionality
+
+The intent layer isn't just a feature — it's the mechanism through which Pyrite's foundational commitment to truth-functionality (see [[bhag-self-configuring-knowledge-infrastructure]]) becomes operational in every KB.
+
+Pyrite is named after fool's gold. The aspiration is to build something that isn't. In a world where AI generates plausible-sounding knowledge at scale, the intent layer is what separates validated, accountable knowledge from plausible-looking noise.
+
+**Every KB inherits truth-functional defaults from the system itself:**
+
+- **Schema validation on every write** — structural correctness is non-negotiable, not opt-in
+- **Source chain expectations** — the intent layer encodes "claims should link to evidence" as a baseline guideline that operators can strengthen but not remove
+- **QA as immune system** — evaluation rubrics enforce quality standards continuously, not just at creation time
+- **Provenance tracking** — who created what, when, and with what credential. Trust is measurable (see Trust as a Measurable Property in the BHAG doc)
+
+The operator's kb.yaml *extends* these defaults with domain-specific intent. A journalism KB adds sourcing standards. A legal KB adds citation requirements. A software KB adds architectural consistency rules. But the baseline commitment to truth-functionality — validate, source, assess — is inherited from the platform.
+
+This is what makes the intent layer more than a configuration feature. It's the encoding of an epistemic commitment: knowledge that enters a Pyrite KB should be better — more structured, more sourced, more validated — than knowledge that doesn't.
+
 ## Problem
 
 Pyrite has strong **context engineering** infrastructure — schemas, type metadata, AI instructions, search, MCP tools. Agents get the right tokens. But there's no formal place to encode **intent** — the "why" behind the KB, the quality standards, the editorial values, the goals that should guide every agent's decisions.
@@ -123,6 +140,33 @@ types:
       - "Source attribution present (even if source is anonymous)"
       - "Priority reflects potential impact if verified"
 ```
+
+### System-Level Defaults (Truth-Functional Baseline)
+
+Before any operator configuration, every KB starts with inherited intent:
+
+```yaml
+# These are system defaults — operators extend, not replace
+_system_guidelines:
+  contributing: |
+    Every claim should link to supporting evidence where possible.
+    Prefer verifiable sources over unsourced assertions.
+    When information conflicts, document both positions.
+  quality: |
+    Entries should be structurally complete per their type schema.
+    Cross-linking strengthens epistemic foundation — isolated entries
+    with no links, sources, or assessments are epistemically weaker.
+    Knowledge ages — maintain freshness where the type requires it.
+
+_system_evaluation_rubric:
+  - "Entry has at least one outgoing link (not orphaned)"
+  - "Source or evidence fields populated where the type defines them"
+  - "No contradictions with linked entries (flagged, not enforced)"
+```
+
+Operator-defined guidelines are **additive** — they layer on top of the system defaults. An operator can raise the bar ("every finding requires two corroborating sources") but the baseline ("claims should link to evidence") is always present.
+
+This creates a floor, not a ceiling. The system defaults are deliberately minimal — they won't impede any legitimate use case. But they ensure that every KB, even one created by an autonomous agent with no human configuration, starts with truth-functional intent.
 
 ### How Each Agent Consumes Intent
 
@@ -248,8 +292,10 @@ This is informational for now — agents read it to understand the process — b
 ## Success Criteria
 
 - A new KB creator can specify intent (guidelines, goals, rubric) alongside schema in kb.yaml
+- **Every KB inherits system-level truth-functional defaults** — even a bare `pyrite init` produces a KB with baseline intent
 - Agents creating entries see both ai_instructions (how) and guidelines (why/standard)
 - QA agents validate against evaluation rubrics, not just structural rules
 - `pyrite ci` surfaces rubric violations
 - The software-kb extension's kb.yaml includes guidelines and goals (dogfooding)
 - Launch blog post can show: "define your standards → agents follow them → QA validates against them"
+- The truth-functionality story is demonstrable: create a KB, add entries, show that QA catches unsourced claims and orphaned entries *by default*

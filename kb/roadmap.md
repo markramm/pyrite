@@ -66,56 +66,115 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 
 ---
 
-## 0.12 — Launch Prep
+## 0.12 — Distribution (done)
 
-**Theme:** Everything needed for a stranger to find, install, try, and trust Pyrite. Three parallel tracks: distribution, public demo, onboarding.
+PyPI publish, version bump, MANIFEST.in, publish workflow, CHANGELOG, README.
 
-**Track 1 — Distribution:**
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[pypi-publish]] | Publish `pyrite` and `pyrite-mcp` to PyPI | S |
-| [[container-deployment]] | Dockerfile, Docker Compose, deploy-to buttons (Railway/Render/Fly) | M |
-| [[plugin-repo-extraction]] | Extract 5 extensions to separate repos, publish to PyPI | M |
-| [[mcp-submission-update]] | Accurate tool count, test count, configuration examples | XS |
-
-**Track 2 — Public Demo & Web Presence:**
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[web-ui-auth]] Phase 1 | Local auth + API key tiers — **done** (#94) | M |
-| [[oauth-providers]] Phase 1 | GitHub/Google OAuth for demo site | L |
-| [[per-kb-permissions]] | Per-KB ACL + ephemeral KB sandbox for demo visitors | L |
-| [[personal-kb-repo-backing]] | Export ephemeral KB to GitHub repo + usage tiers | M |
-| [[mcp-rate-limiting]] | Rate limiting for public-facing MCP server | S |
-| [[pyrite-website]] | Marketing site + docs at pyrite.dev (separate repo) | M |
-| [[demo-site-deployment]] | Live demo at demo.pyrite.dev with curated awesome-list KBs | M |
-| [[byok-ai-gap-analysis]] | Audit AI features for bring-your-own-key completeness | M |
-
-**Track 3 — Onboarding:**
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| Getting Started tutorial | Zero to working MCP connection in 5 minutes | S |
-| [[plugin-writing-tutorial]] | Build a plugin with Claude Code + extension-builder skill | S |
-| [[awesome-plugins-page]] | Curated plugin listing (pre-registry discovery) | XS |
-| [[pyrite-ci-command]] | `pyrite ci` for CI/CD schema + link validation | S |
-
-### Definition of done
-
-- `pip install pyrite && pyrite init --template software` works from a clean venv
-- `docker compose up` → working Pyrite instance in < 2 minutes
-- `pip install pyrite-software-kb` (and all 5 plugins) works from PyPI
-- Demo site live with auth, per-KB permissions, ephemeral sandboxes, and rate limiting
-- Registered users can create an ephemeral KB sandbox; GitHub OAuth users can connect a repo to make it permanent
-- An autonomous agent can: install Pyrite, create a KB, build an extension, test it, install it, and start populating — entirely via Claude Code
-- Plugin writing tutorial published — builds a plugin end-to-end using the extension-builder skill
-- BYOK audit complete — all AI features work with user-provided keys
-- README, tutorials, and awesome plugins page are accurate and newcomer-friendly
+Remaining loose ends (no version bump needed):
+- PyPI trusted publisher setup (XS, manual step)
+- [[mcp-submission-update]] (#89, XS)
 
 ---
 
-## 0.13 — Ecosystem
+## 0.13 — Human & Agent UX Hardening
+
+**Theme:** Fix every bug and gap in both the web UI and the agent-facing surfaces (CLI, MCP, REST). Both humans and agents must have a solid experience before the platform goes public.
+
+**Web UI:**
+
+| Item | Effort |
+|------|--------|
+| [[web-ui-logout-button]] | XS |
+| [[web-ui-version-history-fix]] | XS |
+| [[web-ui-type-colors-consolidation]] | XS |
+| [[web-ui-page-titles]] | XS |
+| [[web-ui-dead-code-cleanup]] | XS |
+| [[web-ui-loading-states]] | S |
+| [[web-ui-accessibility-fixes]] | S |
+| [[web-ui-mobile-responsive]] | S |
+| [[web-ui-collections-save]] | S |
+| [[web-ui-first-run-experience]] | S |
+| [[web-ui-starred-entries]] | S |
+| [[ux-accessibility-fixes]] | M |
+| [[playwright-integration-tests]] | M |
+
+**Agent DX (CLI + MCP + REST):**
+
+| Item | Effort |
+|------|--------|
+| [[bug-kb-update-mcp-tool-returns-posixpath-serialization-error]] | S |
+| [[mcp-tool-kb-batch-read-for-multi-entry-retrieval-in-one-call]] | S |
+| [[mcp-search-add-fields-parameter-for-token-efficient-results]] | M |
+| [[mcp-tool-kb-list-entries-for-lightweight-kb-index-browsing]] | M |
+| [[mcp-tool-kb-recent-for-what-changed-orientation-queries]] | M |
+| [[clarify-metadata-vs-top-level-field-mapping-in-mcp-create-update-tools]] | M |
+| [[agent-oriented-error-responses-across-cli-and-mcp]] | L |
+
+### Definition of done
+
+All Playwright tests pass. No runtime errors on any route. Every page has a loading, empty, and error state. MCP `kb_update` works without serialization errors. `kb_batch_read`, `kb_list_entries`, `kb_recent` tools functional. Search `fields` parameter works across CLI, MCP, and REST. Agent errors return structured JSON with `suggestion` field.
+
+---
+
+## 0.14 — Auth & Rate Limiting
+
+**Theme:** Multi-user access control for public-facing deployments.
+
+| Item | Effort |
+|------|--------|
+| [[mcp-rate-limiting]] | S |
+| [[oauth-providers]] Phase 1 (GitHub) | L |
+| [[per-kb-permissions]] | L |
+
+### Definition of done
+
+GitHub OAuth login works. Per-KB read/write/admin tiers enforced. Rate limiting active on all public endpoints.
+
+---
+
+## 0.15 — Deployment & Demo
+
+**Theme:** Docker, website, live demo site.
+
+| Item | Effort |
+|------|--------|
+| [[container-deployment]] Phase 1 (Dockerfile + compose) | M |
+| [[container-deployment]] Phase 2 (deploy buttons) | S |
+| [[pyrite-website]] (pyrite.dev) | M |
+| [[demo-site-deployment]] | M |
+| [[byok-ai-gap-analysis]] | M |
+| [[web-ui-review-hardening]] (final gate) | S |
+
+### Definition of done
+
+`docker compose up` works. Demo site live at demo.pyrite.dev. Website live at pyrite.dev. Final UI review passed.
+
+---
+
+## 0.16 — Ecosystem & Onboarding
+
+**Theme:** Plugin extraction, tutorials, community readiness. This is the launch release.
+
+| Item | Effort |
+|------|--------|
+| [[plugin-repo-extraction]] | M |
+| [[personal-kb-repo-backing]] | M |
+| Getting Started tutorial | S |
+| [[plugin-writing-tutorial]] | S |
+| [[awesome-plugins-page]] | XS |
+| [[pyrite-ci-command]] | S |
+
+### Definition of done
+
+All 5 plugins on PyPI. Tutorials published. Awesome page live. `pyrite ci` works in CI pipelines.
+
+### Launch Day (after 0.16.0 ships)
+
+Wave 1 content push: HN Show HN, Reddit, blog post. Everything is live, tested, documented.
+
+---
+
+## 0.17 — Ecosystem
 
 **Theme:** Prove Pyrite is general-purpose. Ship plugins for different audiences, let others build and share extensions.
 
@@ -134,6 +193,21 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 - `pyrite extension install <name>` pulls from public registry
 - Obsidian users can migrate with `pyrite import --from obsidian`
 - Extension type protocols defined, at least one plugin implements them
+
+---
+
+## Post-launch — KB Quality & Lifecycle
+
+**Theme:** As KBs grow, search noise increases. Entry lifecycle management and type-aware freshness keep the active search surface clean without losing history.
+
+| Item | Effort |
+|------|--------|
+| [[entry-lifecycle-field-and-search-filtering]] | S |
+| [[kb-compaction-command-and-freshness-qa-rules]] | S |
+
+### Definition of done
+
+`lifecycle` field filters archived entries from default search. `pyrite kb compact --dry-run` identifies reasonable archival candidates. Type-aware freshness rules warn on stale component docs but not on ADRs.
 
 ---
 
@@ -161,6 +235,10 @@ Schema versioning (`_schema_version` tracking, `since_version` field semantics, 
 - **[[db-backup-restore]]** — Database backup and restore tooling
 - **[[oauth-providers]] Phase 3** — Generic OIDC for corporate SSO (Keycloak, Auth0, Okta, Azure AD)
 - **[[extension-type-protocols]] Phases 2-3** — Satisfaction checking, registry integration
+
+### KB Quality at Scale
+
+- **[[search-relevance-boost-by-entry-type]]** — Operator-controlled search ranking by type, intent layer integration
 
 ### Polish and Scale
 

@@ -11,6 +11,7 @@ kind: bug
 priority: high
 effort: XS
 status: proposed
+milestone: "0.13"
 links:
 - web-ui-auth
 - web-ui-review-hardening

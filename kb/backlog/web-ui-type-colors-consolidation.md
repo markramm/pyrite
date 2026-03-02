@@ -10,6 +10,7 @@ kind: improvement
 priority: high
 effort: XS
 status: proposed
+milestone: "0.13"
 links:
 - ux-accessibility-fixes
 - web-ui-review-hardening

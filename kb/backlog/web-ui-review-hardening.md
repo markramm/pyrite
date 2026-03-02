@@ -12,6 +12,7 @@ kind: improvement
 priority: high
 effort: S
 status: proposed
+milestone: "0.15"
 links:
 - ux-accessibility-fixes
 - playwright-integration-tests

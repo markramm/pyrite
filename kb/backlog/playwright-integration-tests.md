@@ -11,6 +11,7 @@ kind: feature
 priority: high
 effort: M
 status: proposed
+milestone: "0.13"
 links:
 - web-ui-auth
 - ux-accessibility-fixes
