@@ -73,16 +73,15 @@ Recommended execution order. Grouped by milestone.
 | **3** | [[demo-site-deployment]] | M | **done** |
 | **4** | [[byok-ai-gap-analysis]] | M | **done** |
 
-**0.16 — Ecosystem & Onboarding (launch release):**
+**0.16 — Onboarding & Docs (launch release):**
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **1** | [[plugin-repo-extraction]] | M | Extract 5 extensions to PyPI |
-| **2** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers |
-| **3** | Getting Started tutorial | S | Newcomer-friendly onboarding |
-| **4** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code |
-| **5** | [[awesome-plugins-page]] | XS | Curated plugin listing |
-| **6** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
+| **1** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers |
+| **2** | Getting Started tutorial | S | Newcomer-friendly onboarding |
+| **3** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code |
+| **4** | [[awesome-plugins-page]] | XS | Curated plugin listing |
+| **5** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
 
 **0.17 — Ecosystem:**
 
@@ -95,6 +94,12 @@ Recommended execution order. Grouped by milestone.
 | **4** | [[extension-type-protocols]] Phase 1 | L | Protocol definitions for extension types | |
 | **5** | [[obsidian-migration]] | M | Import from Obsidian vaults | |
 | **6** | [[pkm-capture-plugin]] | L | Personal knowledge management capture | |
+
+**Pre-1.0 — Extension Extraction:**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[plugin-repo-extraction]] | M | Extract extensions to separate repos/PyPI. In-tree for now as living examples + test coverage. |
 
 **Post-launch — KB Quality & Lifecycle:**
 
@@ -175,11 +180,10 @@ Recommended execution order. Grouped by milestone.
 | 85 | [[demo-site-deployment]] | feature | M | 0.15 | **done** |
 | 87 | [[byok-ai-gap-analysis]] | improvement | M | 0.15 | **done** |
 
-### Planned — 0.16 (Ecosystem & Onboarding — launch release)
+### Planned — 0.16 (Onboarding & Docs — launch release)
 
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
-| 107 | [[plugin-repo-extraction]] | feature | M | 0.16 |
 | 113 | [[personal-kb-repo-backing]] | feature | M | 0.16 |
 | — | Getting Started tutorial | feature | S | 0.16 |
 | 108 | [[plugin-writing-tutorial]] | feature | S | 0.16 |
@@ -196,6 +200,12 @@ Recommended execution order. Grouped by milestone.
 | 88 | [[obsidian-migration]] | feature | M | 0.17 |
 | 90 | [[pkm-capture-plugin]] | feature | L | 0.17 |
 | 99 | [[extension-type-protocols]] | feature | L | 0.17 |
+
+### Planned — Pre-1.0 (Extension Extraction)
+
+| # | Item | Kind | Effort | Milestone |
+|---|------|------|--------|-----------|
+| 107 | [[plugin-repo-extraction]] | feature | M | pre-1.0 |
 
 ### Post-launch — KB Quality & Lifecycle
 
@@ -236,9 +246,10 @@ Recommended execution order. Grouped by milestone.
 
 ```
 pypi-publish (#74)                   [0.12] ✅
-  └── plugin-repo-extraction (#107)  [0.16] — needs #74 ✅
-      ├── awesome-plugins-page (#109) [0.16] — needs #107
-      └── plugin-writing-tutorial (#108) [0.16] — needs #107
+  └── plugin-repo-extraction (#107)  [pre-1.0] — needs #74 ✅, deferred (extensions stay in-tree for now)
+
+awesome-plugins-page (#109)          [0.16] — no blockers
+plugin-writing-tutorial (#108)       [0.16] — no blockers
 
 web-ui-* items                       [0.13] ✅ — all done
   └── playwright-integration-tests   [0.13] ✅ — validates all UI fixes
@@ -252,7 +263,7 @@ web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
   ├── per-kb-permissions (#112)      [0.14] — per-KB ACL + ephemeral sandboxes
   │   — needs #94 ✅, benefits from #110
   └── personal-kb-repo-backing (#113) [0.16] — repo-backed KBs + plan tiers
-      — needs #110 (GitHub OAuth), #112 (per-KB perms)
+      — needs #110 ✅ (GitHub OAuth), #112 ✅ (per-KB perms)
 
 container-deployment (#114)          [0.15] ✅ Phase 1 done
   Phase 1: Dockerfile + Compose      ✅

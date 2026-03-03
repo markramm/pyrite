@@ -8,9 +8,9 @@ tags:
 - distribution
 - launch
 kind: feature
-priority: high
+priority: medium
 effort: M
-status: planned
+status: deferred
 links:
 - pypi-publish
 - extension-registry
