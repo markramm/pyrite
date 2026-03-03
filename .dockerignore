@@ -1,0 +1,17 @@
+.git
+.venv
+__pycache__
+*.pyc
+node_modules
+web/dist
+web/.svelte-kit
+tests/
+kb/
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.claude
+*.egg
+dist/
+build/

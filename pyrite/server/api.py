@@ -8,6 +8,7 @@ the ``endpoints/`` subpackage; this module provides shared dependencies, the rat
 limiter, and the application factory.
 """
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -436,7 +437,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             manager.disconnect(ws)
 
     # Mount static files if dist directory exists
-    dist_dir = Path(__file__).parent.parent.parent / "web" / "dist"
+    # Check env override first (for containerised deploys where the package is
+    # installed as a site-package and the relative path won't resolve).
+    dist_dir = Path(os.environ.get("PYRITE_STATIC_DIR", "")) if os.environ.get("PYRITE_STATIC_DIR") else None
+    if dist_dir is None:
+        dist_dir = Path(__file__).parent.parent.parent / "web" / "dist"
     if dist_dir.is_dir():
         from .static import mount_static
 
@@ -461,7 +466,8 @@ def main():
     """Run the API server."""
     import uvicorn
 
-    uvicorn.run("pyrite.server.api:app", host="127.0.0.1", port=8088)
+    config = load_config()
+    uvicorn.run("pyrite.server.api:app", host=config.settings.host, port=config.settings.port)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,30 @@
+services:
+  pyrite:
+    build: .
+    volumes:
+      - pyrite-data:/data
+    environment:
+      - PYRITE_HOST=0.0.0.0
+      - PYRITE_AUTH_ENABLED=true
+    restart: unless-stopped
+    # No ports exposed — Caddy handles external traffic
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - PYRITE_DOMAIN=${PYRITE_DOMAIN:-localhost}
+    depends_on:
+      - pyrite
+    restart: unless-stopped
+
+volumes:
+  pyrite-data:
+  caddy-data:
+  caddy-config:

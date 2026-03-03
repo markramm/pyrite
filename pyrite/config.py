@@ -682,7 +682,9 @@ class PyriteConfig:
 
 
 # Global configuration paths
-CONFIG_DIR = Path(os.environ.get("PYRITE_CONFIG_DIR", "~/.pyrite")).expanduser().resolve()
+CONFIG_DIR = Path(
+    os.environ.get("PYRITE_DATA_DIR", os.environ.get("PYRITE_CONFIG_DIR", "~/.pyrite"))
+).expanduser().resolve()
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
 
@@ -690,6 +692,44 @@ def ensure_config_dir() -> Path:
     """Ensure the config directory exists."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     return CONFIG_DIR
+
+
+def _apply_env_overrides(config: PyriteConfig) -> None:
+    """Apply PYRITE_* environment variable overrides to config.
+
+    Only overrides values when the env var is set. Does not clobber
+    values that were explicitly set in config.yaml (except for env vars
+    that are explicitly provided — env vars always win when present).
+    """
+    env = os.environ.get
+
+    if val := env("PYRITE_HOST"):
+        config.settings.host = val
+    if val := env("PYRITE_PORT"):
+        config.settings.port = int(val)
+    if val := env("PYRITE_AUTH_ENABLED"):
+        config.settings.auth.enabled = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_AUTH_ANONYMOUS_TIER"):
+        config.settings.auth.anonymous_tier = val
+    if val := env("PYRITE_AUTH_ALLOW_REGISTRATION"):
+        config.settings.auth.allow_registration = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_CORS_ORIGINS"):
+        config.settings.cors_origins = [s.strip() for s in val.split(",")]
+    if val := env("PYRITE_API_KEY"):
+        config.settings.api_key = val
+    if val := env("PYRITE_AI_PROVIDER"):
+        config.settings.ai_provider = val
+    if val := env("PYRITE_AI_MODEL"):
+        config.settings.ai_model = val
+    if val := env("PYRITE_SEARCH_MODE"):
+        config.settings.search_mode = val
+
+    # When PYRITE_DATA_DIR is set, derive index_path and workspace_path from it
+    data_dir = env("PYRITE_DATA_DIR")
+    if data_dir:
+        data_path = Path(data_dir).expanduser().resolve()
+        config.settings.index_path = data_path / "index.db"
+        config.settings.workspace_path = data_path / "repos"
 
 
 def load_config() -> PyriteConfig:
@@ -706,6 +746,9 @@ def load_config() -> PyriteConfig:
     else:
         # Create default config
         config = PyriteConfig()
+
+    # Apply environment variable overrides
+    _apply_env_overrides(config)
 
     # Load kb.yaml for each KB
     for kb in config.knowledge_bases:
