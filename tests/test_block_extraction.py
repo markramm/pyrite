@@ -176,9 +176,9 @@ class TestBlockMigration:
         assert len(v5) == 1
         assert "block" in v5[0].description.lower()
 
-    def test_current_version_is_8(self):
-        """CURRENT_VERSION is 8."""
-        assert CURRENT_VERSION == 8
+    def test_current_version_is_9(self):
+        """CURRENT_VERSION is 9."""
+        assert CURRENT_VERSION == 9
 
     def test_migration_v5_creates_block_table(self, temp_db):
         """Migration v5 creates the block table."""

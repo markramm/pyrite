@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 8
+CURRENT_VERSION = 9
 
 
 @dataclass
@@ -235,6 +235,19 @@ MIGRATIONS: list[Migration] = [
         DROP TABLE IF EXISTS kb_permission;
         """,
     ),
+    Migration(
+        version=9,
+        description="Add protocol columns for ADR-0017 entry protocol mixins",
+        # Actual ALTER TABLE handled conditionally in _apply_v9() since columns
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; columns remain but are unused.
+        DROP INDEX IF EXISTS idx_entry_assignee;
+        DROP INDEX IF EXISTS idx_entry_priority;
+        DROP INDEX IF EXISTS idx_entry_due_date;
+        """,
+    ),
 ]
 
 
@@ -357,6 +370,32 @@ class MigrationManager:
             self.conn.execute(
                 "ALTER TABLE local_user ADD COLUMN ephemeral_kb_count INTEGER DEFAULT 0"
             )
+        self.conn.commit()
+
+    def _apply_v9(self) -> None:
+        """Conditionally add protocol columns to entry (ADR-0017)."""
+        # Check if entry table exists (migration tests use bare connections)
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entry'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(entry)").fetchall()}
+        new_columns = {
+            "assignee": "TEXT",
+            "assigned_at": "TEXT",
+            "priority": "INTEGER",
+            "due_date": "TEXT",
+            "start_date": "TEXT",
+            "end_date": "TEXT",
+            "coordinates": "TEXT",
+        }
+        for col_name, col_type in new_columns.items():
+            if col_name not in existing:
+                self.conn.execute(f"ALTER TABLE entry ADD COLUMN {col_name} {col_type}")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_assignee ON entry(assignee)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_priority ON entry(priority)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_due_date ON entry(due_date)")
         self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:

@@ -86,14 +86,15 @@ Recommended execution order. Grouped by milestone.
 
 **0.17 — Ecosystem:**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[software-project-plugin]] | L | Evolves from software-kb, grabs dev team eyeballs |
-| **2** | [[investigative-journalism-plugin]] | XL | Proves general-purpose, different audience |
-| **3** | [[extension-registry]] | M | Public directory for sharing extensions |
-| **4** | [[extension-type-protocols]] Phase 1 | L | Protocol definitions for extension types |
-| **5** | [[obsidian-migration]] | M | Import from Obsidian vaults |
-| **6** | [[pkm-capture-plugin]] | L | Personal knowledge management capture |
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **0** | [[entry-protocol-mixins]] | L | Composable field protocols (ADR-0017), prerequisite for extension-type-protocols | **done** |
+| **1** | [[software-project-plugin]] | L | Evolves from software-kb, grabs dev team eyeballs | |
+| **2** | [[investigative-journalism-plugin]] | XL | Proves general-purpose, different audience | |
+| **3** | [[extension-registry]] | M | Public directory for sharing extensions | |
+| **4** | [[extension-type-protocols]] Phase 1 | L | Protocol definitions for extension types | |
+| **5** | [[obsidian-migration]] | M | Import from Obsidian vaults | |
+| **6** | [[pkm-capture-plugin]] | L | Personal knowledge management capture | |
 
 **Post-launch — KB Quality & Lifecycle:**
 
