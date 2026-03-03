@@ -292,7 +292,7 @@ class Settings:
     """Global application settings."""
 
     default_editor: str = field(default_factory=lambda: os.environ.get("EDITOR", "vim"))
-    ai_provider: Literal["anthropic", "openai", "local", "stub", "none"] = "stub"
+    ai_provider: Literal["anthropic", "openai", "gemini", "local", "stub", "none"] = "stub"
     ai_model: str = "claude-sonnet-4-20250514"
     ai_api_key: str = ""
     ai_api_base: str = ""
@@ -328,11 +328,16 @@ class Settings:
         self.workspace_path = Path(self.workspace_path).expanduser().resolve()
         # Load from environment if not set
         if not self.ai_api_key:
-            self.ai_api_key = os.environ.get("OPENAI_API_KEY", "") or os.environ.get(
-                "ANTHROPIC_API_KEY", ""
+            self.ai_api_key = (
+                os.environ.get("OPENAI_API_KEY", "")
+                or os.environ.get("ANTHROPIC_API_KEY", "")
+                or os.environ.get("GEMINI_API_KEY", "")
             )
         if not self.ai_api_base:
             self.ai_api_base = os.environ.get("OPENAI_API_BASE", "")
+        # Default base URL for Gemini's OpenAI-compatible endpoint
+        if self.ai_provider == "gemini" and not self.ai_api_base:
+            self.ai_api_base = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
 @dataclass

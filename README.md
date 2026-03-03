@@ -234,6 +234,30 @@ kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 
 **Access control:** REST API supports role-based tier enforcement (read/write/admin) with hashed API keys.
 
+## Deploy
+
+Run your own Pyrite instance on any VPS ($6/month, unlimited users, you own your data):
+
+```bash
+git clone https://github.com/markramm/pyrite.git && cd pyrite
+bash deploy/selfhost/setup.sh kb.example.com
+```
+
+This installs Docker, starts Pyrite + Caddy (auto TLS), and seeds Pyrite's own KB so you have content to explore immediately. Then create your admin user:
+
+```bash
+docker compose -f deploy/selfhost/docker-compose.yml exec pyrite \
+  python /app/deploy/selfhost/create-user.py admin yourpassword
+```
+
+Auth is required, registration is closed by default — add users manually with the same command.
+
+For local development without TLS, use the minimal compose:
+
+```bash
+docker compose up -d  # http://localhost:8088
+```
+
 ## Install
 
 ```bash

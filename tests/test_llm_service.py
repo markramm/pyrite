@@ -129,6 +129,65 @@ class TestLLMServiceProviderSelection:
         assert status["configured"] is True
 
 
+class TestLLMServiceGemini:
+    """Test Gemini provider routes through OpenAI backend."""
+
+    def test_gemini_selected(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="gemini", ai_model="gemini-2.0-flash")
+        svc = LLMService(settings)
+        assert svc.provider_name == "gemini"
+
+    def test_gemini_configured_status(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="gemini", ai_api_key="test-key")
+        svc = LLMService(settings)
+        status = svc.status()
+        assert status["configured"] is True
+        assert status["provider"] == "gemini"
+
+    def test_gemini_complete_uses_openai_backend(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="gemini",
+            ai_api_key="test-key",
+            ai_model="gemini-2.0-flash",
+            ai_api_base="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        svc = LLMService(settings)
+
+        mock_client = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Gemini says hi!"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_client.chat.completions.create = MagicMock(return_value=mock_response)
+
+        mock_module = MagicMock()
+        mock_module.OpenAI.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_openai", return_value=mock_module):
+            result = asyncio.run(svc.complete("Hello"))
+
+        assert result == "Gemini says hi!"
+        mock_module.OpenAI.assert_called_once()
+        call_kwargs = mock_module.OpenAI.call_args[1]
+        assert "generativelanguage.googleapis.com" in call_kwargs["base_url"]
+
+    def test_gemini_default_base_url_from_config(self):
+        """Settings.__post_init__ sets Gemini base URL when not provided."""
+        s = Settings(ai_provider="gemini", ai_api_key="test-key")
+        assert "generativelanguage.googleapis.com" in s.ai_api_base
+
+    def test_gemini_settings_valid(self):
+        s = Settings(ai_provider="gemini", ai_model="gemini-2.0-flash")
+        assert s.ai_provider == "gemini"
+        assert s.ai_model == "gemini-2.0-flash"
+
+
 class TestLLMServiceMissingSDK:
     """Test that missing SDK raises helpful error."""
 

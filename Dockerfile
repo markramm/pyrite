@@ -44,6 +44,9 @@ RUN apt-get purge -y build-essential gcc && \
 # Copy built frontend from stage 1
 COPY --from=frontend /build/web/dist/ /app/web/dist/
 
+# Copy deploy scripts (for seeding etc.)
+COPY deploy/ /app/deploy/
+
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash pyrite
 

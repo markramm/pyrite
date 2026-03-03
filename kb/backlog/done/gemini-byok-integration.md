@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: medium
 effort: M
-status: proposed
+status: completed
 ---
 
 ## Problem

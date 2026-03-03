@@ -1,6 +1,6 @@
 ---
 id: pyrite-website
-title: "Pyrite Website (pyrite.dev)"
+title: "Pyrite Website (pyrite.wiki)"
 type: backlog_item
 tags:
 - feature
@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: planned
+status: completed
 links:
 - demo-site-deployment
 - awesome-plugins-page

@@ -54,6 +54,7 @@ class LLMService:
         - ``"anthropic"`` — uses the ``anthropic`` SDK directly
         - ``"openai"`` — uses the ``openai`` SDK (also works for OpenRouter / Ollama
           via ``ai_api_base``)
+        - ``"gemini"`` — Google Gemini via OpenAI-compatible API
         - ``"stub"`` / ``"none"`` / ``""`` — no-op that returns empty strings / vectors
     """
 
@@ -91,7 +92,7 @@ class LLMService:
             return ""
         if self._provider == "anthropic":
             return self._anthropic_complete(prompt, system, max_tokens)
-        if self._provider in ("openai", "local"):
+        if self._provider in ("openai", "gemini", "local"):
             return self._openai_complete(prompt, system, max_tokens)
         return ""
 
@@ -107,7 +108,7 @@ class LLMService:
             for chunk in self._anthropic_stream(prompt, system):
                 yield chunk
             return
-        if self._provider in ("openai", "local"):
+        if self._provider in ("openai", "gemini", "local"):
             for chunk in self._openai_stream(prompt, system):
                 yield chunk
             return
@@ -119,7 +120,7 @@ class LLMService:
         if self._provider == "anthropic":
             # Anthropic does not have an embeddings API — fall back to empty
             return [[] for _ in texts]
-        if self._provider in ("openai", "local"):
+        if self._provider in ("openai", "gemini", "local"):
             return self._openai_embed(texts)
         return [[] for _ in texts]
 

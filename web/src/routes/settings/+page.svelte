@@ -84,9 +84,14 @@
 	const modelPlaceholders: Record<string, string> = {
 		anthropic: 'claude-sonnet-4-20250514',
 		openai: 'gpt-4o',
+		gemini: 'gemini-2.0-flash',
 		openrouter: 'anthropic/claude-sonnet-4',
 		ollama: 'llama3.2',
 		'': 'Select a provider first'
+	};
+
+	const providerBaseUrls: Record<string, string> = {
+		gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/'
 	};
 </script>
 
@@ -194,14 +199,19 @@
 						<select
 							value={aiProvider}
 							onchange={(e) => {
-								setSetting('ai.provider', e.currentTarget.value);
+								const provider = e.currentTarget.value;
+								setSetting('ai.provider', provider);
 								connectionResult = null;
+								if (providerBaseUrls[provider]) {
+									setSetting('ai.baseUrl', providerBaseUrls[provider]);
+								}
 							}}
 							class="w-48 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
 						>
 							<option value="">None</option>
 							<option value="anthropic">Anthropic</option>
 							<option value="openai">OpenAI</option>
+							<option value="gemini">Google Gemini</option>
 							<option value="openrouter">OpenRouter</option>
 							<option value="ollama">Ollama</option>
 						</select>
@@ -243,14 +253,14 @@
 								>Base URL</label
 							>
 							<p class="text-xs text-zinc-500">
-								Custom API endpoint (for OpenRouter, Ollama, or self-hosted)
+								Custom API endpoint (for Gemini, OpenRouter, Ollama, or self-hosted)
 							</p>
 						</div>
 						<input
 							type="text"
 							value={aiBaseUrl}
 							onchange={(e) => setSetting('ai.baseUrl', e.currentTarget.value)}
-							placeholder={aiProvider === 'ollama' ? 'http://localhost:11434/v1' : 'Optional'}
+							placeholder={providerBaseUrls[aiProvider] ?? (aiProvider === 'ollama' ? 'http://localhost:11434/v1' : 'Optional')}
 							class="w-48 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
 						/>
 					</div>

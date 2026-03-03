@@ -88,6 +88,9 @@ def get_llm_service(
         api_key = db.get_setting("ai.apiKey") or config.settings.ai_api_key
         model = db.get_setting("ai.model") or config.settings.ai_model
         base_url = db.get_setting("ai.baseUrl") or config.settings.ai_api_base
+        # Default base URL for Gemini's OpenAI-compatible endpoint
+        if provider == "gemini" and not base_url:
+            base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
         settings = Settings(
             ai_provider=provider,
             ai_api_key=api_key,

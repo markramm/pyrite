@@ -63,15 +63,15 @@ Recommended execution order. Grouped by milestone.
 | **2** | [[oauth-providers]] Phase 1 | L | GitHub OAuth — "Sign in with GitHub" | **done** |
 | **3** | [[per-kb-permissions]] | L | Per-KB ACL + ephemeral KB sandbox | **done** |
 
-**0.15 — Deployment & Demo:**
+**0.15 — Deployment & Demo (done):**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[container-deployment]] Phase 1 | M | Dockerfile + Docker Compose |
-| **1a** | [[container-deployment]] Phase 2 | S | Deploy-to-Railway/Render/Fly buttons |
-| **2** | [[pyrite-website]] | M | Marketing site + docs at pyrite.dev |
-| **3** | [[demo-site-deployment]] | M | Live demo at demo.pyrite.dev |
-| **4** | [[byok-ai-gap-analysis]] | M | All AI features work with user-provided keys |
+| Priority | Item | Effort | Status |
+|----------|------|--------|--------|
+| **1** | [[container-deployment]] Phase 1 | M | **done** |
+| **1a** | [[container-deployment]] Phase 2 | S | deferred |
+| **2** | [[pyrite-website]] | M | **done** |
+| **3** | [[demo-site-deployment]] | M | **done** |
+| **4** | [[byok-ai-gap-analysis]] | M | **done** |
 
 **0.16 — Ecosystem & Onboarding (launch release):**
 
@@ -167,12 +167,12 @@ Recommended execution order. Grouped by milestone.
 
 ### Planned — 0.15 (Deployment & Demo)
 
-| # | Item | Kind | Effort | Milestone |
-|---|------|------|--------|-----------|
-| 114 | [[container-deployment]] | feature | M | 0.15 |
-| 111 | [[pyrite-website]] | feature | M | 0.15 |
-| 85 | [[demo-site-deployment]] | feature | M | 0.15 |
-| 87 | [[byok-ai-gap-analysis]] | improvement | M | 0.15 |
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| 114 | [[container-deployment]] Phase 1 | feature | M | 0.15 | **done** |
+| 111 | [[pyrite-website]] | feature | M | 0.15 | **done** |
+| 85 | [[demo-site-deployment]] | feature | M | 0.15 | **done** |
+| 87 | [[byok-ai-gap-analysis]] | improvement | M | 0.15 | **done** |
 
 ### Planned — 0.16 (Ecosystem & Onboarding — launch release)
 
@@ -253,12 +253,12 @@ web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
   └── personal-kb-repo-backing (#113) [0.16] — repo-backed KBs + plan tiers
       — needs #110 (GitHub OAuth), #112 (per-KB perms)
 
-container-deployment (#114)          [0.15] — no hard blockers
-  Phase 1: Dockerfile + Compose      — no hard blockers
-  Phase 2: Deploy buttons            — benefits from Phase 1
+container-deployment (#114)          [0.15] ✅ Phase 1 done
+  Phase 1: Dockerfile + Compose      ✅
+  Phase 2: Deploy buttons            — deferred, benefits from Phase 1
 
-pyrite-website (#111)                [0.15] — no blockers
-demo-site-deployment (#85)           [0.15] — needs #94 ✅, #97, #111, #112, #114
+pyrite-website (#111)                [0.15] ✅ — pyrite.wiki live on GitHub Pages
+demo-site-deployment (#85)           [0.15] ✅ — deploy/demo/ + deploy/selfhost/ + deploy/ink/
 
 extension-type-protocols (#99)       [0.17]
   Phase 1: protocol definitions      — needs #92 (intent layer)
@@ -402,6 +402,9 @@ All items below are done. Detail lives in the individual backlog item files in [
 
 ### Wave 16 — Auth & Rate Limiting (0.14)
 [[mcp-rate-limiting]], [[oauth-providers]] Phase 1 (GitHub OAuth), [[mcp-submission-update]], [[per-kb-permissions]]
+
+### Wave 17 — Deployment & Demo (0.15)
+[[container-deployment]] Phase 1 (Dockerfile, Docker Compose, env var config), [[demo-site-deployment]] (deploy/demo/ for demo.pyrite.wiki, deploy/ink/ for pyrite.ink, deploy/selfhost/ for self-hosters), [[pyrite-website]] (Astro + Tailwind site at pyrite.wiki on GitHub Pages), [[byok-ai-gap-analysis]] (audit confirmed all AI features are BYOK-ready)
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]

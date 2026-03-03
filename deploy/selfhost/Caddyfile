@@ -1,0 +1,3 @@
+{$PYRITE_DOMAIN:localhost} {
+	reverse_proxy pyrite:8088
+}
