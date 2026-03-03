@@ -35,3 +35,25 @@ export function markTransclusionActive(target: string): () => void {
 
 /** Message shown when a circular transclusion is detected. */
 export const CIRCULAR_REF_MESSAGE = '\u26A0 Circular reference detected';
+
+/** Maximum depth for nested transclusions. */
+export const MAX_TRANSCLUSION_DEPTH = 3;
+
+/** Track current transclusion depth. */
+let currentDepth = 0;
+
+/** Check if the current transclusion depth has been exceeded. */
+export function isDepthExceeded(): boolean {
+	return currentDepth >= MAX_TRANSCLUSION_DEPTH;
+}
+
+/** Increment depth before loading a transclusion. Returns cleanup function. */
+export function incrementDepth(): () => void {
+	currentDepth++;
+	return () => { currentDepth--; };
+}
+
+/** Reset depth counter (for testing). */
+export function resetDepth(): void {
+	currentDepth = 0;
+}

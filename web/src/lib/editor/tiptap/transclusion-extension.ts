@@ -7,9 +7,12 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { wsClient } from '$lib/api/websocket';
+import { markdownToHtml } from './markdown';
 import {
 	isCircularTransclusion,
 	markTransclusionActive,
+	isDepthExceeded,
+	incrementDepth,
 	CIRCULAR_REF_MESSAGE
 } from '$lib/editor/transclusion-utils';
 
@@ -126,8 +129,16 @@ export const Transclusion = Node.create({
 									return;
 								}
 
+								// Depth limit check
+								if (isDepthExceeded()) {
+									htmlNode.textContent = '\u26A0 Maximum transclusion depth exceeded';
+									htmlNode.dataset.loaded = 'true';
+									return;
+								}
+
 								htmlNode.dataset.loaded = 'true';
 								const cleanup = markTransclusionActive(target);
+								const depthCleanup = incrementDepth();
 								try {
 									const { api } = await import('$lib/api/client');
 									const res = await api.resolveEntry(target);
@@ -386,33 +397,30 @@ export const Transclusion = Node.create({
 												});
 												content = entryRes.body || '';
 											}
+										} else if (heading) {
+											// Use blocks API for heading extraction
+											const blocksRes = await api.getEntryBlocks(
+												res.entry.id,
+												res.entry.kb_name,
+												{ heading }
+											);
+											if (blocksRes.blocks && blocksRes.blocks.length > 0) {
+												content = blocksRes.blocks.map((b) => b.content).join('\n\n');
+											} else {
+												// Fallback: get full body
+												const entryRes = await api.getEntry(res.entry.id, {
+													kb: res.entry.kb_name
+												});
+												content = entryRes.body || '';
+											}
 										} else {
 											const entryRes = await api.getEntry(res.entry.id, {
 												kb: res.entry.kb_name
 											});
 											content = entryRes.body || '';
-											if (heading) {
-												const headingRegex = new RegExp(
-													`^##?#?#?#?#?\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`,
-													'mi'
-												);
-												const match = headingRegex.exec(content);
-												if (match) {
-													const start = match.index + match[0].length;
-													const nextHeading = content
-														.slice(start)
-														.search(/^##?#?#?#?#?\s+/m);
-													content =
-														nextHeading === -1
-															? content.slice(start).trim()
-															: content
-																	.slice(start, start + nextHeading)
-																	.trim();
-												}
-											}
 										}
-										htmlNode.textContent =
-											content.slice(0, 500) + (content.length > 500 ? '...' : '');
+										const truncated = content.slice(0, 500) + (content.length > 500 ? '...' : '');
+										htmlNode.innerHTML = markdownToHtml(truncated);
 									} else {
 										htmlNode.textContent = '\u26A0 Entry not found';
 									}
@@ -420,6 +428,7 @@ export const Transclusion = Node.create({
 									htmlNode.textContent = '\u26A0 Failed to load';
 								} finally {
 									cleanup();
+									depthCleanup();
 								}
 							});
 						},

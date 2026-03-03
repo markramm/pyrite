@@ -260,6 +260,54 @@ describe('renderWikilinks', () => {
 	});
 });
 
+describe('markdownToHtml wikilink preservation', () => {
+	it('preserves heading fragment in wikilink', async () => {
+		const { markdownToHtml } = await import('./tiptap/markdown');
+		const html = markdownToHtml('See [[entry-id#Introduction]] here');
+		expect(html).toContain('data-wikilink="entry-id"');
+		expect(html).toContain('data-wikilink-heading="Introduction"');
+	});
+
+	it('preserves block-id fragment in wikilink', async () => {
+		const { markdownToHtml } = await import('./tiptap/markdown');
+		const html = markdownToHtml('See [[entry-id^block-1]] here');
+		expect(html).toContain('data-wikilink="entry-id"');
+		expect(html).toContain('data-wikilink-block="block-1"');
+	});
+
+	it('preserves kb prefix in wikilink', async () => {
+		const { markdownToHtml } = await import('./tiptap/markdown');
+		const html = markdownToHtml('See [[dev:entry-id]] here');
+		expect(html).toContain('data-wikilink="entry-id"');
+		expect(html).toContain('data-wikilink-kb="dev"');
+	});
+});
+
+describe('depth tracking', () => {
+	it('exceeds at MAX_TRANSCLUSION_DEPTH', async () => {
+		const { isDepthExceeded, incrementDepth, resetDepth, MAX_TRANSCLUSION_DEPTH } = await import('./transclusion-utils');
+		resetDepth();
+		const cleanups: (() => void)[] = [];
+		for (let i = 0; i < MAX_TRANSCLUSION_DEPTH; i++) {
+			cleanups.push(incrementDepth());
+		}
+		expect(isDepthExceeded()).toBe(true);
+		cleanups.forEach(c => c());
+		resetDepth();
+	});
+
+	it('resets after cleanup', async () => {
+		const { isDepthExceeded, incrementDepth, resetDepth } = await import('./transclusion-utils');
+		resetDepth();
+		const c1 = incrementDepth();
+		const c2 = incrementDepth();
+		c2();
+		c1();
+		expect(isDepthExceeded()).toBe(false);
+		resetDepth();
+	});
+});
+
 describe('transclusion cycle detection', () => {
 	beforeEach(() => {
 		// Clear active transclusions between tests

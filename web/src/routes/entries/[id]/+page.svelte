@@ -76,6 +76,62 @@
 		}
 	});
 
+	// Hydrate transclusion placeholders in the rendered (non-editing) view
+	$effect(() => {
+		if (!entryStore.current || editing) return;
+
+		// Wait for DOM to render
+		const timer = setTimeout(async () => {
+			const placeholders = document.querySelectorAll('blockquote.transclusion');
+			for (const placeholder of placeholders) {
+				const target = (placeholder as HTMLElement).dataset.transclusionTarget;
+				if (!target) continue;
+
+				const heading = (placeholder as HTMLElement).dataset.transclusionHeading || undefined;
+				const blockId = (placeholder as HTMLElement).dataset.transclusionBlock || undefined;
+				const loadingEl = placeholder.querySelector('.transclusion-loading');
+				if (!loadingEl) continue;
+
+				try {
+					const res = await api.resolveEntry(target);
+					if (!res.resolved || !res.entry) {
+						loadingEl.textContent = 'Entry not found';
+						(loadingEl as HTMLElement).style.color = '#9ca3af';
+						continue;
+					}
+
+					let content: string;
+					if (blockId) {
+						const blocksRes = await api.getEntryBlocks(res.entry.id, res.entry.kb_name, { block_id: blockId });
+						const block = blocksRes.blocks?.find((b: { block_id: string }) => b.block_id === blockId);
+						content = block?.content || '';
+					} else if (heading) {
+						const blocksRes = await api.getEntryBlocks(res.entry.id, res.entry.kb_name, { heading });
+						content = blocksRes.blocks?.map((b: { content: string }) => b.content).join('\n\n') || '';
+					} else {
+						const entryRes = await api.getEntry(res.entry.id, { kb: res.entry.kb_name });
+						content = entryRes.body || '';
+					}
+
+					if (content) {
+						const { markdownToHtml } = await import('$lib/editor/tiptap/markdown');
+						const truncated = content.slice(0, 1000) + (content.length > 1000 ? '...' : '');
+						loadingEl.innerHTML = markdownToHtml(truncated);
+						(loadingEl as HTMLElement).className = 'transclusion-content';
+					} else {
+						loadingEl.textContent = 'No content';
+						(loadingEl as HTMLElement).style.color = '#9ca3af';
+					}
+				} catch {
+					loadingEl.textContent = 'Failed to load';
+					(loadingEl as HTMLElement).style.color = '#ef4444';
+				}
+			}
+		}, 100);
+
+		return () => clearTimeout(timer);
+	});
+
 	function toggleEdit() {
 		editing = !editing;
 		if (editing && entryStore.current) {
@@ -318,6 +374,13 @@
 		let html = marked.parse(md, { async: false, renderer }) as string;
 		html = renderCallouts(html);
 		html = renderWikilinks(html, existingIds.size > 0 ? existingIds : undefined);
+		// Add block-id anchors: paragraphs ending with ^block-id get id="block-{id}"
+		html = html.replace(
+			/(<p[^>]*>)(.*?)\s*\^([a-zA-Z0-9_-]+)\s*(<\/p>)/g,
+			(_match, open, content, blockId, close) => {
+				return `${open.replace('<p', `<p id="block-${blockId}"`)}${content}${close}`;
+			}
+		);
 		return html;
 	}
 </script>

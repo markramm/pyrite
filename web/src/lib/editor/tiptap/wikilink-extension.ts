@@ -29,7 +29,10 @@ export const Wikilink = Node.create<WikilinkOptions>({
 	addAttributes() {
 		return {
 			target: { default: '' },
-			display: { default: '' }
+			display: { default: '' },
+			heading: { default: null },
+			blockId: { default: null },
+			kb: { default: null }
 		};
 	},
 
@@ -41,7 +44,10 @@ export const Wikilink = Node.create<WikilinkOptions>({
 					const el = dom as HTMLElement;
 					return {
 						target: el.dataset.wikilink || '',
-						display: el.textContent || ''
+						display: el.textContent || '',
+						heading: el.dataset.wikilinkHeading || null,
+						blockId: el.dataset.wikilinkBlock || null,
+						kb: el.dataset.wikilinkKb || null
 					};
 				}
 			}
@@ -50,11 +56,17 @@ export const Wikilink = Node.create<WikilinkOptions>({
 
 	renderHTML({ node, HTMLAttributes }) {
 		const target = node.attrs.target as string;
-		const display = (node.attrs.display as string) || target;
+		const heading = node.attrs.heading as string | null;
+		const blockId = node.attrs.blockId as string | null;
+		const kb = node.attrs.kb as string | null;
+		const display = (node.attrs.display as string) || (heading ? `${target} \u00A7 ${heading}` : blockId ? `${target} ^${blockId}` : target);
 		return [
 			'span',
 			mergeAttributes(HTMLAttributes, {
 				'data-wikilink': target,
+				...(heading ? { 'data-wikilink-heading': heading } : {}),
+				...(blockId ? { 'data-wikilink-block': blockId } : {}),
+				...(kb ? { 'data-wikilink-kb': kb } : {}),
 				class: 'wikilink',
 				style:
 					'background: rgba(59,130,246,0.15); color: #60a5fa; padding: 1px 6px; border-radius: 4px; cursor: pointer; font-size: 0.9em;'

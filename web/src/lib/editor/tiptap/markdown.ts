@@ -29,12 +29,18 @@ export function markdownToHtml(md: string): string {
 		}
 	);
 
-	// Pre-process wikilinks: [[target|display]] -> <span data-wikilink="target">display</span>
+	// Pre-process wikilinks: [[kb:target#heading^block-id|display]] -> <span data-wikilink="target" ...>display</span>
 	processed = processed.replace(
-		/\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
-		(_match, target: string, display?: string) => {
-			const label = display || target;
-			return `<span data-wikilink="${target.trim()}" class="wikilink">${label.trim()}</span>`;
+		/\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]/g,
+		(_match, kb: string | undefined, target: string, heading?: string, blockId?: string, display?: string) => {
+			const label = display || (heading ? `${target} \u00A7 ${heading}` : blockId ? `${target} ^${blockId}` : target);
+			const attrs = [
+				`data-wikilink="${target.trim()}"`,
+				heading ? `data-wikilink-heading="${heading.trim()}"` : '',
+				blockId ? `data-wikilink-block="${blockId.trim()}"` : '',
+				kb ? `data-wikilink-kb="${kb.trim()}"` : ''
+			].filter(Boolean).join(' ');
+			return `<span ${attrs} class="wikilink">${label.trim()}</span>`;
 		}
 	);
 
@@ -78,8 +84,19 @@ function nodeToMarkdown(node: Node): string {
 	// Wikilink spans
 	if (tag === 'span' && el.dataset.wikilink) {
 		const target = el.dataset.wikilink;
+		const heading = el.dataset.wikilinkHeading;
+		const blockId = el.dataset.wikilinkBlock;
+		const kb = el.dataset.wikilinkKb;
 		const display = el.textContent || target;
-		return target === display ? `[[${target}]]` : `[[${target}|${display}]]`;
+
+		// Reconstruct full wikilink syntax
+		let ref = kb ? `${kb}:${target}` : target;
+		if (heading) ref += `#${heading}`;
+		else if (blockId) ref += `^${blockId}`;
+
+		// If display is the auto-generated label, don't include it
+		const autoLabel = heading ? `${target} \u00A7 ${heading}` : blockId ? `${target} ^${blockId}` : target;
+		return ref === display || autoLabel === display ? `[[${ref}]]` : `[[${ref}|${display}]]`;
 	}
 
 	switch (tag) {
