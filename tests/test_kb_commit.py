@@ -11,6 +11,7 @@ from unittest.mock import patch
 import pytest
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.exceptions import KBNotFoundError, PyriteError
 from pyrite.services.git_service import GitService
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
@@ -98,9 +99,7 @@ class TestGitServiceCommit:
         (kb_path / "note-a.md").write_text("---\ntitle: A\n---\n\nA")
         (kb_path / "note-b.md").write_text("---\ntitle: B\n---\n\nB")
 
-        success, result = GitService.commit(
-            kb_path, "Add note A only", paths=["note-a.md"]
-        )
+        success, result = GitService.commit(kb_path, "Add note A only", paths=["note-a.md"])
         assert success
         assert result["files_changed"] >= 1
 
@@ -117,7 +116,10 @@ class TestGitServiceCommit:
         kb_path = git_kb["kb_path"]
         success, result = GitService.commit(kb_path, "Empty commit")
         assert not success
-        assert "nothing" in result.get("error", "").lower() or "no changes" in result.get("error", "").lower()
+        assert (
+            "nothing" in result.get("error", "").lower()
+            or "no changes" in result.get("error", "").lower()
+        )
 
     def test_commit_not_git_repo(self, non_git_kb):
         kb_path = non_git_kb["kb_path"]
@@ -127,9 +129,7 @@ class TestGitServiceCommit:
     def test_commit_with_sign_off(self, git_kb):
         kb_path = git_kb["kb_path"]
         (kb_path / "signed.md").write_text("---\ntitle: Signed\n---\n\nSigned")
-        success, result = GitService.commit(
-            kb_path, "Signed commit", sign_off=True
-        )
+        success, result = GitService.commit(kb_path, "Signed commit", sign_off=True)
         assert success
 
         # Verify sign-off in commit message
@@ -208,13 +208,13 @@ class TestKBServiceCommit:
 
     def test_commit_kb_not_found(self, git_kb):
         svc = git_kb["svc"]
-        with pytest.raises(Exception):  # KBNotFoundError or similar
+        with pytest.raises(KBNotFoundError):
             svc.commit_kb("nonexistent-kb", message="Fail")
 
     def test_commit_kb_not_git_repo(self, non_git_kb):
         svc = non_git_kb["svc"]
         (non_git_kb["kb_path"] / "test.md").write_text("test")
-        with pytest.raises(Exception):
+        with pytest.raises(PyriteError):
             svc.commit_kb("no-git", message="Fail")
 
     def test_commit_kb_specific_paths(self, git_kb):

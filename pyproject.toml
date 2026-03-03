@@ -63,7 +63,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.9.0",
-    "ruff>=0.3.0",
+    "ruff>=0.15.0,<0.16",
     "pytest-xdist>=3.0.0",
     "build>=1.0.0",
 ]
@@ -119,6 +119,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-# Test files can have unused assignments for clarity
-# E402: importorskip must precede the conditional imports
-"tests/*" = ["F841", "E402"]
+# Test files: unused imports (fixtures, side effects), unused assignments,
+# import order, and module-level imports not at top (importorskip pattern)
+"tests/*" = ["F401", "F841", "E402", "I001"]

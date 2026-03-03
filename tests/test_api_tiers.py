@@ -35,10 +35,10 @@ def _make_client(tmpdir, api_key="", api_keys=None):
     kb_path = tmpdir / "kb"
     kb_path.mkdir(parents=True, exist_ok=True)
 
-    settings_kwargs = dict(
-        index_path=db_path,
-        api_key=api_key,
-    )
+    settings_kwargs = {
+        "index_path": db_path,
+        "api_key": api_key,
+    }
     if api_keys is not None:
         settings_kwargs["api_keys"] = api_keys
 
@@ -75,7 +75,9 @@ class TestResolveAPIKeyRole:
             keys = [{"key_hash": _hash_key("list-key"), "role": "read", "label": "Reader"}]
             _, list_config = _make_client(tmpdir / "list", api_keys=keys)
             keys_coexist = [{"key_hash": _hash_key("list-key"), "role": "read", "label": "Reader"}]
-            _, coexist_config = _make_client(tmpdir / "coexist", api_key="legacy-key", api_keys=keys_coexist)
+            _, coexist_config = _make_client(
+                tmpdir / "coexist", api_key="legacy-key", api_keys=keys_coexist
+            )
             yield {
                 "no_auth": no_auth_config,
                 "single_key": single_key_config,
