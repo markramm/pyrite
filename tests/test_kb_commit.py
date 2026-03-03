@@ -321,6 +321,17 @@ class TestRESTCommitEndpoints:
 
         return create_app(config)
 
+    @pytest.fixture(autouse=True)
+    def _cleanup_api_module(self):
+        """Reset api module globals after each test to prevent test isolation issues."""
+        yield
+        import pyrite.server.api as api_module
+
+        api_module._config = None
+        api_module._db = None
+        api_module._kb_service = None
+        api_module._index_mgr = None
+
     def test_commit_endpoint(self, git_kb):
         from starlette.testclient import TestClient
 

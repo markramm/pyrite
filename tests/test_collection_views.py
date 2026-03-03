@@ -57,6 +57,11 @@ class TestPatchEntryEndpoint:
 
             app = create_app(config)
             yield TestClient(app)
+            db.close()
+            api_module._config = None
+            api_module._db = None
+            api_module._kb_service = None
+            api_module._index_mgr = None
 
     def test_patch_entry_field(self, client):
         """PATCH should update a single field on an entry."""

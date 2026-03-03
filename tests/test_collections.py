@@ -329,6 +329,11 @@ class TestCollectionAPI:
 
             app = create_app(config)
             yield TestClient(app)
+            db.close()
+            api_module._config = None
+            api_module._db = None
+            api_module._kb_service = None
+            api_module._index_mgr = None
 
     def test_get_collections_endpoint(self, client):
         resp = client.get("/api/collections?kb=test-kb")
