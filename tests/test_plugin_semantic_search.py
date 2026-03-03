@@ -26,19 +26,13 @@ class TestPluginSemanticSearch:
 
         with patch.dict(
             "sys.modules",
-            {
-                "pyrite.services.search_service": MagicMock(
-                    SearchService=mock_search_cls
-                )
-            },
+            {"pyrite.services.search_service": MagicMock(SearchService=mock_search_cls)},
         ):
             results = ctx.search_semantic("test query")
             assert len(results) == 1
             assert results[0]["id"] == "test"
             mock_search_cls.assert_called_once_with(ctx.db)
-            mock_svc.search.assert_called_once_with(
-                "test query", kb_name="test-kb", limit=10
-            )
+            mock_svc.search.assert_called_once_with("test query", kb_name="test-kb", limit=10)
 
     def test_search_semantic_uses_kb_name_param(self):
         """kb_name parameter overrides context kb_name."""
@@ -51,16 +45,10 @@ class TestPluginSemanticSearch:
 
         with patch.dict(
             "sys.modules",
-            {
-                "pyrite.services.search_service": MagicMock(
-                    SearchService=mock_search_cls
-                )
-            },
+            {"pyrite.services.search_service": MagicMock(SearchService=mock_search_cls)},
         ):
             results = ctx.search_semantic("query", kb_name="other-kb")
-            mock_svc.search.assert_called_once_with(
-                "query", kb_name="other-kb", limit=10
-            )
+            mock_svc.search.assert_called_once_with("query", kb_name="other-kb", limit=10)
 
     def test_search_semantic_returns_empty_on_error(self):
         """Returns empty list when all search methods fail."""
@@ -71,11 +59,7 @@ class TestPluginSemanticSearch:
 
         with patch.dict(
             "sys.modules",
-            {
-                "pyrite.services.search_service": MagicMock(
-                    SearchService=mock_search_cls
-                )
-            },
+            {"pyrite.services.search_service": MagicMock(SearchService=mock_search_cls)},
         ):
             results = ctx.search_semantic("test")
             assert results == []
@@ -91,16 +75,10 @@ class TestPluginSemanticSearch:
 
         with patch.dict(
             "sys.modules",
-            {
-                "pyrite.services.search_service": MagicMock(
-                    SearchService=mock_search_cls
-                )
-            },
+            {"pyrite.services.search_service": MagicMock(SearchService=mock_search_cls)},
         ):
             ctx.search_semantic("query", limit=5)
-            mock_svc.search.assert_called_once_with(
-                "query", kb_name="kb", limit=5
-            )
+            mock_svc.search.assert_called_once_with("query", kb_name="kb", limit=5)
 
     def test_search_semantic_tries_embedding_first(self):
         """When embedding service is available, tries it before FTS."""
@@ -108,9 +86,7 @@ class TestPluginSemanticSearch:
         ctx.db.vec_available = True
 
         mock_embed_svc = MagicMock()
-        mock_embed_svc.search.return_value = [
-            {"id": "vec", "title": "Vector Result"}
-        ]
+        mock_embed_svc.search.return_value = [{"id": "vec", "title": "Vector Result"}]
         mock_embed_cls = MagicMock(return_value=mock_embed_svc)
         mock_is_available = MagicMock(return_value=True)
 
@@ -139,9 +115,7 @@ class TestPluginSemanticSearch:
         mock_is_available = MagicMock(return_value=True)
 
         mock_fts_svc = MagicMock()
-        mock_fts_svc.search.return_value = [
-            {"id": "fts", "title": "FTS Result"}
-        ]
+        mock_fts_svc.search.return_value = [{"id": "fts", "title": "FTS Result"}]
         mock_search_cls = MagicMock(return_value=mock_fts_svc)
 
         with patch.dict(
@@ -151,9 +125,7 @@ class TestPluginSemanticSearch:
                     EmbeddingService=mock_embed_cls,
                     is_available=mock_is_available,
                 ),
-                "pyrite.services.search_service": MagicMock(
-                    SearchService=mock_search_cls
-                ),
+                "pyrite.services.search_service": MagicMock(SearchService=mock_search_cls),
             },
         ):
             results = ctx.search_semantic("query")
@@ -171,13 +143,7 @@ class TestPluginSemanticSearch:
 
         with patch.dict(
             "sys.modules",
-            {
-                "pyrite.services.search_service": MagicMock(
-                    SearchService=mock_search_cls
-                )
-            },
+            {"pyrite.services.search_service": MagicMock(SearchService=mock_search_cls)},
         ):
             ctx.search_semantic("query")
-            mock_svc.search.assert_called_once_with(
-                "query", kb_name="my-kb", limit=10
-            )
+            mock_svc.search.assert_called_once_with("query", kb_name="my-kb", limit=10)

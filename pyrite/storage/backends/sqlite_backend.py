@@ -126,57 +126,66 @@ class SQLiteBackend:
     def _sync_sources(self, entry_id: str, kb_name: str, sources: list[dict[str, Any]]) -> None:
         self._session.query(Source).filter_by(entry_id=entry_id, kb_name=kb_name).delete()
         for src in sources:
-            self._session.add(Source(
-                entry_id=entry_id,
-                kb_name=kb_name,
-                title=src.get("title", ""),
-                url=src.get("url", ""),
-                outlet=src.get("outlet", ""),
-                date=src.get("date", ""),
-                verified=1 if src.get("verified") else 0,
-            ))
+            self._session.add(
+                Source(
+                    entry_id=entry_id,
+                    kb_name=kb_name,
+                    title=src.get("title", ""),
+                    url=src.get("url", ""),
+                    outlet=src.get("outlet", ""),
+                    date=src.get("date", ""),
+                    verified=1 if src.get("verified") else 0,
+                )
+            )
 
     def _sync_links(self, entry_id: str, kb_name: str, links: list[dict[str, Any]]) -> None:
         self._session.query(Link).filter_by(source_id=entry_id, source_kb=kb_name).delete()
         for link in links:
             from ...schema import get_inverse_relation
+
             relation = link.get("relation", "related_to")
             inverse = get_inverse_relation(relation)
             target_kb = link.get("kb", kb_name)
-            self._session.add(Link(
-                source_id=entry_id,
-                source_kb=kb_name,
-                target_id=link.get("target"),
-                target_kb=target_kb,
-                relation=relation,
-                inverse_relation=inverse,
-                note=link.get("note", ""),
-            ))
+            self._session.add(
+                Link(
+                    source_id=entry_id,
+                    source_kb=kb_name,
+                    target_id=link.get("target"),
+                    target_kb=target_kb,
+                    relation=relation,
+                    inverse_relation=inverse,
+                    note=link.get("note", ""),
+                )
+            )
 
     def _sync_entry_refs(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
         self._session.query(EntryRef).filter_by(source_id=entry_id, source_kb=kb_name).delete()
         for ref in entry_data.get("_refs", []):
-            self._session.add(EntryRef(
-                source_id=entry_id,
-                source_kb=kb_name,
-                target_id=ref["target_id"],
-                target_kb=ref.get("target_kb", kb_name),
-                field_name=ref["field_name"],
-                target_type=ref.get("target_type"),
-            ))
+            self._session.add(
+                EntryRef(
+                    source_id=entry_id,
+                    source_kb=kb_name,
+                    target_id=ref["target_id"],
+                    target_kb=ref.get("target_kb", kb_name),
+                    field_name=ref["field_name"],
+                    target_type=ref.get("target_type"),
+                )
+            )
 
     def _sync_blocks(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
         self._session.query(Block).filter_by(entry_id=entry_id, kb_name=kb_name).delete()
         for blk in entry_data.get("_blocks", []):
-            self._session.add(Block(
-                entry_id=entry_id,
-                kb_name=kb_name,
-                block_id=blk["block_id"],
-                heading=blk.get("heading"),
-                content=blk["content"],
-                position=blk["position"],
-                block_type=blk["block_type"],
-            ))
+            self._session.add(
+                Block(
+                    entry_id=entry_id,
+                    kb_name=kb_name,
+                    block_id=blk["block_id"],
+                    heading=blk.get("heading"),
+                    content=blk["content"],
+                    position=blk["position"],
+                    block_type=blk["block_type"],
+                )
+            )
 
     def delete_entry(self, entry_id: str, kb_name: str) -> bool:
         count = self._session.query(Entry).filter_by(id=entry_id, kb_name=kb_name).delete()
@@ -199,11 +208,7 @@ class SQLiteBackend:
             return []
         from sqlalchemy import tuple_
 
-        entries = (
-            self._session.query(Entry)
-            .filter(tuple_(Entry.id, Entry.kb_name).in_(ids))
-            .all()
-        )
+        entries = self._session.query(Entry).filter(tuple_(Entry.id, Entry.kb_name).in_(ids)).all()
         tag_map = self._get_tags_for_entries(ids)
         results = []
         for entry in entries:
@@ -271,9 +276,7 @@ class SQLiteBackend:
         rows = (
             self._session.query(EntryTag.entry_id, EntryTag.kb_name, Tag.name)
             .join(Tag, Tag.id == EntryTag.tag_id)
-            .filter(
-                tuple_(EntryTag.entry_id, EntryTag.kb_name).in_(entry_ids)
-            )
+            .filter(tuple_(EntryTag.entry_id, EntryTag.kb_name).in_(entry_ids))
             .all()
         )
         for entry_id, kb_name, tag_name in rows:
@@ -303,8 +306,7 @@ class SQLiteBackend:
             .all()
         )
         return [
-            {"target_id": l[0], "target_kb": l[1], "relation": l[2], "note": l[3]}
-            for l in links
+            {"target_id": l[0], "target_kb": l[1], "relation": l[2], "note": l[3]} for l in links
         ]
 
     _SORT_COLUMNS = {"title", "updated_at", "created_at", "entry_type"}
@@ -322,7 +324,9 @@ class SQLiteBackend:
         query = self._session.query(Entry)
         if tag:
             query = (
-                query.join(EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name))
+                query.join(
+                    EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name)
+                )
                 .join(Tag, EntryTag.tag_id == Tag.id)
                 .filter(Tag.name == tag)
             )
@@ -361,7 +365,9 @@ class SQLiteBackend:
         query = self._session.query(func.count(func.distinct(Entry.id)))
         if tag:
             query = (
-                query.join(EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name))
+                query.join(
+                    EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name)
+                )
                 .join(Tag, EntryTag.tag_id == Tag.id)
                 .filter(Tag.name == tag)
             )
@@ -372,9 +378,9 @@ class SQLiteBackend:
         return query.scalar() or 0
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
-        query = self._session.query(Entry.entry_type).filter(
-            Entry.entry_type.isnot(None)
-        ).distinct()
+        query = (
+            self._session.query(Entry.entry_type).filter(Entry.entry_type.isnot(None)).distinct()
+        )
         if kb_name:
             query = query.filter(Entry.kb_name == kb_name)
         query = query.order_by(Entry.entry_type)
@@ -507,9 +513,7 @@ class SQLiteBackend:
     def _embedding_to_blob(embedding: list[float]) -> bytes:
         return struct.pack(f"{len(embedding)}f", *embedding)
 
-    def upsert_embedding(
-        self, entry_id: str, kb_name: str, embedding: list[float]
-    ) -> bool:
+    def upsert_embedding(self, entry_id: str, kb_name: str, embedding: list[float]) -> bool:
         if not self.vec_available:
             return False
         row = self._raw_conn.execute(
@@ -585,9 +589,7 @@ class SQLiteBackend:
         rows = self._raw_conn.execute("SELECT rowid FROM vec_entry").fetchall()
         return {r[0] for r in rows}
 
-    def get_entries_for_embedding(
-        self, kb_name: str | None = None
-    ) -> list[dict[str, Any]]:
+    def get_entries_for_embedding(self, kb_name: str | None = None) -> list[dict[str, Any]]:
         if kb_name:
             rows = self._raw_conn.execute(
                 "SELECT rowid, id, kb_name, title, summary, body FROM entry WHERE kb_name = ?",
@@ -698,14 +700,19 @@ class SQLiteBackend:
                         edge_key = (eid, ekb, tid, tkb)
                         if edge_key not in edge_set:
                             edge_set.add(edge_key)
-                            edges.append({
-                                "source_id": eid, "source_kb": ekb,
-                                "target_id": tid, "target_kb": tkb,
-                                "relation": r["relation"],
-                            })
+                            edges.append(
+                                {
+                                    "source_id": eid,
+                                    "source_kb": ekb,
+                                    "target_id": tid,
+                                    "target_kb": tkb,
+                                    "relation": r["relation"],
+                                }
+                            )
                         if (tid, tkb) not in nodes:
                             nodes[(tid, tkb)] = {
-                                "id": tid, "kb_name": tkb,
+                                "id": tid,
+                                "kb_name": tkb,
                                 "title": r["title"] or tid,
                                 "entry_type": r["entry_type"] or "unknown",
                             }
@@ -730,14 +737,19 @@ class SQLiteBackend:
                         edge_key = (sid, skb, eid, ekb)
                         if edge_key not in edge_set:
                             edge_set.add(edge_key)
-                            edges.append({
-                                "source_id": sid, "source_kb": skb,
-                                "target_id": eid, "target_kb": ekb,
-                                "relation": r["relation"],
-                            })
+                            edges.append(
+                                {
+                                    "source_id": sid,
+                                    "source_kb": skb,
+                                    "target_id": eid,
+                                    "target_kb": ekb,
+                                    "relation": r["relation"],
+                                }
+                            )
                         if (sid, skb) not in nodes:
                             nodes[(sid, skb)] = {
-                                "id": sid, "kb_name": skb,
+                                "id": sid,
+                                "kb_name": skb,
                                 "title": r["title"] or sid,
                                 "entry_type": r["entry_type"] or "unknown",
                             }
@@ -776,16 +788,15 @@ class SQLiteBackend:
         for node in nodes.values():
             count = 0
             for e in edges:
-                if (e["source_id"] == node["id"] and e["source_kb"] == node["kb_name"]) or \
-                   (e["target_id"] == node["id"] and e["target_kb"] == node["kb_name"]):
+                if (e["source_id"] == node["id"] and e["source_kb"] == node["kb_name"]) or (
+                    e["target_id"] == node["id"] and e["target_kb"] == node["kb_name"]
+                ):
                     count += 1
             node["link_count"] = count
             node_list.append(node)
         return {"nodes": node_list, "edges": edges}
 
-    def get_most_linked(
-        self, kb_name: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         sql = """
             SELECT e.id, e.kb_name, e.title, e.entry_type,
                    COUNT(l.id) as link_count

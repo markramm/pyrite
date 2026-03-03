@@ -76,7 +76,9 @@ class TestEnvOverrides:
     def test_env_cors_origins_comma_separated(self):
         config = PyriteConfig()
 
-        with patch.dict(os.environ, {"PYRITE_CORS_ORIGINS": "http://a.com, http://b.com,http://c.com"}):
+        with patch.dict(
+            os.environ, {"PYRITE_CORS_ORIGINS": "http://a.com, http://b.com,http://c.com"}
+        ):
             _apply_env_overrides(config)
 
         assert config.settings.cors_origins == ["http://a.com", "http://b.com", "http://c.com"]

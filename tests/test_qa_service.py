@@ -60,9 +60,7 @@ def qa_setup():
             events_repo.save(event)
 
         research_repo = KBRepository(research_kb)
-        person = PersonEntry.create(
-            name="Test Person", role="Policy researcher", importance=7
-        )
+        person = PersonEntry.create(name="Test Person", role="Policy researcher", importance=7)
         person.body = "Test person description body."
         person.tags = ["research"]
         research_repo.save(person)
@@ -115,7 +113,9 @@ class TestValidateCleanKB:
         result = qa_setup["qa"].validate_kb("test-events")
         body_issues = [i for i in result["issues"] if i["rule"] == "empty_body"]
         assert any(i["entry_id"] == "empty-body-entry" for i in body_issues)
-        assert all(i["severity"] == "warning" for i in body_issues if i["entry_id"] == "empty-body-entry")
+        assert all(
+            i["severity"] == "warning" for i in body_issues if i["entry_id"] == "empty-body-entry"
+        )
 
     def test_validate_skips_body_check_for_collections(self, qa_setup):
         """Collections exempt from empty body check."""
@@ -129,7 +129,8 @@ class TestValidateCleanKB:
 
         result = qa_setup["qa"].validate_kb("test-events")
         body_issues = [
-            i for i in result["issues"]
+            i
+            for i in result["issues"]
             if i["rule"] == "empty_body" and i["entry_id"] == "test-collection"
         ]
         assert body_issues == []
@@ -146,7 +147,8 @@ class TestValidateCleanKB:
 
         result = qa_setup["qa"].validate_kb("test-events")
         title_issues = [
-            i for i in result["issues"]
+            i
+            for i in result["issues"]
             if i["rule"] == "missing_title" and i["entry_id"] == "no-title-entry"
         ]
         assert len(title_issues) == 1
@@ -164,7 +166,8 @@ class TestValidateCleanKB:
 
         result = qa_setup["qa"].validate_kb("test-events")
         date_issues = [
-            i for i in result["issues"]
+            i
+            for i in result["issues"]
             if i["rule"] == "event_missing_date" and i["entry_id"] == "dateless-event"
         ]
         assert len(date_issues) == 1
@@ -177,7 +180,14 @@ class TestValidateCleanKB:
         db._raw_conn.execute(
             "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("2025-01-10--test-event-0", "test-events", "nonexistent", "test-events", "related_to", "related_to"),
+            (
+                "2025-01-10--test-event-0",
+                "test-events",
+                "nonexistent",
+                "test-events",
+                "related_to",
+                "related_to",
+            ),
         )
         db._raw_conn.commit()
 
@@ -198,7 +208,8 @@ class TestValidateCleanKB:
 
         result = qa_setup["qa"].validate_kb("test-events")
         date_issues = [
-            i for i in result["issues"]
+            i
+            for i in result["issues"]
             if i["rule"] == "invalid_date" and i["entry_id"] == "bad-date-entry"
         ]
         assert len(date_issues) == 1
@@ -216,7 +227,8 @@ class TestValidateCleanKB:
 
         result = qa_setup["qa"].validate_kb("test-events")
         imp_issues = [
-            i for i in result["issues"]
+            i
+            for i in result["issues"]
             if i["rule"] == "importance_range" and i["entry_id"] == "bad-importance"
         ]
         assert len(imp_issues) == 1
@@ -259,7 +271,8 @@ class TestSchemaValidation:
 
         result = qa_setup["qa"].validate_kb("test-events")
         schema_issues = [
-            i for i in result["issues"]
+            i
+            for i in result["issues"]
             if i["rule"] == "schema_violation" and i["entry_id"] == "schema-test"
         ]
         assert len(schema_issues) >= 1

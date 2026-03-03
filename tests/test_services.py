@@ -165,13 +165,11 @@ class TestSearchService:
 
         # Create 20 fake keyword results
         keyword_results = [
-            {"id": f"kw-{i}", "kb_name": "test", "title": f"Keyword {i}"}
-            for i in range(20)
+            {"id": f"kw-{i}", "kb_name": "test", "title": f"Keyword {i}"} for i in range(20)
         ]
         # Create 20 fake semantic results (different IDs = 40 unique after fusion)
         semantic_results = [
-            {"id": f"sem-{i}", "kb_name": "test", "title": f"Semantic {i}"}
-            for i in range(20)
+            {"id": f"sem-{i}", "kb_name": "test", "title": f"Semantic {i}"} for i in range(20)
         ]
 
         with (
@@ -216,17 +214,14 @@ class TestSearchService:
             ]
 
         semantic_results = [
-            {"id": f"sem-{i}", "kb_name": "test", "title": f"Semantic {i}"}
-            for i in range(50)
+            {"id": f"sem-{i}", "kb_name": "test", "title": f"Semantic {i}"} for i in range(50)
         ]
 
         with (
             patch.object(test_db, "search", side_effect=capture_db_search),
             patch.object(service, "_semantic_search", return_value=semantic_results),
         ):
-            results = service.search(
-                "test", mode=SearchMode.HYBRID, limit=limit, offset=offset
-            )
+            results = service.search("test", mode=SearchMode.HYBRID, limit=limit, offset=offset)
 
         # Keyword leg should fetch enough to cover offset + limit
         keyword_limit = db_call_args["limit"]

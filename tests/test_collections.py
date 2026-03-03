@@ -134,9 +134,7 @@ class TestCollectionRepository:
 
             # Create collection yaml
             (notes_dir / "__collection.yaml").write_text(
-                "title: Notes Collection\n"
-                "description: All notes\n"
-                "icon: book\n"
+                "title: Notes Collection\ndescription: All notes\nicon: book\n"
             )
 
             # Create a sample note in the folder
@@ -303,8 +301,7 @@ class TestCollectionAPI:
             notes_dir.mkdir()
 
             (notes_dir / "__collection.yaml").write_text(
-                "title: Notes Collection\n"
-                "description: All notes\n"
+                "title: Notes Collection\ndescription: All notes\n"
             )
 
             kb_config = KBConfig(name="test-kb", path=kb_path, kb_type=KBType.GENERIC)
@@ -380,9 +377,7 @@ class TestCollectionAPI:
 
     def test_get_collection_entries_pagination(self, client):
         """GET /api/collections/{id}/entries respects limit/offset."""
-        resp = client.get(
-            "/api/collections/collection-notes/entries?kb=test-kb&limit=1&offset=0"
-        )
+        resp = client.get("/api/collections/collection-notes/entries?kb=test-kb&limit=1&offset=0")
         assert resp.status_code == 200
         data = resp.json()
         assert len(data["entries"]) == 1

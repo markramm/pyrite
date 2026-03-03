@@ -90,7 +90,9 @@ class TestQueryParsing:
         assert q.limit == 200  # default
 
     def test_parse_combined_query(self):
-        q = parse_query("type:backlog_item status:proposed tags:enhancement kb:pyrite sort:-updated_at limit:25")
+        q = parse_query(
+            "type:backlog_item status:proposed tags:enhancement kb:pyrite sort:-updated_at limit:25"
+        )
         assert q.entry_type == "backlog_item"
         assert q.status == "proposed"
         assert q.tags_any == ["enhancement"]
@@ -129,11 +131,13 @@ class TestQueryFromDict:
         assert q.entry_type is None
 
     def test_basic_fields(self):
-        q = query_from_dict({
-            "entry_type": "note",
-            "status": "draft",
-            "kb_name": "test-kb",
-        })
+        q = query_from_dict(
+            {
+                "entry_type": "note",
+                "status": "draft",
+                "kb_name": "test-kb",
+            }
+        )
         assert q.entry_type == "note"
         assert q.status == "draft"
         assert q.kb_name == "test-kb"
@@ -244,12 +248,27 @@ class TestPostFilter:
     @pytest.fixture
     def sample_entries(self):
         return [
-            {"id": "e1", "title": "A", "tags": ["core", "backend"], "date": "2025-01-10",
-             "metadata": '{"status": "proposed", "priority": "high"}'},
-            {"id": "e2", "title": "B", "tags": ["frontend"], "date": "2025-02-15",
-             "metadata": '{"status": "done", "priority": "low"}'},
-            {"id": "e3", "title": "C", "tags": ["core", "frontend"], "date": "2025-03-20",
-             "metadata": '{"status": "proposed", "priority": "medium"}'},
+            {
+                "id": "e1",
+                "title": "A",
+                "tags": ["core", "backend"],
+                "date": "2025-01-10",
+                "metadata": '{"status": "proposed", "priority": "high"}',
+            },
+            {
+                "id": "e2",
+                "title": "B",
+                "tags": ["frontend"],
+                "date": "2025-02-15",
+                "metadata": '{"status": "done", "priority": "low"}',
+            },
+            {
+                "id": "e3",
+                "title": "C",
+                "tags": ["core", "frontend"],
+                "date": "2025-03-20",
+                "metadata": '{"status": "proposed", "priority": "medium"}',
+            },
         ]
 
     def test_tags_any_multiple(self, sample_entries):

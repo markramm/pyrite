@@ -26,17 +26,49 @@ from pyrite.storage.repository import KBRepository
 NUM_ENTRIES = 1050
 
 TAG_POOL = [
-    "python", "rust", "javascript", "architecture", "database",
-    "api", "testing", "security", "performance", "devops",
-    "frontend", "backend", "infra", "ml", "data",
-    "design", "refactor", "bugfix", "feature", "docs",
+    "python",
+    "rust",
+    "javascript",
+    "architecture",
+    "database",
+    "api",
+    "testing",
+    "security",
+    "performance",
+    "devops",
+    "frontend",
+    "backend",
+    "infra",
+    "ml",
+    "data",
+    "design",
+    "refactor",
+    "bugfix",
+    "feature",
+    "docs",
 ]
 
 TOPIC_WORDS = [
-    "indexing", "caching", "routing", "authentication", "pagination",
-    "migration", "deployment", "monitoring", "logging", "serialization",
-    "validation", "concurrency", "throughput", "latency", "resilience",
-    "scalability", "observability", "orchestration", "federation", "replication",
+    "indexing",
+    "caching",
+    "routing",
+    "authentication",
+    "pagination",
+    "migration",
+    "deployment",
+    "monitoring",
+    "logging",
+    "serialization",
+    "validation",
+    "concurrency",
+    "throughput",
+    "latency",
+    "resilience",
+    "scalability",
+    "observability",
+    "orchestration",
+    "federation",
+    "replication",
 ]
 
 
@@ -156,8 +188,16 @@ class TestPerformance:
         """FTS search returns within 500ms; average of 10 searches is acceptable."""
         db = large_kb["db"]
         search_terms = [
-            "indexing", "caching", "routing", "authentication", "pagination",
-            "migration", "deployment", "monitoring", "logging", "serialization",
+            "indexing",
+            "caching",
+            "routing",
+            "authentication",
+            "pagination",
+            "migration",
+            "deployment",
+            "monitoring",
+            "logging",
+            "serialization",
         ]
 
         timings = []
@@ -167,9 +207,7 @@ class TestPerformance:
             elapsed = time.perf_counter() - start
             timings.append(elapsed)
             # Each individual search should be fast
-            assert elapsed < 0.5, (
-                f"search('{term}') took {elapsed:.3f}s (limit: 0.5s)"
-            )
+            assert elapsed < 0.5, f"search('{term}') took {elapsed:.3f}s (limit: 0.5s)"
             # Sanity: we should find results for these terms
             assert len(results) > 0, f"search('{term}') returned no results"
 
@@ -195,9 +233,7 @@ class TestPerformance:
         start = time.perf_counter()
         page_mid = svc.list_entries(kb_name="perf-test", limit=50, offset=500)
         elapsed_mid = time.perf_counter() - start
-        assert elapsed_mid < 0.2, (
-            f"list_entries(offset=500) took {elapsed_mid:.3f}s (limit: 0.2s)"
-        )
+        assert elapsed_mid < 0.2, f"list_entries(offset=500) took {elapsed_mid:.3f}s (limit: 0.2s)"
         assert len(page_mid) == 50
 
     def test_graph_performance(self, large_kb):
@@ -239,9 +275,7 @@ class TestPerformance:
             assert response.status_code == 200
             data = response.json()
             assert len(data.get("nodes", [])) > 0
-            assert elapsed < 5, (
-                f"Graph API with centrality took {elapsed:.2f}s (limit: 5s)"
-            )
+            assert elapsed < 5, f"Graph API with centrality took {elapsed:.2f}s (limit: 5s)"
         finally:
             api_module._config = None
             api_module._db = None
@@ -257,10 +291,6 @@ class TestPerformance:
         result = qa_svc.validate_kb("perf-test")
         elapsed = time.perf_counter() - start
 
-        assert elapsed < 10, (
-            f"validate_kb() took {elapsed:.2f}s (limit: 10s)"
-        )
-        assert result["total"] >= 1000, (
-            f"Expected 1000+ entries, got {result['total']}"
-        )
+        assert elapsed < 10, f"validate_kb() took {elapsed:.2f}s (limit: 10s)"
+        assert result["total"] >= 1000, f"Expected 1000+ entries, got {result['total']}"
         assert result["kb_name"] == "perf-test"

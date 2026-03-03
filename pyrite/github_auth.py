@@ -89,7 +89,9 @@ def save_github_auth(auth: GitHubAuth) -> None:
     try:
         os.chmod(auth_file, 0o600)
     except Exception:
-        logger.debug("Could not set file permissions on %s (may be unsupported on this OS)", auth_file)
+        logger.debug(
+            "Could not set file permissions on %s (may be unsupported on this OS)", auth_file
+        )
 
 
 def clear_github_auth() -> None:

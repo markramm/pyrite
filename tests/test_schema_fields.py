@@ -524,59 +524,65 @@ class TestAllowOther:
 
     def test_select_rejects_invalid_when_enforce_true(self):
         """select field with enforce=true rejects unknown values as errors."""
-        schema = KBSchema.from_dict({
-            "types": {
-                "item": {
-                    "fields": {
-                        "status": {
-                            "type": "select",
-                            "options": ["open", "closed"],
+        schema = KBSchema.from_dict(
+            {
+                "types": {
+                    "item": {
+                        "fields": {
+                            "status": {
+                                "type": "select",
+                                "options": ["open", "closed"],
+                            },
                         },
                     },
                 },
-            },
-            "validation": {"enforce": True},
-        })
+                "validation": {"enforce": True},
+            }
+        )
         result = schema.validate_entry("item", {"title": "t", "status": "unknown"})
         assert not result["valid"]
         assert any(e["field"] == "status" for e in result["errors"])
 
     def test_select_allow_other_warns_instead_of_error(self):
         """select field with allow_other=true produces warning, not error, even with enforce=true."""
-        schema = KBSchema.from_dict({
-            "types": {
-                "item": {
-                    "fields": {
-                        "status": {
-                            "type": "select",
-                            "options": ["open", "closed"],
-                            "allow_other": True,
+        schema = KBSchema.from_dict(
+            {
+                "types": {
+                    "item": {
+                        "fields": {
+                            "status": {
+                                "type": "select",
+                                "options": ["open", "closed"],
+                                "allow_other": True,
+                            },
                         },
                     },
                 },
-            },
-            "validation": {"enforce": True},
-        })
+                "validation": {"enforce": True},
+            }
+        )
         result = schema.validate_entry("item", {"title": "t", "status": "custom-val"})
         assert result["valid"]  # No errors — only warnings
         assert any(w["field"] == "status" for w in result["warnings"])
 
     def test_multi_select_allow_other_warns(self):
         """multi-select with allow_other warns on unknown values."""
-        schema = KBSchema.from_dict({
-            "types": {
-                "event": {
-                    "fields": {
-                        "capture_lanes": {
-                            "type": "multi-select",
-                            "allow_other": True,
-                            "options": ["lane-a", "lane-b"],
+        schema = KBSchema.from_dict(
+            {
+                "types": {
+                    "event": {
+                        "fields": {
+                            "capture_lanes": {
+                                "type": "multi-select",
+                                "allow_other": True,
+                                "options": ["lane-a", "lane-b"],
+                            },
                         },
                     },
                 },
-            },
-            "validation": {"enforce": True},
-        })
+                "validation": {"enforce": True},
+            }
+        )
         result = schema.validate_entry(
             "event", {"title": "t", "capture_lanes": ["lane-a", "new-lane"]}
         )
@@ -588,23 +594,23 @@ class TestAllowOther:
 
     def test_multi_select_mixed_known_unknown(self):
         """Known values pass, unknown values produce warnings."""
-        schema = KBSchema.from_dict({
-            "types": {
-                "event": {
-                    "fields": {
-                        "lanes": {
-                            "type": "multi-select",
-                            "allow_other": True,
-                            "options": ["a", "b", "c"],
+        schema = KBSchema.from_dict(
+            {
+                "types": {
+                    "event": {
+                        "fields": {
+                            "lanes": {
+                                "type": "multi-select",
+                                "allow_other": True,
+                                "options": ["a", "b", "c"],
+                            },
                         },
                     },
                 },
-            },
-            "validation": {"enforce": True},
-        })
-        result = schema.validate_entry(
-            "event", {"title": "t", "lanes": ["a", "d", "e"]}
+                "validation": {"enforce": True},
+            }
         )
+        result = schema.validate_entry("event", {"title": "t", "lanes": ["a", "d", "e"]})
         assert result["valid"]
         warnings = [w for w in result["warnings"] if w["field"] == "lanes"]
         assert len(warnings) == 1

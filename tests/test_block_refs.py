@@ -1,4 +1,5 @@
 """Tests for block reference (Phase 2) — [[entry#heading]] and [[entry^block-id]] syntax."""
+
 import pytest
 
 from pyrite.storage.index import _WIKILINK_RE

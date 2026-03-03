@@ -183,9 +183,7 @@ class UserOpsMixin:
 
     def update_workspace_role(self, user_id: int, repo_id: int, role: str) -> None:
         """Update the role for a user's workspace repo."""
-        wr = self.session.query(WorkspaceRepo).filter_by(
-            user_id=user_id, repo_id=repo_id
-        ).first()
+        wr = self.session.query(WorkspaceRepo).filter_by(user_id=user_id, repo_id=repo_id).first()
         if wr:
             wr.role = role
             self.session.commit()
@@ -205,9 +203,9 @@ class UserOpsMixin:
 
     def add_workspace_repo(self, user_id: int, repo_id: int, role: str = "subscriber") -> None:
         """Add a repo to a user's workspace."""
-        existing = self.session.query(WorkspaceRepo).filter_by(
-            user_id=user_id, repo_id=repo_id
-        ).first()
+        existing = (
+            self.session.query(WorkspaceRepo).filter_by(user_id=user_id, repo_id=repo_id).first()
+        )
         if not existing:
             wr = WorkspaceRepo(user_id=user_id, repo_id=repo_id, role=role)
             self.session.add(wr)
@@ -215,16 +213,18 @@ class UserOpsMixin:
 
     def remove_workspace_repo(self, user_id: int, repo_id: int) -> bool:
         """Remove a repo from a user's workspace."""
-        count = self.session.query(WorkspaceRepo).filter_by(
-            user_id=user_id, repo_id=repo_id
-        ).delete()
+        count = (
+            self.session.query(WorkspaceRepo).filter_by(user_id=user_id, repo_id=repo_id).delete()
+        )
         self.session.commit()
         return count > 0
 
     def get_workspace_repos(self, user_id: int) -> list[dict[str, Any]]:
         """Get repos in a user's workspace."""
         results = (
-            self.session.query(Repo, WorkspaceRepo.role, WorkspaceRepo.auto_sync, WorkspaceRepo.added_at)
+            self.session.query(
+                Repo, WorkspaceRepo.role, WorkspaceRepo.auto_sync, WorkspaceRepo.added_at
+            )
             .join(WorkspaceRepo, Repo.id == WorkspaceRepo.repo_id)
             .filter(WorkspaceRepo.user_id == user_id)
             .order_by(Repo.name)
@@ -257,9 +257,11 @@ class UserOpsMixin:
         author_github_login: str | None = None,
     ) -> None:
         """Insert an entry version (from git log). Skips if commit already recorded."""
-        existing = self.session.query(EntryVersion).filter_by(
-            entry_id=entry_id, kb_name=kb_name, commit_hash=commit_hash
-        ).first()
+        existing = (
+            self.session.query(EntryVersion)
+            .filter_by(entry_id=entry_id, kb_name=kb_name, commit_hash=commit_hash)
+            .first()
+        )
         if not existing:
             version = EntryVersion(
                 entry_id=entry_id,

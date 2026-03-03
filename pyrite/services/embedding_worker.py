@@ -102,7 +102,10 @@ class EmbeddingWorker:
                 )
                 logger.warning(
                     "Embed failed for %s (attempt %d/%d): %s",
-                    entry_id, new_attempts, self.max_attempts, e,
+                    entry_id,
+                    new_attempts,
+                    self.max_attempts,
+                    e,
                 )
 
         self.db._raw_conn.commit()

@@ -32,9 +32,14 @@ class QueryMixin:
     ) -> list[dict[str, Any]]:
         """Full-text search across entries using FTS5."""
         return self._backend.search(
-            query=query, kb_name=kb_name, entry_type=entry_type,
-            tags=tags, date_from=date_from, date_to=date_to,
-            limit=limit, offset=offset,
+            query=query,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tags=tags,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
         )
 
     def search_by_tag(
@@ -100,9 +105,12 @@ class QueryMixin:
     ) -> dict[str, Any]:
         """Multi-hop BFS graph traversal returning nodes and edges."""
         return self._backend.get_graph_data(
-            center=center, center_kb=center_kb,
-            kb_name=kb_name, entry_type=entry_type,
-            depth=depth, limit=limit,
+            center=center,
+            center_kb=center_kb,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            depth=depth,
+            limit=limit,
         )
 
     # =========================================================================
@@ -132,9 +140,12 @@ class QueryMixin:
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         return self._backend.get_timeline(
-            date_from=date_from, date_to=date_to,
-            min_importance=min_importance, kb_name=kb_name,
-            limit=limit, offset=offset,
+            date_from=date_from,
+            date_to=date_to,
+            min_importance=min_importance,
+            kb_name=kb_name,
+            limit=limit,
+            offset=offset,
         )
 
     def get_global_counts(self) -> dict[str, int]:
@@ -245,9 +256,12 @@ class QueryMixin:
     ) -> list[dict[str, Any]]:
         """List entries whose file_path is within the given folder."""
         return self._backend.list_entries_in_folder(
-            kb_name=kb_name, folder_path=folder_path,
-            sort_by=sort_by, sort_order=sort_order,
-            limit=limit, offset=offset,
+            kb_name=kb_name,
+            folder_path=folder_path,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            limit=limit,
+            offset=offset,
         )
 
     def count_entries_in_folder(self, kb_name: str, folder_path: str) -> int:

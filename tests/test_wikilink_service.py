@@ -64,7 +64,9 @@ class TestResolveEntry:
         assert result["id"] == "2025-01-10--test-event-0"
 
     def test_resolves_by_id_with_kb(self, wikilink_env):
-        result = wikilink_env["svc"].resolve_entry("2025-01-10--test-event-0", kb_name="test-events")
+        result = wikilink_env["svc"].resolve_entry(
+            "2025-01-10--test-event-0", kb_name="test-events"
+        )
         assert result is not None
         assert result["kb_name"] == "test-events"
 
@@ -78,7 +80,9 @@ class TestResolveEntry:
         assert result is None
 
     def test_wrong_kb_returns_none(self, wikilink_env):
-        result = wikilink_env["svc"].resolve_entry("2025-01-10--test-event-0", kb_name="test-research")
+        result = wikilink_env["svc"].resolve_entry(
+            "2025-01-10--test-event-0", kb_name="test-research"
+        )
         assert result is None
 
 
@@ -151,11 +155,17 @@ class TestGetWantedPages:
         svc = KBService(wikilink_env["config"], wikilink_env["db"])
         # Two entries linking to the same missing page
         svc.create_entry(
-            "test-events", "ref1", "Ref 1", "note",
+            "test-events",
+            "ref1",
+            "Ref 1",
+            "note",
             body="See [[shared-missing-page]].",
         )
         svc.create_entry(
-            "test-events", "ref2", "Ref 2", "note",
+            "test-events",
+            "ref2",
+            "Ref 2",
+            "note",
             body="Also see [[shared-missing-page]].",
         )
         from pyrite.storage.index import IndexManager

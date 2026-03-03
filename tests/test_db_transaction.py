@@ -103,14 +103,16 @@ class TestSingleConnection:
     def test_orm_write_visible_to_raw_read(self, db):
         """ORM writes (via session) should be visible to _raw_conn reads."""
         db.register_kb("test-kb", "generic", "/tmp/test")
-        db.upsert_entry({
-            "id": "e1",
-            "kb_name": "test-kb",
-            "entry_type": "note",
-            "title": "Test Note",
-            "body": "Some body text",
-            "tags": ["alpha", "beta"],
-        })
+        db.upsert_entry(
+            {
+                "id": "e1",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Test Note",
+                "body": "Some body text",
+                "tags": ["alpha", "beta"],
+            }
+        )
 
         # Read via raw connection (used by search queries)
         row = db._raw_conn.execute(
@@ -122,14 +124,16 @@ class TestSingleConnection:
     def test_fts5_works_after_orm_write(self, db):
         """FTS5 triggers should fire after ORM writes."""
         db.register_kb("test-kb", "generic", "/tmp/test")
-        db.upsert_entry({
-            "id": "fts-test",
-            "kb_name": "test-kb",
-            "entry_type": "note",
-            "title": "Quantum Computing Research",
-            "body": "Quantum entanglement experiments",
-            "tags": [],
-        })
+        db.upsert_entry(
+            {
+                "id": "fts-test",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Quantum Computing Research",
+                "body": "Quantum entanglement experiments",
+                "tags": [],
+            }
+        )
 
         # FTS5 search via raw connection
         results = db.search("quantum", kb_name="test-kb")

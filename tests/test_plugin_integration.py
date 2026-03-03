@@ -643,9 +643,9 @@ class TestKBPresets:
         presets = registry.get_all_kb_presets()
         for name, preset_data in presets.items():
             for type_name, type_data in preset_data.get("types", {}).items():
-                assert type_data.get(
-                    "subdirectory"
-                ), f"Preset '{name}' type '{type_name}' missing subdirectory"
+                assert type_data.get("subdirectory"), (
+                    f"Preset '{name}' type '{type_name}' missing subdirectory"
+                )
 
 
 # =========================================================================
@@ -964,7 +964,8 @@ class TestValidatorScoping:
         )
         # With kb_type="generic", task plugin validators should NOT fire
         result = schema.validate_entry(
-            "task", {"status": "invalid_status", "title": "T"},
+            "task",
+            {"status": "invalid_status", "title": "T"},
             context={"kb_type": "generic"},
         )
         # Should be valid — task validator skipped for generic KB

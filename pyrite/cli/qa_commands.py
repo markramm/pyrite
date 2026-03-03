@@ -116,8 +116,12 @@ def qa_assess(
     kb_name: str = typer.Argument(..., help="KB to assess"),
     entry: str | None = typer.Option(None, "--entry", "-e", help="Assess single entry by ID"),
     tier: int = typer.Option(1, "--tier", "-t", help="Assessment tier (1=structural)"),
-    max_age: int = typer.Option(24, "--max-age", help="Skip entries assessed within N hours (0 = reassess all)"),
-    create_tasks: bool = typer.Option(False, "--create-tasks", help="Create tasks for failed assessments"),
+    max_age: int = typer.Option(
+        24, "--max-age", help="Skip entries assessed within N hours (0 = reassess all)"
+    ),
+    create_tasks: bool = typer.Option(
+        False, "--create-tasks", help="Create tasks for failed assessments"
+    ),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
     ),

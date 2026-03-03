@@ -43,7 +43,7 @@ def starred_env():
         events_repo = KBRepository(events_kb)
         for i in range(3):
             event = EventEntry.create(
-                date=f"2025-01-{10+i:02d}",
+                date=f"2025-01-{10 + i:02d}",
                 title=f"Test Event {i}",
                 body=f"Body for event {i}.",
                 importance=5,

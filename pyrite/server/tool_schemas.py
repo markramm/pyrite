@@ -192,7 +192,10 @@ READ_TOOLS = {
             "type": "object",
             "properties": {
                 "kb_name": {"type": "string", "description": "KB to orient in"},
-                "recent_limit": {"type": "integer", "description": "Number of recent entries to include (default 5)"},
+                "recent_limit": {
+                    "type": "integer",
+                    "description": "Number of recent entries to include (default 5)",
+                },
             },
             "required": ["kb_name"],
         },
@@ -255,7 +258,10 @@ READ_TOOLS = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "kb_name": {"type": "string", "description": "KB to browse (optional — lists all KBs if omitted)"},
+                "kb_name": {
+                    "type": "string",
+                    "description": "KB to browse (optional — lists all KBs if omitted)",
+                },
                 "entry_type": {"type": "string", "description": "Filter by entry type"},
                 "tag": {"type": "string", "description": "Filter by tag"},
                 "sort_by": {
@@ -268,7 +274,10 @@ READ_TOOLS = {
                     "enum": ["asc", "desc"],
                     "description": "Sort direction (default: desc)",
                 },
-                "limit": {"type": "integer", "description": "Max entries to return (default 50, max 200)"},
+                "limit": {
+                    "type": "integer",
+                    "description": "Max entries to return (default 50, max 200)",
+                },
                 "offset": {"type": "integer", "description": "Pagination offset (default 0)"},
                 "fields": {
                     "type": "array",
@@ -287,7 +296,10 @@ READ_TOOLS = {
                 "kb_name": {"type": "string", "description": "KB to query (optional)"},
                 "entry_type": {"type": "string", "description": "Filter by entry type"},
                 "limit": {"type": "integer", "description": "Max entries to return (default 20)"},
-                "since": {"type": "string", "description": "Only entries updated after this ISO datetime (e.g. 2025-01-01T00:00:00)"},
+                "since": {
+                    "type": "string",
+                    "description": "Only entries updated after this ISO datetime (e.g. 2025-01-01T00:00:00)",
+                },
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -416,13 +428,24 @@ WRITE_TOOLS = {
                 "title": {"type": "string", "description": "New title"},
                 "body": {"type": "string", "description": "New body content (markdown)"},
                 "importance": {"type": "integer", "description": "Importance score 1-10"},
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "Replacement tags (overwrites existing)"},
-                "participants": {"type": "array", "items": {"type": "string"}, "description": "Participants involved (for events)"},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Replacement tags (overwrites existing)",
+                },
+                "participants": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Participants involved (for events)",
+                },
                 "metadata": {
                     "type": "object",
                     "description": "Additional/extension fields to update",
                 },
-                "status": {"type": "string", "description": "Status field (e.g. draft, confirmed, done)"},
+                "status": {
+                    "type": "string",
+                    "description": "Status field (e.g. draft, confirmed, done)",
+                },
                 "date": {"type": "string", "description": "Date (YYYY-MM-DD)"},
                 "location": {"type": "string", "description": "Location/venue"},
                 "summary": {"type": "string", "description": "Short summary or subtitle"},
@@ -530,11 +553,21 @@ ADMIN_TOOLS = {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["discover", "validate", "show_schema", "add_type", "remove_type", "set_schema"],
+                    "enum": [
+                        "discover",
+                        "validate",
+                        "show_schema",
+                        "add_type",
+                        "remove_type",
+                        "set_schema",
+                    ],
                     "description": "Management action",
                 },
                 "kb_name": {"type": "string", "description": "KB name (for validate)"},
-                "type_name": {"type": "string", "description": "Type name (for add_type, remove_type)"},
+                "type_name": {
+                    "type": "string",
+                    "description": "Type name (for add_type, remove_type)",
+                },
                 "type_def": {
                     "type": "object",
                     "description": "Type definition with description, required, optional, subdirectory (for add_type)",

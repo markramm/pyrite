@@ -49,7 +49,9 @@ def list_starred(
     )
 
 
-@router.post("/starred", response_model=StarEntryResponse, dependencies=[Depends(requires_tier("write"))])
+@router.post(
+    "/starred", response_model=StarEntryResponse, dependencies=[Depends(requires_tier("write"))]
+)
 @limiter.limit("30/minute")
 def star_entry(
     request: Request,
@@ -82,7 +84,11 @@ def star_entry(
     return StarEntryResponse(starred=True, entry_id=body.entry_id, kb_name=body.kb_name)
 
 
-@router.delete("/starred/{entry_id}", response_model=UnstarEntryResponse, dependencies=[Depends(requires_tier("write"))])
+@router.delete(
+    "/starred/{entry_id}",
+    response_model=UnstarEntryResponse,
+    dependencies=[Depends(requires_tier("write"))],
+)
 @limiter.limit("30/minute")
 def unstar_entry(
     request: Request,
@@ -110,7 +116,11 @@ def unstar_entry(
     return UnstarEntryResponse(unstarred=True, entry_id=entry_id)
 
 
-@router.put("/starred/reorder", response_model=ReorderStarredResponse, dependencies=[Depends(requires_tier("write"))])
+@router.put(
+    "/starred/reorder",
+    response_model=ReorderStarredResponse,
+    dependencies=[Depends(requires_tier("write"))],
+)
 @limiter.limit("30/minute")
 def reorder_starred(
     request: Request,

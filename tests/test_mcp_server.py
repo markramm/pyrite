@@ -85,7 +85,7 @@ def _populate_events_and_person(_config, kb_map):
     events_repo = KBRepository(kb_map["test-events"])
     for i in range(3):
         event = EventEntry.create(
-            date=f"2025-01-{10+i:02d}",
+            date=f"2025-01-{10 + i:02d}",
             title=f"Test Event {i}",
             body=f"This is test event {i} about immigration policy.",
             importance=5 + i,
@@ -131,9 +131,7 @@ def mcp_admin_server():
 @pytest.fixture
 def mcp_minimal_server():
     """Minimal read-tier MCP server with a single empty KB."""
-    with _make_mcp_server(
-        [{"name": "test", "kb_type": KBType.EVENTS}], tier="read"
-    ) as env:
+    with _make_mcp_server([{"name": "test", "kb_type": KBType.EVENTS}], tier="read") as env:
         yield env
 
 
@@ -413,9 +411,7 @@ class TestPyriteMCPServer:
 
     def test_kb_schema(self, mcp_admin_server):
         """Test schema returns type information for a KB."""
-        result = mcp_admin_server["server"]._dispatch_tool(
-            "kb_schema", {"kb_name": "test-events"}
-        )
+        result = mcp_admin_server["server"]._dispatch_tool("kb_schema", {"kb_name": "test-events"})
 
         # Schema may be empty (no kb.yaml in test tmpdir) but should not error
         assert "error" not in result
@@ -832,15 +828,11 @@ class TestPyriteMCPServer:
 
     def test_kb_link_in_write_tier(self):
         """Test kb_link appears in write-tier tools but not read-tier."""
-        with _make_mcp_server(
-            [{"name": "t", "kb_type": KBType.EVENTS}], tier="read"
-        ) as read_env:
+        with _make_mcp_server([{"name": "t", "kb_type": KBType.EVENTS}], tier="read") as read_env:
             read_names = [t["name"] for t in read_env["server"].get_tools_list()]
             assert "kb_link" not in read_names
 
-        with _make_mcp_server(
-            [{"name": "t", "kb_type": KBType.EVENTS}], tier="write"
-        ) as write_env:
+        with _make_mcp_server([{"name": "t", "kb_type": KBType.EVENTS}], tier="write") as write_env:
             write_names = [t["name"] for t in write_env["server"].get_tools_list()]
             assert "kb_link" in write_names
 
@@ -939,7 +931,7 @@ def _populate_pagination_data(_config, kb_map):
     # Create 5 events with distinct dates and content
     for i in range(5):
         event = EventEntry.create(
-            date=f"2025-06-{10+i:02d}",
+            date=f"2025-06-{10 + i:02d}",
             title=f"Pagination Event {i}",
             body=f"Body for pagination event number {i}.",
             importance=5,
@@ -985,15 +977,11 @@ class TestMCPPagination:
         """Test kb_search offset returns different pages and has_more flag."""
         server = pagination_env["server"]
 
-        page1 = server._dispatch_tool(
-            "kb_search", {"query": "pagination", "limit": 2, "offset": 0}
-        )
+        page1 = server._dispatch_tool("kb_search", {"query": "pagination", "limit": 2, "offset": 0})
         assert page1["count"] == 2
         assert page1["has_more"] is True
 
-        page2 = server._dispatch_tool(
-            "kb_search", {"query": "pagination", "limit": 2, "offset": 2}
-        )
+        page2 = server._dispatch_tool("kb_search", {"query": "pagination", "limit": 2, "offset": 2})
         assert page2["count"] == 2
         assert page2["has_more"] is True
 
@@ -1003,9 +991,7 @@ class TestMCPPagination:
         assert ids1.isdisjoint(ids2)
 
         # Last page
-        page3 = server._dispatch_tool(
-            "kb_search", {"query": "pagination", "limit": 2, "offset": 4}
-        )
+        page3 = server._dispatch_tool("kb_search", {"query": "pagination", "limit": 2, "offset": 4})
         assert page3["count"] == 1
         assert page3["has_more"] is False
 
@@ -1158,10 +1144,7 @@ class TestMCPValidation:
         )
         assert result.get("created") is True
         assert "warnings" in result
-        assert any(
-            "new-lane" in str(w.get("got", ""))
-            for w in result["warnings"]
-        )
+        assert any("new-lane" in str(w.get("got", "")) for w in result["warnings"])
 
     def test_kb_update_validates_schema(self, validated_server):
         """_kb_update runs schema validation and surfaces warnings."""
@@ -1202,6 +1185,7 @@ class TestMCPQATools:
     @pytest.fixture
     def qa_server_setup(self):
         """Create a test server with some bad data for QA testing."""
+
         def _populate_qa_data(_config, kb_map):
             events_repo = KBRepository(kb_map["qa-events"])
             event = EventEntry.create(
@@ -1239,9 +1223,7 @@ class TestMCPQATools:
 
     def test_mcp_qa_status_tool(self, qa_server_setup):
         """MCP kb_qa_status returns status dict."""
-        result = qa_server_setup["server"]._dispatch_tool(
-            "kb_qa_status", {"kb_name": "qa-events"}
-        )
+        result = qa_server_setup["server"]._dispatch_tool("kb_qa_status", {"kb_name": "qa-events"})
         assert "total_entries" in result
         assert "total_issues" in result
         assert "issues_by_severity" in result
@@ -1256,12 +1238,14 @@ class TestMCPQATools:
 
 def _write_qa_schema(schema_dict):
     """Return an extra_setup callback that writes a kb.yaml."""
+
     def _setup(_config, kb_map):
         from pyrite.utils.yaml import dump_yaml
 
         # Use the first (and only) KB
         kb_config = next(iter(kb_map.values()))
         (kb_config.path / "kb.yaml").write_text(dump_yaml(schema_dict), encoding="utf-8")
+
     return _setup
 
 
@@ -1284,11 +1268,13 @@ class TestMCPPostSaveValidation:
         with _make_mcp_server(
             [{"name": "qa-auto", "kb_type": KBType.GENERIC, "description": "QA auto-validate KB"}],
             tier="write",
-            extra_setup=_write_qa_schema({
-                "name": "qa-auto-kb",
-                "types": {"note": {}},
-                "validation": {"qa_on_write": True},
-            }),
+            extra_setup=_write_qa_schema(
+                {
+                    "name": "qa-auto-kb",
+                    "types": {"note": {}},
+                    "validation": {"qa_on_write": True},
+                }
+            ),
         ) as env:
             yield env
 

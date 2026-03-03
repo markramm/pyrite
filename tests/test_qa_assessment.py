@@ -220,10 +220,14 @@ class TestAssessEntry:
         result = qa_env["qa"].assess_entry("good-note", "test-kb")
         aid = result["assessment_id"]
 
-        row = qa_env["db"]._raw_conn.execute(
-            "SELECT id, entry_type FROM entry WHERE id = ? AND kb_name = ?",
-            (aid, "test-kb"),
-        ).fetchone()
+        row = (
+            qa_env["db"]
+            ._raw_conn.execute(
+                "SELECT id, entry_type FROM entry WHERE id = ? AND kb_name = ?",
+                (aid, "test-kb"),
+            )
+            .fetchone()
+        )
         assert row is not None
         assert row["entry_type"] == "qa_assessment"
 
@@ -418,13 +422,9 @@ class TestMCPTools:
 class TestTaskIntegration:
     def test_no_task_when_plugin_absent(self, qa_env):
         """assess_entry completes when task plugin import fails."""
-        with patch(
-            "pyrite.services.qa_service.QAService._maybe_create_task"
-        ) as mock_create:
+        with patch("pyrite.services.qa_service.QAService._maybe_create_task") as mock_create:
             # Even with create_task_on_fail=True, should not error
-            result = qa_env["qa"].assess_entry(
-                "good-note", "test-kb", create_task_on_fail=True
-            )
+            result = qa_env["qa"].assess_entry("good-note", "test-kb", create_task_on_fail=True)
             assert result["qa_status"] == "pass"
             # No task for pass status — _maybe_create_task only called on fail
             mock_create.assert_not_called()
@@ -441,18 +441,14 @@ class TestTaskIntegration:
         db._raw_conn.commit()
 
         with patch.object(qa_env["qa"], "_maybe_create_task") as mock_task:
-            result = qa_env["qa"].assess_entry(
-                "fail-entry", "test-kb", create_task_on_fail=True
-            )
+            result = qa_env["qa"].assess_entry("fail-entry", "test-kb", create_task_on_fail=True)
             assert result["qa_status"] == "fail"
             mock_task.assert_called_once()
 
     def test_no_task_on_pass(self, qa_env):
         """No task created when assessment passes."""
         with patch.object(qa_env["qa"], "_maybe_create_task") as mock_task:
-            result = qa_env["qa"].assess_entry(
-                "good-note", "test-kb", create_task_on_fail=True
-            )
+            result = qa_env["qa"].assess_entry("good-note", "test-kb", create_task_on_fail=True)
             assert result["qa_status"] == "pass"
             mock_task.assert_not_called()
 
@@ -470,9 +466,7 @@ class TestTaskIntegration:
         # try/except behavior by simulating ImportError in the actual method
         with patch("pyrite.services.qa_service.QAService._maybe_create_task") as mock_task:
             mock_task.side_effect = None  # No-op, just verifying call doesn't break
-            result = qa_env["qa"].assess_entry(
-                "fail2", "test-kb", create_task_on_fail=True
-            )
+            result = qa_env["qa"].assess_entry("fail2", "test-kb", create_task_on_fail=True)
             assert result["qa_status"] == "fail"
             assert "assessment_id" in result
 
@@ -499,8 +493,9 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("pyrite.cli.context.load_config", return_value=qa_env["config"]), patch(
-            "pyrite.cli.context.PyriteDB", return_value=qa_env["db"]
+        with (
+            patch("pyrite.cli.context.load_config", return_value=qa_env["config"]),
+            patch("pyrite.cli.context.PyriteDB", return_value=qa_env["db"]),
         ):
             result = runner.invoke(qa_app, ["assess", "test-kb", "--format", "json"])
             assert result.exit_code == 0
@@ -516,8 +511,9 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("pyrite.cli.context.load_config", return_value=qa_env["config"]), patch(
-            "pyrite.cli.context.PyriteDB", return_value=qa_env["db"]
+        with (
+            patch("pyrite.cli.context.load_config", return_value=qa_env["config"]),
+            patch("pyrite.cli.context.PyriteDB", return_value=qa_env["db"]),
         ):
             result = runner.invoke(
                 qa_app, ["assess", "test-kb", "--entry", "good-note", "--format", "json"]
@@ -534,8 +530,9 @@ class TestCLICommands:
 
         runner = CliRunner()
 
-        with patch("pyrite.cli.context.load_config", return_value=qa_env["config"]), patch(
-            "pyrite.cli.context.PyriteDB", return_value=qa_env["db"]
+        with (
+            patch("pyrite.cli.context.load_config", return_value=qa_env["config"]),
+            patch("pyrite.cli.context.PyriteDB", return_value=qa_env["db"]),
         ):
             result = runner.invoke(qa_app, ["status", "test-kb", "--format", "json"])
             assert result.exit_code == 0

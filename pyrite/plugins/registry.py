@@ -95,9 +95,7 @@ class PluginRegistry:
     # Aggregation methods — collect capabilities from all plugins
     # =========================================================================
 
-    def _merge_dict(
-        self, target: dict, source: dict, plugin_name: str, kind: str
-    ) -> None:
+    def _merge_dict(self, target: dict, source: dict, plugin_name: str, kind: str) -> None:
         """Merge source into target, warning on key collisions."""
         for key, value in source.items():
             if key in target:
@@ -424,9 +422,7 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_hooks failed: %s", plugin.name, e)
         return hooks
 
-    def run_hooks_for_kb(
-        self, hook_name: str, entry: Any, context: dict, kb_type: str = ""
-    ) -> Any:
+    def run_hooks_for_kb(self, hook_name: str, entry: Any, context: dict, kb_type: str = "") -> Any:
         """Run hooks for a given hook point, scoped to a KB type."""
         hooks = self.get_hooks_for_kb(kb_type).get(hook_name, [])
         for hook in hooks:

@@ -36,12 +36,26 @@ def tmp_db():
         db._raw_conn.execute(
             "INSERT INTO entry (id, kb_name, title, body, entry_type, file_path, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
-            ("entry-1", "test-kb", "Test Entry 1", "Some content here", "note", str(kb_path / "entry-1.md")),
+            (
+                "entry-1",
+                "test-kb",
+                "Test Entry 1",
+                "Some content here",
+                "note",
+                str(kb_path / "entry-1.md"),
+            ),
         )
         db._raw_conn.execute(
             "INSERT INTO entry (id, kb_name, title, body, entry_type, file_path, created_at, updated_at) "
             "VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
-            ("entry-2", "test-kb", "Test Entry 2", "More content here", "note", str(kb_path / "entry-2.md")),
+            (
+                "entry-2",
+                "test-kb",
+                "Test Entry 2",
+                "More content here",
+                "note",
+                str(kb_path / "entry-2.md"),
+            ),
         )
         db._raw_conn.commit()
 
@@ -98,7 +112,9 @@ class TestEmbedQueueTable:
         worker.enqueue("entry-1", "test-kb")
         worker.enqueue("entry-1", "test-kb")
 
-        count = db._raw_conn.execute("SELECT COUNT(*) FROM embed_queue WHERE entry_id = 'entry-1'").fetchone()[0]
+        count = db._raw_conn.execute(
+            "SELECT COUNT(*) FROM embed_queue WHERE entry_id = 'entry-1'"
+        ).fetchone()[0]
         assert count == 1
 
     def test_queue_status(self, tmp_db):

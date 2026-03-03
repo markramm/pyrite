@@ -610,7 +610,9 @@ class PyriteConfig:
                 auth_data = load_yaml_file(github_auth_file)
                 github_auth = GitHubAuth.from_dict(auth_data)
             except Exception:
-                logger.warning("Failed to load GitHub auth from %s", github_auth_file, exc_info=True)
+                logger.warning(
+                    "Failed to load GitHub auth from %s", github_auth_file, exc_info=True
+                )
 
         settings_data = data.get("settings", {})
         auth_data = settings_data.get("auth", {})
@@ -630,9 +632,7 @@ class PyriteConfig:
             gh_id = os.environ.get("PYRITE_GITHUB_CLIENT_ID", "")
             gh_secret = os.environ.get("PYRITE_GITHUB_CLIENT_SECRET", "")
             if gh_id and gh_secret:
-                providers["github"] = OAuthProviderConfig(
-                    client_id=gh_id, client_secret=gh_secret
-                )
+                providers["github"] = OAuthProviderConfig(client_id=gh_id, client_secret=gh_secret)
         else:
             gh = providers["github"]
             if not gh.client_id:
@@ -687,9 +687,11 @@ class PyriteConfig:
 
 
 # Global configuration paths
-CONFIG_DIR = Path(
-    os.environ.get("PYRITE_DATA_DIR", os.environ.get("PYRITE_CONFIG_DIR", "~/.pyrite"))
-).expanduser().resolve()
+CONFIG_DIR = (
+    Path(os.environ.get("PYRITE_DATA_DIR", os.environ.get("PYRITE_CONFIG_DIR", "~/.pyrite")))
+    .expanduser()
+    .resolve()
+)
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
 

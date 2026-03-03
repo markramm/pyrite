@@ -134,8 +134,13 @@ def build_entry(
             _cls_fields = {f.name for f in _dc.fields(resolved_cls)}
             # Keys recognised as top-level frontmatter by from_frontmatter
             _fm_keys = _cls_fields | {
-                "type", "provenance", "sources", "links", "aliases",
-                "created_at", "updated_at",
+                "type",
+                "provenance",
+                "sources",
+                "links",
+                "aliases",
+                "created_at",
+                "updated_at",
             }
             fm: dict = {
                 "id": entry_id,

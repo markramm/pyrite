@@ -170,9 +170,7 @@ def graph_env():
             kb_type=KBType.GENERIC,
         )
 
-        config = PyriteConfig(
-            knowledge_bases=[notes_kb], settings=Settings(index_path=db_path)
-        )
+        config = PyriteConfig(knowledge_bases=[notes_kb], settings=Settings(index_path=db_path))
 
         # Create entries that form a star: center -> leaf1, center -> leaf2, center -> leaf3
         repo = KBRepository(notes_kb)

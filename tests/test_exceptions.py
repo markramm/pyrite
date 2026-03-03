@@ -184,9 +184,7 @@ class TestServiceExceptionTypes:
             kb_path.mkdir()
             config = PyriteConfig(
                 knowledge_bases=[
-                    KBConfig(
-                        name="ro", path=kb_path, kb_type=KBType.RESEARCH, read_only=True
-                    ),
+                    KBConfig(name="ro", path=kb_path, kb_type=KBType.RESEARCH, read_only=True),
                 ],
                 settings=Settings(index_path=Path(d) / "test.db"),
             )

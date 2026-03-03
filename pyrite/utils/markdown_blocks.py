@@ -86,13 +86,15 @@ def extract_blocks(markdown_text: str) -> list[dict[str, str | int | None]]:
                 # Skip the marker line
                 i += 1
             block_id = explicit_id or _make_block_id(content)
-            blocks.append({
-                "block_id": block_id,
-                "heading": current_heading,
-                "content": content,
-                "position": position,
-                "block_type": "code",
-            })
+            blocks.append(
+                {
+                    "block_id": block_id,
+                    "heading": current_heading,
+                    "content": content,
+                    "position": position,
+                    "block_type": "code",
+                }
+            )
             position += 1
             continue
 
@@ -107,18 +109,20 @@ def extract_blocks(markdown_text: str) -> list[dict[str, str | int | None]]:
             # Check for inline ^block-id
             inline_match = _BLOCK_ID_RE.search(current_heading)
             if inline_match:
-                current_heading = current_heading[:inline_match.start()].strip()
+                current_heading = current_heading[: inline_match.start()].strip()
                 if not explicit_id:
                     explicit_id = inline_match.group(1)
-                    content = line[:line.rfind("^")].rstrip()
+                    content = line[: line.rfind("^")].rstrip()
                     block_id = explicit_id
-            blocks.append({
-                "block_id": block_id,
-                "heading": current_heading,
-                "content": content,
-                "position": position,
-                "block_type": "heading",
-            })
+            blocks.append(
+                {
+                    "block_id": block_id,
+                    "heading": current_heading,
+                    "content": content,
+                    "position": position,
+                    "block_type": "heading",
+                }
+            )
             position += 1
             i += 1 + skip_extra
             continue
@@ -133,8 +137,10 @@ def extract_blocks(markdown_text: str) -> list[dict[str, str | int | None]]:
                 if re.match(r"^(\s*[-*+]|\s*\d+\.)\s+", cur):
                     list_lines.append(cur)
                     i += 1
-                elif cur.strip() == "" and i + 1 < len(lines) and re.match(
-                    r"^(\s*[-*+]|\s*\d+\.)\s+", lines[i + 1]
+                elif (
+                    cur.strip() == ""
+                    and i + 1 < len(lines)
+                    and re.match(r"^(\s*[-*+]|\s*\d+\.)\s+", lines[i + 1])
                 ):
                     list_lines.append(cur)
                     i += 1
@@ -152,13 +158,15 @@ def extract_blocks(markdown_text: str) -> list[dict[str, str | int | None]]:
             if not explicit_id:
                 content, explicit_id = _extract_explicit_id(content)
             block_id = explicit_id or _make_block_id(content)
-            blocks.append({
-                "block_id": block_id,
-                "heading": current_heading,
-                "content": content,
-                "position": position,
-                "block_type": "list",
-            })
+            blocks.append(
+                {
+                    "block_id": block_id,
+                    "heading": current_heading,
+                    "content": content,
+                    "position": position,
+                    "block_type": "list",
+                }
+            )
             position += 1
             continue
 
@@ -186,13 +194,15 @@ def extract_blocks(markdown_text: str) -> list[dict[str, str | int | None]]:
                 content = content_stripped
                 i += 1
         block_id = explicit_id or _make_block_id(content)
-        blocks.append({
-            "block_id": block_id,
-            "heading": current_heading,
-            "content": content,
-            "position": position,
-            "block_type": "paragraph",
-        })
+        blocks.append(
+            {
+                "block_id": block_id,
+                "heading": current_heading,
+                "content": content,
+                "position": position,
+                "block_type": "paragraph",
+            }
+        )
         position += 1
 
     return blocks

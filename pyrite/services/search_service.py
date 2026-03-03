@@ -91,7 +91,7 @@ class SearchService:
 
         # Quote any token containing FTS5-special characters
         # Matches tokens with at least one non-alphanumeric, non-space, non-underscore char
-        sanitized = re.sub(r'(\S*[^\w\s]\S*)', r'"\1"', query)
+        sanitized = re.sub(r"(\S*[^\w\s]\S*)", r'"\1"', query)
         return sanitized
 
     # =========================================================================

@@ -44,25 +44,23 @@ def ensure_schema(engine) -> None:
     """
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.execute(text(
-            "ALTER TABLE entry ADD COLUMN IF NOT EXISTS fts_vector tsvector"
-        ))
-        conn.execute(text(
-            "ALTER TABLE entry ADD COLUMN IF NOT EXISTS embedding vector(384)"
-        ))
+        conn.execute(text("ALTER TABLE entry ADD COLUMN IF NOT EXISTS fts_vector tsvector"))
+        conn.execute(text("ALTER TABLE entry ADD COLUMN IF NOT EXISTS embedding vector(384)"))
         # GIN index for FTS
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_entry_fts "
-            "ON entry USING gin(fts_vector)"
-        ))
+        conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_entry_fts ON entry USING gin(fts_vector)")
+        )
         # IVFFlat index for vector KNN (requires rows to exist; falls back to seq scan if empty)
         # Use HNSW for small corpora — no training needed
-        conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_entry_embedding "
-            "ON entry USING hnsw(embedding vector_cosine_ops)"
-        ))
+        conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_entry_embedding "
+                "ON entry USING hnsw(embedding vector_cosine_ops)"
+            )
+        )
         # Trigger to auto-update fts_vector on INSERT/UPDATE
-        conn.execute(text("""
+        conn.execute(
+            text("""
             CREATE OR REPLACE FUNCTION entry_fts_trigger() RETURNS trigger AS $$
             BEGIN
                 NEW.fts_vector :=
@@ -72,8 +70,10 @@ def ensure_schema(engine) -> None:
                 RETURN NEW;
             END;
             $$ LANGUAGE plpgsql;
-        """))
-        conn.execute(text("""
+        """)
+        )
+        conn.execute(
+            text("""
             DO $$ BEGIN
                 IF NOT EXISTS (
                     SELECT 1 FROM pg_trigger WHERE tgname = 'trg_entry_fts'
@@ -83,7 +83,8 @@ def ensure_schema(engine) -> None:
                     FOR EACH ROW EXECUTE FUNCTION entry_fts_trigger();
                 END IF;
             END $$;
-        """))
+        """)
+        )
         conn.commit()
 
 
@@ -205,57 +206,66 @@ class PostgresBackend:
     def _sync_sources(self, entry_id: str, kb_name: str, sources: list[dict[str, Any]]) -> None:
         self._session.query(Source).filter_by(entry_id=entry_id, kb_name=kb_name).delete()
         for src in sources:
-            self._session.add(Source(
-                entry_id=entry_id,
-                kb_name=kb_name,
-                title=src.get("title", ""),
-                url=src.get("url", ""),
-                outlet=src.get("outlet", ""),
-                date=src.get("date", ""),
-                verified=1 if src.get("verified") else 0,
-            ))
+            self._session.add(
+                Source(
+                    entry_id=entry_id,
+                    kb_name=kb_name,
+                    title=src.get("title", ""),
+                    url=src.get("url", ""),
+                    outlet=src.get("outlet", ""),
+                    date=src.get("date", ""),
+                    verified=1 if src.get("verified") else 0,
+                )
+            )
 
     def _sync_links(self, entry_id: str, kb_name: str, links: list[dict[str, Any]]) -> None:
         self._session.query(Link).filter_by(source_id=entry_id, source_kb=kb_name).delete()
         for link in links:
             from ...schema import get_inverse_relation
+
             relation = link.get("relation", "related_to")
             inverse = get_inverse_relation(relation)
             target_kb = link.get("kb", kb_name)
-            self._session.add(Link(
-                source_id=entry_id,
-                source_kb=kb_name,
-                target_id=link.get("target"),
-                target_kb=target_kb,
-                relation=relation,
-                inverse_relation=inverse,
-                note=link.get("note", ""),
-            ))
+            self._session.add(
+                Link(
+                    source_id=entry_id,
+                    source_kb=kb_name,
+                    target_id=link.get("target"),
+                    target_kb=target_kb,
+                    relation=relation,
+                    inverse_relation=inverse,
+                    note=link.get("note", ""),
+                )
+            )
 
     def _sync_entry_refs(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
         self._session.query(EntryRef).filter_by(source_id=entry_id, source_kb=kb_name).delete()
         for ref in entry_data.get("_refs", []):
-            self._session.add(EntryRef(
-                source_id=entry_id,
-                source_kb=kb_name,
-                target_id=ref["target_id"],
-                target_kb=ref.get("target_kb", kb_name),
-                field_name=ref["field_name"],
-                target_type=ref.get("target_type"),
-            ))
+            self._session.add(
+                EntryRef(
+                    source_id=entry_id,
+                    source_kb=kb_name,
+                    target_id=ref["target_id"],
+                    target_kb=ref.get("target_kb", kb_name),
+                    field_name=ref["field_name"],
+                    target_type=ref.get("target_type"),
+                )
+            )
 
     def _sync_blocks(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
         self._session.query(Block).filter_by(entry_id=entry_id, kb_name=kb_name).delete()
         for blk in entry_data.get("_blocks", []):
-            self._session.add(Block(
-                entry_id=entry_id,
-                kb_name=kb_name,
-                block_id=blk["block_id"],
-                heading=blk.get("heading"),
-                content=blk["content"],
-                position=blk["position"],
-                block_type=blk["block_type"],
-            ))
+            self._session.add(
+                Block(
+                    entry_id=entry_id,
+                    kb_name=kb_name,
+                    block_id=blk["block_id"],
+                    heading=blk.get("heading"),
+                    content=blk["content"],
+                    position=blk["position"],
+                    block_type=blk["block_type"],
+                )
+            )
 
     def delete_entry(self, entry_id: str, kb_name: str) -> bool:
         count = self._session.query(Entry).filter_by(id=entry_id, kb_name=kb_name).delete()
@@ -278,11 +288,7 @@ class PostgresBackend:
             return []
         from sqlalchemy import tuple_
 
-        entries = (
-            self._session.query(Entry)
-            .filter(tuple_(Entry.id, Entry.kb_name).in_(ids))
-            .all()
-        )
+        entries = self._session.query(Entry).filter(tuple_(Entry.id, Entry.kb_name).in_(ids)).all()
         tag_map = self._get_tags_for_entries(ids)
         results = []
         for entry in entries:
@@ -350,9 +356,7 @@ class PostgresBackend:
         rows = (
             self._session.query(EntryTag.entry_id, EntryTag.kb_name, Tag.name)
             .join(Tag, Tag.id == EntryTag.tag_id)
-            .filter(
-                tuple_(EntryTag.entry_id, EntryTag.kb_name).in_(entry_ids)
-            )
+            .filter(tuple_(EntryTag.entry_id, EntryTag.kb_name).in_(entry_ids))
             .all()
         )
         for entry_id, kb_name, tag_name in rows:
@@ -382,8 +386,7 @@ class PostgresBackend:
             .all()
         )
         return [
-            {"target_id": l[0], "target_kb": l[1], "relation": l[2], "note": l[3]}
-            for l in links
+            {"target_id": l[0], "target_kb": l[1], "relation": l[2], "note": l[3]} for l in links
         ]
 
     _SORT_COLUMNS = {"title", "updated_at", "created_at", "entry_type"}
@@ -401,7 +404,9 @@ class PostgresBackend:
         query = self._session.query(Entry)
         if tag:
             query = (
-                query.join(EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name))
+                query.join(
+                    EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name)
+                )
                 .join(Tag, EntryTag.tag_id == Tag.id)
                 .filter(Tag.name == tag)
             )
@@ -440,7 +445,9 @@ class PostgresBackend:
         query = self._session.query(func.count(func.distinct(Entry.id)))
         if tag:
             query = (
-                query.join(EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name))
+                query.join(
+                    EntryTag, (Entry.id == EntryTag.entry_id) & (Entry.kb_name == EntryTag.kb_name)
+                )
                 .join(Tag, EntryTag.tag_id == Tag.id)
                 .filter(Tag.name == tag)
             )
@@ -451,9 +458,9 @@ class PostgresBackend:
         return query.scalar() or 0
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
-        query = self._session.query(Entry.entry_type).filter(
-            Entry.entry_type.isnot(None)
-        ).distinct()
+        query = (
+            self._session.query(Entry.entry_type).filter(Entry.entry_type.isnot(None)).distinct()
+        )
         if kb_name:
             query = query.filter(Entry.kb_name == kb_name)
         query = query.order_by(Entry.entry_type)
@@ -588,9 +595,7 @@ class PostgresBackend:
     # Semantic search (pgvector embeddings)
     # =====================================================================
 
-    def upsert_embedding(
-        self, entry_id: str, kb_name: str, embedding: list[float]
-    ) -> bool:
+    def upsert_embedding(self, entry_id: str, kb_name: str, embedding: list[float]) -> bool:
         # Store embedding directly on the entry row
         vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
         result = self._session.execute(
@@ -628,15 +633,11 @@ class PostgresBackend:
         return [r for r in rows if r.get("distance", 0) <= max_distance]
 
     def has_embeddings(self) -> bool:
-        count = self._exec_scalar(
-            "SELECT COUNT(*) FROM entry WHERE embedding IS NOT NULL"
-        )
+        count = self._exec_scalar("SELECT COUNT(*) FROM entry WHERE embedding IS NOT NULL")
         return (count or 0) > 0
 
     def embedding_stats(self) -> dict[str, Any]:
-        vec_count = self._exec_scalar(
-            "SELECT COUNT(*) FROM entry WHERE embedding IS NOT NULL"
-        ) or 0
+        vec_count = self._exec_scalar("SELECT COUNT(*) FROM entry WHERE embedding IS NOT NULL") or 0
         entry_count = self._exec_scalar("SELECT COUNT(*) FROM entry") or 0
         return {
             "available": True,
@@ -646,15 +647,11 @@ class PostgresBackend:
         }
 
     def get_embedded_rowids(self) -> set[int]:
-        rows = self._exec(
-            "SELECT id FROM entry WHERE embedding IS NOT NULL"
-        )
+        rows = self._exec("SELECT id FROM entry WHERE embedding IS NOT NULL")
         # Return entry IDs as a set (Postgres doesn't use rowids the same way)
         return {hash(r["id"]) for r in rows}
 
-    def get_entries_for_embedding(
-        self, kb_name: str | None = None
-    ) -> list[dict[str, Any]]:
+    def get_entries_for_embedding(self, kb_name: str | None = None) -> list[dict[str, Any]]:
         sql = "SELECT id, kb_name, title, summary, body FROM entry"
         params: dict[str, Any] = {}
         if kb_name:
@@ -668,10 +665,7 @@ class PostgresBackend:
 
     def delete_embedding(self, entry_id: str, kb_name: str) -> None:
         self._session.execute(
-            text(
-                "UPDATE entry SET embedding = NULL "
-                "WHERE id = :entry_id AND kb_name = :kb_name"
-            ),
+            text("UPDATE entry SET embedding = NULL WHERE id = :entry_id AND kb_name = :kb_name"),
             {"entry_id": entry_id, "kb_name": kb_name},
         )
         self._session.commit()
@@ -764,14 +758,19 @@ class PostgresBackend:
                         edge_key = (eid, ekb, tid, tkb)
                         if edge_key not in edge_set:
                             edge_set.add(edge_key)
-                            edges.append({
-                                "source_id": eid, "source_kb": ekb,
-                                "target_id": tid, "target_kb": tkb,
-                                "relation": r["relation"],
-                            })
+                            edges.append(
+                                {
+                                    "source_id": eid,
+                                    "source_kb": ekb,
+                                    "target_id": tid,
+                                    "target_kb": tkb,
+                                    "relation": r["relation"],
+                                }
+                            )
                         if (tid, tkb) not in nodes:
                             nodes[(tid, tkb)] = {
-                                "id": tid, "kb_name": tkb,
+                                "id": tid,
+                                "kb_name": tkb,
                                 "title": r["title"] or tid,
                                 "entry_type": r["entry_type"] or "unknown",
                             }
@@ -796,14 +795,19 @@ class PostgresBackend:
                         edge_key = (sid, skb, eid, ekb)
                         if edge_key not in edge_set:
                             edge_set.add(edge_key)
-                            edges.append({
-                                "source_id": sid, "source_kb": skb,
-                                "target_id": eid, "target_kb": ekb,
-                                "relation": r["relation"],
-                            })
+                            edges.append(
+                                {
+                                    "source_id": sid,
+                                    "source_kb": skb,
+                                    "target_id": eid,
+                                    "target_kb": ekb,
+                                    "relation": r["relation"],
+                                }
+                            )
                         if (sid, skb) not in nodes:
                             nodes[(sid, skb)] = {
-                                "id": sid, "kb_name": skb,
+                                "id": sid,
+                                "kb_name": skb,
                                 "title": r["title"] or sid,
                                 "entry_type": r["entry_type"] or "unknown",
                             }
@@ -842,16 +846,15 @@ class PostgresBackend:
         for node in nodes.values():
             count = 0
             for e in edges:
-                if (e["source_id"] == node["id"] and e["source_kb"] == node["kb_name"]) or \
-                   (e["target_id"] == node["id"] and e["target_kb"] == node["kb_name"]):
+                if (e["source_id"] == node["id"] and e["source_kb"] == node["kb_name"]) or (
+                    e["target_id"] == node["id"] and e["target_kb"] == node["kb_name"]
+                ):
                     count += 1
             node["link_count"] = count
             node_list.append(node)
         return {"nodes": node_list, "edges": edges}
 
-    def get_most_linked(
-        self, kb_name: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         sql = """
             SELECT e.id, e.kb_name, e.title, e.entry_type,
                    COUNT(l.id) as link_count
@@ -862,7 +865,9 @@ class PostgresBackend:
         if kb_name:
             sql += " WHERE e.kb_name = :kb_name"
             params["kb_name"] = kb_name
-        sql += " GROUP BY e.id, e.kb_name, e.title, e.entry_type ORDER BY link_count DESC LIMIT :limit"
+        sql += (
+            " GROUP BY e.id, e.kb_name, e.title, e.entry_type ORDER BY link_count DESC LIMIT :limit"
+        )
         params["limit"] = limit
         return self._exec(sql, params)
 
@@ -1013,21 +1018,27 @@ class PostgresBackend:
             ORDER BY {sort_by} {sort_order}
             LIMIT :limit OFFSET :offset
         """
-        return self._exec(sql, {
-            "kb_name": kb_name,
-            "folder_prefix": folder_prefix + "%",
-            "limit": limit,
-            "offset": offset,
-        })
+        return self._exec(
+            sql,
+            {
+                "kb_name": kb_name,
+                "folder_prefix": folder_prefix + "%",
+                "limit": limit,
+                "offset": offset,
+            },
+        )
 
     def count_entries_in_folder(self, kb_name: str, folder_path: str) -> int:
         folder_prefix = folder_path.rstrip("/") + "/"
-        return self._exec_scalar(
-            """SELECT COUNT(*) FROM entry
+        return (
+            self._exec_scalar(
+                """SELECT COUNT(*) FROM entry
                WHERE kb_name = :kb_name AND file_path LIKE :folder_prefix
                  AND entry_type != 'collection'""",
-            {"kb_name": kb_name, "folder_prefix": folder_prefix + "%"},
-        ) or 0
+                {"kb_name": kb_name, "folder_prefix": folder_prefix + "%"},
+            )
+            or 0
+        )
 
     # =====================================================================
     # Global counts — identical to SQLiteBackend

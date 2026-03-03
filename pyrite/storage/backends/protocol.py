@@ -35,9 +35,7 @@ class SearchBackend(Protocol):
         """Get a single entry with tags, sources, and links."""
         ...
 
-    def get_entries(
-        self, ids: list[tuple[str, str]]
-    ) -> list[dict[str, Any]]:
+    def get_entries(self, ids: list[tuple[str, str]]) -> list[dict[str, Any]]:
         """Batch-get multiple entries by (entry_id, kb_name) pairs."""
         ...
 
@@ -111,9 +109,7 @@ class SearchBackend(Protocol):
 
     # ── semantic search (embeddings) ─────────────────────────────────
 
-    def upsert_embedding(
-        self, entry_id: str, kb_name: str, embedding: list[float]
-    ) -> bool:
+    def upsert_embedding(self, entry_id: str, kb_name: str, embedding: list[float]) -> bool:
         """Store/update a vector embedding for an entry. Returns True on success."""
         ...
 
@@ -139,9 +135,7 @@ class SearchBackend(Protocol):
         """Get set of rowids that already have embeddings."""
         ...
 
-    def get_entries_for_embedding(
-        self, kb_name: str | None = None
-    ) -> list[dict[str, Any]]:
+    def get_entries_for_embedding(self, kb_name: str | None = None) -> list[dict[str, Any]]:
         """Get entries with rowid for batch embedding."""
         ...
 
@@ -177,9 +171,7 @@ class SearchBackend(Protocol):
         """Multi-hop BFS graph traversal returning {nodes, edges}."""
         ...
 
-    def get_most_linked(
-        self, kb_name: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         """Get entries with most incoming links."""
         ...
 
@@ -189,9 +181,7 @@ class SearchBackend(Protocol):
 
     # ── tags ─────────────────────────────────────────────────────────
 
-    def get_all_tags(
-        self, kb_name: str | None = None
-    ) -> list[tuple[str, int]]:
+    def get_all_tags(self, kb_name: str | None = None) -> list[tuple[str, int]]:
         """Get all tags with counts."""
         ...
 
@@ -221,15 +211,11 @@ class SearchBackend(Protocol):
 
     # ── object refs ──────────────────────────────────────────────────
 
-    def get_refs_from(
-        self, entry_id: str, kb_name: str
-    ) -> list[dict[str, Any]]:
+    def get_refs_from(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries this entry references via object-ref fields."""
         ...
 
-    def get_refs_to(
-        self, entry_id: str, kb_name: str
-    ) -> list[dict[str, Any]]:
+    def get_refs_to(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that reference this entry."""
         ...
 

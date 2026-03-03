@@ -34,7 +34,11 @@ def schema_diff(
         console.print(f"[bold]Schema for KB '{kb_name}'[/bold]")
         console.print(f"[dim]Schema version: {schema.schema_version}[/dim]\n")
 
-        types_to_show = {entry_type: schema.types[entry_type]} if entry_type and entry_type in schema.types else schema.types
+        types_to_show = (
+            {entry_type: schema.types[entry_type]}
+            if entry_type and entry_type in schema.types
+            else schema.types
+        )
 
         for type_name, type_schema in types_to_show.items():
             console.print(f"[bold cyan]{type_name}[/bold cyan] (v{type_schema.version})")
@@ -49,7 +53,11 @@ def schema_diff(
             table.add_column("Since", style="yellow")
 
             for field_name, field_schema in type_schema.fields.items():
-                since = str(field_schema.since_version) if field_schema.since_version is not None else ""
+                since = (
+                    str(field_schema.since_version)
+                    if field_schema.since_version is not None
+                    else ""
+                )
                 req = "yes" if field_schema.required else ""
                 table.add_row(field_name, field_schema.field_type, req, since)
 
@@ -61,7 +69,9 @@ def schema_diff(
 def schema_migrate(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     entry_type: str = typer.Option(None, "--type", "-t", help="Filter by entry type"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be migrated without saving"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be migrated without saving"
+    ),
 ):
     """Migrate entries to current schema version.
 

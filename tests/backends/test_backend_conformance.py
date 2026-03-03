@@ -12,6 +12,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_entry(entry_id="e1", kb_name="test", **overrides):
     """Build a minimal entry data dict."""
     data = {
@@ -33,6 +34,7 @@ def _make_entry(entry_id="e1", kb_name="test", **overrides):
 # =========================================================================
 # Entry lifecycle
 # =========================================================================
+
 
 class TestEntryLifecycle:
     def test_upsert_and_get(self, backend):
@@ -124,7 +126,12 @@ class TestEntryLifecycle:
         backend.upsert_entry(_make_entry("e1", metadata={"custom_field": "value"}))
         entry = backend.get_entry("e1", "test")
         import json
-        meta = json.loads(entry["metadata"]) if isinstance(entry["metadata"], str) else entry["metadata"]
+
+        meta = (
+            json.loads(entry["metadata"])
+            if isinstance(entry["metadata"], str)
+            else entry["metadata"]
+        )
         assert meta["custom_field"] == "value"
 
     def test_entry_importance_and_status(self, backend):
@@ -137,6 +144,7 @@ class TestEntryLifecycle:
 # =========================================================================
 # Tags
 # =========================================================================
+
 
 class TestTags:
     def test_tags_stored_and_retrieved(self, backend):
@@ -203,6 +211,7 @@ class TestTags:
 # Full-text search
 # =========================================================================
 
+
 class TestFullTextSearch:
     def test_search_basic(self, backend):
         backend.upsert_entry(_make_entry("e1", title="quantum computing advances"))
@@ -268,14 +277,27 @@ class TestFullTextSearch:
 # Graph (links)
 # =========================================================================
 
+
 class TestGraph:
     def _setup_linked_entries(self, backend):
-        backend.upsert_entry(_make_entry("a", title="Entry A", links=[
-            {"target": "b", "relation": "related_to"},
-        ]))
-        backend.upsert_entry(_make_entry("b", title="Entry B", links=[
-            {"target": "c", "relation": "related_to"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "a",
+                title="Entry A",
+                links=[
+                    {"target": "b", "relation": "related_to"},
+                ],
+            )
+        )
+        backend.upsert_entry(
+            _make_entry(
+                "b",
+                title="Entry B",
+                links=[
+                    {"target": "c", "relation": "related_to"},
+                ],
+            )
+        )
         backend.upsert_entry(_make_entry("c", title="Entry C"))
 
     def test_get_backlinks(self, backend):
@@ -303,9 +325,15 @@ class TestGraph:
     def test_get_backlinks_with_limit(self, backend):
         # Create many inbound links to c
         for i in range(5):
-            backend.upsert_entry(_make_entry(f"src{i}", title=f"Source {i}", links=[
-                {"target": "target", "relation": "related_to"},
-            ]))
+            backend.upsert_entry(
+                _make_entry(
+                    f"src{i}",
+                    title=f"Source {i}",
+                    links=[
+                        {"target": "target", "relation": "related_to"},
+                    ],
+                )
+            )
         backend.upsert_entry(_make_entry("target", title="Target"))
         backlinks = backend.get_backlinks("target", "test", limit=2)
         assert len(backlinks) == 2
@@ -335,9 +363,14 @@ class TestGraph:
 
     def test_get_orphans(self, backend):
         backend.upsert_entry(_make_entry("orphan", title="Lonely"))
-        backend.upsert_entry(_make_entry("linked", links=[
-            {"target": "other", "relation": "related_to"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "linked",
+                links=[
+                    {"target": "other", "relation": "related_to"},
+                ],
+            )
+        )
         backend.upsert_entry(_make_entry("other"))
         orphans = backend.get_orphans(kb_name="test")
         orphan_ids = {o["id"] for o in orphans}
@@ -349,11 +382,17 @@ class TestGraph:
 # Sources
 # =========================================================================
 
+
 class TestSources:
     def test_sources_stored(self, backend):
-        backend.upsert_entry(_make_entry("e1", sources=[
-            {"title": "Source 1", "url": "https://example.com", "outlet": "Blog"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                sources=[
+                    {"title": "Source 1", "url": "https://example.com", "outlet": "Blog"},
+                ],
+            )
+        )
         entry = backend.get_entry("e1", "test")
         assert len(entry["sources"]) == 1
         assert entry["sources"][0]["title"] == "Source 1"
@@ -370,11 +409,17 @@ class TestSources:
 # Object refs
 # =========================================================================
 
+
 class TestObjectRefs:
     def test_refs_from(self, backend):
-        backend.upsert_entry(_make_entry("e1", _refs=[
-            {"target_id": "e2", "field_name": "author", "target_type": "person"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _refs=[
+                    {"target_id": "e2", "field_name": "author", "target_type": "person"},
+                ],
+            )
+        )
         backend.upsert_entry(_make_entry("e2", entry_type="person", title="Person"))
         refs = backend.get_refs_from("e1", "test")
         assert len(refs) == 1
@@ -382,21 +427,36 @@ class TestObjectRefs:
         assert refs[0]["field_name"] == "author"
 
     def test_refs_to(self, backend):
-        backend.upsert_entry(_make_entry("e1", _refs=[
-            {"target_id": "e2", "field_name": "author", "target_type": "person"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _refs=[
+                    {"target_id": "e2", "field_name": "author", "target_type": "person"},
+                ],
+            )
+        )
         backend.upsert_entry(_make_entry("e2"))
         refs = backend.get_refs_to("e2", "test")
         assert len(refs) == 1
         assert refs[0]["id"] == "e1"
 
     def test_refs_replaced_on_update(self, backend):
-        backend.upsert_entry(_make_entry("e1", _refs=[
-            {"target_id": "old", "field_name": "ref"},
-        ]))
-        backend.upsert_entry(_make_entry("e1", _refs=[
-            {"target_id": "new", "field_name": "ref"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _refs=[
+                    {"target_id": "old", "field_name": "ref"},
+                ],
+            )
+        )
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _refs=[
+                    {"target_id": "new", "field_name": "ref"},
+                ],
+            )
+        )
         refs = backend.get_refs_from("e1", "test")
         assert len(refs) == 1
         assert refs[0]["id"] == "new"
@@ -406,23 +466,63 @@ class TestObjectRefs:
 # Blocks
 # =========================================================================
 
+
 class TestBlocks:
     def test_blocks_stored(self, backend):
-        backend.upsert_entry(_make_entry("e1", _blocks=[
-            {"block_id": "b1", "heading": "Section 1", "content": "Content 1", "position": 0, "block_type": "heading"},
-            {"block_id": "b2", "heading": "Section 2", "content": "Content 2", "position": 1, "block_type": "heading"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _blocks=[
+                    {
+                        "block_id": "b1",
+                        "heading": "Section 1",
+                        "content": "Content 1",
+                        "position": 0,
+                        "block_type": "heading",
+                    },
+                    {
+                        "block_id": "b2",
+                        "heading": "Section 2",
+                        "content": "Content 2",
+                        "position": 1,
+                        "block_type": "heading",
+                    },
+                ],
+            )
+        )
         # Blocks don't have a direct get, but upsert shouldn't fail
         entry = backend.get_entry("e1", "test")
         assert entry is not None
 
     def test_blocks_replaced_on_update(self, backend):
-        backend.upsert_entry(_make_entry("e1", _blocks=[
-            {"block_id": "b1", "heading": "Old", "content": "Old", "position": 0, "block_type": "heading"},
-        ]))
-        backend.upsert_entry(_make_entry("e1", _blocks=[
-            {"block_id": "b2", "heading": "New", "content": "New", "position": 0, "block_type": "heading"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _blocks=[
+                    {
+                        "block_id": "b1",
+                        "heading": "Old",
+                        "content": "Old",
+                        "position": 0,
+                        "block_type": "heading",
+                    },
+                ],
+            )
+        )
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                _blocks=[
+                    {
+                        "block_id": "b2",
+                        "heading": "New",
+                        "content": "New",
+                        "position": 0,
+                        "block_type": "heading",
+                    },
+                ],
+            )
+        )
         entry = backend.get_entry("e1", "test")
         assert entry is not None
 
@@ -430,6 +530,7 @@ class TestBlocks:
 # =========================================================================
 # Timeline
 # =========================================================================
+
 
 class TestTimeline:
     def test_timeline_basic(self, backend):
@@ -465,6 +566,7 @@ class TestTimeline:
 # Folder queries
 # =========================================================================
 
+
 class TestFolderQueries:
     def test_list_entries_in_folder(self, backend):
         backend.upsert_entry(_make_entry("e1", file_path="notes/sub/e1.md"))
@@ -490,11 +592,18 @@ class TestFolderQueries:
 # Global counts
 # =========================================================================
 
+
 class TestGlobalCounts:
     def test_global_counts(self, backend):
-        backend.upsert_entry(_make_entry("e1", tags=["alpha"], links=[
-            {"target": "e2", "relation": "related_to"},
-        ]))
+        backend.upsert_entry(
+            _make_entry(
+                "e1",
+                tags=["alpha"],
+                links=[
+                    {"target": "e2", "relation": "related_to"},
+                ],
+            )
+        )
         backend.upsert_entry(_make_entry("e2", tags=["beta"]))
         counts = backend.get_global_counts()
         assert counts["total_tags"] == 2
@@ -504,6 +613,7 @@ class TestGlobalCounts:
 # =========================================================================
 # Multi-KB isolation
 # =========================================================================
+
 
 class TestMultiKB:
     def test_entries_isolated_by_kb(self, backend_with_db):
@@ -543,6 +653,7 @@ class TestMultiKB:
 # =========================================================================
 # Embeddings (basic — only tests interface, not actual model)
 # =========================================================================
+
 
 class TestEmbeddingInterface:
     """Tests the embedding API surface. Actual vector search requires sqlite-vec."""

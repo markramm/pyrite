@@ -230,8 +230,12 @@ class LocalUser(Base):
     ephemeral_kb_count = Column(Integer, server_default="0")
 
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
-    kb_permissions = relationship("KBPermission", back_populates="user", cascade="all, delete-orphan",
-                                  foreign_keys="KBPermission.user_id")
+    kb_permissions = relationship(
+        "KBPermission",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="KBPermission.user_id",
+    )
 
 
 class AuthSession(Base):
@@ -241,9 +245,7 @@ class AuthSession(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     token_hash = Column(String, unique=True, nullable=False, index=True)
-    user_id = Column(
-        Integer, ForeignKey("local_user.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id = Column(Integer, ForeignKey("local_user.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(String, server_default="CURRENT_TIMESTAMP")
     expires_at = Column(String, nullable=False)
     last_used = Column(String)
@@ -257,9 +259,7 @@ class KBPermission(Base):
     __tablename__ = "kb_permission"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        Integer, ForeignKey("local_user.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id = Column(Integer, ForeignKey("local_user.id", ondelete="CASCADE"), nullable=False)
     kb_name = Column(String, nullable=False)
     role = Column(String, nullable=False)
     granted_by = Column(Integer, ForeignKey("local_user.id"), nullable=True)

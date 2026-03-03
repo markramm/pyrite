@@ -62,6 +62,4 @@ def get_entry_blocks(
     neg = negotiate_response(request, resp_data)
     if neg is not None:
         return neg
-    return BlockListResponse(
-        entry_id=entry_id, kb_name=kb, blocks=blocks, total=len(blocks)
-    )
+    return BlockListResponse(entry_id=entry_id, kb_name=kb, blocks=blocks, total=len(blocks))

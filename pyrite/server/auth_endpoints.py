@@ -81,9 +81,7 @@ class AuthConfigResponse(BaseModel):
 COOKIE_NAME = "pyrite_session"
 
 
-def _set_session_cookie(
-    response: Response, token: str, ttl_hours: int, request: Request
-) -> None:
+def _set_session_cookie(response: Response, token: str, ttl_hours: int, request: Request) -> None:
     secure = request.url.scheme == "https"
     response.set_cookie(
         key=COOKIE_NAME,
@@ -140,11 +138,7 @@ async def get_auth_config(
     config: PyriteConfig = Depends(get_config),
 ) -> AuthConfigResponse:
     """Public endpoint: returns auth configuration for the frontend."""
-    providers = [
-        name
-        for name, p in config.settings.auth.providers.items()
-        if p.client_id
-    ]
+    providers = [name for name, p in config.settings.auth.providers.items() if p.client_id]
     return AuthConfigResponse(
         enabled=config.settings.auth.enabled,
         allow_registration=config.settings.auth.allow_registration,
@@ -165,9 +159,7 @@ async def register(
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
 
     try:
-        user = auth_service.register(
-            body.username, body.password, body.display_name
-        )
+        user = auth_service.register(body.username, body.password, body.display_name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -296,7 +288,5 @@ async def github_oauth_callback(
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
     response = RedirectResponse(url="/", status_code=302)
-    _set_session_cookie(
-        response, session_token, config.settings.auth.session_ttl_hours, request
-    )
+    _set_session_cookie(response, session_token, config.settings.auth.session_ttl_hours, request)
     return response

@@ -34,7 +34,9 @@ def get_stats(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)
     return StatsResponse(**stats)
 
 
-@router.post("/index/sync", response_model=SyncResponse, dependencies=[Depends(requires_tier("admin"))])
+@router.post(
+    "/index/sync", response_model=SyncResponse, dependencies=[Depends(requires_tier("admin"))]
+)
 @limiter.limit("30/minute")
 def sync_index(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)):
     """Trigger incremental index sync."""
@@ -46,9 +48,7 @@ def sync_index(request: Request, index_mgr: IndexManager = Depends(get_index_mgr
 
     try:
         loop = asyncio.get_event_loop()
-        loop.create_task(
-            manager.broadcast({"type": "kb_synced", "entry_id": "", "kb_name": ""})
-        )
+        loop.create_task(manager.broadcast({"type": "kb_synced", "entry_id": "", "kb_name": ""}))
     except RuntimeError:
         pass
 
@@ -131,7 +131,9 @@ def delete_kb(
     config = svc.config
     kb = config.get_kb(name)
     if not kb:
-        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{name}' not found"})
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{name}' not found"}
+        )
     svc.db.unregister_kb(name)
     config.remove_kb(name)
     save_config(config)
@@ -329,7 +331,9 @@ def get_plugin_detail(request: Request, name: str):
     registry = get_registry()
     plugin = registry.get_plugin(name)
     if not plugin:
-        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": f"Plugin '{name}' not found"})
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"Plugin '{name}' not found"}
+        )
 
     info: dict = {"name": name}
 

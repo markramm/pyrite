@@ -308,7 +308,9 @@ def kb_create(
 def kb_commit(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     message: str = typer.Option(..., "--message", "-m", help="Commit message"),
-    paths: list[str] | None = typer.Option(None, "--path", "-p", help="Specific file paths to commit"),
+    paths: list[str] | None = typer.Option(
+        None, "--path", "-p", help="Specific file paths to commit"
+    ),
     sign_off: bool = typer.Option(False, "--signoff", "-s", help="Add Signed-off-by line"),
 ):
     """Commit changes in a KB's git repository."""
@@ -373,9 +375,7 @@ kb_app.add_typer(schema_app, name="schema")
 @schema_app.command("show")
 def schema_show(
     kb_name: str = typer.Argument(..., help="Knowledge base name"),
-    output_format: str = typer.Option(
-        "rich", "--format", "-f", help="Output format: rich, json"
-    ),
+    output_format: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Show the current schema for a KB."""
     from ..services.schema_service import SchemaService
@@ -430,9 +430,7 @@ def schema_add_type(
     required: str = typer.Option("", "--required", "-r", help="Comma-separated required fields"),
     optional: str = typer.Option("", "--optional", "-o", help="Comma-separated optional fields"),
     subdirectory: str = typer.Option("", "--subdirectory", "-s", help="Subdirectory for files"),
-    output_format: str = typer.Option(
-        "rich", "--format", "-f", help="Output format: rich, json"
-    ),
+    output_format: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Add a type definition to a KB's schema."""
     from ..services.schema_service import SchemaService
@@ -471,9 +469,7 @@ def schema_add_type(
 def schema_remove_type(
     kb_name: str = typer.Argument(..., help="Knowledge base name"),
     type_name: str = typer.Option(..., "--type", "-t", help="Type name to remove"),
-    output_format: str = typer.Option(
-        "rich", "--format", "-f", help="Output format: rich, json"
-    ),
+    output_format: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Remove a type definition from a KB's schema."""
     from ..services.schema_service import SchemaService
@@ -502,9 +498,7 @@ def schema_remove_type(
 def schema_set(
     kb_name: str = typer.Argument(..., help="Knowledge base name"),
     schema_file: Path = typer.Option(..., "--schema-file", "-s", help="YAML file with schema"),
-    output_format: str = typer.Option(
-        "rich", "--format", "-f", help="Output format: rich, json"
-    ),
+    output_format: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Replace schema from a YAML file."""
     from ..services.schema_service import SchemaService

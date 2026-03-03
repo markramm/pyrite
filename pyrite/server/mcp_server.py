@@ -28,10 +28,20 @@ logger = logging.getLogger(__name__)
 
 URI_SCHEME = "pyrite://"
 MAX_BATCH_READ_ENTRIES = 50
-_UPDATE_FIELDS = frozenset({
-    "title", "body", "importance", "tags", "participants", "metadata",
-    "status", "date", "location", "summary",
-})
+_UPDATE_FIELDS = frozenset(
+    {
+        "title",
+        "body",
+        "importance",
+        "tags",
+        "participants",
+        "metadata",
+        "status",
+        "date",
+        "location",
+        "summary",
+    }
+)
 
 
 def _project_fields(entry: dict, fields: list[str] | None) -> dict:
@@ -53,6 +63,8 @@ def _error(
     if suggestion:
         r["suggestion"] = suggestion
     return r
+
+
 MAX_TIMELINE_EVENTS = 50
 MAX_BULK_CREATE_ENTRIES = 50
 MAX_RESOURCE_LIST_ENTRIES = 200
@@ -226,7 +238,11 @@ class PyriteMCPServer:
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
 
         if not result:
-            return _error("NOT_FOUND", f"Entry '{entry_id}' not found", suggestion="Use kb_list_entries or kb_search to find entries")
+            return _error(
+                "NOT_FOUND",
+                f"Entry '{entry_id}' not found",
+                suggestion="Use kb_list_entries or kb_search to find entries",
+            )
 
         if fields:
             result = _project_fields(result, fields)
@@ -370,9 +386,7 @@ class PyriteMCPServer:
 
         found_ids = {(r["id"], r["kb_name"]) for r in results}
         not_found = [
-            {"entry_id": eid, "kb_name": kb}
-            for eid, kb in ids
-            if (eid, kb) not in found_ids
+            {"entry_id": eid, "kb_name": kb} for eid, kb in ids if (eid, kb) not in found_ids
         ]
 
         return {
@@ -463,7 +477,9 @@ class PyriteMCPServer:
             return qa.assess_entry(entry_id, kb_name, tier=tier, create_task_on_fail=create_tasks)
         else:
             max_age = args.get("max_age_hours", 24)
-            return qa.assess_kb(kb_name, tier=tier, max_age_hours=max_age, create_task_on_fail=create_tasks)
+            return qa.assess_kb(
+                kb_name, tier=tier, max_age_hours=max_age, create_task_on_fail=create_tasks
+            )
 
     # =========================================================================
     # Post-save QA validation
@@ -496,19 +512,25 @@ class PyriteMCPServer:
 
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            return _error("KB_NOT_FOUND", f"KB '{kb_name}' not found", suggestion="Use kb_list to see available KBs")
+            return _error(
+                "KB_NOT_FOUND",
+                f"KB '{kb_name}' not found",
+                suggestion="Use kb_list to see available KBs",
+            )
         if kb_config.read_only:
             return _error("READ_ONLY", f"KB '{kb_name}' is read-only")
 
         # Validate against schema
         schema = kb_config.kb_schema
-        validation = schema.validate_entry(
-            entry_type, args, context={"kb_type": kb_config.kb_type}
-        )
+        validation = schema.validate_entry(entry_type, args, context={"kb_type": kb_config.kb_type})
         warnings = validation.get("warnings", [])
 
         if entry_type == "event" and not args.get("date"):
-            return _error("VALIDATION_FAILED", "Date is required for events", suggestion="Add a 'date' field in YYYY-MM-DD format")
+            return _error(
+                "VALIDATION_FAILED",
+                "Date is required for events",
+                suggestion="Add a 'date' field in YYYY-MM-DD format",
+            )
 
         entry_id = generate_entry_id(title)
 
@@ -544,7 +566,9 @@ class PyriteMCPServer:
         if not entries:
             return _error("VALIDATION_FAILED", "entries array is required and must not be empty")
         if len(entries) > MAX_BULK_CREATE_ENTRIES:
-            return _error("VALIDATION_FAILED", f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call")
+            return _error(
+                "VALIDATION_FAILED", f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call"
+            )
 
         # Pre-validate each entry against schema
         kb_config = self.config.get_kb(kb_name)
@@ -599,7 +623,8 @@ class PyriteMCPServer:
                 entry_type = existing.get("entry_type", "note")
                 # Merge existing fields with updates for validation
                 validation = schema.validate_entry(
-                    entry_type, {**existing, **updates},
+                    entry_type,
+                    {**existing, **updates},
                     context={"kb_type": kb_config.kb_type},
                 )
                 warnings = validation.get("warnings", [])
@@ -632,7 +657,11 @@ class PyriteMCPServer:
             return _error("DELETE_FAILED", str(e), retryable=True)
 
         if not deleted:
-            return _error("NOT_FOUND", f"Entry '{entry_id}' not found in {kb_name}", suggestion="Use kb_list_entries or kb_search to find entries")
+            return _error(
+                "NOT_FOUND",
+                f"Entry '{entry_id}' not found in {kb_name}",
+                suggestion="Use kb_list_entries or kb_search to find entries",
+            )
 
         return {"deleted": True, "entry_id": entry_id}
 
@@ -749,9 +778,7 @@ class PyriteMCPServer:
             return {"error": "Both 'kb' and 'message' are required"}
 
         try:
-            return self.svc.commit_kb(
-                kb_name, message=message, paths=paths, sign_off=sign_off
-            )
+            return self.svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
         except PyriteError as e:
             return {"error": str(e)}
 
@@ -1049,7 +1076,11 @@ class PyriteMCPServer:
     ) -> dict[str, Any]:
         """Execute a tool and return result."""
         if name not in self.tools:
-            return _error("UNKNOWN_TOOL", f"Unknown tool: {name}", suggestion="Use list_tools to see available tools")
+            return _error(
+                "UNKNOWN_TOOL",
+                f"Unknown tool: {name}",
+                suggestion="Use list_tools to see available tools",
+            )
 
         # Rate limiting (skip for local stdio when configured)
         if not (client_id == "stdio" and self.config.settings.mcp_rate_limit_exempt_local):
@@ -1103,7 +1134,11 @@ class PyriteMCPServer:
         @sdk.call_tool()
         async def _call_tool(name: str, arguments: dict):
             result = mcp_server._dispatch_tool(name, arguments or {}, client_id="stdio")
-            return [TextContent(type="text", text=json.dumps(result, separators=(",", ":"), default=str))]
+            return [
+                TextContent(
+                    type="text", text=json.dumps(result, separators=(",", ":"), default=str)
+                )
+            ]
 
         @sdk.list_prompts()
         async def _list_prompts():

@@ -133,58 +133,78 @@ class TestReadCLIExcludesWrites:
             ["create", "--kb", "test-kb", "--title", "Should Fail", "--type", "note"],
         )
         # Typer returns exit code 2 for unknown commands
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_update_command(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["update", "note-0", "--kb", "test-kb", "--title", "New"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_delete_command(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["delete", "note-0", "--kb", "test-kb", "--force"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_link_command(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["link", "note-0", "note-1", "--kb", "test-kb"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_serve_command(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["serve"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_index_subcommand(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["index", "build"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_kb_subcommand(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["kb", "list"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_repo_subcommand(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["repo", "list"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_auth_subcommand(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["auth", "status"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )
 
     def test_no_mcp_command(self, cli_env):
         from pyrite.read_cli import app as read_app
 
         result = runner.invoke(read_app, ["mcp"])
-        assert result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        assert (
+            result.exit_code == 2 or "No such command" in result.output or "Error" in result.output
+        )

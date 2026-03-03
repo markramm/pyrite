@@ -25,7 +25,9 @@ def search(
     limit: int = Query(20, ge=1, le=100),
     mode: str = Query("keyword", description="Search mode: keyword, semantic, hybrid"),
     expand: bool = Query(False, description="Use AI query expansion for additional search terms"),
-    include_body: bool = Query(False, description="Include full body text in results (default: snippet only)"),
+    include_body: bool = Query(
+        False, description="Include full body text in results (default: snippet only)"
+    ),
     fields: str | None = Query(None, description="Comma-separated fields to return per result"),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),

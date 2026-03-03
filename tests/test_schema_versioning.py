@@ -104,17 +104,13 @@ class TestValidateSinceVersion:
 
     def test_old_entry_gets_warning(self):
         schema = self._make_schema()
-        result = schema.validate_entry(
-            "article", {"title": "Test"}, context={"_schema_version": 2}
-        )
+        result = schema.validate_entry("article", {"title": "Test"}, context={"_schema_version": 2})
         assert result["valid"] is True  # no errors
         assert any(w["field"] == "category" for w in result["warnings"])
 
     def test_current_entry_gets_error(self):
         schema = self._make_schema()
-        result = schema.validate_entry(
-            "article", {"title": "Test"}, context={"_schema_version": 3}
-        )
+        result = schema.validate_entry("article", {"title": "Test"}, context={"_schema_version": 3})
         assert result["valid"] is False
         assert any(e["field"] == "category" for e in result["errors"])
 

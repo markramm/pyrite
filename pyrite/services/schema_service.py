@@ -46,9 +46,7 @@ class SchemaService:
             "validation": data.get("validation", {}),
         }
 
-    def add_type(
-        self, kb_name: str, type_name: str, type_def: dict[str, Any]
-    ) -> dict[str, Any]:
+    def add_type(self, kb_name: str, type_name: str, type_def: dict[str, Any]) -> dict[str, Any]:
         """Add a type definition to kb.yaml.
 
         Args:

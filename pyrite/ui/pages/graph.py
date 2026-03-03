@@ -108,14 +108,7 @@ if entry_id:
 
         # Legend
         st.divider()
-        st.caption(
-            "Node colors: "
-            "🔵 Event | "
-            "🔴 Actor | "
-            "🟠 Organization | "
-            "🟢 Theme | "
-            "🟣 Document"
-        )
+        st.caption("Node colors: 🔵 Event | 🔴 Actor | 🟠 Organization | 🟢 Theme | 🟣 Document")
 
         # Stats
         col1, col2 = st.columns(2)

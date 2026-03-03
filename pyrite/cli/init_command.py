@@ -19,6 +19,7 @@ def _format_output(data: dict, fmt: str) -> str | None:
     if fmt == "rich":
         return None
     from ..formats import format_response
+
     content, _ = format_response(data, fmt)
     return content
 
@@ -98,7 +99,10 @@ BUILTIN_TEMPLATES = {
             "rules": [
                 {"field": "zettel_type", "enum": ["fleeting", "literature", "permanent", "hub"]},
                 {"field": "maturity", "enum": ["seed", "sapling", "evergreen"]},
-                {"field": "processing_stage", "enum": ["capture", "elaborate", "question", "review", "connect"]},
+                {
+                    "field": "processing_stage",
+                    "enum": ["capture", "elaborate", "question", "review", "connect"],
+                },
             ],
         },
         "directories": ["zettels", "literature"],
@@ -148,12 +152,20 @@ BUILTIN_TEMPLATES = {
 
 
 def init_kb(
-    template: str = typer.Option(..., "--template", "-t", help="Template: software, zettelkasten, research, empty"),
+    template: str = typer.Option(
+        ..., "--template", "-t", help="Template: software, zettelkasten, research, empty"
+    ),
     path: Path = typer.Option(..., "--path", "-p", help="Directory for the new KB"),
-    name: str | None = typer.Option(None, "--name", "-n", help="KB name (defaults to directory name)"),
+    name: str | None = typer.Option(
+        None, "--name", "-n", help="KB name (defaults to directory name)"
+    ),
     no_examples: bool = typer.Option(False, "--no-examples", help="Skip creating example entries"),
-    schema_file: Path | None = typer.Option(None, "--schema-file", help="Custom schema YAML file to use as preset override"),
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json, markdown, csv, yaml"),
+    schema_file: Path | None = typer.Option(
+        None, "--schema-file", help="Custom schema YAML file to use as preset override"
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Initialize a new knowledge base from a template.
 
@@ -171,7 +183,12 @@ def init_kb(
     # Idempotency: if kb.yaml exists, warn and return
     kb_yaml_path = path / "kb.yaml"
     if kb_yaml_path.exists():
-        result = {"status": "exists", "name": kb_name, "path": str(path), "message": "kb.yaml already exists"}
+        result = {
+            "status": "exists",
+            "name": kb_name,
+            "path": str(path),
+            "message": "kb.yaml already exists",
+        }
         formatted = _format_output(result, output_format)
         if formatted is not None:
             typer.echo(formatted)
@@ -189,16 +206,21 @@ def init_kb(
     else:
         try:
             from ..plugins import get_registry
+
             plugin_presets = get_registry().get_all_kb_presets()
             if template in plugin_presets:
                 preset = plugin_presets[template]
         except Exception:
-            logger.warning("Failed to load plugin presets for template '%s'", template, exc_info=True)
+            logger.warning(
+                "Failed to load plugin presets for template '%s'", template, exc_info=True
+            )
 
         if preset is None:
             if template not in BUILTIN_TEMPLATES:
                 available = ", ".join(sorted(BUILTIN_TEMPLATES.keys()))
-                console.print(f"[red]Error:[/red] Unknown template '{template}'. Available: {available}")
+                console.print(
+                    f"[red]Error:[/red] Unknown template '{template}'. Available: {available}"
+                )
                 raise typer.Exit(1)
             preset = BUILTIN_TEMPLATES[template]
 

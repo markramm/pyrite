@@ -234,8 +234,14 @@ class TestBlockMigration:
         cols = temp_db.execute("PRAGMA table_info(block)").fetchall()
         col_names = {c["name"] for c in cols}
         assert col_names == {
-            "id", "entry_id", "kb_name", "block_id",
-            "heading", "content", "position", "block_type",
+            "id",
+            "entry_id",
+            "kb_name",
+            "block_id",
+            "heading",
+            "content",
+            "position",
+            "block_type",
         }
 
     def test_migration_v5_has_rollback(self):

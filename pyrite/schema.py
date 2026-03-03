@@ -602,7 +602,9 @@ class FieldSchema:
     default: Any = None
     description: str = ""
     options: list[str] = field(default_factory=list)  # for select/multi-select
-    allow_other: bool = False  # when True, unknown select/multi-select values produce warnings not errors
+    allow_other: bool = (
+        False  # when True, unknown select/multi-select values produce warnings not errors
+    )
     items: dict[str, Any] = field(default_factory=dict)  # for list type
     constraints: dict[str, Any] = field(default_factory=dict)  # min, max, format, target_type
     since_version: int | None = None
@@ -1121,7 +1123,9 @@ class KBSchema:
                             else:
                                 errors.append(item)
                     except Exception:
-                        logger.warning("Validator fallback failed for %s", entry_type, exc_info=True)
+                        logger.warning(
+                            "Validator fallback failed for %s", entry_type, exc_info=True
+                        )
                 except Exception:
                     logger.warning("Validator execution failed for %s", entry_type, exc_info=True)
         except Exception:

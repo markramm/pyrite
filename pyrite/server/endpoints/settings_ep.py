@@ -60,7 +60,11 @@ def get_setting(
     return SettingResponse(key=key, value=value)
 
 
-@router.put("/settings/{key}", response_model=SettingResponse, dependencies=[Depends(requires_tier("write"))])
+@router.put(
+    "/settings/{key}",
+    response_model=SettingResponse,
+    dependencies=[Depends(requires_tier("write"))],
+)
 @limiter.limit("30/minute")
 def set_setting(
     request: Request,

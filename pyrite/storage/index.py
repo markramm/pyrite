@@ -21,11 +21,15 @@ logger = logging.getLogger(__name__)
 
 # Matches wikilinks: [[target]], [[kb:target]], [[target#heading]], [[target^block-id]], [[target|display]]
 # Groups: (1) kb prefix, (2) target, (3) heading, (4) block-id, (5) display text
-_WIKILINK_RE = re.compile(r"\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]")
+_WIKILINK_RE = re.compile(
+    r"\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]"
+)
 
 # Matches transclusions: ![[target]], ![[target#heading]], ![[target^block-id]]
 # Same groups as _WIKILINK_RE: (1) kb prefix, (2) target, (3) heading, (4) block-id, (5) display text
-_TRANSCLUSION_RE = re.compile(r"!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]")
+_TRANSCLUSION_RE = re.compile(
+    r"!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]"
+)
 
 
 def _parse_indexed_at(indexed_at: str) -> datetime:
@@ -130,7 +134,9 @@ class IndexManager:
             if ext_fields:
                 data["metadata"] = ext_fields  # stored as dict; upsert_entry JSON-encodes
         except Exception:
-            logger.warning("Metadata extraction failed for %s, using fallback", entry.id, exc_info=True)
+            logger.warning(
+                "Metadata extraction failed for %s, using fallback", entry.id, exc_info=True
+            )
             # Fallback: just store the metadata dict
             if hasattr(entry, "metadata") and entry.metadata:
                 data["metadata"] = entry.metadata

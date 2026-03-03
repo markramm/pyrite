@@ -581,6 +581,7 @@ def mcp_server(
     import sys
 
     from .server.mcp_server import PyriteMCPServer
+
     print(f"Starting MCP server (tier={tier}) on stdio...", file=sys.stderr)
     server = PyriteMCPServer(tier=tier)
     try:

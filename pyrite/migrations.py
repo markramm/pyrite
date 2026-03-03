@@ -28,15 +28,19 @@ class MigrationRegistry:
 
     def register(self, entry_type: str, from_version: int, to_version: int, description: str = ""):
         """Decorator to register a migration function."""
+
         def decorator(fn: Callable[[dict], dict]) -> Callable[[dict], dict]:
-            self.add(Migration(
-                entry_type=entry_type,
-                from_version=from_version,
-                to_version=to_version,
-                fn=fn,
-                description=description,
-            ))
+            self.add(
+                Migration(
+                    entry_type=entry_type,
+                    from_version=from_version,
+                    to_version=to_version,
+                    fn=fn,
+                    description=description,
+                )
+            )
             return fn
+
         return decorator
 
     def add(self, migration: Migration) -> None:
@@ -51,8 +55,11 @@ class MigrationRegistry:
             return []
 
         available = sorted(
-            [m for m in self._migrations.get(entry_type, [])
-             if m.from_version >= from_version and m.to_version <= to_version],
+            [
+                m
+                for m in self._migrations.get(entry_type, [])
+                if m.from_version >= from_version and m.to_version <= to_version
+            ],
             key=lambda m: m.from_version,
         )
 
@@ -107,12 +114,14 @@ def load_plugin_migrations() -> None:
         from .plugins import get_registry as get_plugin_registry
 
         for migration_dict in get_plugin_registry().get_all_migrations():
-            registry.add(Migration(
-                entry_type=migration_dict["entry_type"],
-                from_version=migration_dict["from_version"],
-                to_version=migration_dict["to_version"],
-                fn=migration_dict["fn"],
-                description=migration_dict.get("description", ""),
-            ))
+            registry.add(
+                Migration(
+                    entry_type=migration_dict["entry_type"],
+                    from_version=migration_dict["from_version"],
+                    to_version=migration_dict["to_version"],
+                    fn=migration_dict["fn"],
+                    description=migration_dict.get("description", ""),
+                )
+            )
     except Exception:
         logger.warning("Failed to load plugin migrations", exc_info=True)

@@ -334,10 +334,7 @@ class MigrationManager:
 
     def _apply_v7(self) -> None:
         """Conditionally add OAuth columns to local_user (may already exist from ORM)."""
-        existing = {
-            row[1]
-            for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()
-        }
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
         if "auth_provider" not in existing:
             self.conn.execute(
                 "ALTER TABLE local_user ADD COLUMN auth_provider TEXT DEFAULT 'local'"
@@ -355,10 +352,7 @@ class MigrationManager:
 
     def _apply_v8(self) -> None:
         """Conditionally add ephemeral_kb_count column to local_user."""
-        existing = {
-            row[1]
-            for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()
-        }
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
         if "ephemeral_kb_count" not in existing:
             self.conn.execute(
                 "ALTER TABLE local_user ADD COLUMN ephemeral_kb_count INTEGER DEFAULT 0"

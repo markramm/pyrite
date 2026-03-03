@@ -89,9 +89,7 @@ class TestPromptsGet:
     def test_summarize_entry_with_valid_entry(self, mcp_server):
         """prompts/get for summarize_entry returns entry content."""
         # Get an entry ID from search
-        search_result = mcp_server._dispatch_tool(
-            "kb_search", {"query": "Stephen Miller"}
-        )
+        search_result = mcp_server._dispatch_tool("kb_search", {"query": "Stephen Miller"})
         entry_id = search_result["results"][0]["id"]
 
         result = mcp_server._get_prompt(
@@ -107,9 +105,7 @@ class TestPromptsGet:
 
     def test_summarize_entry_with_invalid_entry(self, mcp_server):
         """prompts/get for summarize_entry handles missing entry gracefully."""
-        result = mcp_server._get_prompt(
-            "summarize_entry", {"entry_id": "nonexistent-entry"}
-        )
+        result = mcp_server._get_prompt("summarize_entry", {"entry_id": "nonexistent-entry"})
 
         assert "messages" in result
         messages = result["messages"]
@@ -238,9 +234,7 @@ class TestResourcesRead:
     def test_read_entry_returns_entry(self, mcp_server):
         """resources/read for pyrite://entries/{id} returns entry data."""
         # First find an entry ID
-        search_result = mcp_server._dispatch_tool(
-            "kb_search", {"query": "Stephen Miller"}
-        )
+        search_result = mcp_server._dispatch_tool("kb_search", {"query": "Stephen Miller"})
         entry_id = search_result["results"][0]["id"]
 
         result = mcp_server._read_resource(f"pyrite://entries/{entry_id}")
@@ -297,9 +291,9 @@ class TestCapabilities:
                 try:
                     assert len(server.prompts) == 4, f"Tier {tier} should have 4 prompts"
                     assert len(server.resources) >= 1, f"Tier {tier} should have resources"
-                    assert (
-                        len(server.resource_templates) == 2
-                    ), f"Tier {tier} should have 2 templates"
+                    assert len(server.resource_templates) == 2, (
+                        f"Tier {tier} should have 2 templates"
+                    )
                 finally:
                     server.close()
 

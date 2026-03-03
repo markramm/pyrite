@@ -7,10 +7,12 @@ class TestPluginProtocolCollectionTypes:
     def test_protocol_has_get_collection_types(self):
         """Protocol defines get_collection_types method."""
         from pyrite.plugins.protocol import PyritePlugin
+
         assert hasattr(PyritePlugin, "get_collection_types")
 
     def test_protocol_method_callable(self):
         """A minimal plugin can implement get_collection_types."""
+
         class TestPlugin:
             name = "test"
 
@@ -19,7 +21,9 @@ class TestPluginProtocolCollectionTypes:
                     "evidence-board": {
                         "description": "Evidence board for investigations",
                         "default_view": "kanban",
-                        "fields": {"confidence": {"type": "select", "options": ["low", "medium", "high"]}},
+                        "fields": {
+                            "confidence": {"type": "select", "options": ["low", "medium", "high"]}
+                        },
                         "ai_instructions": "Use for organizing evidence",
                         "icon": "shield",
                     }
@@ -50,11 +54,13 @@ class TestRegistryCollectionTypes:
 
         class PluginA:
             name = "plugin-a"
+
             def get_collection_types(self):
                 return {"board": {"description": "A board", "default_view": "kanban"}}
 
         class PluginB:
             name = "plugin-b"
+
             def get_collection_types(self):
                 return {"gallery": {"description": "A gallery", "default_view": "gallery"}}
 
@@ -74,6 +80,7 @@ class TestRegistryCollectionTypes:
 
         class BadPlugin:
             name = "bad"
+
             def get_collection_types(self):
                 raise RuntimeError("oops")
 

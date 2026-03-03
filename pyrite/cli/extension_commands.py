@@ -23,6 +23,7 @@ def _format_output(data: dict, fmt: str) -> str | None:
     if fmt == "rich":
         return None
     from ..formats import format_response
+
     content, _ = format_response(data, fmt)
     return content
 
@@ -39,10 +40,18 @@ def _normalize_name(name: str) -> dict:
 @extension_app.command("init")
 def extension_init(
     name: str = typer.Argument(..., help="Extension name (e.g. 'my-plugin')"),
-    path: Path | None = typer.Option(None, "--path", "-p", help="Output directory (default: ./<name>)"),
-    types: str | None = typer.Option(None, "--types", "-t", help="Comma-separated entry type names to scaffold"),
-    description: str = typer.Option("A Pyrite extension", "--description", "-d", help="Extension description"),
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json, markdown, csv, yaml"),
+    path: Path | None = typer.Option(
+        None, "--path", "-p", help="Output directory (default: ./<name>)"
+    ),
+    types: str | None = typer.Option(
+        None, "--types", "-t", help="Comma-separated entry type names to scaffold"
+    ),
+    description: str = typer.Option(
+        "A Pyrite extension", "--description", "-d", help="Extension description"
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Scaffold a new Pyrite extension with plugin boilerplate."""
     names = _normalize_name(name)
@@ -200,7 +209,7 @@ def get_validators():
             types_str += '            "required": ["title"],\n'
             types_str += '            "optional": [],\n'
             types_str += f'            "subdirectory": "{t_def["subdirectory"]}",\n'
-            types_str += '        }},\n'
+            types_str += "        }},\n"
         types_str += "    }"
         dirs_str = str(preset_dirs)
     else:
@@ -288,7 +297,9 @@ class Test{pascal}Plugin:
 def extension_install(
     path: Path = typer.Argument(..., help="Path to extension directory"),
     verify: bool = typer.Option(False, "--verify", help="Verify plugin loads after install"),
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json, markdown, csv, yaml"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Install a Pyrite extension from a local path."""
     path = path.expanduser().resolve()
@@ -301,6 +312,7 @@ def extension_install(
     plugin_name = None
     try:
         import tomllib
+
         with open(path / "pyproject.toml", "rb") as f:
             toml_data = tomllib.load(f)
         plugin_name = toml_data.get("project", {}).get("name", path.name)
@@ -324,6 +336,7 @@ def extension_install(
     if verify:
         try:
             from ..plugins import get_registry
+
             # Force re-discovery
             registry = get_registry()
             registry._discovered = False
@@ -354,11 +367,14 @@ def extension_install(
 
 @extension_app.command("list")
 def extension_list(
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json, markdown, csv, yaml"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """List installed Pyrite extensions."""
     try:
         from ..plugins import get_registry
+
         registry = get_registry()
         plugin_names = registry.list_plugins()
     except Exception:
@@ -378,8 +394,11 @@ def extension_list(
     for name in plugin_names:
         try:
             from ..plugins import get_registry
+
             plugin = get_registry().get(name)
-            entry_types = list(plugin.get_entry_types().keys()) if hasattr(plugin, "get_entry_types") else []
+            entry_types = (
+                list(plugin.get_entry_types().keys()) if hasattr(plugin, "get_entry_types") else []
+            )
             tool_count = 0
             if hasattr(plugin, "get_mcp_tools"):
                 try:
@@ -387,11 +406,13 @@ def extension_list(
                     tool_count = len(tools) if tools else 0
                 except Exception:
                     logger.warning("Failed to get MCP tools for plugin %s", name, exc_info=True)
-            plugins_data.append({
-                "name": name,
-                "entry_types": entry_types,
-                "tool_count": tool_count,
-            })
+            plugins_data.append(
+                {
+                    "name": name,
+                    "entry_types": entry_types,
+                    "tool_count": tool_count,
+                }
+            )
         except Exception:
             logger.warning("Failed to inspect plugin %s", name, exc_info=True)
             plugins_data.append({"name": name, "entry_types": [], "tool_count": 0})
@@ -422,7 +443,9 @@ def extension_list(
 def extension_uninstall(
     name: str = typer.Argument(..., help="Extension name to uninstall"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
-    output_format: str = typer.Option("rich", "--format", help="Output format: rich, json, markdown, csv, yaml"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+    ),
 ):
     """Uninstall a Pyrite extension."""
     pkg_name = f"pyrite-{name.replace('_', '-')}"

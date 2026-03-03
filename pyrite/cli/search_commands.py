@@ -35,8 +35,12 @@ def register_search_command(app: typer.Typer):
         ),
         use_files: bool = typer.Option(False, "--files", help="Search files directly (skip index)"),
         expand: bool = typer.Option(False, "--expand", "-x", help="Use AI query expansion"),
-        include_body: bool = typer.Option(False, "--include-body", help="Include full body text (default: snippet only)"),
-        fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return (e.g. id,title,tags)"),
+        include_body: bool = typer.Option(
+            False, "--include-body", help="Include full body text (default: snippet only)"
+        ),
+        fields: str = typer.Option(
+            None, "--fields", help="Comma-separated fields to return (e.g. id,title,tags)"
+        ),
         output_format: str = typer.Option(
             "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
         ),

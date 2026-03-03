@@ -99,9 +99,11 @@ class TestSyncSources:
     """Test source sync behavior."""
 
     def test_sources_created(self, db):
-        db.upsert_entry(_make_entry("src1", sources=[
-            {"title": "Source A", "url": "https://a.com", "verified": True}
-        ]))
+        db.upsert_entry(
+            _make_entry(
+                "src1", sources=[{"title": "Source A", "url": "https://a.com", "verified": True}]
+            )
+        )
         entry = db.get_entry("src1", "test")
         assert len(entry["sources"]) == 1
         assert entry["sources"][0]["title"] == "Source A"
@@ -120,9 +122,7 @@ class TestSyncLinks:
 
     def test_links_created(self, db):
         db.upsert_entry(_make_entry("l1"))
-        db.upsert_entry(_make_entry("l2", links=[
-            {"target": "l1", "relation": "related_to"}
-        ]))
+        db.upsert_entry(_make_entry("l2", links=[{"target": "l1", "relation": "related_to"}]))
         entry = db.get_entry("l2", "test")
         assert len(entry["links"]) == 1
         assert entry["links"][0]["target_id"] == "l1"
@@ -219,9 +219,12 @@ class TestEntryRefs:
 
     def test_refs_synced(self, db):
         db.upsert_entry(_make_entry("ref1"))
-        db.upsert_entry(_make_entry("ref2", _refs=[
-            {"target_id": "ref1", "field_name": "related_to", "target_type": "note"}
-        ]))
+        db.upsert_entry(
+            _make_entry(
+                "ref2",
+                _refs=[{"target_id": "ref1", "field_name": "related_to", "target_type": "note"}],
+            )
+        )
         refs = db.get_refs_from("ref2", "test")
         assert len(refs) == 1
         assert refs[0]["id"] == "ref1"
@@ -231,23 +234,64 @@ class TestSyncBlocks:
     """Test _sync_blocks via upsert_entry."""
 
     def test_sync_blocks_creates_records(self, db):
-        db.upsert_entry(_make_entry("b1", _blocks=[
-            {"block_id": "h1", "heading": "Intro", "content": "Hello", "position": 0, "block_type": "heading"},
-            {"block_id": "h2", "heading": "Details", "content": "World", "position": 1, "block_type": "heading"},
-        ]))
+        db.upsert_entry(
+            _make_entry(
+                "b1",
+                _blocks=[
+                    {
+                        "block_id": "h1",
+                        "heading": "Intro",
+                        "content": "Hello",
+                        "position": 0,
+                        "block_type": "heading",
+                    },
+                    {
+                        "block_id": "h2",
+                        "heading": "Details",
+                        "content": "World",
+                        "position": 1,
+                        "block_type": "heading",
+                    },
+                ],
+            )
+        )
         from pyrite.storage.models import Block
+
         blocks = db.session.query(Block).filter_by(entry_id="b1", kb_name="test").all()
         assert len(blocks) == 2
         assert {b.block_id for b in blocks} == {"h1", "h2"}
 
     def test_sync_blocks_replaces_on_update(self, db):
-        db.upsert_entry(_make_entry("b2", _blocks=[
-            {"block_id": "old", "heading": "Old", "content": "Old content", "position": 0, "block_type": "heading"},
-        ]))
-        db.upsert_entry(_make_entry("b2", _blocks=[
-            {"block_id": "new", "heading": "New", "content": "New content", "position": 0, "block_type": "heading"},
-        ]))
+        db.upsert_entry(
+            _make_entry(
+                "b2",
+                _blocks=[
+                    {
+                        "block_id": "old",
+                        "heading": "Old",
+                        "content": "Old content",
+                        "position": 0,
+                        "block_type": "heading",
+                    },
+                ],
+            )
+        )
+        db.upsert_entry(
+            _make_entry(
+                "b2",
+                _blocks=[
+                    {
+                        "block_id": "new",
+                        "heading": "New",
+                        "content": "New content",
+                        "position": 0,
+                        "block_type": "heading",
+                    },
+                ],
+            )
+        )
         from pyrite.storage.models import Block
+
         blocks = db.session.query(Block).filter_by(entry_id="b2", kb_name="test").all()
         assert len(blocks) == 1
         assert blocks[0].block_id == "new"
@@ -258,10 +302,16 @@ class TestSyncEntryRefsDetailed:
 
     def test_sync_entry_refs_creates_records(self, db):
         db.upsert_entry(_make_entry("r1"))
-        db.upsert_entry(_make_entry("r2", _refs=[
-            {"target_id": "r1", "field_name": "author", "target_type": "person"},
-        ]))
+        db.upsert_entry(
+            _make_entry(
+                "r2",
+                _refs=[
+                    {"target_id": "r1", "field_name": "author", "target_type": "person"},
+                ],
+            )
+        )
         from pyrite.storage.models import EntryRef
+
         refs = db.session.query(EntryRef).filter_by(source_id="r2", source_kb="test").all()
         assert len(refs) == 1
         assert refs[0].target_id == "r1"
@@ -270,13 +320,24 @@ class TestSyncEntryRefsDetailed:
     def test_sync_entry_refs_replaces_on_update(self, db):
         db.upsert_entry(_make_entry("r3"))
         db.upsert_entry(_make_entry("r4"))
-        db.upsert_entry(_make_entry("r5", _refs=[
-            {"target_id": "r3", "field_name": "author", "target_type": "person"},
-        ]))
-        db.upsert_entry(_make_entry("r5", _refs=[
-            {"target_id": "r4", "field_name": "editor", "target_type": "person"},
-        ]))
+        db.upsert_entry(
+            _make_entry(
+                "r5",
+                _refs=[
+                    {"target_id": "r3", "field_name": "author", "target_type": "person"},
+                ],
+            )
+        )
+        db.upsert_entry(
+            _make_entry(
+                "r5",
+                _refs=[
+                    {"target_id": "r4", "field_name": "editor", "target_type": "person"},
+                ],
+            )
+        )
         from pyrite.storage.models import EntryRef
+
         refs = db.session.query(EntryRef).filter_by(source_id="r5", source_kb="test").all()
         assert len(refs) == 1
         assert refs[0].target_id == "r4"

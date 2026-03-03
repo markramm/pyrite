@@ -1,4 +1,5 @@
 """Tests for type_counts in stats endpoint."""
+
 import pytest
 from pyrite.storage.database import PyriteDB
 
@@ -9,13 +10,15 @@ def db_with_types(tmp_path):
     db.register_kb(name="test", kb_type="generic", path=str(tmp_path))
     # Insert entries of different types
     for i, t in enumerate(["note", "note", "note", "event", "event", "person"]):
-        db.upsert_entry({
-            "id": f"entry-{i}",
-            "kb_name": "test",
-            "entry_type": t,
-            "title": f"Entry {i}",
-            "body": f"Body {i}",
-        })
+        db.upsert_entry(
+            {
+                "id": f"entry-{i}",
+                "kb_name": "test",
+                "entry_type": t,
+                "title": f"Entry {i}",
+                "body": f"Body {i}",
+            }
+        )
     return db
 
 

@@ -64,7 +64,8 @@ class CollectionEntry(Entry):
             query=meta.get("query", ""),
             description=meta.get("description", ""),
             icon=meta.get("icon", ""),
-            view_config=meta.get("view_config", {"default_view": "list"}) or {"default_view": "list"},
+            view_config=meta.get("view_config", {"default_view": "list"})
+            or {"default_view": "list"},
             entry_filter=meta.get("entry_filter", {}) or {},
             folder_path=meta.get("folder_path", ""),
             collection_type=meta.get("collection_type", "generic"),
@@ -98,7 +99,8 @@ class CollectionEntry(Entry):
             query=yaml_data.get("query", ""),
             description=yaml_data.get("description", ""),
             icon=yaml_data.get("icon", ""),
-            view_config=yaml_data.get("view_config", {"default_view": "list"}) or {"default_view": "list"},
+            view_config=yaml_data.get("view_config", {"default_view": "list"})
+            or {"default_view": "list"},
             entry_filter=yaml_data.get("entry_filter", {}) or {},
             folder_path=folder_path,
             collection_type=yaml_data.get("collection_type", "generic"),

@@ -691,12 +691,7 @@ class TestCheckSchemaValidation:
         svc, db, _, kb_path = qa
         # Minimal schema that the default note satisfies (no required custom fields)
         (kb_path / "kb.yaml").write_text(
-            "name: test\n"
-            "validation:\n"
-            "  enforce: true\n"
-            "types:\n"
-            "  note:\n"
-            "    fields: {}\n"
+            "name: test\nvalidation:\n  enforce: true\ntypes:\n  note:\n    fields: {}\n"
         )
         entry = {
             "id": "clean",

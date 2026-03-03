@@ -58,15 +58,21 @@ class TestOAuthLoginNewUser:
         _, service = db_and_service
         # First user
         profile1 = OAuthProfile(
-            provider="github", provider_id="111", username="first",
-            orgs=[], display_name="First",
+            provider="github",
+            provider_id="111",
+            username="first",
+            orgs=[],
+            display_name="First",
         )
         service.oauth_login(profile1, provider_config)
 
         # Second user
         profile2 = OAuthProfile(
-            provider="github", provider_id="222", username="second",
-            orgs=[], display_name="Second",
+            provider="github",
+            provider_id="222",
+            username="second",
+            orgs=[],
+            display_name="Second",
         )
         user2, _ = service.oauth_login(profile2, provider_config)
         assert user2["role"] == "read"
@@ -102,8 +108,11 @@ class TestOrgRestriction:
         _, service = db_and_service
         provider_config.allowed_orgs = ["allowed-org"]
         profile = OAuthProfile(
-            provider="github", provider_id="999", username="blocked",
-            orgs=["other-org"], display_name="Blocked",
+            provider="github",
+            provider_id="999",
+            username="blocked",
+            orgs=["other-org"],
+            display_name="Blocked",
         )
         with pytest.raises(ValueError, match="not a member"):
             service.oauth_login(profile, provider_config)
@@ -112,8 +121,11 @@ class TestOrgRestriction:
         _, service = db_and_service
         provider_config.allowed_orgs = ["allowed-org"]
         profile = OAuthProfile(
-            provider="github", provider_id="888", username="allowed",
-            orgs=["allowed-org", "other"], display_name="Allowed",
+            provider="github",
+            provider_id="888",
+            username="allowed",
+            orgs=["allowed-org", "other"],
+            display_name="Allowed",
         )
         user, _ = service.oauth_login(profile, provider_config)
         assert user["username"] == "allowed"
@@ -136,8 +148,11 @@ class TestTierFromOrgMap:
         service.register("seeduser", "password123")
 
         profile = OAuthProfile(
-            provider="github", provider_id="777", username="multi",
-            orgs=["org-a", "org-b"], display_name="Multi",
+            provider="github",
+            provider_id="777",
+            username="multi",
+            orgs=["org-a", "org-b"],
+            display_name="Multi",
         )
         user, _ = service.oauth_login(profile, provider_config)
         assert user["role"] == "admin"

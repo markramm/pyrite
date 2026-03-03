@@ -55,12 +55,16 @@ class KBOpsMixin:
         """Get entry counts grouped by entry_type."""
         if kb_name:
             rows = self.session.execute(
-                text("SELECT entry_type, COUNT(*) as count FROM entry WHERE kb_name = :kb GROUP BY entry_type ORDER BY count DESC"),
+                text(
+                    "SELECT entry_type, COUNT(*) as count FROM entry WHERE kb_name = :kb GROUP BY entry_type ORDER BY count DESC"
+                ),
                 {"kb": kb_name},
             ).fetchall()
         else:
             rows = self.session.execute(
-                text("SELECT entry_type, COUNT(*) as count FROM entry GROUP BY entry_type ORDER BY count DESC"),
+                text(
+                    "SELECT entry_type, COUNT(*) as count FROM entry GROUP BY entry_type ORDER BY count DESC"
+                ),
             ).fetchall()
         return [dict(r._mapping) for r in rows]
 

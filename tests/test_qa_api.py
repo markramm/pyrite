@@ -34,15 +34,13 @@ def qa_env():
             kb_type=KBType.EVENTS,
         )
 
-        config = PyriteConfig(
-            knowledge_bases=[events_kb], settings=Settings(index_path=db_path)
-        )
+        config = PyriteConfig(knowledge_bases=[events_kb], settings=Settings(index_path=db_path))
 
         # Create some good entries
         events_repo = KBRepository(events_kb)
         for i in range(3):
             event = EventEntry.create(
-                date=f"2025-01-{10+i:02d}",
+                date=f"2025-01-{10 + i:02d}",
                 title=f"Test Event {i}",
                 body=f"Body for event {i} about immigration policy.",
                 importance=5 + i,

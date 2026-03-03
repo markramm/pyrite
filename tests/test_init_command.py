@@ -39,8 +39,10 @@ class TestInitCommand:
         kb_path = init_env["tmpdir"] / "my-sw-kb"
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
             result = runner.invoke(test_app, ["--template", "software", "--path", str(kb_path)])
 
         assert result.exit_code == 0, result.output
@@ -57,8 +59,10 @@ class TestInitCommand:
         kb_path = init_env["tmpdir"] / "my-zk"
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
             result = runner.invoke(test_app, ["--template", "zettelkasten", "--path", str(kb_path)])
 
         assert result.exit_code == 0, result.output
@@ -71,8 +75,10 @@ class TestInitCommand:
         kb_path = init_env["tmpdir"] / "empty-kb"
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
             result = runner.invoke(test_app, ["--template", "empty", "--path", str(kb_path)])
 
         assert result.exit_code == 0, result.output
@@ -85,8 +91,10 @@ class TestInitCommand:
         (kb_path / "kb.yaml").write_text("name: existing\n")
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
             result = runner.invoke(test_app, ["--template", "software", "--path", str(kb_path)])
 
         assert result.exit_code == 0
@@ -97,9 +105,14 @@ class TestInitCommand:
         kb_path = init_env["tmpdir"] / "dir-name"
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
-            result = runner.invoke(test_app, ["--template", "research", "--path", str(kb_path), "--name", "custom-name"])
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
+            result = runner.invoke(
+                test_app,
+                ["--template", "research", "--path", str(kb_path), "--name", "custom-name"],
+            )
 
         assert result.exit_code == 0, result.output
         assert "custom-name" in result.output
@@ -109,9 +122,13 @@ class TestInitCommand:
         kb_path = init_env["tmpdir"] / "json-kb"
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
-            result = runner.invoke(test_app, ["--template", "software", "--path", str(kb_path), "--format", "json"])
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
+            result = runner.invoke(
+                test_app, ["--template", "software", "--path", str(kb_path), "--format", "json"]
+            )
 
         assert result.exit_code == 0, result.output
         data = json.loads(result.output)
@@ -124,8 +141,10 @@ class TestInitCommand:
         kb_path = init_env["tmpdir"] / "bad-template"
         config = init_env["config"]
 
-        with patch("pyrite.config.load_config", return_value=config), \
-             patch("pyrite.config.save_config"):
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
             result = runner.invoke(test_app, ["--template", "nonexistent", "--path", str(kb_path)])
 
         assert result.exit_code == 1

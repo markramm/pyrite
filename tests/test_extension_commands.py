@@ -24,7 +24,9 @@ class TestExtensionInit:
         """Extension init creates all expected files."""
         with tempfile.TemporaryDirectory() as tmpdir:
             out_path = Path(tmpdir) / "test-ext"
-            result = runner.invoke(test_app, ["extension", "init", "test-ext", "--path", str(out_path)])
+            result = runner.invoke(
+                test_app, ["extension", "init", "test-ext", "--path", str(out_path)]
+            )
 
             assert result.exit_code == 0, result.output
             assert (out_path / "pyproject.toml").exists()
@@ -41,7 +43,15 @@ class TestExtensionInit:
             out_path = Path(tmpdir) / "typed-ext"
             result = runner.invoke(
                 test_app,
-                ["extension", "init", "typed-ext", "--path", str(out_path), "--types", "article,review"],
+                [
+                    "extension",
+                    "init",
+                    "typed-ext",
+                    "--path",
+                    str(out_path),
+                    "--types",
+                    "article,review",
+                ],
             )
 
             assert result.exit_code == 0, result.output
@@ -73,7 +83,9 @@ class TestExtensionInit:
             out_path.mkdir()
             (out_path / "pyproject.toml").write_text("[project]\nname = 'existing'\n")
 
-            result = runner.invoke(test_app, ["extension", "init", "existing-ext", "--path", str(out_path)])
+            result = runner.invoke(
+                test_app, ["extension", "init", "existing-ext", "--path", str(out_path)]
+            )
 
             assert result.exit_code == 1
             assert "already exists" in result.output
@@ -82,12 +94,15 @@ class TestExtensionInit:
         """Generated plugin class can be imported."""
         with tempfile.TemporaryDirectory() as tmpdir:
             out_path = Path(tmpdir) / "importable-ext"
-            result = runner.invoke(test_app, ["extension", "init", "importable-ext", "--path", str(out_path)])
+            result = runner.invoke(
+                test_app, ["extension", "init", "importable-ext", "--path", str(out_path)]
+            )
             assert result.exit_code == 0, result.output
 
             # Add src to path and try importing
             import importlib
             import sys as _sys
+
             src_path = str(out_path / "src")
             _sys.path.insert(0, src_path)
             try:
@@ -120,7 +135,9 @@ class TestExtensionInstall:
             mock_result.stdout = ""
             mock_result.stderr = ""
 
-            with patch("pyrite.cli.extension_commands.subprocess.run", return_value=mock_result) as mock_run:
+            with patch(
+                "pyrite.cli.extension_commands.subprocess.run", return_value=mock_result
+            ) as mock_run:
                 result = runner.invoke(test_app, ["extension", "install", str(tmpdir)])
 
                 assert result.exit_code == 0, result.output
@@ -137,7 +154,9 @@ class TestExtensionInstall:
         mock_result.stdout = ""
         mock_result.stderr = ""
 
-        with patch("pyrite.cli.extension_commands.subprocess.run", return_value=mock_result) as mock_run:
+        with patch(
+            "pyrite.cli.extension_commands.subprocess.run", return_value=mock_result
+        ) as mock_run:
             result = runner.invoke(test_app, ["extension", "uninstall", "test-ext", "--force"])
 
             assert result.exit_code == 0, result.output

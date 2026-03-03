@@ -26,9 +26,7 @@ class AuthService:
         self.db = db
         self.config = auth_config
 
-    def register(
-        self, username: str, password: str, display_name: str | None = None
-    ) -> dict:
+    def register(self, username: str, password: str, display_name: str | None = None) -> dict:
         """Create a new local user.
 
         First registered user gets 'admin' role; subsequent users get 'read'.
@@ -46,9 +44,7 @@ class AuthService:
         conn = self.db._raw_conn
 
         # Check if username exists
-        row = conn.execute(
-            "SELECT id FROM local_user WHERE username = ?", (username,)
-        ).fetchone()
+        row = conn.execute("SELECT id FROM local_user WHERE username = ?", (username,)).fetchone()
         if row:
             raise ValueError("Username already taken")
 
@@ -141,9 +137,7 @@ class AuthService:
         # 1. Check org restrictions
         if provider_config.allowed_orgs:
             if not set(profile.orgs) & set(provider_config.allowed_orgs):
-                raise ValueError(
-                    "Your GitHub account is not a member of an allowed organization"
-                )
+                raise ValueError("Your GitHub account is not a member of an allowed organization")
 
         # 2. Determine role from org_tier_map or default_tier
         role = provider_config.default_tier
@@ -388,9 +382,7 @@ class AuthService:
 
         if user_id is not None:
             # Check if global admin
-            row = conn.execute(
-                "SELECT role FROM local_user WHERE id = ?", (user_id,)
-            ).fetchone()
+            row = conn.execute("SELECT role FROM local_user WHERE id = ?", (user_id,)).fetchone()
             if row and row[0] == "admin":
                 return "admin"
 
@@ -407,9 +399,7 @@ class AuthService:
                 return kb_default_role
 
             # Fall back to user's global role
-            row = conn.execute(
-                "SELECT role FROM local_user WHERE id = ?", (user_id,)
-            ).fetchone()
+            row = conn.execute("SELECT role FROM local_user WHERE id = ?", (user_id,)).fetchone()
             if row:
                 # If KB is private (default_role="none"), deny unless explicit grant
                 if kb_default_role == "none":
@@ -423,9 +413,7 @@ class AuthService:
             return None
         return self.config.anonymous_tier
 
-    def grant_kb_permission(
-        self, user_id: int, kb_name: str, role: str, granted_by: int
-    ) -> None:
+    def grant_kb_permission(self, user_id: int, kb_name: str, role: str, granted_by: int) -> None:
         """Grant or update a per-KB permission."""
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
@@ -480,9 +468,7 @@ class AuthService:
         ).fetchall()
         return {r[0]: r[1] for r in rows}
 
-    def create_user_ephemeral_kb(
-        self, user_id: int, kb_service, name: str | None = None
-    ) -> dict:
+    def create_user_ephemeral_kb(self, user_id: int, kb_service, name: str | None = None) -> dict:
         """Create an ephemeral KB for a user with per-KB admin grant.
 
         Checks ephemeral_min_tier, ephemeral_max_per_user limits.
@@ -509,16 +495,16 @@ class AuthService:
 
         # Check per-user limit
         if current_count >= self.config.ephemeral_max_per_user:
-            raise ValueError(
-                f"Ephemeral KB limit reached ({self.config.ephemeral_max_per_user})"
-            )
+            raise ValueError(f"Ephemeral KB limit reached ({self.config.ephemeral_max_per_user})")
 
         # Generate name if not provided
         if not name:
             name = f"ephemeral-{user_id}-{secrets.token_hex(4)}"
 
         ttl = self.config.ephemeral_default_ttl
-        kb = kb_service.create_ephemeral_kb(name, ttl=ttl, description=f"Ephemeral KB for user {user_id}")
+        kb = kb_service.create_ephemeral_kb(
+            name, ttl=ttl, description=f"Ephemeral KB for user {user_id}"
+        )
 
         # Set KB as private by default
         kb.default_role = "none"

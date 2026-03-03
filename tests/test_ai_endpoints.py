@@ -138,10 +138,12 @@ class TestAISummarize:
 @pytest.mark.api
 class TestAIAutoTag:
     def test_auto_tag_returns_suggestions(self, ai_env):
-        tags_json = json.dumps([
-            {"name": "policy", "is_new": False, "reason": "Content about policy"},
-            {"name": "executive-order", "is_new": True, "reason": "Mentions executive orders"},
-        ])
+        tags_json = json.dumps(
+            [
+                {"name": "policy", "is_new": False, "reason": "Content about policy"},
+                {"name": "executive-order", "is_new": True, "reason": "Mentions executive orders"},
+            ]
+        )
         llm = MockLLMService(complete_response=tags_json)
         _inject_llm(ai_env["app"], llm)
         resp = ai_env["client"].post(
@@ -193,16 +195,32 @@ class TestAISuggestLinks:
         """When search finds related entries, LLM suggestions are returned."""
         from pyrite.server.api import get_search_service
 
-        links_json = json.dumps([
-            {"target_id": "2025-01-11--test-event-1", "target_title": "Test Event 1", "reason": "Related event"},
-        ])
+        links_json = json.dumps(
+            [
+                {
+                    "target_id": "2025-01-11--test-event-1",
+                    "target_title": "Test Event 1",
+                    "reason": "Related event",
+                },
+            ]
+        )
         llm = MockLLMService(complete_response=links_json)
         _inject_llm(ai_env["app"], llm)
 
         mock_svc = MagicMock()
         mock_svc.search.return_value = [
-            {"id": "2025-01-11--test-event-1", "title": "Test Event 1", "entry_type": "event", "snippet": "immigration"},
-            {"id": "2025-01-12--test-event-2", "title": "Test Event 2", "entry_type": "event", "snippet": "immigration"},
+            {
+                "id": "2025-01-11--test-event-1",
+                "title": "Test Event 1",
+                "entry_type": "event",
+                "snippet": "immigration",
+            },
+            {
+                "id": "2025-01-12--test-event-2",
+                "title": "Test Event 2",
+                "entry_type": "event",
+                "snippet": "immigration",
+            },
         ]
         ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
 
@@ -242,7 +260,12 @@ class TestAISuggestLinks:
 
         mock_svc = MagicMock()
         mock_svc.search.return_value = [
-            {"id": "2025-01-11--test-event-1", "title": "Test Event 1", "entry_type": "event", "snippet": "x"},
+            {
+                "id": "2025-01-11--test-event-1",
+                "title": "Test Event 1",
+                "entry_type": "event",
+                "snippet": "x",
+            },
         ]
         ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
 
@@ -257,17 +280,24 @@ class TestAISuggestLinks:
         """Items without target_id are filtered out."""
         from pyrite.server.api import get_search_service
 
-        links_json = json.dumps([
-            {"target_id": "2025-01-11--test-event-1", "target_title": "Valid", "reason": "ok"},
-            {"no_id": True},
-            "not a dict",
-        ])
+        links_json = json.dumps(
+            [
+                {"target_id": "2025-01-11--test-event-1", "target_title": "Valid", "reason": "ok"},
+                {"no_id": True},
+                "not a dict",
+            ]
+        )
         llm = MockLLMService(complete_response=links_json)
         _inject_llm(ai_env["app"], llm)
 
         mock_svc = MagicMock()
         mock_svc.search.return_value = [
-            {"id": "2025-01-11--test-event-1", "title": "Test Event 1", "entry_type": "event", "snippet": "x"},
+            {
+                "id": "2025-01-11--test-event-1",
+                "title": "Test Event 1",
+                "entry_type": "event",
+                "snippet": "x",
+            },
         ]
         ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
 

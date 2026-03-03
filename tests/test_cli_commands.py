@@ -281,9 +281,7 @@ class TestAddCommand:
         md = cli_env["tmpdir"] / "test-validate.md"
         self._write_md(md, "type: note\ntitle: Validate Only Note")
         with _patch_config(cli_env):
-            result = runner.invoke(
-                app, ["add", str(md), "--kb", "test-events", "--validate-only"]
-            )
+            result = runner.invoke(app, ["add", str(md), "--kb", "test-events", "--validate-only"])
             assert result.exit_code == 0
             assert "Valid" in result.output
             # Should NOT be saved to KB directory
@@ -418,10 +416,14 @@ class TestCreateImprovements:
                 app,
                 [
                     "create",
-                    "--kb", "test-events",
-                    "--type", "note",
-                    "--title", "FM Merge Test",
-                    "--body-file", str(body_path),
+                    "--kb",
+                    "test-events",
+                    "--type",
+                    "note",
+                    "--title",
+                    "FM Merge Test",
+                    "--body-file",
+                    str(body_path),
                 ],
             )
             assert result.exit_code == 0
@@ -451,11 +453,16 @@ class TestCreateImprovements:
                 app,
                 [
                     "create",
-                    "--kb", "test-events",
-                    "--type", "note",
-                    "--title", "Override Test",
-                    "--body-file", str(body_path),
-                    "--field", "kind=from-cli",
+                    "--kb",
+                    "test-events",
+                    "--type",
+                    "note",
+                    "--title",
+                    "Override Test",
+                    "--body-file",
+                    str(body_path),
+                    "--field",
+                    "kind=from-cli",
                 ],
             )
             assert result.exit_code == 0
@@ -476,10 +483,14 @@ class TestCreateImprovements:
                 app,
                 [
                     "create",
-                    "--kb", "test-events",
-                    "--type", "note",
-                    "--title", "Plain Body Test",
-                    "--body-file", str(body_path),
+                    "--kb",
+                    "test-events",
+                    "--type",
+                    "note",
+                    "--title",
+                    "Plain Body Test",
+                    "--body-file",
+                    str(body_path),
                 ],
             )
             assert result.exit_code == 0

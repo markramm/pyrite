@@ -453,8 +453,7 @@ class TestIndexManager:
 
         health = setup["index_mgr"].check_health()
         assert health["stale_entries"] == [], (
-            f"Expected no stale entries immediately after indexing, "
-            f"got: {health['stale_entries']}"
+            f"Expected no stale entries immediately after indexing, got: {health['stale_entries']}"
         )
         assert health["missing_files"] == []
         assert health["unindexed_files"] == []

@@ -187,7 +187,9 @@ class TestObjectRefs:
         )
         db.delete_entry("meeting-1", "test-kb")
 
-        rows = db._raw_conn.execute("SELECT * FROM entry_ref WHERE source_id = 'meeting-1'").fetchall()
+        rows = db._raw_conn.execute(
+            "SELECT * FROM entry_ref WHERE source_id = 'meeting-1'"
+        ).fetchall()
         assert len(rows) == 0
 
     def test_no_refs_when_none_provided(self, db):

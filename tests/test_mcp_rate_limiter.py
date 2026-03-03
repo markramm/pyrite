@@ -45,7 +45,7 @@ class TestAllowsWithinLimit:
     def test_allows_up_to_max(self, limiter):
         for i in range(5):
             allowed, info = limiter.check("client1", "read")
-            assert allowed, f"Call {i+1} should be allowed"
+            assert allowed, f"Call {i + 1} should be allowed"
             assert info["remaining"] == 4 - i
             assert info["limit"] == 5
 

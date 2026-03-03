@@ -96,9 +96,7 @@ def test_kb_discover_json(cli_env):
     kb_yaml.write_text("name: discovered-kb\ntype: events\n")
 
     with _patch_config("pyrite.cli.kb_commands.load_config", cli_env):
-        result = runner.invoke(
-            app, ["kb", "discover", str(cli_env["tmpdir"]), "--format", "json"]
-        )
+        result = runner.invoke(app, ["kb", "discover", str(cli_env["tmpdir"]), "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert "discovered" in data
@@ -171,9 +169,7 @@ def test_repo_list_json(cli_env):
 def test_qa_validate_json(cli_env):
     """qa validate --format json returns valid JSON with 'issues' key."""
     with _patch_config("pyrite.cli.qa_commands.load_config", cli_env):
-        result = runner.invoke(
-            app, ["qa", "validate", "test-events", "--format", "json"]
-        )
+        result = runner.invoke(app, ["qa", "validate", "test-events", "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert "issues" in data

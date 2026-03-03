@@ -79,70 +79,112 @@ class TestAuthConfig:
 
 class TestRegisterEndpoint:
     def test_register_first_user(self, auth_client):
-        r = auth_client.post("/auth/register", json={
-            "username": "alice",
-            "password": "password123",
-        })
+        r = auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         assert r.status_code == 200
         data = r.json()
         assert data["username"] == "alice"
         assert data["role"] == "admin"
 
     def test_register_sets_cookie(self, auth_client):
-        r = auth_client.post("/auth/register", json={
-            "username": "alice",
-            "password": "password123",
-        })
+        r = auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         assert r.status_code == 200
         assert "pyrite_session" in r.cookies
 
     def test_register_duplicate(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
-        r = auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password456",
-        })
+        auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
+        r = auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password456",
+            },
+        )
         assert r.status_code == 400
 
     def test_register_disabled(self, tmpdir):
         client, _, _ = _make_client(tmpdir, allow_registration=False)
-        r = client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
+        r = client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         assert r.status_code == 400
 
 
 class TestLoginEndpoint:
     def test_login_success(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
-        r = auth_client.post("/auth/login", json={
-            "username": "alice", "password": "password123",
-        })
+        auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
+        r = auth_client.post(
+            "/auth/login",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         assert r.status_code == 200
         assert "pyrite_session" in r.cookies
 
     def test_login_wrong_password(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
-        r = auth_client.post("/auth/login", json={
-            "username": "alice", "password": "wrong",
-        })
+        auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
+        r = auth_client.post(
+            "/auth/login",
+            json={
+                "username": "alice",
+                "password": "wrong",
+            },
+        )
         assert r.status_code == 401
 
 
 class TestMeEndpoint:
     def test_me_authenticated(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
+        auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         # Login to get the cookie
-        auth_client.post("/auth/login", json={
-            "username": "alice", "password": "password123",
-        })
+        auth_client.post(
+            "/auth/login",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         r = auth_client.get("/auth/me")
         assert r.status_code == 200
         assert r.json()["username"] == "alice"
@@ -154,12 +196,20 @@ class TestMeEndpoint:
 
 class TestLogoutEndpoint:
     def test_logout_clears_session(self, auth_client):
-        auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
-        auth_client.post("/auth/login", json={
-            "username": "alice", "password": "password123",
-        })
+        auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
+        auth_client.post(
+            "/auth/login",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         r = auth_client.post("/auth/logout")
         assert r.status_code == 200
         # After logout, /auth/me should fail
@@ -175,12 +225,20 @@ class TestAPIWithAuth:
 
     def test_api_works_with_session(self, auth_client):
         """API works when authenticated via session cookie."""
-        auth_client.post("/auth/register", json={
-            "username": "alice", "password": "password123",
-        })
-        auth_client.post("/auth/login", json={
-            "username": "alice", "password": "password123",
-        })
+        auth_client.post(
+            "/auth/register",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
+        auth_client.post(
+            "/auth/login",
+            json={
+                "username": "alice",
+                "password": "password123",
+            },
+        )
         r = auth_client.get("/api/kbs")
         assert r.status_code == 200
 
@@ -234,6 +292,7 @@ class TestOAuthEndpoints:
         location = r.headers["location"]
         # Extract state from URL
         import urllib.parse
+
         parsed = urllib.parse.urlparse(location)
         qs = urllib.parse.parse_qs(parsed.query)
         state = qs["state"][0]
@@ -285,12 +344,20 @@ class TestOAuthEndpoints:
     def test_me_includes_kb_permissions(self, tmpdir):
         client, config, db = _make_client(tmpdir)
         # Register and login as admin
-        client.post("/auth/register", json={
-            "username": "admin", "password": "password123",
-        })
-        client.post("/auth/login", json={
-            "username": "admin", "password": "password123",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
+        client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
 
         # Grant a KB permission via service
         from pyrite.services.auth_service import AuthService
@@ -318,6 +385,7 @@ class TestOAuthEndpoints:
         # Get valid state
         r = client.get("/auth/github", follow_redirects=False)
         import urllib.parse
+
         parsed = urllib.parse.urlparse(r.headers["location"])
         qs = urllib.parse.parse_qs(parsed.query)
         state = qs["state"][0]
@@ -360,12 +428,20 @@ class TestEphemeralKBEndpoint:
     def test_ephemeral_kb_create(self, tmpdir):
         client, config, db = _make_client(tmpdir)
         # Register admin (first user gets admin role which >= write)
-        client.post("/auth/register", json={
-            "username": "admin", "password": "password123",
-        })
-        client.post("/auth/login", json={
-            "username": "admin", "password": "password123",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
+        client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
 
         r = client.post("/api/kbs/ephemeral", json={})
         assert r.status_code == 200
@@ -376,12 +452,20 @@ class TestEphemeralKBEndpoint:
     def test_ephemeral_kb_limit(self, tmpdir):
         client, config, db = _make_client(tmpdir)
         # Register admin
-        client.post("/auth/register", json={
-            "username": "admin", "password": "password123",
-        })
-        client.post("/auth/login", json={
-            "username": "admin", "password": "password123",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
+        client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
 
         # First should succeed
         r = client.post("/api/kbs/ephemeral", json={})
@@ -400,12 +484,20 @@ class TestEphemeralKBEndpoint:
 class TestKBPermissionsCRUD:
     def _setup_admin(self, tmpdir):
         client, config, db = _make_client(tmpdir)
-        client.post("/auth/register", json={
-            "username": "admin", "password": "password123",
-        })
-        client.post("/auth/login", json={
-            "username": "admin", "password": "password123",
-        })
+        client.post(
+            "/auth/register",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
+        client.post(
+            "/auth/login",
+            json={
+                "username": "admin",
+                "password": "password123",
+            },
+        )
         return client, config, db
 
     def test_list_permissions(self, tmpdir):
@@ -421,14 +513,18 @@ class TestKBPermissionsCRUD:
 
         # Register a second user
         from pyrite.services.auth_service import AuthService
+
         auth = AuthService(db, config.settings.auth)
         user2 = auth.register("bob", "password123", "Bob")
 
         # Grant permission
-        r = client.post("/api/kbs/test-kb/permissions", json={
-            "user_id": user2["id"],
-            "role": "write",
-        })
+        r = client.post(
+            "/api/kbs/test-kb/permissions",
+            json={
+                "user_id": user2["id"],
+                "role": "write",
+            },
+        )
         assert r.status_code == 200
         assert r.json()["granted"] is True
 
@@ -442,18 +538,25 @@ class TestKBPermissionsCRUD:
         client, config, db = self._setup_admin(tmpdir)
 
         from pyrite.services.auth_service import AuthService
+
         auth = AuthService(db, config.settings.auth)
         user2 = auth.register("bob", "password123", "Bob")
 
         # Grant then revoke
-        client.post("/api/kbs/test-kb/permissions", json={
-            "user_id": user2["id"],
-            "role": "write",
-        })
-        r = client.post("/api/kbs/test-kb/permissions", json={
-            "user_id": user2["id"],
-            "revoke": True,
-        })
+        client.post(
+            "/api/kbs/test-kb/permissions",
+            json={
+                "user_id": user2["id"],
+                "role": "write",
+            },
+        )
+        r = client.post(
+            "/api/kbs/test-kb/permissions",
+            json={
+                "user_id": user2["id"],
+                "revoke": True,
+            },
+        )
         assert r.status_code == 200
         assert r.json()["revoked"] is True
 

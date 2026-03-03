@@ -67,7 +67,9 @@ class KBRepository:
             # Fallback: try EventEntry.load for backward compat
             return EventEntry.load(file_path)
         except Exception:
-            logger.warning("Entry load failed for %s, trying EventEntry fallback", file_path, exc_info=True)
+            logger.warning(
+                "Entry load failed for %s, trying EventEntry fallback", file_path, exc_info=True
+            )
             return EventEntry.load(file_path)
 
     def _maybe_migrate(self, fm: dict) -> dict:
@@ -97,7 +99,9 @@ class KBRepository:
         except ValueError:
             logger.warning(
                 "Migration failed for %s (v%d -> v%d)",
-                entry_type, entry_sv, type_schema.version,
+                entry_type,
+                entry_sv,
+                type_schema.version,
                 exc_info=True,
             )
 
@@ -151,7 +155,7 @@ class KBRepository:
 
         # Check for collection entries (collection-<folder_name>)
         if entry_id.startswith("collection-"):
-            folder_name = entry_id[len("collection-"):]
+            folder_name = entry_id[len("collection-") :]
             for subdir in self.path.rglob(folder_name):
                 if subdir.is_dir() and (subdir / "__collection.yaml").exists():
                     return True
@@ -174,7 +178,7 @@ class KBRepository:
 
         # Check for collection entries (collection-<folder_name>)
         if entry_id.startswith("collection-"):
-            folder_name = entry_id[len("collection-"):]
+            folder_name = entry_id[len("collection-") :]
             for subdir in self.path.rglob(folder_name):
                 if subdir.is_dir():
                     yaml_path = subdir / "__collection.yaml"

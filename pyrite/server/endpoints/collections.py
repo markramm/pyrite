@@ -204,7 +204,8 @@ def get_collection_entries(
     """List entries within a collection."""
     try:
         results, total = svc.get_collection_entries(
-            collection_id, kb,
+            collection_id,
+            kb,
             sort_by=sort_by,
             sort_order=sort_order,
             limit=limit,

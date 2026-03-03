@@ -162,9 +162,7 @@ class TestCommitKBEdgeCases:
         (kb_path / "staged.md").write_text("staged content")
         (kb_path / "unstaged.md").write_text("unstaged content")
 
-        result = svc.commit_kb(
-            "test-kb", message="Partial commit", paths=["staged.md"]
-        )
+        result = svc.commit_kb("test-kb", message="Partial commit", paths=["staged.md"])
         assert result["success"]
         assert result["files_changed"] >= 1
 
