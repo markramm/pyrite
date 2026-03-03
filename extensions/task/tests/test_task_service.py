@@ -148,7 +148,7 @@ class TestClaimTask:
 
         # Verify index was rolled back to open
         row = task_env["db"]._raw_conn.execute(
-            "SELECT json_extract(metadata, '$.status') as status FROM entry WHERE id = ?",
+            "SELECT status FROM entry WHERE id = ?",
             (entry_id,),
         ).fetchone()
         assert row["status"] == "open"

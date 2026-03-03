@@ -18,7 +18,7 @@ class TestCoreTypeMetadata:
             assert type_name in CORE_TYPE_METADATA, f"Missing metadata for core type '{type_name}'"
 
     def test_each_core_type_has_required_keys(self):
-        """Each core type metadata should have ai_instructions, field_descriptions, display."""
+        """Each core type metadata should have ai_instructions, field_descriptions, protocols, display."""
         for type_name, meta in CORE_TYPE_METADATA.items():
             assert "ai_instructions" in meta, f"{type_name}: missing ai_instructions"
             assert isinstance(meta["ai_instructions"], str)
@@ -27,6 +27,9 @@ class TestCoreTypeMetadata:
             assert "field_descriptions" in meta, f"{type_name}: missing field_descriptions"
             assert isinstance(meta["field_descriptions"], dict)
 
+            assert "protocols" in meta, f"{type_name}: missing protocols"
+            assert isinstance(meta["protocols"], list)
+
             assert "display" in meta, f"{type_name}: missing display"
             assert isinstance(meta["display"], dict)
             assert "icon" in meta["display"], f"{type_name}: display missing icon"
@@ -34,6 +37,32 @@ class TestCoreTypeMetadata:
     def test_exactly_nine_core_types(self):
         """There should be exactly 9 core types with metadata."""
         assert len(CORE_TYPE_METADATA) == 9
+
+    def test_protocol_declarations_match_classes(self):
+        """Protocol declarations in metadata should match actual mixin inheritance."""
+        from pyrite.models.core_types import (
+            EventEntry,
+            OrganizationEntry,
+            PersonEntry,
+        )
+        from pyrite.models.protocols import PROTOCOL_REGISTRY
+
+        # Map core types to their entry classes
+        type_classes = {
+            "event": EventEntry,
+            "person": PersonEntry,
+            "organization": OrganizationEntry,
+        }
+        for type_name, cls in type_classes.items():
+            declared = set(CORE_TYPE_METADATA[type_name]["protocols"])
+            actual = {
+                name
+                for name, mixin_cls in PROTOCOL_REGISTRY.items()
+                if issubclass(cls, mixin_cls)
+            }
+            assert declared == actual, (
+                f"{type_name}: declared={declared}, actual={actual}"
+            )
 
 
 class TestResolveTypeMetadata:
@@ -44,13 +73,20 @@ class TestResolveTypeMetadata:
         result = resolve_type_metadata("note")
         assert result["ai_instructions"] == CORE_TYPE_METADATA["note"]["ai_instructions"]
         assert result["field_descriptions"] == CORE_TYPE_METADATA["note"]["field_descriptions"]
+        assert result["protocols"] == CORE_TYPE_METADATA["note"]["protocols"]
         assert result["display"] == CORE_TYPE_METADATA["note"]["display"]
+
+    def test_event_protocols_resolved(self):
+        """Event type should resolve with temporal, locatable, statusable protocols."""
+        result = resolve_type_metadata("event")
+        assert set(result["protocols"]) == {"temporal", "locatable", "statusable"}
 
     def test_unknown_type_returns_empty(self):
         """Unknown type should return empty defaults."""
         result = resolve_type_metadata("totally_unknown_type_xyz")
         assert result["ai_instructions"] == ""
         assert result["field_descriptions"] == {}
+        assert result["protocols"] == []
         assert result["display"] == {}
 
     def test_kb_overrides_core_defaults(self):

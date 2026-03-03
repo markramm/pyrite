@@ -322,6 +322,114 @@ READ_TOOLS = {
             "required": [],
         },
     },
+    "kb_find_by_assignee": {
+        "description": "Find entries assigned to a specific agent or user, across all entry types and KBs. Uses the Assignable protocol (ADR-0017).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "assignee": {
+                    "type": "string",
+                    "description": "Assignee identifier (e.g. 'agent:researcher', 'alice')",
+                },
+                "kb_name": {
+                    "type": "string",
+                    "description": "Limit to specific KB (optional)",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Filter by status (optional)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default 50)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset (default 0)",
+                },
+            },
+            "required": ["assignee"],
+        },
+    },
+    "kb_find_overdue": {
+        "description": "Find entries with overdue due_date (before a given date, default today). Only returns entries not yet done or failed. Uses the Temporal protocol (ADR-0017).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "as_of": {
+                    "type": "string",
+                    "description": "Reference date in YYYY-MM-DD format (default: today)",
+                },
+                "kb_name": {
+                    "type": "string",
+                    "description": "Limit to specific KB (optional)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default 50)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset (default 0)",
+                },
+            },
+            "required": [],
+        },
+    },
+    "kb_find_by_status": {
+        "description": "Find entries by status across all entry types and KBs. Uses the Statusable protocol (ADR-0017).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "description": "Status value to match (e.g. 'open', 'in_progress', 'done', 'draft')",
+                },
+                "kb_name": {
+                    "type": "string",
+                    "description": "Limit to specific KB (optional)",
+                },
+                "entry_type": {
+                    "type": "string",
+                    "description": "Filter by entry type (optional)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default 50)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset (default 0)",
+                },
+            },
+            "required": ["status"],
+        },
+    },
+    "kb_find_by_location": {
+        "description": "Find entries by location (substring match) across all entry types and KBs. Uses the Locatable protocol (ADR-0017).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "Location to search for (substring match)",
+                },
+                "kb_name": {
+                    "type": "string",
+                    "description": "Limit to specific KB (optional)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default 50)",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset (default 0)",
+                },
+            },
+            "required": ["location"],
+        },
+    },
 }
 
 WRITE_TOOLS = {

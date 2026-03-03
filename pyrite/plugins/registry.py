@@ -368,6 +368,22 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_migrations failed: %s", plugin.name, e)
         return migrations
 
+    def get_all_protocols(self) -> dict[str, type]:
+        """Get all protocol mixin classes: core 5 + plugin-provided (ADR-0017)."""
+        from ..models.protocols import PROTOCOL_REGISTRY
+
+        protocols = dict(PROTOCOL_REGISTRY)
+        self.discover()
+        for plugin in self._plugins.values():
+            if hasattr(plugin, "get_protocols"):
+                try:
+                    plugin_protocols = plugin.get_protocols()
+                    if plugin_protocols:
+                        self._merge_dict(protocols, plugin_protocols, plugin.name, "protocol")
+                except Exception as e:
+                    logger.warning("Plugin %s get_protocols failed: %s", plugin.name, e)
+        return protocols
+
     def _plugin_matches_kb_type(self, plugin: PyritePlugin, kb_type: str) -> bool:
         """Check if a plugin should be active for a given KB type.
 

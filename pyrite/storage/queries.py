@@ -273,3 +273,117 @@ class QueryMixin:
     ) -> list[dict[str, Any]]:
         """Search entries by tag prefix (parent tag includes children)."""
         return self._backend.search_by_tag_prefix(prefix=prefix, kb_name=kb_name, limit=limit)
+
+    # =========================================================================
+    # Protocol-aware cross-type queries (ADR-0017)
+    # =========================================================================
+
+    def find_by_assignee(
+        self,
+        assignee: str,
+        kb_name: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find entries assigned to a specific agent/user, across all entry types."""
+        from sqlalchemy import text
+
+        sql = "SELECT * FROM entry WHERE assignee = :assignee"
+        params: dict[str, Any] = {"assignee": assignee}
+        if kb_name:
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
+        if status:
+            sql += " AND status = :status"
+            params["status"] = status
+        sql += " ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
+
+        result = self.session.execute(text(sql), params)
+        cols = result.keys()
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
+
+    def find_overdue(
+        self,
+        as_of: str | None = None,
+        kb_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find entries with due_date before a given date (default: now).
+
+        Only returns entries that are not yet done or failed.
+        """
+        from sqlalchemy import text
+
+        if not as_of:
+            as_of = datetime.now(UTC).strftime("%Y-%m-%d")
+
+        sql = (
+            "SELECT * FROM entry WHERE due_date IS NOT NULL AND due_date != '' "
+            "AND due_date < :as_of "
+            "AND (status IS NULL OR status NOT IN ('done', 'failed'))"
+        )
+        params: dict[str, Any] = {"as_of": as_of}
+        if kb_name:
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
+        sql += " ORDER BY due_date ASC LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
+
+        result = self.session.execute(text(sql), params)
+        cols = result.keys()
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
+
+    def find_by_status(
+        self,
+        status: str,
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find entries by status, across all entry types."""
+        from sqlalchemy import text
+
+        sql = "SELECT * FROM entry WHERE status = :status"
+        params: dict[str, Any] = {"status": status}
+        if kb_name:
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
+        if entry_type:
+            sql += " AND entry_type = :entry_type"
+            params["entry_type"] = entry_type
+        sql += " ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
+
+        result = self.session.execute(text(sql), params)
+        cols = result.keys()
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
+
+    def find_by_location(
+        self,
+        location: str,
+        kb_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find entries by location (substring match), across all entry types."""
+        from sqlalchemy import text
+
+        sql = "SELECT * FROM entry WHERE location LIKE :location"
+        params: dict[str, Any] = {"location": f"%{location}%"}
+        if kb_name:
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
+        sql += " ORDER BY updated_at DESC LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
+
+        result = self.session.execute(text(sql), params)
+        cols = result.keys()
+        return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]

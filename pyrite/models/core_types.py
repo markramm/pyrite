@@ -21,6 +21,7 @@ from ..schema import (
 )
 from .base import Entry, parse_datetime, parse_links, parse_sources
 from .collection import CollectionEntry
+from .protocols import Locatable, Statusable, Temporal
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class NoteEntry(Entry):
             title=meta.get("title", ""),
             body=body,
             summary=meta.get("summary", ""),
+            importance=int(meta.get("importance", 5)),
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
             sources=parse_sources(meta.get("sources")),
@@ -66,12 +68,11 @@ class NoteEntry(Entry):
 
 
 @dataclass
-class PersonEntry(Entry):
+class PersonEntry(Locatable, Entry):
     """An individual — person profile."""
 
     role: str = ""
     affiliations: list[str] = field(default_factory=list)
-    importance: int = 5
     research_status: ResearchStatus = ResearchStatus.STUB
 
     @property
@@ -84,8 +85,6 @@ class PersonEntry(Entry):
             meta["role"] = self.role
         if self.affiliations:
             meta["affiliations"] = self.affiliations
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.research_status != ResearchStatus.STUB:
             meta["research_status"] = self.research_status.value
         if self.summary:
@@ -140,13 +139,12 @@ class PersonEntry(Entry):
 
 
 @dataclass
-class OrganizationEntry(Entry):
+class OrganizationEntry(Locatable, Entry):
     """A group, company, institution."""
 
     org_type: str = ""  # gov, ngo, corp, etc.
     jurisdiction: str = ""
     founded: str = ""
-    importance: int = 5
     research_status: ResearchStatus = ResearchStatus.STUB
 
     @property
@@ -161,8 +159,6 @@ class OrganizationEntry(Entry):
             meta["jurisdiction"] = self.jurisdiction
         if self.founded:
             meta["founded"] = self.founded
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.research_status != ResearchStatus.STUB:
             meta["research_status"] = self.research_status.value
         if self.summary:
@@ -213,13 +209,10 @@ class OrganizationEntry(Entry):
 
 
 @dataclass
-class EventEntry(Entry):
+class EventEntry(Temporal, Locatable, Statusable, Entry):
     """Something that happened — timeline event with canonical date."""
 
-    date: str = ""  # YYYY-MM-DD
-    importance: int = 5
-    status: EventStatus = EventStatus.CONFIRMED
-    location: str = ""
+    status: EventStatus = EventStatus.CONFIRMED  # overrides Statusable.status with enum
     participants: list[str] = field(default_factory=list)
     notes: str = ""
 
@@ -231,8 +224,6 @@ class EventEntry(Entry):
         meta = self._base_frontmatter()
         if self.date:
             meta["date"] = self.date
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.status != EventStatus.CONFIRMED:
             meta["status"] = self.status.value
         if self.location:
@@ -307,14 +298,12 @@ class EventEntry(Entry):
 
 
 @dataclass
-class DocumentEntry(Entry):
+class DocumentEntry(Temporal, Entry):
     """A reference document."""
 
-    date: str = ""
     author: str = ""
     document_type: str = ""
     url: str = ""
-    importance: int = 5
 
     @property
     def entry_type(self) -> str:
@@ -330,8 +319,6 @@ class DocumentEntry(Entry):
             meta["document_type"] = self.document_type
         if self.url:
             meta["url"] = self.url
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -377,16 +364,12 @@ class DocumentEntry(Entry):
 class TopicEntry(Entry):
     """A theme, subject area, or concept."""
 
-    importance: int = 5
-
     @property
     def entry_type(self) -> str:
         return "topic"
 
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.summary:
             meta["summary"] = self.summary
         return meta

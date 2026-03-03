@@ -500,6 +500,61 @@ class PyriteMCPServer:
         return None
 
     # =========================================================================
+    # Protocol query handlers (ADR-0017)
+    # =========================================================================
+
+    def _kb_find_by_assignee(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Find entries assigned to a specific agent/user."""
+        assignee = args.get("assignee", "")
+        if not assignee:
+            return _error("VALIDATION_FAILED", "assignee is required")
+        rows = self.db.find_by_assignee(
+            assignee=assignee,
+            kb_name=args.get("kb_name"),
+            status=args.get("status"),
+            limit=min(args.get("limit", 50), 200),
+            offset=args.get("offset", 0),
+        )
+        return {"entries": rows, "count": len(rows), "assignee": assignee}
+
+    def _kb_find_overdue(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Find entries with overdue due_date."""
+        rows = self.db.find_overdue(
+            as_of=args.get("as_of"),
+            kb_name=args.get("kb_name"),
+            limit=min(args.get("limit", 50), 200),
+            offset=args.get("offset", 0),
+        )
+        return {"entries": rows, "count": len(rows)}
+
+    def _kb_find_by_status(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Find entries by status across all types."""
+        status = args.get("status", "")
+        if not status:
+            return _error("VALIDATION_FAILED", "status is required")
+        rows = self.db.find_by_status(
+            status=status,
+            kb_name=args.get("kb_name"),
+            entry_type=args.get("entry_type"),
+            limit=min(args.get("limit", 50), 200),
+            offset=args.get("offset", 0),
+        )
+        return {"entries": rows, "count": len(rows), "status": status}
+
+    def _kb_find_by_location(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Find entries by location (substring match)."""
+        location = args.get("location", "")
+        if not location:
+            return _error("VALIDATION_FAILED", "location is required")
+        rows = self.db.find_by_location(
+            location=location,
+            kb_name=args.get("kb_name"),
+            limit=min(args.get("limit", 50), 200),
+            offset=args.get("offset", 0),
+        )
+        return {"entries": rows, "count": len(rows), "location": location}
+
+    # =========================================================================
     # Write handlers
     # =========================================================================
 

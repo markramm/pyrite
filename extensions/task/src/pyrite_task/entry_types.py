@@ -5,6 +5,7 @@ from typing import Any
 
 from pyrite.models.base import parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import NoteEntry
+from pyrite.models.protocols import Assignable, Prioritizable, Statusable, Temporal
 from pyrite.schema import Provenance, generate_entry_id
 
 TASK_STATUSES = ("open", "claimed", "in_progress", "blocked", "review", "done", "failed")
@@ -33,16 +34,14 @@ def _note_base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
 
 
 @dataclass
-class TaskEntry(NoteEntry):
+class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, NoteEntry):
     """Agent-oriented task with workflow state machine."""
 
-    status: str = "open"
-    assignee: str = ""
+    status: str = "open"  # overrides Statusable default
     parent_task: str = ""
     dependencies: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
-    priority: int = 5
-    due_date: str = ""
+    priority: int = 5  # overrides Prioritizable default
     agent_context: dict[str, Any] = field(default_factory=dict)
 
     @property

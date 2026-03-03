@@ -5,6 +5,7 @@ from typing import Any
 
 from pyrite.models.base import parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import DocumentEntry, NoteEntry
+from pyrite.models.protocols import Assignable, Statusable, Temporal
 from pyrite.schema import Provenance, generate_entry_id
 
 # Enum tuples
@@ -42,13 +43,12 @@ def _note_base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
 
 
 @dataclass
-class ADREntry(NoteEntry):
+class ADREntry(Statusable, Temporal, NoteEntry):
     """Architecture Decision Record."""
 
     adr_number: int = 0
-    status: str = "proposed"
+    status: str = "proposed"  # overrides Statusable default
     deciders: list[str] = field(default_factory=list)
-    date: str = ""
     superseded_by: str = ""
 
     @property
@@ -201,13 +201,12 @@ class ComponentEntry(NoteEntry):
 
 
 @dataclass
-class BacklogItemEntry(NoteEntry):
+class BacklogItemEntry(Assignable, Statusable, NoteEntry):
     """Feature, bug, or tech debt tracking item."""
 
     kind: str = ""
-    status: str = "proposed"
-    priority: str = "medium"
-    assignee: str = ""
+    status: str = "proposed"  # overrides Statusable default
+    priority: str = "medium"  # string priority, not Prioritizable (domain-specific vocabulary)
     effort: str = ""
 
     @property

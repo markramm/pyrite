@@ -59,6 +59,15 @@ class Entry(Base):
     status = Column(String)
     location = Column(String)
 
+    # Protocol fields (ADR-0017)
+    assignee = Column(String)
+    assigned_at = Column(String)
+    priority = Column(Integer)
+    due_date = Column(String)
+    start_date = Column(String)
+    end_date = Column(String)
+    coordinates = Column(String)
+
     # Extension fields (JSON) — attribute named extra_data to avoid SQLAlchemy reserved 'metadata'
     extra_data = Column("metadata", Text, default="{}")
 

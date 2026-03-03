@@ -14,6 +14,7 @@ from typing import Any
 
 from ..config import PyriteConfig, load_config
 from ..models import Entry, EventEntry
+from ..models.protocols import Assignable, Locatable, Prioritizable, Statusable, Temporal
 from .database import PyriteDB
 from .repository import KBRepository
 
@@ -82,27 +83,81 @@ class IndexManager:
             "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
         }
 
-        # Event-specific fields
-        if isinstance(entry, EventEntry):
+        # Protocol-based field extraction (ADR-0017)
+        # Temporal protocol: date, start_date, end_date, due_date
+        if isinstance(entry, Temporal):
             data["date"] = entry.date
-            data["importance"] = entry.importance
-            # Handle status (could be enum, string, or list)
+            data["start_date"] = entry.start_date
+            data["end_date"] = entry.end_date
+            data["due_date"] = entry.due_date
+        elif hasattr(entry, "date"):
+            data["date"] = entry.date
+
+        # Locatable protocol: location, coordinates
+        if isinstance(entry, Locatable):
+            location = entry.location
+            if isinstance(location, list):
+                location = ", ".join(str(loc) for loc in location)
+            data["location"] = location
+            data["coordinates"] = entry.coordinates
+        elif hasattr(entry, "location"):
+            location = getattr(entry, "location", "")
+            if isinstance(location, list):
+                location = ", ".join(str(loc) for loc in location)
+            data["location"] = location
+
+        # Statusable protocol: status
+        if isinstance(entry, Statusable):
             status = entry.status
             if hasattr(status, "value"):
                 status = status.value
             elif isinstance(status, list):
                 status = status[0] if status else None
             data["status"] = status
-            # Handle location (could be list)
-            location = entry.location
-            if isinstance(location, list):
-                location = ", ".join(str(loc) for loc in location)
-            data["location"] = location
+        elif hasattr(entry, "status"):
+            status = getattr(entry, "status", "")
+            if hasattr(status, "value"):
+                status = status.value
+            data["status"] = status
+
+        # Assignable protocol: assignee, assigned_at
+        if isinstance(entry, Assignable):
+            data["assignee"] = entry.assignee
+            data["assigned_at"] = entry.assigned_at
+        elif hasattr(entry, "assignee"):
+            data["assignee"] = getattr(entry, "assignee", "")
+
+        # Prioritizable protocol: priority
+        if isinstance(entry, Prioritizable):
+            data["priority"] = entry.priority
+        elif hasattr(entry, "priority"):
+            data["priority"] = getattr(entry, "priority", 0)
+
+        # importance (promoted to base Entry)
+        data["importance"] = entry.importance
+
+        # Event-specific backward compat: actors/participants
+        if isinstance(entry, EventEntry):
             data["actors"] = entry.participants if hasattr(entry, "participants") else []
-        else:
-            # Core types with importance
-            if hasattr(entry, "importance"):
-                data["importance"] = entry.importance
+
+        # For GenericEntry types: promote protocol fields from metadata to DB columns
+        # This handles kb.yaml types that declare protocols: [temporal, assignable, ...]
+        if hasattr(entry, "metadata") and entry.metadata:
+            _protocol_column_keys = {
+                "assignee",
+                "assigned_at",
+                "priority",
+                "due_date",
+                "start_date",
+                "end_date",
+                "date",
+                "location",
+                "coordinates",
+                "status",
+            }
+            for key in _protocol_column_keys:
+                if key not in data and key in entry.metadata:
+                    data[key] = entry.metadata[key]
 
         # Store extension-specific fields in metadata column
         # Use to_frontmatter() to capture all fields, then strip keys

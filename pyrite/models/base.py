@@ -47,6 +47,7 @@ class Entry(ABC):
     sources: list[Source] = field(default_factory=list)
     provenance: Provenance | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    importance: int = 5
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
 
@@ -92,6 +93,8 @@ class Entry(ABC):
             prov = self.provenance.to_dict()
             if prov:
                 meta["provenance"] = prov
+        if self.importance != 5:
+            meta["importance"] = self.importance
         if self.metadata:
             meta["metadata"] = self.metadata
         if self._schema_version > 0:

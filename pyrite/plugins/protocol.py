@@ -270,3 +270,17 @@ class PyritePlugin(Protocol):
                 description: str
         """
         ...
+
+    def get_protocols(self) -> dict[str, type]:
+        """
+        Return additional protocol mixin classes (ADR-0017).
+
+        The core 5 protocols (Assignable, Temporal, Locatable, Statusable,
+        Prioritizable) are always available. Plugins can define additional
+        protocols for domain-specific field patterns.
+
+        Returns:
+            Dict mapping protocol name to mixin dataclass.
+            Example: {"claimable": ClaimableMixin}
+        """
+        ...

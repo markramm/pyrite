@@ -161,6 +161,14 @@ class PostgresBackend:
             existing.importance = entry_data.get("importance")
             existing.status = entry_data.get("status")
             existing.location = entry_data.get("location")
+            # Protocol columns (ADR-0017)
+            existing.assignee = entry_data.get("assignee")
+            existing.assigned_at = entry_data.get("assigned_at")
+            existing.priority = entry_data.get("priority")
+            existing.due_date = entry_data.get("due_date")
+            existing.start_date = entry_data.get("start_date")
+            existing.end_date = entry_data.get("end_date")
+            existing.coordinates = entry_data.get("coordinates")
             existing.extra_data = metadata_json
             existing.updated_at = entry_data.get("updated_at")
             existing.indexed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
@@ -181,6 +189,14 @@ class PostgresBackend:
                 importance=entry_data.get("importance"),
                 status=entry_data.get("status"),
                 location=entry_data.get("location"),
+                # Protocol columns (ADR-0017)
+                assignee=entry_data.get("assignee"),
+                assigned_at=entry_data.get("assigned_at"),
+                priority=entry_data.get("priority"),
+                due_date=entry_data.get("due_date"),
+                start_date=entry_data.get("start_date"),
+                end_date=entry_data.get("end_date"),
+                coordinates=entry_data.get("coordinates"),
                 extra_data=metadata_json,
                 created_at=entry_data.get("created_at"),
                 updated_at=entry_data.get("updated_at"),

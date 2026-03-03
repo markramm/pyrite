@@ -144,6 +144,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "links": "Typed relationships to other entries",
             "summary": "Brief one-line summary of the note",
         },
+        "protocols": [],
         "display": {"icon": "file-text", "layout": "document"},
     },
     "event": {
@@ -159,6 +160,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "location": "Where the event took place",
             "participants": "People or organizations involved",
         },
+        "protocols": ["temporal", "locatable", "statusable"],
         "display": {"icon": "calendar", "layout": "record"},
     },
     "person": {
@@ -173,6 +175,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "importance": "Relevance score from 1 (peripheral) to 10 (central)",
             "research_status": "How complete the profile is: stub, partial, draft, complete, published",
         },
+        "protocols": ["locatable"],
         "display": {"icon": "user", "layout": "record"},
     },
     "organization": {
@@ -187,6 +190,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "founded": "Date or year the organization was established",
             "importance": "Relevance score from 1 to 10",
         },
+        "protocols": ["locatable"],
         "display": {"icon": "building", "layout": "record"},
     },
     "document": {
@@ -201,6 +205,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "document_type": "Category: report, filing, memo, article, press-release, court-document, etc.",
             "url": "URL to the original document",
         },
+        "protocols": ["temporal"],
         "display": {"icon": "file", "layout": "document"},
     },
     "topic": {
@@ -211,6 +216,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         "field_descriptions": {
             "importance": "Centrality of this topic to the research, 1-10",
         },
+        "protocols": [],
         "display": {"icon": "hash", "layout": "document"},
     },
     "relationship": {
@@ -224,6 +230,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "target_entity": "Entry ID of the target entity",
             "relationship_type": "Type of relationship (see relationship_types in schema)",
         },
+        "protocols": [],
         "display": {"icon": "link", "layout": "record"},
     },
     "timeline": {
@@ -234,6 +241,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         "field_descriptions": {
             "date_range": "Time span covered, e.g. '2024-01 to 2025-06'",
         },
+        "protocols": [],
         "display": {"icon": "clock", "layout": "document"},
     },
     "collection": {
@@ -249,6 +257,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
             "view_config": "View settings: default_view, table_columns",
             "folder_path": "Relative path to the folder within the KB",
         },
+        "protocols": [],
         "display": {"icon": "folder", "layout": "record"},
     },
 }
@@ -444,13 +453,19 @@ def resolve_type_metadata(type_name: str, kb_schema: "KBSchema | None" = None) -
     Returns:
         Dict with keys: ai_instructions, field_descriptions, display.
     """
-    result: dict[str, Any] = {"ai_instructions": "", "field_descriptions": {}, "display": {}}
+    result: dict[str, Any] = {
+        "ai_instructions": "",
+        "field_descriptions": {},
+        "protocols": [],
+        "display": {},
+    }
 
     # Layer 1: Core defaults (lowest priority base)
     if type_name in CORE_TYPE_METADATA:
         core = CORE_TYPE_METADATA[type_name]
         result["ai_instructions"] = core.get("ai_instructions", "")
         result["field_descriptions"] = dict(core.get("field_descriptions", {}))
+        result["protocols"] = list(core.get("protocols", []))
         result["display"] = dict(core.get("display", {}))
 
     # Layer 2: Plugin metadata (overrides core)
@@ -463,6 +478,8 @@ def resolve_type_metadata(type_name: str, kb_schema: "KBSchema | None" = None) -
             if pm.get("ai_instructions"):
                 result["ai_instructions"] = pm["ai_instructions"]
             result["field_descriptions"].update(pm.get("field_descriptions", {}))
+            if pm.get("protocols"):
+                result["protocols"] = list(pm["protocols"])
             result["display"].update(pm.get("display", {}))
     except Exception:
         logger.warning("Failed to load plugin type metadata for %s", type_name, exc_info=True)
@@ -474,6 +491,8 @@ def resolve_type_metadata(type_name: str, kb_schema: "KBSchema | None" = None) -
             result["ai_instructions"] = ts.ai_instructions
         if ts.field_descriptions:
             result["field_descriptions"].update(ts.field_descriptions)
+        if ts.protocols:
+            result["protocols"] = list(ts.protocols)
         if ts.display:
             result["display"].update(ts.display)
 
@@ -676,6 +695,7 @@ class TypeSchema:
     optional: list[str] = field(default_factory=list)
     subdirectory: str = ""
     fields: dict[str, FieldSchema] = field(default_factory=dict)
+    protocols: list[str] = field(default_factory=list)  # ADR-0017: e.g. ["temporal", "assignable"]
     layout: str = ""  # "document" or "record"
     ai_instructions: str = ""
     field_descriptions: dict[str, str] = field(default_factory=dict)
@@ -692,6 +712,8 @@ class TypeSchema:
             result["subdirectory"] = self.subdirectory
         if self.fields:
             result["fields"] = {name: fs.to_dict() for name, fs in self.fields.items()}
+        if self.protocols:
+            result["protocols"] = self.protocols
         if self.layout:
             result["layout"] = self.layout
         if self.ai_instructions:
@@ -862,6 +884,7 @@ class KBSchema:
                     optional=type_data.get("optional", []),
                     subdirectory=type_data.get("subdirectory", ""),
                     fields=fields,
+                    protocols=type_data.get("protocols", []),
                     layout=type_data.get("layout", ""),
                     ai_instructions=type_data.get("ai_instructions", ""),
                     field_descriptions=type_data.get("field_descriptions", {}),

@@ -5,6 +5,7 @@ from typing import Any
 
 from pyrite.models.base import Entry, parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import EventEntry, OrganizationEntry, PersonEntry, TopicEntry
+from pyrite.models.protocols import Locatable
 from pyrite.schema import Provenance, generate_entry_id
 
 # ---------------------------------------------------------------------------
@@ -357,13 +358,11 @@ class ThemeEntry(TopicEntry):
 # ---------------------------------------------------------------------------
 
 @dataclass
-class VictimEntry(Entry):
+class VictimEntry(Locatable, Entry):
     """A victim entry in the Cascade Series."""
 
     era: str = ""
-    location: str = ""
     research_status: str = "stub"
-    importance: int = 5
 
     @property
     def entry_type(self) -> str:
@@ -378,8 +377,6 @@ class VictimEntry(Entry):
             meta["location"] = self.location
         if self.research_status != "stub":
             meta["research_status"] = self.research_status
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -408,7 +405,6 @@ class StatisticEntry(Entry):
     data_type: str = ""
     research_status: str = "stub"
     verified: bool = False
-    importance: int = 5
 
     @property
     def entry_type(self) -> str:
@@ -425,8 +421,6 @@ class StatisticEntry(Entry):
             meta["research_status"] = self.research_status
         if self.verified:
             meta["verified"] = self.verified
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -457,7 +451,6 @@ class MechanismEntry(Entry):
     related_actors: list[str] = field(default_factory=list)
     chapters: list[int] = field(default_factory=list)
     word_count: int = 0
-    importance: int = 5
 
     @property
     def entry_type(self) -> str:
@@ -476,8 +469,6 @@ class MechanismEntry(Entry):
             meta["chapters"] = self.chapters
         if self.word_count:
             meta["word_count"] = self.word_count
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -508,7 +499,6 @@ class SceneEntry(Entry):
     era: str = ""
     related_events: list[str] = field(default_factory=list)
     actors: list[str] = field(default_factory=list)
-    importance: int = 5
 
     @property
     def entry_type(self) -> str:
@@ -525,8 +515,6 @@ class SceneEntry(Entry):
             meta["related_events"] = self.related_events
         if self.actors:
             meta["actors"] = self.actors
-        if self.importance != 5:
-            meta["importance"] = self.importance
         if self.summary:
             meta["summary"] = self.summary
         return meta

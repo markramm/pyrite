@@ -112,21 +112,20 @@ class TaskService:
 
         Queries the index via session connection for consistency with ORM writes.
         """
-        query = "SELECT id, title, kb_name, metadata FROM entry WHERE entry_type = 'task'"
+        query = "SELECT id, title, kb_name, status, assignee, metadata FROM entry WHERE entry_type = 'task'"
         params: dict[str, str] = {}
         if kb_name:
             query += " AND kb_name = :kb_name"
             params["kb_name"] = kb_name
         if status:
             if status == "open":
-                # to_frontmatter omits status when it's "open" (default),
-                # so match both NULL and explicit 'open'
-                query += " AND (json_extract(metadata, '$.status') = 'open' OR json_extract(metadata, '$.status') IS NULL)"
+                # Status column: match 'open' or NULL (default)
+                query += " AND (status = 'open' OR status IS NULL)"
             else:
-                query += " AND json_extract(metadata, '$.status') = :status"
+                query += " AND status = :status"
                 params["status"] = status
         if assignee:
-            query += " AND json_extract(metadata, '$.assignee') = :assignee"
+            query += " AND assignee = :assignee"
             params["assignee"] = assignee
         if parent:
             query += " AND json_extract(metadata, '$.parent_task') = :parent"
@@ -163,18 +162,13 @@ class TaskService:
         session = self.db.session
 
         # CAS: only update if status is currently 'open'
-        # to_frontmatter omits status when it's "open" (default),
-        # so metadata may have status=NULL or status='open'
+        # Status and assignee are stored in dedicated columns (ADR-0017)
         result = session.execute(
             text("""UPDATE entry
-               SET metadata = json_set(
-                   COALESCE(metadata, '{}'),
-                   '$.status', 'claimed',
-                   '$.assignee', :assignee
-               )
+               SET status = 'claimed',
+                   assignee = :assignee
                WHERE id = :task_id AND kb_name = :kb_name
-               AND (json_extract(metadata, '$.status') = 'open'
-                    OR json_extract(metadata, '$.status') IS NULL)"""),
+               AND (status = 'open' OR status IS NULL)"""),
             {"assignee": assignee, "task_id": task_id, "kb_name": kb_name},
         )
         session.commit()
@@ -182,13 +176,12 @@ class TaskService:
         if result.rowcount == 0:
             # Check why — not found or wrong status
             rows = self._query(
-                "SELECT metadata FROM entry WHERE id = :task_id AND kb_name = :kb_name",
+                "SELECT status FROM entry WHERE id = :task_id AND kb_name = :kb_name",
                 {"task_id": task_id, "kb_name": kb_name},
             )
             if not rows:
                 return {"claimed": False, "error": f"Task '{task_id}' not found in KB '{kb_name}'"}
-            meta = _parse_metadata(rows[0].get("metadata"))
-            current = meta.get("status", "open")
+            current = rows[0].get("status", "open")
             return {
                 "claimed": False,
                 "error": f"Task '{task_id}' is '{current}', not 'open'",
@@ -203,10 +196,8 @@ class TaskService:
             logger.warning("File update failed for claim on %s, rolling back: %s", task_id, e)
             session.execute(
                 text("""UPDATE entry
-                   SET metadata = json_remove(
-                       json_set(metadata, '$.status', 'open'),
-                       '$.assignee'
-                   )
+                   SET status = 'open',
+                       assignee = NULL
                    WHERE id = :task_id AND kb_name = :kb_name"""),
                 {"task_id": task_id, "kb_name": kb_name},
             )
@@ -329,7 +320,7 @@ class TaskService:
         """
         # Query through session connection for consistency with ORM writes
         rows = self._query(
-            """SELECT id, json_extract(metadata, '$.status') as status
+            """SELECT id, status
                FROM entry
                WHERE kb_name = :kb_name
                AND json_extract(metadata, '$.parent_task') = :parent_id""",
@@ -346,7 +337,7 @@ class TaskService:
 
         # Check parent status — skip if already done/failed
         parent_rows = self._query(
-            """SELECT json_extract(metadata, '$.status') as status
+            """SELECT status
                FROM entry WHERE id = :parent_id AND kb_name = :kb_name""",
             {"parent_id": parent_id, "kb_name": kb_name},
         )
