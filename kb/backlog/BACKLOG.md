@@ -68,7 +68,6 @@ Recommended execution order. Grouped by milestone.
 | Priority | Item | Effort | Status |
 |----------|------|--------|--------|
 | **1** | [[container-deployment]] Phase 1 | M | **done** |
-| **1a** | [[container-deployment]] Phase 2 | S | deferred |
 | **2** | [[pyrite-website]] | M | **done** |
 | **3** | [[demo-site-deployment]] | M | **done** |
 | **4** | [[byok-ai-gap-analysis]] | M | **done** |
@@ -77,11 +76,16 @@ Recommended execution order. Grouped by milestone.
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **1** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers |
-| **2** | Getting Started tutorial | S | Newcomer-friendly onboarding |
-| **3** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code |
-| **4** | [[awesome-plugins-page]] | XS | Curated plugin listing |
-| **5** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
+| **1** | [[pypi-trusted-publisher]] | S | Configure OIDC trusted publisher for automated PyPI releases |
+| **2** | [[container-deployment]] Phase 2 | S | One-click deploy buttons (Railway, Render, Fly.io) |
+| **3** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers |
+| **4** | Getting Started tutorial | S | Newcomer-friendly onboarding |
+| **5** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code |
+| **6** | [[awesome-plugins-page]] | XS | Curated plugin listing |
+| **7** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
+| **8** | [[web-ui-alpha-banner]] | S | Alpha badge, feedback button, error "report this" links |
+| **9** | [[doc-openai-mcp-integration]] | XS | OpenAI / Codex MCP connection docs |
+| **10** | [[doc-gemini-mcp-integration]] | XS | Gemini CLI / Antigravity MCP connection docs |
 
 **0.17 — Ecosystem:**
 
@@ -184,11 +188,16 @@ Recommended execution order. Grouped by milestone.
 
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
+| — | [[pypi-trusted-publisher]] | task | S | 0.16 |
+| 114 | [[container-deployment]] Phase 2 | feature | S | 0.16 |
 | 113 | [[personal-kb-repo-backing]] | feature | M | 0.16 |
 | — | Getting Started tutorial | feature | S | 0.16 |
 | 108 | [[plugin-writing-tutorial]] | feature | S | 0.16 |
 | 109 | [[awesome-plugins-page]] | feature | XS | 0.16 |
 | 86 | [[pyrite-ci-command]] | feature | S | 0.16 |
+| — | [[web-ui-alpha-banner]] | feature | S | 0.16 |
+| — | [[doc-openai-mcp-integration]] | docs | XS | 0.16 |
+| — | [[doc-gemini-mcp-integration]] | docs | XS | 0.16 |
 
 ### Planned — 0.17 (Ecosystem)
 
@@ -233,13 +242,6 @@ Recommended execution order. Grouped by milestone.
 | 64 | [[collections-phase4-embedding]] | proposed | #60 |
 | 73 | [[qa-agent-workflows]] Phases 3-5 | deferred | Phase 2 done, Phases 3-5 post-launch |
 
-### Remaining Hardening (unscheduled)
-
-| # | Item | Kind | Effort |
-|---|------|------|--------|
-| 102 | [[silent-error-logging]] | improvement | M |
-| 103 | [[test-coverage-gaps]] | improvement | L |
-
 ---
 
 ## Dependencies (open items only)
@@ -267,7 +269,11 @@ web-ui-auth (#94)                    [0.12] ✅ Phase 1 done
 
 container-deployment (#114)          [0.15] ✅ Phase 1 done
   Phase 1: Dockerfile + Compose      ✅
-  Phase 2: Deploy buttons            — deferred, benefits from Phase 1
+  Phase 2: Deploy buttons            [0.16] — benefits from Phase 1 ✅
+
+pypi-trusted-publisher               [0.16] — needs pypi-publish (#74) ✅
+doc-openai-mcp-integration           [0.16] — no blockers
+doc-gemini-mcp-integration           [0.16] — no blockers
 
 pyrite-website (#111)                [0.15] ✅ — pyrite.wiki live on GitHub Pages
 demo-site-deployment (#85)           [0.15] ✅ — deploy/demo/ + deploy/selfhost/ + deploy/ink/
@@ -419,4 +425,4 @@ All items below are done. Detail lives in the individual backlog item files in [
 [[container-deployment]] Phase 1 (Dockerfile, Docker Compose, env var config), [[demo-site-deployment]] (deploy/demo/ for demo.pyrite.wiki, deploy/ink/ for pyrite.ink, deploy/selfhost/ for self-hosters), [[pyrite-website]] (Astro + Tailwind site at pyrite.wiki on GitHub Pages), [[byok-ai-gap-analysis]] (audit confirmed all AI features are BYOK-ready)
 
 ### Also Completed
-[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]]
+[[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[silent-error-logging]], [[test-coverage-gaps]]

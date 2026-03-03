@@ -10,7 +10,7 @@ tags:
 kind: improvement
 priority: high
 effort: L
-status: planned
+status: completed
 links:
 - roadmap
 - test-infrastructure

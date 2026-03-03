@@ -10,7 +10,7 @@ tags:
 kind: improvement
 priority: high
 effort: M
-status: planned
+status: completed
 links:
 - roadmap
 ---
