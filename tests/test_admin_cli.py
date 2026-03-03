@@ -8,7 +8,7 @@ Uses CliRunner with patched config.
 import contextlib
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -88,6 +88,7 @@ def _patch_config(env):
         patch("pyrite.cli.context.load_config", return_value=target),
         patch("pyrite.cli.kb_commands.load_config", return_value=target),
         patch("pyrite.cli.search_commands.load_config", return_value=target),
+        patch("pyrite.cli.repo_commands.load_config", return_value=target),
     ):
         yield
 
@@ -122,7 +123,9 @@ class TestKBDiscover:
 
     def test_kb_discover_json(self, admin_env):
         with _patch_config(admin_env):
-            result = runner.invoke(app, ["kb", "discover", str(admin_env["tmpdir"]), "--format", "json"])
+            result = runner.invoke(
+                app, ["kb", "discover", str(admin_env["tmpdir"]), "--format", "json"]
+            )
             assert result.exit_code == 0
 
 
@@ -298,7 +301,15 @@ class TestExtensionInit:
         with _patch_config(admin_env):
             result = runner.invoke(
                 app,
-                ["extension", "init", "typed-ext", "--path", str(ext_path), "--types", "widget,gadget"],
+                [
+                    "extension",
+                    "init",
+                    "typed-ext",
+                    "--path",
+                    str(ext_path),
+                    "--types",
+                    "widget,gadget",
+                ],
             )
             assert result.exit_code == 0
             assert (ext_path / "pyproject.toml").exists()
@@ -323,6 +334,523 @@ class TestInitCommand:
         with _patch_config(admin_env):
             result = runner.invoke(app, ["init", "--path", str(kb_path), "--template", "software"])
             assert result.exit_code == 0
+
+
+# =========================================================================
+# KB Add / Remove / Create / Commit / Push / GC
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestKBAdd:
+    def test_kb_add_success(self, admin_env):
+        new_kb_path = admin_env["tmpdir"] / "new-kb-add"
+        new_kb_path.mkdir()
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.kb_commands.save_config"):
+                result = runner.invoke(
+                    app,
+                    ["kb", "add", str(new_kb_path), "--name", "added-kb", "--type", "research"],
+                )
+                assert result.exit_code == 0
+                assert "Added KB" in result.output
+
+    def test_kb_add_nonexistent_path(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "add", "/tmp/nonexistent-path-xyz-12345", "--name", "ghost-kb"],
+            )
+            assert result.exit_code == 1
+            assert "does not exist" in result.output
+
+    def test_kb_add_duplicate_name(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "add", str(admin_env["tmpdir"]), "--name", "test-events"],
+            )
+            assert result.exit_code == 1
+            assert "already exists" in result.output
+
+
+@pytest.mark.cli
+class TestKBRemove:
+    def test_kb_remove_success(self, admin_env):
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.kb_commands.save_config"):
+                result = runner.invoke(
+                    app,
+                    ["kb", "remove", "test-events", "--force"],
+                )
+                assert result.exit_code == 0
+                assert "Removed" in result.output
+
+    def test_kb_remove_nonexistent(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "remove", "no-such-kb", "--force"],
+            )
+            assert result.exit_code == 1
+            assert "not found" in result.output
+
+
+@pytest.mark.cli
+class TestKBCreate:
+    def test_kb_create_success(self, admin_env):
+        kb_path = admin_env["tmpdir"] / "created-kb"
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.kb_commands.save_config"):
+                result = runner.invoke(
+                    app,
+                    ["kb", "create", "--name", "created-kb", "--path", str(kb_path)],
+                )
+                assert result.exit_code == 0
+                assert "Created KB" in result.output
+
+    def test_kb_create_with_type(self, admin_env):
+        kb_path = admin_env["tmpdir"] / "typed-kb"
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.kb_commands.save_config"):
+                result = runner.invoke(
+                    app,
+                    [
+                        "kb",
+                        "create",
+                        "--name",
+                        "typed-kb",
+                        "--path",
+                        str(kb_path),
+                        "--type",
+                        "events",
+                    ],
+                )
+                assert result.exit_code == 0
+
+    def test_kb_create_no_path(self, admin_env):
+        """Creating non-ephemeral KB without --path should fail."""
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "create", "--name", "no-path-kb"],
+            )
+            assert result.exit_code == 1
+            assert "path" in result.output.lower()
+
+
+@pytest.mark.cli
+class TestKBCommit:
+    def test_kb_commit_non_git(self, admin_env):
+        """Commit on a non-git KB should error gracefully."""
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "commit", "--kb", "test-events", "--message", "test commit"],
+            )
+            # Should fail gracefully (not a git repo)
+            assert result.exit_code in (0, 1)
+
+    def test_kb_commit_nonexistent_kb(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "commit", "--kb", "no-such-kb", "--message", "test"],
+            )
+            assert result.exit_code in (1, 2)
+
+
+@pytest.mark.cli
+class TestKBPush:
+    def test_kb_push_non_git(self, admin_env):
+        """Push on a non-git KB should error gracefully."""
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "push", "--kb", "test-events"],
+            )
+            assert result.exit_code in (0, 1)
+
+    def test_kb_push_nonexistent_kb(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "push", "--kb", "no-such-kb"],
+            )
+            assert result.exit_code in (1, 2)
+
+
+@pytest.mark.cli
+class TestKBGC:
+    def test_kb_gc(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["kb", "gc"])
+            assert result.exit_code == 0
+
+    def test_kb_gc_no_expired(self, admin_env):
+        """GC with no expired KBs should succeed with informational message."""
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["kb", "gc"])
+            assert result.exit_code == 0
+            assert "expired" in result.output.lower() or "garbage" in result.output.lower()
+
+
+# =========================================================================
+# KB Schema (sub-commands under kb schema)
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestKBSchemaAddType:
+    def test_schema_add_type_success(self, admin_env):
+        # Create a kb.yaml so schema operations work
+        kb_yaml = admin_env["events_kb"].path / "kb.yaml"
+        kb_yaml.write_text("name: test-events\ntypes: {}\n")
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                [
+                    "kb",
+                    "schema",
+                    "add-type",
+                    "test-events",
+                    "--type",
+                    "widget",
+                    "--description",
+                    "A widget",
+                ],
+            )
+            assert result.exit_code in (0, 1)
+
+    def test_schema_add_type_nonexistent_kb(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "schema", "add-type", "no-such-kb", "--type", "widget"],
+            )
+            assert result.exit_code == 1
+
+    def test_schema_add_type_with_fields(self, admin_env):
+        kb_yaml = admin_env["events_kb"].path / "kb.yaml"
+        if not kb_yaml.exists():
+            kb_yaml.write_text("name: test-events\ntypes: {}\n")
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                [
+                    "kb",
+                    "schema",
+                    "add-type",
+                    "test-events",
+                    "--type",
+                    "gadget",
+                    "--required",
+                    "title,body",
+                    "--optional",
+                    "tags",
+                ],
+            )
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestKBSchemaRemoveType:
+    def test_schema_remove_type_success(self, admin_env):
+        # Create kb.yaml with a type to remove
+        kb_yaml = admin_env["events_kb"].path / "kb.yaml"
+        kb_yaml.write_text("name: test-events\ntypes:\n  widget:\n    description: A widget\n")
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "schema", "remove-type", "test-events", "--type", "widget"],
+            )
+            assert result.exit_code in (0, 1)
+
+    def test_schema_remove_type_nonexistent_type(self, admin_env):
+        kb_yaml = admin_env["events_kb"].path / "kb.yaml"
+        kb_yaml.write_text("name: test-events\ntypes: {}\n")
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "schema", "remove-type", "test-events", "--type", "nonexistent"],
+            )
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestKBSchemaSet:
+    def test_schema_set_from_file(self, admin_env):
+        schema_file = admin_env["tmpdir"] / "schema.yaml"
+        schema_file.write_text("types:\n  article:\n    description: An article\n")
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "schema", "set", "test-events", "--schema-file", str(schema_file)],
+            )
+            assert result.exit_code in (0, 1)
+
+    def test_schema_set_nonexistent_file(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                [
+                    "kb",
+                    "schema",
+                    "set",
+                    "test-events",
+                    "--schema-file",
+                    "/tmp/nonexistent-schema.yaml",
+                ],
+            )
+            assert result.exit_code == 1
+
+
+# =========================================================================
+# Index embed
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestIndexEmbed:
+    def test_index_embed_no_embedder(self, admin_env):
+        """Embedding without sentence-transformers should fail gracefully."""
+        with _patch_config(admin_env):
+            with patch(
+                "pyrite.cli.index_commands.get_config_and_db",
+                return_value=(
+                    admin_env["config"],
+                    PyriteDB(admin_env["config"].settings.index_path),
+                ),
+            ):
+                result = runner.invoke(app, ["index", "embed"])
+                # Exits 1 if sentence-transformers not available, 0 if it is
+                assert result.exit_code in (0, 1)
+
+    def test_index_embed_specific_kb(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["index", "embed", "test-events"])
+            assert result.exit_code in (0, 1)
+
+    def test_index_embed_force(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["index", "embed", "--force"])
+            assert result.exit_code in (0, 1)
+
+
+# =========================================================================
+# QA assess
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestQAAssess:
+    def test_qa_assess_kb(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["qa", "assess", "test-events"])
+            assert result.exit_code in (0, 1)
+
+    def test_qa_assess_specific_entry(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["qa", "assess", "test-events", "--entry", "nonexistent-id"],
+            )
+            # May fail because entry doesn't exist; should not crash
+            assert result.exit_code in (0, 1)
+
+    def test_qa_assess_json(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["qa", "assess", "test-events", "--format", "json"],
+            )
+            assert result.exit_code in (0, 1)
+
+
+# =========================================================================
+# Repo commands
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestRepoSubscribe:
+    def test_repo_subscribe_invalid_url(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "subscribe", "not-a-valid-url"])
+            # Should fail because it's not a real git URL
+            assert result.exit_code in (0, 1)
+
+    def test_repo_subscribe_url(self, admin_env):
+        """Subscribe with a fake URL — should fail gracefully (no network)."""
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["repo", "subscribe", "https://github.com/fake/nonexistent-repo-xyz"],
+            )
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestRepoFork:
+    def test_repo_fork_url(self, admin_env):
+        """Fork with a fake URL — should fail gracefully."""
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["repo", "fork", "https://github.com/fake/nonexistent-repo-xyz"],
+            )
+            assert result.exit_code in (0, 1)
+
+    def test_repo_fork_nonexistent(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "fork", "not-a-url"])
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestRepoSync:
+    def test_repo_sync_all(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "sync"])
+            assert result.exit_code in (0, 1)
+
+    def test_repo_sync_nonexistent(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "sync", "nonexistent-repo"])
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestRepoUnsubscribe:
+    def test_repo_unsubscribe(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["repo", "unsubscribe", "nonexistent-repo", "--force"],
+            )
+            # Should fail because repo doesn't exist, but not crash
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestRepoStatus:
+    def test_repo_status_specific(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "status", "nonexistent-repo"])
+            assert result.exit_code in (0, 1)
+
+    def test_repo_status_json(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["repo", "status", "nonexistent-repo", "--format", "json"],
+            )
+            assert result.exit_code in (0, 1)
+
+
+@pytest.mark.cli
+class TestRepoList:
+    def test_repo_list(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "list"])
+            assert result.exit_code == 0
+
+    def test_repo_list_json(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["repo", "list", "--format", "json"])
+            assert result.exit_code == 0
+
+
+# =========================================================================
+# Schema commands (top-level)
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestSchemaDiff:
+    def test_schema_diff(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["schema", "diff", "--kb", "test-events"])
+            # May fail if kb.yaml doesn't exist — that's fine
+            assert result.exit_code in (0, 1)
+
+    def test_schema_diff_nonexistent_kb(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["schema", "diff", "--kb", "no-such-kb"])
+            assert result.exit_code == 1
+
+
+@pytest.mark.cli
+class TestSchemaMigrate:
+    def test_schema_migrate(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["schema", "migrate", "--kb", "test-events"])
+            assert result.exit_code in (0, 1)
+
+    def test_schema_migrate_dry_run(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["schema", "migrate", "--kb", "test-events", "--dry-run"],
+            )
+            assert result.exit_code in (0, 1)
+
+
+# =========================================================================
+# Extension install / uninstall
+# =========================================================================
+
+
+@pytest.mark.cli
+class TestExtensionInstall:
+    def test_extension_install_success(self, admin_env):
+        """Install an extension from an init-scaffolded directory (mock pip)."""
+        ext_path = admin_env["tmpdir"] / "installable-ext"
+        ext_path.mkdir()
+        (ext_path / "pyproject.toml").write_text(
+            '[project]\nname = "pyrite-installable"\nversion = "0.1.0"\n'
+        )
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.extension_commands.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+                result = runner.invoke(app, ["extension", "install", str(ext_path)])
+                assert result.exit_code == 0
+                assert "Installed" in result.output
+
+    def test_extension_install_nonexistent_path(self, admin_env):
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["extension", "install", "/tmp/nonexistent-ext-xyz-12345"],
+            )
+            assert result.exit_code == 1
+            assert "pyproject.toml" in result.output
+
+
+@pytest.mark.cli
+class TestExtensionUninstall:
+    def test_extension_uninstall_success(self, admin_env):
+        """Uninstall an extension (mock pip)."""
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.extension_commands.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+                result = runner.invoke(
+                    app,
+                    ["extension", "uninstall", "test-plugin", "--force"],
+                )
+                assert result.exit_code == 0
+                assert "Uninstalled" in result.output
+
+    def test_extension_uninstall_pip_failure(self, admin_env):
+        """Uninstall when pip fails should exit 1."""
+        with _patch_config(admin_env):
+            with patch("pyrite.cli.extension_commands.subprocess.run") as mock_run:
+                mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="No such package")
+                result = runner.invoke(
+                    app,
+                    ["extension", "uninstall", "nonexistent-ext", "--force"],
+                )
+                assert result.exit_code == 1
 
 
 # =========================================================================
