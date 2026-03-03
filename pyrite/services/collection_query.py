@@ -88,12 +88,12 @@ def parse_query(query_str: str) -> CollectionQuery:
                 try:
                     query.limit = int(value)
                 except ValueError:
-                    pass
+                    logger.debug("Could not parse query parameter as number: %s", value)
             elif key == "offset":
                 try:
                     query.offset = int(value)
                 except ValueError:
-                    pass
+                    logger.debug("Could not parse query parameter as number: %s", value)
             else:
                 # Treat as field comparison
                 if query.fields is None:
@@ -148,12 +148,12 @@ def query_from_dict(d: dict) -> CollectionQuery:
         try:
             query.limit = int(d["limit"])
         except (ValueError, TypeError):
-            pass
+            logger.debug("Could not parse query parameter as number: %s", d["limit"])
     if "offset" in d:
         try:
             query.offset = int(d["offset"])
         except (ValueError, TypeError):
-            pass
+            logger.debug("Could not parse query parameter as number: %s", d["offset"])
 
     return query
 
@@ -206,7 +206,9 @@ def evaluate_query(query: CollectionQuery, db: PyriteDB) -> tuple[list[dict], in
         kb_name=query.kb_name,
         entry_type=query.entry_type,
         tag=db_tag,
-        sort_by=query.sort_by if query.sort_by in {"title", "entry_type", "updated_at", "created_at", "date", "id"} else "title",
+        sort_by=query.sort_by
+        if query.sort_by in {"title", "entry_type", "updated_at", "created_at", "date", "id"}
+        else "title",
         sort_order=query.sort_order,
         limit=fetch_limit,
         offset=0,
@@ -229,40 +231,27 @@ def _post_filter(entries: list[dict], query: CollectionQuery) -> list[dict]:
     # tags_any with multiple tags: entry must have at least one
     if query.tags_any and len(query.tags_any) > 1:
         tag_set = set(query.tags_any)
-        result = [
-            e for e in result if tag_set.intersection(_get_tags(e))
-        ]
+        result = [e for e in result if tag_set.intersection(_get_tags(e))]
 
     # tags_all: entry must have ALL of these tags
     if query.tags_all:
         tag_set = set(query.tags_all)
-        result = [
-            e for e in result if tag_set.issubset(_get_tags(e))
-        ]
+        result = [e for e in result if tag_set.issubset(_get_tags(e))]
 
     # status filter
     if query.status:
-        result = [
-            e for e in result if _get_metadata_field(e, "status") == query.status
-        ]
+        result = [e for e in result if _get_metadata_field(e, "status") == query.status]
 
     # date range filters
     if query.date_from:
-        result = [
-            e for e in result if (e.get("date") or "") >= query.date_from
-        ]
+        result = [e for e in result if (e.get("date") or "") >= query.date_from]
     if query.date_to:
-        result = [
-            e for e in result if (e.get("date") or "") <= query.date_to
-        ]
+        result = [e for e in result if (e.get("date") or "") <= query.date_to]
 
     # Arbitrary field comparisons
     if query.fields:
         for field_name, field_value in query.fields.items():
-            result = [
-                e for e in result
-                if _get_metadata_field(e, field_name) == field_value
-            ]
+            result = [e for e in result if _get_metadata_field(e, field_name) == field_value]
 
     return result
 

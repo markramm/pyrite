@@ -89,7 +89,7 @@ class ConnectionMixin:
             self._raw_conn.enable_load_extension(False)
             self.vec_available = True
         except (ImportError, Exception):
-            pass
+            logger.info("sqlite-vec extension not available")
 
     def _run_migrations(self):
         """Run any pending database migrations using legacy MigrationManager."""
@@ -149,9 +149,7 @@ class ConnectionMixin:
             if "default" in col:
                 default_val = str(col["default"])
                 if not self._VALID_SQL_DEFAULT.match(default_val):
-                    raise ValueError(
-                        f"Invalid SQL DEFAULT value: {default_val!r}"
-                    )
+                    raise ValueError(f"Invalid SQL DEFAULT value: {default_val!r}")
                 parts.append(f"DEFAULT {default_val}")
             col_defs.append(" ".join(parts))
 

@@ -1,11 +1,15 @@
 """Web Clipper endpoint — POST /api/clip to fetch URL and create entry."""
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ...services.clipper import ClipperService
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter, requires_tier
 from ..schemas import ClipRequest, ClipResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Clipper"])
 
@@ -74,12 +78,10 @@ async def clip_url(
     try:
         loop = asyncio.get_event_loop()
         loop.create_task(
-            manager.broadcast(
-                {"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb}
-            )
+            manager.broadcast({"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb})
         )
     except RuntimeError:
-        pass
+        logger.debug("WebSocket broadcast failed (client may have disconnected)")
 
     return ClipResponse(
         created=True,

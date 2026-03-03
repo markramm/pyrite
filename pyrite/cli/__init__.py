@@ -10,6 +10,7 @@ Split into submodules for maintainability:
 """
 
 import json as _json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,8 @@ from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
 from .schema_commands import schema_app
 from .search_commands import register_search_command
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     name="pyrite",
@@ -93,6 +96,7 @@ try:
             app.command(name)(command)
 except Exception:
     import logging
+
     logging.getLogger(__name__).warning("Plugin CLI loading failed", exc_info=True)
 
 
@@ -275,7 +279,7 @@ def create_entry(
             try:
                 v = int(v)
             except ValueError:
-                pass
+                logger.debug("Could not coerce field value to int: %s", v)
             extra[k] = v
 
     with cli_context() as (config, db, svc):
@@ -325,9 +329,7 @@ def add_entry(
 
     with cli_context() as (config, db, svc):
         try:
-            entry, result = svc.add_entry_from_file(
-                kb_name, file_path, validate_only=validate_only
-            )
+            entry, result = svc.add_entry_from_file(kb_name, file_path, validate_only=validate_only)
 
             # Show warnings
             for warning in result.get("warnings", []):
@@ -385,12 +387,14 @@ def update_entry(
     if field:
         for fv in field:
             if "=" not in fv:
-                _cli_error(f"--field must be key=value, got '{fv}'", output_format, "VALIDATION_FAILED")
+                _cli_error(
+                    f"--field must be key=value, got '{fv}'", output_format, "VALIDATION_FAILED"
+                )
             k, v = fv.split("=", 1)
             try:
                 v = int(v)
             except ValueError:
-                pass
+                logger.debug("Could not coerce field value to int: %s", v)
             updates[k] = v
 
     with cli_context() as (config, db, svc):
@@ -459,7 +463,9 @@ def link_entries(
 
                 inverse = get_inverse_relation(relation)
                 svc.add_link(target, tkb, source, inverse, target_kb=kb_name, note=note)
-                console.print(f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})")
+                console.print(
+                    f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})"
+                )
         except (PyriteError, ValueError) as e:
             console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
@@ -513,7 +519,9 @@ def list_entries(
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="Filter by KB"),
     entry_type: str | None = typer.Option(None, "--type", "-t", help="Filter by entry type"),
     tag: str | None = typer.Option(None, "--tag", help="Filter by tag"),
-    sort_by: str = typer.Option("updated_at", "--sort-by", help="Sort column: title, updated_at, created_at, entry_type"),
+    sort_by: str = typer.Option(
+        "updated_at", "--sort-by", help="Sort column: title, updated_at, created_at, entry_type"
+    ),
     sort_order: str = typer.Option("desc", "--sort-order", help="Sort direction: asc, desc"),
     limit: int = typer.Option(50, "--limit", "-n", help="Max entries (max 200)"),
     offset: int = typer.Option(0, "--offset", help="Pagination offset"),
@@ -582,7 +590,9 @@ def list_entries(
 
 @app.command("batch-read")
 def batch_read(
-    ids: list[str] = typer.Argument(..., help="Entry IDs as kb_name:entry_id (e.g. mydb:alice-smith)"),
+    ids: list[str] = typer.Argument(
+        ..., help="Entry IDs as kb_name:entry_id (e.g. mydb:alice-smith)"
+    ),
     fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
@@ -592,7 +602,11 @@ def batch_read(
     parsed_ids: list[tuple[str, str]] = []
     for spec in ids:
         if ":" not in spec:
-            _cli_error(f"Invalid format '{spec}' — use kb_name:entry_id", output_format, "VALIDATION_FAILED")
+            _cli_error(
+                f"Invalid format '{spec}' — use kb_name:entry_id",
+                output_format,
+                "VALIDATION_FAILED",
+            )
         kb, eid = spec.split(":", 1)
         parsed_ids.append((eid.strip(), kb.strip()))
 
@@ -606,9 +620,7 @@ def batch_read(
 
         found_ids = {(r.get("id"), r.get("kb_name")) for r in results}
         not_found = [
-            {"entry_id": eid, "kb_name": kb}
-            for eid, kb in parsed_ids
-            if (eid, kb) not in found_ids
+            {"entry_id": eid, "kb_name": kb} for eid, kb in parsed_ids if (eid, kb) not in found_ids
         ]
 
         resp_data = {
@@ -661,8 +673,12 @@ def orient_kb(
             typer.echo(formatted)
             return
 
-        console.print(f"\n[bold cyan]{result['kb']}[/bold cyan]  [dim]{result.get('description', '')}[/dim]")
-        console.print(f"Type: {result.get('kb_type', 'default')}  |  Entries: {result['total_entries']}  |  Read-only: {result.get('read_only', False)}\n")
+        console.print(
+            f"\n[bold cyan]{result['kb']}[/bold cyan]  [dim]{result.get('description', '')}[/dim]"
+        )
+        console.print(
+            f"Type: {result.get('kb_type', 'default')}  |  Entries: {result['total_entries']}  |  Read-only: {result.get('read_only', False)}\n"
+        )
 
         # Types table
         types = result.get("types", [])
@@ -685,7 +701,9 @@ def orient_kb(
         if recent_entries:
             console.print("\n[bold]Recent Changes:[/bold]")
             for e in recent_entries:
-                console.print(f"  {e.get('updated_at', '')[:19]}  [{e.get('entry_type', '')}]  {e.get('title', '')}")
+                console.print(
+                    f"  {e.get('updated_at', '')[:19]}  [{e.get('entry_type', '')}]  {e.get('title', '')}"
+                )
 
 
 # =============================================================================

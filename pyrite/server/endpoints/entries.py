@@ -1,6 +1,7 @@
 """Entry CRUD endpoints including wikilink resolution."""
 
 import io
+import logging
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -32,6 +33,8 @@ from ..schemas import (
     WantedPage,
     WantedPagesResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Entries"])
 
@@ -120,8 +123,11 @@ def list_entry_titles(
             aliases = []
         entries.append(
             EntryTitle(
-                id=r["id"], title=r["title"], kb_name=r["kb_name"],
-                entry_type=r["entry_type"], aliases=aliases,
+                id=r["id"],
+                title=r["title"],
+                kb_name=r["kb_name"],
+                entry_type=r["entry_type"],
+                aliases=aliases,
             )
         )
     return EntryTitlesResponse(entries=entries)
@@ -151,9 +157,15 @@ def batch_read_entries(
     fields_param = body.get("fields")
 
     if not entries_spec:
-        raise HTTPException(status_code=400, detail={"code": "VALIDATION_FAILED", "message": "entries array is required"})
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "VALIDATION_FAILED", "message": "entries array is required"},
+        )
     if len(entries_spec) > 50:
-        raise HTTPException(status_code=400, detail={"code": "VALIDATION_FAILED", "message": "Maximum 50 entries per call"})
+        raise HTTPException(
+            status_code=400,
+            detail={"code": "VALIDATION_FAILED", "message": "Maximum 50 entries per call"},
+        )
 
     ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
     results = svc.get_entries(ids)
@@ -162,11 +174,7 @@ def batch_read_entries(
         results = [{k: r[k] for k in fields_param if k in r} for r in results]
 
     found_ids = {(r.get("id"), r.get("kb_name")) for r in results}
-    not_found = [
-        {"entry_id": eid, "kb_name": kb}
-        for eid, kb in ids
-        if (eid, kb) not in found_ids
-    ]
+    not_found = [{"entry_id": eid, "kb_name": kb} for eid, kb in ids if (eid, kb) not in found_ids]
 
     resp_data = {"entries": results, "found": len(results), "not_found": not_found}
     neg = negotiate_response(request, resp_data)
@@ -450,7 +458,9 @@ def get_entry(
     return EntryResponse(**result)
 
 
-@router.post("/entries", response_model=CreateResponse, dependencies=[Depends(requires_kb_tier("write"))])
+@router.post(
+    "/entries", response_model=CreateResponse, dependencies=[Depends(requires_kb_tier("write"))]
+)
 @limiter.limit("30/minute")
 def create_entry(
     request: Request,
@@ -507,17 +517,19 @@ def create_entry(
     try:
         loop = asyncio.get_event_loop()
         loop.create_task(
-            manager.broadcast(
-                {"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb}
-            )
+            manager.broadcast({"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb})
         )
     except RuntimeError:
-        pass
+        logger.debug("WebSocket broadcast failed (client may have disconnected)")
 
     return CreateResponse(created=True, id=entry.id, kb_name=req.kb, file_path="")
 
 
-@router.put("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_kb_tier("write"))])
+@router.put(
+    "/entries/{entry_id}",
+    response_model=UpdateResponse,
+    dependencies=[Depends(requires_kb_tier("write"))],
+)
 @limiter.limit("30/minute")
 def update_entry(
     request: Request,
@@ -553,17 +565,19 @@ def update_entry(
     try:
         loop = asyncio.get_event_loop()
         loop.create_task(
-            manager.broadcast(
-                {"type": "entry_updated", "entry_id": entry_id, "kb_name": req.kb}
-            )
+            manager.broadcast({"type": "entry_updated", "entry_id": entry_id, "kb_name": req.kb})
         )
     except RuntimeError:
-        pass
+        logger.debug("WebSocket broadcast failed (client may have disconnected)")
 
     return UpdateResponse(updated=True, id=entry_id)
 
 
-@router.patch("/entries/{entry_id}", response_model=UpdateResponse, dependencies=[Depends(requires_kb_tier("write"))])
+@router.patch(
+    "/entries/{entry_id}",
+    response_model=UpdateResponse,
+    dependencies=[Depends(requires_kb_tier("write"))],
+)
 @limiter.limit("30/minute")
 def patch_entry_field(
     request: Request,
@@ -584,7 +598,11 @@ def patch_entry_field(
     return UpdateResponse(updated=True, id=entry_id)
 
 
-@router.delete("/entries/{entry_id}", response_model=DeleteResponse, dependencies=[Depends(requires_kb_tier("write"))])
+@router.delete(
+    "/entries/{entry_id}",
+    response_model=DeleteResponse,
+    dependencies=[Depends(requires_kb_tier("write"))],
+)
 @limiter.limit("30/minute")
 def delete_entry(
     request: Request,
@@ -616,11 +634,9 @@ def delete_entry(
     try:
         loop = asyncio.get_event_loop()
         loop.create_task(
-            manager.broadcast(
-                {"type": "entry_deleted", "entry_id": entry_id, "kb_name": kb}
-            )
+            manager.broadcast({"type": "entry_deleted", "entry_id": entry_id, "kb_name": kb})
         )
     except RuntimeError:
-        pass
+        logger.debug("WebSocket broadcast failed (client may have disconnected)")
 
     return DeleteResponse(deleted=True, id=entry_id)

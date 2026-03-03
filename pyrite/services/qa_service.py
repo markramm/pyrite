@@ -239,7 +239,9 @@ class QAService:
                 skipped += 1
                 continue
 
-            result = self.assess_entry(eid, kb_name, tier=tier, create_task_on_fail=create_task_on_fail)
+            result = self.assess_entry(
+                eid, kb_name, tier=tier, create_task_on_fail=create_task_on_fail
+            )
             results.append(result)
 
         return {
@@ -368,7 +370,10 @@ class QAService:
             ")",
             {"kb_name": kb_name, "kb_name2": kb_name},
         )
-        return [{"id": row["id"], "entry_type": row["entry_type"], "title": row["title"]} for row in rows]
+        return [
+            {"id": row["id"], "entry_type": row["entry_type"], "title": row["title"]}
+            for row in rows
+        ]
 
     def get_coverage(self, kb_name: str) -> dict[str, Any]:
         """Get assessment coverage stats for a KB."""
@@ -436,9 +441,7 @@ class QAService:
                 }
             )
 
-    def _check_empty_bodies(
-        self, issues: list[dict[str, Any]], kb_name: str | None = None
-    ) -> None:
+    def _check_empty_bodies(self, issues: list[dict[str, Any]], kb_name: str | None = None) -> None:
         sql = (
             "SELECT id, kb_name, entry_type, title FROM entry "
             "WHERE (body IS NULL OR body = '') "
@@ -488,7 +491,9 @@ class QAService:
     def _check_invalid_dates(
         self, issues: list[dict[str, Any]], kb_name: str | None = None
     ) -> None:
-        sql = "SELECT id, kb_name, entry_type, date FROM entry WHERE date IS NOT NULL AND date != ''"
+        sql = (
+            "SELECT id, kb_name, entry_type, date FROM entry WHERE date IS NOT NULL AND date != ''"
+        )
         params: dict[str, Any] = {}
         if kb_name:
             sql += " AND kb_name = :kb_name"
@@ -529,9 +534,7 @@ class QAService:
                     }
                 )
 
-    def _check_broken_links(
-        self, issues: list[dict[str, Any]], kb_name: str | None = None
-    ) -> None:
+    def _check_broken_links(self, issues: list[dict[str, Any]], kb_name: str | None = None) -> None:
         sql = (
             "SELECT l.source_id, l.source_kb, l.target_id, l.target_kb, l.relation "
             "FROM link l LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name "
@@ -557,9 +560,7 @@ class QAService:
                 }
             )
 
-    def _check_orphans(
-        self, issues: list[dict[str, Any]], kb_name: str | None = None
-    ) -> None:
+    def _check_orphans(self, issues: list[dict[str, Any]], kb_name: str | None = None) -> None:
         orphans = self.db.get_orphans(kb_name=kb_name)
         for entry in orphans:
             issues.append(
@@ -650,9 +651,7 @@ class QAService:
                 }
             )
 
-    def _check_entry_links(
-        self, entry_id: str, kb_name: str, issues: list[dict[str, Any]]
-    ) -> None:
+    def _check_entry_links(self, entry_id: str, kb_name: str, issues: list[dict[str, Any]]) -> None:
         """Check links from a single entry for broken targets."""
         outlinks = self.db.get_outlinks(entry_id, kb_name)
         for link in outlinks:
@@ -672,9 +671,7 @@ class QAService:
                     }
                 )
 
-    def _check_schema_validation(
-        self, entry: dict[str, Any], issues: list[dict[str, Any]]
-    ) -> None:
+    def _check_schema_validation(self, entry: dict[str, Any], issues: list[dict[str, Any]]) -> None:
         """Run KBSchema.validate_entry() on a single entry."""
         kb_name = entry["kb_name"]
         kb_config = self.config.get_kb(kb_name)
@@ -696,16 +693,19 @@ class QAService:
         if metadata:
             if isinstance(metadata, str):
                 import json
+
                 try:
                     meta_dict = json.loads(metadata)
                     schema_version = int(meta_dict.get("_schema_version", 0))
                 except (json.JSONDecodeError, ValueError):
-                    pass
+                    logger.debug("Could not parse metadata schema version")
             elif isinstance(metadata, dict):
                 schema_version = int(metadata.get("_schema_version", 0))
 
         result = schema.validate_entry(
-            entry_type, fields, context={"kb_type": kb_config.kb_type, "_schema_version": schema_version}
+            entry_type,
+            fields,
+            context={"kb_type": kb_config.kb_type, "_schema_version": schema_version},
         )
 
         for err in result.get("errors", []):
@@ -744,9 +744,7 @@ class QAService:
     # Schema pass (all entries)
     # =========================================================================
 
-    def _check_schema_all(
-        self, issues: list[dict[str, Any]], kb_name: str
-    ) -> None:
+    def _check_schema_all(self, issues: list[dict[str, Any]], kb_name: str) -> None:
         """Run schema validation on all entries in a KB (only if kb.yaml exists)."""
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
@@ -766,23 +764,28 @@ class QAService:
         for row in rows:
             entry = dict(row)
             entry_type = entry.get("entry_type", "")
-            fields = {k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")}
+            fields = {
+                k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")
+            }
 
             metadata = entry.get("metadata")
             schema_version = 0
             if metadata:
                 if isinstance(metadata, str):
                     import json
+
                     try:
                         meta_dict = json.loads(metadata)
                         schema_version = int(meta_dict.get("_schema_version", 0))
                     except (json.JSONDecodeError, ValueError):
-                        pass
+                        logger.debug("Could not parse metadata schema version")
                 elif isinstance(metadata, dict):
                     schema_version = int(metadata.get("_schema_version", 0))
 
             result = schema.validate_entry(
-                entry_type, fields, context={"kb_type": kb_config.kb_type, "_schema_version": schema_version}
+                entry_type,
+                fields,
+                context={"kb_type": kb_config.kb_type, "_schema_version": schema_version},
             )
 
             for err in result.get("errors", []):

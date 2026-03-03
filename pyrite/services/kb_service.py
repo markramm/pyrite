@@ -273,15 +273,9 @@ class KBService:
                 entry_type = self._resolve_entry_type(entry_type)
 
                 # Build extra kwargs
-                extra = {
-                    k: v
-                    for k, v in spec.items()
-                    if k not in ("entry_type", "title", "body")
-                }
+                extra = {k: v for k, v in spec.items() if k not in ("entry_type", "title", "body")}
 
-                entry = build_entry(
-                    entry_type, entry_id=entry_id, title=title, body=body, **extra
-                )
+                entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **extra)
                 entry = self._run_hooks("before_save", entry, hook_ctx)
 
                 self._doc_mgr.save_entry(entry, kb_name, kb_config)
@@ -367,7 +361,8 @@ class KBService:
             try:
                 schema = kb_config.kb_schema
                 validation_result = schema.validate_entry(
-                    entry.entry_type, meta,
+                    entry.entry_type,
+                    meta,
                     context={"kb_name": kb_name, "kb_type": kb_config.kb_type},
                 )
             except Exception as e:
@@ -377,9 +372,7 @@ class KBService:
             return entry, validation_result
 
         if validation_result.get("errors"):
-            raise ValidationError(
-                f"Validation errors: {validation_result['errors']}"
-            )
+            raise ValidationError(f"Validation errors: {validation_result['errors']}")
 
         # Check for ID collision
         repo = KBRepository(kb_config)
@@ -615,7 +608,9 @@ class KBService:
             except (json.JSONDecodeError, TypeError):
                 metadata = {}
 
-        source_type = metadata.get("source_type", "folder") if isinstance(metadata, dict) else "folder"
+        source_type = (
+            metadata.get("source_type", "folder") if isinstance(metadata, dict) else "folder"
+        )
 
         # Virtual collection (query-based)
         if source_type == "query":
@@ -715,9 +710,7 @@ class KBService:
         prefix: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get tags with counts as dicts."""
-        return self.db.get_tags_as_dicts(
-            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix
-        )
+        return self.db.get_tags_as_dicts(kb_name=kb_name, limit=limit, offset=offset, prefix=prefix)
 
     def get_tag_tree(self, kb_name: str | None = None) -> list[dict]:
         """Get hierarchical tag tree."""
@@ -806,7 +799,7 @@ class KBService:
             try:
                 schema_info = kb_config.kb_schema.to_agent_schema()
             except Exception:
-                pass
+                logger.warning("Failed schema-to-agent conversion", exc_info=True)
 
         # Guidelines from config (if available)
         guidelines = getattr(kb_config, "guidelines", None) or {}
@@ -1086,9 +1079,7 @@ class KBService:
         if not GitService.is_git_repo(kb.path):
             raise PyriteError(f"KB '{kb_name}' is not in a git repository")
 
-        success, result = GitService.commit(
-            kb.path, message, paths=paths, sign_off=sign_off
-        )
+        success, result = GitService.commit(kb.path, message, paths=paths, sign_off=sign_off)
 
         if success:
             return {"success": True, **result}

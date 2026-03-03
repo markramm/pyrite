@@ -2,7 +2,10 @@
 
 import csv
 import io
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def import_csv(data: str | bytes) -> list[dict[str, Any]]:
@@ -37,7 +40,7 @@ def import_csv(data: str | bytes) -> list[dict[str, Any]]:
             try:
                 entry["importance"] = int(row["importance"])
             except (ValueError, TypeError):
-                pass
+                logger.debug("Could not parse importance value: %s", row["importance"])
         if row.get("summary"):
             entry["summary"] = row["summary"]
 

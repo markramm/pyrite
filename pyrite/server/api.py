@@ -8,6 +8,7 @@ the ``endpoints/`` subpackage; this module provides shared dependencies, the rat
 limiter, and the application factory.
 """
 
+import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,8 @@ from ..services.llm_service import LLMService
 from ..services.search_service import SearchService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
+
+logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Dependencies (imported by endpoint modules)
@@ -193,7 +196,11 @@ async def verify_api_key(
         return
 
     # 4. No auth configured → admin (existing behavior)
-    if not config.settings.api_key and not config.settings.api_keys and not config.settings.auth.enabled:
+    if (
+        not config.settings.api_key
+        and not config.settings.api_keys
+        and not config.settings.auth.enabled
+    ):
         request.state.api_role = "admin"
         return
 
@@ -241,7 +248,7 @@ async def _resolve_kb_name(request: Request) -> str | None:
             if isinstance(data, dict):
                 return data.get("kb")
     except Exception:
-        pass
+        logger.warning("Failed to extract KB from request body", exc_info=True)
 
     return None
 
@@ -299,7 +306,9 @@ def requires_kb_tier(tier: str):
         auth_service = AuthService(db, config.settings.auth)
         effective_role = auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
 
-        if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(tier, 99):
+        if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(
+            tier, 99
+        ):
             raise HTTPException(
                 status_code=403,
                 detail=f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier",
@@ -442,7 +451,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     # Mount static files if dist directory exists
     # Check env override first (for containerised deploys where the package is
     # installed as a site-package and the relative path won't resolve).
-    dist_dir = Path(os.environ.get("PYRITE_STATIC_DIR", "")) if os.environ.get("PYRITE_STATIC_DIR") else None
+    dist_dir = (
+        Path(os.environ.get("PYRITE_STATIC_DIR", ""))
+        if os.environ.get("PYRITE_STATIC_DIR")
+        else None
+    )
     if dist_dir is None:
         dist_dir = Path(__file__).parent.parent.parent / "web" / "dist"
     if dist_dir.is_dir():
