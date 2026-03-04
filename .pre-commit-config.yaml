@@ -36,6 +36,12 @@ repos:
 # Run pytest on commit (local hook)
   - repo: local
     hooks:
+      - id: pyrite-schema-validate
+        name: Validate KB entries
+        entry: bash -c 'source .venv/bin/activate && python -m pyrite schema validate --changed'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
       - id: pytest-check
         name: pytest quick check
         entry: bash -c 'source .venv/bin/activate && python -m pytest tests/ -x -q --tb=no 2>/dev/null || (echo "Tests failed! Run pytest for details." && exit 1)'

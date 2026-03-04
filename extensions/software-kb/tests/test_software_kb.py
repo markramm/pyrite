@@ -1,5 +1,9 @@
 """Tests for the Software KB extension."""
 
+import json
+import tempfile
+from pathlib import Path
+
 from pyrite_software_kb.entry_types import (
     ADR_STATUSES,
     BACKLOG_EFFORTS,
@@ -844,3 +848,51 @@ class TestCoreIntegration:
             assert get_inverse_relation("owns") == "owned_by"
         finally:
             reg_module._registry = old
+
+
+class TestBacklogStatusColumn:
+    """Verify sw_backlog reads status from the DB column, not just metadata JSON."""
+
+    def test_status_from_db_column_overrides_metadata(self):
+        """When DB status column differs from metadata JSON, DB column wins."""
+        from pyrite.storage.database import PyriteDB
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = PyriteDB(db_path)
+            try:
+                # Insert a KB row for the foreign key
+                db._raw_conn.execute(
+                    "INSERT INTO kb (name, path, kb_type) VALUES (?, ?, ?)",
+                    ("test", str(tmpdir), "generic"),
+                )
+                # Insert an entry with status=done in the column but proposed in metadata
+                db._raw_conn.execute(
+                    "INSERT INTO entry (id, kb_name, entry_type, title, body, status, priority, metadata) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        "test-item",
+                        "test",
+                        "backlog_item",
+                        "Test Item",
+                        "",
+                        "done",
+                        "high",
+                        json.dumps({"status": "proposed", "priority": "medium", "kind": "bug"}),
+                    ),
+                )
+                db._raw_conn.commit()
+
+                from pyrite_software_kb.cli import _query_entries
+
+                rows = _query_entries(db, "backlog_item")
+                assert len(rows) == 1
+                row = rows[0]
+
+                # The row's DB column should be authoritative
+                assert row["status"] == "done"
+                assert row["priority"] == "high"
+                # But _meta still has the old values from JSON
+                assert row["_meta"]["status"] == "proposed"
+            finally:
+                db.close()

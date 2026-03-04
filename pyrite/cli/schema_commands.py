@@ -1,6 +1,10 @@
 """Schema versioning CLI commands."""
 
 import logging
+import subprocess
+from collections import defaultdict
+from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -10,6 +14,256 @@ from .context import cli_context
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+
+# =========================================================================
+# Schema validation logic (stateless, testable)
+# =========================================================================
+
+# Protocol fields and their expected Python types
+_PROTOCOL_FIELD_TYPES: dict[str, type] = {
+    "priority": str,
+    "date": str,
+    "start_date": str,
+    "end_date": str,
+    "due_date": str,
+    "status": str,
+    "assignee": str,
+    "assigned_at": str,
+    "location": str,
+    "coordinates": str,
+}
+
+
+def _parse_frontmatter(file_path: Path) -> tuple[dict[str, Any], str, list[dict[str, str]]]:
+    """Parse a markdown file's YAML frontmatter.
+
+    Returns (frontmatter_dict, body, errors).
+    Errors are dicts with keys: file, check, message, severity.
+    """
+    errors: list[dict[str, str]] = []
+    path_str = str(file_path)
+
+    try:
+        text = file_path.read_text(encoding="utf-8")
+    except Exception as e:
+        errors.append(
+            {
+                "file": path_str,
+                "check": "read",
+                "message": f"Cannot read file: {e}",
+                "severity": "error",
+            }
+        )
+        return {}, "", errors
+
+    if not text.startswith("---"):
+        errors.append(
+            {
+                "file": path_str,
+                "check": "frontmatter_parse",
+                "message": "No YAML frontmatter found (missing opening ---)",
+                "severity": "error",
+            }
+        )
+        return {}, text, errors
+
+    end = text.find("---", 3)
+    if end < 0:
+        errors.append(
+            {
+                "file": path_str,
+                "check": "frontmatter_parse",
+                "message": "Unterminated YAML frontmatter (missing closing ---)",
+                "severity": "error",
+            }
+        )
+        return {}, text, errors
+
+    yaml_text = text[3:end]
+    body = text[end + 3 :].strip()
+
+    try:
+        from ..utils.yaml import load_yaml
+
+        fm = load_yaml(yaml_text)
+        if not isinstance(fm, dict):
+            errors.append(
+                {
+                    "file": path_str,
+                    "check": "frontmatter_parse",
+                    "message": "Frontmatter is not a YAML mapping",
+                    "severity": "error",
+                }
+            )
+            return {}, body, errors
+    except Exception as e:
+        errors.append(
+            {
+                "file": path_str,
+                "check": "frontmatter_parse",
+                "message": f"Invalid YAML: {e}",
+                "severity": "error",
+            }
+        )
+        return {}, body, errors
+
+    # Check required base fields
+    if "type" not in fm:
+        errors.append(
+            {
+                "file": path_str,
+                "check": "frontmatter_parse",
+                "message": "Missing required field: type",
+                "severity": "error",
+            }
+        )
+    if "title" not in fm:
+        errors.append(
+            {
+                "file": path_str,
+                "check": "frontmatter_parse",
+                "message": "Missing required field: title",
+                "severity": "error",
+            }
+        )
+
+    return fm, body, errors
+
+
+def validate_entry(
+    file_path: Path,
+    fm: dict[str, Any],
+    schema: Any | None = None,
+) -> list[dict[str, str]]:
+    """Validate a single entry's frontmatter against schema and protocol rules.
+
+    Args:
+        file_path: Path to the markdown file.
+        fm: Parsed frontmatter dict.
+        schema: Optional KBSchema for type-specific required field checks.
+
+    Returns list of error/warning dicts.
+    """
+    errors: list[dict[str, str]] = []
+    path_str = str(file_path)
+    entry_type = fm.get("type", "")
+
+    if not entry_type:
+        return errors  # Already reported by _parse_frontmatter
+
+    # Check required fields from kb.yaml TypeSchema
+    if schema:
+        type_schema = schema.get_type_schema(entry_type)
+        if type_schema:
+            for req_field in type_schema.required:
+                if req_field not in fm:
+                    errors.append(
+                        {
+                            "file": path_str,
+                            "check": "required_fields",
+                            "message": f"Missing required field '{req_field}' for type '{entry_type}'",
+                            "severity": "error",
+                        }
+                    )
+
+            # Check typed fields from schema
+            for field_name, field_schema in type_schema.fields.items():
+                if field_name in fm:
+                    value = fm[field_name]
+                    # select type: check against options
+                    if field_schema.field_type == "select" and field_schema.options:
+                        if value not in field_schema.options:
+                            sev = "warning" if field_schema.allow_other else "error"
+                            errors.append(
+                                {
+                                    "file": path_str,
+                                    "check": "field_value",
+                                    "message": (
+                                        f"Field '{field_name}' value '{value}' "
+                                        f"not in options: {field_schema.options}"
+                                    ),
+                                    "severity": sev,
+                                }
+                            )
+
+    # Protocol field type checks
+    for field_name, expected_type in _PROTOCOL_FIELD_TYPES.items():
+        if field_name in fm and fm[field_name] is not None:
+            value = fm[field_name]
+            if not isinstance(value, expected_type):
+                errors.append(
+                    {
+                        "file": path_str,
+                        "check": "protocol_field_type",
+                        "message": (
+                            f"Protocol field '{field_name}' should be {expected_type.__name__}, "
+                            f"got {type(value).__name__}: {value!r}"
+                        ),
+                        "severity": "warning",
+                    }
+                )
+
+    return errors
+
+
+def detect_id_collisions(
+    entries: list[tuple[Path, dict[str, Any]]],
+) -> list[dict[str, str]]:
+    """Detect entries that would generate the same ID across different types.
+
+    Args:
+        entries: List of (file_path, frontmatter) tuples.
+
+    Returns list of error dicts for collisions.
+    """
+    from ..schema import generate_entry_id
+
+    errors: list[dict[str, str]] = []
+
+    # Map generated_id -> list of (file_path, entry_type)
+    id_map: dict[str, list[tuple[Path, str]]] = defaultdict(list)
+
+    for file_path, fm in entries:
+        entry_id = fm.get("id", "")
+        if not entry_id:
+            title = fm.get("title", "")
+            if title:
+                entry_id = generate_entry_id(title)
+        if entry_id:
+            entry_type = fm.get("type", "unknown")
+            id_map[entry_id].append((file_path, entry_type))
+
+    for entry_id, occurrences in id_map.items():
+        if len(occurrences) > 1:
+            types = {t for _, t in occurrences}
+            if len(types) > 1:
+                # Cross-type collision
+                files_desc = ", ".join(f"{p.name} ({t})" for p, t in occurrences)
+                for file_path, _entry_type in occurrences:
+                    errors.append(
+                        {
+                            "file": str(file_path),
+                            "check": "id_collision",
+                            "message": (f"ID '{entry_id}' collides across types: {files_desc}"),
+                            "severity": "error",
+                        }
+                    )
+            else:
+                # Same-type collision (duplicate ID)
+                dup_type = occurrences[0][1]
+                for file_path, _entry_type in occurrences:
+                    errors.append(
+                        {
+                            "file": str(file_path),
+                            "check": "id_collision",
+                            "message": (f"Duplicate ID '{entry_id}' within type '{dup_type}'"),
+                            "severity": "error",
+                        }
+                    )
+
+    return errors
+
 
 schema_app = typer.Typer(help="Schema versioning and migration commands")
 
@@ -125,3 +379,148 @@ def schema_migrate(
             console.print(f"  [red]Errors: {errors}[/red]")
         if migrated == 0:
             console.print("  [green]All entries are up to date.[/green]")
+
+
+def _collect_md_files(paths: list[Path]) -> list[Path]:
+    """Resolve paths to a flat list of .md files."""
+    result: list[Path] = []
+    for p in paths:
+        if p.is_file() and p.suffix == ".md":
+            result.append(p)
+        elif p.is_dir():
+            result.extend(sorted(p.rglob("*.md")))
+    return result
+
+
+def _get_git_changed_md_files() -> list[Path]:
+    """Get .md files changed in the current git working tree."""
+    try:
+        output = subprocess.run(
+            ["git", "diff", "--name-only", "--cached", "--diff-filter=ACMR"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        staged = output.stdout.strip().splitlines()
+
+        output = subprocess.run(
+            ["git", "diff", "--name-only", "--diff-filter=ACMR"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        unstaged = output.stdout.strip().splitlines()
+
+        output = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        untracked = output.stdout.strip().splitlines()
+
+        all_files = set(staged + unstaged + untracked)
+        return [Path(f) for f in all_files if f.endswith(".md") and Path(f).exists()]
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+
+
+@schema_app.command("validate")
+def schema_validate(
+    files: list[Path] = typer.Argument(None, help="Files or directories to validate"),
+    kb_name: str = typer.Option(None, "--kb", "-k", help="Validate entire KB"),
+    changed: bool = typer.Option(False, "--changed", help="Validate git-changed .md files"),
+):
+    """Validate KB entry frontmatter against schema rules.
+
+    Checks: frontmatter parsing, required fields, protocol field types,
+    and ID collision detection.
+    """
+    from ..config import load_config
+
+    config = load_config()
+    schema = None
+
+    # Resolve files to validate
+    md_files: list[Path] = []
+
+    if kb_name:
+        kb_config = config.get_kb(kb_name)
+        if not kb_config:
+            console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
+            raise typer.Exit(1)
+        md_files = _collect_md_files([kb_config.path])
+        schema = kb_config.kb_schema
+    elif changed:
+        md_files = _get_git_changed_md_files()
+        # Try to find a schema from the first file's KB
+        if md_files:
+            for kb in config.knowledge_bases:
+                try:
+                    for f in md_files:
+                        f.resolve().relative_to(kb.path.resolve())
+                        schema = kb.kb_schema
+                        break
+                except ValueError:
+                    continue
+    elif files:
+        md_files = _collect_md_files(files)
+        # Try to detect KB for schema
+        for kb in config.knowledge_bases:
+            try:
+                for f in md_files:
+                    f.resolve().relative_to(kb.path.resolve())
+                    schema = kb.kb_schema
+                    break
+            except ValueError:
+                continue
+    else:
+        console.print("[yellow]Specify files, --kb, or --changed[/yellow]")
+        raise typer.Exit(1)
+
+    if not md_files:
+        console.print("[dim]No .md files found to validate.[/dim]")
+        raise typer.Exit(0)
+
+    # Phase 1: Parse all files
+    all_errors: list[dict[str, str]] = []
+    parsed_entries: list[tuple[Path, dict[str, Any]]] = []
+
+    for file_path in md_files:
+        fm, body, parse_errors = _parse_frontmatter(file_path)
+        all_errors.extend(parse_errors)
+
+        if fm:
+            parsed_entries.append((file_path, fm))
+            entry_errors = validate_entry(file_path, fm, schema)
+            all_errors.extend(entry_errors)
+
+    # Phase 2: ID collision detection
+    collision_errors = detect_id_collisions(parsed_entries)
+    all_errors.extend(collision_errors)
+
+    # Output
+    error_count = sum(1 for e in all_errors if e["severity"] == "error")
+    warning_count = sum(1 for e in all_errors if e["severity"] == "warning")
+
+    # Group by file
+    by_file: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for err in all_errors:
+        by_file[err["file"]].append(err)
+
+    for file_path_str, file_errors in sorted(by_file.items()):
+        console.print(f"\n[bold]{file_path_str}:[/bold]")
+        for err in file_errors:
+            icon = "[red]x[/red]" if err["severity"] == "error" else "[yellow]![/yellow]"
+            console.print(f"  {icon} [{err['check']}] {err['message']}")
+
+    # Files with no errors get a checkmark
+    clean_files = len(md_files) - len(by_file)
+
+    console.print(
+        f"\n{len(md_files)} files, {error_count} errors, {warning_count} warnings"
+        + (f", {clean_files} clean" if clean_files > 0 else "")
+    )
+
+    if error_count > 0:
+        raise typer.Exit(1)
