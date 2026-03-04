@@ -115,7 +115,17 @@ Recommended execution order. Grouped by milestone.
 | **10** | [[import-cycle-detection]] | XS | Guard against circular imports as codebase grows | |
 | **11** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness | |
 
-**0.18 — Ecosystem:**
+**0.18 — Architecture & Ecosystem:**
+
+*Architecture (from deep-module evaluation):*
+
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **0** | [[kb-service-decomposition]] | L | KBService is a 45-method god-class — extract GraphService, EphemeralKBService, QuotaService, ExportService | |
+| **1** | [[schema-module-decomposition]] | M | schema.py mixes 4+ concerns in 1,157 lines — split into focused submodules | |
+| **2** | [[search-service-kb-service-overlap]] | S | Duplicate methods between SearchService and KBService | |
+
+*Ecosystem:*
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
@@ -243,6 +253,20 @@ Recommended execution order. Grouped by milestone.
 | — | [[embedding-service-prewarm]] | improvement | S | 0.17 | |
 | — | [[import-cycle-detection]] | improvement | XS | 0.17 | |
 | — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S | 0.17 | |
+| — | [[plugin-registry-deduplication]] | improvement | S | 0.17 | |
+| — | [[factory-open-closed]] | improvement | S | 0.17 | |
+| — | [[kb-component-documentation-gaps]] | improvement | M | 0.17 | |
+
+### Planned — 0.18 (Architecture)
+
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| — | [[kb-service-decomposition]] | improvement | L | 0.18 | |
+| — | [[schema-module-decomposition]] | improvement | M | 0.18 | |
+| — | [[search-service-kb-service-overlap]] | improvement | S | 0.18 | |
+| — | [[plugin-registry-deduplication]] | improvement | S | 0.17 | |
+| — | [[factory-open-closed]] | improvement | S | 0.17 | |
+| — | [[kb-component-documentation-gaps]] | improvement | M | 0.17 | |
 
 ### Planned — 0.18 (Ecosystem)
 
