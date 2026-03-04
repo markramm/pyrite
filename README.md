@@ -332,6 +332,14 @@ pyrite sw components     # Module documentation
 pyrite sw standards      # Coding conventions
 ```
 
+## Documentation
+
+- [Getting Started](docs/getting-started.md) — install, create a KB, connect an AI
+- [Plugin Writing Tutorial](docs/tutorials/plugin-writing.md) — build a custom plugin step by step
+- [Plugins Directory](docs/plugins.md) — official and community plugins
+- [OpenAI / Codex MCP Integration](docs/openai-mcp-integration.md)
+- [Gemini CLI MCP Integration](docs/gemini-mcp-integration.md)
+
 ## Background
 
 Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5 + vector search, REST API with tier enforcement, SvelteKit frontend, service layer, schema-as-config, content negotiation, collections, block references, web clipper, AI integration. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.
