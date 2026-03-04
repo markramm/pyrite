@@ -71,9 +71,8 @@ class TestSettingsAPI:
         pytest.importorskip("fastapi")
         from fastapi.testclient import TestClient
 
-        import pyrite.server.api as api_module
         from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
-        from pyrite.server.api import create_app
+        from pyrite.server.api import create_app, get_config, get_db
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -86,15 +85,11 @@ class TestSettingsAPI:
 
             db = PyriteDB(db_path)
 
-            api_module._config = config
-            api_module._db = db
             app = create_app(config)
+            app.dependency_overrides[get_config] = lambda: config
+            app.dependency_overrides[get_db] = lambda: db
             yield TestClient(app)
             db.close()
-            api_module._config = None
-            api_module._db = None
-            api_module._kb_service = None
-            api_module._index_mgr = None
 
     def test_get_settings_empty(self, client):
         """GET /settings returns empty dict initially."""

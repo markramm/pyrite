@@ -120,9 +120,8 @@ class TestVersionHistoryAPI:
         pytest.importorskip("fastapi")
         from fastapi.testclient import TestClient
 
-        import pyrite.server.api as api_module
         from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
-        from pyrite.server.api import create_app
+        from pyrite.server.api import create_app, get_config, get_db
 
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)
@@ -160,19 +159,15 @@ class TestVersionHistoryAPI:
                 change_type="created",
             )
 
-            api_module._config = config
-            api_module._db = db
             app = create_app(config)
-            yield TestClient(app)
+            app.dependency_overrides[get_config] = lambda: config
+            app.dependency_overrides[get_db] = lambda: db
+            yield {"client": TestClient(app), "db": db}
             db.close()
-            api_module._config = None
-            api_module._db = None
-            api_module._kb_service = None
-            api_module._index_mgr = None
 
     def test_get_versions(self, client):
         """GET /entries/{id}/versions returns version list."""
-        resp = client.get("/api/entries/entry-1/versions?kb=test-kb")
+        resp = client["client"].get("/api/entries/entry-1/versions?kb=test-kb")
         assert resp.status_code == 200
         data = resp.json()
         assert data["entry_id"] == "entry-1"
@@ -182,9 +177,9 @@ class TestVersionHistoryAPI:
 
     def test_get_versions_empty(self, client):
         """GET /entries/{id}/versions returns empty for entry without versions."""
-        import pyrite.server.api as api_module
+        db = client["db"]
 
-        api_module._db.upsert_entry(
+        db.upsert_entry(
             {
                 "id": "entry-2",
                 "kb_name": "test-kb",
@@ -197,7 +192,7 @@ class TestVersionHistoryAPI:
             }
         )
 
-        resp = client.get("/api/entries/entry-2/versions?kb=test-kb")
+        resp = client["client"].get("/api/entries/entry-2/versions?kb=test-kb")
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
         assert resp.json()["versions"] == []

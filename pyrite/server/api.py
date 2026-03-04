@@ -32,52 +32,59 @@ logger = logging.getLogger(__name__)
 
 # =============================================================================
 # Dependencies (imported by endpoint modules)
+#
+# Service state lives on ``app.state.pyrite_*`` attributes, initialised by
+# ``create_app()``.  DI functions read from app.state so each FastAPI app
+# instance is fully isolated — no cross-test contamination via module globals.
 # =============================================================================
 
-_config: PyriteConfig | None = None
-_db: PyriteDB | None = None
-_index_mgr: IndexManager | None = None
-_kb_service: KBService | None = None
-_llm_service: LLMService | None = None
+
+def _init_app_state(application: FastAPI, config: PyriteConfig) -> None:
+    """Initialise pyrite service state on *application*.state."""
+    application.state.pyrite_config = config
+    application.state.pyrite_db = None
+    application.state.pyrite_index_mgr = None
+    application.state.pyrite_kb_service = None
+    application.state.pyrite_llm_service = None
 
 
 def get_config() -> PyriteConfig:
-    """Get or load configuration."""
-    global _config
-    if _config is None:
-        _config = load_config()
-    return _config
+    """Get or load configuration.
+
+    When used inside a FastAPI app created by ``create_app()``, this is
+    overridden via ``dependency_overrides`` to return the app-state config.
+    Direct calls (non-DI contexts) fall back to ``load_config()``.
+    """
+    return load_config()
 
 
 def get_db() -> PyriteDB:
-    """Get or create database connection."""
-    global _db
-    if _db is None:
-        config = get_config()
-        _db = PyriteDB(config.settings.index_path)
-    return _db
+    """Get or create database connection.
+
+    When used inside a FastAPI app created by ``create_app()``, this is
+    overridden via ``dependency_overrides`` to return the app-state DB.
+    Direct calls (non-DI contexts) create a fresh connection.
+    """
+    config = load_config()
+    return PyriteDB(config.settings.index_path)
 
 
 def get_index_mgr() -> IndexManager:
-    """Get or create index manager."""
-    global _index_mgr
-    if _index_mgr is None:
-        _index_mgr = IndexManager(get_db(), get_config())
-    return _index_mgr
+    """Get or create index manager.
+
+    Overridden via ``dependency_overrides`` inside FastAPI apps.
+    """
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    return IndexManager(db, config)
 
 
 def get_kb_service(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
 ) -> KBService:
-    """Get or create KB service. Uses FastAPI DI so test overrides work."""
-    global _kb_service
-    if _kb_service is None:
-        _kb_service = KBService(config, db)
-    # If config/db changed (test overrides), rebuild
-    elif _kb_service.config is not config or _kb_service.db is not db:
-        _kb_service = KBService(config, db)
-    return _kb_service
+    """Get or create KB service via DI."""
+    return KBService(config, db)
 
 
 def get_llm_service(
@@ -85,23 +92,20 @@ def get_llm_service(
     db: PyriteDB = Depends(get_db),
 ) -> LLMService:
     """Get or create LLM service, using DB settings with config file fallback."""
-    global _llm_service
-    if _llm_service is None:
-        provider = db.get_setting("ai.provider") or config.settings.ai_provider
-        api_key = db.get_setting("ai.apiKey") or config.settings.ai_api_key
-        model = db.get_setting("ai.model") or config.settings.ai_model
-        base_url = db.get_setting("ai.baseUrl") or config.settings.ai_api_base
-        # Default base URL for Gemini's OpenAI-compatible endpoint
-        if provider == "gemini" and not base_url:
-            base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
-        settings = Settings(
-            ai_provider=provider,
-            ai_api_key=api_key,
-            ai_model=model,
-            ai_api_base=base_url,
-        )
-        _llm_service = LLMService(settings)
-    return _llm_service
+    provider = db.get_setting("ai.provider") or config.settings.ai_provider
+    api_key = db.get_setting("ai.apiKey") or config.settings.ai_api_key
+    model = db.get_setting("ai.model") or config.settings.ai_model
+    base_url = db.get_setting("ai.baseUrl") or config.settings.ai_api_base
+    # Default base URL for Gemini's OpenAI-compatible endpoint
+    if provider == "gemini" and not base_url:
+        base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    settings = Settings(
+        ai_provider=provider,
+        ai_api_key=api_key,
+        ai_model=model,
+        ai_api_base=base_url,
+    )
+    return LLMService(settings)
 
 
 def get_search_service(
@@ -113,9 +117,11 @@ def get_search_service(
 
 
 def invalidate_llm_service():
-    """Reset the cached LLM service so next request rebuilds it."""
-    global _llm_service
-    _llm_service = None
+    """Reset the cached LLM service so next request rebuilds it.
+
+    No-op retained for import compatibility. With app-state-scoped DI,
+    LLM services are rebuilt per-request from current DB settings.
+    """
 
 
 TIER_LEVELS = {"read": 0, "write": 1, "admin": 2}
@@ -392,7 +398,31 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
     # Resolve config for CORS setup
     if config is None:
-        config = get_config()
+        config = load_config()
+
+    # Store all service state on app.state for per-app isolation
+    _init_app_state(application, config)
+
+    # Override DI functions to read from app.state instead of module globals
+    def _app_get_config() -> PyriteConfig:
+        return application.state.pyrite_config
+
+    def _app_get_db() -> PyriteDB:
+        if application.state.pyrite_db is None:
+            cfg = application.state.pyrite_config
+            application.state.pyrite_db = PyriteDB(cfg.settings.index_path)
+        return application.state.pyrite_db
+
+    def _app_get_index_mgr() -> IndexManager:
+        if application.state.pyrite_index_mgr is None:
+            application.state.pyrite_index_mgr = IndexManager(
+                _app_get_db(), _app_get_config()
+            )
+        return application.state.pyrite_index_mgr
+
+    application.dependency_overrides[get_config] = _app_get_config
+    application.dependency_overrides[get_db] = _app_get_db
+    application.dependency_overrides[get_index_mgr] = _app_get_index_mgr
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins

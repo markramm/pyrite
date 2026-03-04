@@ -119,9 +119,8 @@ class TestTagTreeAPI:
         fastapi = pytest.importorskip("fastapi")  # noqa: F841
         from fastapi.testclient import TestClient
 
-        import pyrite.server.api as api_module
         from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
-        from pyrite.server.api import create_app
+        from pyrite.server.api import create_app, get_config, get_db
         from pyrite.storage.database import PyriteDB
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -151,17 +150,11 @@ class TestTagTreeAPI:
                     }
                 )
 
-            api_module._config = config
-            api_module._db = db
-            api_module._kb_service = None
             app = create_app(config)
+            app.dependency_overrides[get_config] = lambda: config
+            app.dependency_overrides[get_db] = lambda: db
             yield TestClient(app)
             db.close()
-
-            # Reset globals
-            api_module._config = None
-            api_module._db = None
-            api_module._kb_service = None
 
     def test_get_tag_tree(self, client):
         """GET /tags/tree returns hierarchical tree."""

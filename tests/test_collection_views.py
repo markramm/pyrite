@@ -50,18 +50,13 @@ class TestPatchEntryEndpoint:
             db = PyriteDB(db_path)
             IndexManager(db, config).index_all()
 
-            import pyrite.server.api as api_module
-
-            api_module._config = config
-            api_module._db = db
+            from pyrite.server.api import get_config, get_db
 
             app = create_app(config)
+            app.dependency_overrides[get_config] = lambda: config
+            app.dependency_overrides[get_db] = lambda: db
             yield TestClient(app)
             db.close()
-            api_module._config = None
-            api_module._db = None
-            api_module._kb_service = None
-            api_module._index_mgr = None
 
     def test_patch_entry_field(self, client):
         """PATCH should update a single field on an entry."""

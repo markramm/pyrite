@@ -381,19 +381,16 @@ def rest_api_env(indexed_test_env):
     """Test environment for REST API tests with TestClient."""
     from starlette.testclient import TestClient
 
-    import pyrite.server.api as api_module
-    from pyrite.server.api import create_app
+    from pyrite.server.api import create_app, get_config, get_db, get_index_mgr
 
     config = indexed_test_env["config"]
     db = indexed_test_env["db"]
     index_mgr = indexed_test_env["index_mgr"]
 
-    api_module._config = config
-    api_module._db = db
-    api_module._index_mgr = index_mgr
-    api_module._kb_service = None
-
     app = create_app(config)
+    app.dependency_overrides[get_config] = lambda: config
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_index_mgr] = lambda: index_mgr
     client = TestClient(app)
 
     yield {
@@ -403,11 +400,6 @@ def rest_api_env(indexed_test_env):
         "events_kb": indexed_test_env["events_kb"],
         "research_kb": indexed_test_env["research_kb"],
     }
-
-    api_module._config = None
-    api_module._db = None
-    api_module._index_mgr = None
-    api_module._kb_service = None
 
 
 class TestApiContentNegotiation:

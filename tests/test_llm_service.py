@@ -333,24 +333,16 @@ class TestAIStatusEndpoint:
     def test_ai_status_returns_config(self):
         from fastapi.testclient import TestClient
 
-        from pyrite.server.api import app
+        from pyrite.server.api import create_app
 
+        app = create_app()
         with TestClient(app) as client:
-            # Reset the cached config to force fresh load
-            import pyrite.server.api as api_module
-
-            old_config = api_module._config
-            api_module._config = None
-
-            try:
-                response = client.get("/api/ai/status")
-                assert response.status_code == 200
-                data = response.json()
-                assert "configured" in data
-                assert "provider" in data
-                assert "model" in data
-                assert isinstance(data["configured"], bool)
-                assert isinstance(data["provider"], str)
-                assert isinstance(data["model"], str)
-            finally:
-                api_module._config = old_config
+            response = client.get("/api/ai/status")
+            assert response.status_code == 200
+            data = response.json()
+            assert "configured" in data
+            assert "provider" in data
+            assert "model" in data
+            assert isinstance(data["configured"], bool)
+            assert isinstance(data["provider"], str)
+            assert isinstance(data["model"], str)

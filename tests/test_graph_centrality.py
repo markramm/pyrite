@@ -189,13 +189,12 @@ def graph_env():
         index_mgr = IndexManager(db, config)
         index_mgr.index_all()
 
-        import pyrite.server.api as api_module
-
-        api_module._config = config
-        api_module._db = db
-        api_module._index_mgr = index_mgr
+        from pyrite.server.api import get_config, get_db, get_index_mgr
 
         app = create_app(config)
+        app.dependency_overrides[get_config] = lambda: config
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_index_mgr] = lambda: index_mgr
         client = TestClient(app)
 
         yield {
@@ -206,10 +205,6 @@ def graph_env():
         }
 
         db.close()
-
-        api_module._config = None
-        api_module._db = None
-        api_module._index_mgr = None
 
 
 class TestGraphCentralityEndpoint:

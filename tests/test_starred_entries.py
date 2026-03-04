@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
 from pyrite.models import EventEntry
-from pyrite.server.api import app
+from pyrite.server.api import create_app, get_config, get_db, get_index_mgr
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.index import IndexManager
 from pyrite.storage.repository import KBRepository
@@ -55,12 +55,10 @@ def starred_env():
         index_mgr = IndexManager(db, config)
         index_mgr.index_all()
 
-        # Inject into app globals
-        import pyrite.server.api as api_module
-
-        api_module._config = config
-        api_module._db = db
-        api_module._index_mgr = index_mgr
+        app = create_app(config)
+        app.dependency_overrides[get_config] = lambda: config
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_index_mgr] = lambda: index_mgr
 
         client = TestClient(app)
 
@@ -71,11 +69,6 @@ def starred_env():
         }
 
         db.close()
-
-        # Reset globals
-        api_module._config = None
-        api_module._db = None
-        api_module._index_mgr = None
 
 
 class TestStarEntry:

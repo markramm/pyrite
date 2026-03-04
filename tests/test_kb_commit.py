@@ -311,26 +311,12 @@ class TestRESTCommitEndpoints:
     """Test REST API commit/push endpoints."""
 
     def _make_app(self, config, db):
-        from pyrite.server.api import create_app
-        import pyrite.server.api as api_module
+        from pyrite.server.api import create_app, get_config, get_db
 
-        api_module._config = config
-        api_module._db = db
-        api_module._kb_service = None
-        api_module._index_mgr = None
-
-        return create_app(config)
-
-    @pytest.fixture(autouse=True)
-    def _cleanup_api_module(self):
-        """Reset api module globals after each test to prevent test isolation issues."""
-        yield
-        import pyrite.server.api as api_module
-
-        api_module._config = None
-        api_module._db = None
-        api_module._kb_service = None
-        api_module._index_mgr = None
+        app = create_app(config)
+        app.dependency_overrides[get_config] = lambda: config
+        app.dependency_overrides[get_db] = lambda: db
+        return app
 
     def test_commit_endpoint(self, git_kb):
         from starlette.testclient import TestClient

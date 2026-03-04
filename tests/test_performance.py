@@ -253,33 +253,26 @@ class TestPerformance:
         """Graph API with centrality on 1000+ nodes completes within 5 seconds."""
         fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
         from fastapi.testclient import TestClient
-        from pyrite.server.api import create_app
-        import pyrite.server.api as api_module
+        from pyrite.server.api import create_app, get_config, get_db, get_index_mgr
 
         config = large_kb["config"]
         db = large_kb["db"]
         index_mgr = large_kb["index_mgr"]
 
-        api_module._config = config
-        api_module._db = db
-        api_module._index_mgr = index_mgr
+        app = create_app(config)
+        app.dependency_overrides[get_config] = lambda: config
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[get_index_mgr] = lambda: index_mgr
+        client = TestClient(app)
 
-        try:
-            app = create_app(config)
-            client = TestClient(app)
+        start = time.perf_counter()
+        response = client.get("/api/graph?include_centrality=true")
+        elapsed = time.perf_counter() - start
 
-            start = time.perf_counter()
-            response = client.get("/api/graph?include_centrality=true")
-            elapsed = time.perf_counter() - start
-
-            assert response.status_code == 200
-            data = response.json()
-            assert len(data.get("nodes", [])) > 0
-            assert elapsed < 5, f"Graph API with centrality took {elapsed:.2f}s (limit: 5s)"
-        finally:
-            api_module._config = None
-            api_module._db = None
-            api_module._index_mgr = None
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data.get("nodes", [])) > 0
+        assert elapsed < 5, f"Graph API with centrality took {elapsed:.2f}s (limit: 5s)"
 
     def test_qa_validate_performance(self, large_kb):
         """QA validation of 1000+ entries completes within 10 seconds."""

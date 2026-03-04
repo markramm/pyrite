@@ -76,8 +76,8 @@ class TestRunHooksPropagation:
             with pytest.raises(KBReadOnlyError):
                 KBService._run_hooks("before_save", entry, {})
 
-    def test_permission_error_caught(self):
-        """PermissionError is not a PyriteError, so it's caught and entry returned."""
+    def test_permission_error_propagated_in_before_hooks(self):
+        """PermissionError in before_save hooks should propagate (hook atomicity)."""
         from pyrite.models.core_types import NoteEntry
         from pyrite.services.kb_service import KBService
 
@@ -86,11 +86,11 @@ class TestRunHooksPropagation:
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
-            result = KBService._run_hooks("before_save", entry, {})
-            assert result is entry
+            with pytest.raises(PermissionError, match="denied"):
+                KBService._run_hooks("before_save", entry, {})
 
-    def test_generic_exception_returns_entry(self):
-        """Generic exceptions in hooks should be caught and entry returned."""
+    def test_generic_exception_propagated_in_before_hooks(self):
+        """Generic exceptions in before_save hooks should propagate (hook atomicity)."""
         from pyrite.models.core_types import NoteEntry
         from pyrite.services.kb_service import KBService
 
@@ -99,8 +99,8 @@ class TestRunHooksPropagation:
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
-            result = KBService._run_hooks("before_save", entry, {})
-            assert result is entry
+            with pytest.raises(RuntimeError, match="boom"):
+                KBService._run_hooks("before_save", entry, {})
 
     def test_successful_hook_returns_result(self):
         """Successful hooks return the modified entry."""
