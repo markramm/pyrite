@@ -74,18 +74,18 @@ Recommended execution order. Grouped by milestone.
 
 **0.16 — Onboarding & Docs (launch release):**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[pypi-trusted-publisher]] | S | Configure OIDC trusted publisher for automated PyPI releases |
-| **2** | [[container-deployment]] Phase 2 | S | One-click deploy buttons (Railway, Render, Fly.io) |
-| **3** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers |
-| **4** | Getting Started tutorial | S | Newcomer-friendly onboarding |
-| **5** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code |
-| **6** | [[awesome-plugins-page]] | XS | Curated plugin listing |
-| **7** | [[pyrite-ci-command]] | S | CI/CD schema + link validation |
-| **8** | [[web-ui-alpha-banner]] | S | Alpha badge, feedback button, error "report this" links |
-| **9** | [[doc-openai-mcp-integration]] | XS | OpenAI / Codex MCP connection docs |
-| **10** | [[doc-gemini-mcp-integration]] | XS | Gemini CLI / Antigravity MCP connection docs |
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[pypi-trusted-publisher]] | S | Configure OIDC trusted publisher for automated PyPI releases | manual (PyPI settings) |
+| **2** | [[container-deployment]] Phase 2 | S | One-click deploy buttons (Railway, Render, Fly.io) | **done** |
+| **3** | [[personal-kb-repo-backing]] | M | Export KB to GitHub repo + tiers | **done** |
+| **4** | Getting Started tutorial | S | Newcomer-friendly onboarding | **done** |
+| **5** | [[plugin-writing-tutorial]] | S | Build a plugin with Claude Code | **done** |
+| **6** | [[awesome-plugins-page]] | XS | Curated plugin listing | **done** |
+| **7** | [[pyrite-ci-command]] | S | CI/CD schema + link validation | **done** |
+| **8** | [[web-ui-alpha-banner]] | S | Alpha badge, feedback button, error "report this" links | **done** |
+| **9** | [[doc-openai-mcp-integration]] | XS | OpenAI / Codex MCP connection docs | **done** |
+| **10** | [[doc-gemini-mcp-integration]] | XS | Gemini CLI / Antigravity MCP connection docs | **done** |
 
 **0.17 — Ecosystem:**
 
@@ -186,18 +186,18 @@ Recommended execution order. Grouped by milestone.
 
 ### Planned — 0.16 (Onboarding & Docs — launch release)
 
-| # | Item | Kind | Effort | Milestone |
-|---|------|------|--------|-----------|
-| — | [[pypi-trusted-publisher]] | task | S | 0.16 |
-| 114 | [[container-deployment]] Phase 2 | feature | S | 0.16 |
-| 113 | [[personal-kb-repo-backing]] | feature | M | 0.16 |
-| — | Getting Started tutorial | feature | S | 0.16 |
-| 108 | [[plugin-writing-tutorial]] | feature | S | 0.16 |
-| 109 | [[awesome-plugins-page]] | feature | XS | 0.16 |
-| 86 | [[pyrite-ci-command]] | feature | S | 0.16 |
-| — | [[web-ui-alpha-banner]] | feature | S | 0.16 |
-| — | [[doc-openai-mcp-integration]] | docs | XS | 0.16 |
-| — | [[doc-gemini-mcp-integration]] | docs | XS | 0.16 |
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| — | [[pypi-trusted-publisher]] | task | S | 0.16 | manual (PyPI settings) |
+| 114 | [[container-deployment]] Phase 2 | feature | S | 0.16 | **done** |
+| 113 | [[personal-kb-repo-backing]] | feature | M | 0.16 | **done** |
+| — | Getting Started tutorial | feature | S | 0.16 | **done** |
+| 108 | [[plugin-writing-tutorial]] | feature | S | 0.16 | **done** |
+| 109 | [[awesome-plugins-page]] | feature | XS | 0.16 | **done** |
+| 86 | [[pyrite-ci-command]] | feature | S | 0.16 | **done** |
+| — | [[web-ui-alpha-banner]] | feature | S | 0.16 | **done** |
+| — | [[doc-openai-mcp-integration]] | docs | XS | 0.16 | **done** |
+| — | [[doc-gemini-mcp-integration]] | docs | XS | 0.16 | **done** |
 
 ### Planned — 0.17 (Ecosystem)
 
@@ -423,6 +423,9 @@ All items below are done. Detail lives in the individual backlog item files in [
 
 ### Wave 17 — Deployment & Demo (0.15)
 [[container-deployment]] Phase 1 (Dockerfile, Docker Compose, env var config), [[demo-site-deployment]] (deploy/demo/ for demo.pyrite.wiki, deploy/ink/ for pyrite.ink, deploy/selfhost/ for self-hosters), [[pyrite-website]] (Astro + Tailwind site at pyrite.wiki on GitHub Pages), [[byok-ai-gap-analysis]] (audit confirmed all AI features are BYOK-ready)
+
+### Wave 18 — Onboarding & Docs (0.16)
+[[container-deployment]] Phase 2 (Railway, Render, Fly.io deploy configs), [[personal-kb-repo-backing]] (KB export to directory, usage tier config, migration v10), [[pyrite-ci-command]] (CI/CD validation command), [[plugin-writing-tutorial]], Getting Started tutorial, [[awesome-plugins-page]], [[web-ui-alpha-banner]] (alpha badge, feedback button, error report links), [[doc-openai-mcp-integration]], [[doc-gemini-mcp-integration]]
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[silent-error-logging]], [[test-coverage-gaps]]

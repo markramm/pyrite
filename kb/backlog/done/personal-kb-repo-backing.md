@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: planned
+status: completed
 links:
 - per-kb-permissions
 - oauth-providers

@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: medium
 effort: S
-status: planned
+status: completed
 links:
 - permissions-model
 - qa-agent-workflows

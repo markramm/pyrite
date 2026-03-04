@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: medium
 effort: XS
-status: planned
+status: completed
 links:
 - plugin-repo-extraction
 - extension-registry

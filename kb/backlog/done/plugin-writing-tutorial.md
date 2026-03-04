@@ -11,7 +11,7 @@ tags:
 kind: feature
 priority: high
 effort: S
-status: planned
+status: completed
 links:
 - extension-builder-skill
 - plugin-repo-extraction
