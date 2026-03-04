@@ -79,6 +79,7 @@ class IndexManager:
             "aliases": entry.aliases,
             "sources": [s.to_dict() for s in entry.sources],
             "links": [l.to_dict() for l in entry.links],
+            "lifecycle": getattr(entry, "lifecycle", "active"),
             "created_at": entry.created_at.isoformat() if entry.created_at else None,
             "updated_at": entry.updated_at.isoformat() if entry.updated_at else None,
         }

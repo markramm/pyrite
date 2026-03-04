@@ -39,6 +39,7 @@ class CRUDMixin:
         sort_order: str = "desc",
         limit: int = 50,
         offset: int = 0,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """List entries with pagination, optionally filtered by KB, type, and/or tag."""
         return self._backend.list_entries(
@@ -49,6 +50,7 @@ class CRUDMixin:
             sort_order=sort_order,
             limit=limit,
             offset=offset,
+            include_archived=include_archived,
         )
 
     def count_entries(

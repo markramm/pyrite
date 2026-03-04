@@ -68,6 +68,9 @@ class Entry(Base):
     end_date = Column(String)
     coordinates = Column(String)
 
+    # Lifecycle (active / archived)
+    lifecycle = Column(String, server_default="active")
+
     # Extension fields (JSON) — attribute named extra_data to avoid SQLAlchemy reserved 'metadata'
     extra_data = Column("metadata", Text, default="{}")
 

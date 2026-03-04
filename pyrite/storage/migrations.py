@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 10
+CURRENT_VERSION = 11
 
 
 @dataclass
@@ -258,6 +258,17 @@ MIGRATIONS: list[Migration] = [
         -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
         """,
     ),
+    Migration(
+        version=11,
+        description="Add lifecycle column to entry for archive support",
+        # Actual ALTER TABLE handled conditionally in _apply_v11() since column
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        DROP INDEX IF EXISTS idx_entry_lifecycle;
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
 ]
 
 
@@ -420,6 +431,23 @@ class MigrationManager:
             self.conn.execute(
                 "ALTER TABLE local_user ADD COLUMN usage_tier TEXT DEFAULT 'default'"
             )
+        self.conn.commit()
+
+    def _apply_v11(self) -> None:
+        """Conditionally add lifecycle column to entry for archive support."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entry'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(entry)").fetchall()}
+        if "lifecycle" not in existing:
+            self.conn.execute(
+                "ALTER TABLE entry ADD COLUMN lifecycle TEXT DEFAULT 'active'"
+            )
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_entry_lifecycle ON entry(lifecycle)"
+        )
         self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:

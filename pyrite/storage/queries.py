@@ -29,6 +29,8 @@ class QueryMixin:
         date_to: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        include_archived: bool = False,
+        lifecycle: str | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search across entries using FTS5."""
         return self._backend.search(
@@ -40,6 +42,8 @@ class QueryMixin:
             date_to=date_to,
             limit=limit,
             offset=offset,
+            include_archived=include_archived,
+            lifecycle=lifecycle,
         )
 
     def search_by_tag(

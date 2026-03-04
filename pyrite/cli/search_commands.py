@@ -35,6 +35,9 @@ def register_search_command(app: typer.Typer):
         ),
         use_files: bool = typer.Option(False, "--files", help="Search files directly (skip index)"),
         expand: bool = typer.Option(False, "--expand", "-x", help="Use AI query expansion"),
+        include_archived: bool = typer.Option(
+            False, "--include-archived", help="Include archived entries in results"
+        ),
         include_body: bool = typer.Option(
             False, "--include-body", help="Include full body text (default: snippet only)"
         ),
@@ -89,6 +92,7 @@ def register_search_command(app: typer.Typer):
                 limit=limit,
                 mode=search_mode,
                 expand=expand,
+                include_archived=include_archived,
             )
 
             if not results:

@@ -111,6 +111,7 @@ class SearchService:
         sanitize: bool = True,
         mode: str | SearchMode = SearchMode.KEYWORD,
         expand: bool = False,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -176,6 +177,7 @@ class SearchService:
             date_to=date_to,
             limit=limit,
             offset=offset,
+            include_archived=include_archived,
         )
 
     def _expand_query(self, query: str) -> str:

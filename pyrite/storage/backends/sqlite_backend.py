@@ -89,6 +89,7 @@ class SQLiteBackend:
             existing.start_date = entry_data.get("start_date")
             existing.end_date = entry_data.get("end_date")
             existing.coordinates = entry_data.get("coordinates")
+            existing.lifecycle = entry_data.get("lifecycle", "active")
             existing.extra_data = metadata_json
             existing.updated_at = entry_data.get("updated_at")
             existing.indexed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
@@ -117,6 +118,7 @@ class SQLiteBackend:
                 start_date=entry_data.get("start_date"),
                 end_date=entry_data.get("end_date"),
                 coordinates=entry_data.get("coordinates"),
+                lifecycle=entry_data.get("lifecycle", "active"),
                 extra_data=metadata_json,
                 created_at=entry_data.get("created_at"),
                 updated_at=entry_data.get("updated_at"),
@@ -263,6 +265,7 @@ class SQLiteBackend:
             "importance": entry.importance,
             "status": entry.status,
             "location": entry.location,
+            "lifecycle": entry.lifecycle or "active",
             "metadata": self._parse_metadata(entry.extra_data),
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
@@ -336,8 +339,15 @@ class SQLiteBackend:
         sort_order: str = "desc",
         limit: int = 50,
         offset: int = 0,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
+        from sqlalchemy import func as sa_func
+
         query = self._session.query(Entry)
+        if not include_archived:
+            query = query.filter(
+                sa_func.coalesce(Entry.lifecycle, "active") != "archived"
+            )
         if tag:
             query = (
                 query.join(
@@ -424,12 +434,14 @@ class SQLiteBackend:
         date_to: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        include_archived: bool = False,
+        lifecycle: str | None = None,
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT
                 e.id, e.kb_name, e.entry_type, e.title, e.summary,
                 e.file_path, e.date, e.importance, e.status, e.location,
-                e.metadata, e.created_at, e.updated_at, e.indexed_at,
+                e.lifecycle, e.metadata, e.created_at, e.updated_at, e.indexed_at,
                 e.created_by, e.modified_by,
                 snippet(entry_fts, 4, '<mark>', '</mark>', '...', 32) as snippet,
                 bm25(entry_fts) as rank
@@ -438,6 +450,11 @@ class SQLiteBackend:
             WHERE entry_fts MATCH ?
         """
         params: list[Any] = [query]
+        if lifecycle:
+            sql += " AND e.lifecycle = ?"
+            params.append(lifecycle)
+        elif not include_archived:
+            sql += " AND COALESCE(e.lifecycle, 'active') != 'archived'"
         if kb_name:
             sql += " AND e.kb_name = ?"
             params.append(kb_name)

@@ -614,4 +614,7 @@ def entry_from_frontmatter(meta: dict[str, Any], body: str) -> Entry:
     """Create an entry from frontmatter, auto-detecting the type."""
     entry_type = meta.get("type", "note")
     cls = get_entry_class(entry_type)
-    return cls.from_frontmatter(meta, body)
+    entry = cls.from_frontmatter(meta, body)
+    # Restore lifecycle from frontmatter (base field, not in subclass constructors)
+    entry.lifecycle = meta.get("lifecycle", "active")
+    return entry

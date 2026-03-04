@@ -332,6 +332,6 @@ class TestMigrationV10:
 
         conn.close()
 
-    def test_current_version_is_10(self):
-        """CURRENT_VERSION is 10 after migration."""
-        assert CURRENT_VERSION == 10
+    def test_current_version_is_11(self):
+        """CURRENT_VERSION is 11 after migration."""
+        assert CURRENT_VERSION == 11

@@ -30,6 +30,7 @@ from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from .collection_commands import collections_app
 from .context import cli_context
+from .db_commands import db_app
 from .extension_commands import extension_app
 from .index_commands import index_app
 from .init_command import init_kb
@@ -64,6 +65,7 @@ app.add_typer(kb_app, name="kb")
 app.add_typer(index_app, name="index")
 app.add_typer(collections_app, name="collections")
 app.add_typer(qa_app, name="qa")
+app.add_typer(db_app, name="db")
 
 # Repository management — collaboration app with subscribe/fork/sync/unsubscribe/status/list
 # Plus legacy add/remove commands added below
@@ -523,6 +525,7 @@ def update_entry(
     body: str = typer.Option(None, "--body", "-b", help="New body text"),
     tags: str = typer.Option(None, "--tags", help="New comma-separated tags"),
     importance: int = typer.Option(None, "--importance", "-i", help="New importance (1-10)"),
+    lifecycle: str = typer.Option(None, "--lifecycle", help="Lifecycle state: active or archived"),
     field: list[str] | None = typer.Option(None, "--field", "-f", help="Extra field as key=value"),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
@@ -536,6 +539,8 @@ def update_entry(
         updates["body"] = body
     if importance is not None:
         updates["importance"] = importance
+    if lifecycle is not None:
+        updates["lifecycle"] = lifecycle
     if tags is not None:
         updates["tags"] = [t.strip() for t in tags.split(",")]
 

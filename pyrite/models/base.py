@@ -48,6 +48,7 @@ class Entry(ABC):
     provenance: Provenance | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     importance: int = 5
+    lifecycle: str = "active"
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
 
@@ -95,6 +96,8 @@ class Entry(ABC):
                 meta["provenance"] = prov
         if self.importance != 5:
             meta["importance"] = self.importance
+        if self.lifecycle != "active":
+            meta["lifecycle"] = self.lifecycle
         if self.metadata:
             meta["metadata"] = self.metadata
         if self._schema_version > 0:
@@ -112,6 +115,7 @@ class Entry(ABC):
             "body": self.body,
             "summary": self.summary,
             "file_path": file_path,
+            "lifecycle": self.lifecycle,
             "metadata": self.metadata,
         }
 
@@ -131,7 +135,11 @@ class Entry(ABC):
         meta = load_yaml(parts[1])
         body = parts[2].strip()
 
-        return cls.from_frontmatter(meta, body)
+        entry = cls.from_frontmatter(meta, body)
+        # Restore lifecycle from frontmatter (base field, not in subclass constructors)
+        if entry is not None:
+            entry.lifecycle = meta.get("lifecycle", "active")
+        return entry
 
     @classmethod
     def load(cls, path: Path) -> "Entry":

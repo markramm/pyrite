@@ -48,6 +48,7 @@ class SearchBackend(Protocol):
         sort_order: str = "desc",
         limit: int = 50,
         offset: int = 0,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """List entries with pagination and optional filters."""
         ...
@@ -81,6 +82,8 @@ class SearchBackend(Protocol):
         date_to: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        include_archived: bool = False,
+        lifecycle: str | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search across entries."""
         ...
