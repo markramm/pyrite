@@ -107,10 +107,10 @@ Recommended execution order. Grouped by milestone.
 
 **Post-launch — KB Quality & Lifecycle:**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[entry-lifecycle-field-and-search-filtering]] | S | Archive entries without deleting, filter from search |
-| **2** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness |
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[entry-lifecycle-field-and-search-filtering]] | S | Archive entries without deleting, filter from search | **done** |
+| **2** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness | |
 
 **Future:**
 
@@ -119,7 +119,7 @@ Recommended execution order. Grouped by milestone.
 | **1** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality |
 | **2** | [[event-bus-webhooks]] | M | Integration story, live graph updates |
 | **3** | [[kb-orchestrator-skill]] | M | Multi-KB agent coordination pattern |
-| **4** | [[db-backup-restore]] | S | Operational tooling |
+| **4** | [[db-backup-restore]] | S | Operational tooling | **done** |
 | **5** | [[search-relevance-boost-by-entry-type]] | M | Type-aware search ranking + intent integration |
 
 ---
@@ -220,9 +220,9 @@ Recommended execution order. Grouped by milestone.
 
 | # | Item | Kind | Effort |
 |---|------|------|--------|
-| — | [[entry-lifecycle-field-and-search-filtering]] | feature | S |
-| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S |
-| — | [[knowledgeclaw-pyrite-powered-agent-for-openclaw-ecosystem]] | feature | XL |
+| — | [[entry-lifecycle-field-and-search-filtering]] | feature | S | **done** |
+| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S | |
+| — | [[knowledgeclaw-pyrite-powered-agent-for-openclaw-ecosystem]] | feature | XL | |
 
 ### Planned — Future
 
@@ -230,7 +230,7 @@ Recommended execution order. Grouped by milestone.
 |---|------|------|--------|
 | 92 | [[intent-layer]] | feature | M |
 | 95 | [[event-bus-webhooks]] | feature | M |
-| 96 | [[db-backup-restore]] | feature | S |
+| 96 | [[db-backup-restore]] | feature | S | **done** |
 | 98 | [[kb-orchestrator-skill]] | feature | M |
 | — | [[search-relevance-boost-by-entry-type]] | feature | M |
 
@@ -426,6 +426,9 @@ All items below are done. Detail lives in the individual backlog item files in [
 
 ### Wave 18 — Onboarding & Docs (0.16)
 [[container-deployment]] Phase 2 (Railway, Render, Fly.io deploy configs), [[personal-kb-repo-backing]] (KB export to directory, usage tier config, migration v10), [[pyrite-ci-command]] (CI/CD validation command), [[plugin-writing-tutorial]], Getting Started tutorial, [[awesome-plugins-page]], [[web-ui-alpha-banner]] (alpha badge, feedback button, error report links), [[doc-openai-mcp-integration]], [[doc-gemini-mcp-integration]]
+
+### Wave 19 — Backend Polish & E2E Coverage
+[[db-backup-restore]] (SQLite `conn.backup()` backup/restore commands), [[entry-lifecycle-field-and-search-filtering]] (lifecycle field, migration v11, archive-aware search), comprehensive Playwright E2E expansion (7 new specs: search, collections, qa, settings, daily, entry-crud, auth)
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[silent-error-logging]], [[test-coverage-gaps]]
