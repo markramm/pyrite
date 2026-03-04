@@ -84,6 +84,16 @@ class ApiClient {
 		return this.request('/api/kbs');
 	}
 
+	async exportKB(
+		kbName: string,
+		repoUrl: string
+	): Promise<{ success: boolean; entries_exported: number; message: string }> {
+		return this.request(`/api/kbs/${encodeURIComponent(kbName)}/export`, {
+			method: 'POST',
+			body: JSON.stringify({ repo_url: repoUrl })
+		});
+	}
+
 	// Search
 	async search(
 		query: string,

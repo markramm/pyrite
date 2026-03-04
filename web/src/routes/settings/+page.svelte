@@ -8,6 +8,11 @@
 
 	let testingConnection = $state(false);
 	let connectionResult = $state<{ ok: boolean; message: string } | null>(null);
+	let exportingKB = $state(false);
+	let exportResult = $state<{ ok: boolean; message: string } | null>(null);
+	let exportRepoUrl = $state('');
+	let exportKbName = $state('');
+	let showExportDialog = $state(false);
 
 	onMount(() => {
 		settingsStore.load();
@@ -93,6 +98,33 @@
 	const providerBaseUrls: Record<string, string> = {
 		gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/'
 	};
+
+	function openExportDialog() {
+		exportResult = null;
+		exportRepoUrl = '';
+		exportKbName = defaultKb || '';
+		showExportDialog = true;
+	}
+
+	async function handleExportToGitHub() {
+		if (!exportKbName || !exportRepoUrl) return;
+		exportingKB = true;
+		exportResult = null;
+		try {
+			const result = await api.exportKB(exportKbName, exportRepoUrl);
+			exportResult = {
+				ok: result.success,
+				message: result.message
+			};
+		} catch (e) {
+			exportResult = {
+				ok: false,
+				message: e instanceof Error ? e.message : 'Export failed'
+			};
+		} finally {
+			exportingKB = false;
+		}
+	}
 </script>
 
 <svelte:head><title>Settings — Pyrite</title></svelte:head>
@@ -352,23 +384,60 @@
 					</div>
 					<div class="flex items-center justify-between">
 						<div>
-							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Export</label>
-							<p class="text-xs text-zinc-500">Export your knowledge base to a portable format</p>
+							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300">Export to GitHub</label>
+							<p class="text-xs text-zinc-500">Export your knowledge base entries to a GitHub repository</p>
 						</div>
-						<div class="relative group">
-							<button
-								disabled
-								class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium opacity-50 cursor-not-allowed dark:border-zinc-600"
-							>
-								Export...
-							</button>
-							<span
-								class="pointer-events-none absolute right-0 top-full mt-1 w-28 rounded bg-zinc-800 px-2 py-1 text-center text-xs text-zinc-100 opacity-0 transition-opacity group-hover:opacity-100"
-							>
-								Coming soon
-							</span>
-						</div>
+						<button
+							onclick={openExportDialog}
+							class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
+						>
+							Export to GitHub...
+						</button>
 					</div>
+					{#if showExportDialog}
+						<div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+							<div class="space-y-3">
+								<div>
+									<label class="text-xs font-medium text-zinc-600 dark:text-zinc-400">KB Name</label>
+									<input
+										type="text"
+										bind:value={exportKbName}
+										placeholder="e.g., my-notes"
+										class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+									/>
+								</div>
+								<div>
+									<label class="text-xs font-medium text-zinc-600 dark:text-zinc-400">GitHub Repo URL</label>
+									<input
+										type="text"
+										bind:value={exportRepoUrl}
+										placeholder="https://github.com/user/repo"
+										class="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
+									/>
+								</div>
+								<div class="flex items-center gap-2">
+									<button
+										onclick={handleExportToGitHub}
+										disabled={exportingKB || !exportKbName || !exportRepoUrl}
+										class="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+									>
+										{exportingKB ? 'Exporting...' : 'Export'}
+									</button>
+									<button
+										onclick={() => (showExportDialog = false)}
+										class="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
+									>
+										Cancel
+									</button>
+								</div>
+								{#if exportResult}
+									<p class="text-sm {exportResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-500'}">
+										{exportResult.message}
+									</p>
+								{/if}
+							</div>
+						</div>
+					{/if}
 				</div>
 			</section>
 

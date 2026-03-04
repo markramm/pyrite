@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 9
+CURRENT_VERSION = 10
 
 
 @dataclass
@@ -248,6 +248,16 @@ MIGRATIONS: list[Migration] = [
         DROP INDEX IF EXISTS idx_entry_due_date;
         """,
     ),
+    Migration(
+        version=10,
+        description="Add usage_tier column to local_user for personal KB tiers",
+        # Actual ALTER TABLE handled conditionally in _apply_v10() since column
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
 ]
 
 
@@ -396,6 +406,20 @@ class MigrationManager:
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_assignee ON entry(assignee)")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_priority ON entry(priority)")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_due_date ON entry(due_date)")
+        self.conn.commit()
+
+    def _apply_v10(self) -> None:
+        """Conditionally add usage_tier column to local_user."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='local_user'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
+        if "usage_tier" not in existing:
+            self.conn.execute(
+                "ALTER TABLE local_user ADD COLUMN usage_tier TEXT DEFAULT 'default'"
+            )
         self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:

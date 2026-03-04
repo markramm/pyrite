@@ -1,13 +1,24 @@
-"""KB listing and schema endpoints."""
+"""KB listing, schema, and export endpoints."""
+
+import tempfile
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from ...config import PyriteConfig
+from ...exceptions import KBNotFoundError
 from ...services.kb_service import KBService
 from ..api import get_config, get_kb_service, limiter, negotiate_response
 from ..schemas import KBInfo, KBListResponse
 
 router = APIRouter(tags=["Knowledge Bases"])
+
+
+class ExportRequest(BaseModel):
+    """Request body for KB export."""
+
+    repo_url: str
 
 
 @router.get("/kbs", response_model=KBListResponse)
@@ -75,3 +86,45 @@ def orient_kb(
     if neg is not None:
         return neg
     return result
+
+
+@router.post("/kbs/{kb_name}/export")
+@limiter.limit("5/minute")
+def export_kb_to_repo(
+    kb_name: str,
+    body: ExportRequest,
+    request: Request,
+    svc: KBService = Depends(get_kb_service),
+):
+    """Export a KB's entries to a directory (future: push to a GitHub repo).
+
+    Exports all entries as markdown files with YAML frontmatter, organized
+    by entry type. Currently exports to a local temp directory; pushing to
+    a remote GitHub repo requires the user's OAuth token (stretch goal).
+    """
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            export_dir = Path(tmpdir) / kb_name
+            export_dir.mkdir()
+            result = svc.export_kb_to_directory(kb_name, export_dir)
+            # TODO: clone/init repo_url, copy files, commit and push
+            return {
+                "success": True,
+                "kb_name": kb_name,
+                "repo_url": body.repo_url,
+                **result,
+                "message": (
+                    f"Exported {result['entries_exported']} entries. "
+                    "Git push to remote is not yet implemented."
+                ),
+            }
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "EXPORT_FAILED", "message": str(e)},
+        )

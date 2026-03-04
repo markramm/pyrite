@@ -272,6 +272,18 @@ class OAuthProviderConfig:
 
 
 @dataclass
+class UsageTierConfig:
+    """Resource limits for a usage tier (e.g. free, pro)."""
+
+    max_personal_kbs: int = 1
+    max_entries_per_kb: int = 500
+    max_storage_mb: int = 50
+    allow_private_repos: bool = False
+    rate_limit_read: str = "100/minute"
+    rate_limit_write: str = "30/minute"
+
+
+@dataclass
 class AuthConfig:
     """Authentication configuration."""
 
@@ -285,6 +297,7 @@ class AuthConfig:
     ephemeral_max_per_user: int = 1
     ephemeral_default_ttl: int = 86400
     ephemeral_max_ttl: int = 604800
+    usage_tiers: dict[str, UsageTierConfig] = field(default_factory=dict)
 
 
 @dataclass
@@ -666,6 +679,10 @@ class PyriteConfig:
                 ephemeral_max_per_user=auth_data.get("ephemeral_max_per_user", 1),
                 ephemeral_default_ttl=auth_data.get("ephemeral_default_ttl", 86400),
                 ephemeral_max_ttl=auth_data.get("ephemeral_max_ttl", 604800),
+                usage_tiers={
+                    tname: UsageTierConfig(**tdata)
+                    for tname, tdata in auth_data.get("usage_tiers", {}).items()
+                },
             ),
             rate_limit_read=settings_data.get("rate_limit_read", "100/minute"),
             rate_limit_write=settings_data.get("rate_limit_write", "30/minute"),

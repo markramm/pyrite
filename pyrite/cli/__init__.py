@@ -127,6 +127,162 @@ def _cli_error(message: str, output_format: str = "rich", error_code: str | None
     raise typer.Exit(1)
 
 
+# =========================================================================
+# CI command — CI/CD-optimized validation
+# =========================================================================
+
+
+@app.command("ci")
+def ci_command(
+    kb: str | None = typer.Option(None, "--kb", help="Validate specific KB"),
+    output_format: str = typer.Option("text", "--format", help="Output format: text or json"),
+    severity: str = typer.Option(
+        "warning", "--severity", help="Minimum severity to fail on: error or warning"
+    ),
+):
+    """CI/CD-optimized KB validation. Exits 0 on pass, 1 on failure.
+
+    Validates knowledge base integrity and reports results in a format
+    suitable for CI pipelines. Use --format json for machine-readable output.
+    """
+    from ..services.qa_service import QAService
+
+    config = load_config()
+
+    # Handle no KBs configured
+    if not config.knowledge_bases:
+        if output_format == "json":
+            typer.echo(
+                _json.dumps(
+                    {
+                        "kbs": [],
+                        "total_entries": 0,
+                        "total_errors": 0,
+                        "total_warnings": 0,
+                        "result": "pass",
+                    }
+                )
+            )
+        else:
+            typer.echo("pyrite ci — no KBs configured, nothing to validate.")
+        raise typer.Exit(0)
+
+    db = PyriteDB(config.settings.index_path)
+    try:
+        qa = QAService(config, db)
+
+        if kb:
+            result = {"kbs": [qa.validate_kb(kb)]}
+        else:
+            result = qa.validate_all()
+
+        # Aggregate results
+        severity_order = {"error": 0, "warning": 1, "info": 2}
+        fail_threshold = severity_order.get(severity, 1)
+
+        kb_summaries = []
+        total_entries = 0
+        total_errors = 0
+        total_warnings = 0
+
+        for kb_result in result["kbs"]:
+            kb_name = kb_result["kb_name"]
+            entries = kb_result["total"]
+            issues = kb_result["issues"]
+
+            errors = [i for i in issues if i.get("severity") == "error"]
+            warnings = [i for i in issues if i.get("severity") == "warning"]
+
+            total_entries += entries
+            total_errors += len(errors)
+            total_warnings += len(warnings)
+
+            kb_summaries.append(
+                {
+                    "kb_name": kb_name,
+                    "entries": entries,
+                    "errors": len(errors),
+                    "warnings": len(warnings),
+                    "issues": issues,
+                }
+            )
+
+        # Determine pass/fail based on severity threshold
+        has_failure = False
+        if fail_threshold >= 0 and total_errors > 0:
+            has_failure = True
+        if fail_threshold >= 1 and total_warnings > 0:
+            has_failure = True
+
+        result_str = "fail" if has_failure else "pass"
+
+        if output_format == "json":
+            json_output = {
+                "kbs": [
+                    {
+                        "kb_name": s["kb_name"],
+                        "entries": s["entries"],
+                        "errors": s["errors"],
+                        "warnings": s["warnings"],
+                        "issues": [
+                            {
+                                "entry_id": i.get("entry_id", ""),
+                                "severity": i.get("severity", "info"),
+                                "rule": i.get("rule", ""),
+                                "field": i.get("field", ""),
+                                "message": i.get("message", ""),
+                            }
+                            for i in s["issues"]
+                            if severity_order.get(i.get("severity", "info"), 2) <= fail_threshold
+                        ],
+                    }
+                    for s in kb_summaries
+                ],
+                "total_entries": total_entries,
+                "total_errors": total_errors,
+                "total_warnings": total_warnings,
+                "result": result_str,
+            }
+            typer.echo(_json.dumps(json_output, indent=2))
+        else:
+            # Text output
+            kb_count = len(kb_summaries)
+            typer.echo(
+                f"pyrite ci — {kb_count} KB{'s' if kb_count != 1 else ''}, "
+                f"{total_entries} entries validated"
+            )
+            for s in kb_summaries:
+                typer.echo(
+                    f"  {s['kb_name']}: {s['entries']} entries, "
+                    f"{s['errors']} errors, {s['warnings']} warnings"
+                )
+                # Show individual issues at/above threshold
+                for issue in s["issues"]:
+                    sev = issue.get("severity", "info")
+                    if severity_order.get(sev, 2) <= fail_threshold:
+                        entry_id = issue.get("entry_id", "")
+                        message = issue.get("message", "")
+                        typer.echo(f"    {sev.upper()}: {entry_id} — {message}")
+
+            # Result line
+            if has_failure:
+                parts = []
+                if total_errors > 0:
+                    parts.append(f"{total_errors} error{'s' if total_errors != 1 else ''}")
+                if fail_threshold >= 1 and total_warnings > 0:
+                    parts.append(
+                        f"{total_warnings} warning{'s' if total_warnings != 1 else ''}"
+                    )
+                typer.echo(f"\nResult: FAIL ({', '.join(parts)})")
+            else:
+                typer.echo("\nResult: PASS")
+
+        if has_failure:
+            raise typer.Exit(1)
+    finally:
+        db.close()
+
+
 @app.command("get")
 def get_entry(
     entry_id: str = typer.Argument(..., help="Entry ID"),

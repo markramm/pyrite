@@ -1044,6 +1044,132 @@ class KBService:
         return removed
 
     # =========================================================================
+    # Usage Tier Checks
+    # =========================================================================
+
+    def check_kb_creation_allowed(
+        self, user_id: int, user_tier: str, current_kb_count: int
+    ) -> tuple[bool, str]:
+        """Check if user is allowed to create another KB based on tier limits.
+
+        Returns:
+            (allowed, message) — allowed is True if within limits, message explains why not.
+        """
+        tiers = self.config.settings.auth.usage_tiers
+        if not tiers:
+            return True, "No usage tiers configured — unlimited"
+
+        tier_config = tiers.get(user_tier)
+        if not tier_config:
+            return True, f"Tier '{user_tier}' not found — no limits enforced"
+
+        if current_kb_count >= tier_config.max_personal_kbs:
+            return False, (
+                f"KB creation limit reached: {current_kb_count}/{tier_config.max_personal_kbs} "
+                f"for tier '{user_tier}'"
+            )
+        return True, "OK"
+
+    def check_entry_creation_allowed(
+        self, kb_name: str, user_tier: str, current_entry_count: int
+    ) -> tuple[bool, str]:
+        """Check if adding another entry is within tier limits.
+
+        Returns:
+            (allowed, message) — allowed is True if within limits.
+        """
+        tiers = self.config.settings.auth.usage_tiers
+        if not tiers:
+            return True, "No usage tiers configured — unlimited"
+
+        tier_config = tiers.get(user_tier)
+        if not tier_config:
+            return True, f"Tier '{user_tier}' not found — no limits enforced"
+
+        if current_entry_count >= tier_config.max_entries_per_kb:
+            return False, (
+                f"Entry limit reached: {current_entry_count}/{tier_config.max_entries_per_kb} "
+                f"for tier '{user_tier}'"
+            )
+        return True, "OK"
+
+    # =========================================================================
+    # KB Export
+    # =========================================================================
+
+    def export_kb_to_directory(self, kb_name: str, target_dir: Path) -> dict:
+        """Export all entries in a KB as markdown files to a directory.
+
+        Args:
+            kb_name: Name of the KB to export
+            target_dir: Target directory for exported files
+
+        Returns:
+            Summary dict with entries_exported and files_created
+        """
+        import shutil
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy kb.yaml if it exists
+        kb_yaml_src = kb_config.kb_yaml_path
+        if kb_yaml_src.exists():
+            shutil.copy2(kb_yaml_src, target_dir / "kb.yaml")
+
+        # Get all entries from the KB
+        entries = self.db.list_entries(kb_name=kb_name, limit=100000)
+
+        files_created = 0
+        for entry in entries:
+            entry_type = entry.get("entry_type", "note")
+            entry_id = entry.get("id", "unknown")
+            title = entry.get("title", "")
+            body = entry.get("body", "")
+
+            # Organize by entry_type subdirectory
+            type_dir = target_dir / entry_type
+            type_dir.mkdir(parents=True, exist_ok=True)
+
+            # Build YAML frontmatter
+            frontmatter_fields = {
+                "title": title,
+                "type": entry_type,
+            }
+            if entry.get("date"):
+                frontmatter_fields["date"] = entry["date"]
+            if entry.get("status"):
+                frontmatter_fields["status"] = entry["status"]
+            if entry.get("tags"):
+                frontmatter_fields["tags"] = entry["tags"]
+
+            # Format as markdown with frontmatter
+            fm_lines = ["---"]
+            for key, val in frontmatter_fields.items():
+                if isinstance(val, list):
+                    fm_lines.append(f"{key}:")
+                    for item in val:
+                        fm_lines.append(f"  - {item}")
+                else:
+                    fm_lines.append(f"{key}: {val}")
+            fm_lines.append("---")
+            fm_lines.append("")
+
+            content = "\n".join(fm_lines) + (body or "")
+
+            file_path = type_dir / f"{entry_id}.md"
+            file_path.write_text(content, encoding="utf-8")
+            files_created += 1
+
+        return {
+            "entries_exported": len(entries),
+            "files_created": files_created,
+        }
+
+    # =========================================================================
     # Git operations
     # =========================================================================
 

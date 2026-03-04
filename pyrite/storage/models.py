@@ -237,6 +237,7 @@ class LocalUser(Base):
     avatar_url = Column(String, nullable=True)
 
     ephemeral_kb_count = Column(Integer, server_default="0")
+    usage_tier = Column(String, server_default="default")
 
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
     kb_permissions = relationship(
