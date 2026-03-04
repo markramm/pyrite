@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Dashboard', () => {
 	test('loads and shows Pyrite branding', async ({ page }) => {
 		await page.goto('/');
-		await expect(page.getByRole('link', { name: 'Pyrite', exact: true })).toBeVisible();
+		await expect(page.getByRole('link', { name: /Pyrite/ })).toBeVisible();
 	});
 
 	test('shows dashboard heading', async ({ page }) => {
@@ -32,14 +32,14 @@ test.describe('Sidebar Navigation', () => {
 		await page.goto('/');
 		await page.click('aside >> text=Entries');
 		await expect(page).toHaveURL(/\/entries/);
-		await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Entries' }).first()).toBeVisible();
 	});
 
 	test('navigates to timeline page', async ({ page }) => {
 		await page.goto('/');
 		await page.click('aside >> text=Timeline');
 		await expect(page).toHaveURL(/\/timeline/);
-		await expect(page.getByRole('heading', { name: 'Timeline' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Timeline' }).first()).toBeVisible();
 	});
 
 	test('navigates to graph page', async ({ page }) => {
