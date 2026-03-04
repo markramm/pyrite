@@ -5,15 +5,6 @@ Core entry types for knowledge bases.
 """
 
 from .base import Entry
-from .protocols import (
-    PROTOCOL_FIELDS,
-    PROTOCOL_REGISTRY,
-    Assignable,
-    Locatable,
-    Prioritizable,
-    Statusable,
-    Temporal,
-)
 from .core_types import (
     ENTRY_TYPE_REGISTRY,
     DocumentEntry,
@@ -28,6 +19,15 @@ from .core_types import (
     get_entry_class,
 )
 from .generic import GenericEntry
+from .protocols import (
+    PROTOCOL_FIELDS,
+    PROTOCOL_REGISTRY,
+    Assignable,
+    Locatable,
+    Prioritizable,
+    Statusable,
+    Temporal,
+)
 
 __all__ = [
     "Entry",

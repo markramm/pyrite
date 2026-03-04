@@ -14,7 +14,6 @@ from ..exceptions import (
     EntryNotFoundError,
     KBNotFoundError,
     KBReadOnlyError,
-    PyriteError,
     ValidationError,
 )
 from ..models import Entry
@@ -24,6 +23,8 @@ from ..storage.database import PyriteDB
 from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
+from .export_service import ExportService
+from .graph_service import GraphService
 from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
@@ -49,6 +50,8 @@ class KBService:
         self.db = db
         self._index_mgr = IndexManager(db, config)
         self._doc_mgr = doc_mgr or DocumentManager(db, self._index_mgr)
+        self._graph_svc = GraphService(db)
+        self._export_svc = ExportService(config, db)
         self._embedding_svc = None
         self._embedding_checked = False
         self._embedding_worker = None  # Set externally to enable queue-based embedding
@@ -712,6 +715,16 @@ class KBService:
         """Get tags with counts as dicts."""
         return self.db.get_tags_as_dicts(kb_name=kb_name, limit=limit, offset=offset, prefix=prefix)
 
+    def get_most_linked(
+        self, kb_name: str | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Get most referenced entries."""
+        return self.db.get_most_linked(kb_name, limit)
+
+    def get_orphans(self, kb_name: str | None = None) -> list[dict[str, Any]]:
+        """Get entries with no links."""
+        return self.db.get_orphans(kb_name)
+
     def get_tag_tree(self, kb_name: str | None = None) -> list[dict]:
         """Get hierarchical tag tree."""
         return self.db.get_tag_tree(kb_name=kb_name)
@@ -736,7 +749,7 @@ class KBService:
         limit: int = 500,
     ) -> dict[str, Any]:
         """Get graph data for visualization."""
-        return self.db.get_graph_data(
+        return self._graph_svc.get_graph(
             center=center,
             center_kb=center_kb,
             kb_name=kb_name,
@@ -751,11 +764,11 @@ class KBService:
 
     def get_refs_to(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that reference this entry via object-ref fields."""
-        return self.db.get_refs_to(entry_id, kb_name)
+        return self._graph_svc.get_refs_to(entry_id, kb_name)
 
     def get_refs_from(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries this entry references via object-ref fields."""
-        return self.db.get_refs_from(entry_id, kb_name)
+        return self._graph_svc.get_refs_from(entry_id, kb_name)
 
     def orient(self, kb_name: str, recent_limit: int = 5) -> dict[str, Any]:
         """One-shot KB orientation summary for agents entering a new KB."""
@@ -828,11 +841,11 @@ class KBService:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Get entries that link TO this entry."""
-        return self.db.get_backlinks(entry_id, kb_name, limit=limit, offset=offset)
+        return self._graph_svc.get_backlinks(entry_id, kb_name, limit=limit, offset=offset)
 
     def get_outlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that this entry links TO."""
-        return self.db.get_outlinks(entry_id, kb_name)
+        return self._graph_svc.get_outlinks(entry_id, kb_name)
 
     # =========================================================================
     # Wikilink delegation (implementation in WikilinkService)
@@ -1116,67 +1129,7 @@ class KBService:
         Returns:
             Summary dict with entries_exported and files_created
         """
-        import shutil
-
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            raise KBNotFoundError(f"KB not found: {kb_name}")
-
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        # Copy kb.yaml if it exists
-        kb_yaml_src = kb_config.kb_yaml_path
-        if kb_yaml_src.exists():
-            shutil.copy2(kb_yaml_src, target_dir / "kb.yaml")
-
-        # Get all entries from the KB
-        entries = self.db.list_entries(kb_name=kb_name, limit=100000)
-
-        files_created = 0
-        for entry in entries:
-            entry_type = entry.get("entry_type", "note")
-            entry_id = entry.get("id", "unknown")
-            title = entry.get("title", "")
-            body = entry.get("body", "")
-
-            # Organize by entry_type subdirectory
-            type_dir = target_dir / entry_type
-            type_dir.mkdir(parents=True, exist_ok=True)
-
-            # Build YAML frontmatter
-            frontmatter_fields = {
-                "title": title,
-                "type": entry_type,
-            }
-            if entry.get("date"):
-                frontmatter_fields["date"] = entry["date"]
-            if entry.get("status"):
-                frontmatter_fields["status"] = entry["status"]
-            if entry.get("tags"):
-                frontmatter_fields["tags"] = entry["tags"]
-
-            # Format as markdown with frontmatter
-            fm_lines = ["---"]
-            for key, val in frontmatter_fields.items():
-                if isinstance(val, list):
-                    fm_lines.append(f"{key}:")
-                    for item in val:
-                        fm_lines.append(f"  - {item}")
-                else:
-                    fm_lines.append(f"{key}: {val}")
-            fm_lines.append("---")
-            fm_lines.append("")
-
-            content = "\n".join(fm_lines) + (body or "")
-
-            file_path = type_dir / f"{entry_id}.md"
-            file_path.write_text(content, encoding="utf-8")
-            files_created += 1
-
-        return {
-            "entries_exported": len(entries),
-            "files_created": files_created,
-        }
+        return self._export_svc.export_kb_to_directory(kb_name, target_dir)
 
     # =========================================================================
     # Git operations
@@ -1205,20 +1158,7 @@ class KBService:
             KBNotFoundError: KB doesn't exist
             PyriteError: KB is not in a git repository
         """
-        from .git_service import GitService
-
-        kb = self.config.get_kb(kb_name)
-        if not kb:
-            raise KBNotFoundError(f"KB '{kb_name}' not found")
-
-        if not GitService.is_git_repo(kb.path):
-            raise PyriteError(f"KB '{kb_name}' is not in a git repository")
-
-        success, result = GitService.commit(kb.path, message, paths=paths, sign_off=sign_off)
-
-        if success:
-            return {"success": True, **result}
-        return {"success": False, "error": result.get("error", "Unknown error")}
+        return self._export_svc.commit_kb(kb_name, message, paths=paths, sign_off=sign_off)
 
     def push_kb(
         self,
@@ -1241,14 +1181,4 @@ class KBService:
             KBNotFoundError: KB doesn't exist
             PyriteError: KB is not in a git repository
         """
-        from .git_service import GitService
-
-        kb = self.config.get_kb(kb_name)
-        if not kb:
-            raise KBNotFoundError(f"KB '{kb_name}' not found")
-
-        if not GitService.is_git_repo(kb.path):
-            raise PyriteError(f"KB '{kb_name}' is not in a git repository")
-
-        success, msg = GitService.push(kb.path, remote=remote, branch=branch)
-        return {"success": success, "message": msg}
+        return self._export_svc.push_kb(kb_name, remote=remote, branch=branch)

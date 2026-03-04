@@ -42,7 +42,14 @@ def build_import_graph(root: Path) -> dict[str, set[str]]:
                 for child in ast.iter_child_nodes(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         import_nodes.append(child)
-            elif isinstance(node, (ast.If, ast.Try)):
+            elif isinstance(node, ast.If):
+                # Skip TYPE_CHECKING blocks — they're not runtime imports
+                if isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING":
+                    continue
+                for child in ast.walk(node):
+                    if isinstance(child, (ast.Import, ast.ImportFrom)):
+                        import_nodes.append(child)
+            elif isinstance(node, ast.Try):
                 for child in ast.walk(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         import_nodes.append(child)

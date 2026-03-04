@@ -256,7 +256,7 @@ class TestTagAndActorFlow:
         )
 
         # Get all tags
-        tags = env["search_service"].get_tags()
+        tags = env["kb_service"].get_tags()
         tag_names = {t["name"] for t in tags}
         assert "alpha" in tag_names
         assert "beta" in tag_names
@@ -319,11 +319,11 @@ class TestTimelineFlow:
             )
 
         # Get all events
-        events = env["search_service"].get_timeline()
+        events = env["kb_service"].get_timeline()
         assert len(events) == 3
 
         # Filter by date range
-        events = env["search_service"].get_timeline(
+        events = env["kb_service"].get_timeline(
             date_from="2024-02-01",
             date_to="2024-02-28",
         )
@@ -347,7 +347,7 @@ class TestTimelineFlow:
             )
 
         # Get high importance only
-        events = env["search_service"].get_timeline(min_importance=4)
+        events = env["kb_service"].get_timeline(min_importance=4)
         assert len(events) == 1
         assert events[0]["importance"] == 5
 

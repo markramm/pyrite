@@ -27,8 +27,6 @@ class SearchService:
     Provides:
     - FTS5 query sanitization (handles hyphens, special chars)
     - Full-text search with filters
-    - Timeline queries
-    - Tag and actor analytics
     - AI-powered query expansion
     """
 
@@ -296,57 +294,3 @@ class SearchService:
             kb_name = None
         return self.db.search_by_tag(tag, kb_name, limit)
 
-    # =========================================================================
-    # Timeline
-    # =========================================================================
-
-    def get_timeline(
-        self,
-        date_from: str | None = None,
-        date_to: str | None = None,
-        min_importance: int = 1,
-        kb_name: str | None = None,
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        """
-        Get timeline events.
-
-        Args:
-            date_from: Filter from date
-            date_to: Filter to date
-            min_importance: Minimum importance level (1-10)
-            kb_name: Filter to specific KB
-            limit: Max results
-        """
-        if kb_name == "All KBs":
-            kb_name = None
-
-        results = self.db.get_timeline(
-            date_from=date_from, date_to=date_to, min_importance=min_importance, kb_name=kb_name
-        )
-
-        return results[:limit]
-
-    # =========================================================================
-    # Analytics
-    # =========================================================================
-
-    def get_tags(self, kb_name: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
-        """Get tags with counts."""
-        if kb_name == "All KBs":
-            kb_name = None
-
-        tags = self.db.get_all_tags(kb_name)
-        return [{"name": name, "count": count} for name, count in tags[:limit]]
-
-    def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
-        """Get most referenced entries."""
-        if kb_name == "All KBs":
-            kb_name = None
-        return self.db.get_most_linked(kb_name, limit)
-
-    def get_orphans(self, kb_name: str | None = None) -> list[dict[str, Any]]:
-        """Get entries with no links."""
-        if kb_name == "All KBs":
-            kb_name = None
-        return self.db.get_orphans(kb_name)

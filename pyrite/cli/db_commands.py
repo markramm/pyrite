@@ -7,7 +7,7 @@ Commands: backup, restore
 import logging
 import shutil
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -38,7 +38,7 @@ def db_backup(
         raise typer.Exit(1)
 
     if output is None:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
         output = f"pyrite-backup-{timestamp}.db"
 
     output_path = Path(output)
