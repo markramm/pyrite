@@ -3,7 +3,7 @@ id: schema-module-decomposition
 type: backlog_item
 title: "Decompose schema.py kitchen-sink module"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.18"
 priority: medium
 effort: M

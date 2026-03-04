@@ -2,13 +2,27 @@
 type: component
 title: "Schema & Validation"
 kind: module
-path: "pyrite/schema.py"
+path: "pyrite/schema/"
 owner: "markr"
 dependencies: ["pyrite.plugins"]
 tags: [core, validation]
 ---
 
-`KBSchema` defines per-KB validation rules loaded from `kb.yaml`. The module also houses core data classes (`Source`, `Link`, `Provenance`), enums (`VerificationStatus`, `EventStatus`, `ResearchStatus`), and the `CORE_TYPES` / `CORE_TYPE_METADATA` registries.
+`pyrite/schema/` is a package of 6 focused submodules (split from the original monolithic `schema.py`). `KBSchema` defines per-KB validation rules loaded from `kb.yaml`. The package also houses core data classes (`Source`, `Link`, `Provenance`), enums (`VerificationStatus`, `EventStatus`, `ResearchStatus`), and the `CORE_TYPES` / `CORE_TYPE_METADATA` registries.
+
+## Package Structure
+
+| Submodule | Contents |
+|-----------|----------|
+| `enums.py` | `VerificationStatus`, `EventStatus`, `ResearchStatus` |
+| `validators.py` | `validate_date`, `validate_importance`, `generate_entry_id`, etc. |
+| `provenance.py` | `Source`, `Link`, `Provenance`, `RELATIONSHIP_TYPES`, `get_inverse_relation` |
+| `core_types.py` | `CORE_TYPES`, `CORE_TYPE_METADATA`, `resolve_type_metadata` |
+| `field_schema.py` | `FieldSchema`, `TypeSchema`, `_validate_field_value` |
+| `kb_schema.py` | `KBSchema` class |
+| `__init__.py` | Re-exports all public symbols for backward compatibility |
+
+All existing `from pyrite.schema import X` imports continue working via `__init__.py`.
 
 ## Validator Lifecycle
 

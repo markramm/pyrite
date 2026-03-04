@@ -121,9 +121,9 @@ Recommended execution order. Grouped by milestone.
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
-| **0** | [[kb-service-decomposition]] | L | KBService is a 45-method god-class — extract GraphService, EphemeralKBService, QuotaService, ExportService | |
-| **1** | [[schema-module-decomposition]] | M | schema.py mixes 4+ concerns in 1,157 lines — split into focused submodules | |
-| **2** | [[search-service-kb-service-overlap]] | S | Duplicate methods between SearchService and KBService | |
+| **0** | [[kb-service-decomposition]] | L | KBService is a 45-method god-class — extract GraphService, EphemeralKBService, QuotaService, ExportService | **in progress** (GraphService + ExportService extracted) |
+| **1** | [[schema-module-decomposition]] | M | schema.py mixes 4+ concerns in 1,157 lines — split into focused submodules | **done** |
+| **2** | [[search-service-kb-service-overlap]] | S | Duplicate methods between SearchService and KBService | **done** |
 
 *Ecosystem:*
 

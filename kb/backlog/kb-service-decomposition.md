@@ -3,7 +3,7 @@ id: kb-service-decomposition
 type: backlog_item
 title: "Decompose KBService god-class into focused services"
 kind: improvement
-status: proposed
+status: in_progress
 milestone: "0.18"
 priority: high
 effort: L

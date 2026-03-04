@@ -248,8 +248,10 @@ When implementation + verification are done, follow the backlog process:
 | `pyrite/services/repo_service.py` | RepoService — multi-repo management |
 | `pyrite/services/user_service.py` | UserService — user identity and auth |
 | `pyrite/services/clipper.py` | ClipperService — web clipper |
+| `pyrite/services/graph_service.py` | GraphService — graph/link queries (extracted from KBService) |
+| `pyrite/services/export_service.py` | ExportService — KB export and git operations (extracted from KBService) |
 | `pyrite/services/collection_query.py` | Collection query functions |
-| `pyrite/schema.py` | KBSchema, FieldSchema — schema-as-config validation |
+| `pyrite/schema/` | KBSchema, FieldSchema — schema-as-config validation (6 submodules) |
 | `pyrite/config.py` | PyriteConfig, Settings, KBConfig |
 
 ### Architecture decisions

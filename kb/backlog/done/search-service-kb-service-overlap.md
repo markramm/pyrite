@@ -3,7 +3,7 @@ id: search-service-kb-service-overlap
 type: backlog_item
 title: "Resolve SearchService / KBService method duplication"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.18"
 priority: low
 effort: S
