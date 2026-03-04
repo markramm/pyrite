@@ -2,6 +2,7 @@
 	import '../app.css';
 	import Sidebar from '$lib/components/layout/Sidebar.svelte';
 	import Toast from '$lib/components/common/Toast.svelte';
+	import FeedbackButton from '$lib/components/common/FeedbackButton.svelte';
 	import QuickSwitcher from '$lib/components/QuickSwitcher.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import ChatSidebar from '$lib/components/ai/ChatSidebar.svelte';
@@ -133,6 +134,7 @@
 {/if}
 
 <Toast />
+<FeedbackButton />
 <QuickSwitcher />
 <CommandPalette />
 <KeyboardShortcutsModal open={shortcutsOpen} onclose={() => (shortcutsOpen = false)} />

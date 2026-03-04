@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: pyrite
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    repo: https://github.com/markramm/pyrite
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: PYRITE_HOST
+        value: "0.0.0.0"
+      - key: PYRITE_DATA_DIR
+        value: /data
+      - key: PYRITE_AUTH_ENABLED
+        value: "false"
+      - key: PYRITE_OPENAI_API_KEY
+        sync: false
+      - key: PYRITE_ANTHROPIC_API_KEY
+        sync: false
+      - key: PYRITE_GITHUB_CLIENT_ID
+        sync: false
+      - key: PYRITE_GITHUB_CLIENT_SECRET
+        sync: false
+    disk:
+      name: pyrite-data
+      mountPath: /data
+      sizeGB: 1

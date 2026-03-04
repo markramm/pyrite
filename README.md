@@ -236,6 +236,24 @@ kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 
 ## Deploy
 
+### One-Click Deploy
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repo=markramm/pyrite&referralCode=pyrite)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/markramm/pyrite)
+
+**Fly.io** — create a volume and deploy:
+
+```bash
+fly launch --copy-config --name my-pyrite
+fly volumes create pyrite_data --size 1
+fly deploy
+```
+
+All three platforms use the included Dockerfile, persist data at `/data`, and expose port 8088. Set `PYRITE_AUTH_ENABLED`, `PYRITE_OPENAI_API_KEY`, and other env vars in your platform's dashboard after deploy.
+
+### Self-Hosted VPS
+
 Run your own Pyrite instance on any VPS ($6/month, unlimited users, you own your data):
 
 ```bash
@@ -251,6 +269,8 @@ docker compose -f deploy/selfhost/docker-compose.yml exec pyrite \
 ```
 
 Auth is required, registration is closed by default — add users manually with the same command.
+
+### Local Docker
 
 For local development without TLS, use the minimal compose:
 
