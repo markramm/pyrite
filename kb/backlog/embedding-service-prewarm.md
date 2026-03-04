@@ -4,6 +4,7 @@ type: backlog_item
 title: "Add embedding service pre-warm option to reduce cold-start latency"
 kind: improvement
 status: proposed
+milestone: "0.17"
 priority: medium
 effort: S
 tags: [ai, search, performance]

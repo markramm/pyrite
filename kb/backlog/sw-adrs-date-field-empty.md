@@ -3,7 +3,8 @@ id: sw-adrs-date-field-empty
 type: backlog_item
 title: "Bug: sw adrs date field always empty"
 kind: bug
-status: proposed
+status: done
+milestone: "0.17"
 priority: medium
 effort: XS
 tags: [cli, software-kb, bug]

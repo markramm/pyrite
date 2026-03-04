@@ -2,6 +2,8 @@
 id: kb-compaction-command-and-freshness-qa-rules
 title: KB Compaction Command and Freshness QA Rules
 type: backlog_item
+status: proposed
+milestone: "0.17"
 tags:
 - enhancement
 - qa

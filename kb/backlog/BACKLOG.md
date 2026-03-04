@@ -87,7 +87,35 @@ Recommended execution order. Grouped by milestone.
 | **9** | [[doc-openai-mcp-integration]] | XS | OpenAI / Codex MCP connection docs | **done** |
 | **10** | [[doc-gemini-mcp-integration]] | XS | Gemini CLI / Antigravity MCP connection docs | **done** |
 
-**0.17 — Ecosystem:**
+**0.17 — Cleanup & Hardening:**
+
+*Bugs (close out known issues):*
+
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[entry-id-collision-across-types]] | M | Silent index overwrites from title-derived ID collisions | **done** (explicit `id` fields added) |
+| **2** | [[priority-type-mismatch]] | S | DB Integer column vs string values from entry types | **done** (column changed to String) |
+| **3** | [[sw-adrs-date-field-empty]] | XS | sw adrs reading date from metadata instead of DB column | **done** (column-first reads) |
+| **4** | [[schema-validate-cli-command]] | M | No validation gate between authoring and indexing | **done** (`schema validate` + pre-commit hook) |
+
+*Reliability:*
+
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **5** | [[api-module-level-singletons]] | S | Test isolation risk from module-level globals in api.py | |
+| **6** | [[plugin-hook-atomicity]] | S | Hook failures can leave partial state — need transactional wrapping | |
+| **7** | [[plugin-discovery-strict-mode]] | XS | Surface plugin load failures during development | |
+
+*Developer experience:*
+
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **8** | [[mcp-body-truncation-docs]] | XS | Document body truncation + pagination for agents | **done** (tool schemas updated) |
+| **9** | [[embedding-service-prewarm]] | S | Reduce cold-start latency on first semantic search | |
+| **10** | [[import-cycle-detection]] | XS | Guard against circular imports as codebase grows | |
+| **11** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness | |
+
+**0.18 — Ecosystem:**
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
@@ -105,20 +133,11 @@ Recommended execution order. Grouped by milestone.
 |----------|------|--------|-----------|
 | **1** | [[plugin-repo-extraction]] | M | Extract extensions to separate repos/PyPI. In-tree for now as living examples + test coverage. |
 
-**Post-launch — Reliability & Robustness:**
-
-| Priority | Item | Effort | Rationale | Status |
-|----------|------|--------|-----------|--------|
-| **1** | [[api-module-level-singletons]] | S | Test isolation risk from module-level globals in api.py | |
-| **2** | [[plugin-hook-atomicity]] | S | Hook failures can leave partial state — need transactional wrapping | |
-| **3** | [[async-index-rebuild]] | M | Synchronous sync blocks CLI/API for large KBs | |
-
 **Post-launch — KB Quality & Lifecycle:**
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
 | **1** | [[entry-lifecycle-field-and-search-filtering]] | S | Archive entries without deleting, filter from search | **done** |
-| **2** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness | |
 
 **Future:**
 
@@ -130,10 +149,7 @@ Recommended execution order. Grouped by milestone.
 | **4** | [[db-backup-restore]] | S | Operational tooling | **done** |
 | **5** | [[search-relevance-boost-by-entry-type]] | M | Type-aware search ranking + intent integration |
 | **6** | [[protocol-versioning-implementation]] | M | Runtime protocol satisfaction checking (ADR-0014) |
-| **7** | [[embedding-service-prewarm]] | S | Reduce cold-start latency on first semantic search |
-| **8** | [[plugin-discovery-strict-mode]] | XS | Surface plugin load failures during development |
-| **9** | [[mcp-body-truncation-docs]] | XS | Document body truncation + pagination for agents |
-| **10** | [[import-cycle-detection]] | XS | Guard against circular imports as codebase grows |
+| **7** | [[async-index-rebuild]] | M | Synchronous sync blocks CLI/API for large KBs |
 
 ---
 
@@ -212,16 +228,32 @@ Recommended execution order. Grouped by milestone.
 | — | [[doc-openai-mcp-integration]] | docs | XS | 0.16 | **done** |
 | — | [[doc-gemini-mcp-integration]] | docs | XS | 0.16 | **done** |
 
-### Planned — 0.17 (Ecosystem)
+### Planned — 0.17 (Cleanup & Hardening)
+
+| # | Item | Kind | Effort | Milestone | Status |
+|---|------|------|--------|-----------|--------|
+| — | [[entry-id-collision-across-types]] | bug | M | 0.17 | **done** |
+| — | [[priority-type-mismatch]] | bug | S | 0.17 | **done** |
+| — | [[sw-adrs-date-field-empty]] | bug | XS | 0.17 | **done** |
+| — | [[schema-validate-cli-command]] | feature | M | 0.17 | **done** |
+| — | [[mcp-body-truncation-docs]] | improvement | XS | 0.17 | **done** |
+| — | [[api-module-level-singletons]] | improvement | S | 0.17 | |
+| — | [[plugin-hook-atomicity]] | improvement | S | 0.17 | |
+| — | [[plugin-discovery-strict-mode]] | improvement | XS | 0.17 | |
+| — | [[embedding-service-prewarm]] | improvement | S | 0.17 | |
+| — | [[import-cycle-detection]] | improvement | XS | 0.17 | |
+| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S | 0.17 | |
+
+### Planned — 0.18 (Ecosystem)
 
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
-| 82 | [[software-project-plugin]] | feature | L | 0.17 |
-| 83 | [[investigative-journalism-plugin]] | feature | XL | 0.17 |
-| 84 | [[extension-registry]] | feature | M | 0.17 |
-| 88 | [[obsidian-migration]] | feature | M | 0.17 |
-| 90 | [[pkm-capture-plugin]] | feature | L | 0.17 |
-| 99 | [[extension-type-protocols]] | feature | L | 0.17 |
+| 82 | [[software-project-plugin]] | feature | L | 0.18 |
+| 83 | [[investigative-journalism-plugin]] | feature | XL | 0.18 |
+| 84 | [[extension-registry]] | feature | M | 0.18 |
+| 88 | [[obsidian-migration]] | feature | M | 0.18 |
+| 90 | [[pkm-capture-plugin]] | feature | L | 0.18 |
+| 99 | [[extension-type-protocols]] | feature | L | 0.18 |
 
 ### Planned — Pre-1.0 (Extension Extraction)
 
@@ -229,20 +261,11 @@ Recommended execution order. Grouped by milestone.
 |---|------|------|--------|-----------|
 | 107 | [[plugin-repo-extraction]] | feature | M | pre-1.0 |
 
-### Post-launch — Reliability & Robustness
-
-| # | Item | Kind | Effort |
-|---|------|------|--------|
-| — | [[api-module-level-singletons]] | improvement | S |
-| — | [[plugin-hook-atomicity]] | improvement | S |
-| — | [[async-index-rebuild]] | improvement | M |
-
 ### Post-launch — KB Quality & Lifecycle
 
 | # | Item | Kind | Effort |
 |---|------|------|--------|
 | — | [[entry-lifecycle-field-and-search-filtering]] | feature | S | **done** |
-| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S | |
 | — | [[knowledgeclaw-pyrite-powered-agent-for-openclaw-ecosystem]] | feature | XL | |
 
 ### Planned — Future
@@ -255,10 +278,7 @@ Recommended execution order. Grouped by milestone.
 | 98 | [[kb-orchestrator-skill]] | feature | M |
 | — | [[search-relevance-boost-by-entry-type]] | feature | M |
 | — | [[protocol-versioning-implementation]] | feature | M |
-| — | [[embedding-service-prewarm]] | improvement | S |
-| — | [[plugin-discovery-strict-mode]] | improvement | XS |
-| — | [[mcp-body-truncation-docs]] | improvement | XS |
-| — | [[import-cycle-detection]] | improvement | XS |
+| — | [[async-index-rebuild]] | improvement | M |
 
 ### Open Phases (blocked or deferred)
 
@@ -304,12 +324,12 @@ doc-gemini-mcp-integration           [0.16] — no blockers
 pyrite-website (#111)                [0.15] ✅ — pyrite.wiki live on GitHub Pages
 demo-site-deployment (#85)           [0.15] ✅ — deploy/demo/ + deploy/selfhost/ + deploy/ink/
 
-extension-type-protocols (#99)       [0.17]
+extension-type-protocols (#99)       [0.18]
   Phase 1: protocol definitions      — needs #92 (intent layer)
   Phase 2: satisfaction checking     — needs Phase 1
   Phase 3: registry integration      — needs #84 (extension registry)
 
-extension-registry (#84)             [0.17] — needs demo site (#85)
+extension-registry (#84)             [0.18] — needs demo site (#85)
 
 coordination-task-plugin (#79)       — Phases 1-2 ✅
   Phase 3: DAG queries               [future]
@@ -366,10 +386,10 @@ Lower-priority items in [`future-ideas/`](future-ideas/):
 
 | # | Item | Priority | Status |
 |---|------|----------|--------|
-| — | [[entry-id-collision-across-types]] | high | proposed |
-| — | [[schema-validate-cli-command]] | high | proposed |
-| — | [[sw-adrs-date-field-empty]] | medium | proposed |
-| — | [[priority-type-mismatch]] | medium | proposed |
+| — | [[entry-id-collision-across-types]] | high | **done** (explicit `id` fields) |
+| — | [[schema-validate-cli-command]] | high | **done** (`schema validate` command) |
+| — | [[sw-adrs-date-field-empty]] | medium | **done** (column-first reads) |
+| — | [[priority-type-mismatch]] | medium | **done** (Integer → String) |
 | 66 | [[health-check-timezone-fix]] | — | **done** |
 | 67 | [[create-body-file-nested-yaml-bug]] | — | **done** |
 

@@ -4,6 +4,7 @@ type: backlog_item
 title: "Make plugin hook execution atomic with DB transactions"
 kind: improvement
 status: proposed
+milestone: "0.17"
 priority: high
 effort: S
 tags: [plugins, storage, reliability]

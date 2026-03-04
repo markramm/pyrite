@@ -3,7 +3,8 @@ id: schema-validate-cli-command
 type: backlog_item
 title: "Schema validate CLI command and pre-commit hook"
 kind: feature
-status: proposed
+status: done
+milestone: "0.17"
 priority: high
 effort: M
 tags: [cli, validation, pre-commit, data-integrity]

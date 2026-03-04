@@ -3,7 +3,8 @@ id: priority-type-mismatch
 type: backlog_item
 title: "Bug: priority field type mismatch between entry types and DB column"
 kind: bug
-status: proposed
+status: done
+milestone: "0.17"
 priority: medium
 effort: S
 tags: [storage, protocols, bug, type-system]

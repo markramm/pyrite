@@ -3,7 +3,8 @@ id: entry-id-collision-across-types
 type: backlog_item
 title: "Bug: Entry ID collisions across types cause silent index overwrites"
 kind: bug
-status: proposed
+status: done
+milestone: "0.17"
 priority: high
 effort: M
 tags: [storage, indexing, bug, data-integrity]

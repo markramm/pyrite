@@ -3,7 +3,8 @@ id: mcp-body-truncation-docs
 type: backlog_item
 title: "Document body truncation behavior in MCP tool schemas"
 kind: improvement
-status: proposed
+status: done
+milestone: "0.17"
 priority: low
 effort: XS
 tags: [mcp, documentation, agent-dx]
