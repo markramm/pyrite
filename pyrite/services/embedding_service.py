@@ -108,6 +108,27 @@ class EmbeddingService:
                 tf_logging.enable_progress_bar()
         return self._model
 
+    def prewarm(self) -> bool:
+        """Pre-load the embedding model to avoid cold-start latency.
+
+        Returns True if model was loaded successfully, False if dependencies
+        are missing or loading failed.
+        """
+        if not is_available():
+            return False
+        try:
+            self._get_model()
+            logger.info("Embedding model '%s' pre-warmed", self.model_name)
+            return True
+        except Exception:
+            logger.warning("Failed to pre-warm embedding model", exc_info=True)
+            return False
+
+    @property
+    def is_warm(self) -> bool:
+        """Whether the embedding model is already loaded."""
+        return self._model is not None
+
     def embed_text(self, text: str) -> list[float]:
         """Generate embedding for a text string."""
         model = self._get_model()

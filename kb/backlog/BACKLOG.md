@@ -102,18 +102,18 @@ Recommended execution order. Grouped by milestone.
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
-| **5** | [[api-module-level-singletons]] | S | Test isolation risk from module-level globals in api.py | |
-| **6** | [[plugin-hook-atomicity]] | S | Hook failures can leave partial state — need transactional wrapping | |
-| **7** | [[plugin-discovery-strict-mode]] | XS | Surface plugin load failures during development | |
+| **5** | [[api-module-level-singletons]] | S | Test isolation risk from module-level globals in api.py | **done** |
+| **6** | [[plugin-hook-atomicity]] | S | Hook failures can leave partial state — need transactional wrapping | **done** |
+| **7** | [[plugin-discovery-strict-mode]] | XS | Surface plugin load failures during development | **done** |
 
 *Developer experience:*
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
 | **8** | [[mcp-body-truncation-docs]] | XS | Document body truncation + pagination for agents | **done** (tool schemas updated) |
-| **9** | [[embedding-service-prewarm]] | S | Reduce cold-start latency on first semantic search | |
-| **10** | [[import-cycle-detection]] | XS | Guard against circular imports as codebase grows | |
-| **11** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness | |
+| **9** | [[embedding-service-prewarm]] | S | Reduce cold-start latency on first semantic search | **done** |
+| **10** | [[import-cycle-detection]] | XS | Guard against circular imports as codebase grows | **done** |
+| **11** | [[kb-compaction-command-and-freshness-qa-rules]] | S | Detect archival candidates, type-aware staleness | **done** |
 
 **0.18 — Architecture & Ecosystem:**
 
@@ -247,15 +247,15 @@ Recommended execution order. Grouped by milestone.
 | — | [[sw-adrs-date-field-empty]] | bug | XS | 0.17 | **done** |
 | — | [[schema-validate-cli-command]] | feature | M | 0.17 | **done** |
 | — | [[mcp-body-truncation-docs]] | improvement | XS | 0.17 | **done** |
-| — | [[api-module-level-singletons]] | improvement | S | 0.17 | |
-| — | [[plugin-hook-atomicity]] | improvement | S | 0.17 | |
-| — | [[plugin-discovery-strict-mode]] | improvement | XS | 0.17 | |
-| — | [[embedding-service-prewarm]] | improvement | S | 0.17 | |
-| — | [[import-cycle-detection]] | improvement | XS | 0.17 | |
-| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S | 0.17 | |
-| — | [[plugin-registry-deduplication]] | improvement | S | 0.17 | |
-| — | [[factory-open-closed]] | improvement | S | 0.17 | |
-| — | [[kb-component-documentation-gaps]] | improvement | M | 0.17 | |
+| — | [[api-module-level-singletons]] | improvement | S | 0.17 | **done** |
+| — | [[plugin-hook-atomicity]] | improvement | S | 0.17 | **done** |
+| — | [[plugin-discovery-strict-mode]] | improvement | XS | 0.17 | **done** |
+| — | [[embedding-service-prewarm]] | improvement | S | 0.17 | **done** |
+| — | [[import-cycle-detection]] | improvement | XS | 0.17 | **done** |
+| — | [[kb-compaction-command-and-freshness-qa-rules]] | feature | S | 0.17 | **done** |
+| — | [[plugin-registry-deduplication]] | improvement | S | 0.17 | **done** |
+| — | [[factory-open-closed]] | improvement | S | 0.17 | **done** |
+| — | [[kb-component-documentation-gaps]] | improvement | M | 0.17 | **done** |
 
 ### Planned — 0.18 (Architecture)
 
@@ -264,9 +264,6 @@ Recommended execution order. Grouped by milestone.
 | — | [[kb-service-decomposition]] | improvement | L | 0.18 | |
 | — | [[schema-module-decomposition]] | improvement | M | 0.18 | |
 | — | [[search-service-kb-service-overlap]] | improvement | S | 0.18 | |
-| — | [[plugin-registry-deduplication]] | improvement | S | 0.17 | |
-| — | [[factory-open-closed]] | improvement | S | 0.17 | |
-| — | [[kb-component-documentation-gaps]] | improvement | M | 0.17 | |
 
 ### Planned — 0.18 (Ecosystem)
 

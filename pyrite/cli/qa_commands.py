@@ -252,3 +252,99 @@ def qa_status(
                 for s, cnt in cov["by_status"].items():
                     style = {"pass": "green", "warn": "yellow", "fail": "red"}.get(s, "")
                     console.print(f"    [{style}]{s}: {cnt}[/{style}]")
+
+
+@qa_app.command("stale")
+def qa_stale(
+    kb_name: str = typer.Argument(..., help="KB to check for stale entries"),
+    max_age: int = typer.Option(90, "--max-age", "-a", help="Days since last update to consider stale"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Find entries that haven't been updated recently.
+
+    Reports entries older than --max-age days. Historical types (ADR, event,
+    timeline) are exempt since they represent past records.
+    """
+    ctx = cli_context()
+    from ..services.qa_service import QAService
+
+    svc = QAService(ctx.config, ctx.db)
+    results = svc.find_stale(kb_name, max_age_days=max_age)
+
+    data = {"kb_name": kb_name, "max_age_days": max_age, "stale_count": len(results), "entries": results}
+
+    formatted = _format_output(data, output_format)
+    if formatted:
+        console.print(formatted)
+        return
+
+    if not results:
+        console.print(f"[green]No stale entries in '{kb_name}' (threshold: {max_age} days)[/green]")
+        return
+
+    table = Table(title=f"Stale entries in '{kb_name}' (>{max_age} days)")
+    table.add_column("ID", style="cyan")
+    table.add_column("Type", style="dim")
+    table.add_column("Title")
+    table.add_column("Days Stale", justify="right", style="yellow")
+
+    for entry in results:
+        table.add_row(entry["entry_id"], entry["entry_type"], entry["title"], str(entry["days_stale"]))
+
+    console.print(table)
+    console.print(f"\n[yellow]{len(results)} stale entries found[/yellow]")
+
+
+@qa_app.command("compact")
+def qa_compact(
+    kb_name: str = typer.Argument(..., help="KB to check for archival candidates"),
+    min_age: int = typer.Option(90, "--min-age", "-a", help="Minimum days old to be a candidate"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Find entries that are candidates for archival.
+
+    Identifies completed backlog items and old orphan entries (no links, low
+    importance) that could be archived to reduce noise.
+
+    This is a dry-run report — no entries are modified.
+    """
+    ctx = cli_context()
+    from ..services.qa_service import QAService
+
+    svc = QAService(ctx.config, ctx.db)
+    results = svc.find_archival_candidates(kb_name, min_age_days=min_age)
+
+    data = {"kb_name": kb_name, "min_age_days": min_age, "candidate_count": len(results), "entries": results}
+
+    formatted = _format_output(data, output_format)
+    if formatted:
+        console.print(formatted)
+        return
+
+    if not results:
+        console.print(f"[green]No archival candidates in '{kb_name}' (threshold: {min_age} days)[/green]")
+        return
+
+    table = Table(title=f"Archival candidates in '{kb_name}' (>{min_age} days)")
+    table.add_column("ID", style="cyan")
+    table.add_column("Type", style="dim")
+    table.add_column("Title")
+    table.add_column("Reason", style="yellow")
+    table.add_column("Days Old", justify="right")
+
+    for entry in results:
+        table.add_row(
+            entry["entry_id"],
+            entry["entry_type"],
+            entry["title"],
+            entry["reason"],
+            str(entry["days_old"]),
+        )
+
+    console.print(table)
+    console.print(f"\n[yellow]{len(results)} archival candidates found[/yellow]")
+    console.print("[dim]Use 'pyrite update <id> -k <kb> --lifecycle archived' to archive entries[/dim]")

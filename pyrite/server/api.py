@@ -424,6 +424,14 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     application.dependency_overrides[get_db] = _app_get_db
     application.dependency_overrides[get_index_mgr] = _app_get_index_mgr
 
+    # Set up embedding service for prewarm (actual prewarm happens in lifespan)
+    if config.settings.prewarm_embeddings:
+        from ..services.embedding_service import EmbeddingService
+
+        application.state.pyrite_embedding_svc = EmbeddingService(
+            _app_get_db(), model_name=config.settings.embedding_model
+        )
+
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins
     application.add_middleware(
@@ -463,7 +471,16 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     @application.get("/health", tags=["Admin"])
     def health_check():
         """Health check endpoint."""
-        return {"status": "ok", "timestamp": datetime.now(UTC).isoformat()}
+        result: dict[str, Any] = {
+            "status": "ok",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if config.settings.prewarm_embeddings:
+            svc = getattr(application.state, "pyrite_embedding_svc", None)
+            result["embeddings"] = {
+                "ready": svc.is_warm if svc else False,
+            }
+        return result
 
     # WebSocket endpoint for multi-tab awareness
     @application.websocket("/ws")

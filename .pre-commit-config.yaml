@@ -36,6 +36,12 @@ repos:
 # Run pytest on commit (local hook)
   - repo: local
     hooks:
+      - id: import-cycle-check
+        name: Check for circular imports
+        entry: bash -c 'source .venv/bin/activate && python scripts/check_import_cycles.py'
+        language: system
+        pass_filenames: false
+        files: '\.py$'
       - id: pyrite-schema-validate
         name: Validate KB entries
         entry: bash -c 'source .venv/bin/activate && python -m pyrite schema validate --changed'

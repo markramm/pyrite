@@ -112,7 +112,7 @@ class PluginRegistry:
         return list(self._plugins.keys())
 
     # =========================================================================
-    # Aggregation methods — collect capabilities from all plugins
+    # Generic aggregation helpers
     # =========================================================================
 
     def _merge_dict(self, target: dict, source: dict, plugin_name: str, kind: str) -> None:
@@ -128,52 +128,69 @@ class PluginRegistry:
                 )
             target[key] = value
 
+    def _aggregate_dict(self, method_name: str, kind: str) -> dict:
+        """Aggregate dict results from all plugins, warning on key collisions."""
+        self.discover()
+        result: dict = {}
+        for plugin in self._plugins.values():
+            if hasattr(plugin, method_name):
+                try:
+                    items = getattr(plugin, method_name)()
+                    if items:
+                        self._merge_dict(result, items, plugin.name, kind)
+                except Exception as e:
+                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+        return result
+
+    def _aggregate_list(self, method_name: str) -> list:
+        """Aggregate list results from all plugins."""
+        self.discover()
+        result: list = []
+        for plugin in self._plugins.values():
+            if hasattr(plugin, method_name):
+                try:
+                    items = getattr(plugin, method_name)()
+                    if items:
+                        result.extend(items)
+                except Exception as e:
+                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+        return result
+
+    def _aggregate_dict_of_lists(self, method_name: str) -> dict[str, list]:
+        """Aggregate dict-of-list results, extending lists per key."""
+        self.discover()
+        result: dict[str, list] = {}
+        for plugin in self._plugins.values():
+            if hasattr(plugin, method_name):
+                try:
+                    items = getattr(plugin, method_name)()
+                    if items:
+                        for key, lst in items.items():
+                            result.setdefault(key, []).extend(lst)
+                except Exception as e:
+                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+        return result
+
+    # =========================================================================
+    # Public aggregation methods — collect capabilities from all plugins
+    # =========================================================================
+
     def get_all_entry_types(self) -> dict[str, type]:
         """Get all custom entry types from all plugins."""
-        self.discover()
-        types = {}
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_entry_types"):
-                try:
-                    plugin_types = plugin.get_entry_types()
-                    if plugin_types:
-                        self._merge_dict(types, plugin_types, plugin.name, "entry type")
-                except Exception as e:
-                    logger.warning("Plugin %s get_entry_types failed: %s", plugin.name, e)
-        return types
+        return self._aggregate_dict("get_entry_types", "entry type")
 
     def get_all_kb_types(self) -> list[str]:
         """Get all custom KB types from all plugins."""
-        self.discover()
-        kb_types = []
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_kb_types"):
-                try:
-                    plugin_types = plugin.get_kb_types()
-                    if plugin_types:
-                        kb_types.extend(plugin_types)
-                except Exception as e:
-                    logger.warning("Plugin %s get_kb_types failed: %s", plugin.name, e)
-        return kb_types
+        return self._aggregate_list("get_kb_types")
 
     def get_all_cli_commands(self) -> list[tuple[str, Any]]:
         """Get all CLI commands from all plugins."""
-        self.discover()
-        commands = []
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_cli_commands"):
-                try:
-                    plugin_commands = plugin.get_cli_commands()
-                    if plugin_commands:
-                        commands.extend(plugin_commands)
-                except Exception as e:
-                    logger.warning("Plugin %s get_cli_commands failed: %s", plugin.name, e)
-        return commands
+        return self._aggregate_list("get_cli_commands")
 
     def get_all_mcp_tools(self, tier: str) -> dict[str, dict]:
         """Get all MCP tools for the given tier from all plugins."""
         self.discover()
-        tools = {}
+        tools: dict[str, dict] = {}
         for plugin in self._plugins.values():
             if hasattr(plugin, "get_mcp_tools"):
                 try:
@@ -186,45 +203,15 @@ class PluginRegistry:
 
     def get_all_db_columns(self) -> list[dict]:
         """Get all additional DB columns from all plugins."""
-        self.discover()
-        columns = []
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_db_columns"):
-                try:
-                    plugin_columns = plugin.get_db_columns()
-                    if plugin_columns:
-                        columns.extend(plugin_columns)
-                except Exception as e:
-                    logger.warning("Plugin %s get_db_columns failed: %s", plugin.name, e)
-        return columns
+        return self._aggregate_list("get_db_columns")
 
     def get_all_relationship_types(self) -> dict[str, dict]:
         """Get all relationship types from all plugins."""
-        self.discover()
-        rel_types = {}
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_relationship_types"):
-                try:
-                    plugin_rels = plugin.get_relationship_types()
-                    if plugin_rels:
-                        self._merge_dict(rel_types, plugin_rels, plugin.name, "relationship type")
-                except Exception as e:
-                    logger.warning("Plugin %s get_relationship_types failed: %s", plugin.name, e)
-        return rel_types
+        return self._aggregate_dict("get_relationship_types", "relationship type")
 
     def get_all_workflows(self) -> dict[str, dict]:
         """Get all workflow definitions from all plugins."""
-        self.discover()
-        workflows = {}
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_workflows"):
-                try:
-                    plugin_workflows = plugin.get_workflows()
-                    if plugin_workflows:
-                        self._merge_dict(workflows, plugin_workflows, plugin.name, "workflow")
-                except Exception as e:
-                    logger.warning("Plugin %s get_workflows failed: %s", plugin.name, e)
-        return workflows
+        return self._aggregate_dict("get_workflows", "workflow")
 
     def validate_transition(
         self, workflow_name: str, current_state: str, target_state: str, user_role: str = ""
@@ -244,32 +231,11 @@ class PluginRegistry:
 
     def get_all_db_tables(self) -> list[dict]:
         """Get all custom DB table definitions from all plugins."""
-        self.discover()
-        tables = []
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_db_tables"):
-                try:
-                    plugin_tables = plugin.get_db_tables()
-                    if plugin_tables:
-                        tables.extend(plugin_tables)
-                except Exception as e:
-                    logger.warning("Plugin %s get_db_tables failed: %s", plugin.name, e)
-        return tables
+        return self._aggregate_list("get_db_tables")
 
     def get_all_hooks(self) -> dict[str, list[Callable]]:
         """Get all lifecycle hooks from all plugins, merged by hook name."""
-        self.discover()
-        hooks: dict[str, list[Callable]] = {}
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_hooks"):
-                try:
-                    plugin_hooks = plugin.get_hooks()
-                    if plugin_hooks:
-                        for hook_name, hook_list in plugin_hooks.items():
-                            hooks.setdefault(hook_name, []).extend(hook_list)
-                except Exception as e:
-                    logger.warning("Plugin %s get_hooks failed: %s", plugin.name, e)
-        return hooks
+        return self._aggregate_dict_of_lists("get_hooks")
 
     def run_hooks(self, hook_name: str, entry: Any, context: dict) -> Any:
         """Run all hooks for a given hook point. Returns the (possibly modified) entry.
@@ -290,20 +256,10 @@ class PluginRegistry:
 
     def get_all_kb_presets(self) -> dict[str, dict]:
         """Get all KB presets from all plugins."""
-        self.discover()
-        presets = {}
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_kb_presets"):
-                try:
-                    plugin_presets = plugin.get_kb_presets()
-                    if plugin_presets:
-                        self._merge_dict(presets, plugin_presets, plugin.name, "KB preset")
-                except Exception as e:
-                    logger.warning("Plugin %s get_kb_presets failed: %s", plugin.name, e)
-        return presets
+        return self._aggregate_dict("get_kb_presets", "KB preset")
 
     def get_all_type_metadata(self) -> dict[str, dict]:
-        """Get type metadata from all plugins."""
+        """Get type metadata from all plugins (deep-merged per type)."""
         self.discover()
         metadata: dict[str, dict] = {}
         for plugin in self._plugins.values():
@@ -329,24 +285,10 @@ class PluginRegistry:
 
     def get_all_collection_types(self) -> dict[str, dict]:
         """Get all custom collection types from all plugins."""
-        self.discover()
-        types: dict[str, dict] = {}
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_collection_types"):
-                try:
-                    plugin_types = plugin.get_collection_types()
-                    if plugin_types:
-                        self._merge_dict(types, plugin_types, plugin.name, "collection type")
-                except Exception as e:
-                    logger.warning("Plugin %s get_collection_types failed: %s", plugin.name, e)
-        return types
+        return self._aggregate_dict("get_collection_types", "collection type")
 
     def get_all_field_schemas(self) -> dict[str, dict[str, dict]]:
-        """Get all rich field schemas from all plugins.
-
-        Returns:
-            Dict mapping type name to dict of field definitions.
-        """
+        """Get all rich field schemas from all plugins (merged per type)."""
         self.discover()
         schemas: dict[str, dict[str, dict]] = {}
         for plugin in self._plugins.values():
@@ -362,31 +304,11 @@ class PluginRegistry:
 
     def get_all_validators(self) -> list[Callable]:
         """Get all validators from all plugins."""
-        self.discover()
-        validators = []
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_validators"):
-                try:
-                    plugin_validators = plugin.get_validators()
-                    if plugin_validators:
-                        validators.extend(plugin_validators)
-                except Exception as e:
-                    logger.warning("Plugin %s get_validators failed: %s", plugin.name, e)
-        return validators
+        return self._aggregate_list("get_validators")
 
     def get_all_migrations(self) -> list[dict]:
         """Get all schema migrations from all plugins."""
-        self.discover()
-        migrations = []
-        for plugin in self._plugins.values():
-            if hasattr(plugin, "get_migrations"):
-                try:
-                    plugin_migrations = plugin.get_migrations()
-                    if plugin_migrations:
-                        migrations.extend(plugin_migrations)
-                except Exception as e:
-                    logger.warning("Plugin %s get_migrations failed: %s", plugin.name, e)
-        return migrations
+        return self._aggregate_list("get_migrations")
 
     def get_all_protocols(self) -> dict[str, type]:
         """Get all protocol mixin classes: core 5 + plugin-provided (ADR-0017)."""
@@ -404,14 +326,12 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_protocols failed: %s", plugin.name, e)
         return protocols
 
-    def _plugin_matches_kb_type(self, plugin: PyritePlugin, kb_type: str) -> bool:
-        """Check if a plugin should be active for a given KB type.
+    # =========================================================================
+    # KB-type-scoped queries
+    # =========================================================================
 
-        A plugin matches if:
-        - kb_type is empty (no filtering)
-        - plugin declares no kb_types (universal plugin)
-        - kb_type is in the plugin's declared kb_types
-        """
+    def _plugin_matches_kb_type(self, plugin: PyritePlugin, kb_type: str) -> bool:
+        """Check if a plugin should be active for a given KB type."""
         if not kb_type:
             return True
         if not hasattr(plugin, "get_kb_types"):
@@ -425,38 +345,46 @@ class PluginRegistry:
             logger.warning("Failed to check KB type compatibility for plugin", exc_info=True)
             return True
 
-    def get_validators_for_kb(self, kb_type: str = "") -> list[Callable]:
-        """Get validators scoped to a specific KB type."""
+    def _aggregate_list_for_kb(self, method_name: str, kb_type: str) -> list:
+        """Aggregate list results from plugins matching a KB type."""
         self.discover()
-        validators = []
+        result: list = []
         for plugin in self._plugins.values():
             if not self._plugin_matches_kb_type(plugin, kb_type):
                 continue
-            if hasattr(plugin, "get_validators"):
+            if hasattr(plugin, method_name):
                 try:
-                    plugin_validators = plugin.get_validators()
-                    if plugin_validators:
-                        validators.extend(plugin_validators)
+                    items = getattr(plugin, method_name)()
+                    if items:
+                        result.extend(items)
                 except Exception as e:
-                    logger.warning("Plugin %s get_validators failed: %s", plugin.name, e)
-        return validators
+                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+        return result
+
+    def _aggregate_dict_of_lists_for_kb(self, method_name: str, kb_type: str) -> dict[str, list]:
+        """Aggregate dict-of-list results from plugins matching a KB type."""
+        self.discover()
+        result: dict[str, list] = {}
+        for plugin in self._plugins.values():
+            if not self._plugin_matches_kb_type(plugin, kb_type):
+                continue
+            if hasattr(plugin, method_name):
+                try:
+                    items = getattr(plugin, method_name)()
+                    if items:
+                        for key, lst in items.items():
+                            result.setdefault(key, []).extend(lst)
+                except Exception as e:
+                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+        return result
+
+    def get_validators_for_kb(self, kb_type: str = "") -> list[Callable]:
+        """Get validators scoped to a specific KB type."""
+        return self._aggregate_list_for_kb("get_validators", kb_type)
 
     def get_hooks_for_kb(self, kb_type: str = "") -> dict[str, list[Callable]]:
         """Get lifecycle hooks scoped to a specific KB type."""
-        self.discover()
-        hooks: dict[str, list[Callable]] = {}
-        for plugin in self._plugins.values():
-            if not self._plugin_matches_kb_type(plugin, kb_type):
-                continue
-            if hasattr(plugin, "get_hooks"):
-                try:
-                    plugin_hooks = plugin.get_hooks()
-                    if plugin_hooks:
-                        for hook_name, hook_list in plugin_hooks.items():
-                            hooks.setdefault(hook_name, []).extend(hook_list)
-                except Exception as e:
-                    logger.warning("Plugin %s get_hooks failed: %s", plugin.name, e)
-        return hooks
+        return self._aggregate_dict_of_lists_for_kb("get_hooks", kb_type)
 
     def run_hooks_for_kb(self, hook_name: str, entry: Any, context: dict, kb_type: str = "") -> Any:
         """Run hooks for a given hook point, scoped to a KB type."""

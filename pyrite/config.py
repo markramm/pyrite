@@ -336,6 +336,7 @@ class Settings:
     database_url: str = ""  # PostgreSQL connection string (for postgres backend)
     workspace_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "repos")
     strict_plugins: bool = False  # Raise on plugin load failures (dev/CI mode)
+    prewarm_embeddings: bool = False  # Pre-load embedding model on server startup
 
     def __post_init__(self):
         self.index_path = Path(self.index_path).expanduser().resolve()
@@ -750,6 +751,8 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         config.settings.search_mode = val
     if val := env("PYRITE_STRICT_PLUGINS"):
         config.settings.strict_plugins = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_PREWARM_EMBEDDINGS"):
+        config.settings.prewarm_embeddings = val.lower() in ("true", "1", "yes")
 
     # When PYRITE_DATA_DIR is set, derive index_path and workspace_path from it
     data_dir = env("PYRITE_DATA_DIR")

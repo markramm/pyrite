@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..config import PyriteConfig
@@ -67,7 +67,12 @@ class QAService:
 
         return {"entry_id": entry_id, "kb_name": kb_name, "issues": issues}
 
-    def validate_kb(self, kb_name: str) -> dict[str, Any]:
+    def validate_kb(
+        self,
+        kb_name: str,
+        check_staleness: bool = False,
+        staleness_days: int = 90,
+    ) -> dict[str, Any]:
         """Validate all entries in a KB. Returns {kb_name, total, checked, issues: [...]}."""
         issues: list[dict[str, Any]] = []
 
@@ -88,6 +93,10 @@ class QAService:
 
         # Per-entry schema pass (only if kb.yaml exists)
         self._check_schema_all(issues, kb_name)
+
+        # Optional staleness check
+        if check_staleness:
+            self._check_staleness(issues, kb_name, staleness_days)
 
         return {
             "kb_name": kb_name,
@@ -819,3 +828,156 @@ class QAService:
                         ),
                     }
                 )
+
+    # =========================================================================
+    # Staleness & compaction
+    # =========================================================================
+
+    # Types that are historical by design — never flag as stale.
+    _STALENESS_EXEMPT_TYPES = frozenset({
+        "adr", "event", "timeline", "qa_assessment", "relationship",
+    })
+
+    def _check_staleness(
+        self, issues: list[dict[str, Any]], kb_name: str, max_age_days: int = 90
+    ) -> None:
+        """Add staleness info issues for entries not updated within *max_age_days*."""
+        for entry in self.find_stale(kb_name, max_age_days):
+            issues.append(
+                {
+                    "entry_id": entry["entry_id"],
+                    "kb_name": kb_name,
+                    "rule": "stale_entry",
+                    "severity": "info",
+                    "field": "updated_at",
+                    "message": (
+                        f"Entry '{entry['entry_id']}' ({entry['entry_type']}) "
+                        f"has not been updated in {entry['days_stale']} days"
+                    ),
+                }
+            )
+
+    def find_stale(
+        self, kb_name: str, max_age_days: int = 90
+    ) -> list[dict[str, Any]]:
+        """Find active entries not updated within *max_age_days*.
+
+        Type-aware: historical types (adr, event, timeline, qa_assessment,
+        relationship) are exempt from staleness checks.
+
+        Returns list of dicts with entry_id, entry_type, title, days_stale.
+        """
+        cutoff = (datetime.now(UTC) - timedelta(days=max_age_days)).isoformat()
+
+        rows = self.db.execute_sql(
+            "SELECT id, entry_type, title, updated_at FROM entry "
+            "WHERE kb_name = :kb_name AND lifecycle = 'active' "
+            "AND updated_at < :cutoff "
+            "ORDER BY updated_at ASC",
+            {"kb_name": kb_name, "cutoff": cutoff},
+        )
+
+        now = datetime.now(UTC)
+        results = []
+        for row in rows:
+            entry_type = row.get("entry_type", "")
+            if entry_type in self._STALENESS_EXEMPT_TYPES:
+                continue
+
+            updated_str = row.get("updated_at", "")
+            try:
+                updated = datetime.fromisoformat(updated_str)
+                if updated.tzinfo is None:
+                    updated = updated.replace(tzinfo=UTC)
+                days_stale = (now - updated).days
+            except (ValueError, TypeError):
+                days_stale = max_age_days  # Treat unparseable as stale
+
+            results.append(
+                {
+                    "entry_id": row["id"],
+                    "entry_type": entry_type,
+                    "title": row.get("title", ""),
+                    "days_stale": days_stale,
+                    "updated_at": updated_str,
+                }
+            )
+
+        return results
+
+    def find_archival_candidates(
+        self, kb_name: str, min_age_days: int = 90
+    ) -> list[dict[str, Any]]:
+        """Find entries that are candidates for archival.
+
+        Candidates:
+        1. Completed backlog items older than *min_age_days*
+        2. Old orphan entries (no links) with low importance (≤3) older than *min_age_days*
+
+        Returns list of dicts with entry_id, entry_type, title, reason, days_old.
+        """
+        cutoff = (datetime.now(UTC) - timedelta(days=min_age_days)).isoformat()
+        now = datetime.now(UTC)
+        results: list[dict[str, Any]] = []
+
+        # 1. Completed backlog items
+        done_rows = self.db.execute_sql(
+            "SELECT id, entry_type, title, updated_at FROM entry "
+            "WHERE kb_name = :kb_name AND lifecycle = 'active' "
+            "AND entry_type = 'backlog_item' AND status = 'completed' "
+            "AND updated_at < :cutoff",
+            {"kb_name": kb_name, "cutoff": cutoff},
+        )
+        for row in done_rows:
+            days_old = self._days_since(row.get("updated_at", ""), now)
+            results.append(
+                {
+                    "entry_id": row["id"],
+                    "entry_type": row.get("entry_type", ""),
+                    "title": row.get("title", ""),
+                    "reason": "completed_backlog_item",
+                    "days_old": days_old,
+                }
+            )
+
+        # 2. Old orphan entries with low importance
+        orphan_rows = self.db.execute_sql(
+            "SELECT e.id, e.entry_type, e.title, e.updated_at FROM entry e "
+            "WHERE e.kb_name = :kb_name AND e.lifecycle = 'active' "
+            "AND e.updated_at < :cutoff "
+            "AND (e.importance IS NULL OR e.importance <= 3) "
+            "AND e.entry_type NOT IN ('backlog_item', 'qa_assessment', 'collection') "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM link l WHERE l.target_id = e.id AND l.target_kb = :kb_name"
+            ") "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM link l WHERE l.source_id = e.id AND l.source_kb = :kb_name"
+            ")",
+            {"kb_name": kb_name, "cutoff": cutoff},
+        )
+        existing_ids = {r["entry_id"] for r in results}
+        for row in orphan_rows:
+            if row["id"] not in existing_ids:
+                days_old = self._days_since(row.get("updated_at", ""), now)
+                results.append(
+                    {
+                        "entry_id": row["id"],
+                        "entry_type": row.get("entry_type", ""),
+                        "title": row.get("title", ""),
+                        "reason": "old_orphan",
+                        "days_old": days_old,
+                    }
+                )
+
+        return results
+
+    @staticmethod
+    def _days_since(iso_str: str, now: datetime) -> int:
+        """Parse ISO timestamp and return days elapsed."""
+        try:
+            dt = datetime.fromisoformat(iso_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return (now - dt).days
+        except (ValueError, TypeError):
+            return 0
