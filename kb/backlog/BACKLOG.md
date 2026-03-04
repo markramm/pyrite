@@ -105,6 +105,14 @@ Recommended execution order. Grouped by milestone.
 |----------|------|--------|-----------|
 | **1** | [[plugin-repo-extraction]] | M | Extract extensions to separate repos/PyPI. In-tree for now as living examples + test coverage. |
 
+**Post-launch — Reliability & Robustness:**
+
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[api-module-level-singletons]] | S | Test isolation risk from module-level globals in api.py | |
+| **2** | [[plugin-hook-atomicity]] | S | Hook failures can leave partial state — need transactional wrapping | |
+| **3** | [[async-index-rebuild]] | M | Synchronous sync blocks CLI/API for large KBs | |
+
 **Post-launch — KB Quality & Lifecycle:**
 
 | Priority | Item | Effort | Rationale | Status |
@@ -121,6 +129,11 @@ Recommended execution order. Grouped by milestone.
 | **3** | [[kb-orchestrator-skill]] | M | Multi-KB agent coordination pattern |
 | **4** | [[db-backup-restore]] | S | Operational tooling | **done** |
 | **5** | [[search-relevance-boost-by-entry-type]] | M | Type-aware search ranking + intent integration |
+| **6** | [[protocol-versioning-implementation]] | M | Runtime protocol satisfaction checking (ADR-0014) |
+| **7** | [[embedding-service-prewarm]] | S | Reduce cold-start latency on first semantic search |
+| **8** | [[plugin-discovery-strict-mode]] | XS | Surface plugin load failures during development |
+| **9** | [[mcp-body-truncation-docs]] | XS | Document body truncation + pagination for agents |
+| **10** | [[import-cycle-detection]] | XS | Guard against circular imports as codebase grows |
 
 ---
 
@@ -216,6 +229,14 @@ Recommended execution order. Grouped by milestone.
 |---|------|------|--------|-----------|
 | 107 | [[plugin-repo-extraction]] | feature | M | pre-1.0 |
 
+### Post-launch — Reliability & Robustness
+
+| # | Item | Kind | Effort |
+|---|------|------|--------|
+| — | [[api-module-level-singletons]] | improvement | S |
+| — | [[plugin-hook-atomicity]] | improvement | S |
+| — | [[async-index-rebuild]] | improvement | M |
+
 ### Post-launch — KB Quality & Lifecycle
 
 | # | Item | Kind | Effort |
@@ -233,6 +254,11 @@ Recommended execution order. Grouped by milestone.
 | 96 | [[db-backup-restore]] | feature | S | **done** |
 | 98 | [[kb-orchestrator-skill]] | feature | M |
 | — | [[search-relevance-boost-by-entry-type]] | feature | M |
+| — | [[protocol-versioning-implementation]] | feature | M |
+| — | [[embedding-service-prewarm]] | improvement | S |
+| — | [[plugin-discovery-strict-mode]] | improvement | XS |
+| — | [[mcp-body-truncation-docs]] | improvement | XS |
+| — | [[import-cycle-detection]] | improvement | XS |
 
 ### Open Phases (blocked or deferred)
 
@@ -338,10 +364,14 @@ Lower-priority items in [`future-ideas/`](future-ideas/):
 
 ## Bugs
 
-| # | Item | Status |
-|---|------|--------|
-| 66 | [[health-check-timezone-fix]] | **done** |
-| 67 | [[create-body-file-nested-yaml-bug]] | **done** |
+| # | Item | Priority | Status |
+|---|------|----------|--------|
+| — | [[entry-id-collision-across-types]] | high | proposed |
+| — | [[schema-validate-cli-command]] | high | proposed |
+| — | [[sw-adrs-date-field-empty]] | medium | proposed |
+| — | [[priority-type-mismatch]] | medium | proposed |
+| 66 | [[health-check-timezone-fix]] | — | **done** |
+| 67 | [[create-body-file-nested-yaml-bug]] | — | **done** |
 
 ---
 
