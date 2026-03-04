@@ -1,4 +1,5 @@
 ---
+id: adr-0012
 type: adr
 title: "Block References and Transclusion"
 adr_number: 12

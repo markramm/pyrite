@@ -1,4 +1,5 @@
 ---
+id: adr-0017
 type: adr
 title: "Entry Protocol Mixins"
 adr_number: 17

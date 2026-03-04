@@ -1,4 +1,5 @@
 ---
+id: adr-0010
 type: adr
 title: "Content Negotiation and Multi-Format Support"
 adr_number: 10
