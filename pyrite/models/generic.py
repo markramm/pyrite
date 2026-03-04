@@ -27,6 +27,7 @@ _KNOWN_KEYS = {
     "created_at",
     "updated_at",
     "_schema_version",
+    "file_path",
 }
 
 

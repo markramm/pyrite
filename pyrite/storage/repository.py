@@ -61,7 +61,7 @@ class KBRepository:
                         body = text[end + 3 :].strip()
                         fm = self._maybe_migrate(fm)
                         fm["body"] = body
-                        fm["file_path"] = file_path
+                        fm["file_path"] = str(file_path)
                         return entry_from_frontmatter(fm, body)
 
             # Fallback: try EventEntry.load for backward compat
