@@ -13,6 +13,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from ..exceptions import PluginError
 from .context import PluginContext
 from .protocol import PyritePlugin
 
@@ -35,8 +36,14 @@ class PluginRegistry:
         self._plugins: dict[str, PyritePlugin] = {}
         self._discovered = False
 
-    def discover(self) -> None:
-        """Discover plugins via entry points."""
+    def discover(self, strict: bool = False) -> None:
+        """Discover plugins via entry points.
+
+        Args:
+            strict: If True, raise PluginError on any plugin load failure
+                instead of logging a warning and continuing. Useful for
+                development, CI, and ``pyrite ci``.
+        """
         if self._discovered:
             return
 
@@ -58,11 +65,24 @@ class PluginRegistry:
                         self._plugins[plugin.name] = plugin
                         logger.info("Loaded plugin: %s", plugin.name)
                     else:
-                        logger.warning("Plugin %s has no 'name' attribute, skipping", ep.name)
+                        msg = f"Plugin {ep.name} has no 'name' attribute"
+                        if strict:
+                            raise PluginError(msg)
+                        logger.warning("%s, skipping", msg)
+                except PluginError:
+                    raise
                 except Exception as e:
+                    if strict:
+                        raise PluginError(
+                            f"Failed to load plugin {ep.name}: {e}"
+                        ) from e
                     logger.warning("Failed to load plugin %s: %s", ep.name, e)
 
+        except PluginError:
+            raise
         except Exception as e:
+            if strict:
+                raise PluginError(f"Plugin discovery failed: {e}") from e
             logger.warning("Plugin discovery failed: %s", e)
 
         self._discovered = True

@@ -947,15 +947,24 @@ class KBService:
 
     @staticmethod
     def _run_hooks(hook_name: str, entry: Entry, context: dict) -> Entry:
-        """Run plugin lifecycle hooks, scoped by KB type. Returns the (possibly modified) entry."""
+        """Run plugin lifecycle hooks, scoped by KB type. Returns the (possibly modified) entry.
+
+        Hook ordering:
+        - ``before_save`` / ``before_delete``: Run BEFORE persistence. If any hook
+          raises, the operation is aborted — the entry is NOT saved. All exceptions
+          propagate to the caller.
+        - ``after_save`` / ``after_delete``: Run AFTER persistence. The entry is
+          already committed. Exceptions are logged but swallowed — the operation
+          is considered successful.
+        """
         try:
             from ..plugins import get_registry
 
             kb_type = context.get("kb_type", "") if context else ""
             return get_registry().run_hooks_for_kb(hook_name, entry, context, kb_type=kb_type)
-        except PyriteError:
-            raise  # Let Pyrite exceptions propagate (e.g. hook aborts)
         except Exception:
+            if hook_name.startswith("before_"):
+                raise  # before_* hooks abort the operation on ANY exception
             logger.warning("Hook %s failed", hook_name, exc_info=True)
             return entry
 

@@ -147,6 +147,58 @@ class TestEntryPointDiscovery:
         assert "fake_test_plugin" in reg.list_plugins()
 
 
+class TestStrictDiscovery:
+    """Test strict mode for plugin discovery."""
+
+    def test_strict_false_swallows_load_errors(self):
+        """Default non-strict mode logs warnings but doesn't raise."""
+        from unittest.mock import MagicMock, patch
+
+        bad_ep = MagicMock()
+        bad_ep.name = "broken_plugin"
+        bad_ep.load.side_effect = ImportError("missing dependency")
+
+        with patch("importlib.metadata.entry_points") as mock_eps:
+            mock_eps.return_value.select.return_value = [bad_ep]
+            reg = PluginRegistry()
+            reg.discover(strict=False)  # Should not raise
+            assert "broken_plugin" not in reg.list_plugins()
+
+    def test_strict_true_raises_on_load_error(self):
+        """Strict mode raises PluginError on plugin load failure."""
+        from unittest.mock import MagicMock, patch
+
+        from pyrite.exceptions import PluginError
+
+        bad_ep = MagicMock()
+        bad_ep.name = "broken_plugin"
+        bad_ep.load.side_effect = ImportError("missing dependency")
+
+        with patch("importlib.metadata.entry_points") as mock_eps:
+            mock_eps.return_value.select.return_value = [bad_ep]
+            reg = PluginRegistry()
+            with pytest.raises(PluginError, match="broken_plugin"):
+                reg.discover(strict=True)
+
+    def test_strict_true_raises_on_missing_name(self):
+        """Strict mode raises PluginError when plugin has no name attribute."""
+        from unittest.mock import MagicMock, patch
+
+        from pyrite.exceptions import PluginError
+
+        nameless_plugin = MagicMock(spec=[])  # No 'name' attribute
+
+        bad_ep = MagicMock()
+        bad_ep.name = "nameless"
+        bad_ep.load.return_value = lambda: nameless_plugin
+
+        with patch("importlib.metadata.entry_points") as mock_eps:
+            mock_eps.return_value.select.return_value = [bad_ep]
+            reg = PluginRegistry()
+            with pytest.raises(PluginError, match="nameless"):
+                reg.discover(strict=True)
+
+
 # =========================================================================
 # Entry type resolution through core
 # =========================================================================
@@ -465,6 +517,41 @@ class TestHookExecution:
         entry = NoteEntry(id="test", title="Test")
         result = registry.run_hooks("before_index", entry, {})
         assert result is entry
+
+
+class TestHookAtomicity:
+    """Test that before_save exceptions propagate through kb_service._run_hooks."""
+
+    def test_before_save_non_pyrite_error_propagates(self):
+        """Non-PyriteError from before_save hook must propagate, not be swallowed."""
+        from unittest.mock import patch
+
+        from pyrite.services.kb_service import KBService
+
+        entry = NoteEntry(id="test", title="Test")
+        ctx = {"kb_type": "", "operation": "create"}
+
+        with patch("pyrite.plugins.get_registry") as mock_reg:
+            mock_reg.return_value.run_hooks_for_kb.side_effect = ValueError(
+                "hook validation failed"
+            )
+            with pytest.raises(ValueError, match="hook validation failed"):
+                KBService._run_hooks("before_save", entry, ctx)
+
+    def test_after_save_non_pyrite_error_is_swallowed(self):
+        """Non-PyriteError from after_save hook should be logged, not raised."""
+        from unittest.mock import patch
+
+        from pyrite.services.kb_service import KBService
+
+        entry = NoteEntry(id="test", title="Test")
+        ctx = {"kb_type": "", "operation": "create"}
+
+        with patch("pyrite.plugins.get_registry") as mock_reg:
+            mock_reg.return_value.run_hooks_for_kb.side_effect = RuntimeError("oops")
+            # Should NOT raise — after_save errors are swallowed
+            result = KBService._run_hooks("after_save", entry, ctx)
+            assert result is entry
 
 
 # =========================================================================
