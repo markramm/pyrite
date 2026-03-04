@@ -145,17 +145,17 @@ class TestPrioritizable:
             pass
 
         t = T()
-        assert t.priority == 0
+        assert t.priority == ""
 
     def test_to_frontmatter(self):
         @dataclass
         class T(Prioritizable):
             pass
 
-        t = T(priority=3)
-        assert t._prioritizable_to_frontmatter() == {"priority": 3}
+        t = T(priority="high")
+        assert t._prioritizable_to_frontmatter() == {"priority": "high"}
 
-    def test_to_frontmatter_zero(self):
+    def test_to_frontmatter_empty(self):
         @dataclass
         class T(Prioritizable):
             pass
@@ -164,8 +164,8 @@ class TestPrioritizable:
         assert t._prioritizable_to_frontmatter() == {}
 
     def test_from_frontmatter(self):
-        result = Prioritizable._prioritizable_from_frontmatter({"priority": "7"})
-        assert result == {"priority": 7}
+        result = Prioritizable._prioritizable_from_frontmatter({"priority": "high"})
+        assert result == {"priority": "high"}
 
 
 class TestMixinComposition:
@@ -191,14 +191,14 @@ class TestMixinComposition:
             date="2026-01-01",
             location="NYC",
             status="active",
-            priority=5,
+            priority="high",
             title="Test",
         )
         assert s.assignee == "bob"
         assert s.date == "2026-01-01"
         assert s.location == "NYC"
         assert s.status == "active"
-        assert s.priority == 5
+        assert s.priority == "high"
         assert s.title == "Test"
 
     def test_composed_frontmatter_helpers(self):
@@ -206,12 +206,12 @@ class TestMixinComposition:
         class TaskLike(Assignable, Temporal, Prioritizable):
             pass
 
-        t = TaskLike(assignee="alice", due_date="2026-04-01", priority=3)
+        t = TaskLike(assignee="alice", due_date="2026-04-01", priority="high")
         fm = {}
         fm.update(t._assignable_to_frontmatter())
         fm.update(t._temporal_to_frontmatter())
         fm.update(t._prioritizable_to_frontmatter())
-        assert fm == {"assignee": "alice", "due_date": "2026-04-01", "priority": 3}
+        assert fm == {"assignee": "alice", "due_date": "2026-04-01", "priority": "high"}
 
     def test_mro_no_conflict(self):
         """All 5 protocols can be combined in any order."""

@@ -119,12 +119,12 @@ class Statusable:
 class Prioritizable:
     """Protocol for entries with priority ranking."""
 
-    priority: int = 0
+    priority: str = ""
 
     def _prioritizable_to_frontmatter(self) -> dict[str, Any]:
         """Return non-default Prioritizable fields for frontmatter."""
         result: dict[str, Any] = {}
-        if self.priority != 0:
+        if self.priority:
             result["priority"] = self.priority
         return result
 
@@ -132,7 +132,7 @@ class Prioritizable:
     def _prioritizable_from_frontmatter(meta: dict[str, Any]) -> dict[str, Any]:
         """Extract Prioritizable fields from frontmatter dict."""
         return {
-            "priority": int(meta.get("priority", 0)),
+            "priority": str(meta.get("priority", "")),
         }
 
 

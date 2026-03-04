@@ -27,7 +27,7 @@ def db():
             "assignee": "agent:alpha",
             "status": "in_progress",
             "due_date": "2026-02-01",
-            "priority": 3,
+            "priority": "high",
             "tags": [],
             "sources": [],
             "links": [],
@@ -175,3 +175,35 @@ class TestFindByLocation:
     def test_no_results(self, db):
         rows = db.find_by_location("Tokyo")
         assert rows == []
+
+
+class TestProtocolFieldsInGetEntry:
+    """Protocol fields must appear as top-level keys in get_entry() results."""
+
+    def test_protocol_fields_returned_by_get_entry(self, db):
+        """get_entry() returns protocol columns (assignee, priority, due_date, etc.)."""
+        result = db.get_entry("task-1", "kb-a")
+        assert result is not None
+        # Protocol fields should be top-level keys, not buried in metadata
+        assert result["assignee"] == "agent:alpha"
+        assert result["priority"] == "high"
+        assert result["due_date"] == "2026-02-01"
+        assert result["status"] == "in_progress"
+
+    def test_location_and_date_in_get_entry(self, db):
+        """get_entry() returns location, coordinates, date fields."""
+        result = db.get_entry("event-1", "kb-a")
+        assert result is not None
+        assert result["location"] == "New York City Hall"
+        assert result["date"] == "2026-01-15"
+        # coordinates not set — should be None, not missing
+        assert "coordinates" in result
+
+    def test_unset_protocol_fields_are_none(self, db):
+        """Entries without protocol fields return None, not KeyError."""
+        result = db.get_entry("note-1", "kb-a")
+        assert result is not None
+        assert result.get("assignee") is None
+        assert result.get("priority") is None
+        assert result.get("due_date") is None
+        assert result.get("coordinates") is None

@@ -132,7 +132,7 @@ class IndexManager:
         if isinstance(entry, Prioritizable):
             data["priority"] = entry.priority
         elif hasattr(entry, "priority"):
-            data["priority"] = getattr(entry, "priority", 0)
+            data["priority"] = getattr(entry, "priority", "")
 
         # importance (promoted to base Entry)
         data["importance"] = entry.importance

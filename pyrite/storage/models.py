@@ -62,7 +62,7 @@ class Entry(Base):
     # Protocol fields (ADR-0017)
     assignee = Column(String)
     assigned_at = Column(String)
-    priority = Column(Integer)
+    priority = Column(String)
     due_date = Column(String)
     start_date = Column(String)
     end_date = Column(String)
