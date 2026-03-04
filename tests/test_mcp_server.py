@@ -1436,5 +1436,126 @@ class TestDispatchRateLimiting:
                 assert "error_code" not in result
 
 
+# ---------------------------------------------------------------------------
+# Body chunking tests
+# ---------------------------------------------------------------------------
+
+
+class TestBodyChunking:
+    """Tests for auto-truncation and body pagination in kb_get, kb_batch_read, kb_read_body."""
+
+    def _make_large_entry(self, ctx, body_size=10000):
+        """Create an entry with a body of exactly body_size characters."""
+        server = ctx["server"]
+        body = "A" * body_size
+        server._dispatch_tool(
+            "kb_create",
+            {
+                "kb_name": "test",
+                "entry_type": "note",
+                "title": "Large Entry",
+                "body": body,
+            },
+        )
+        # Find the entry
+        result = server._dispatch_tool(
+            "kb_search", {"query": "Large Entry", "kb_name": "test", "include_body": True}
+        )
+        return result["results"][0]["id"], body
+
+    def test_body_truncated_with_metadata(self):
+        """Body >8K is truncated and includes truncation metadata."""
+        kb_defs = [{"name": "test", "kb_type": "generic"}]
+        with _make_mcp_server(kb_defs, tier="write") as ctx:
+            entry_id, full_body = self._make_large_entry(ctx, body_size=10000)
+            server = ctx["server"]
+            result = server._dispatch_tool("kb_get", {"entry_id": entry_id, "kb_name": "test"})
+            entry = result["entry"]
+            assert entry["body_truncated"] is True
+            assert entry["body_length"] == 10000
+            assert entry["body_offset"] == 0
+            assert entry["body_chunk_size"] == 8000
+            assert len(entry["body"]) == 8000
+            assert entry["body"] == full_body[:8000]
+
+    def test_body_offset_returns_second_chunk(self):
+        """body_offset=8000 returns the second chunk."""
+        kb_defs = [{"name": "test", "kb_type": "generic"}]
+        with _make_mcp_server(kb_defs, tier="write") as ctx:
+            entry_id, full_body = self._make_large_entry(ctx, body_size=10000)
+            server = ctx["server"]
+            result = server._dispatch_tool(
+                "kb_get", {"entry_id": entry_id, "kb_name": "test", "body_offset": 8000}
+            )
+            entry = result["entry"]
+            assert entry["body_truncated"] is True
+            assert entry["body_offset"] == 8000
+            assert entry["body_chunk_size"] == 2000
+            assert entry["body"] == full_body[8000:]
+
+    def test_small_body_no_truncation(self):
+        """Small body returned as-is without truncation metadata."""
+        kb_defs = [{"name": "test", "kb_type": "generic"}]
+        with _make_mcp_server(kb_defs, tier="write") as ctx:
+            server = ctx["server"]
+            server._dispatch_tool(
+                "kb_create",
+                {
+                    "kb_name": "test",
+                    "entry_type": "note",
+                    "title": "Small Entry",
+                    "body": "Short body text",
+                },
+            )
+            result = server._dispatch_tool(
+                "kb_search", {"query": "Small Entry", "kb_name": "test"}
+            )
+            eid = result["results"][0]["id"]
+            result = server._dispatch_tool("kb_get", {"entry_id": eid, "kb_name": "test"})
+            entry = result["entry"]
+            assert entry["body"] == "Short body text"
+            assert "body_truncated" not in entry
+            assert "body_length" not in entry
+
+    def test_kb_read_body_returns_chunk_with_has_more(self):
+        """kb_read_body returns body chunk with has_more flag, no title/metadata."""
+        kb_defs = [{"name": "test", "kb_type": "generic"}]
+        with _make_mcp_server(kb_defs, tier="write") as ctx:
+            entry_id, full_body = self._make_large_entry(ctx, body_size=10000)
+            server = ctx["server"]
+            result = server._dispatch_tool(
+                "kb_read_body", {"entry_id": entry_id, "kb_name": "test"}
+            )
+            assert "title" not in result
+            assert result["body"] == full_body[:8000]
+            assert result["body_length"] == 10000
+            assert result["body_offset"] == 0
+            assert result["body_chunk_size"] == 8000
+            assert result["has_more"] is True
+
+            # Second chunk
+            result2 = server._dispatch_tool(
+                "kb_read_body",
+                {"entry_id": entry_id, "kb_name": "test", "body_offset": 8000},
+            )
+            assert result2["body"] == full_body[8000:]
+            assert result2["has_more"] is False
+
+    def test_batch_read_applies_per_entry_truncation(self):
+        """kb_batch_read applies per-entry body truncation."""
+        kb_defs = [{"name": "test", "kb_type": "generic"}]
+        with _make_mcp_server(kb_defs, tier="write") as ctx:
+            entry_id, full_body = self._make_large_entry(ctx, body_size=10000)
+            server = ctx["server"]
+            result = server._dispatch_tool(
+                "kb_batch_read",
+                {"entries": [{"entry_id": entry_id, "kb_name": "test"}]},
+            )
+            entry = result["entries"][0]
+            assert entry["body_truncated"] is True
+            assert entry["body_length"] == 10000
+            assert len(entry["body"]) == 8000
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

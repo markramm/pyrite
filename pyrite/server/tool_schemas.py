@@ -71,7 +71,7 @@ READ_TOOLS = {
         },
     },
     "kb_get": {
-        "description": "Get a specific entry by its ID. Returns full content including body, metadata, sources, and links.",
+        "description": "Get a specific entry by its ID. Returns full content including body, metadata, sources, and links. Bodies over 8000 chars are auto-truncated; use body_offset/body_limit to paginate, or kb_read_body for continuation.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -86,7 +86,15 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields.",
+                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields. When specified, body chunking is skipped.",
+                },
+                "body_offset": {
+                    "type": "integer",
+                    "description": "Start position in body text (default 0). Use to paginate large bodies.",
+                },
+                "body_limit": {
+                    "type": "integer",
+                    "description": "Max body chars to return (default 8000, max 50000).",
                 },
             },
             "required": ["entry_id"],
@@ -227,7 +235,7 @@ READ_TOOLS = {
         },
     },
     "kb_batch_read": {
-        "description": "Fetch multiple entries in one call. Faster than sequential kb_get when you need 2+ entries. Returns found entries and lists any IDs not found. Max 50 entries per call.",
+        "description": "Fetch multiple entries in one call. Faster than sequential kb_get when you need 2+ entries. Returns found entries and lists any IDs not found. Max 50 entries per call. Bodies over 8000 chars are auto-truncated.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -247,10 +255,43 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields per entry. Omit for all fields.",
+                    "description": "Return only these fields per entry. Omit for all fields. When specified, body chunking is skipped.",
+                },
+                "body_offset": {
+                    "type": "integer",
+                    "description": "Start position in body text (default 0). Applied to all entries.",
+                },
+                "body_limit": {
+                    "type": "integer",
+                    "description": "Max body chars to return per entry (default 8000, max 50000).",
                 },
             },
             "required": ["entries"],
+        },
+    },
+    "kb_read_body": {
+        "description": "Read a chunk of an entry's body text. Lightweight continuation tool — returns body only, no entry metadata. Use after kb_get indicates body_truncated: true.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entry_id": {
+                    "type": "string",
+                    "description": "Entry ID to read body from",
+                },
+                "kb_name": {
+                    "type": "string",
+                    "description": "KB name (optional - searches all KBs if not provided)",
+                },
+                "body_offset": {
+                    "type": "integer",
+                    "description": "Start position in body text (default 0)",
+                },
+                "body_limit": {
+                    "type": "integer",
+                    "description": "Max chars to return (default 8000, max 50000)",
+                },
+            },
+            "required": ["entry_id"],
         },
     },
     "kb_list_entries": {

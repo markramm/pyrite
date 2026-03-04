@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 URI_SCHEME = "pyrite://"
 MAX_BATCH_READ_ENTRIES = 50
+DEFAULT_BODY_CHUNK = 8000
+MAX_BODY_CHUNK = 50_000
 _UPDATE_FIELDS = frozenset(
     {
         "title",
@@ -49,6 +51,31 @@ def _project_fields(entry: dict, fields: list[str] | None) -> dict:
     if not fields:
         return entry
     return {k: entry[k] for k in fields if k in entry}
+
+
+def _chunk_body(
+    entry: dict, offset: int = 0, limit: int = DEFAULT_BODY_CHUNK
+) -> dict:
+    """Apply body chunking to an entry dict.
+
+    If the body fits within the offset+limit window, return unchanged.
+    Otherwise return a shallow copy with the body sliced and truncation metadata.
+    """
+    body = entry.get("body")
+    if body is None:
+        return entry
+    body_len = len(body)
+    limit = min(limit, MAX_BODY_CHUNK)
+    chunk = body[offset : offset + limit]
+    if offset == 0 and len(chunk) == body_len:
+        # No truncation needed
+        return entry
+    out = {**entry, "body": chunk}
+    out["body_truncated"] = True
+    out["body_length"] = body_len
+    out["body_offset"] = offset
+    out["body_chunk_size"] = len(chunk)
+    return out
 
 
 def _error(
@@ -234,6 +261,8 @@ class PyriteMCPServer:
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         fields = args.get("fields")
+        body_offset = args.get("body_offset", 0)
+        body_limit = args.get("body_limit", DEFAULT_BODY_CHUNK)
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
 
@@ -246,8 +275,36 @@ class PyriteMCPServer:
 
         if fields:
             result = _project_fields(result, fields)
+        else:
+            result = _chunk_body(result, offset=body_offset, limit=body_limit)
 
         return {"entry": result}
+
+    def _kb_read_body(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Read a chunk of an entry's body text. Lightweight continuation tool."""
+        entry_id = args.get("entry_id")
+        kb_name = args.get("kb_name")
+        offset = args.get("body_offset", 0)
+        limit = min(args.get("body_limit", DEFAULT_BODY_CHUNK), MAX_BODY_CHUNK)
+
+        result = self.svc.get_entry(entry_id, kb_name=kb_name)
+        if not result:
+            return _error(
+                "NOT_FOUND",
+                f"Entry '{entry_id}' not found",
+                suggestion="Use kb_list_entries or kb_search to find entries",
+            )
+
+        body = result.get("body") or ""
+        body_len = len(body)
+        chunk = body[offset : offset + limit]
+        return {
+            "body": chunk,
+            "body_length": body_len,
+            "body_offset": offset,
+            "body_chunk_size": len(chunk),
+            "has_more": offset + len(chunk) < body_len,
+        }
 
     def _kb_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get timeline events."""
@@ -372,6 +429,8 @@ class PyriteMCPServer:
         """Fetch multiple entries in one call."""
         entries_spec = args.get("entries", [])
         fields = args.get("fields")
+        body_offset = args.get("body_offset", 0)
+        body_limit = args.get("body_limit", DEFAULT_BODY_CHUNK)
 
         if not entries_spec:
             return _error("VALIDATION_FAILED", "entries array is required and must not be empty")
@@ -383,6 +442,8 @@ class PyriteMCPServer:
 
         if fields:
             results = [_project_fields(r, fields) for r in results]
+        else:
+            results = [_chunk_body(r, offset=body_offset, limit=body_limit) for r in results]
 
         found_ids = {(r["id"], r["kb_name"]) for r in results}
         not_found = [
