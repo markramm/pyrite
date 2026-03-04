@@ -50,7 +50,7 @@ def extension_init(
         "A Pyrite extension", "--description", "-d", help="Extension description"
     ),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Scaffold a new Pyrite extension with plugin boilerplate."""
@@ -298,7 +298,7 @@ def extension_install(
     path: Path = typer.Argument(..., help="Path to extension directory"),
     verify: bool = typer.Option(False, "--verify", help="Verify plugin loads after install"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Install a Pyrite extension from a local path."""
@@ -368,7 +368,7 @@ def extension_install(
 @extension_app.command("list")
 def extension_list(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """List installed Pyrite extensions."""
@@ -444,7 +444,7 @@ def extension_uninstall(
     name: str = typer.Argument(..., help="Extension name to uninstall"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Uninstall a Pyrite extension."""

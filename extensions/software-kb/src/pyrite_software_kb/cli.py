@@ -46,7 +46,7 @@ def _json_output(items: list[dict]) -> None:
 def sw_adrs(
     status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
-    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
 ):
     """List Architecture Decision Records."""
     config = load_config()
@@ -56,7 +56,7 @@ def sw_adrs(
         rows = _query_entries(db, "adr", kb_name)
 
         if status:
-            rows = [r for r in rows if r["_meta"].get("status", "proposed") == status]
+            rows = [r for r in rows if (r.get("status") or r["_meta"].get("status", "proposed")) == status]
 
         if not rows:
             if fmt == "json":
@@ -70,8 +70,8 @@ def sw_adrs(
                 {
                     "adr_number": r["_meta"].get("adr_number", ""),
                     "title": r["title"],
-                    "status": r["_meta"].get("status", "proposed"),
-                    "date": r["_meta"].get("date", ""),
+                    "status": r.get("status") or r["_meta"].get("status", "proposed"),
+                    "date": r.get("date") or r["_meta"].get("date", ""),
                 }
                 for r in rows
             ])
@@ -89,8 +89,8 @@ def sw_adrs(
             table.add_row(
                 num,
                 row["title"],
-                meta.get("status", "proposed"),
-                meta.get("date", ""),
+                row.get("status") or meta.get("status", "proposed"),
+                row.get("date") or meta.get("date", ""),
             )
 
         console.print(table)
@@ -135,7 +135,7 @@ def sw_backlog(
     priority: str | None = typer.Option(None, "--priority", "-p", help="Filter by priority"),
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
-    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
 ):
     """List backlog items."""
     config = load_config()
@@ -145,9 +145,9 @@ def sw_backlog(
         rows = _query_entries(db, "backlog_item", kb_name)
 
         if status:
-            rows = [r for r in rows if r["_meta"].get("status", "proposed") == status]
+            rows = [r for r in rows if (r.get("status") or r["_meta"].get("status", "proposed")) == status]
         if priority:
-            rows = [r for r in rows if r["_meta"].get("priority", "medium") == priority]
+            rows = [r for r in rows if (r.get("priority") or r["_meta"].get("priority", "medium")) == priority]
         if kind:
             rows = [r for r in rows if r["_meta"].get("kind", "") == kind]
 
@@ -164,8 +164,8 @@ def sw_backlog(
                     "id": r["id"],
                     "title": r["title"],
                     "kind": r["_meta"].get("kind", ""),
-                    "status": r["_meta"].get("status", "proposed"),
-                    "priority": r["_meta"].get("priority", "medium"),
+                    "status": r.get("status") or r["_meta"].get("status", "proposed"),
+                    "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
                     "effort": r["_meta"].get("effort", ""),
                 }
                 for r in rows
@@ -186,8 +186,8 @@ def sw_backlog(
                 row["id"][:12],
                 row["title"],
                 meta.get("kind", ""),
-                meta.get("status", "proposed"),
-                meta.get("priority", "medium"),
+                row.get("status") or meta.get("status", "proposed"),
+                row.get("priority") or meta.get("priority", "medium"),
                 meta.get("effort", ""),
             )
 
@@ -200,7 +200,7 @@ def sw_backlog(
 def sw_standards(
     category: str | None = typer.Option(None, "--category", "-c", help="Filter by category"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
-    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
 ):
     """List coding standards and conventions."""
     config = load_config()
@@ -249,7 +249,7 @@ def sw_standards(
 def sw_components(
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
-    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
 ):
     """List component documentation."""
     config = load_config()

@@ -45,7 +45,7 @@ def register_search_command(app: typer.Typer):
             None, "--fields", help="Comma-separated fields to return (e.g. id,title,tags)"
         ),
         output_format: str = typer.Option(
-            "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+            "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
         ),
     ):
         """

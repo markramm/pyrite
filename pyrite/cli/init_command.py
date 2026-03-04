@@ -164,7 +164,7 @@ def init_kb(
         None, "--schema-file", help="Custom schema YAML file to use as preset override"
     ),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Initialize a new knowledge base from a template.

@@ -145,7 +145,7 @@ def repo_unsubscribe(
 def repo_status(
     name: str = typer.Argument(..., help="Repository name"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Show detailed status for a repository."""
@@ -193,7 +193,7 @@ def repo_status(
 @repo_collab_app.command("list")
 def repo_list_extended(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """List all repositories with sync status."""

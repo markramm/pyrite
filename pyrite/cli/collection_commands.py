@@ -14,7 +14,7 @@ console = Console()
 def list_collections(
     kb: str | None = typer.Option(None, "--kb", "-k", help="Filter by KB name"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """List all collections with entry counts."""
@@ -68,7 +68,7 @@ def query_entries(
     kb: str | None = typer.Option(None, "--kb", "-k", help="Filter by KB name"),
     limit: int = typer.Option(50, "--limit", "-n", help="Max results"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Run an ad-hoc collection query."""

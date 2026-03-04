@@ -815,7 +815,7 @@ class TestExtensionInstall:
                 mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
                 result = runner.invoke(app, ["extension", "install", str(ext_path)])
                 assert result.exit_code == 0
-                assert "Installed" in result.output
+                assert "installed" in result.output
 
     def test_extension_install_nonexistent_path(self, admin_env):
         with _patch_config(admin_env):
@@ -839,7 +839,7 @@ class TestExtensionUninstall:
                     ["extension", "uninstall", "test-plugin", "--force"],
                 )
                 assert result.exit_code == 0
-                assert "Uninstalled" in result.output
+                assert "uninstalled" in result.output
 
     def test_extension_uninstall_pip_failure(self, admin_env):
         """Uninstall when pip fails should exit 1."""

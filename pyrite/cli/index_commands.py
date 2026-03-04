@@ -149,7 +149,7 @@ def index_sync(
 @index_app.command("stats")
 def index_stats(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Show index statistics."""
@@ -246,7 +246,7 @@ def index_embed(
 @index_app.command("health")
 def index_health(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Check index health and consistency."""

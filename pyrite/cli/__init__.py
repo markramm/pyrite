@@ -291,7 +291,7 @@ def get_entry(
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to search in"),
     fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Get a specific entry by ID."""
@@ -528,7 +528,7 @@ def update_entry(
     lifecycle: str = typer.Option(None, "--lifecycle", help="Lifecycle state: active or archived"),
     field: list[str] | None = typer.Option(None, "--field", "-f", help="Extra field as key=value"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Update an existing entry."""
@@ -640,7 +640,7 @@ def link_entries(
 @app.command("list")
 def list_kbs(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """List all knowledge bases."""
@@ -688,7 +688,7 @@ def list_entries(
     offset: int = typer.Option(0, "--offset", help="Pagination offset"),
     fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Browse entries with filters and pagination."""
@@ -756,7 +756,7 @@ def batch_read(
     ),
     fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Fetch multiple entries in one call."""
@@ -819,7 +819,7 @@ def orient_kb(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base to orient in"),
     recent: int = typer.Option(5, "--recent", "-r", help="Number of recent entries to include"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """One-shot KB orientation summary — types, tags, recent changes, and schema."""
@@ -880,7 +880,7 @@ def recent_entries(
     since: str = typer.Option(None, "--since", help="Only entries updated after this ISO datetime"),
     fields: str = typer.Option(None, "--fields", help="Comma-separated fields to return"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Show recently changed entries."""
@@ -941,7 +941,7 @@ def timeline(
     min_importance: int = typer.Option(1, "--min-importance", help="Minimum importance (1-10)"),
     limit: int = typer.Option(50, "--limit", "-n", help="Max results"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Query timeline events."""
@@ -990,7 +990,7 @@ def tags_cmd(
     prefix: str = typer.Option(None, "--prefix", "-p", help="Filter tags by prefix"),
     limit: int = typer.Option(100, "--limit", "-n", help="Max tags to show"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """List tags with counts."""
@@ -1031,7 +1031,7 @@ def backlinks_cmd(
     entry_id: str = typer.Argument(..., help="Entry ID to find backlinks for"),
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Find entries that link to a given entry."""
@@ -1232,7 +1232,7 @@ def repo_remove(
 @auth_app.command("status")
 def auth_status(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Check GitHub authentication status."""
@@ -1254,7 +1254,7 @@ def auth_status(
 @auth_app.command("whoami")
 def auth_whoami(
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Show current user identity."""

@@ -116,7 +116,7 @@ class TestTyperGetCommand:
 class TestTyperTimelineCommand:
     def test_timeline_shows_events(self, cli_env):
         with _patch_config(cli_env):
-            result = runner.invoke(app, ["timeline"])
+            result = runner.invoke(app, ["timeline", "--format", "rich"])
             assert result.exit_code == 0
             assert "Timeline" in result.output
 
@@ -130,7 +130,7 @@ class TestTyperTimelineCommand:
 class TestTyperTagsCommand:
     def test_tags_shows_results(self, cli_env):
         with _patch_config(cli_env):
-            result = runner.invoke(app, ["tags"])
+            result = runner.invoke(app, ["tags", "--format", "rich"])
             assert result.exit_code == 0
             assert "Tags" in result.output
 
@@ -224,7 +224,7 @@ class TestTyperUpdateCommand:
                 ],
             )
             assert result.exit_code == 0
-            assert "Updated" in result.output
+            assert "updated" in result.output.lower()
 
     def test_update_nonexistent(self, cli_env):
         with _patch_config(cli_env):

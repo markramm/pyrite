@@ -29,7 +29,7 @@ def qa_validate(
     kb_name: str | None = typer.Argument(None, help="KB to validate (all if omitted)"),
     entry: str | None = typer.Option(None, "--entry", "-e", help="Validate single entry by ID"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
     severity: str | None = typer.Option(
         None, "--severity", "-s", help="Minimum severity filter: error, warning, info"
@@ -123,7 +123,7 @@ def qa_assess(
         False, "--create-tasks", help="Create tasks for failed assessments"
     ),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Run QA assessment on entries, creating assessment records.
@@ -206,7 +206,7 @@ def qa_assess(
 def qa_status(
     kb_name: str | None = typer.Argument(None, help="KB to check (all if omitted)"),
     output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich, json, markdown, csv, yaml"
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
     """Show QA status dashboard with issue counts and coverage."""
