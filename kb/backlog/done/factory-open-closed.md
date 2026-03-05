@@ -3,7 +3,7 @@ id: factory-open-closed
 type: backlog_item
 title: "Fix factory.py Open-Closed violation"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: medium
 effort: S

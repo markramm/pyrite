@@ -3,7 +3,7 @@ id: plugin-registry-deduplication
 type: backlog_item
 title: "Deduplicate PluginRegistry aggregation methods"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: medium
 effort: S

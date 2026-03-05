@@ -124,6 +124,19 @@ Recommended execution order. Grouped by milestone.
 | **0** | [[kb-service-decomposition]] | L | KBService is a 45-method god-class — extract GraphService, EphemeralKBService, QuotaService, ExportService | **done** |
 | **1** | [[schema-module-decomposition]] | M | schema.py mixes 4+ concerns in 1,157 lines — split into focused submodules | **done** |
 | **2** | [[search-service-kb-service-overlap]] | S | Duplicate methods between SearchService and KBService | **done** |
+| **3** | [[dynamic-subdirectory-paths]] | M | Template subdirectories (`{status}`) for auto file organization | **done** |
+
+*Cleanup (from 0.17 stale proposed → completed):*
+
+| Priority | Item | Effort | Status |
+|----------|------|--------|--------|
+| — | [[factory-open-closed]] | S | **done** (0.17) |
+| — | [[plugin-registry-deduplication]] | S | **done** (0.17) |
+| — | [[import-cycle-detection]] | XS | **done** (0.17) |
+| — | [[embedding-service-prewarm]] | S | **done** (0.17) |
+| — | [[plugin-hook-atomicity]] | S | **done** (0.17) |
+| — | [[plugin-discovery-strict-mode]] | XS | **done** (0.17) |
+| — | [[api-module-level-singletons]] | S | **done** (0.17) |
 
 *Ecosystem:*
 

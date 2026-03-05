@@ -3,7 +3,7 @@ id: api-module-level-singletons
 type: backlog_item
 title: "Replace module-level singletons in api.py with FastAPI app state"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: high
 effort: S

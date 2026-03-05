@@ -3,7 +3,7 @@ id: plugin-hook-atomicity
 type: backlog_item
 title: "Make plugin hook execution atomic with DB transactions"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: high
 effort: S

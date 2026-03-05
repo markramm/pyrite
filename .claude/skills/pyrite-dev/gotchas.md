@@ -249,3 +249,9 @@ db.execute_sql("SELECT * FROM entry WHERE id = ?", (entry_id,))
 3. If either leg fetches too few candidates, pagination at high offsets returns empty
 
 **When this bites you:** Adding a new search mode or modifying the hybrid pipeline. Always ensure both legs fetch enough to cover `offset + limit`.
+
+## `list_files()` Skips Files with "template" in the Filename
+
+`KBRepository.list_files()` (repository.py:244) filters out any `.md` file whose name contains the substring `"template"`. This is a broad substring check, not a prefix/suffix match.
+
+**When this bites you:** Creating KB entries with filenames like `templated-foo.md`, `template-bar.md`, or `path-templates.md`. They silently won't be indexed. Rename to avoid the word entirely (e.g., `dynamic-foo.md`).

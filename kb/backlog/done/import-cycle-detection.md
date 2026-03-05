@@ -3,7 +3,7 @@ id: import-cycle-detection
 type: backlog_item
 title: "Add import cycle detection to pre-commit hooks"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: low
 effort: XS

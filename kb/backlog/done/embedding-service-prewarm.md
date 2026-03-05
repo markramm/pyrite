@@ -3,7 +3,7 @@ id: embedding-service-prewarm
 type: backlog_item
 title: "Add embedding service pre-warm option to reduce cold-start latency"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: medium
 effort: S

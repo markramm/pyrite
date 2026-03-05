@@ -3,7 +3,7 @@ id: plugin-discovery-strict-mode
 type: backlog_item
 title: "Add strict mode for plugin discovery to surface load failures"
 kind: improvement
-status: proposed
+status: completed
 milestone: "0.17"
 priority: medium
 effort: XS
