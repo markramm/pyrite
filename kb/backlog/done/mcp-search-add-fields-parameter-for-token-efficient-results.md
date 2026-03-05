@@ -9,7 +9,7 @@ tags:
 - dx
 metadata:
   kind: enhancement
-  status: proposed
+  status: completed
   priority: high
   effort: m
 kind: enhancement

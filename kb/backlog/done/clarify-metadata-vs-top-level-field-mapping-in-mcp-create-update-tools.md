@@ -9,7 +9,7 @@ tags:
 - schema
 metadata:
   kind: improvement
-  status: proposed
+  status: completed
   priority: medium
   effort: m
 kind: improvement

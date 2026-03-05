@@ -8,7 +8,7 @@ tags:
 - agents
 metadata:
   kind: bug
-  status: proposed
+  status: completed
   priority: high
   effort: s
 kind: bug

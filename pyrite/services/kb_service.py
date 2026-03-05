@@ -23,8 +23,10 @@ from ..storage.database import PyriteDB
 from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
+from .ephemeral_service import EphemeralKBService
 from .export_service import ExportService
 from .graph_service import GraphService
+from .quota_service import QuotaService
 from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
@@ -52,6 +54,8 @@ class KBService:
         self._doc_mgr = doc_mgr or DocumentManager(db, self._index_mgr)
         self._graph_svc = GraphService(db)
         self._export_svc = ExportService(config, db)
+        self._ephemeral_svc = EphemeralKBService(config, db)
+        self._quota_svc = QuotaService(config)
         self._embedding_svc = None
         self._embedding_checked = False
         self._embedding_worker = None  # Set externally to enable queue-based embedding
@@ -1007,113 +1011,23 @@ class KBService:
 
     def create_ephemeral_kb(self, name: str, ttl: int = 3600, description: str = "") -> KBConfig:
         """Create an ephemeral KB with TTL."""
-        import time
-
-        from ..config import save_config
-
-        # Create temp directory for ephemeral KB
-        ephemeral_dir = self.config.settings.workspace_path / "ephemeral" / name
-        ephemeral_dir.mkdir(parents=True, exist_ok=True)
-
-        kb = KBConfig(
-            name=name,
-            path=ephemeral_dir,
-            kb_type="generic",
-            description=description or f"Ephemeral KB (TTL: {ttl}s)",
-            ephemeral=True,
-            ttl=ttl,
-            created_at_ts=time.time(),
-        )
-        self.config.add_kb(kb)
-        save_config(self.config)
-
-        # Register in DB
-        self.db.register_kb(
-            name=name,
-            kb_type="generic",
-            path=str(ephemeral_dir),
-            description=kb.description,
-        )
-
-        return kb
+        return self._ephemeral_svc.create_ephemeral_kb(name, ttl=ttl, description=description)
 
     def gc_ephemeral_kbs(self) -> list[str]:
         """Garbage-collect expired ephemeral KBs. Returns list of removed KB names."""
-        import shutil
-        import time
-
-        from ..config import save_config
-
-        removed = []
-        now = time.time()
-
-        for kb in list(self.config.knowledge_bases):
-            if not kb.ephemeral or not kb.ttl or not kb.created_at_ts:
-                continue
-            if now - kb.created_at_ts > kb.ttl:
-                # Remove from index
-                self.db.unregister_kb(kb.name)
-                # Remove files
-                if kb.path.exists():
-                    shutil.rmtree(kb.path, ignore_errors=True)
-                # Remove from config
-                self.config.remove_kb(kb.name)
-                removed.append(kb.name)
-
-        if removed:
-            save_config(self.config)
-
-        return removed
-
-    # =========================================================================
-    # Usage Tier Checks
-    # =========================================================================
+        return self._ephemeral_svc.gc_ephemeral_kbs()
 
     def check_kb_creation_allowed(
         self, user_id: int, user_tier: str, current_kb_count: int
     ) -> tuple[bool, str]:
-        """Check if user is allowed to create another KB based on tier limits.
-
-        Returns:
-            (allowed, message) — allowed is True if within limits, message explains why not.
-        """
-        tiers = self.config.settings.auth.usage_tiers
-        if not tiers:
-            return True, "No usage tiers configured — unlimited"
-
-        tier_config = tiers.get(user_tier)
-        if not tier_config:
-            return True, f"Tier '{user_tier}' not found — no limits enforced"
-
-        if current_kb_count >= tier_config.max_personal_kbs:
-            return False, (
-                f"KB creation limit reached: {current_kb_count}/{tier_config.max_personal_kbs} "
-                f"for tier '{user_tier}'"
-            )
-        return True, "OK"
+        """Check if user is allowed to create another KB based on tier limits."""
+        return self._quota_svc.check_kb_creation_allowed(user_id, user_tier, current_kb_count)
 
     def check_entry_creation_allowed(
         self, kb_name: str, user_tier: str, current_entry_count: int
     ) -> tuple[bool, str]:
-        """Check if adding another entry is within tier limits.
-
-        Returns:
-            (allowed, message) — allowed is True if within limits.
-        """
-        tiers = self.config.settings.auth.usage_tiers
-        if not tiers:
-            return True, "No usage tiers configured — unlimited"
-
-        tier_config = tiers.get(user_tier)
-        if not tier_config:
-            return True, f"Tier '{user_tier}' not found — no limits enforced"
-
-        if current_entry_count >= tier_config.max_entries_per_kb:
-            return False, (
-                f"Entry limit reached: {current_entry_count}/{tier_config.max_entries_per_kb} "
-                f"for tier '{user_tier}'"
-            )
-        return True, "OK"
+        """Check if adding another entry is within tier limits."""
+        return self._quota_svc.check_entry_creation_allowed(kb_name, user_tier, current_entry_count)
 
     # =========================================================================
     # KB Export

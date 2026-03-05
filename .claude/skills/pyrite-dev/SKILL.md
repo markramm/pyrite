@@ -250,6 +250,8 @@ When implementation + verification are done, follow the backlog process:
 | `pyrite/services/clipper.py` | ClipperService — web clipper |
 | `pyrite/services/graph_service.py` | GraphService — graph/link queries (extracted from KBService) |
 | `pyrite/services/export_service.py` | ExportService — KB export and git operations (extracted from KBService) |
+| `pyrite/services/ephemeral_service.py` | EphemeralKBService — ephemeral KB lifecycle with TTL (extracted from KBService) |
+| `pyrite/services/quota_service.py` | QuotaService — usage tier limit checks (extracted from KBService) |
 | `pyrite/services/collection_query.py` | Collection query functions |
 | `pyrite/schema/` | KBSchema, FieldSchema — schema-as-config validation (6 submodules) |
 | `pyrite/config.py` | PyriteConfig, Settings, KBConfig |

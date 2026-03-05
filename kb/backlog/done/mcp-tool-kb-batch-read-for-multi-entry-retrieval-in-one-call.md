@@ -9,7 +9,7 @@ tags:
 - feature
 metadata:
   kind: feature
-  status: proposed
+  status: completed
   priority: high
   effort: s
 kind: feature

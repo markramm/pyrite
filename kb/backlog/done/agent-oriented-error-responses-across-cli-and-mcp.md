@@ -10,7 +10,7 @@ tags:
 - architecture
 metadata:
   kind: enhancement
-  status: proposed
+  status: completed
   priority: high
   effort: l
 kind: enhancement
