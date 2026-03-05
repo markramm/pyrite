@@ -33,6 +33,9 @@ class DocumentManager:
     def save_entry(self, entry: Entry, kb_name: str, kb_config: KBConfig) -> Path:
         """Save an entry to disk, register the KB, and index it.
 
+        If the entry's resolved path has changed (e.g. due to a templated
+        subdirectory like ``backlog/{status}``), the old file is removed.
+
         Args:
             entry: The entry to save.
             kb_name: Name of the knowledge base.
@@ -42,7 +45,15 @@ class DocumentManager:
             Path to the saved file.
         """
         repo = KBRepository(kb_config)
+
+        # Find current on-disk location before saving to new path
+        old_path = repo.find_file(entry.id)
+
         file_path = repo.save(entry)
+
+        # Clean up old file if path changed (template-driven move)
+        if old_path and old_path.resolve() != file_path.resolve() and old_path.exists():
+            self._remove_old_file(old_path, kb_config.path)
 
         self._db.register_kb(
             name=kb_name,
@@ -53,6 +64,41 @@ class DocumentManager:
 
         self._index_mgr.index_entry(entry, kb_name, file_path)
         return file_path
+
+    def _remove_old_file(self, old_path: Path, kb_root: Path) -> None:
+        """Remove old file after a template-driven path change. Git-aware."""
+        import subprocess
+
+        try:
+            # Check if this is a git repo
+            result = subprocess.run(
+                ["git", "rev-parse", "--is-inside-work-tree"],
+                cwd=str(kb_root),
+                capture_output=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                subprocess.run(
+                    ["git", "rm", "--quiet", "--force", str(old_path)],
+                    cwd=str(kb_root),
+                    capture_output=True,
+                    timeout=10,
+                )
+            else:
+                old_path.unlink(missing_ok=True)
+        except Exception:
+            old_path.unlink(missing_ok=True)
+            logger.warning("Git-aware move failed, deleted old file directly", exc_info=True)
+
+        # Clean up empty parent directories up to kb_root
+        parent = old_path.parent
+        try:
+            resolved_root = kb_root.resolve()
+            while parent.resolve() != resolved_root and not any(parent.iterdir()):
+                parent.rmdir()
+                parent = parent.parent
+        except OSError:
+            pass
 
     def delete_entry(self, entry_id: str, kb_name: str, kb_config: KBConfig) -> bool:
         """Delete an entry from disk and remove it from the index.

@@ -154,6 +154,7 @@ def test_dunder_all_completeness():
         "TypeSchema",
         "VerificationStatus",
         "_validate_field_value",
+        "expand_subdirectory_template",
         "generate_entry_id",
         "generate_event_id",
         "get_all_relationship_types",

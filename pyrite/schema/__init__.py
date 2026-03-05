@@ -7,7 +7,12 @@ Supports per-KB schema customization via kb.yaml.
 
 from .core_types import CORE_TYPE_METADATA, CORE_TYPES, resolve_type_metadata
 from .enums import EventStatus, ResearchStatus, VerificationStatus
-from .field_schema import FieldSchema, TypeSchema, _validate_field_value
+from .field_schema import (
+    FieldSchema,
+    TypeSchema,
+    _validate_field_value,
+    expand_subdirectory_template,
+)
 from .kb_schema import KBSchema
 from .provenance import (
     RELATIONSHIP_TYPES,
@@ -39,6 +44,7 @@ __all__ = [
     "TypeSchema",
     "VerificationStatus",
     "_validate_field_value",
+    "expand_subdirectory_template",
     "generate_entry_id",
     "generate_event_id",
     "get_all_relationship_types",

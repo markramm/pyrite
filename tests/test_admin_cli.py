@@ -207,6 +207,91 @@ class TestIndexHealth:
 
 
 # =========================================================================
+# Index reconcile
+# =========================================================================
+
+
+@pytest.fixture
+def reconcile_env():
+    """Environment with templated subdirectory and a misplaced entry."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        db_path = tmpdir / "index.db"
+
+        kb_path = tmpdir / "project-kb"
+        kb_path.mkdir()
+
+        # Write a kb.yaml with a templated subdirectory for a custom type
+        (kb_path / "kb.yaml").write_text(
+            "name: project\n"
+            "types:\n"
+            "  task:\n"
+            "    subdirectory: \"tasks/{status}\"\n"
+            "    fields:\n"
+            "      status:\n"
+            "        type: select\n"
+            "        options: [active, done]\n"
+        )
+
+        kb = KBConfig(
+            name="project",
+            path=kb_path,
+            kb_type="generic",
+        )
+
+        config = PyriteConfig(
+            knowledge_bases=[kb],
+            settings=Settings(index_path=db_path),
+        )
+
+        # Create an entry at the "wrong" location (tasks/active/ instead of tasks/done/)
+        wrong_dir = kb_path / "tasks" / "active"
+        wrong_dir.mkdir(parents=True)
+        (wrong_dir / "my-task.md").write_text(
+            "---\ntype: task\ntitle: My Task\nstatus: done\n---\nBody\n"
+        )
+
+        # Build the index
+        db = PyriteDB(db_path)
+        index_mgr = IndexManager(db, config)
+        repo = KBRepository(kb)
+        for entry, file_path in repo.list_entries():
+            db.register_kb(name="project", kb_type="generic", path=str(kb_path))
+            index_mgr.index_entry(entry, "project", file_path)
+
+        yield {"config": config, "db": db, "kb_path": kb_path}
+        db.close()
+
+
+@pytest.mark.cli
+class TestIndexReconcile:
+    def test_reconcile_dry_run(self, reconcile_env):
+        with _patch_config(reconcile_env):
+            result = runner.invoke(app, ["index", "reconcile", "project"])
+            assert result.exit_code == 0
+            assert "my-task" in result.output
+            assert "Dry run" in result.output or "dry" in result.output.lower()
+            # File should NOT have moved
+            assert (reconcile_env["kb_path"] / "tasks" / "active" / "my-task.md").exists()
+
+    def test_reconcile_apply(self, reconcile_env):
+        with _patch_config(reconcile_env):
+            result = runner.invoke(app, ["index", "reconcile", "project", "--apply"])
+            assert result.exit_code == 0
+            assert "Moved" in result.output or "moved" in result.output.lower()
+            # File should be at new location
+            assert (reconcile_env["kb_path"] / "tasks" / "done" / "my-task.md").exists()
+            assert not (reconcile_env["kb_path"] / "tasks" / "active" / "my-task.md").exists()
+
+    def test_reconcile_no_mismatches(self, admin_env):
+        """When all files match, reports no moves needed."""
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["index", "reconcile", "test-events"])
+            assert result.exit_code == 0
+            assert "match" in result.output.lower() or "0" in result.output
+
+
+# =========================================================================
 # QA commands
 # =========================================================================
 

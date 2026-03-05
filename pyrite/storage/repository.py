@@ -127,7 +127,7 @@ class KBRepository:
         schema = self.config.kb_schema
         type_schema = schema.get_type_schema(entry_type)
         if type_schema and type_schema.subdirectory:
-            return type_schema.subdirectory
+            return type_schema.resolve_subdirectory(entry)
 
         # Check core types for subdirectory mapping
         if entry_type in CORE_TYPES:
@@ -143,38 +143,24 @@ class KBRepository:
 
     def exists(self, entry_id: str) -> bool:
         """Check if an entry exists."""
-        # Check root
-        if (self.path / f"{entry_id}.md").exists():
-            return True
-
-        # Check subdirectories
-        for subdir in self.path.iterdir():
-            if subdir.is_dir() and not subdir.name.startswith("."):
-                if (subdir / f"{entry_id}.md").exists():
-                    return True
-
-        # Check for collection entries (collection-<folder_name>)
-        if entry_id.startswith("collection-"):
-            folder_name = entry_id[len("collection-") :]
-            for subdir in self.path.rglob(folder_name):
-                if subdir.is_dir() and (subdir / "__collection.yaml").exists():
-                    return True
-
-        return False
+        return self.find_file(entry_id) is not None
 
     def find_file(self, entry_id: str) -> Path | None:
-        """Find the file path for an entry."""
+        """Find the file path for an entry.
+
+        Searches root, then all subdirectories recursively (to support
+        templated subdirectories like ``backlog/{status}``).
+        """
         # Check root
         root_path = self.path / f"{entry_id}.md"
         if root_path.exists():
             return root_path
 
-        # Check subdirectories
-        for subdir in self.path.iterdir():
-            if subdir.is_dir() and not subdir.name.startswith("."):
-                file_path = subdir / f"{entry_id}.md"
-                if file_path.exists():
-                    return file_path
+        # Check all subdirectories recursively (supports nested template paths)
+        filename = f"{entry_id}.md"
+        for match in self.path.rglob(filename):
+            if not any(part.startswith(".") for part in match.relative_to(self.path).parts):
+                return match
 
         # Check for collection entries (collection-<folder_name>)
         if entry_id.startswith("collection-"):

@@ -4,6 +4,8 @@ import pytest
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.models.factory import build_entry
+from pyrite.schema.field_schema import TypeSchema
+from pyrite.schema.kb_schema import KBSchema
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.document_manager import DocumentManager
 from pyrite.storage.index import IndexManager
@@ -116,3 +118,72 @@ def test_save_entry_idempotent(setup):
 
     row = db.get_entry("idem-test", "test")
     assert row["title"] == "Version 2"
+
+
+# --- File movement on template path change ---
+
+
+@pytest.fixture
+def template_setup(tmp_path):
+    """Create a KB with templated subdirectory for note type."""
+    kb_path = tmp_path / "test-kb"
+    kb_path.mkdir()
+
+    schema = KBSchema(
+        types={
+            "note": TypeSchema(name="note", subdirectory="notes/{status}"),
+        }
+    )
+
+    kb = KBConfig(name="test", path=kb_path, kb_type="generic")
+    kb._schema_cache = schema
+
+    config = PyriteConfig(
+        knowledge_bases=[kb],
+        settings=Settings(index_path=tmp_path / "index.db"),
+    )
+    db = PyriteDB(tmp_path / "index.db")
+    index_mgr = IndexManager(db, config)
+    doc_mgr = DocumentManager(db, index_mgr)
+
+    yield {"kb": kb, "config": config, "db": db, "doc_mgr": doc_mgr, "kb_path": kb_path}
+    db.close()
+
+
+def test_save_entry_moves_file_on_field_change(template_setup):
+    """When a templated field changes, saving moves the file to the new path."""
+    doc_mgr = template_setup["doc_mgr"]
+    kb = template_setup["kb"]
+    kb_path = template_setup["kb_path"]
+
+    entry = build_entry("note", entry_id="move-test", title="Move Test", body="body")
+    entry.metadata["status"] = "active"
+    first_path = doc_mgr.save_entry(entry, "test", kb)
+
+    assert first_path.exists()
+    assert "notes/active" in str(first_path)
+
+    # Change status → should move file
+    entry.metadata["status"] = "done"
+    second_path = doc_mgr.save_entry(entry, "test", kb)
+
+    assert second_path.exists()
+    assert "notes/done" in str(second_path)
+    assert not first_path.exists(), "Old file should be removed"
+
+
+def test_save_entry_no_move_when_path_unchanged(template_setup):
+    """When the resolved path hasn't changed, no move occurs."""
+    doc_mgr = template_setup["doc_mgr"]
+    kb = template_setup["kb"]
+
+    entry = build_entry("note", entry_id="stay-test", title="Stay Test", body="body")
+    entry.metadata["status"] = "active"
+    first_path = doc_mgr.save_entry(entry, "test", kb)
+
+    # Save again with same status
+    entry.title = "Stay Test Updated"
+    second_path = doc_mgr.save_entry(entry, "test", kb)
+
+    assert first_path == second_path
+    assert second_path.exists()

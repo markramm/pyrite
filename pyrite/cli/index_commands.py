@@ -309,3 +309,72 @@ def index_health(
             console.print(f"  ... and {len(health['stale_entries']) - 10} more")
 
     console.print("\nRun 'pyrite index sync' to fix issues.")
+
+
+@index_app.command("reconcile")
+def index_reconcile(
+    kb_name: str = typer.Argument(..., help="KB to reconcile"),
+    apply: bool = typer.Option(False, "--apply", help="Execute moves (default is dry-run)"),
+):
+    """Move files to match their resolved subdirectory templates.
+
+    Compares each entry's current file location against its template-resolved
+    path. By default runs in dry-run mode. Use --apply to execute moves.
+    """
+    from ..storage.document_manager import DocumentManager
+    from ..storage.index import IndexManager
+    from ..storage.repository import KBRepository
+
+    config, db = get_config_and_db()
+    kb_config = config.get_kb(kb_name)
+    if not kb_config:
+        console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
+        raise typer.Exit(1)
+
+    repo = KBRepository(kb_config)
+    moves = []
+
+    for entry, current_path in repo.list_entries():
+        inferred_subdir = repo._infer_subdir(entry)
+        expected_path = repo._get_file_path(entry.id, inferred_subdir)
+        if current_path.resolve() != expected_path.resolve():
+            moves.append((entry, current_path, expected_path))
+
+    if not moves:
+        console.print("[green]All files match their template paths.[/green]")
+        return
+
+    table = Table(title=f"{'[DRY RUN] ' if not apply else ''}Files to move")
+    table.add_column("Entry ID", style="cyan")
+    table.add_column("Current Path")
+    table.add_column("Target Path")
+    for entry, current, target in moves:
+        try:
+            current_rel = str(current.relative_to(kb_config.path))
+        except ValueError:
+            current_rel = str(current)
+        try:
+            target_rel = str(target.relative_to(kb_config.path))
+        except ValueError:
+            target_rel = str(target)
+        table.add_row(entry.id, current_rel, target_rel)
+    console.print(table)
+    console.print(f"\nTotal: {len(moves)} file(s) to move")
+
+    if not apply:
+        console.print("\n[yellow]Dry run. Use --apply to execute moves.[/yellow]")
+        return
+
+    # Execute moves by re-saving each entry (triggers DocumentManager move logic)
+    index_mgr = IndexManager(db, config)
+    doc_mgr = DocumentManager(db, index_mgr)
+    moved = 0
+    for entry, _current_path, _target_path in moves:
+        try:
+            doc_mgr.save_entry(entry, kb_name, kb_config)
+            moved += 1
+        except Exception as e:
+            console.print(f"[red]Error moving {entry.id}:[/red] {e}")
+
+    console.print(f"\n[green]Moved {moved} file(s).[/green]")
+    console.print("Run 'pyrite index sync' to update the index.")

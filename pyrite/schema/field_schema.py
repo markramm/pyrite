@@ -1,10 +1,51 @@
 """Field and type schema definitions."""
 
+from __future__ import annotations
+
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .validators import validate_date
+
+if TYPE_CHECKING:
+    from ..models import Entry
+
+_TEMPLATE_RE = re.compile(r"\{(\w+)\}")
+
+
+def expand_subdirectory_template(template: str, entry: Entry) -> str:
+    """Expand {field} placeholders in a subdirectory template from entry fields.
+
+    Resolution order for each placeholder:
+      1. Dataclass attribute (getattr) — covers core type fields like status, date
+      2. entry.metadata[field] — covers GenericEntry custom fields
+      3. Fallback to literal "_unknown"
+
+    Enum values are converted via .value. The result is sanitized to prevent
+    path traversal (no "..", no leading "/").
+    """
+    if not template or "{" not in template:
+        return template
+
+    def _replace(match: re.Match) -> str:
+        field_name = match.group(1)
+        value = getattr(entry, field_name, None)
+        if value is None:
+            md = getattr(entry, "metadata", None)
+            if md is not None:
+                value = md.get(field_name)
+        if value is None:
+            return "_unknown"
+        if hasattr(value, "value"):
+            value = value.value
+        s = str(value).strip().lower().replace(" ", "-")
+        s = s.replace("..", "").replace("/", "-").strip("-") or "_unknown"
+        return s
+
+    result = _TEMPLATE_RE.sub(_replace, template)
+    return result.lstrip("/")
 
 
 @dataclass
@@ -44,7 +85,7 @@ class FieldSchema:
     )
 
     @classmethod
-    def from_dict(cls, name: str, data: dict[str, Any]) -> "FieldSchema":
+    def from_dict(cls, name: str, data: dict[str, Any]) -> FieldSchema:
         """Parse a field definition from kb.yaml."""
         constraints = {}
         for key in ("format", "min_length", "max_length", "min", "max", "target_type"):
@@ -101,6 +142,12 @@ class TypeSchema:
     field_descriptions: dict[str, str] = field(default_factory=dict)
     display: dict[str, Any] = field(default_factory=dict)
     version: int = 0
+
+    def resolve_subdirectory(self, entry: Entry) -> str:
+        """Return the resolved subdirectory, expanding template placeholders."""
+        if not self.subdirectory:
+            return ""
+        return expand_subdirectory_template(self.subdirectory, entry)
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"description": self.description}
