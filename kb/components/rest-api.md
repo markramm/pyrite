@@ -25,6 +25,7 @@ pyrite/server/
     timeline.py             # GET /api/timeline
     tags.py                 # GET /api/tags, /api/tags/tree
     admin.py                # Stats, sync, AI status, KB management, plugins
+    repos.py                # Repo management: subscribe, fork, sync, unsubscribe, PR
     ai_ep.py                # POST /api/ai/{summarize,auto-tag,suggest-links,chat}
     starred.py              # CRUD /api/starred
     templates.py            # /api/kbs/{kb}/templates
@@ -54,6 +55,8 @@ FastAPI's `Depends()` system is used for config, database, index manager, KB ser
 - `get_db()` — creates `PyriteDB` connection
 - `get_index_mgr()` — creates `IndexManager` with db and config
 - `get_kb_service()` — creates `KBService` (rebuilds if config/db changed)
+- `get_kb_registry()` — creates `KBRegistryService` for DB-backed KB lifecycle
+- `get_repo_service()` — creates `RepoService` with the current user's GitHub token injected
 - `get_llm_service()` — creates `LLMService` with DB settings override and config fallback
 
 Tests override these globals directly via `api_module._config = ...`.
@@ -153,9 +156,21 @@ Configured from `config.settings.cors_origins`. Credentials disabled when wildca
 | `/auth/config` | GET | auth_endpoints.py | Public auth configuration |
 | `/auth/github` | GET | auth_endpoints.py | Start GitHub OAuth flow |
 | `/auth/github/callback` | GET | auth_endpoints.py | GitHub OAuth callback |
+| `/auth/github/connect` | GET | auth_endpoints.py | Scope escalation with `public_repo` (requires login) |
+| `/auth/github/connect` | DELETE | auth_endpoints.py | Disconnect GitHub (clear stored token) |
+| `/auth/github/status` | GET | auth_endpoints.py | GitHub connection status |
 | `/api/kbs/ephemeral` | POST | admin.py | Create ephemeral KB for current user |
 | `/api/kbs/{name}/permissions` | GET | admin.py | List per-KB permission grants |
 | `/api/kbs/{name}/permissions` | POST | admin.py | Grant or revoke per-KB permission |
+| `/api/repos` | GET | repos.py | List subscribed repos |
+| `/api/repos/{name}` | GET | repos.py | Repo status (branch, head, KB count, contributors) |
+| `/api/repos/subscribe` | POST | repos.py | Subscribe to remote repo (clone + discover KBs) |
+| `/api/repos/fork` | POST | repos.py | Fork on GitHub + subscribe to fork |
+| `/api/repos/{name}/sync` | POST | repos.py | Pull + re-index changed files |
+| `/api/repos/{name}` | DELETE | repos.py | Unsubscribe from repo |
+| `/api/repos/{name}/pr` | POST | repos.py | Create PR from fork to upstream |
+| `/api/github/repos` | GET | repos.py | List user's GitHub repos (requires connected token) |
+| `/api/kbs/{kb}/export` | POST | kbs.py | Export KB to GitHub repo (clone, commit, push) |
 | `/health` | GET | api.py | Health check (not behind /api) |
 
 ## Adding New Endpoints

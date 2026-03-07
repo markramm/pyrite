@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 13
+CURRENT_VERSION = 14
 
 
 @dataclass
@@ -289,6 +289,16 @@ MIGRATIONS: list[Migration] = [
         -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
         """,
     ),
+    Migration(
+        version=14,
+        description="Add GitHub token columns to local_user for web GitHub integration",
+        # Actual ALTER TABLE handled conditionally in _apply_v14() since columns
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; columns remain but are unused.
+        """,
+    ),
 ]
 
 
@@ -480,6 +490,20 @@ class MigrationManager:
         existing = {row[1] for row in self.conn.execute("PRAGMA table_info(kb)").fetchall()}
         if "source" not in existing:
             self.conn.execute("ALTER TABLE kb ADD COLUMN source TEXT DEFAULT 'user'")
+        self.conn.commit()
+
+    def _apply_v14(self) -> None:
+        """Conditionally add GitHub token columns to local_user."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='local_user'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
+        if "github_access_token" not in existing:
+            self.conn.execute("ALTER TABLE local_user ADD COLUMN github_access_token TEXT")
+        if "github_token_scopes" not in existing:
+            self.conn.execute("ALTER TABLE local_user ADD COLUMN github_token_scopes TEXT")
         self.conn.commit()
 
     def _apply_v13(self) -> None:

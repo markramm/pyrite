@@ -494,6 +494,60 @@ export interface ImportResult {
 	error_details: Array<{ title: string; error: string }>;
 }
 
+// GitHub Connection
+
+export interface GitHubConnectionStatus {
+	connected: boolean;
+	github_configured: boolean;
+	username?: string;
+	scopes?: string;
+	reason?: string;
+}
+
+// Repos
+
+export interface RepoInfo {
+	id: number;
+	name: string;
+	local_path: string;
+	remote_url: string | null;
+	owner: string | null;
+	visibility: string;
+	default_branch: string;
+	is_fork: boolean;
+	last_synced: string | null;
+	last_synced_commit: string | null;
+	kb_count?: number;
+	kb_names?: string[];
+	total_entries?: number;
+}
+
+export interface RepoListResponse {
+	repos: RepoInfo[];
+}
+
+export interface SyncResult {
+	success: boolean;
+	repos?: Record<string, { success: boolean; message?: string; changes?: number; reindexed?: number; error?: string }>;
+	error?: string;
+}
+
+export interface PRResult {
+	success: boolean;
+	pr_url?: string;
+	pr_number?: number;
+	error?: string;
+}
+
+export interface GitHubRepoInfo {
+	full_name: string;
+	description: string | null;
+	html_url: string;
+	clone_url: string;
+	private: boolean;
+	fork: boolean;
+}
+
 // Web Clipper
 
 export interface ClipRequest {

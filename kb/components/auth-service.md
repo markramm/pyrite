@@ -26,6 +26,12 @@ Local username/password authentication with session tokens for the web UI. Uses 
 - `logout(token)` — invalidates a session
 - `verify_session(token)` — returns user info if token is valid
 
+### GitHub Token Management
+
+- `store_github_token(user_id, token, scopes)` — store GitHub OAuth token for a user (scope escalation)
+- `get_github_token_for_user(user_id)` — returns `(token, scopes)` tuple; `(None, None)` if not stored
+- `clear_github_token(user_id)` — remove stored GitHub token; returns `True` if user found
+
 ### Per-KB Permissions
 
 - `get_kb_role(user_id, kb_name, kb_default_role)` — resolve effective role via: global admin → explicit grant → KB default_role → user global role → anonymous tier
@@ -59,6 +65,9 @@ Mounted at `/auth` (outside `/api` prefix) via `auth_endpoints.py`:
 | `/auth/config` | GET | Public auth configuration |
 | `/auth/github` | GET | Start GitHub OAuth flow |
 | `/auth/github/callback` | GET | GitHub OAuth callback |
+| `/auth/github/connect` | GET | Scope escalation: re-auth with `public_repo` scope (requires login) |
+| `/auth/github/status` | GET | GitHub connection status (connected, scopes, github_configured) |
+| `/auth/github/connect` | DELETE | Disconnect GitHub (clear stored token) |
 
 KB permission management endpoints live under `/api/kbs/{name}/permissions` (see [[rest-api]]).
 

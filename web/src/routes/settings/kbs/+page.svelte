@@ -3,7 +3,7 @@
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { api, ApiError } from '$lib/api/client';
-	import type { KBHealthResponse, KBReindexResponse } from '$lib/api/types';
+	import type { KBHealthResponse, KBReindexResponse, GitHubConnectionStatus } from '$lib/api/types';
 	import { onMount } from 'svelte';
 
 	let showAddDialog = $state(false);
@@ -26,6 +26,11 @@
 
 	let feedback = $state<{ ok: boolean; message: string } | null>(null);
 
+	// GitHub connection
+	let ghStatus = $state<GitHubConnectionStatus | null>(null);
+	let ghLoading = $state(false);
+	let ghDisconnecting = $state(false);
+
 	// Ephemeral KBs (admin only)
 	type EphemeralKB = {
 		name: string;
@@ -43,10 +48,38 @@
 
 	onMount(() => {
 		kbStore.load();
+		loadGitHubStatus();
 		if (isAdmin) {
 			loadEphemeral();
 		}
 	});
+
+	async function loadGitHubStatus() {
+		ghLoading = true;
+		try {
+			ghStatus = await api.getGitHubConnectionStatus();
+		} catch {
+			// GitHub status not available — hide panel
+		} finally {
+			ghLoading = false;
+		}
+	}
+
+	async function handleDisconnectGitHub() {
+		ghDisconnecting = true;
+		try {
+			await api.disconnectGitHub();
+			ghStatus = { connected: false, github_configured: true };
+			feedback = { ok: true, message: 'GitHub disconnected' };
+		} catch (e) {
+			feedback = {
+				ok: false,
+				message: e instanceof ApiError ? e.detail : 'Failed to disconnect'
+			};
+		} finally {
+			ghDisconnecting = false;
+		}
+	}
 
 	async function loadEphemeral() {
 		ephemeralLoading = true;
@@ -173,6 +206,51 @@
 			Add KB
 		</button>
 	</div>
+
+	<!-- GitHub Connection Panel -->
+	{#if ghStatus?.github_configured}
+		<div class="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<svg class="w-5 h-5 text-gray-700 dark:text-gray-300" viewBox="0 0 16 16" fill="currentColor">
+						<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+					</svg>
+					<div>
+						<div class="text-sm font-medium text-gray-900 dark:text-gray-100">
+							GitHub Connection
+						</div>
+						{#if ghStatus.connected}
+							<div class="text-xs text-green-600 dark:text-green-400">
+								Connected{ghStatus.username ? ` as @${ghStatus.username}` : ''}
+							</div>
+						{:else}
+							<div class="text-xs text-gray-500 dark:text-gray-400">
+								Connect GitHub for repo operations (fork, subscribe, export)
+							</div>
+						{/if}
+					</div>
+				</div>
+				<div>
+					{#if ghStatus.connected}
+						<button
+							class="text-xs px-3 py-1.5 rounded border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-700 dark:text-red-400 disabled:opacity-50"
+							disabled={ghDisconnecting}
+							onclick={handleDisconnectGitHub}
+						>
+							{ghDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+						</button>
+					{:else}
+						<a
+							href="/auth/github/connect"
+							class="inline-flex items-center text-xs px-3 py-1.5 rounded bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-gray-200 font-medium"
+						>
+							Connect GitHub
+						</a>
+					{/if}
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	{#if feedback}
 		<div

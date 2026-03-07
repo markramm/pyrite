@@ -1,8 +1,5 @@
 """KB listing, schema, health, reindex, and export endpoints."""
 
-import tempfile
-from pathlib import Path
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -20,6 +17,8 @@ class ExportRequest(BaseModel):
     """Request body for KB export."""
 
     repo_url: str
+    branch: str = "main"
+    commit_message: str | None = None
 
 
 def _kb_to_info(kb: dict) -> KBInfo:
@@ -137,22 +136,30 @@ def export_kb_to_repo(
     request: Request,
     svc: KBService = Depends(get_kb_service),
 ):
-    """Export a KB's entries to a directory (future: push to a GitHub repo)."""
+    """Export a KB's entries to a GitHub repo (clone, export, commit, push)."""
+    # Get GitHub token from authenticated user if available
+    github_token = None
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user:
+        from ...services.auth_service import AuthService
+
+        config = request.app.state.pyrite_config
+        db = request.app.state.pyrite_db
+        if db:
+            auth_service = AuthService(db, config.settings.auth)
+            github_token, _ = auth_service.get_github_token_for_user(auth_user["id"])
+
     try:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            export_dir = Path(tmpdir) / kb_name
-            export_dir.mkdir()
-            result = svc.export_kb_to_directory(kb_name, export_dir)
-            return {
-                "success": True,
-                "kb_name": kb_name,
-                "repo_url": body.repo_url,
-                **result,
-                "message": (
-                    f"Exported {result['entries_exported']} entries. "
-                    "Git push to remote is not yet implemented."
-                ),
-            }
+        result = svc.export_kb_to_repo(
+            kb_name,
+            body.repo_url,
+            github_token=github_token,
+            branch=body.branch,
+            commit_message=body.commit_message,
+        )
+        result["kb_name"] = kb_name
+        result["repo_url"] = body.repo_url
+        return result
     except KBNotFoundError:
         raise HTTPException(
             status_code=404,

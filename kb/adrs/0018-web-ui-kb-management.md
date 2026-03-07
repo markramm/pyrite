@@ -3,7 +3,7 @@ id: adr-0018
 type: adr
 title: "Web UI KB Management via Git Forks"
 adr_number: 18
-status: proposed
+status: accepted
 deciders: ["markr"]
 date: "2026-03-05"
 tags: [architecture, web-ui, git, multi-user, storage]

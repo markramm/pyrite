@@ -36,11 +36,19 @@ class RepoService:
         db: PyriteDB,
         git_service: GitService | None = None,
         user_service: UserService | None = None,
+        github_token: str | None = None,
     ):
         self.config = config
         self.db = db
         self.git = git_service or GitService()
         self.user_service = user_service or UserService(db)
+        self._github_token = github_token
+
+    def _get_token(self) -> str | None:
+        """Get GitHub token: injected token first, then CLI fallback."""
+        if self._github_token:
+            return self._github_token
+        return get_github_token()
 
     def subscribe(
         self,
@@ -68,7 +76,7 @@ class RepoService:
         workspace_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Clone (shallow for subscriptions)
-        token = get_github_token()
+        token = self._get_token()
         success, msg = GitService.clone(
             remote_url, workspace_path, branch=branch, depth=1, token=token
         )
@@ -144,7 +152,7 @@ class RepoService:
             return {"success": False, "error": "Could not parse GitHub URL"}
 
         owner, repo_name = parsed
-        token = get_github_token()
+        token = self._get_token()
         if not token:
             return {"success": False, "error": "GitHub authentication required for forking"}
 
@@ -199,7 +207,7 @@ class RepoService:
             return {"success": False, "error": "No repos found"}
 
         results = {}
-        token = get_github_token()
+        token = self._get_token()
 
         for repo in repos:
             name = repo["name"]
@@ -297,6 +305,56 @@ class RepoService:
             "files_deleted": delete_files,
         }
 
+    def create_pr(
+        self,
+        repo_name: str,
+        title: str,
+        body: str = "",
+        branch: str | None = None,
+    ) -> dict:
+        """Create a pull request from a fork to its upstream.
+
+        Requires the repo to be a fork with a recorded upstream.
+        """
+        repo = self.db.get_repo(name=repo_name)
+        if not repo:
+            return {"success": False, "error": f"Repo '{repo_name}' not found"}
+
+        if not repo.get("upstream_repo_id"):
+            return {"success": False, "error": "Repo is not a fork (no upstream)"}
+
+        upstream = self.db.get_repo(repo_id=repo["upstream_repo_id"])
+        if not upstream:
+            return {"success": False, "error": "Upstream repo not found in DB"}
+
+        # Parse upstream remote URL to get owner/repo
+        upstream_url = upstream.get("remote_url", "")
+        parsed = GitService.parse_github_url(upstream_url)
+        if not parsed:
+            return {"success": False, "error": "Cannot parse upstream URL"}
+
+        upstream_owner, upstream_repo = parsed
+
+        # Determine head branch (fork_owner:branch)
+        fork_owner = repo.get("owner", "")
+        local_path = Path(repo["local_path"])
+        if branch is None:
+            branch = GitService.get_current_branch(local_path) if local_path.exists() else "main"
+
+        head = f"{fork_owner}:{branch}"
+        base = upstream.get("default_branch", "main")
+
+        token = self._get_token()
+        if not token:
+            return {"success": False, "error": "GitHub authentication required for PR creation"}
+
+        success, result = GitService.create_pull_request(
+            upstream_owner, upstream_repo, title, body, head, base, token
+        )
+        if success:
+            return {"success": True, **result}
+        return {"success": False, "error": result.get("error", "PR creation failed")}
+
     def list_repos(self, user_id: int | None = None) -> list[dict]:
         """List repos, optionally filtered by user workspace."""
         if user_id is not None:
@@ -378,7 +436,7 @@ class RepoService:
             return {"success": False, "error": f"Path already exists: {workspace_path}"}
 
         workspace_path.parent.mkdir(parents=True, exist_ok=True)
-        token = get_github_token()
+        token = self._get_token()
 
         success, msg = GitService.clone(
             clone_url, workspace_path, branch=branch, depth=depth, token=token

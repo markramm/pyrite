@@ -283,6 +283,65 @@ class GitService:
             return False, {"error": str(e)}
 
     @staticmethod
+    def create_pull_request(
+        owner: str,
+        repo: str,
+        title: str,
+        body: str,
+        head: str,
+        base: str,
+        token: str,
+    ) -> tuple[bool, dict]:
+        """
+        Create a pull request on GitHub via the API.
+
+        Args:
+            owner: Repo owner (upstream)
+            repo: Repo name (upstream)
+            title: PR title
+            body: PR body/description
+            head: Head branch (e.g. "user:branch" for cross-fork PRs)
+            base: Base branch to merge into
+            token: GitHub OAuth token
+
+        Returns:
+            (success, response_dict)
+        """
+        try:
+            import httpx
+        except ImportError:
+            return False, {"error": "httpx required for GitHub API operations"}
+
+        try:
+            with httpx.Client() as client:
+                response = client.post(
+                    f"https://api.github.com/repos/{owner}/{repo}/pulls",
+                    json={
+                        "title": title,
+                        "body": body,
+                        "head": head,
+                        "base": base,
+                    },
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/vnd.github+json",
+                    },
+                    timeout=30,
+                )
+                if response.status_code in (200, 201):
+                    data = response.json()
+                    return True, {
+                        "pr_url": data.get("html_url"),
+                        "pr_number": data.get("number"),
+                    }
+                return False, {
+                    "error": f"GitHub API error: {response.status_code}",
+                    "message": response.text,
+                }
+        except Exception as e:
+            return False, {"error": str(e)}
+
+    @staticmethod
     def parse_github_url(url: str) -> tuple[str, str] | None:
         """
         Parse a GitHub URL into (owner, repo).

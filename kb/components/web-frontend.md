@@ -38,6 +38,8 @@ web/
       register/+page.svelte      # Registration page
       qa/+page.svelte             # QA validation dashboard
       settings/plugins/+page.svelte # Plugin management
+      settings/kbs/+page.svelte    # KB management (CRUD, reindex, access control, GitHub connection)
+      settings/kbs/[name]/+page.svelte # KB detail (permissions, schema, GitHub panel, repos)
     lib/
       api/
         client.ts              # ApiClient singleton with typed methods

@@ -33,6 +33,7 @@ Note: `storage/migrations.py` handles **database** schema migrations (DDL). `pyr
 - **Tag** — entry_id, kb_name, tag (with FTS5 for prefix search)
 - **StarredEntry** — entry_id, kb_name, sort_order, created_at
 - **Setting** — key, value (user preferences)
+- **LocalUser** — id, username, display_name, password_hash, role, github_access_token, github_token_scopes (v14 migration)
 
 ## Wikilink Indexing
 

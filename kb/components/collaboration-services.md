@@ -37,13 +37,14 @@ A stateless class with all `@staticmethod` methods. Token handling is done by in
 | `is_git_repo(path)` | Check if path is inside a git repo |
 | `add_remote(local_path, name, url)` | Add a named git remote |
 | `fork_repo(owner, repo, token)` | Fork a repo on GitHub via the REST API (uses `httpx`). Returns `(success, response_dict)` |
+| `create_pull_request(owner, repo, title, body, head, base, token)` | Create a PR on GitHub via the REST API. Returns `(success, result_dict)` with `pr_url`, `pr_number` |
 | `parse_github_url(url)` | Parse HTTPS or SSH GitHub URLs into `(owner, repo)` tuple |
 
 Internal helpers: `_inject_token` injects OAuth tokens into HTTPS URLs, `_sanitize_output` strips tokens from error messages.
 
 ### `RepoService`
 
-Initialized with `PyriteConfig`, `PyriteDB`, and optional `GitService` / `UserService` instances.
+Initialized with `PyriteConfig`, `PyriteDB`, and optional `GitService`, `UserService`, and `github_token` (for web users). The `_get_token()` method resolves: injected token → CLI `get_github_token()` fallback.
 
 | Method | Description |
 |--------|-------------|
@@ -54,6 +55,7 @@ Initialized with `PyriteConfig`, `PyriteDB`, and optional `GitService` / `UserSe
 | `list_repos(user_id)` | List repos, optionally filtered by user workspace |
 | `get_repo_status(repo_name)` | Detailed status: branch, head, KB count, entry count, contributors |
 | `discover_kbs(repo_path)` | Find KBs in a repo via `auto_discover_kbs` or fallback `kb.yaml` parsing |
+| `create_pr(repo_name, title, body, branch)` | Create a PR from a fork to its upstream repo via GitHub API |
 
 ## Design Notes
 

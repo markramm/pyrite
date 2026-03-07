@@ -1,10 +1,11 @@
 """
 Export Service
 
-KB export and git operations.
+KB export and git operations, including export-to-repo (clone, export, commit, push).
 """
 
 import logging
+import tempfile
 from pathlib import Path
 
 from ..config import PyriteConfig
@@ -92,6 +93,81 @@ class ExportService:
             "entries_exported": len(entries),
             "files_created": files_created,
         }
+
+    def export_kb_to_repo(
+        self,
+        kb_name: str,
+        repo_url: str,
+        github_token: str | None = None,
+        branch: str = "main",
+        commit_message: str | None = None,
+    ) -> dict:
+        """Export a KB's entries into a target repo: clone, write entries, commit, push.
+
+        Entries are written into a ``kb_name/`` subdirectory inside the target repo
+        so that multiple KBs can coexist.
+
+        Args:
+            kb_name: KB to export
+            repo_url: Remote repo URL to push to
+            github_token: OAuth token (optional for public repos)
+            branch: Branch to push to
+            commit_message: Custom commit message
+
+        Returns:
+            Summary dict with entries_exported, commit_hash, etc.
+        """
+        from .git_service import GitService
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            clone_path = Path(tmpdir) / "repo"
+
+            # Clone the target repo
+            success, msg = GitService.clone(
+                repo_url, clone_path, branch=branch, depth=None, token=github_token
+            )
+            if not success:
+                return {"success": False, "error": f"Clone failed: {msg}"}
+
+            # Export entries into kb_name/ subdirectory
+            export_dir = clone_path / kb_name
+            export_dir.mkdir(parents=True, exist_ok=True)
+            result = self.export_kb_to_directory(kb_name, export_dir)
+
+            if result["entries_exported"] == 0:
+                return {"success": True, "entries_exported": 0, "message": "No entries to export"}
+
+            # Commit
+            if not commit_message:
+                commit_message = f"Export KB '{kb_name}': {result['entries_exported']} entries"
+
+            commit_ok, commit_result = GitService.commit(
+                clone_path, commit_message
+            )
+            if not commit_ok:
+                return {
+                    "success": False,
+                    "error": commit_result.get("error", "Commit failed"),
+                }
+
+            # Push
+            push_ok, push_msg = GitService.push(
+                clone_path, remote="origin", branch=branch, token=github_token
+            )
+            if not push_ok:
+                return {"success": False, "error": push_msg}
+
+            return {
+                "success": True,
+                **result,
+                "commit_hash": commit_result.get("commit_hash", ""),
+                "branch": branch,
+                "message": f"Exported {result['entries_exported']} entries and pushed to {repo_url}",
+            }
 
     def commit_kb(
         self,

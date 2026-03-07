@@ -74,6 +74,15 @@ Stores config, the database handle, and creates an `IndexManager`. The embedding
 - **`sync_index(kb_name)`** / **`get_index_stats()`** -- Index synchronization and health.
 - **`get_setting(key)`** / **`set_setting(key, value)`** / **`get_all_settings()`** / **`delete_setting(key)`** -- Key-value settings store.
 
+## Export & Git Operations (Delegated)
+
+These methods are facades that delegate to `ExportService`:
+
+- **`export_kb_to_directory(kb_name, target_dir)`** -- Exports entries as markdown files
+- **`export_kb_to_repo(kb_name, repo_url, github_token, branch, commit_message)`** -- End-to-end export to a GitHub repo (clone, export, commit, push)
+- **`commit_kb(kb_name, message)`** -- Commit KB changes to git
+- **`push_kb(kb_name)`** -- Push KB commits to remote
+
 ## Design Notes
 
 - All mutating operations check `read_only` and raise `KBReadOnlyError` before doing any work.

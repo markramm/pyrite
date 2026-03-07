@@ -748,3 +748,54 @@ class ClipResponse(BaseModel):
     kb_name: str
     title: str
     source_url: str
+
+
+# =============================================================================
+# Repos
+# =============================================================================
+
+
+class RepoInfo(BaseModel):
+    """Repository information."""
+
+    id: int
+    name: str
+    local_path: str
+    remote_url: str | None = None
+    owner: str | None = None
+    visibility: str = "public"
+    default_branch: str = "main"
+    is_fork: bool = False
+    last_synced: str | None = None
+    last_synced_commit: str | None = None
+    kb_count: int = 0
+    kb_names: list[str] = []
+    total_entries: int = 0
+
+
+class RepoListResponse(BaseModel):
+    """Response for listing repos."""
+
+    repos: list[RepoInfo]
+
+
+class SubscribeRequest(BaseModel):
+    """Request to subscribe to a repo."""
+
+    remote_url: str
+    name: str | None = None
+    branch: str = "main"
+
+
+class ForkRequest(BaseModel):
+    """Request to fork a repo."""
+
+    remote_url: str
+
+
+class PRRequest(BaseModel):
+    """Request to create a pull request."""
+
+    title: str
+    body: str = ""
+    branch: str | None = None

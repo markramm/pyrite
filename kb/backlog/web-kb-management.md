@@ -9,7 +9,7 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: proposed
+status: in-progress
 links:
 - per-kb-permissions
 - personal-kb-repo-backing
@@ -100,9 +100,9 @@ Per-KB permission endpoints (ships with [[per-kb-permissions]]):
 
 ## Phased Delivery
 
-1. **Phase 1** (this item): KB list, add, remove, reindex, health. Read-only config view. No auth integration.
-2. **Phase 2** (with [[per-kb-permissions]]): Access control panel, default role editing, permission grants.
-3. **Phase 3** (with [[personal-kb-repo-backing]]): GitHub repo connection, fork, export, PR submission.
+1. **Phase 1** (completed): KB list, add, remove, reindex, health. DB-first KB registry via `KBRegistryService`. `/settings/kbs` page with full CRUD.
+2. **Phase 2** (completed): Access control panel, default role editing, per-KB permission grants. Per-KB detail page at `/settings/kbs/[name]`.
+3. **Phase 3** (completed): GitHub token storage (DB migration v14), GitHub connect/disconnect endpoints, repo REST endpoints (`repos.py`), export-to-repo (clone+commit+push), fork + PR web UI, subscribe/sync workflows. See `pyrite/server/endpoints/repos.py`, `pyrite/server/auth_endpoints.py`.
 
 ## Prerequisites
 

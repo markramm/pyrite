@@ -8,7 +8,10 @@
 		KBInfo,
 		KBPermissionGrant,
 		KBHealthResponse,
-		UserInfo
+		UserInfo,
+		GitHubConnectionStatus,
+		RepoInfo,
+		SyncResult
 	} from '$lib/api/types';
 
 	const kbName = $derived($page.params.name);
@@ -40,6 +43,19 @@
 	// Health
 	let healthLoading = $state(false);
 
+	// GitHub / Repos
+	let ghStatus = $state<GitHubConnectionStatus | null>(null);
+	let repos = $state<RepoInfo[]>([]);
+	let repoLoading = $state(false);
+	let subscribing = $state(false);
+	let subscribeUrl = $state('');
+	let syncing = $state<string | null>(null);
+	let exporting = $state(false);
+	let exportUrl = $state('');
+	let prTitle = $state('');
+	let prBody = $state('');
+	let creatingPR = $state(false);
+
 	let feedback = $state<{ ok: boolean; message: string } | null>(null);
 
 	const breadcrumbs = $derived([
@@ -62,12 +78,91 @@
 				const userData = await api.listUsers().catch(() => ({ users: [] }));
 				users = userData.users;
 			}
+
+			// Load GitHub status and repos
+			loadGitHubData();
 		} catch (e) {
 			error = e instanceof ApiError ? e.detail : 'Failed to load KB';
 		} finally {
 			loading = false;
 		}
 	});
+
+	async function loadGitHubData() {
+		try {
+			ghStatus = await api.getGitHubConnectionStatus();
+			if (ghStatus?.connected) {
+				repoLoading = true;
+				const data = await api.listRepos();
+				repos = data.repos;
+				repoLoading = false;
+			}
+		} catch {
+			// Silently ignore
+		}
+	}
+
+	async function handleSubscribe() {
+		if (!subscribeUrl.trim()) return;
+		subscribing = true;
+		try {
+			const result = await api.subscribeToRepo(subscribeUrl.trim());
+			if (result.success) {
+				feedback = { ok: true, message: `Subscribed to ${result.repo} (${result.kbs?.length ?? 0} KBs found)` };
+				subscribeUrl = '';
+				await loadGitHubData();
+			}
+		} catch (e) {
+			feedback = { ok: false, message: e instanceof ApiError ? e.detail : 'Subscribe failed' };
+		} finally {
+			subscribing = false;
+		}
+	}
+
+	async function handleSync(name: string) {
+		syncing = name;
+		try {
+			await api.syncRepo(name);
+			feedback = { ok: true, message: `Synced ${name}` };
+		} catch (e) {
+			feedback = { ok: false, message: e instanceof ApiError ? e.detail : 'Sync failed' };
+		} finally {
+			syncing = null;
+		}
+	}
+
+	async function handleExport() {
+		if (!exportUrl.trim()) return;
+		exporting = true;
+		try {
+			const result = await api.exportKB(kbName, exportUrl.trim());
+			feedback = { ok: result.success, message: result.message };
+			if (result.success) exportUrl = '';
+		} catch (e) {
+			feedback = { ok: false, message: e instanceof ApiError ? e.detail : 'Export failed' };
+		} finally {
+			exporting = false;
+		}
+	}
+
+	async function handleCreatePR(repoName: string) {
+		if (!prTitle.trim()) return;
+		creatingPR = true;
+		try {
+			const result = await api.createPR(repoName, prTitle, prBody);
+			if (result.success && result.pr_url) {
+				feedback = { ok: true, message: `PR created: ${result.pr_url}` };
+				prTitle = '';
+				prBody = '';
+			} else {
+				feedback = { ok: false, message: result.error ?? 'PR creation failed' };
+			}
+		} catch (e) {
+			feedback = { ok: false, message: e instanceof ApiError ? e.detail : 'PR creation failed' };
+		} finally {
+			creatingPR = false;
+		}
+	}
 
 	async function handleDefaultRoleChange(newRole: string) {
 		if (!kb) return;
@@ -317,6 +412,153 @@
 						<div>Files on disk: {health.file_count}</div>
 						<div>Indexed entries: {health.entry_count}</div>
 					</div>
+				</div>
+			{/if}
+
+			<!-- GitHub / Repo Panel -->
+			{#if ghStatus?.github_configured && ghStatus?.connected}
+				<div class="bg-white dark:bg-gray-800 rounded-lg shadow p-5">
+					<h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+						GitHub
+					</h2>
+
+					<!-- Subscribe -->
+					<div class="mb-4">
+						<label for="subscribe-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+							Subscribe to Repo
+						</label>
+						<div class="flex gap-2">
+							<input
+								id="subscribe-url"
+								type="text"
+								bind:value={subscribeUrl}
+								placeholder="https://github.com/owner/repo"
+								class="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+							/>
+							<button
+								class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+								disabled={subscribing || !subscribeUrl.trim()}
+								onclick={handleSubscribe}
+							>
+								{subscribing ? '...' : 'Subscribe'}
+							</button>
+						</div>
+					</div>
+
+					<!-- Export to Repo -->
+					<div class="mb-4">
+						<label for="export-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+							Export to GitHub Repo
+						</label>
+						<div class="flex gap-2">
+							<input
+								id="export-url"
+								type="text"
+								bind:value={exportUrl}
+								placeholder="https://github.com/you/target-repo"
+								class="flex-1 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+							/>
+							<button
+								class="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+								disabled={exporting || !exportUrl.trim()}
+								onclick={handleExport}
+							>
+								{exporting ? 'Exporting...' : 'Export'}
+							</button>
+						</div>
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+							Entries will be pushed into a <code>{kbName}/</code> subdirectory.
+						</p>
+					</div>
+
+					<!-- Subscribed Repos -->
+					{#if repos.length > 0}
+						<div>
+							<h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+								Subscribed Repos
+							</h3>
+							<div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+								<table class="w-full text-sm">
+									<thead class="bg-gray-50 dark:bg-gray-700">
+										<tr>
+											<th class="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300">Repo</th>
+											<th class="text-left px-3 py-2 font-medium text-gray-600 dark:text-gray-300">Status</th>
+											<th class="text-right px-3 py-2 font-medium text-gray-600 dark:text-gray-300">Actions</th>
+										</tr>
+									</thead>
+									<tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+										{#each repos as repo}
+											<tr>
+												<td class="px-3 py-2">
+													<div class="font-medium text-gray-900 dark:text-gray-100">{repo.name}</div>
+													{#if repo.is_fork}
+														<span class="text-xs text-purple-600 dark:text-purple-400">fork</span>
+													{/if}
+												</td>
+												<td class="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+													{repo.last_synced ? `Synced ${new Date(repo.last_synced).toLocaleDateString()}` : 'Never synced'}
+												</td>
+												<td class="px-3 py-2 text-right">
+													<div class="flex items-center justify-end gap-1">
+														<button
+															class="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+															disabled={syncing === repo.name}
+															onclick={() => handleSync(repo.name)}
+														>
+															{syncing === repo.name ? '...' : 'Sync'}
+														</button>
+														{#if repo.is_fork}
+															<button
+																class="text-xs px-2 py-1 rounded border border-purple-300 dark:border-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-400"
+																onclick={() => {
+																	prTitle = '';
+																	prBody = '';
+																}}
+															>
+																PR
+															</button>
+														{/if}
+													</div>
+												</td>
+											</tr>
+										{/each}
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<!-- PR Form (shown for fork repos) -->
+						{#each repos.filter(r => r.is_fork) as forkRepo}
+							<div class="mt-3 p-3 bg-gray-50 dark:bg-gray-750 rounded-lg">
+								<h4 class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+									Submit PR from {forkRepo.name}
+								</h4>
+								<input
+									type="text"
+									bind:value={prTitle}
+									placeholder="PR title"
+									class="w-full mb-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+								/>
+								<textarea
+									bind:value={prBody}
+									placeholder="PR description (optional)"
+									rows="2"
+									class="w-full mb-2 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
+								></textarea>
+								<button
+									class="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+									disabled={creatingPR || !prTitle.trim()}
+									onclick={() => handleCreatePR(forkRepo.name)}
+								>
+									{creatingPR ? 'Creating...' : 'Create PR'}
+								</button>
+							</div>
+						{/each}
+					{:else if !repoLoading}
+						<p class="text-sm text-gray-500 dark:text-gray-400">
+							No subscribed repos. Subscribe to a repo URL above.
+						</p>
+					{/if}
 				</div>
 			{/if}
 

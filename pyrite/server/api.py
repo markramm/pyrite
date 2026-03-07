@@ -119,6 +119,33 @@ def get_kb_registry(
     return KBRegistryService(config, db, index_mgr)
 
 
+def get_repo_service(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+):
+    """Get RepoService, injecting the current user's GitHub token if available."""
+    from ..services.repo_service import RepoService
+
+    svc = RepoService(config, db)
+
+    # Inject user's stored GitHub token if available
+    auth_user = getattr(request, "state", None) and getattr(request.state, "auth_user", None)
+    if auth_user:
+        from ..services.auth_service import AuthService
+
+        auth_service = AuthService(db, config.settings.auth)
+        gh_token, _ = auth_service.get_github_token_for_user(auth_user["id"])
+        if gh_token:
+            svc._github_token = gh_token
+        else:
+            svc._github_token = None
+    else:
+        svc._github_token = None
+
+    return svc
+
+
 def get_search_service(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),

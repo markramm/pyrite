@@ -406,10 +406,10 @@ class TestKBRepoAssociation:
 class TestSchemaVersion:
     """Tests for migration version."""
 
-    def test_schema_version_is_13(self, db):
-        """DB should be at schema version 13 after migration."""
+    def test_schema_version_is_14(self, db):
+        """DB should be at schema version 14 after migration."""
         version = db.get_schema_version()
-        assert version == 13
+        assert version == 14
 
     def test_collaboration_tables_exist(self, db):
         """All collaboration tables should exist."""

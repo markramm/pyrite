@@ -477,6 +477,42 @@ class AuthService:
         ).fetchall()
         return {r[0]: r[1] for r in rows}
 
+    # =====================================================================
+    # GitHub Token Management
+    # =====================================================================
+
+    def store_github_token(
+        self, user_id: int, token: str, scopes: str = "public_repo"
+    ) -> None:
+        """Store a GitHub access token for a user."""
+        conn = self.db._raw_conn
+        conn.execute(
+            "UPDATE local_user SET github_access_token = ?, github_token_scopes = ?, updated_at = ? WHERE id = ?",
+            (token, scopes, datetime.now(UTC).isoformat(), user_id),
+        )
+        conn.commit()
+
+    def get_github_token_for_user(self, user_id: int) -> tuple[str | None, str | None]:
+        """Get GitHub token and scopes for a user. Returns (token, scopes)."""
+        conn = self.db._raw_conn
+        row = conn.execute(
+            "SELECT github_access_token, github_token_scopes FROM local_user WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return None, None
+        return row[0], row[1]
+
+    def clear_github_token(self, user_id: int) -> bool:
+        """Remove stored GitHub token. Returns True if user found."""
+        conn = self.db._raw_conn
+        cursor = conn.execute(
+            "UPDATE local_user SET github_access_token = NULL, github_token_scopes = NULL, updated_at = ? WHERE id = ?",
+            (datetime.now(UTC).isoformat(), user_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
     def create_user_ephemeral_kb(self, user_id: int, kb_service, name: str | None = None) -> dict:
         """Create an ephemeral KB for a user with per-KB admin grant.
 

@@ -10,4 +10,6 @@ tags:
 - service
 ---
 
-Git operations service using subprocess. Provides commit log, diff, blame, and push operations. Deliberately avoids gitpython/pygit2. Used by version history endpoint, kb_commit/kb_push MCP tools, and CLI git commands.
+Git operations service using subprocess. Provides commit log, diff, blame, push, clone, pull, fork, and PR creation. Deliberately avoids gitpython/pygit2. Stateless class with all `@staticmethod` methods.
+
+Used by version history endpoint, kb_commit/kb_push MCP tools, CLI git commands, ExportService (export-to-repo), and RepoService (subscribe, fork, sync). See [[collaboration-services]] for full method listing.

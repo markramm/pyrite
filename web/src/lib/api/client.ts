@@ -52,6 +52,12 @@ import type {
 	UnstarEntryResponse,
 	ClipRequest,
 	ClipResponse,
+	GitHubConnectionStatus,
+	GitHubRepoInfo,
+	PRResult,
+	RepoInfo,
+	RepoListResponse,
+	SyncResult,
 	UpdateEntryRequest,
 	UpdateResponse,
 	UserListResponse,
@@ -557,6 +563,74 @@ class ApiClient {
 
 	async getPlugin(name: string): Promise<PluginDetail> {
 		return this.request(`/api/plugins/${encodeURIComponent(name)}`);
+	}
+
+	// GitHub Connection
+	async getGitHubConnectionStatus(): Promise<GitHubConnectionStatus> {
+		return this.request('/auth/github/status');
+	}
+
+	async disconnectGitHub(): Promise<{ ok: boolean; message: string }> {
+		return this.request('/auth/github/connect', { method: 'DELETE' });
+	}
+
+	// Repos
+	async listRepos(): Promise<RepoListResponse> {
+		return this.request('/api/repos');
+	}
+
+	async getRepo(name: string): Promise<RepoInfo> {
+		return this.request(`/api/repos/${encodeURIComponent(name)}`);
+	}
+
+	async subscribeToRepo(remoteUrl: string, name?: string, branch?: string): Promise<{
+		success: boolean;
+		repo?: string;
+		kbs?: string[];
+		error?: string;
+	}> {
+		return this.request('/api/repos/subscribe', {
+			method: 'POST',
+			body: JSON.stringify({ remote_url: remoteUrl, name, branch })
+		});
+	}
+
+	async forkRepo(remoteUrl: string): Promise<{
+		success: boolean;
+		repo?: string;
+		error?: string;
+	}> {
+		return this.request('/api/repos/fork', {
+			method: 'POST',
+			body: JSON.stringify({ remote_url: remoteUrl })
+		});
+	}
+
+	async syncRepo(name: string): Promise<SyncResult> {
+		return this.request(`/api/repos/${encodeURIComponent(name)}/sync`, {
+			method: 'POST'
+		});
+	}
+
+	async unsubscribeRepo(name: string, deleteFiles?: boolean): Promise<{
+		success: boolean;
+		error?: string;
+	}> {
+		const params = deleteFiles ? '?delete_files=true' : '';
+		return this.request(`/api/repos/${encodeURIComponent(name)}${params}`, {
+			method: 'DELETE'
+		});
+	}
+
+	async createPR(repoName: string, title: string, body: string, branch?: string): Promise<PRResult> {
+		return this.request(`/api/repos/${encodeURIComponent(repoName)}/pr`, {
+			method: 'POST',
+			body: JSON.stringify({ title, body, branch })
+		});
+	}
+
+	async listGitHubRepos(): Promise<{ repos: GitHubRepoInfo[] }> {
+		return this.request('/api/github/repos');
 	}
 
 	// Auth

@@ -102,30 +102,38 @@ def _clear_session_cookie(response: Response) -> None:
 # CSRF state store (in-memory, single-process — fine for Phase 1)
 # ---------------------------------------------------------------------------
 
-_oauth_states: dict[str, float] = {}  # {state: expiry_timestamp}
+_oauth_states: dict[str, dict] = {}  # {state: {"expiry": float, "flow": str, "user_id": int|None}}
 _OAUTH_STATE_TTL = 300  # 5 minutes
 
 
-def _create_oauth_state() -> str:
-    """Generate a CSRF state token and store it."""
+def _create_oauth_state(
+    flow: str = "login", user_id: int | None = None
+) -> str:
+    """Generate a CSRF state token and store it with flow metadata."""
     # Probabilistic cleanup (1 in 10 calls)
     if secrets.randbelow(10) == 0:
         now = time.time()
-        expired = [k for k, v in _oauth_states.items() if v < now]
+        expired = [k for k, v in _oauth_states.items() if v["expiry"] < now]
         for k in expired:
             del _oauth_states[k]
 
     state = secrets.token_urlsafe(32)
-    _oauth_states[state] = time.time() + _OAUTH_STATE_TTL
+    _oauth_states[state] = {
+        "expiry": time.time() + _OAUTH_STATE_TTL,
+        "flow": flow,
+        "user_id": user_id,
+    }
     return state
 
 
-def _verify_oauth_state(state: str) -> bool:
-    """Verify and consume a CSRF state token."""
-    expiry = _oauth_states.pop(state, None)
-    if expiry is None:
-        return False
-    return time.time() < expiry
+def _verify_oauth_state(state: str) -> dict | None:
+    """Verify and consume a CSRF state token. Returns state metadata or None."""
+    state_data = _oauth_states.pop(state, None)
+    if state_data is None:
+        return None
+    if time.time() >= state_data["expiry"]:
+        return None
+    return state_data
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +289,8 @@ async def github_oauth_callback(
         logger.warning("GitHub OAuth error: %s", error or "no code")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
-    if not _verify_oauth_state(state):
+    state_data = _verify_oauth_state(state)
+    if not state_data:
         logger.warning("GitHub OAuth invalid/expired state")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
@@ -294,6 +303,29 @@ async def github_oauth_callback(
 
     try:
         token = await provider.exchange_code(code, callback_url)
+    except ValueError as e:
+        logger.warning("GitHub OAuth token exchange failed: %s", e)
+        return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
+    except Exception:
+        logger.exception("GitHub OAuth unexpected error during token exchange")
+        return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
+
+    # Handle "connect" flow — store token for existing user, don't create session
+    if state_data.get("flow") == "connect":
+        connect_user_id = state_data.get("user_id")
+        if not connect_user_id:
+            return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
+        try:
+            auth_service.store_github_token(
+                connect_user_id, token.access_token, token.scope
+            )
+            return RedirectResponse(url="/settings/kbs?github=connected", status_code=302)
+        except Exception:
+            logger.exception("Failed to store GitHub token")
+            return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
+
+    # Standard login flow
+    try:
         profile = await provider.get_user_profile(token)
         user, session_token = auth_service.oauth_login(profile, gh_config)
     except ValueError as e:
@@ -306,3 +338,111 @@ async def github_oauth_callback(
     response = RedirectResponse(url="/", status_code=302)
     _set_session_cookie(response, session_token, config.settings.auth.session_ttl_hours, request)
     return response
+
+
+# ---------------------------------------------------------------------------
+# GitHub Connect (scope escalation for repo access)
+# ---------------------------------------------------------------------------
+
+CONNECT_SCOPES = "read:user read:org public_repo"
+
+
+@auth_router.get("/github/connect")
+async def github_connect_start(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> RedirectResponse:
+    """Redirect logged-in user to GitHub with public_repo scope for repo operations."""
+    gh_config = config.settings.auth.providers.get("github")
+    if not gh_config or not gh_config.client_id:
+        raise HTTPException(status_code=404, detail="GitHub OAuth is not configured")
+
+    # Require authenticated user
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = auth_service.verify_session(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
+    state = _create_oauth_state(flow="connect", user_id=user["id"])
+
+    callback_url = str(request.url_for("github_oauth_callback"))
+    # Build authorize URL with elevated scopes
+    from urllib.parse import urlencode
+
+    params = {
+        "client_id": gh_config.client_id,
+        "redirect_uri": callback_url,
+        "scope": CONNECT_SCOPES,
+        "state": state,
+    }
+    authorize_url = f"{provider.AUTHORIZE_URL}?{urlencode(params)}"
+
+    return RedirectResponse(url=authorize_url, status_code=302)
+
+
+@auth_router.get("/github/status")
+async def github_connection_status(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Check if current user has a connected GitHub token."""
+    gh_config = config.settings.auth.providers.get("github")
+    if not gh_config or not gh_config.client_id:
+        return {"connected": False, "github_configured": False}
+
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        return {"connected": False, "github_configured": True}
+
+    user = auth_service.verify_session(token)
+    if not user:
+        return {"connected": False, "github_configured": True}
+
+    gh_token, scopes = auth_service.get_github_token_for_user(user["id"])
+    if not gh_token:
+        return {"connected": False, "github_configured": True}
+
+    # Optionally verify token is still valid
+    username = None
+    try:
+        from ..github_auth import get_github_user_info
+
+        info = get_github_user_info(gh_token)
+        if info:
+            username = info.get("login")
+        else:
+            # Token invalid, clear it
+            auth_service.clear_github_token(user["id"])
+            return {"connected": False, "github_configured": True, "reason": "token_expired"}
+    except Exception:
+        pass
+
+    return {
+        "connected": True,
+        "github_configured": True,
+        "username": username,
+        "scopes": scopes,
+    }
+
+
+@auth_router.delete("/github/connect")
+async def github_disconnect(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Disconnect GitHub by removing stored token."""
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    user = auth_service.verify_session(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Session expired")
+
+    auth_service.clear_github_token(user["id"])
+    return {"ok": True, "message": "GitHub disconnected"}

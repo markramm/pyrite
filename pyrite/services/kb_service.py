@@ -1055,6 +1055,22 @@ class KBService:
     # KB Export
     # =========================================================================
 
+    def export_kb_to_repo(
+        self,
+        kb_name: str,
+        repo_url: str,
+        github_token: str | None = None,
+        branch: str = "main",
+        commit_message: str | None = None,
+    ) -> dict:
+        """Export KB entries to a remote repo (clone, export, commit, push)."""
+        return self._export_svc.export_kb_to_repo(
+            kb_name, repo_url,
+            github_token=github_token,
+            branch=branch,
+            commit_message=commit_message,
+        )
+
     def export_kb_to_directory(self, kb_name: str, target_dir: Path) -> dict:
         """Export all entries in a KB as markdown files to a directory.
 
