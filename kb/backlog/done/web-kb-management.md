@@ -9,7 +9,8 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: in-progress
+status: completed
+milestone: "0.18"
 links:
 - per-kb-permissions
 - personal-kb-repo-backing
