@@ -126,6 +126,7 @@ Recommended execution order. Grouped by milestone.
 | **2** | [[search-service-kb-service-overlap]] | S | Duplicate methods between SearchService and KBService | **done** |
 | **3** | [[dynamic-subdirectory-paths]] | M | Template subdirectories (`{status}`) for auto file organization | **done** |
 | **4** | [[reserved-field-validation]] | S | Prevent kb.yaml field names from colliding with reserved Entry fields | **done** |
+| **5** | [[adr-0018-web-ui-kb-management-backlog]] | XS | Design doc for git fork-based multi-user KB management | **done** |
 
 *Cleanup (from 0.17 stale proposed → completed):*
 
