@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from ..config import PyriteConfig, load_config
+from ..config import KBConfig, PyriteConfig, load_config
 from ..models import Entry, EventEntry
 from ..models.protocols import (
     PROTOCOL_COLUMN_KEYS,
@@ -541,6 +541,49 @@ class IndexManager:
             # Update KB stats
             self.db.update_kb_indexed(kb.name, len(seen_ids))
 
+        return results
+
+    def sync_kb(self, kb_config: KBConfig) -> dict[str, int]:
+        """Sync a single KB given its config. Used by KBRegistryService for DB-only KBs."""
+        results = {"added": 0, "updated": 0, "removed": 0}
+
+        if not kb_config.path.exists():
+            return results
+
+        repo = KBRepository(kb_config)
+
+        self.db.register_kb(
+            name=kb_config.name,
+            kb_type=kb_config.kb_type,
+            path=str(kb_config.path),
+            description=kb_config.description,
+        )
+
+        indexed = self._load_indexed_state(kb_config.name)
+        seen_ids = set()
+
+        for entry, file_path in repo.list_entries():
+            seen_ids.add(entry.id)
+
+            if entry.id not in indexed:
+                self.index_entry(entry, kb_config.name, file_path)
+                results["added"] += 1
+            else:
+                indexed_at = indexed[entry.id]["indexed_at"]
+                if indexed_at:
+                    try:
+                        if self._is_stale(file_path, indexed_at):
+                            self.index_entry(entry, kb_config.name, file_path)
+                            results["updated"] += 1
+                    except Exception:
+                        logger.warning("Stale check failed for %s", entry.id, exc_info=True)
+
+        for entry_id in indexed:
+            if entry_id not in seen_ids:
+                self.remove_entry(entry_id, kb_config.name)
+                results["removed"] += 1
+
+        self.db.update_kb_indexed(kb_config.name, len(seen_ids))
         return results
 
     def index_with_attribution(

@@ -17,7 +17,7 @@ from typing import Any
 from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
-from ..exceptions import ConfigError, PyriteError
+from ..exceptions import ConfigError, KBNotFoundError, KBProtectedError, PyriteError
 from ..schema import generate_entry_id
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
@@ -117,6 +117,12 @@ class PyriteMCPServer:
         self.index_mgr = IndexManager(self.db, self.config)
         self.svc = KBService(self.config, self.db)
 
+        # KB registry (seeded from config on init)
+        from ..services.kb_registry_service import KBRegistryService
+
+        self.registry = KBRegistryService(self.config, self.db, self.index_mgr)
+        self.registry.seed_from_config()
+
         # Rate limiter and tool→tier map
         self.rate_limiter = MCPRateLimiter(self.config.settings)
         self._tool_tiers: dict[str, str] = {}
@@ -209,7 +215,7 @@ class PyriteMCPServer:
 
     def _kb_list(self, args: dict[str, Any]) -> dict[str, Any]:
         """List all knowledge bases."""
-        kbs_data = self.svc.list_kbs()
+        kbs_data = self.registry.list_kbs()
         kbs = [
             {
                 "name": kb["name"],
@@ -218,6 +224,7 @@ class PyriteMCPServer:
                 "description": kb.get("description", ""),
                 "entry_count": kb["entries"],
                 "read_only": kb.get("read_only", False),
+                "source": kb.get("source", "user"),
             }
             for kb in kbs_data
         ]
@@ -911,6 +918,57 @@ class PyriteMCPServer:
             return self.svc.push_kb(kb_name, remote=remote, branch=branch)
         except PyriteError as e:
             return {"error": str(e)}
+
+    def _kb_registry_add(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Register a new user KB by path."""
+        name = args.get("name")
+        path = args.get("path")
+        if not name or not path:
+            return _error("MISSING_PARAM", "'name' and 'path' are required")
+        try:
+            result = self.registry.add_kb(
+                name=name,
+                path=path,
+                kb_type=args.get("kb_type", "generic"),
+                description=args.get("description", ""),
+            )
+            return {"created": True, **result}
+        except ValueError as e:
+            return _error("CONFLICT", str(e))
+
+    def _kb_registry_remove(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Remove a user-added KB."""
+        name = args.get("name")
+        if not name:
+            return _error("MISSING_PARAM", "'name' is required")
+        try:
+            self.registry.remove_kb(name)
+            return {"deleted": True, "name": name}
+        except KBNotFoundError as e:
+            return _error("NOT_FOUND", str(e))
+        except KBProtectedError as e:
+            return _error("PROTECTED", str(e))
+
+    def _kb_registry_reindex(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Reindex a specific KB."""
+        name = args.get("name")
+        if not name:
+            return _error("MISSING_PARAM", "'name' is required")
+        try:
+            result = self.registry.reindex_kb(name)
+            return {"reindexed": True, "name": name, **result}
+        except KBNotFoundError as e:
+            return _error("NOT_FOUND", str(e))
+
+    def _kb_registry_health(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Check KB health."""
+        name = args.get("name")
+        if not name:
+            return _error("MISSING_PARAM", "'name' is required")
+        try:
+            return self.registry.health_kb(name)
+        except KBNotFoundError as e:
+            return _error("NOT_FOUND", str(e))
 
     # =========================================================================
     # Prompts

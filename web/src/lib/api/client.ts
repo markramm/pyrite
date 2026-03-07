@@ -25,7 +25,11 @@ import type {
 	EntryTypesResponse,
 	GraphResponse,
 	ImportResult,
+	KBHealthResponse,
+	KBInfo,
 	KBListResponse,
+	KBPermissionsResponse,
+	KBReindexResponse,
 	PluginDetail,
 	PluginListResponse,
 	RenderedTemplate,
@@ -50,6 +54,7 @@ import type {
 	ClipResponse,
 	UpdateEntryRequest,
 	UpdateResponse,
+	UserListResponse,
 	VersionListResponse
 } from './types';
 
@@ -82,6 +87,107 @@ class ApiClient {
 	// Knowledge Bases
 	async listKBs(): Promise<KBListResponse> {
 		return this.request('/api/kbs');
+	}
+
+	async getKB(name: string): Promise<KBInfo> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}`);
+	}
+
+	async createKB(req: {
+		name: string;
+		path: string;
+		kb_type?: string;
+		description?: string;
+	}): Promise<{ created: boolean; name: string; path: string }> {
+		return this.request('/api/kbs', {
+			method: 'POST',
+			body: JSON.stringify(req)
+		});
+	}
+
+	async updateKB(
+		name: string,
+		updates: { description?: string; kb_type?: string }
+	): Promise<{ updated: boolean }> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}`, {
+			method: 'PUT',
+			body: JSON.stringify(updates)
+		});
+	}
+
+	async deleteKB(name: string): Promise<{ deleted: boolean; name: string }> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}`, {
+			method: 'DELETE'
+		});
+	}
+
+	async reindexKB(name: string): Promise<KBReindexResponse> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/reindex`, {
+			method: 'POST'
+		});
+	}
+
+	async getKBHealth(name: string): Promise<KBHealthResponse> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/health`);
+	}
+
+	async getKBPermissions(name: string): Promise<KBPermissionsResponse> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/permissions`);
+	}
+
+	async grantKBPermission(
+		name: string,
+		userId: number,
+		role: string
+	): Promise<{ granted: boolean; user_id: number; kb_name: string; role: string }> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/permissions`, {
+			method: 'POST',
+			body: JSON.stringify({ user_id: userId, role })
+		});
+	}
+
+	async revokeKBPermission(
+		name: string,
+		userId: number
+	): Promise<{ revoked: boolean; user_id: number; kb_name: string }> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/permissions`, {
+			method: 'POST',
+			body: JSON.stringify({ user_id: userId, revoke: true })
+		});
+	}
+
+	async updateKBDefaultRole(
+		name: string,
+		role: string | null
+	): Promise<{ ok: boolean; kb_name: string; default_role: string | null }> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/default-role`, {
+			method: 'PUT',
+			body: JSON.stringify({ role })
+		});
+	}
+
+	async listUsers(): Promise<UserListResponse> {
+		return this.request('/auth/users');
+	}
+
+	async listEphemeralKBs(): Promise<{
+		ephemeral_kbs: Array<{
+			name: string;
+			path: string;
+			created_at: number | null;
+			ttl: number | null;
+			expires_at: number | null;
+			expired: boolean;
+		}>;
+		count: number;
+	}> {
+		return this.request('/api/kbs/ephemeral');
+	}
+
+	async forceExpireKB(name: string): Promise<{ expired: boolean; name: string }> {
+		return this.request(`/api/kbs/ephemeral/${encodeURIComponent(name)}`, {
+			method: 'DELETE'
+		});
 	}
 
 	async exportKB(

@@ -33,5 +33,9 @@ class StorageError(PyriteError):
     """Raised when a storage operation fails."""
 
 
+class KBProtectedError(PyriteError):
+    """Raised when attempting to modify/remove a config-protected KB."""
+
+
 class ConfigError(PyriteError):
     """Raised when configuration is invalid."""

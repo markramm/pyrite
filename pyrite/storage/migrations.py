@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 11
+CURRENT_VERSION = 13
 
 
 @dataclass
@@ -269,6 +269,26 @@ MIGRATIONS: list[Migration] = [
         -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
         """,
     ),
+    Migration(
+        version=12,
+        description="Add source column to kb for DB-first registry",
+        # Actual ALTER TABLE handled conditionally in _apply_v12() since column
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
+    Migration(
+        version=13,
+        description="Add default_role column to kb for per-KB access control",
+        # Actual ALTER TABLE handled conditionally in _apply_v13() since column
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
 ]
 
 
@@ -448,6 +468,30 @@ class MigrationManager:
         self.conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_entry_lifecycle ON entry(lifecycle)"
         )
+        self.conn.commit()
+
+    def _apply_v12(self) -> None:
+        """Conditionally add source column to kb for DB-first registry."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='kb'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(kb)").fetchall()}
+        if "source" not in existing:
+            self.conn.execute("ALTER TABLE kb ADD COLUMN source TEXT DEFAULT 'user'")
+        self.conn.commit()
+
+    def _apply_v13(self) -> None:
+        """Conditionally add default_role column to kb for per-KB access control."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='kb'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(kb)").fetchall()}
+        if "default_role" not in existing:
+            self.conn.execute("ALTER TABLE kb ADD COLUMN default_role TEXT")
         self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:

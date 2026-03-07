@@ -49,6 +49,36 @@ class EphemeralKBService:
 
         return kb
 
+    def list_ephemeral_kbs(self) -> list[dict]:
+        """List all active ephemeral KBs with metadata."""
+        now = time.time()
+        result = []
+        for kb in self.config.knowledge_bases:
+            if not kb.ephemeral:
+                continue
+            expires_at = (kb.created_at_ts + kb.ttl) if kb.created_at_ts and kb.ttl else None
+            result.append({
+                "name": kb.name,
+                "path": str(kb.path),
+                "created_at": kb.created_at_ts,
+                "ttl": kb.ttl,
+                "expires_at": expires_at,
+                "expired": expires_at is not None and now > expires_at,
+            })
+        return result
+
+    def force_expire_kb(self, name: str) -> bool:
+        """Force-expire a specific ephemeral KB. Returns True if removed."""
+        kb = next((k for k in self.config.knowledge_bases if k.name == name), None)
+        if not kb or not kb.ephemeral:
+            return False
+        self.db.unregister_kb(kb.name)
+        if kb.path.exists():
+            shutil.rmtree(kb.path, ignore_errors=True)
+        self.config.remove_kb(kb.name)
+        save_config(self.config)
+        return True
+
     def gc_ephemeral_kbs(self) -> list[str]:
         """Garbage-collect expired ephemeral KBs. Returns list of removed KB names."""
         removed = []

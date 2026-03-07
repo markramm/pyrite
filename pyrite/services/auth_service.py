@@ -459,6 +459,15 @@ class AuthService:
             for r in rows
         ]
 
+    def list_users(self) -> list[dict]:
+        """List all local users (excluding password hashes)."""
+        conn = self.db._raw_conn
+        rows = conn.execute(
+            "SELECT id, username, display_name, role, auth_provider, avatar_url "
+            "FROM local_user ORDER BY username"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_user_kb_permissions(self, user_id: int) -> dict[str, str]:
         """Get all explicit KB grants for a user. Returns {kb_name: role}."""
         conn = self.db._raw_conn

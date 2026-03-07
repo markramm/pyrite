@@ -776,4 +776,47 @@ ADMIN_TOOLS = {
             "required": ["kb"],
         },
     },
+    "kb_registry_add": {
+        "description": "Register a new user KB by path. Does not modify config.yaml.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name for the new KB"},
+                "path": {"type": "string", "description": "Filesystem path to the KB directory"},
+                "kb_type": {"type": "string", "description": "KB type (default: generic)"},
+                "description": {"type": "string", "description": "Optional description"},
+            },
+            "required": ["name", "path"],
+        },
+    },
+    "kb_registry_remove": {
+        "description": "Remove a user-added KB from the registry. Config-protected KBs cannot be removed.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the KB to remove"},
+            },
+            "required": ["name"],
+        },
+    },
+    "kb_registry_reindex": {
+        "description": "Reindex a specific KB — sync files to the search index.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the KB to reindex"},
+            },
+            "required": ["name"],
+        },
+    },
+    "kb_registry_health": {
+        "description": "Check KB health: path exists, file count vs index count, staleness.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Name of the KB to check"},
+            },
+            "required": ["name"],
+        },
+    },
 }

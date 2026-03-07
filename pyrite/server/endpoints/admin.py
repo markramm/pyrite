@@ -4,8 +4,10 @@ import logging
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-from ...config import KBConfig, PyriteConfig, save_config
+from ...config import PyriteConfig
+from ...exceptions import KBNotFoundError, KBProtectedError
 from ...services.auth_service import AuthService
+from ...services.kb_registry_service import KBRegistryService
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...storage.database import PyriteDB
@@ -14,16 +16,33 @@ from ..api import (
     get_config,
     get_db,
     get_index_mgr,
+    get_kb_registry,
     get_kb_service,
     get_llm_service,
     limiter,
     requires_tier,
 )
-from ..schemas import AIStatusResponse, StatsResponse, SyncResponse
+from ..schemas import (
+    AIStatusResponse,
+    KBReindexResponse,
+    StatsResponse,
+    SyncResponse,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Admin"])
+
+
+def _resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, name: str) -> str | None:
+    """Get default_role for a KB from config or DB."""
+    kb_config = config.get_kb(name)
+    if kb_config and kb_config.default_role is not None:
+        return kb_config.default_role
+    row = db._raw_conn.execute(
+        "SELECT default_role FROM kb WHERE name = ?", (name,)
+    ).fetchone()
+    return row[0] if row else None
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -95,29 +114,37 @@ def create_kb(
     ephemeral: bool = Body(False),
     ttl: int | None = Body(None),
     svc: KBService = Depends(get_kb_service),
+    registry: KBRegistryService = Depends(get_kb_registry),
 ):
     """Create a new knowledge base."""
-    from pathlib import Path as PathLib
-
-    kb_path = PathLib(path).expanduser().resolve()
-    kb_path.mkdir(parents=True, exist_ok=True)
-
     if ephemeral:
         kb = svc.create_ephemeral_kb(name, ttl=ttl or 3600, description=description)
         return {"created": True, "name": kb.name, "path": str(kb.path), "ephemeral": True}
 
-    kb = KBConfig(
-        name=name,
-        path=kb_path,
-        kb_type=kb_type,
-        description=description,
-        shortname=shortname,
-    )
-    config = svc.config
-    config.add_kb(kb)
-    save_config(config)
-    svc.db.register_kb(name=name, kb_type=kb_type, path=str(kb_path), description=description)
-    return {"created": True, "name": name, "path": str(kb_path)}
+    try:
+        result = registry.add_kb(name=name, path=path, kb_type=kb_type, description=description)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail={"code": "CONFLICT", "message": str(e)})
+    return {"created": True, **result}
+
+
+@router.put("/kbs/{name}", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("30/minute")
+def update_kb(
+    request: Request,
+    name: str,
+    description: str | None = Body(None),
+    kb_type: str | None = Body(None),
+    registry: KBRegistryService = Depends(get_kb_registry),
+):
+    """Update a knowledge base's metadata."""
+    try:
+        result = registry.update_kb(name, description=description, kb_type=kb_type)
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{name}' not found"}
+        )
+    return {"updated": True, **result}
 
 
 @router.delete("/kbs/{name}", dependencies=[Depends(requires_tier("admin"))])
@@ -125,19 +152,35 @@ def create_kb(
 def delete_kb(
     request: Request,
     name: str,
-    svc: KBService = Depends(get_kb_service),
+    registry: KBRegistryService = Depends(get_kb_registry),
 ):
     """Delete a knowledge base from the registry."""
-    config = svc.config
-    kb = config.get_kb(name)
-    if not kb:
+    try:
+        registry.remove_kb(name)
+    except KBNotFoundError:
         raise HTTPException(
             status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{name}' not found"}
         )
-    svc.db.unregister_kb(name)
-    config.remove_kb(name)
-    save_config(config)
+    except KBProtectedError as e:
+        raise HTTPException(status_code=403, detail={"code": "PROTECTED", "message": str(e)})
     return {"deleted": True, "name": name}
+
+
+@router.post("/kbs/{name}/reindex", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("10/minute")
+def reindex_kb(
+    request: Request,
+    name: str,
+    registry: KBRegistryService = Depends(get_kb_registry),
+):
+    """Reindex a specific knowledge base."""
+    try:
+        result = registry.reindex_kb(name)
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{name}' not found"}
+        )
+    return KBReindexResponse(name=name, **result)
 
 
 @router.post("/kbs/gc", dependencies=[Depends(requires_tier("admin"))])
@@ -149,6 +192,36 @@ def gc_ephemeral_kbs(
     """Garbage-collect expired ephemeral KBs."""
     removed = svc.gc_ephemeral_kbs()
     return {"removed": removed, "count": len(removed)}
+
+
+# =============================================================================
+# Ephemeral KB Admin
+# =============================================================================
+
+
+@router.get("/kbs/ephemeral", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("30/minute")
+def list_ephemeral_kbs(
+    request: Request,
+    svc: KBService = Depends(get_kb_service),
+):
+    """List all active ephemeral KBs. Requires admin."""
+    kbs = svc.list_ephemeral_kbs()
+    return {"ephemeral_kbs": kbs, "count": len(kbs)}
+
+
+@router.delete("/kbs/ephemeral/{name}", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("30/minute")
+def force_expire_ephemeral_kb(
+    request: Request,
+    name: str,
+    svc: KBService = Depends(get_kb_service),
+):
+    """Force-expire a specific ephemeral KB. Requires admin."""
+    ok = svc.force_expire_kb(name)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Ephemeral KB '{name}' not found")
+    return {"expired": True, "name": name}
 
 
 # =============================================================================
@@ -197,12 +270,10 @@ def list_kb_permissions(
     global_role = getattr(request.state, "api_role", None)
 
     if global_role != "admin":
-        # Check if user has KB-level admin
         if not auth_user:
             raise HTTPException(status_code=403, detail="Admin access required")
         auth_service = AuthService(db, config.settings.auth)
-        kb_config = config.get_kb(name)
-        kb_default_role = kb_config.default_role if kb_config else None
+        kb_default_role = _resolve_kb_default_role(config, db, name)
         effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
         if effective != "admin":
             raise HTTPException(status_code=403, detail="Admin access required for this KB")
@@ -231,8 +302,7 @@ def manage_kb_permission(
         if not auth_user:
             raise HTTPException(status_code=403, detail="Admin access required")
         auth_service = AuthService(db, config.settings.auth)
-        kb_config = config.get_kb(name)
-        kb_default_role = kb_config.default_role if kb_config else None
+        kb_default_role = _resolve_kb_default_role(config, db, name)
         effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
         if effective != "admin":
             raise HTTPException(status_code=403, detail="Admin access required for this KB")
@@ -255,6 +325,26 @@ def manage_kb_permission(
         raise HTTPException(status_code=400, detail=str(e))
 
     return {"granted": True, "user_id": user_id, "kb_name": name, "role": role}
+
+
+@router.put(
+    "/kbs/{name}/default-role", dependencies=[Depends(requires_tier("admin"))]
+)
+@limiter.limit("30/minute")
+def update_kb_default_role(
+    request: Request,
+    name: str,
+    role: str | None = Body(..., embed=True),
+    registry: KBRegistryService = Depends(get_kb_registry),
+):
+    """Update a KB's default access role. Requires admin."""
+    if role is not None and role not in ("none", "read", "write"):
+        raise HTTPException(status_code=400, detail="role must be 'none', 'read', 'write', or null")
+    try:
+        registry.update_kb(name, default_role=role)
+    except KBNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"ok": True, "kb_name": name, "default_role": role}
 
 
 # =============================================================================

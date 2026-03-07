@@ -4,10 +4,15 @@ Knowledge Base Service
 Unified KB operations used by API, CLI, and UI layers.
 """
 
+from __future__ import annotations
+
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .kb_registry_service import KBRegistryService
 
 from ..config import KBConfig, PyriteConfig
 from ..exceptions import (
@@ -47,6 +52,7 @@ class KBService:
         config: PyriteConfig,
         db: PyriteDB,
         doc_mgr: DocumentManager | None = None,
+        registry: KBRegistryService | None = None,
     ):
         self.config = config
         self.db = db
@@ -56,6 +62,7 @@ class KBService:
         self._export_svc = ExportService(config, db)
         self._ephemeral_svc = EphemeralKBService(config, db)
         self._quota_svc = QuotaService(config)
+        self._registry: KBRegistryService | None = registry
         self._embedding_svc = None
         self._embedding_checked = False
         self._embedding_worker = None  # Set externally to enable queue-based embedding
@@ -101,7 +108,9 @@ class KBService:
     # =========================================================================
 
     def list_kbs(self) -> list[dict[str, Any]]:
-        """List all configured knowledge bases with stats."""
+        """List all knowledge bases with stats. Delegates to registry if available."""
+        if self._registry:
+            return self._registry.list_kbs()
         kbs = []
         for kb in self.config.knowledge_bases:
             stats = self.db.get_kb_stats(kb.name)
@@ -120,8 +129,13 @@ class KBService:
         return kbs
 
     def get_kb(self, name: str) -> KBConfig | None:
-        """Get KB config by name."""
-        return self.config.get_kb(name)
+        """Get KB config by name. Falls back to registry for DB-only KBs."""
+        cfg = self.config.get_kb(name)
+        if cfg:
+            return cfg
+        if self._registry:
+            return self._registry.get_kb_config(name)
+        return None
 
     def get_kb_stats(self, name: str) -> dict[str, Any] | None:
         """Get stats for a specific KB."""
@@ -1016,6 +1030,14 @@ class KBService:
     def gc_ephemeral_kbs(self) -> list[str]:
         """Garbage-collect expired ephemeral KBs. Returns list of removed KB names."""
         return self._ephemeral_svc.gc_ephemeral_kbs()
+
+    def list_ephemeral_kbs(self) -> list[dict]:
+        """List all active ephemeral KBs."""
+        return self._ephemeral_svc.list_ephemeral_kbs()
+
+    def force_expire_kb(self, name: str) -> bool:
+        """Force-expire a specific ephemeral KB."""
+        return self._ephemeral_svc.force_expire_kb(name)
 
     def check_kb_creation_allowed(
         self, user_id: int, user_tier: str, current_kb_count: int

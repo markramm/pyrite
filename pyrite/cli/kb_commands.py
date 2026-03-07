@@ -1,7 +1,7 @@
 """
 KB management commands for pyrite CLI.
 
-Commands: list, add, remove, discover, validate
+Commands: list, add, remove, discover, validate, create, reindex, health, commit, push, gc
 """
 
 from pathlib import Path
@@ -12,12 +12,11 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import (
-    KBConfig,
     auto_discover_kbs,
     load_config,
     save_config,
 )
-from .context import cli_context
+from .context import cli_context, cli_registry_context
 
 kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
@@ -43,76 +42,64 @@ def kb_list(
     ),
 ):
     """List all configured knowledge bases."""
-    config = load_config()
+    with cli_registry_context() as (config, db, svc, registry):
+        kbs = registry.list_kbs(type_filter=kb_type)
 
-    type_filter = kb_type
-    kbs = config.list_kbs(type_filter)
+        if not kbs:
+            console.print("[yellow]No knowledge bases configured.[/yellow]")
+            console.print("Add a KB with: pyrite kb add <path> --name <name>")
+            return
 
-    if not kbs:
-        console.print("[yellow]No knowledge bases configured.[/yellow]")
-        console.print("Add a KB with: pyrite kb add <path> --name <name>")
-        return
+        formatted = _format_output({"kbs": kbs}, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
 
-    formatted = _format_output(
-        {
-            "kbs": [
-                {
-                    "name": kb.name,
-                    "type": kb.kb_type,
-                    "path": str(kb.path),
-                    "valid": len(kb.validate()) == 0,
-                }
-                for kb in kbs
-            ]
-        },
-        output_format,
-    )
-    if formatted is not None:
-        typer.echo(formatted)
-        return
+        table = Table(title="Knowledge Bases")
+        table.add_column("Name", style="cyan")
+        table.add_column("Type", style="green")
+        table.add_column("Source", style="magenta")
+        table.add_column("Entries", justify="right")
+        table.add_column("Last Indexed")
+        table.add_column("Path")
 
-    table = Table(title="Knowledge Bases")
-    table.add_column("Name", style="cyan")
-    table.add_column("Type", style="green")
-    table.add_column("Path")
-    table.add_column("Status")
+        for kb in kbs:
+            table.add_row(
+                kb["name"],
+                kb["type"],
+                kb.get("source", "user"),
+                str(kb.get("entries", 0)),
+                kb.get("last_indexed", "never") or "never",
+                kb["path"],
+            )
 
-    for kb in kbs:
-        errors = kb.validate()
-        status = "[green]OK[/green]" if not errors else f"[red]{len(errors)} errors[/red]"
-        table.add_row(kb.name, kb.kb_type, str(kb.path), status)
-
-    console.print(table)
+        console.print(table)
 
 
 @kb_app.command("add")
 def kb_add(
     path: Path = typer.Argument(..., help="Path to the knowledge base"),
     name: str | None = typer.Option(None, "--name", "-n", help="Name for the KB"),
-    kb_type: str = typer.Option("research", "--type", "-t", help="KB type (events/research)"),
+    kb_type: str = typer.Option("generic", "--type", "-t", help="KB type"),
     description: str = typer.Option("", "--desc", "-d", help="Description"),
 ):
     """Add a knowledge base to the registry."""
-    config = load_config()
-
-    path = path.expanduser().resolve()
-    if not path.exists():
-        console.print(f"[red]Error:[/red] Path does not exist: {path}")
+    resolved = path.expanduser().resolve()
+    if not resolved.exists():
+        console.print(f"[red]Error:[/red] Path does not exist: {resolved}")
         raise typer.Exit(1)
 
-    kb_name = name or path.name
+    kb_name = name or resolved.name
 
-    if config.get_kb(kb_name):
-        console.print(f"[red]Error:[/red] KB with name '{kb_name}' already exists")
-        raise typer.Exit(1)
-
-    kb = KBConfig(name=kb_name, path=path, kb_type=kb_type, description=description)
-    kb.load_kb_yaml()
-
-    config.add_kb(kb)
-    save_config(config)
-
-    console.print(f"[green]Added KB:[/green] {kb_name} ({kb_type}) at {path}")
+    with cli_registry_context() as (config, db, svc, registry):
+        try:
+            result = registry.add_kb(
+                name=kb_name, path=str(resolved), kb_type=kb_type, description=description
+            )
+            console.print(f"[green]Added KB:[/green] {result['name']} ({result['type']}) at {result['path']}")
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 @kb_app.command("remove")
@@ -121,23 +108,26 @@ def kb_remove(
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ):
     """Remove a knowledge base from the registry."""
-    config = load_config()
+    with cli_registry_context() as (config, db, svc, registry):
+        kb = registry.get_kb(name)
+        if not kb:
+            console.print(f"[red]Error:[/red] KB '{name}' not found")
+            raise typer.Exit(1)
 
-    kb = config.get_kb(name)
-    if not kb:
-        console.print(f"[red]Error:[/red] KB '{name}' not found")
-        raise typer.Exit(1)
+        if not force:
+            confirm = typer.confirm(f"Remove KB '{name}' from registry?")
+            if not confirm:
+                raise typer.Abort()
 
-    if not force:
-        confirm = typer.confirm(f"Remove KB '{name}' from registry?")
-        if not confirm:
-            raise typer.Abort()
+        from ..exceptions import KBProtectedError
 
-    config.remove_kb(name)
-    save_config(config)
-
-    console.print(f"[green]Removed:[/green] {name}")
-    console.print(f"[dim]Note: Files at {kb.path} were not deleted.[/dim]")
+        try:
+            registry.remove_kb(name)
+            console.print(f"[green]Removed:[/green] {name}")
+            console.print(f"[dim]Note: Files at {kb['path']} were not deleted.[/dim]")
+        except KBProtectedError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
 
 
 @kb_app.command("discover")
@@ -278,7 +268,7 @@ def kb_create(
     ttl: int = typer.Option(3600, "--ttl", help="TTL in seconds for ephemeral KBs"),
 ):
     """Create a new knowledge base."""
-    with cli_context() as (config, db, svc):
+    with cli_registry_context() as (config, db, svc, registry):
         if ephemeral:
             kb = svc.create_ephemeral_kb(name, ttl=ttl, description=description)
             console.print(f"[green]Created ephemeral KB:[/green] {name} (TTL: {ttl}s) at {kb.path}")
@@ -291,17 +281,74 @@ def kb_create(
         resolved_path = path.expanduser().resolve()
         resolved_path.mkdir(parents=True, exist_ok=True)
 
-        kb = KBConfig(
-            name=name,
-            path=resolved_path,
-            kb_type=kb_type,
-            description=description,
-            shortname=shortname,
-        )
-        config.add_kb(kb)
-        save_config(config)
-        db.register_kb(name=name, kb_type=kb_type, path=str(resolved_path), description=description)
-        console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
+        try:
+            registry.add_kb(
+                name=name,
+                path=str(resolved_path),
+                kb_type=kb_type,
+                description=description,
+            )
+            console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+
+@kb_app.command("reindex")
+def kb_reindex(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    output_format: str = typer.Option(
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Reindex a specific knowledge base."""
+    with cli_registry_context() as (config, db, svc, registry):
+        from ..exceptions import KBNotFoundError
+
+        try:
+            result = registry.reindex_kb(kb_name)
+        except KBNotFoundError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        data = {"name": kb_name, **result}
+        formatted = _format_output(data, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        console.print(f"[green]Reindexed:[/green] {kb_name}")
+        console.print(f"  Added: {result['added']}, Updated: {result['updated']}, Removed: {result['removed']}")
+
+
+@kb_app.command("health")
+def kb_health(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    output_format: str = typer.Option(
+        "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Check health of a knowledge base."""
+    with cli_registry_context() as (config, db, svc, registry):
+        from ..exceptions import KBNotFoundError
+
+        try:
+            result = registry.health_kb(kb_name)
+        except KBNotFoundError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        formatted = _format_output(result, output_format)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        status = "[green]Healthy[/green]" if result["healthy"] else "[red]Unhealthy[/red]"
+        console.print(f"\n[bold]{kb_name}[/bold]: {status}")
+        console.print(f"  Path: {result['path']} ({'exists' if result['path_exists'] else 'MISSING'})")
+        console.print(f"  Files: {result['file_count']}, Indexed entries: {result['entry_count']}")
+        console.print(f"  Last indexed: {result['last_indexed'] or 'never'}")
+        console.print(f"  Source: {result['source']}")
 
 
 @kb_app.command("commit")

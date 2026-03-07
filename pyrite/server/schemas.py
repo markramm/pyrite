@@ -21,6 +21,12 @@ class KBInfo(BaseModel):
     path: str
     entries: int
     indexed: bool
+    source: str = "user"
+    description: str = ""
+    read_only: bool = False
+    last_indexed: str | None = None
+    shortname: str | None = None
+    default_role: str | None = None
 
 
 class KBListResponse(BaseModel):
@@ -28,6 +34,28 @@ class KBListResponse(BaseModel):
 
     kbs: list[KBInfo]
     total: int
+
+
+class KBHealthResponse(BaseModel):
+    """Response for KB health check."""
+
+    name: str
+    healthy: bool
+    path_exists: bool
+    path: str
+    file_count: int
+    entry_count: int
+    last_indexed: str | None = None
+    source: str = "user"
+
+
+class KBReindexResponse(BaseModel):
+    """Response for KB reindex."""
+
+    name: str
+    added: int
+    updated: int
+    removed: int
 
 
 # =============================================================================

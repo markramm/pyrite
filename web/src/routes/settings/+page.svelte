@@ -469,6 +469,27 @@
 				</div>
 			</section>
 
+			<!-- More Settings -->
+			<section>
+				<h2 class="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">More</h2>
+				<div class="space-y-2">
+					<a
+						href="/settings/kbs"
+						class="flex items-center justify-between rounded-md border border-zinc-300 px-4 py-3 text-sm hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
+					>
+						<span>Knowledge Bases</span>
+						<span class="text-zinc-400">&rarr;</span>
+					</a>
+					<a
+						href="/settings/plugins"
+						class="flex items-center justify-between rounded-md border border-zinc-300 px-4 py-3 text-sm hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
+					>
+						<span>Plugins</span>
+						<span class="text-zinc-400">&rarr;</span>
+					</a>
+				</div>
+			</section>
+
 			{#if settingsStore.error}
 				<p class="text-sm text-red-500">{settingsStore.error}</p>
 			{/if}

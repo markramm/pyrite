@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ..config import PyriteConfig, Settings, load_config
+from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
 from ..services.search_service import SearchService
@@ -45,6 +46,7 @@ def _init_app_state(application: FastAPI, config: PyriteConfig) -> None:
     application.state.pyrite_db = None
     application.state.pyrite_index_mgr = None
     application.state.pyrite_kb_service = None
+    application.state.pyrite_kb_registry = None
     application.state.pyrite_llm_service = None
 
 
@@ -106,6 +108,15 @@ def get_llm_service(
         ai_api_base=base_url,
     )
     return LLMService(settings)
+
+
+def get_kb_registry(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+    index_mgr: IndexManager = Depends(get_index_mgr),
+) -> KBRegistryService:
+    """Get KBRegistryService instance via DI."""
+    return KBRegistryService(config, db, index_mgr)
 
 
 def get_search_service(
@@ -303,9 +314,15 @@ def requires_kb_tier(tier: str):
                 )
             return
 
-        # Get KB config for default_role
+        # Get default_role — try config first, then DB
         kb_config = config.get_kb(kb_name)
         kb_default_role = kb_config.default_role if kb_config else None
+        if kb_default_role is None:
+            row = db._raw_conn.execute(
+                "SELECT default_role FROM kb WHERE name = ?", (kb_name,)
+            ).fetchone()
+            if row:
+                kb_default_role = row[0]
 
         from ..services.auth_service import AuthService
 
@@ -420,9 +437,26 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             )
         return application.state.pyrite_index_mgr
 
+    def _app_get_kb_registry() -> KBRegistryService:
+        if application.state.pyrite_kb_registry is None:
+            application.state.pyrite_kb_registry = KBRegistryService(
+                _app_get_config(), _app_get_db(), _app_get_index_mgr()
+            )
+        return application.state.pyrite_kb_registry
+
     application.dependency_overrides[get_config] = _app_get_config
     application.dependency_overrides[get_db] = _app_get_db
     application.dependency_overrides[get_index_mgr] = _app_get_index_mgr
+    application.dependency_overrides[get_kb_registry] = _app_get_kb_registry
+
+    # Seed config KBs into DB registry
+    try:
+        registry = _app_get_kb_registry()
+        seeded = registry.seed_from_config()
+        if seeded:
+            logger.info("Seeded %d config KB(s) into registry", seeded)
+    except Exception:
+        logger.warning("Failed to seed KB registry from config", exc_info=True)
 
     # Set up embedding service for prewarm (actual prewarm happens in lifespan)
     if config.settings.prewarm_embeddings:

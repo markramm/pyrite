@@ -15,7 +15,15 @@ from .models import KB
 class KBOpsMixin:
     """KB registration, stats, and indexing metadata."""
 
-    def register_kb(self, name: str, kb_type: str, path: str, description: str = "") -> None:
+    def register_kb(
+        self,
+        name: str,
+        kb_type: str,
+        path: str,
+        description: str = "",
+        source: str = "user",
+        default_role: str | None = None,
+    ) -> None:
         """Register a KB in the index."""
         type_str = kb_type.value if hasattr(kb_type, "value") else kb_type
         existing = self.session.get(KB, name)
@@ -23,10 +31,29 @@ class KBOpsMixin:
             existing.kb_type = type_str
             existing.path = path
             existing.description = description
+            existing.source = source
+            if default_role is not None:
+                existing.default_role = default_role
         else:
-            kb = KB(name=name, kb_type=type_str, path=path, description=description)
+            kb = KB(
+                name=name,
+                kb_type=type_str,
+                path=path,
+                description=description,
+                source=source,
+                default_role=default_role,
+            )
             self.session.add(kb)
         self.session.commit()
+
+    def update_kb_default_role(self, name: str, default_role: str | None) -> bool:
+        """Update a KB's default_role. Returns True if KB was found."""
+        kb = self.session.get(KB, name)
+        if not kb:
+            return False
+        kb.default_role = default_role
+        self.session.commit()
+        return True
 
     def unregister_kb(self, name: str) -> None:
         """Remove a KB and all its entries from the index."""

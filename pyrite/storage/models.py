@@ -32,6 +32,9 @@ class KB(Base):
     last_indexed = Column(String)
     entry_count = Column(Integer, default=0)
 
+    source = Column(String, server_default="user")
+    default_role = Column(String, nullable=True)
+
     # Phase 7: repo association
     repo_id = Column(Integer, ForeignKey("repo.id", ondelete="SET NULL"), nullable=True)
     repo_subpath = Column(String, default="")

@@ -6,11 +6,63 @@ export interface KBInfo {
 	path: string;
 	entries: number;
 	indexed: boolean;
+	source: string;
+	description: string;
+	read_only: boolean;
+	last_indexed: string | null;
+	shortname: string | null;
+	default_role: string | null;
 }
 
 export interface KBListResponse {
 	kbs: KBInfo[];
 	total: number;
+}
+
+export interface KBHealthResponse {
+	name: string;
+	healthy: boolean;
+	path_exists: boolean;
+	path: string;
+	file_count: number;
+	entry_count: number;
+	last_indexed: string | null;
+	source: string;
+}
+
+export interface KBReindexResponse {
+	name: string;
+	added: number;
+	updated: number;
+	removed: number;
+}
+
+// Permissions
+
+export interface KBPermissionGrant {
+	user_id: number;
+	username: string;
+	role: string;
+	granted_by: number | null;
+	created_at: string;
+}
+
+export interface KBPermissionsResponse {
+	kb_name: string;
+	permissions: KBPermissionGrant[];
+}
+
+export interface UserInfo {
+	id: number;
+	username: string;
+	display_name: string | null;
+	role: string;
+	auth_provider: string;
+	avatar_url: string | null;
+}
+
+export interface UserListResponse {
+	users: UserInfo[];
 }
 
 export interface SearchResult {

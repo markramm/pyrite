@@ -432,13 +432,12 @@ class TestKBAdd:
         new_kb_path = admin_env["tmpdir"] / "new-kb-add"
         new_kb_path.mkdir()
         with _patch_config(admin_env):
-            with patch("pyrite.cli.kb_commands.save_config"):
-                result = runner.invoke(
-                    app,
-                    ["kb", "add", str(new_kb_path), "--name", "added-kb", "--type", "research"],
-                )
-                assert result.exit_code == 0
-                assert "Added KB" in result.output
+            result = runner.invoke(
+                app,
+                ["kb", "add", str(new_kb_path), "--name", "added-kb", "--type", "research"],
+            )
+            assert result.exit_code == 0
+            assert "Added KB" in result.output
 
     def test_kb_add_nonexistent_path(self, admin_env):
         with _patch_config(admin_env):
@@ -461,15 +460,35 @@ class TestKBAdd:
 
 @pytest.mark.cli
 class TestKBRemove:
-    def test_kb_remove_success(self, admin_env):
+    def test_kb_remove_user_kb_success(self, admin_env):
+        """Removing a user-added KB succeeds."""
         with _patch_config(admin_env):
-            with patch("pyrite.cli.kb_commands.save_config"):
-                result = runner.invoke(
-                    app,
-                    ["kb", "remove", "test-events", "--force"],
-                )
-                assert result.exit_code == 0
-                assert "Removed" in result.output
+            # First add a user KB via the registry
+            user_kb_path = admin_env["tmpdir"] / "user-removable"
+            user_kb_path.mkdir()
+            result = runner.invoke(
+                app,
+                ["kb", "add", str(user_kb_path), "--name", "user-removable"],
+            )
+            assert result.exit_code == 0
+
+            # Now remove it
+            result = runner.invoke(
+                app,
+                ["kb", "remove", "user-removable", "--force"],
+            )
+            assert result.exit_code == 0
+            assert "Removed" in result.output
+
+    def test_kb_remove_config_kb_fails(self, admin_env):
+        """Removing a config-defined KB fails with a protected error."""
+        with _patch_config(admin_env):
+            result = runner.invoke(
+                app,
+                ["kb", "remove", "test-events", "--force"],
+            )
+            assert result.exit_code == 1
+            assert "config.yaml" in result.output
 
     def test_kb_remove_nonexistent(self, admin_env):
         with _patch_config(admin_env):
@@ -486,32 +505,30 @@ class TestKBCreate:
     def test_kb_create_success(self, admin_env):
         kb_path = admin_env["tmpdir"] / "created-kb"
         with _patch_config(admin_env):
-            with patch("pyrite.cli.kb_commands.save_config"):
-                result = runner.invoke(
-                    app,
-                    ["kb", "create", "--name", "created-kb", "--path", str(kb_path)],
-                )
-                assert result.exit_code == 0
-                assert "Created KB" in result.output
+            result = runner.invoke(
+                app,
+                ["kb", "create", "--name", "created-kb", "--path", str(kb_path)],
+            )
+            assert result.exit_code == 0
+            assert "Created KB" in result.output
 
     def test_kb_create_with_type(self, admin_env):
         kb_path = admin_env["tmpdir"] / "typed-kb"
         with _patch_config(admin_env):
-            with patch("pyrite.cli.kb_commands.save_config"):
-                result = runner.invoke(
-                    app,
-                    [
-                        "kb",
-                        "create",
-                        "--name",
-                        "typed-kb",
-                        "--path",
-                        str(kb_path),
-                        "--type",
-                        "events",
-                    ],
-                )
-                assert result.exit_code == 0
+            result = runner.invoke(
+                app,
+                [
+                    "kb",
+                    "create",
+                    "--name",
+                    "typed-kb",
+                    "--path",
+                    str(kb_path),
+                    "--type",
+                    "events",
+                ],
+            )
+            assert result.exit_code == 0
 
     def test_kb_create_no_path(self, admin_env):
         """Creating non-ephemeral KB without --path should fail."""

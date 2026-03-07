@@ -1,7 +1,7 @@
 /** KB list + active KB store using Svelte 5 runes */
 
 import { api } from '$lib/api/client';
-import type { KBInfo } from '$lib/api/types';
+import type { KBHealthResponse, KBInfo, KBReindexResponse } from '$lib/api/types';
 
 class KBStore {
 	kbs = $state<KBInfo[]>([]);
@@ -32,6 +32,31 @@ class KBStore {
 
 	setActive(name: string) {
 		this.activeKB = name;
+	}
+
+	async add(req: {
+		name: string;
+		path: string;
+		kb_type?: string;
+		description?: string;
+	}): Promise<void> {
+		await api.createKB(req);
+		await this.load();
+	}
+
+	async remove(name: string): Promise<void> {
+		await api.deleteKB(name);
+		await this.load();
+	}
+
+	async reindex(name: string): Promise<KBReindexResponse> {
+		const result = await api.reindexKB(name);
+		await this.load();
+		return result;
+	}
+
+	async getHealth(name: string): Promise<KBHealthResponse> {
+		return api.getKBHealth(name);
 	}
 }
 

@@ -133,6 +133,22 @@ def _verify_oauth_state(state: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+@auth_router.get("/users")
+async def list_users(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """List all users. Requires admin role."""
+    auth_user = getattr(request.state, "auth_user", None)
+    global_role = getattr(request.state, "api_role", None)
+
+    is_admin = global_role == "admin" or (auth_user and auth_user.get("role") == "admin")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    return {"users": auth_service.list_users()}
+
+
 @auth_router.get("/config")
 async def get_auth_config(
     config: PyriteConfig = Depends(get_config),

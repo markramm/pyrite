@@ -1,4 +1,4 @@
-"""KB listing, schema, and export endpoints."""
+"""KB listing, schema, health, reindex, and export endpoints."""
 
 import tempfile
 from pathlib import Path
@@ -8,9 +8,10 @@ from pydantic import BaseModel
 
 from ...config import PyriteConfig
 from ...exceptions import KBNotFoundError
+from ...services.kb_registry_service import KBRegistryService
 from ...services.kb_service import KBService
-from ..api import get_config, get_kb_service, limiter, negotiate_response
-from ..schemas import KBInfo, KBListResponse
+from ..api import get_config, get_kb_registry, get_kb_service, limiter, negotiate_response
+from ..schemas import KBHealthResponse, KBInfo, KBListResponse
 
 router = APIRouter(tags=["Knowledge Bases"])
 
@@ -25,10 +26,10 @@ class ExportRequest(BaseModel):
 @limiter.limit("100/minute")
 def list_kbs(
     request: Request,
-    svc: KBService = Depends(get_kb_service),
+    registry: KBRegistryService = Depends(get_kb_registry),
 ):
-    """List all configured knowledge bases."""
-    kbs_data = svc.list_kbs()
+    """List all knowledge bases."""
+    kbs_data = registry.list_kbs()
     kbs = [
         KBInfo(
             name=kb["name"],
@@ -36,6 +37,11 @@ def list_kbs(
             path=kb["path"],
             entries=kb["entries"],
             indexed=kb["indexed"],
+            source=kb.get("source", "user"),
+            description=kb.get("description", ""),
+            read_only=kb.get("read_only", False),
+            last_indexed=kb.get("last_indexed"),
+            shortname=kb.get("shortname"),
         )
         for kb in kbs_data
     ]
@@ -44,6 +50,51 @@ def list_kbs(
     if neg is not None:
         return neg
     return KBListResponse(kbs=kbs, total=len(kbs))
+
+
+@router.get("/kbs/{kb_name}", response_model=KBInfo)
+@limiter.limit("100/minute")
+def get_kb(
+    kb_name: str,
+    request: Request,
+    registry: KBRegistryService = Depends(get_kb_registry),
+):
+    """Get a single KB by name."""
+    kb = registry.get_kb(kb_name)
+    if not kb:
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"}
+        )
+    return KBInfo(
+        name=kb["name"],
+        type=kb["type"],
+        path=kb["path"],
+        entries=kb["entries"],
+        indexed=kb["indexed"],
+        source=kb.get("source", "user"),
+        description=kb.get("description", ""),
+        read_only=kb.get("read_only", False),
+        last_indexed=kb.get("last_indexed"),
+        shortname=kb.get("shortname"),
+    )
+
+
+@router.get("/kbs/{kb_name}/health", response_model=KBHealthResponse)
+@limiter.limit("100/minute")
+def kb_health(
+    kb_name: str,
+    request: Request,
+    registry: KBRegistryService = Depends(get_kb_registry),
+):
+    """Check KB health: path, file count vs index count."""
+    try:
+        result = registry.health_kb(kb_name)
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
+        )
+    return KBHealthResponse(**result)
 
 
 @router.get("/kbs/{kb_name}/schema")
@@ -96,18 +147,12 @@ def export_kb_to_repo(
     request: Request,
     svc: KBService = Depends(get_kb_service),
 ):
-    """Export a KB's entries to a directory (future: push to a GitHub repo).
-
-    Exports all entries as markdown files with YAML frontmatter, organized
-    by entry type. Currently exports to a local temp directory; pushing to
-    a remote GitHub repo requires the user's OAuth token (stretch goal).
-    """
+    """Export a KB's entries to a directory (future: push to a GitHub repo)."""
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             export_dir = Path(tmpdir) / kb_name
             export_dir.mkdir()
             result = svc.export_kb_to_directory(kb_name, export_dir)
-            # TODO: clone/init repo_url, copy files, commit and push
             return {
                 "success": True,
                 "kb_name": kb_name,
