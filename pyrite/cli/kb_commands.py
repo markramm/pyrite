@@ -14,7 +14,6 @@ from rich.table import Table
 from ..config import (
     auto_discover_kbs,
     load_config,
-    save_config,
 )
 from .context import cli_context, cli_registry_context
 
@@ -183,14 +182,22 @@ def kb_discover(
     console.print(table)
 
     if add:
-        added = 0
-        for kb in discovered:
-            if not config.get_kb(kb.name):
-                config.add_kb(kb)
-                added += 1
-        if added:
-            save_config(config)
-            console.print(f"[green]Added {added} KB(s) to registry.[/green]")
+        with cli_registry_context() as (_, _, _, registry):
+            added = 0
+            for kb in discovered:
+                if not config.get_kb(kb.name):
+                    try:
+                        registry.add_kb(
+                            name=kb.name,
+                            path=str(kb.path),
+                            kb_type=kb.kb_type,
+                            description=kb.description,
+                        )
+                        added += 1
+                    except ValueError:
+                        pass  # Already exists in DB
+            if added:
+                console.print(f"[green]Added {added} KB(s) to registry.[/green]")
 
 
 @kb_app.command("validate")

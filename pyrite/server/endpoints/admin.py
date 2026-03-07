@@ -21,6 +21,7 @@ from ..api import (
     get_llm_service,
     limiter,
     requires_tier,
+    resolve_kb_default_role,
 )
 from ..schemas import (
     AIStatusResponse,
@@ -32,17 +33,6 @@ from ..schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Admin"])
-
-
-def _resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, name: str) -> str | None:
-    """Get default_role for a KB from config or DB."""
-    kb_config = config.get_kb(name)
-    if kb_config and kb_config.default_role is not None:
-        return kb_config.default_role
-    row = db._raw_conn.execute(
-        "SELECT default_role FROM kb WHERE name = ?", (name,)
-    ).fetchone()
-    return row[0] if row else None
 
 
 @router.get("/stats", response_model=StatsResponse)
@@ -110,7 +100,6 @@ def create_kb(
     path: str = Body(...),
     kb_type: str = Body("generic"),
     description: str = Body(""),
-    shortname: str | None = Body(None),
     ephemeral: bool = Body(False),
     ttl: int | None = Body(None),
     svc: KBService = Depends(get_kb_service),
@@ -268,17 +257,16 @@ def list_kb_permissions(
     """List permission grants for a KB. Requires global admin or KB admin."""
     auth_user = getattr(request.state, "auth_user", None)
     global_role = getattr(request.state, "api_role", None)
+    auth_service = AuthService(db, config.settings.auth)
 
     if global_role != "admin":
         if not auth_user:
             raise HTTPException(status_code=403, detail="Admin access required")
-        auth_service = AuthService(db, config.settings.auth)
-        kb_default_role = _resolve_kb_default_role(config, db, name)
+        kb_default_role = resolve_kb_default_role(config, db, name)
         effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
         if effective != "admin":
             raise HTTPException(status_code=403, detail="Admin access required for this KB")
 
-    auth_service = AuthService(db, config.settings.auth)
     grants = auth_service.list_kb_permissions(name)
     return {"kb_name": name, "permissions": grants}
 
@@ -297,12 +285,12 @@ def manage_kb_permission(
     """Grant or revoke a per-KB permission. Requires global admin or KB admin."""
     auth_user = getattr(request.state, "auth_user", None)
     global_role = getattr(request.state, "api_role", None)
+    auth_service = AuthService(db, config.settings.auth)
 
     if global_role != "admin":
         if not auth_user:
             raise HTTPException(status_code=403, detail="Admin access required")
-        auth_service = AuthService(db, config.settings.auth)
-        kb_default_role = _resolve_kb_default_role(config, db, name)
+        kb_default_role = resolve_kb_default_role(config, db, name)
         effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
         if effective != "admin":
             raise HTTPException(status_code=403, detail="Admin access required for this KB")

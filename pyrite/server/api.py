@@ -270,6 +270,22 @@ async def _resolve_kb_name(request: Request) -> str | None:
     return None
 
 
+def resolve_kb_default_role(
+    config: PyriteConfig, db: PyriteDB, kb_name: str
+) -> str | None:
+    """Resolve a KB's default_role from config or DB.
+
+    Config takes precedence; falls back to DB for user-registered KBs.
+    """
+    kb_config = config.get_kb(kb_name)
+    if kb_config and kb_config.default_role is not None:
+        return kb_config.default_role
+    row = db._raw_conn.execute(
+        "SELECT default_role FROM kb WHERE name = ?", (kb_name,)
+    ).fetchone()
+    return row[0] if row else None
+
+
 def requires_kb_tier(tier: str):
     """FastAPI dependency factory: enforce minimum tier on a per-KB basis.
 
@@ -314,15 +330,7 @@ def requires_kb_tier(tier: str):
                 )
             return
 
-        # Get default_role — try config first, then DB
-        kb_config = config.get_kb(kb_name)
-        kb_default_role = kb_config.default_role if kb_config else None
-        if kb_default_role is None:
-            row = db._raw_conn.execute(
-                "SELECT default_role FROM kb WHERE name = ?", (kb_name,)
-            ).fetchone()
-            if row:
-                kb_default_role = row[0]
+        kb_default_role = resolve_kb_default_role(config, db, kb_name)
 
         from ..services.auth_service import AuthService
 

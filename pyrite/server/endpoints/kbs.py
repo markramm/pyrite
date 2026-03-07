@@ -22,6 +22,23 @@ class ExportRequest(BaseModel):
     repo_url: str
 
 
+def _kb_to_info(kb: dict) -> KBInfo:
+    """Build a KBInfo from a registry KB dict."""
+    return KBInfo(
+        name=kb["name"],
+        type=kb["type"],
+        path=kb["path"],
+        entries=kb["entries"],
+        indexed=kb["indexed"],
+        source=kb.get("source", "user"),
+        description=kb.get("description", ""),
+        read_only=kb.get("read_only", False),
+        last_indexed=kb.get("last_indexed"),
+        shortname=kb.get("shortname"),
+        default_role=kb.get("default_role"),
+    )
+
+
 @router.get("/kbs", response_model=KBListResponse)
 @limiter.limit("100/minute")
 def list_kbs(
@@ -30,21 +47,7 @@ def list_kbs(
 ):
     """List all knowledge bases."""
     kbs_data = registry.list_kbs()
-    kbs = [
-        KBInfo(
-            name=kb["name"],
-            type=kb["type"],
-            path=kb["path"],
-            entries=kb["entries"],
-            indexed=kb["indexed"],
-            source=kb.get("source", "user"),
-            description=kb.get("description", ""),
-            read_only=kb.get("read_only", False),
-            last_indexed=kb.get("last_indexed"),
-            shortname=kb.get("shortname"),
-        )
-        for kb in kbs_data
-    ]
+    kbs = [_kb_to_info(kb) for kb in kbs_data]
     resp_data = {"kbs": [kb.model_dump() for kb in kbs], "total": len(kbs)}
     neg = negotiate_response(request, resp_data)
     if neg is not None:
@@ -65,18 +68,7 @@ def get_kb(
         raise HTTPException(
             status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"}
         )
-    return KBInfo(
-        name=kb["name"],
-        type=kb["type"],
-        path=kb["path"],
-        entries=kb["entries"],
-        indexed=kb["indexed"],
-        source=kb.get("source", "user"),
-        description=kb.get("description", ""),
-        read_only=kb.get("read_only", False),
-        last_indexed=kb.get("last_indexed"),
-        shortname=kb.get("shortname"),
-    )
+    return _kb_to_info(kb)
 
 
 @router.get("/kbs/{kb_name}/health", response_model=KBHealthResponse)
@@ -124,8 +116,6 @@ def orient_kb(
     svc: KBService = Depends(get_kb_service),
 ):
     """One-shot KB orientation summary — types, tags, recent changes, and schema."""
-    from ...exceptions import KBNotFoundError
-
     try:
         result = svc.orient(kb_name, recent_limit=recent)
     except KBNotFoundError:
