@@ -14,7 +14,14 @@ from typing import Any
 
 from ..config import PyriteConfig, load_config
 from ..models import Entry, EventEntry
-from ..models.protocols import Assignable, Locatable, Prioritizable, Statusable, Temporal
+from ..models.protocols import (
+    PROTOCOL_COLUMN_KEYS,
+    Assignable,
+    Locatable,
+    Prioritizable,
+    Statusable,
+    Temporal,
+)
 from .database import PyriteDB
 from .repository import KBRepository
 
@@ -144,19 +151,7 @@ class IndexManager:
         # For GenericEntry types: promote protocol fields from metadata to DB columns
         # This handles kb.yaml types that declare protocols: [temporal, assignable, ...]
         if hasattr(entry, "metadata") and entry.metadata:
-            _protocol_column_keys = {
-                "assignee",
-                "assigned_at",
-                "priority",
-                "due_date",
-                "start_date",
-                "end_date",
-                "date",
-                "location",
-                "coordinates",
-                "status",
-            }
-            for key in _protocol_column_keys:
+            for key in PROTOCOL_COLUMN_KEYS:
                 if key not in data and key in entry.metadata:
                     data[key] = entry.metadata[key]
 

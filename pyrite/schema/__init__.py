@@ -22,6 +22,7 @@ from .provenance import (
     get_all_relationship_types,
     get_inverse_relation,
 )
+from .reserved import RESERVED_FIELD_NAMES
 from .validators import (
     generate_entry_id,
     generate_event_id,
@@ -39,6 +40,7 @@ __all__ = [
     "Link",
     "Provenance",
     "RELATIONSHIP_TYPES",
+    "RESERVED_FIELD_NAMES",
     "ResearchStatus",
     "Source",
     "TypeSchema",

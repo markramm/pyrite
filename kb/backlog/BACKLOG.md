@@ -125,6 +125,7 @@ Recommended execution order. Grouped by milestone.
 | **1** | [[schema-module-decomposition]] | M | schema.py mixes 4+ concerns in 1,157 lines — split into focused submodules | **done** |
 | **2** | [[search-service-kb-service-overlap]] | S | Duplicate methods between SearchService and KBService | **done** |
 | **3** | [[dynamic-subdirectory-paths]] | M | Template subdirectories (`{status}`) for auto file organization | **done** |
+| **4** | [[reserved-field-validation]] | S | Prevent kb.yaml field names from colliding with reserved Entry fields | **done** |
 
 *Cleanup (from 0.17 stale proposed → completed):*
 

@@ -28,6 +28,8 @@ _KNOWN_KEYS = {
     "updated_at",
     "_schema_version",
     "file_path",
+    "importance",
+    "lifecycle",
 }
 
 
@@ -81,6 +83,8 @@ class GenericEntry(Entry):
             sources=parse_sources(meta.get("sources")),
             links=parse_links(meta.get("links")),
             provenance=provenance,
+            importance=int(meta.get("importance", 5)),
+            lifecycle=meta.get("lifecycle", "active"),
             metadata=merged_metadata,
             _entry_type=meta.get("type", "note"),
             created_at=parse_datetime(meta.get("created_at")),

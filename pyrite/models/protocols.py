@@ -158,3 +158,6 @@ PROTOCOL_FIELDS: dict[str, type] = {
     "status": Statusable,
     "priority": Prioritizable,
 }
+
+# Field names promoted to DB columns by IndexManager
+PROTOCOL_COLUMN_KEYS: frozenset[str] = frozenset(PROTOCOL_FIELDS.keys())

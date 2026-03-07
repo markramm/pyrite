@@ -149,6 +149,7 @@ def test_dunder_all_completeness():
         "Link",
         "Provenance",
         "RELATIONSHIP_TYPES",
+        "RESERVED_FIELD_NAMES",
         "ResearchStatus",
         "Source",
         "TypeSchema",

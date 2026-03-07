@@ -10,6 +10,7 @@ from pyrite.utils.yaml import load_yaml_file
 from .core_types import CORE_TYPES, resolve_type_metadata
 from .field_schema import FieldSchema, TypeSchema, _validate_field_value
 from .provenance import get_all_relationship_types
+from .reserved import RESERVED_FIELD_NAMES
 from .validators import validate_date
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,18 @@ class KBSchema:
                 for field_name, field_data in type_data.get("fields", {}).items():
                     if isinstance(field_data, dict):
                         fields[field_name] = FieldSchema.from_dict(field_name, field_data)
+
+                # Strip fields that collide with reserved names
+                collisions = set(fields.keys()) & RESERVED_FIELD_NAMES
+                if collisions:
+                    logger.warning(
+                        "Type '%s': field names %s collide with reserved names"
+                        " and will be ignored",
+                        type_name,
+                        collisions,
+                    )
+                    for col_name in collisions:
+                        del fields[col_name]
 
                 types[type_name] = TypeSchema(
                     name=type_name,
