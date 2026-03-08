@@ -34,7 +34,9 @@ def _register_defaults(registry: ImporterRegistry):
     from .csv_importer import import_csv
     from .json_importer import import_json
     from .markdown_importer import import_markdown
+    from .yaml_importer import import_yaml
 
     registry.register("json", import_json)
+    registry.register("yaml", import_yaml)
     registry.register("markdown", import_markdown)
     registry.register("csv", import_csv)

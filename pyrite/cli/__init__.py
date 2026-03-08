@@ -541,6 +541,8 @@ def update_entry(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     title: str = typer.Option(None, "--title", help="New title"),
     body: str = typer.Option(None, "--body", "-b", help="New body text"),
+    body_file: Path | None = typer.Option(None, "--body-file", help="Read body from file"),
+    stdin_flag: bool = typer.Option(False, "--stdin", help="Read body from stdin"),
     tags: str = typer.Option(None, "--tags", help="New comma-separated tags"),
     importance: int = typer.Option(None, "--importance", "-i", help="New importance (1-10)"),
     lifecycle: str = typer.Option(None, "--lifecycle", help="Lifecycle state: active or archived"),
@@ -550,6 +552,17 @@ def update_entry(
     ),
 ):
     """Update an existing entry."""
+    # Body resolution: --stdin > --body-file > --body
+    if stdin_flag:
+        import sys
+
+        body = sys.stdin.read()
+    elif body_file:
+        if not body_file.exists():
+            console.print(f"[red]Error:[/red] Body file not found: {body_file}")
+            raise typer.Exit(1)
+        body = body_file.read_text(encoding="utf-8")
+
     updates: dict[str, Any] = {}
     if title is not None:
         updates["title"] = title
@@ -1442,6 +1455,123 @@ def mcp_setup(
     console.print("  • kb_stats - Get index statistics")
     console.print("  • kb_index_sync - Sync index (admin tier)")
     console.print("  • kb_manage - Manage KBs (admin tier)")
+
+
+# =============================================================================
+# Import command
+# =============================================================================
+
+
+@app.command("import")
+def import_entries(
+    file_path: Path = typer.Argument(..., help="Path to JSON or YAML file"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Target knowledge base"),
+    fmt: str = typer.Option(None, "--format", help="json or yaml (auto-detected from extension)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Validate without creating entries"),
+):
+    """Bulk import entries from a JSON or YAML file."""
+    from ..formats.importers import get_importer_registry
+
+    if not file_path.exists():
+        console.print(f"[red]Error:[/red] File not found: {file_path}")
+        raise typer.Exit(1)
+
+    # Auto-detect format from extension
+    if fmt is None:
+        suffix = file_path.suffix.lower()
+        format_map = {".json": "json", ".yaml": "yaml", ".yml": "yaml"}
+        fmt = format_map.get(suffix)
+        if fmt is None:
+            console.print(
+                f"[red]Error:[/red] Cannot detect format from extension '{suffix}'. "
+                "Use --format json or --format yaml."
+            )
+            raise typer.Exit(1)
+
+    registry = get_importer_registry()
+    importer = registry.get(fmt)
+    if importer is None:
+        console.print(
+            f"[red]Error:[/red] Unknown format '{fmt}'. "
+            f"Available: {', '.join(registry.available_formats())}"
+        )
+        raise typer.Exit(1)
+
+    data = file_path.read_text(encoding="utf-8")
+    try:
+        parsed = importer(data)
+    except Exception as e:
+        console.print(f"[red]Error parsing file:[/red] {e}")
+        raise typer.Exit(1)
+
+    if not parsed:
+        console.print("[yellow]No entries found in file.[/yellow]")
+        raise typer.Exit(0)
+
+    if dry_run:
+        console.print(f"[bold]Dry run:[/bold] {len(parsed)} entries parsed")
+        for i, entry in enumerate(parsed):
+            title = entry.get("title", "Untitled")
+            etype = entry.get("entry_type", "note")
+            console.print(f"  {i + 1}. [{etype}] {title}")
+        console.print("\n[dim]No entries were created (--dry-run).[/dim]")
+        return
+
+    with cli_context() as (config, db, svc):
+        try:
+            results = svc.bulk_create_entries(kb_name, parsed)
+        except PyriteError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        created = sum(1 for r in results if r.get("created"))
+        failed = sum(1 for r in results if not r.get("created"))
+
+        for r in results:
+            if r.get("created"):
+                console.print(f"  [green]Created:[/green] {r['entry_id']}")
+            else:
+                console.print(f"  [red]Failed:[/red] {r.get('error', 'unknown error')}")
+
+        console.print(f"\n[bold]Imported {created} entries[/bold]", end="")
+        if failed:
+            console.print(f" [red]({failed} failed)[/red]")
+        else:
+            console.print()
+
+
+# =============================================================================
+# Readme command
+# =============================================================================
+
+
+@app.command("readme")
+def generate_readme_cmd(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base"),
+    output: Path = typer.Option(None, "--output", "-o", help="Write to file path"),
+    write: bool = typer.Option(False, "--write", "-w", help="Write to KB's README.md"),
+):
+    """Generate a README.md for a knowledge base."""
+    with cli_context() as (config, db, svc):
+        try:
+            readme = svc.generate_readme(kb_name)
+        except PyriteError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1)
+
+        if write:
+            kb_config = config.get_kb(kb_name)
+            if not kb_config:
+                console.print(f"[red]Error:[/red] KB not found: {kb_name}")
+                raise typer.Exit(1)
+            readme_path = kb_config.path / "README.md"
+            readme_path.write_text(readme, encoding="utf-8")
+            console.print(f"[green]Written:[/green] {readme_path}")
+        elif output:
+            output.write_text(readme, encoding="utf-8")
+            console.print(f"[green]Written:[/green] {output}")
+        else:
+            typer.echo(readme)
 
 
 def main():
