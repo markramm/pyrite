@@ -92,6 +92,25 @@ CORE_TYPES: dict[str, dict[str, Any]] = {
 
 
 # =============================================================================
+# System Intent -- truth-functional defaults every KB inherits
+# =============================================================================
+
+SYSTEM_INTENT: dict[str, Any] = {
+    "guidelines": {
+        "sourcing": "Claims should link to evidence. Prefer primary sources.",
+        "cross_linking": "Entries should link to related entries for discoverability.",
+        "completeness": "Fill all required fields. Use summary for quick orientation.",
+    },
+    "evaluation_rubric": [
+        "Entry has a descriptive title",
+        "Entry body is non-empty",
+        "Entry has at least one tag",
+        "Entry links to at least one related entry (unless a stub)",
+    ],
+}
+
+
+# =============================================================================
 # Core Type Metadata -- AI instructions, field descriptions, display hints
 # =============================================================================
 
@@ -126,6 +145,10 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         },
         "protocols": ["temporal", "locatable", "statusable"],
         "display": {"icon": "calendar", "layout": "record"},
+        "evaluation_rubric": [
+            "Event has a date field",
+            "Event has an importance score between 1 and 10",
+        ],
     },
     "person": {
         "ai_instructions": (
@@ -141,6 +164,9 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         },
         "protocols": ["locatable"],
         "display": {"icon": "user", "layout": "record"},
+        "evaluation_rubric": [
+            "Person has a role or position described",
+        ],
     },
     "organization": {
         "ai_instructions": (
@@ -171,6 +197,10 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         },
         "protocols": ["temporal"],
         "display": {"icon": "file", "layout": "document"},
+        "evaluation_rubric": [
+            "Document has a source URL or author",
+            "Document has a document_type classification",
+        ],
     },
     "topic": {
         "ai_instructions": (
@@ -244,6 +274,9 @@ def resolve_type_metadata(type_name: str, kb_schema: KBSchema | None = None) -> 
         "field_descriptions": {},
         "protocols": [],
         "display": {},
+        "guidelines": "",
+        "goals": "",
+        "evaluation_rubric": [],
     }
 
     # Layer 1: Core defaults (lowest priority base)
@@ -253,6 +286,9 @@ def resolve_type_metadata(type_name: str, kb_schema: KBSchema | None = None) -> 
         result["field_descriptions"] = dict(core.get("field_descriptions", {}))
         result["protocols"] = list(core.get("protocols", []))
         result["display"] = dict(core.get("display", {}))
+        result["guidelines"] = core.get("guidelines", "")
+        result["goals"] = core.get("goals", "")
+        result["evaluation_rubric"] = list(core.get("evaluation_rubric", []))
 
     # Layer 2: Plugin metadata (overrides core)
     try:
@@ -267,6 +303,12 @@ def resolve_type_metadata(type_name: str, kb_schema: KBSchema | None = None) -> 
             if pm.get("protocols"):
                 result["protocols"] = list(pm["protocols"])
             result["display"].update(pm.get("display", {}))
+            if pm.get("guidelines"):
+                result["guidelines"] = pm["guidelines"]
+            if pm.get("goals"):
+                result["goals"] = pm["goals"]
+            if pm.get("evaluation_rubric"):
+                result["evaluation_rubric"] = list(pm["evaluation_rubric"])
     except Exception:
         logger.warning("Failed to load plugin type metadata for %s", type_name, exc_info=True)
 
@@ -281,5 +323,11 @@ def resolve_type_metadata(type_name: str, kb_schema: KBSchema | None = None) -> 
             result["protocols"] = list(ts.protocols)
         if ts.display:
             result["display"].update(ts.display)
+        if ts.guidelines:
+            result["guidelines"] = ts.guidelines
+        if ts.goals:
+            result["goals"] = ts.goals
+        if ts.evaluation_rubric:
+            result["evaluation_rubric"] = list(ts.evaluation_rubric)
 
     return result

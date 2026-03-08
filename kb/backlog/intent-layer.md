@@ -11,7 +11,7 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: planned
+status: in-progress
 links:
 - intent-layer-guidelines-and-goals
 - qa-agent-workflows
@@ -34,7 +34,7 @@ See [[intent-layer-guidelines-and-goals]] for full design.
 
 ### Three phases:
 
-1. **Schema + Storage** [S]: Add fields to KBSchema/TypeSchema, parse from kb.yaml, extend to_agent_schema(), update MCP tool response. Include system-level truth-functional defaults that every KB inherits
+1. **Schema + Storage** [S] ✅: Add fields to KBSchema/TypeSchema, parse from kb.yaml, extend to_agent_schema(), update MCP tool response. Include system-level truth-functional defaults that every KB inherits
 2. **QA Rubric Evaluation** [M]: QA service reads evaluation_rubric, deterministic rubric items become validation rules, `pyrite ci` runs rubric checks
 3. **LLM-Assisted Rubric Evaluation** [L]: Judgment rubric items evaluated by LLM, QA assessment entries link to rubric items, periodic sweeps
 

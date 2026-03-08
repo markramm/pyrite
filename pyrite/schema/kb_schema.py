@@ -7,7 +7,7 @@ from typing import Any
 
 from pyrite.utils.yaml import load_yaml_file
 
-from .core_types import CORE_TYPES, resolve_type_metadata
+from .core_types import CORE_TYPES, SYSTEM_INTENT, resolve_type_metadata
 from .field_schema import FieldSchema, TypeSchema, _validate_field_value
 from .provenance import get_all_relationship_types
 from .reserved import RESERVED_FIELD_NAMES
@@ -27,6 +27,9 @@ class KBSchema:
     policies: dict[str, Any] = field(default_factory=dict)
     validation: dict[str, Any] = field(default_factory=dict)
     schema_version: int = 0
+    guidelines: dict[str, str] = field(default_factory=dict)
+    goals: dict[str, str] = field(default_factory=dict)
+    evaluation_rubric: list[str] = field(default_factory=list)
 
     @classmethod
     def from_yaml(cls, path: Path) -> "KBSchema":
@@ -75,6 +78,9 @@ class KBSchema:
                     field_descriptions=type_data.get("field_descriptions", {}),
                     display=type_data.get("display", {}),
                     version=type_data.get("version", 0),
+                    guidelines=type_data.get("guidelines", ""),
+                    goals=type_data.get("goals", ""),
+                    evaluation_rubric=type_data.get("evaluation_rubric", []),
                 )
             else:
                 types[type_name] = TypeSchema(name=type_name)
@@ -87,6 +93,9 @@ class KBSchema:
             policies=data.get("policies", {}),
             validation=data.get("validation", {}),
             schema_version=data.get("schema_version", 0),
+            guidelines=data.get("guidelines", {}),
+            goals=data.get("goals", {}),
+            evaluation_rubric=data.get("evaluation_rubric", []),
         )
 
     def get_type_schema(self, entry_type: str) -> TypeSchema | None:
@@ -137,6 +146,12 @@ class KBSchema:
                 type_info["field_descriptions"] = metadata["field_descriptions"]
             if metadata["display"]:
                 type_info["display"] = metadata["display"]
+            if metadata.get("guidelines"):
+                type_info["guidelines"] = metadata["guidelines"]
+            if metadata.get("goals"):
+                type_info["goals"] = metadata["goals"]
+            if metadata.get("evaluation_rubric"):
+                type_info["evaluation_rubric"] = metadata["evaluation_rubric"]
 
             types_dict[type_name] = type_info
 
@@ -152,9 +167,31 @@ class KBSchema:
                     type_dict["field_descriptions"] = metadata["field_descriptions"]
                 if metadata["display"]:
                     type_dict["display"] = metadata["display"]
+                if metadata.get("guidelines"):
+                    type_dict["guidelines"] = metadata["guidelines"]
+                if metadata.get("goals"):
+                    type_dict["goals"] = metadata["goals"]
+                if metadata.get("evaluation_rubric"):
+                    type_dict["evaluation_rubric"] = metadata["evaluation_rubric"]
                 types_dict[type_name] = type_dict
 
         result: dict[str, Any] = {"types": types_dict}
+
+        # KB-level intent: merge system defaults with KB overrides
+        merged_guidelines = dict(SYSTEM_INTENT.get("guidelines", {}))
+        merged_guidelines.update(self.guidelines)
+        if merged_guidelines:
+            result["guidelines"] = merged_guidelines
+
+        if self.goals:
+            result["goals"] = self.goals
+
+        merged_rubric = list(SYSTEM_INTENT.get("evaluation_rubric", []))
+        for item in self.evaluation_rubric:
+            if item not in merged_rubric:
+                merged_rubric.append(item)
+        if merged_rubric:
+            result["evaluation_rubric"] = merged_rubric
 
         if self.policies:
             result["policies"] = self.policies

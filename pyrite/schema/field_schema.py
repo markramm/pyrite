@@ -142,6 +142,9 @@ class TypeSchema:
     field_descriptions: dict[str, str] = field(default_factory=dict)
     display: dict[str, Any] = field(default_factory=dict)
     version: int = 0
+    guidelines: str = ""  # Contributing standards, quality expectations
+    goals: str = ""  # What entries of this type should achieve
+    evaluation_rubric: list[str] = field(default_factory=list)  # Assertions for QA validation
 
     def resolve_subdirectory(self, entry: Entry) -> str:
         """Return the resolved subdirectory, expanding template placeholders."""
@@ -171,6 +174,12 @@ class TypeSchema:
             result["display"] = self.display
         if self.version > 0:
             result["version"] = self.version
+        if self.guidelines:
+            result["guidelines"] = self.guidelines
+        if self.goals:
+            result["goals"] = self.goals
+        if self.evaluation_rubric:
+            result["evaluation_rubric"] = self.evaluation_rubric
         return result
 
 
