@@ -182,7 +182,7 @@ Recommended execution order. Grouped by milestone.
 | **4** | [[db-backup-restore]] | S | Operational tooling | **done** |
 | **5** | [[search-relevance-boost-by-entry-type]] | M | Type-aware search ranking + intent integration |
 | **6** | [[protocol-versioning-implementation]] | M | Runtime protocol satisfaction checking (ADR-0014) |
-| **7** | [[async-index-rebuild]] | M | Synchronous sync blocks CLI/API for large KBs |
+| **7** | [[async-index-rebuild]] | M | Synchronous sync blocks CLI/API for large KBs | **done** |
 
 ---
 
@@ -322,7 +322,7 @@ Recommended execution order. Grouped by milestone.
 | 98 | [[kb-orchestrator-skill]] | feature | M |
 | — | [[search-relevance-boost-by-entry-type]] | feature | M |
 | — | [[protocol-versioning-implementation]] | feature | M |
-| — | [[async-index-rebuild]] | improvement | M |
+| — | [[async-index-rebuild]] | improvement | M | **done** |
 
 ### Open Phases (blocked or deferred)
 

@@ -3,7 +3,7 @@ id: async-index-rebuild
 type: backlog_item
 title: "Add async/queue-based index rebuild"
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [storage, indexing, scalability]
