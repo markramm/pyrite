@@ -129,7 +129,7 @@ def _validate_backlog_item(data: dict[str, Any], errors: list[dict]) -> None:
     _validate_enum(data, "priority", BACKLOG_PRIORITIES, errors, "medium")
 
     effort = data.get("effort", "")
-    if effort and effort not in BACKLOG_EFFORTS:
+    if effort and effort.upper() not in BACKLOG_EFFORTS:
         errors.append(
             {
                 "field": "effort",

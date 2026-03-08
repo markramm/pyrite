@@ -758,7 +758,9 @@ class TestEnums:
     def test_component_kinds(self):
         assert "module" in COMPONENT_KINDS
         assert "service" in COMPONENT_KINDS
-        assert len(COMPONENT_KINDS) == 7
+        assert "application" in COMPONENT_KINDS
+        assert "utility" in COMPONENT_KINDS
+        assert "endpoint" in COMPONENT_KINDS
 
     def test_backlog_kinds(self):
         assert "feature" in BACKLOG_KINDS
