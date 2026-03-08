@@ -1,4 +1,5 @@
 ---
+id: embedding-service
 type: component
 title: "Embedding Service"
 kind: service

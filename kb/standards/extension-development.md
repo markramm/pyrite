@@ -1,4 +1,5 @@
 ---
+id: extension-development
 type: standard
 title: "Extension Development Standards"
 category: coding

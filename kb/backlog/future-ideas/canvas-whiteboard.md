@@ -1,4 +1,5 @@
 ---
+id: canvas-whiteboard
 type: backlog_item
 title: "Canvas / Whiteboard View"
 kind: feature

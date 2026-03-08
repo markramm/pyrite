@@ -1,4 +1,5 @@
 ---
+id: llm-service
 type: component
 title: "LLM Service"
 kind: service

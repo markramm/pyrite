@@ -1,4 +1,5 @@
 ---
+id: collections-phase2-virtual-collections
 type: backlog_item
 title: "Collections Phase 2: Virtual Collections"
 kind: feature

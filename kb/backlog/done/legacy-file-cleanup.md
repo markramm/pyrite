@@ -1,4 +1,5 @@
 ---
+id: legacy-file-cleanup
 type: backlog_item
 title: "Remove Legacy Files and Stale Entry Points"
 kind: improvement

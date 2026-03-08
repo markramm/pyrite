@@ -1,4 +1,5 @@
 ---
+id: plugin-developer-guide
 type: backlog_item
 title: "Plugin Developer Guide"
 kind: documentation

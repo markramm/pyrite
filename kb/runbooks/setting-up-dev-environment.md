@@ -1,4 +1,5 @@
 ---
+id: setting-up-dev-environment
 type: runbook
 title: "Setting Up the Development Environment"
 runbook_kind: setup

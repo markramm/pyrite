@@ -1,4 +1,5 @@
 ---
+id: outline-table-of-contents
 type: backlog_item
 title: "Outline / Table of Contents Panel"
 kind: feature

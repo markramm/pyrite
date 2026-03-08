@@ -1,4 +1,5 @@
 ---
+id: type-metadata-and-ai-instructions
 type: backlog_item
 title: "Type Metadata and AI Instructions"
 kind: feature

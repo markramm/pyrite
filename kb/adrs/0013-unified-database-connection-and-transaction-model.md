@@ -1,4 +1,5 @@
 ---
+id: adr-0013
 type: adr
 title: "Unified Database Connection and Transaction Model"
 adr_number: 13

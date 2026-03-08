@@ -1,4 +1,5 @@
 ---
+id: display-hints-for-types
 type: backlog_item
 title: "Display Hints for Types"
 kind: feature

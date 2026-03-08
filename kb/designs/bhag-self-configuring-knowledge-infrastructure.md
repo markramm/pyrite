@@ -1,4 +1,5 @@
 ---
+id: bhag-self-configuring-knowledge-infrastructure
 type: design_doc
 title: "BHAG: Self-Configuring Knowledge Infrastructure for Agent Swarms"
 status: active

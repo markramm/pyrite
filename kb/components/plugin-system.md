@@ -1,4 +1,5 @@
 ---
+id: plugin-system
 type: component
 title: "Plugin System"
 kind: module

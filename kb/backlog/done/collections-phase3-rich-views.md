@@ -1,4 +1,5 @@
 ---
+id: collections-phase3-rich-views
 type: backlog_item
 title: "Collections Phase 3: Rich Views (Kanban, Gallery, Timeline)"
 kind: feature

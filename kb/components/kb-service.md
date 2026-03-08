@@ -1,4 +1,5 @@
 ---
+id: kb-service
 type: component
 title: "KB Service"
 kind: service

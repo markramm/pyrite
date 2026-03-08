@@ -1,4 +1,5 @@
 ---
+id: api-design
 type: standard
 title: "API & MCP Tool Design"
 category: api

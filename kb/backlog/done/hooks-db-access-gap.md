@@ -1,4 +1,5 @@
 ---
+id: hooks-db-access-gap
 type: backlog_item
 title: "Hooks Cannot Access DB Instance"
 kind: bug

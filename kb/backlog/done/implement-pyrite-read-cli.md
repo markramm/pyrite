@@ -1,4 +1,5 @@
 ---
+id: implement-pyrite-read-cli
 type: backlog_item
 title: "Implement pyrite-read CLI Entry Point"
 kind: feature

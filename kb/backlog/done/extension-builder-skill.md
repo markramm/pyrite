@@ -1,4 +1,5 @@
 ---
+id: extension-builder-skill
 type: backlog_item
 title: "Build Extension Builder Skill for Claude Code"
 kind: feature

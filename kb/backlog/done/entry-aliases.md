@@ -1,4 +1,5 @@
 ---
+id: entry-aliases
 type: backlog_item
 title: "Entry Aliases"
 kind: feature

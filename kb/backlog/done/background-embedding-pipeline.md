@@ -1,4 +1,5 @@
 ---
+id: background-embedding-pipeline
 type: backlog_item
 title: "Background Embedding Pipeline"
 kind: improvement

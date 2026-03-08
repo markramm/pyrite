@@ -1,4 +1,5 @@
 ---
+id: cross-kb-shortlinks
 type: backlog_item
 title: "Cross-KB Shortlinks"
 kind: feature

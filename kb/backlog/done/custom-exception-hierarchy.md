@@ -1,4 +1,5 @@
 ---
+id: custom-exception-hierarchy
 type: backlog_item
 title: "Add Custom Exception Hierarchy and Fix Silent Swallowing"
 kind: improvement

@@ -1,4 +1,5 @@
 ---
+id: kb-compaction-command-and-freshness-qa-rules
 type: backlog_item
 title: "KB Compaction Command and Freshness QA Rules"
 kind: feature

@@ -1,4 +1,5 @@
 ---
+id: backlinks-and-split-panes
 type: backlog_item
 title: "Backlinks Panel and Split Panes"
 kind: feature

@@ -1,4 +1,5 @@
 ---
+id: starred-entries
 type: backlog_item
 title: "Starred/Pinned Entries"
 kind: feature

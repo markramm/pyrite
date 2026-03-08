@@ -1,4 +1,5 @@
 ---
+id: enterprise-kb
 type: design_doc
 title: "Market Positioning: Enterprise Knowledge Management"
 status: active

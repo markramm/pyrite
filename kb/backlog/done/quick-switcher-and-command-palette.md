@@ -1,4 +1,5 @@
 ---
+id: quick-switcher-and-command-palette
 type: backlog_item
 title: "Quick Switcher and Command Palette"
 kind: feature

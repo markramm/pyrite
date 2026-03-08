@@ -1,4 +1,5 @@
 ---
+id: web-frontend
 type: component
 title: "Web Frontend"
 kind: application

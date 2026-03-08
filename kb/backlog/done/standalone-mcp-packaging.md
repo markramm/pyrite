@@ -1,4 +1,5 @@
 ---
+id: standalone-mcp-packaging
 type: backlog_item
 title: "Standalone MCP Server Packaging"
 kind: feature

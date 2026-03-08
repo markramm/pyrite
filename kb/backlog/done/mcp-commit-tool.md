@@ -1,4 +1,5 @@
 ---
+id: mcp-commit-tool
 type: backlog_item
 title: "Add kb_commit MCP Tool and REST Endpoint"
 kind: feature

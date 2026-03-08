@@ -1,4 +1,5 @@
 ---
+id: web-ai-chat-sidebar
 type: backlog_item
 title: "Web UI AI: Chat Sidebar (RAG over KB)"
 kind: feature

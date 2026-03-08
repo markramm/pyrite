@@ -1,4 +1,5 @@
 ---
+id: mcp-server
 type: component
 title: "MCP Server"
 kind: service

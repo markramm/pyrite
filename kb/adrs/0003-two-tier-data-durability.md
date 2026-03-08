@@ -1,4 +1,5 @@
 ---
+id: adr-0003
 type: adr
 title: "Two-Tier Data Durability Model"
 adr_number: 3

@@ -1,4 +1,5 @@
 ---
+id: cli-entry-point-consolidation
 type: backlog_item
 title: "Consolidate CLI Entry Points"
 kind: improvement

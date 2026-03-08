@@ -1,4 +1,5 @@
 ---
+id: adr-0002
 type: adr
 title: "Plugin System via Python Entry Points"
 adr_number: 2

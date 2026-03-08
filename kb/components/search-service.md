@@ -1,4 +1,5 @@
 ---
+id: search-service
 type: component
 title: "Search Service"
 kind: service

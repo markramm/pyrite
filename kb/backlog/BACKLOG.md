@@ -164,11 +164,19 @@ Recommended execution order. Grouped by milestone.
 |----------|------|--------|-----------|--------|
 | **1** | [[entry-lifecycle-field-and-search-filtering]] | S | Archive entries without deleting, filter from search | **done** |
 
+**Agent Workflow (ADR-0019 — Kanban for Agent Teams):**
+
+| Priority | Item | Effort | Rationale | Status |
+|----------|------|--------|-----------|--------|
+| **1** | [[kanban-entity-types]] | M | Milestone, review_queue, lane entity types | proposed |
+| **2** | [[standard-type-split]] | M | Split standard → programmatic_validation + development_convention | proposed |
+| **3** | [[kanban-mcp-tools]] | L | sw_pull_next, sw_context_for_item, sw_review_queue, sw_validate | proposed |
+
 **Future:**
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **1** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality |
+| **1** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality | **in_progress** (Phase 1 ✅, Phase 2 ✅) |
 | **2** | [[event-bus-webhooks]] | M | Integration story, live graph updates |
 | **3** | [[kb-orchestrator-skill]] | M | Multi-KB agent coordination pattern |
 | **4** | [[db-backup-restore]] | S | Operational tooling | **done** |

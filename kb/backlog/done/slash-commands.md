@@ -1,4 +1,5 @@
 ---
+id: slash-commands
 type: backlog_item
 title: "Slash Commands in Editor"
 kind: feature

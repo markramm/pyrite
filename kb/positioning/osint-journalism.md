@@ -1,4 +1,5 @@
 ---
+id: osint-journalism
 type: design_doc
 title: "Market Positioning: OSINT & Investigative Journalism"
 status: active

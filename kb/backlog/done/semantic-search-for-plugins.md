@@ -1,4 +1,5 @@
 ---
+id: semantic-search-for-plugins
 type: backlog_item
 title: "Expose Semantic Search to Plugin MCP Tools"
 kind: improvement

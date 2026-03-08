@@ -1,4 +1,5 @@
 ---
+id: editor-system
 type: component
 title: "Editor System"
 kind: module

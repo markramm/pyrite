@@ -1,4 +1,5 @@
 ---
+id: domain-specific-kb
 type: design_doc
 title: "Market Positioning: Domain-Specific KB Creation"
 status: active

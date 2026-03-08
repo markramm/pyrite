@@ -599,12 +599,18 @@ class TestValidators:
 
 class TestADRLifecycle:
     def test_states(self):
-        assert ADR_LIFECYCLE["states"] == ["proposed", "accepted", "deprecated", "superseded"]
+        assert ADR_LIFECYCLE["states"] == ["proposed", "accepted", "rejected", "deprecated", "superseded"]
         assert ADR_LIFECYCLE["initial"] == "proposed"
         assert ADR_LIFECYCLE["field"] == "status"
 
     def test_proposed_to_accepted(self):
         assert can_transition(ADR_LIFECYCLE, "proposed", "accepted", "write")
+
+    def test_proposed_to_rejected(self):
+        assert can_transition(ADR_LIFECYCLE, "proposed", "rejected", "write")
+
+    def test_rejected_requires_reason(self):
+        assert requires_reason(ADR_LIFECYCLE, "proposed", "rejected")
 
     def test_accepted_to_deprecated(self):
         assert can_transition(ADR_LIFECYCLE, "accepted", "deprecated", "write")
@@ -656,6 +662,34 @@ class TestBacklogWorkflow:
         assert not requires_reason(BACKLOG_WORKFLOW, "proposed", "accepted")
         assert not requires_reason(BACKLOG_WORKFLOW, "accepted", "in_progress")
 
+    def test_proposed_to_planned(self):
+        assert can_transition(BACKLOG_WORKFLOW, "proposed", "planned", "write")
+
+    def test_planned_to_accepted(self):
+        assert can_transition(BACKLOG_WORKFLOW, "planned", "accepted", "write")
+
+    def test_in_progress_to_completed(self):
+        assert can_transition(BACKLOG_WORKFLOW, "in_progress", "completed", "write")
+
+    def test_done_to_retired(self):
+        assert can_transition(BACKLOG_WORKFLOW, "done", "retired", "write")
+
+    def test_completed_to_retired(self):
+        assert can_transition(BACKLOG_WORKFLOW, "completed", "retired", "write")
+
+    def test_proposed_to_deferred(self):
+        assert can_transition(BACKLOG_WORKFLOW, "proposed", "deferred", "write")
+
+    def test_planned_to_deferred(self):
+        assert can_transition(BACKLOG_WORKFLOW, "planned", "deferred", "write")
+
+    def test_deferred_to_proposed(self):
+        assert can_transition(BACKLOG_WORKFLOW, "deferred", "proposed", "write")
+
+    def test_reopen_from_completed(self):
+        assert can_transition(BACKLOG_WORKFLOW, "completed", "accepted", "write")
+        assert requires_reason(BACKLOG_WORKFLOW, "completed", "accepted")
+
     def test_cannot_skip_to_done(self):
         assert not can_transition(BACKLOG_WORKFLOW, "proposed", "done", "write")
 
@@ -705,6 +739,7 @@ class TestEnums:
     def test_adr_statuses(self):
         assert "proposed" in ADR_STATUSES
         assert "accepted" in ADR_STATUSES
+        assert "rejected" in ADR_STATUSES
         assert "deprecated" in ADR_STATUSES
         assert "superseded" in ADR_STATUSES
 
@@ -732,7 +767,13 @@ class TestEnums:
 
     def test_backlog_statuses(self):
         assert "proposed" in BACKLOG_STATUSES
+        assert "planned" in BACKLOG_STATUSES
+        assert "accepted" in BACKLOG_STATUSES
+        assert "in_progress" in BACKLOG_STATUSES
         assert "done" in BACKLOG_STATUSES
+        assert "completed" in BACKLOG_STATUSES
+        assert "retired" in BACKLOG_STATUSES
+        assert "deferred" in BACKLOG_STATUSES
         assert "wont_do" in BACKLOG_STATUSES
 
     def test_backlog_priorities(self):

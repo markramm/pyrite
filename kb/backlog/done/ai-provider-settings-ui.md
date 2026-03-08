@@ -1,4 +1,5 @@
 ---
+id: ai-provider-settings-ui
 type: backlog_item
 title: "AI Provider Settings in Web UI"
 kind: feature

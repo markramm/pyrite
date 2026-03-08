@@ -1,4 +1,5 @@
 ---
+id: adr-0007
 type: adr
 title: "AI Integration Architecture: Three Surfaces with BYOK"
 adr_number: 7

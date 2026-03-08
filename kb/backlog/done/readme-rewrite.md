@@ -1,4 +1,5 @@
 ---
+id: readme-rewrite
 type: backlog_item
 title: "Rewrite README for Pyrite"
 kind: bug

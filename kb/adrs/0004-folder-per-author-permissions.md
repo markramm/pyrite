@@ -1,4 +1,5 @@
 ---
+id: adr-0004
 type: adr
 title: "Folder-per-Author Permission Convention"
 adr_number: 4

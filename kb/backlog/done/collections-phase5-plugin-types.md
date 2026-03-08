@@ -1,4 +1,5 @@
 ---
+id: collections-phase5-plugin-types
 type: backlog_item
 title: "Collections Phase 5: Plugin Collection Types"
 kind: feature

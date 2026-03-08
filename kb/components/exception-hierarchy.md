@@ -1,4 +1,5 @@
 ---
+id: exception-hierarchy
 type: component
 title: "Exception Hierarchy"
 kind: module

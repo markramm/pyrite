@@ -1,4 +1,5 @@
 ---
+id: sync-conflict-resolution-ui
 type: backlog_item
 title: "Git Sync Conflict Resolution UI"
 kind: feature

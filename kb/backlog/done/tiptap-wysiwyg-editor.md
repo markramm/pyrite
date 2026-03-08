@@ -1,4 +1,5 @@
 ---
+id: tiptap-wysiwyg-editor
 type: backlog_item
 title: "Tiptap WYSIWYG Editor Mode"
 kind: feature

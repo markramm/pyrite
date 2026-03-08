@@ -1,4 +1,5 @@
 ---
+id: plugin-protocol
 type: design_doc
 title: "Plugin Protocol Design"
 status: implemented

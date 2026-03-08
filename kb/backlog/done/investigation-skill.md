@@ -1,4 +1,5 @@
 ---
+id: investigation-skill
 type: backlog_item
 title: "Investigation Skill for Claude Code"
 kind: feature

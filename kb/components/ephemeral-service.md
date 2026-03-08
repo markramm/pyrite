@@ -1,4 +1,5 @@
 ---
+id: ephemeral-service
 type: component
 title: "Ephemeral KB Service"
 kind: service

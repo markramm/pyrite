@@ -1,4 +1,5 @@
 ---
+id: schema-validation
 type: component
 title: "Schema & Validation"
 kind: module

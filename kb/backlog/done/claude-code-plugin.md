@@ -1,4 +1,5 @@
 ---
+id: claude-code-plugin
 type: backlog_item
 title: "Claude Code Plugin Manifest and Structure"
 kind: feature

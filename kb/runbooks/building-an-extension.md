@@ -1,4 +1,5 @@
 ---
+id: building-an-extension
 type: runbook
 title: "Building a Pyrite Extension"
 runbook_kind: howto

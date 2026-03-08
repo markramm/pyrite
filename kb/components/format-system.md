@@ -1,4 +1,5 @@
 ---
+id: format-system
 type: component
 title: "Format System"
 kind: module

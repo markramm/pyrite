@@ -1,4 +1,5 @@
 ---
+id: adr-0001
 type: adr
 title: "Git-Native Markdown Storage"
 adr_number: 1

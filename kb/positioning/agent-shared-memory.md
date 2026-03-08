@@ -1,4 +1,5 @@
 ---
+id: agent-shared-memory
 type: design_doc
 title: "Market Positioning: Agent Shared Memory"
 status: active

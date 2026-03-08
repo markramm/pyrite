@@ -1,4 +1,5 @@
 ---
+id: cli-system
 type: component
 title: "CLI System"
 kind: cli

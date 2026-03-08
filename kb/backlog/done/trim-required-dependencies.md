@@ -1,4 +1,5 @@
 ---
+id: trim-required-dependencies
 type: backlog_item
 title: "Move Unused/Premature Dependencies to Optional Groups"
 kind: improvement

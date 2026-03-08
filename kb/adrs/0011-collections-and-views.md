@@ -1,4 +1,5 @@
 ---
+id: adr-0011
 type: adr
 title: "Collections, Folder Metadata, and Views"
 adr_number: 11

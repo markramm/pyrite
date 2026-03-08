@@ -1,4 +1,5 @@
 ---
+id: typed-object-references
 type: backlog_item
 title: "Typed Object References and Relation Indexing"
 kind: feature

@@ -1,4 +1,5 @@
 ---
+id: kb-registry-service
 type: component
 title: "KB Registry Service"
 kind: service

@@ -1,4 +1,5 @@
 ---
+id: testing-standards
 type: standard
 title: "Testing Standards"
 category: testing

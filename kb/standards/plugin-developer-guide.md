@@ -1,4 +1,5 @@
 ---
+id: plugin-developer-guide
 type: standard
 title: "Plugin Developer Guide"
 tags: [plugins, developer-guide, standards]

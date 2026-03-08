@@ -1,4 +1,5 @@
 ---
+id: troubleshooting-pre-commit
 type: runbook
 title: "Troubleshooting Pre-commit Hook Failures"
 runbook_kind: troubleshooting

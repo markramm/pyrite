@@ -1,4 +1,5 @@
 ---
+id: daily-notes
 type: backlog_item
 title: "Daily Notes with Calendar Navigation"
 kind: feature

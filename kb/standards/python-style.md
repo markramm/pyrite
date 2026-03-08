@@ -1,4 +1,5 @@
 ---
+id: python-style
 type: standard
 title: "Python Code Style"
 category: coding

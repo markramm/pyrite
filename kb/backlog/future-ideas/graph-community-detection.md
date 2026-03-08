@@ -1,4 +1,5 @@
 ---
+id: graph-community-detection
 type: backlog_item
 title: "Graph Community Detection and Cluster Coloring"
 kind: enhancement

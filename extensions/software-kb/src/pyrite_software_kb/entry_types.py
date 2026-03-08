@@ -9,12 +9,12 @@ from pyrite.models.protocols import Assignable, Statusable, Temporal
 from pyrite.schema import Provenance, generate_entry_id
 
 # Enum tuples
-ADR_STATUSES = ("proposed", "accepted", "deprecated", "superseded")
+ADR_STATUSES = ("proposed", "accepted", "rejected", "deprecated", "superseded")
 DESIGN_DOC_STATUSES = ("draft", "review", "approved", "implemented", "obsolete")
 STANDARD_CATEGORIES = ("coding", "testing", "api", "git", "documentation", "security", "deployment")
 COMPONENT_KINDS = ("module", "service", "package", "library", "cli", "api", "database")
 BACKLOG_KINDS = ("feature", "bug", "tech_debt", "improvement", "spike")
-BACKLOG_STATUSES = ("proposed", "accepted", "in_progress", "done", "wont_do")
+BACKLOG_STATUSES = ("proposed", "planned", "accepted", "in_progress", "done", "completed", "retired", "deferred", "wont_do")
 BACKLOG_PRIORITIES = ("critical", "high", "medium", "low")
 BACKLOG_EFFORTS = ("XS", "S", "M", "L", "XL")
 RUNBOOK_KINDS = ("howto", "troubleshooting", "setup", "operations", "onboarding")

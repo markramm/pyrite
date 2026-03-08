@@ -1,4 +1,5 @@
 ---
+id: adr-0005
 type: adr
 title: "SQLAlchemy ORM with Alembic Migrations"
 adr_number: 5

@@ -1,4 +1,5 @@
 ---
+id: entry-model
 type: component
 title: "Entry Model"
 kind: module

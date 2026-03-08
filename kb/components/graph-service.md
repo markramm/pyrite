@@ -1,4 +1,5 @@
 ---
+id: graph-service
 type: component
 title: "Graph Service"
 kind: service

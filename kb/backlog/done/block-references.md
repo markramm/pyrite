@@ -1,4 +1,5 @@
 ---
+id: block-references
 type: backlog_item
 title: "Block References and Transclusion"
 kind: feature

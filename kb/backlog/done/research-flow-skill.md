@@ -1,4 +1,5 @@
 ---
+id: research-flow-skill
 type: backlog_item
 title: "Research Flow Skill for Claude Code"
 kind: feature

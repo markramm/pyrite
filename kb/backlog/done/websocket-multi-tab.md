@@ -1,4 +1,5 @@
 ---
+id: websocket-multi-tab
 type: backlog_item
 title: "WebSocket Multi-Tab Awareness"
 kind: feature

@@ -1,4 +1,5 @@
 ---
+id: web-ai-writing-assist
 type: backlog_item
 title: "Web UI AI: Writing Assistant in Editor"
 kind: feature

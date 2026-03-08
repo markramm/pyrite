@@ -1,4 +1,5 @@
 ---
+id: settings-and-preferences
 type: backlog_item
 title: "Settings Page and User Preferences"
 kind: feature

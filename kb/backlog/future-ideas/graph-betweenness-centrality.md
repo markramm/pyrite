@@ -1,4 +1,5 @@
 ---
+id: graph-betweenness-centrality
 type: backlog_item
 title: "Graph Betweenness Centrality Sizing"
 kind: enhancement

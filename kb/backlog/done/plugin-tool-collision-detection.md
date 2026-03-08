@@ -1,4 +1,5 @@
 ---
+id: plugin-tool-collision-detection
 type: backlog_item
 title: "Detect Plugin Name Collisions in Registry"
 kind: bug

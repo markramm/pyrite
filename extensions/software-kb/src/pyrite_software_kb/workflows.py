@@ -1,7 +1,7 @@
 """Software KB workflow definitions."""
 
 ADR_LIFECYCLE = {
-    "states": ["proposed", "accepted", "deprecated", "superseded"],
+    "states": ["proposed", "accepted", "rejected", "deprecated", "superseded"],
     "initial": "proposed",
     "field": "status",
     "transitions": [
@@ -10,6 +10,13 @@ ADR_LIFECYCLE = {
             "to": "accepted",
             "requires": "write",
             "description": "Accept the ADR",
+        },
+        {
+            "from": "proposed",
+            "to": "rejected",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Reject the proposed ADR",
         },
         {
             "from": "accepted",
@@ -27,15 +34,27 @@ ADR_LIFECYCLE = {
 }
 
 BACKLOG_WORKFLOW = {
-    "states": ["proposed", "accepted", "in_progress", "done", "wont_do"],
+    "states": ["proposed", "planned", "accepted", "in_progress", "done", "completed", "retired", "deferred", "wont_do"],
     "initial": "proposed",
     "field": "status",
     "transitions": [
         {
             "from": "proposed",
+            "to": "planned",
+            "requires": "write",
+            "description": "Schedule the item for future work",
+        },
+        {
+            "from": "proposed",
             "to": "accepted",
             "requires": "write",
             "description": "Accept the backlog item",
+        },
+        {
+            "from": "planned",
+            "to": "accepted",
+            "requires": "write",
+            "description": "Accept the planned item for active work",
         },
         {
             "from": "accepted",
@@ -48,6 +67,42 @@ BACKLOG_WORKFLOW = {
             "to": "done",
             "requires": "write",
             "description": "Mark item as done",
+        },
+        {
+            "from": "in_progress",
+            "to": "completed",
+            "requires": "write",
+            "description": "Mark item as completed",
+        },
+        {
+            "from": "done",
+            "to": "retired",
+            "requires": "write",
+            "description": "Retire a done item (no longer relevant)",
+        },
+        {
+            "from": "completed",
+            "to": "retired",
+            "requires": "write",
+            "description": "Retire a completed item",
+        },
+        {
+            "from": "proposed",
+            "to": "deferred",
+            "requires": "write",
+            "description": "Defer the item to a later date",
+        },
+        {
+            "from": "planned",
+            "to": "deferred",
+            "requires": "write",
+            "description": "Defer the planned item",
+        },
+        {
+            "from": "deferred",
+            "to": "proposed",
+            "requires": "write",
+            "description": "Reactivate a deferred item",
         },
         {
             "from": "proposed",
@@ -65,6 +120,13 @@ BACKLOG_WORKFLOW = {
         },
         {
             "from": "done",
+            "to": "accepted",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Reopen a completed item",
+        },
+        {
+            "from": "completed",
             "to": "accepted",
             "requires": "write",
             "requires_reason": True,

@@ -1,4 +1,5 @@
 ---
+id: structured-data-and-schema
 type: design_doc
 title: "Structured Data and Schema-as-Config"
 status: active

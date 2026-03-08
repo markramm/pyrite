@@ -1,4 +1,5 @@
 ---
+id: entry-factory-deduplication
 type: backlog_item
 title: "Extract Entry Factory to Eliminate Duplicated Construction Logic"
 kind: improvement

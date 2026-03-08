@@ -1,4 +1,5 @@
 ---
+id: config-system
 type: component
 title: "Configuration System"
 kind: module

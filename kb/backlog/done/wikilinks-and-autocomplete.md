@@ -1,4 +1,5 @@
 ---
+id: wikilinks-and-autocomplete
 type: backlog_item
 title: "Wikilinks with Autocomplete in Editor"
 kind: feature

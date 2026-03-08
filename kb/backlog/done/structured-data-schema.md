@@ -1,4 +1,5 @@
 ---
+id: structured-data-schema
 type: backlog_item
 title: "Schema-as-Config: Rich Field Types in kb.yaml"
 kind: feature

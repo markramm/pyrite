@@ -1,4 +1,5 @@
 ---
+id: knowledge-graph-view
 type: backlog_item
 title: "Interactive Knowledge Graph View"
 kind: feature

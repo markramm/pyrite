@@ -1,4 +1,5 @@
 ---
+id: quota-service
 type: component
 title: "Quota Service"
 kind: service

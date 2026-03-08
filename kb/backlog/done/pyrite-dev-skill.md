@@ -1,4 +1,5 @@
 ---
+id: pyrite-dev-skill
 type: backlog_item
 title: "Pyrite Development Workflow Skill"
 kind: feature

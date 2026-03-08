@@ -1,4 +1,5 @@
 ---
+id: block-refs-phase2-block-id-references
 type: backlog_item
 title: "Block References Phase 2: Block ID References and Resolution"
 kind: feature

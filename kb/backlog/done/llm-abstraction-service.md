@@ -1,4 +1,5 @@
 ---
+id: llm-abstraction-service
 type: backlog_item
 title: "LLM Abstraction Service (Provider-Agnostic)"
 kind: feature

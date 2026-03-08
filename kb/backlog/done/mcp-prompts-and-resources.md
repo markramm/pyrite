@@ -1,4 +1,5 @@
 ---
+id: mcp-prompts-and-resources
 type: backlog_item
 title: "MCP Prompts and Resources"
 kind: feature

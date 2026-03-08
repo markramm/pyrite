@@ -1,4 +1,5 @@
 ---
+id: web-clipper
 type: backlog_item
 title: "Web Clipper"
 kind: feature

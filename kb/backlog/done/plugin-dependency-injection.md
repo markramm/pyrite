@@ -1,4 +1,5 @@
 ---
+id: plugin-dependency-injection
 type: backlog_item
 title: "Replace Manual Plugin DI with Injected Dependencies"
 kind: improvement

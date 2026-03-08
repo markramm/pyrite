@@ -1,4 +1,5 @@
 ---
+id: adr-0006
 type: adr
 title: "MCP Three-Tier Tool Model"
 adr_number: 6

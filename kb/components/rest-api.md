@@ -1,4 +1,5 @@
 ---
+id: rest-api
 type: component
 title: "REST API Server"
 kind: service

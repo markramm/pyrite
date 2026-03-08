@@ -1,4 +1,5 @@
 ---
+id: plugin-ui-hooks
 type: backlog_item
 title: "Plugin UI Extension Points"
 kind: feature

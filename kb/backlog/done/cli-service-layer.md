@@ -1,4 +1,5 @@
 ---
+id: cli-service-layer
 type: backlog_item
 title: "Route CLI Data Access Through Service Layer"
 kind: improvement

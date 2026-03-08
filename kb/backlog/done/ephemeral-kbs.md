@@ -1,4 +1,5 @@
 ---
+id: ephemeral-kbs
 type: backlog_item
 title: "Ephemeral KBs for Agent Swarm Shared Memory"
 kind: feature

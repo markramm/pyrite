@@ -1,4 +1,5 @@
 ---
+id: graph-influence-per-occurrence
 type: backlog_item
 title: "Graph Influence-per-Occurrence Metric"
 kind: enhancement

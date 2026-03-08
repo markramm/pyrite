@@ -1,4 +1,5 @@
 ---
+id: adr-0008
 type: adr
 title: "Structured Data and Schema-as-Config"
 adr_number: 8

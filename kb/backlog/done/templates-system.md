@@ -1,4 +1,5 @@
 ---
+id: templates-system
 type: backlog_item
 title: "Templates System"
 kind: feature

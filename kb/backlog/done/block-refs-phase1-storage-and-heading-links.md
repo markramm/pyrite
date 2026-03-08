@@ -1,4 +1,5 @@
 ---
+id: block-refs-phase1-storage-and-heading-links
 type: backlog_item
 title: "Block References Phase 1: Block Storage and Heading Links"
 kind: feature

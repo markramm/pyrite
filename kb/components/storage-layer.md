@@ -1,4 +1,5 @@
 ---
+id: storage-layer
 type: component
 title: "Storage Layer"
 kind: module

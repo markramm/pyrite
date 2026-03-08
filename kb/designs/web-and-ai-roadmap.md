@@ -1,4 +1,5 @@
 ---
+id: web-and-ai-roadmap
 type: design_doc
 title: "Pyrite Web Application & AI Integration Roadmap"
 status: active

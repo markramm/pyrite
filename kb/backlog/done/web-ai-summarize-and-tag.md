@@ -1,4 +1,5 @@
 ---
+id: web-ai-summarize-and-tag
 type: backlog_item
 title: "Web UI AI: Summarize, Auto-Tag, Link Suggestions"
 kind: feature

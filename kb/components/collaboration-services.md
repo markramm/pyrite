@@ -1,4 +1,5 @@
 ---
+id: collaboration-services
 type: component
 title: "Collaboration Services"
 kind: service

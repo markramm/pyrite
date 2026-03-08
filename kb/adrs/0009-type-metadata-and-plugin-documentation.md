@@ -1,4 +1,5 @@
 ---
+id: adr-0009
 type: adr
 title: "Type Metadata, AI Instructions, and Plugin Documentation"
 adr_number: 9
