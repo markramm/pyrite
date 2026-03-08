@@ -289,18 +289,19 @@ def index_health(
 
     health = index_mgr.check_health()
 
+    broken_links = health.get("broken_links", 0)
+    is_unhealthy = (
+        health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
+    )
+    status = "unhealthy" if is_unhealthy else ("warning" if broken_links else "healthy")
+
     formatted = _format_output(
         {
-            "status": "healthy"
-            if (
-                not health["missing_files"]
-                and not health["unindexed_files"]
-                and not health["stale_entries"]
-            )
-            else "unhealthy",
+            "status": status,
             "missing_files": len(health["missing_files"]),
             "unindexed_files": len(health["unindexed_files"]),
             "stale_entries": len(health["stale_entries"]),
+            "broken_links": broken_links,
             "checks": health,
         },
         output_format,
@@ -311,13 +312,18 @@ def index_health(
 
     console.print("\n[bold]Index Health Check[/bold]\n")
 
-    if (
-        not health["missing_files"]
-        and not health["unindexed_files"]
-        and not health["stale_entries"]
-    ):
+    if not is_unhealthy and not broken_links:
         console.print("[green]✓ Index is healthy[/green]")
         return
+
+    if not is_unhealthy and broken_links:
+        console.print("[green]✓ Index is healthy[/green]")
+
+    if broken_links:
+        console.print(
+            f"[yellow]⚠ {broken_links} broken link(s) found.[/yellow]"
+            " Run 'pyrite links broken' for details."
+        )
 
     if health["missing_files"]:
         console.print(f"[red]Missing files ({len(health['missing_files'])}):[/red]")

@@ -31,6 +31,7 @@ from ..storage.database import PyriteDB
 from .collection_commands import collections_app
 from .context import cli_context
 from .db_commands import db_app
+from .link_commands import links_app
 from .extension_commands import extension_app
 from .index_commands import index_app
 from .init_command import init_kb
@@ -67,6 +68,7 @@ app.add_typer(index_app, name="index")
 app.add_typer(collections_app, name="collections")
 app.add_typer(qa_app, name="qa")
 app.add_typer(db_app, name="db")
+app.add_typer(links_app, name="links")
 
 # Repository management — collaboration app with subscribe/fork/sync/unsubscribe/status/list
 # Plus legacy add/remove commands added below

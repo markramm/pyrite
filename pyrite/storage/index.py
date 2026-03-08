@@ -442,6 +442,7 @@ class IndexManager:
             "missing_files": [],
             "unindexed_files": [],
             "stale_entries": [],
+            "broken_links": 0,
         }
 
         for kb in self.config.knowledge_bases:
@@ -485,6 +486,16 @@ class IndexManager:
                     health["missing_files"].append(
                         {"kb": kb.name, "id": entry_id, "path": info["file_path"]}
                     )
+
+        # Count broken links (targets that don't resolve to entries)
+        broken_sql = """
+            SELECT COUNT(*) as cnt FROM link l
+            LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
+            WHERE e.id IS NULL
+        """
+        rows = self.db.execute_sql(broken_sql, {})
+        if rows:
+            health["broken_links"] = rows[0]["cnt"]
 
         return health
 

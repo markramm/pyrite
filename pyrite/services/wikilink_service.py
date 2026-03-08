@@ -146,3 +146,39 @@ class WikilinkService:
         sql += " GROUP BY l.target_id, l.target_kb ORDER BY ref_count DESC LIMIT :limit"
         params["limit"] = limit
         return self.db.execute_sql(sql, params)
+
+    def get_broken_links(
+        self,
+        kb_name: str | None = None,
+        source_kb: str | None = None,
+        target_kb: str | None = None,
+        limit: int = 500,
+    ) -> list[dict[str, Any]]:
+        """Get individual broken links (source→missing target).
+
+        Unlike get_wanted_pages() which aggregates by target, this returns
+        per-link rows for detailed reporting.
+
+        Args:
+            kb_name: Alias for source_kb (for API consistency).
+            source_kb: Filter by source KB.
+            target_kb: Filter by target KB.
+            limit: Max rows to return.
+        """
+        effective_source_kb = source_kb or kb_name
+        sql = """
+            SELECT l.source_id, l.source_kb, l.target_id, l.target_kb, l.relation
+            FROM link l
+            LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
+            WHERE e.id IS NULL
+        """
+        params: dict[str, Any] = {}
+        if effective_source_kb:
+            sql += " AND l.source_kb = :source_kb"
+            params["source_kb"] = effective_source_kb
+        if target_kb:
+            sql += " AND l.target_kb = :target_kb"
+            params["target_kb"] = target_kb
+        sql += " ORDER BY l.source_kb, l.source_id LIMIT :limit"
+        params["limit"] = limit
+        return self.db.execute_sql(sql, params)
