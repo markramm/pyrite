@@ -141,11 +141,15 @@ def ci_command(
     severity: str = typer.Option(
         "warning", "--severity", help="Minimum severity to fail on: error or warning"
     ),
+    tier: int = typer.Option(
+        1, "--tier", help="Assessment tier: 1=structural, 2=structural+LLM judgment"
+    ),
 ):
     """CI/CD-optimized KB validation. Exits 0 on pass, 1 on failure.
 
     Validates knowledge base integrity and reports results in a format
     suitable for CI pipelines. Use --format json for machine-readable output.
+    Use --tier 2 to include LLM-assisted rubric evaluation (requires AI config).
     """
     from ..services.qa_service import QAService
 
@@ -171,7 +175,21 @@ def ci_command(
 
     db = PyriteDB(config.settings.index_path)
     try:
-        qa = QAService(config, db)
+        # Set up LLM service for tier >= 2
+        llm_service = None
+        if tier >= 2:
+            from ..services.llm_service import LLMService
+
+            llm_service = LLMService(config.settings)
+            if not llm_service.status()["configured"]:
+                if output_format != "json":
+                    typer.echo(
+                        "Note: LLM not configured — tier 2 evaluation will skip "
+                        "judgment rubric items. Configure ai_provider + ai_api_key "
+                        "in pyrite.yaml to enable."
+                    )
+
+        qa = QAService(config, db, llm_service=llm_service)
 
         if kb:
             result = {"kbs": [qa.validate_kb(kb)]}

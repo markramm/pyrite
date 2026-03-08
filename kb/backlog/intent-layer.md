@@ -11,7 +11,7 @@ tags:
 kind: feature
 priority: high
 effort: M
-status: in-progress
+status: in_progress
 links:
 - intent-layer-guidelines-and-goals
 - qa-agent-workflows

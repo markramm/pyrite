@@ -63,6 +63,22 @@ def ci_env():
 
         db = PyriteDB(db_path)
         IndexManager(db, config).index_all()
+
+        # Add links between events so they satisfy rubric "has outgoing links"
+        event_ids = [
+            row["id"]
+            for row in db.execute_sql(
+                "SELECT id FROM entry WHERE kb_name = 'test-events' ORDER BY id"
+            )
+        ]
+        for i, eid in enumerate(event_ids):
+            target = event_ids[(i + 1) % len(event_ids)]
+            db._raw_conn.execute(
+                "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (eid, "test-events", target, "test-events", "related_to", "related_to"),
+            )
+        db._raw_conn.commit()
         db.close()
 
         yield {
@@ -241,3 +257,21 @@ class TestCIMultipleKBs:
             assert "test-research" in result.output
             # Should show total counts
             assert "entries" in result.output.lower()
+
+
+@pytest.mark.cli
+class TestCITierOption:
+    def test_ci_tier2_with_stub_advisory_no_crash(self, ci_env):
+        """--tier 2 with stub provider prints advisory, doesn't crash."""
+        with _patch_ci(ci_env):
+            result = runner.invoke(app, ["ci", "--tier", "2"])
+            assert result.exit_code == 0
+            assert "LLM not configured" in result.output
+
+    def test_ci_default_tier1_no_llm_calls(self, ci_env):
+        """Default (no --tier) uses tier=1, no LLM calls."""
+        with _patch_ci(ci_env):
+            result = runner.invoke(app, ["ci"])
+            assert result.exit_code == 0
+            # No LLM-related output
+            assert "LLM not configured" not in result.output

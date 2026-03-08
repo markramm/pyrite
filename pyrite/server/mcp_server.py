@@ -196,9 +196,11 @@ class PyriteMCPServer:
     @property
     def qa_svc(self):
         if not hasattr(self, "_qa_svc_cache"):
+            from ..services.llm_service import LLMService
             from ..services.qa_service import QAService
 
-            self._qa_svc_cache = QAService(self.config, self.db)
+            llm_service = LLMService(self.config.settings)
+            self._qa_svc_cache = QAService(self.config, self.db, llm_service=llm_service)
         return self._qa_svc_cache
 
     @property

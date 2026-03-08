@@ -1279,7 +1279,7 @@ class TestMCPPostSaveValidation:
             yield env
 
     def test_kb_create_with_validate_clean(self, qa_write_server):
-        """Valid entry with validate=True returns no qa_issues."""
+        """Valid entry with validate=True returns no error-level qa_issues."""
         server = qa_write_server["server"]
         result = server._dispatch_tool(
             "kb_create",
@@ -1288,11 +1288,15 @@ class TestMCPPostSaveValidation:
                 "entry_type": "note",
                 "title": "Clean Entry",
                 "body": "This entry has a proper body.",
+                "tags": ["test"],
                 "validate": True,
             },
         )
         assert result.get("created") is True
-        assert "qa_issues" not in result
+        # May have rubric warnings (e.g. missing outlinks for new entry) but no errors
+        qa_issues = result.get("qa_issues", [])
+        errors = [i for i in qa_issues if i.get("severity") == "error"]
+        assert errors == []
 
     def test_kb_create_with_validate_has_issues(self, qa_write_server):
         """Empty body with validate=True returns qa_issues."""
@@ -1375,7 +1379,7 @@ class TestMCPPostSaveValidation:
         assert "empty_body" in rules
 
     def test_kb_create_qa_on_write_kb_clean(self, qa_on_write_server):
-        """KB with qa_on_write: true, valid entry returns no qa_issues."""
+        """KB with qa_on_write: true, valid entry returns no error-level qa_issues."""
         server = qa_on_write_server["server"]
         result = server._dispatch_tool(
             "kb_create",
@@ -1384,10 +1388,14 @@ class TestMCPPostSaveValidation:
                 "entry_type": "note",
                 "title": "Clean Auto Entry",
                 "body": "This entry has proper content.",
+                "tags": ["test"],
             },
         )
         assert result.get("created") is True
-        assert "qa_issues" not in result
+        # May have rubric warnings (e.g. missing outlinks for new entry) but no errors
+        qa_issues = result.get("qa_issues", [])
+        errors = [i for i in qa_issues if i.get("severity") == "error"]
+        assert errors == []
 
 
 class TestDispatchRateLimiting:

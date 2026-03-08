@@ -5,9 +5,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query, Request
 
 from ...config import PyriteConfig
+from ...services.llm_service import LLMService
 from ...services.qa_service import QAService
 from ...storage.database import PyriteDB
-from ..api import get_config, get_db, limiter
+from ..api import get_config, get_db, get_llm_service, limiter
 
 router = APIRouter(tags=["QA"])
 
@@ -15,9 +16,10 @@ router = APIRouter(tags=["QA"])
 def get_qa_service(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
 ) -> QAService:
     """Get QA service instance."""
-    return QAService(config, db)
+    return QAService(config, db, llm_service=llm_service)
 
 
 @router.get("/qa/status")

@@ -18,7 +18,9 @@ from typing import Any
 
 from ..config import PyriteConfig
 from ..schema import validate_date, validate_importance
+from ..schema.core_types import SYSTEM_INTENT, resolve_type_metadata
 from ..storage.database import PyriteDB
+from .rubric_checkers import is_already_covered, match_rubric_item
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,25 @@ logger = logging.getLogger(__name__)
 class QAService:
     """Structural quality assurance for knowledge bases."""
 
-    def __init__(self, config: PyriteConfig, db: PyriteDB):
+    def __init__(self, config: PyriteConfig, db: PyriteDB, llm_service=None):
         self.config = config
         self.db = db
+        self._llm_service = llm_service
+        self._llm_evaluator = None
+
+    @property
+    def llm_evaluator(self):
+        """Lazy-init LLM rubric evaluator."""
+        if self._llm_evaluator is None and self._llm_service is not None:
+            from .llm_rubric_evaluator import LLMRubricEvaluator
+
+            self._llm_evaluator = LLMRubricEvaluator(self._llm_service)
+        return self._llm_evaluator
+
+    @property
+    def llm_available(self) -> bool:
+        """Whether LLM evaluation is available."""
+        return self.llm_evaluator is not None and self.llm_evaluator.is_available()
 
     # =========================================================================
     # Public API
@@ -64,6 +82,7 @@ class QAService:
         self._check_entry_fields(entry, issues)
         self._check_entry_links(entry_id, kb_name, issues)
         self._check_schema_validation(entry, issues)
+        self._check_rubric_evaluation(entry, issues)
 
         return {"entry_id": entry_id, "kb_name": kb_name, "issues": issues}
 
@@ -93,6 +112,9 @@ class QAService:
 
         # Per-entry schema pass (only if kb.yaml exists)
         self._check_schema_all(issues, kb_name)
+
+        # Rubric evaluation pass
+        self._check_rubric_all(issues, kb_name)
 
         # Optional staleness check
         if check_staleness:
@@ -164,10 +186,19 @@ class QAService:
     ) -> dict[str, Any]:
         """Assess a single entry and create a qa_assessment entry.
 
-        Returns dict with assessment_id, qa_status, issues_found, issues.
+        Returns dict with assessment_id, qa_status, issues_found, issues,
+        llm_available.
+
+        Tier 1: structural validation + deterministic rubric checks.
+        Tier 2+: tier 1 + LLM judgment rubric evaluation.
         """
         result = self.validate_entry(entry_id, kb_name)
         issues = result["issues"]
+
+        # Tier 2+: LLM rubric evaluation
+        if tier >= 2:
+            llm_issues = self._evaluate_llm_rubric(entry_id, kb_name)
+            issues.extend(llm_issues)
 
         errors = [i for i in issues if i.get("severity") == "error"]
         warnings = [i for i in issues if i.get("severity") == "warning"]
@@ -213,6 +244,7 @@ class QAService:
             "qa_status": qa_status,
             "issues_found": len(issues),
             "issues": issues,
+            "llm_available": self.llm_available,
         }
 
     def assess_kb(
@@ -828,6 +860,289 @@ class QAService:
                         ),
                     }
                 )
+
+    # =========================================================================
+    # Rubric evaluation
+    # =========================================================================
+
+    def _get_rubric_items(self, entry_type: str, kb_name: str) -> list[str]:
+        """Collect rubric items applicable to an entry type.
+
+        Merges system-level rubric, type-level rubric (from CORE_TYPE_METADATA
+        or KB overrides), and KB-level rubric from kb.yaml.
+        """
+        items: list[str] = []
+        seen: set[str] = set()
+
+        # System-level rubric (always applies)
+        for item in SYSTEM_INTENT.get("evaluation_rubric", []):
+            if item not in seen:
+                items.append(item)
+                seen.add(item)
+
+        # Type-level rubric (resolved through 4-layer precedence)
+        kb_config = self.config.get_kb(kb_name)
+        kb_schema = kb_config.kb_schema if kb_config else None
+        type_meta = resolve_type_metadata(entry_type, kb_schema)
+        for item in type_meta.get("evaluation_rubric", []):
+            if item not in seen:
+                items.append(item)
+                seen.add(item)
+
+        # KB-level rubric from kb.yaml
+        if kb_schema:
+            for item in kb_schema.evaluation_rubric:
+                if item not in seen:
+                    items.append(item)
+                    seen.add(item)
+
+        return items
+
+    def _check_rubric_evaluation(
+        self, entry: dict[str, Any], issues: list[dict[str, Any]]
+    ) -> None:
+        """Run rubric checks on a single entry."""
+        entry_id = entry["id"]
+        kb_name = entry["kb_name"]
+        entry_type = entry.get("entry_type", "")
+
+        rubric_items = self._get_rubric_items(entry_type, kb_name)
+        if not rubric_items:
+            return
+
+        # Enrich entry with tag count and outlink count for checkers
+        enriched = dict(entry)
+        tag_rows = self.db.execute_sql(
+            "SELECT COUNT(*) as cnt FROM entry_tag WHERE entry_id = :eid AND kb_name = :kb",
+            {"eid": entry_id, "kb": kb_name},
+        )
+        enriched["_tag_count"] = tag_rows[0]["cnt"] if tag_rows else 0
+
+        link_rows = self.db.execute_sql(
+            "SELECT COUNT(*) as cnt FROM link WHERE source_id = :eid AND source_kb = :kb",
+            {"eid": entry_id, "kb": kb_name},
+        )
+        enriched["_outlink_count"] = link_rows[0]["cnt"] if link_rows else 0
+
+        kb_config = self.config.get_kb(kb_name)
+        kb_schema = kb_config.kb_schema if kb_config else None
+
+        for item in rubric_items:
+            if is_already_covered(item):
+                continue
+
+            checker = match_rubric_item(item)
+            if checker is None:
+                logger.debug("Rubric item has no deterministic checker (judgment_only): %s", item)
+                continue
+
+            try:
+                issue = checker(enriched, kb_schema)
+                if issue is not None:
+                    issues.append(issue)
+            except Exception:
+                logger.warning("Rubric checker failed for item '%s'", item, exc_info=True)
+
+    def _collect_judgment_items(self, entry_type: str, kb_name: str) -> list[str]:
+        """Filter rubric items to judgment-only (no deterministic checker, not already covered)."""
+        all_items = self._get_rubric_items(entry_type, kb_name)
+        return [
+            item
+            for item in all_items
+            if not is_already_covered(item) and match_rubric_item(item) is None
+        ]
+
+    def _evaluate_llm_rubric(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Run LLM rubric evaluation on a single entry. Returns list of issues."""
+        if not self.llm_available:
+            logger.info("LLM not configured; skipping LLM rubric evaluation for %s", entry_id)
+            return []
+
+        # Fetch entry row
+        rows = self.db.execute_sql(
+            "SELECT id, kb_name, entry_type, title, date, importance, body, status, metadata "
+            "FROM entry WHERE id = :entry_id AND kb_name = :kb_name",
+            {"entry_id": entry_id, "kb_name": kb_name},
+        )
+        if not rows:
+            return []
+
+        entry = rows[0]
+        entry_type = entry.get("entry_type", "")
+        judgment_items = self._collect_judgment_items(entry_type, kb_name)
+        if not judgment_items:
+            return []
+
+        # Get guidelines for context
+        kb_config = self.config.get_kb(kb_name)
+        kb_schema = kb_config.kb_schema if kb_config else None
+        type_meta = resolve_type_metadata(entry_type, kb_schema)
+        guidelines = type_meta.get("guidelines", "")
+
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    result = pool.submit(
+                        asyncio.run,
+                        self.llm_evaluator.evaluate(dict(entry), judgment_items, guidelines),
+                    ).result()
+                return result
+            else:
+                return loop.run_until_complete(
+                    self.llm_evaluator.evaluate(dict(entry), judgment_items, guidelines)
+                )
+        except RuntimeError:
+            return asyncio.run(
+                self.llm_evaluator.evaluate(dict(entry), judgment_items, guidelines)
+            )
+
+    def _check_rubric_all(
+        self, issues: list[dict[str, Any]], kb_name: str
+    ) -> None:
+        """Bulk SQL rubric checks across all entries in a KB."""
+        # 1. Missing tags
+        no_tag_rows = self.db.execute_sql(
+            "SELECT e.id, e.kb_name, e.entry_type, e.title FROM entry e "
+            "LEFT JOIN entry_tag et ON e.id = et.entry_id AND e.kb_name = et.kb_name "
+            "WHERE e.kb_name = :kb_name AND et.entry_id IS NULL",
+            {"kb_name": kb_name},
+        )
+        for row in no_tag_rows:
+            issues.append(
+                {
+                    "entry_id": row["id"],
+                    "kb_name": row["kb_name"],
+                    "rule": "rubric_violation",
+                    "severity": "warning",
+                    "field": "tags",
+                    "message": f"Entry '{row['id']}' has no tags",
+                    "rubric_item": "Entry has at least one tag",
+                }
+            )
+
+        # 2. Missing outlinks (excluding stubs)
+        no_link_rows = self.db.execute_sql(
+            "SELECT e.id, e.kb_name, e.entry_type, e.title, e.body FROM entry e "
+            "WHERE e.kb_name = :kb_name "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM link l WHERE l.source_id = e.id AND l.source_kb = e.kb_name"
+            ")",
+            {"kb_name": kb_name},
+        )
+        for row in no_link_rows:
+            body = row.get("body", "") or ""
+            if "stub" not in body.lower():
+                issues.append(
+                    {
+                        "entry_id": row["id"],
+                        "kb_name": row["kb_name"],
+                        "rule": "rubric_violation",
+                        "severity": "warning",
+                        "field": "links",
+                        "message": f"Entry '{row['id']}' has no outgoing links",
+                        "rubric_item": "Entry links to at least one related entry (unless a stub)",
+                    }
+                )
+
+        # 3. Generic titles
+        rows = self.db.execute_sql(
+            "SELECT id, kb_name, title FROM entry WHERE kb_name = :kb_name "
+            "AND title IS NOT NULL AND title != ''",
+            {"kb_name": kb_name},
+        )
+        from .rubric_checkers import GENERIC_TITLES
+
+        for row in rows:
+            title = (row.get("title") or "").strip().lower()
+            if title in GENERIC_TITLES:
+                issues.append(
+                    {
+                        "entry_id": row["id"],
+                        "kb_name": row["kb_name"],
+                        "rule": "rubric_violation",
+                        "severity": "warning",
+                        "field": "title",
+                        "message": f"Entry '{row['id']}' has a generic title: '{row['title']}'",
+                        "rubric_item": "Entry has a descriptive title",
+                    }
+                )
+
+        # 4. Type-specific metadata checks (person/role, document/url|author, document/document_type)
+        self._check_rubric_type_metadata(issues, kb_name)
+
+    def _check_rubric_type_metadata(
+        self, issues: list[dict[str, Any]], kb_name: str
+    ) -> None:
+        """Bulk check type-specific metadata fields from rubric."""
+        # Person: role
+        person_rows = self.db.execute_sql(
+            "SELECT id, kb_name, metadata FROM entry "
+            "WHERE kb_name = :kb_name AND entry_type = 'person' "
+            "AND (metadata IS NULL OR json_extract(metadata, '$.role') IS NULL "
+            "OR json_extract(metadata, '$.role') = '')",
+            {"kb_name": kb_name},
+        )
+        for row in person_rows:
+            issues.append(
+                {
+                    "entry_id": row["id"],
+                    "kb_name": row["kb_name"],
+                    "rule": "rubric_violation",
+                    "severity": "warning",
+                    "field": "metadata.role",
+                    "message": f"Entry '{row['id']}' is missing 'role' in metadata",
+                    "rubric_item": "Person has a role or position described",
+                }
+            )
+
+        # Document: url or author
+        doc_rows = self.db.execute_sql(
+            "SELECT id, kb_name, metadata FROM entry "
+            "WHERE kb_name = :kb_name AND entry_type = 'document' "
+            "AND (metadata IS NULL OR ("
+            "  (json_extract(metadata, '$.url') IS NULL OR json_extract(metadata, '$.url') = '') "
+            "  AND (json_extract(metadata, '$.author') IS NULL OR json_extract(metadata, '$.author') = '')"
+            "))",
+            {"kb_name": kb_name},
+        )
+        for row in doc_rows:
+            issues.append(
+                {
+                    "entry_id": row["id"],
+                    "kb_name": row["kb_name"],
+                    "rule": "rubric_violation",
+                    "severity": "warning",
+                    "field": "metadata",
+                    "message": f"Entry '{row['id']}' is missing url or author in metadata",
+                    "rubric_item": "Document has a source URL or author",
+                }
+            )
+
+        # Document: document_type
+        doc_type_rows = self.db.execute_sql(
+            "SELECT id, kb_name, metadata FROM entry "
+            "WHERE kb_name = :kb_name AND entry_type = 'document' "
+            "AND (metadata IS NULL OR json_extract(metadata, '$.document_type') IS NULL "
+            "OR json_extract(metadata, '$.document_type') = '')",
+            {"kb_name": kb_name},
+        )
+        for row in doc_type_rows:
+            issues.append(
+                {
+                    "entry_id": row["id"],
+                    "kb_name": row["kb_name"],
+                    "rule": "rubric_violation",
+                    "severity": "warning",
+                    "field": "metadata.document_type",
+                    "message": f"Entry '{row['id']}' is missing 'document_type' in metadata",
+                    "rubric_item": "Document has a document_type classification",
+                }
+            )
 
     # =========================================================================
     # Staleness & compaction

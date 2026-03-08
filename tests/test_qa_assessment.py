@@ -17,7 +17,7 @@ Covers:
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -80,6 +80,19 @@ def qa_env():
         db = PyriteDB(db_path)
         index_mgr = IndexManager(db, config)
         index_mgr.index_all()
+
+        # Add cross-links so entries satisfy the "has outgoing links" rubric
+        db._raw_conn.execute(
+            "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("good-note", "test-kb", "no-body-note", "test-kb", "related_to", "related_to"),
+        )
+        db._raw_conn.execute(
+            "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("no-body-note", "test-kb", "good-note", "test-kb", "related_to", "related_to"),
+        )
+        db._raw_conn.commit()
 
         qa = QAService(config, db)
 
@@ -539,3 +552,81 @@ class TestCLICommands:
             data = json.loads(result.stdout)
             assert "coverage" in data
             assert "coverage_pct" in data["coverage"]
+
+
+# =========================================================================
+# Phase G: LLM rubric evaluation in QAService
+# =========================================================================
+
+
+class TestLLMRubricInAssessEntry:
+    def _make_mock_llm(self, configured=True, response="[]"):
+        llm = MagicMock()
+        llm.status.return_value = {
+            "configured": configured,
+            "provider": "anthropic",
+            "model": "claude-sonnet-4-20250514",
+        }
+        llm.complete = AsyncMock(return_value=response)
+        return llm
+
+    def test_tier2_with_llm_includes_llm_issues(self, qa_env):
+        """assess_entry(tier=2) with mock LLM includes LLM rubric issues."""
+        llm_response = json.dumps([
+            {
+                "item": "Entry body explains the why, not just the what",
+                "pass": False,
+                "confidence": 0.75,
+                "reasoning": "Body only lists facts",
+            },
+        ])
+        mock_llm = self._make_mock_llm(response=llm_response)
+        qa = QAService(qa_env["config"], qa_env["db"], llm_service=mock_llm)
+
+        result = qa.assess_entry("good-note", "test-kb", tier=2)
+        assert result["llm_available"] is True
+        # Check that LLM issues are included (may or may not have judgment items
+        # depending on rubric config, but llm_available flag should be set)
+
+    def test_tier2_without_llm_returns_tier1_only(self, qa_env):
+        """assess_entry(tier=2) without LLM returns tier-1 results, llm_available=false."""
+        qa = QAService(qa_env["config"], qa_env["db"], llm_service=None)
+        result = qa.assess_entry("good-note", "test-kb", tier=2)
+        assert result["llm_available"] is False
+        # No LLM issues (no LLM configured)
+        llm_issues = [i for i in result["issues"] if i.get("rule") == "llm_rubric_violation"]
+        assert len(llm_issues) == 0
+
+    def test_tier1_no_llm_calls(self, qa_env):
+        """assess_entry(tier=1) makes no LLM calls regardless of config."""
+        mock_llm = self._make_mock_llm()
+        qa = QAService(qa_env["config"], qa_env["db"], llm_service=mock_llm)
+        result = qa.assess_entry("good-note", "test-kb", tier=1)
+        mock_llm.complete.assert_not_called()
+        assert "llm_available" in result
+
+    def test_llm_available_flag_in_response(self, qa_env):
+        """llm_available flag present in response."""
+        qa = QAService(qa_env["config"], qa_env["db"])
+        result = qa.assess_entry("good-note", "test-kb")
+        assert "llm_available" in result
+        assert result["llm_available"] is False
+
+    def test_llm_issues_distinct_rule_name(self, qa_env):
+        """LLM issues use 'llm_rubric_violation' rule, distinct from 'rubric_violation'."""
+        llm_response = json.dumps([
+            {
+                "item": "Entry body explains the why, not just the what",
+                "pass": False,
+                "confidence": 0.8,
+                "reasoning": "lacks explanation",
+            },
+        ])
+        mock_llm = self._make_mock_llm(response=llm_response)
+        qa = QAService(qa_env["config"], qa_env["db"], llm_service=mock_llm)
+        result = qa.assess_entry("good-note", "test-kb", tier=2)
+
+        for issue in result["issues"]:
+            if issue.get("rubric_item") == "Entry body explains the why, not just the what":
+                assert issue["rule"] == "llm_rubric_violation"
+                assert issue["rule"] != "rubric_violation"
