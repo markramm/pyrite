@@ -12,6 +12,8 @@ from pyrite.schema import Provenance, generate_entry_id
 ADR_STATUSES = ("proposed", "accepted", "rejected", "deprecated", "superseded")
 DESIGN_DOC_STATUSES = ("draft", "review", "approved", "implemented", "obsolete", "active")
 STANDARD_CATEGORIES = ("coding", "testing", "api", "git", "documentation", "security", "deployment")
+VALIDATION_CATEGORIES = STANDARD_CATEGORIES
+CONVENTION_CATEGORIES = STANDARD_CATEGORIES
 COMPONENT_KINDS = ("module", "service", "package", "library", "cli", "api", "database", "application", "utility", "endpoint", "docs")
 BACKLOG_KINDS = ("feature", "bug", "tech_debt", "improvement", "spike", "enhancement", "documentation", "docs", "task")
 BACKLOG_STATUSES = ("proposed", "planned", "accepted", "in_progress", "done", "completed", "retired", "deferred", "wont_do")
@@ -159,6 +161,66 @@ class StandardEntry(NoteEntry):
             **kwargs,
             category=meta.get("category", ""),
             enforced=bool(meta.get("enforced", False)),
+        )
+
+
+@dataclass
+class ProgrammaticValidationEntry(NoteEntry):
+    """Automated check with verifiable pass/fail criteria."""
+
+    category: str = ""
+    check_command: str = ""
+    pass_criteria: str = ""
+
+    @property
+    def entry_type(self) -> str:
+        return "programmatic_validation"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = super().to_frontmatter()
+        meta["type"] = "programmatic_validation"
+        if self.category:
+            meta["category"] = self.category
+        if self.check_command:
+            meta["check_command"] = self.check_command
+        if self.pass_criteria:
+            meta["pass_criteria"] = self.pass_criteria
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ProgrammaticValidationEntry":
+        kwargs = _note_base_kwargs(meta, body)
+        return cls(
+            **kwargs,
+            category=meta.get("category", ""),
+            check_command=meta.get("check_command", ""),
+            pass_criteria=meta.get("pass_criteria", ""),
+        )
+
+
+@dataclass
+class DevelopmentConventionEntry(NoteEntry):
+    """Judgment-based guidance carried as context during work."""
+
+    category: str = ""
+
+    @property
+    def entry_type(self) -> str:
+        return "development_convention"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = super().to_frontmatter()
+        meta["type"] = "development_convention"
+        if self.category:
+            meta["category"] = self.category
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "DevelopmentConventionEntry":
+        kwargs = _note_base_kwargs(meta, body)
+        return cls(
+            **kwargs,
+            category=meta.get("category", ""),
         )
 
 

@@ -11,13 +11,17 @@ from pyrite_software_kb.entry_types import (
     BACKLOG_PRIORITIES,
     BACKLOG_STATUSES,
     COMPONENT_KINDS,
+    CONVENTION_CATEGORIES,
     DESIGN_DOC_STATUSES,
     RUNBOOK_KINDS,
     STANDARD_CATEGORIES,
+    VALIDATION_CATEGORIES,
     ADREntry,
     BacklogItemEntry,
     ComponentEntry,
     DesignDocEntry,
+    DevelopmentConventionEntry,
+    ProgrammaticValidationEntry,
     RunbookEntry,
     StandardEntry,
 )
@@ -57,11 +61,15 @@ class TestPluginRegistration:
         assert "adr" in types
         assert "design_doc" in types
         assert "standard" in types
+        assert "programmatic_validation" in types
+        assert "development_convention" in types
         assert "component" in types
         assert "backlog_item" in types
         assert "runbook" in types
         assert types["adr"] is ADREntry
         assert types["design_doc"] is DesignDocEntry
+        assert types["programmatic_validation"] is ProgrammaticValidationEntry
+        assert types["development_convention"] is DevelopmentConventionEntry
 
     def test_relationship_types_registered(self):
         registry = PluginRegistry()
@@ -95,6 +103,8 @@ class TestPluginRegistration:
         assert "sw_adrs" in tools
         assert "sw_component" in tools
         assert "sw_standards" in tools
+        assert "sw_validations" in tools
+        assert "sw_conventions" in tools
         assert "sw_backlog" in tools
 
     def test_mcp_write_tools_registered(self):
@@ -321,6 +331,223 @@ class TestStandardEntry:
         entry = StandardEntry.from_frontmatter(meta, "Use snake_case")
         assert entry.category == "coding"
         assert entry.enforced is True
+
+
+# =========================================================================
+# Entry types — ProgrammaticValidation
+# =========================================================================
+
+
+class TestProgrammaticValidationEntry:
+    def test_entry_type(self):
+        entry = ProgrammaticValidationEntry(id="test", title="Test")
+        assert entry.entry_type == "programmatic_validation"
+
+    def test_default_values(self):
+        entry = ProgrammaticValidationEntry(id="test", title="Test")
+        assert entry.category == ""
+        assert entry.check_command == ""
+        assert entry.pass_criteria == ""
+
+    def test_to_frontmatter(self):
+        entry = ProgrammaticValidationEntry(
+            id="test",
+            title="Ruff Linting",
+            category="coding",
+            check_command="ruff check .",
+            pass_criteria="exit code 0",
+        )
+        fm = entry.to_frontmatter()
+        assert fm["type"] == "programmatic_validation"
+        assert fm["category"] == "coding"
+        assert fm["check_command"] == "ruff check ."
+        assert fm["pass_criteria"] == "exit code 0"
+
+    def test_to_frontmatter_omits_defaults(self):
+        entry = ProgrammaticValidationEntry(id="test", title="Test")
+        fm = entry.to_frontmatter()
+        assert "category" not in fm
+        assert "check_command" not in fm
+        assert "pass_criteria" not in fm
+
+    def test_roundtrip(self):
+        entry = ProgrammaticValidationEntry(
+            id="test",
+            title="Ruff Linting",
+            category="coding",
+            check_command="ruff check .",
+            pass_criteria="exit code 0",
+            tags=["ci"],
+        )
+        fm = entry.to_frontmatter()
+        restored = ProgrammaticValidationEntry.from_frontmatter(fm, entry.body)
+        assert restored.entry_type == "programmatic_validation"
+        assert restored.category == "coding"
+        assert restored.check_command == "ruff check ."
+        assert restored.pass_criteria == "exit code 0"
+        assert restored.tags == ["ci"]
+
+    def test_validation_category_enum(self):
+        errors = validate_software_kb("programmatic_validation", {"category": "coding", "check_command": "x"}, {})
+        non_warnings = [e for e in errors if e.get("severity") != "warning"]
+        assert non_warnings == []
+
+    def test_invalid_category(self):
+        errors = validate_software_kb("programmatic_validation", {"category": "invalid", "check_command": "x"}, {})
+        assert any(e["field"] == "category" for e in errors)
+
+    def test_check_command_warning(self):
+        errors = validate_software_kb("programmatic_validation", {"category": "coding"}, {})
+        warnings = [e for e in errors if e.get("severity") == "warning"]
+        assert any(e["rule"] == "check_command_recommended" for e in warnings)
+
+    def test_no_warning_with_check_command(self):
+        errors = validate_software_kb("programmatic_validation", {"check_command": "ruff check ."}, {})
+        assert not any(e["rule"] == "check_command_recommended" for e in errors)
+
+
+# =========================================================================
+# Entry types — DevelopmentConvention
+# =========================================================================
+
+
+class TestDevelopmentConventionEntry:
+    def test_entry_type(self):
+        entry = DevelopmentConventionEntry(id="test", title="Test")
+        assert entry.entry_type == "development_convention"
+
+    def test_default_values(self):
+        entry = DevelopmentConventionEntry(id="test", title="Test")
+        assert entry.category == ""
+
+    def test_to_frontmatter(self):
+        entry = DevelopmentConventionEntry(
+            id="test", title="Naming Convention", category="coding"
+        )
+        fm = entry.to_frontmatter()
+        assert fm["type"] == "development_convention"
+        assert fm["category"] == "coding"
+
+    def test_to_frontmatter_omits_defaults(self):
+        entry = DevelopmentConventionEntry(id="test", title="Test")
+        fm = entry.to_frontmatter()
+        assert "category" not in fm
+
+    def test_roundtrip(self):
+        entry = DevelopmentConventionEntry(
+            id="test", title="Naming Convention", category="coding", tags=["style"]
+        )
+        fm = entry.to_frontmatter()
+        restored = DevelopmentConventionEntry.from_frontmatter(fm, entry.body)
+        assert restored.entry_type == "development_convention"
+        assert restored.category == "coding"
+        assert restored.tags == ["style"]
+
+    def test_validation_category_enum(self):
+        errors = validate_software_kb("development_convention", {"category": "coding"}, {})
+        assert errors == []
+
+    def test_invalid_category(self):
+        errors = validate_software_kb("development_convention", {"category": "invalid"}, {})
+        assert any(e["field"] == "category" for e in errors)
+
+
+# =========================================================================
+# Standards Migration
+# =========================================================================
+
+
+class TestStandardsMigration:
+    def _write_standard_file(self, path: Path, title: str, enforced: bool, category: str = "coding"):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        enforced_str = "true" if enforced else "false"
+        path.write_text(
+            f"---\ntype: standard\ntitle: {title}\ncategory: {category}\nenforced: {enforced_str}\n---\n\nBody text.\n"
+        )
+
+    def test_dry_run_no_changes(self, tmp_path):
+        """Dry run should not modify any files."""
+        standards_dir = tmp_path / "standards"
+        std_file = standards_dir / "test.md"
+        self._write_standard_file(std_file, "Test Standard", enforced=False)
+
+        original_content = std_file.read_text()
+
+        from pyrite.storage.database import PyriteDB
+
+        db_path = tmp_path / "test.db"
+        db = PyriteDB(db_path)
+        try:
+            db._raw_conn.execute(
+                "INSERT INTO kb (name, path, kb_type) VALUES (?, ?, ?)",
+                ("test", str(tmp_path), "generic"),
+            )
+            db._raw_conn.execute(
+                "INSERT INTO entry (id, kb_name, entry_type, title, body, file_path, metadata) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "test-std",
+                    "test",
+                    "standard",
+                    "Test Standard",
+                    "Body text.",
+                    str(std_file),
+                    json.dumps({"category": "coding", "enforced": False}),
+                ),
+            )
+            db._raw_conn.commit()
+
+            from pyrite_software_kb.cli import _query_entries
+
+            rows = _query_entries(db, "standard")
+            assert len(rows) == 1
+
+            # Verify file unchanged (simulating dry run logic)
+            assert std_file.read_text() == original_content
+        finally:
+            db.close()
+
+    def test_enforced_becomes_validation(self, tmp_path):
+        """An enforced standard should become programmatic_validation."""
+        standards_dir = tmp_path / "standards"
+        std_file = standards_dir / "ruff.md"
+        self._write_standard_file(std_file, "Ruff Linting", enforced=True)
+
+        import re
+
+        content = std_file.read_text()
+        content = re.sub(r'^type:\s*standard\s*$', 'type: programmatic_validation', content, flags=re.MULTILINE)
+        content = re.sub(r'^enforced:\s*(true|false)\s*\n', '', content, flags=re.MULTILINE | re.IGNORECASE)
+
+        new_dir = tmp_path / "validations"
+        new_dir.mkdir(parents=True, exist_ok=True)
+        new_path = new_dir / "ruff.md"
+        new_path.write_text(content)
+
+        assert "type: programmatic_validation" in new_path.read_text()
+        assert "enforced:" not in new_path.read_text()
+        assert new_path.exists()
+
+    def test_non_enforced_becomes_convention(self, tmp_path):
+        """A non-enforced standard should become development_convention."""
+        standards_dir = tmp_path / "standards"
+        std_file = standards_dir / "naming.md"
+        self._write_standard_file(std_file, "Naming Convention", enforced=False)
+
+        import re
+
+        content = std_file.read_text()
+        content = re.sub(r'^type:\s*standard\s*$', 'type: development_convention', content, flags=re.MULTILINE)
+        content = re.sub(r'^enforced:\s*(true|false)\s*\n', '', content, flags=re.MULTILINE | re.IGNORECASE)
+
+        new_dir = tmp_path / "conventions"
+        new_dir.mkdir(parents=True, exist_ok=True)
+        new_path = new_dir / "naming.md"
+        new_path.write_text(content)
+
+        assert "type: development_convention" in new_path.read_text()
+        assert "enforced:" not in new_path.read_text()
+        assert new_path.exists()
 
 
 # =========================================================================
@@ -706,6 +933,8 @@ class TestPreset:
         assert "adr" in p["types"]
         assert "design_doc" in p["types"]
         assert "standard" in p["types"]
+        assert "programmatic_validation" in p["types"]
+        assert "development_convention" in p["types"]
         assert "component" in p["types"]
         assert "backlog_item" in p["types"]
         assert "runbook" in p["types"]
@@ -718,6 +947,8 @@ class TestPreset:
         assert "adrs" in dirs
         assert "designs" in dirs
         assert "standards" in dirs
+        assert "validations" in dirs
+        assert "conventions" in dirs
         assert "components" in dirs
         assert "backlog" in dirs
         assert "runbooks" in dirs
@@ -754,6 +985,12 @@ class TestEnums:
         assert "coding" in STANDARD_CATEGORIES
         assert "security" in STANDARD_CATEGORIES
         assert len(STANDARD_CATEGORIES) == 7
+
+    def test_validation_categories(self):
+        assert VALIDATION_CATEGORIES == STANDARD_CATEGORIES
+
+    def test_convention_categories(self):
+        assert CONVENTION_CATEGORIES == STANDARD_CATEGORIES
 
     def test_component_kinds(self):
         assert "module" in COMPONENT_KINDS

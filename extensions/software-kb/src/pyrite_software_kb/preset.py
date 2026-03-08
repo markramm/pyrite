@@ -17,10 +17,22 @@ SOFTWARE_KB_PRESET = {
             "subdirectory": "designs/",
         },
         "standard": {
-            "description": "Coding standard or convention",
+            "description": "Coding standard or convention (legacy — use programmatic_validation or development_convention)",
             "required": ["title"],
             "optional": ["category", "enforced"],
             "subdirectory": "standards/",
+        },
+        "programmatic_validation": {
+            "description": "Automated check with verifiable pass/fail criteria",
+            "required": ["title"],
+            "optional": ["category", "check_command", "pass_criteria"],
+            "subdirectory": "validations/",
+        },
+        "development_convention": {
+            "description": "Judgment-based guidance carried as context during work",
+            "required": ["title"],
+            "optional": ["category"],
+            "subdirectory": "conventions/",
         },
         "component": {
             "description": "Module or service documentation",
@@ -51,5 +63,5 @@ SOFTWARE_KB_PRESET = {
             {"field": "status", "enum": ["proposed", "accepted", "deprecated", "superseded"]},
         ],
     },
-    "directories": ["adrs", "designs", "standards", "components", "backlog", "runbooks"],
+    "directories": ["adrs", "designs", "standards", "validations", "conventions", "components", "backlog", "runbooks"],
 }

@@ -8,6 +8,8 @@ from .entry_types import (
     BacklogItemEntry,
     ComponentEntry,
     DesignDocEntry,
+    DevelopmentConventionEntry,
+    ProgrammaticValidationEntry,
     RunbookEntry,
     StandardEntry,
 )
@@ -47,6 +49,8 @@ class SoftwareKBPlugin:
             "adr": ADREntry,
             "design_doc": DesignDocEntry,
             "standard": StandardEntry,
+            "programmatic_validation": ProgrammaticValidationEntry,
+            "development_convention": DevelopmentConventionEntry,
             "component": ComponentEntry,
             "backlog_item": BacklogItemEntry,
             "runbook": RunbookEntry,
@@ -94,7 +98,7 @@ class SoftwareKBPlugin:
                 "handler": self._mcp_component,
             }
             tools["sw_standards"] = {
-                "description": "List coding standards and conventions. Check before writing code.",
+                "description": "List all standards (includes standard, programmatic_validation, and development_convention types). Check before writing code.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -116,6 +120,54 @@ class SoftwareKBPlugin:
                     "required": [],
                 },
                 "handler": self._mcp_standards,
+            }
+            tools["sw_validations"] = {
+                "description": "List programmatic validations (automated checks). These define verifiable pass/fail criteria.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "coding",
+                                "testing",
+                                "api",
+                                "git",
+                                "documentation",
+                                "security",
+                                "deployment",
+                            ],
+                            "description": "Filter by category",
+                        },
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_validations,
+            }
+            tools["sw_conventions"] = {
+                "description": "List development conventions (judgment-based guidance). These are carried as context during work.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                        "category": {
+                            "type": "string",
+                            "enum": [
+                                "coding",
+                                "testing",
+                                "api",
+                                "git",
+                                "documentation",
+                                "security",
+                                "deployment",
+                            ],
+                            "description": "Filter by category",
+                        },
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_conventions,
             }
             tools["sw_backlog"] = {
                 "description": "List backlog items (features, bugs, tech debt), filter by status/priority/kind",
@@ -357,7 +409,7 @@ class SoftwareKBPlugin:
                 db.close()
 
     def _mcp_standards(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List standards."""
+        """List all standards (standard + programmatic_validation + development_convention)."""
         import json
 
         db, should_close = self._get_db()
@@ -365,7 +417,7 @@ class SoftwareKBPlugin:
         category_filter = args.get("category")
 
         try:
-            query = "SELECT * FROM entry WHERE entry_type = 'standard'"
+            query = "SELECT * FROM entry WHERE entry_type IN ('standard', 'programmatic_validation', 'development_convention')"
             params: list = []
             if kb_name:
                 query += " AND kb_name = ?"
@@ -387,6 +439,7 @@ class SoftwareKBPlugin:
                     {
                         "id": row["id"],
                         "title": row["title"],
+                        "type": row["entry_type"],
                         "category": category,
                         "enforced": meta.get("enforced", False),
                         "kb_name": row["kb_name"],
@@ -394,6 +447,90 @@ class SoftwareKBPlugin:
                 )
 
             return {"count": len(standards), "standards": standards}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_validations(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List programmatic validations."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+        category_filter = args.get("category")
+
+        try:
+            query = "SELECT * FROM entry WHERE entry_type = 'programmatic_validation'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+            items = []
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                category = meta.get("category", "")
+                if category_filter and category != category_filter:
+                    continue
+                items.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "category": category,
+                        "check_command": meta.get("check_command", ""),
+                        "pass_criteria": meta.get("pass_criteria", ""),
+                        "kb_name": row["kb_name"],
+                    }
+                )
+
+            return {"count": len(items), "validations": items}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_conventions(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List development conventions."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+        category_filter = args.get("category")
+
+        try:
+            query = "SELECT * FROM entry WHERE entry_type = 'development_convention'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+            items = []
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                category = meta.get("category", "")
+                if category_filter and category != category_filter:
+                    continue
+                items.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "category": category,
+                        "kb_name": row["kb_name"],
+                    }
+                )
+
+            return {"count": len(items), "conventions": items}
         finally:
             if should_close:
                 db.close()

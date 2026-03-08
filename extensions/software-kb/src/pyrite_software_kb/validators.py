@@ -9,9 +9,11 @@ from .entry_types import (
     BACKLOG_PRIORITIES,
     BACKLOG_STATUSES,
     COMPONENT_KINDS,
+    CONVENTION_CATEGORIES,
     DESIGN_DOC_STATUSES,
     RUNBOOK_KINDS,
     STANDARD_CATEGORIES,
+    VALIDATION_CATEGORIES,
 )
 
 
@@ -27,6 +29,10 @@ def validate_software_kb(
         _validate_design_doc(data, errors)
     elif entry_type == "standard":
         _validate_standard(data, errors)
+    elif entry_type == "programmatic_validation":
+        _validate_programmatic_validation(data, errors)
+    elif entry_type == "development_convention":
+        _validate_development_convention(data, errors)
     elif entry_type == "component":
         _validate_component(data, errors)
     elif entry_type == "backlog_item":
@@ -106,6 +112,24 @@ def _validate_design_doc(data: dict[str, Any], errors: list[dict]) -> None:
 
 def _validate_standard(data: dict[str, Any], errors: list[dict]) -> None:
     _validate_enum(data, "category", STANDARD_CATEGORIES, errors)
+
+
+def _validate_programmatic_validation(data: dict[str, Any], errors: list[dict]) -> None:
+    _validate_enum(data, "category", VALIDATION_CATEGORIES, errors)
+    if not data.get("check_command"):
+        errors.append(
+            {
+                "field": "check_command",
+                "rule": "check_command_recommended",
+                "expected": "command to run for validation",
+                "got": None,
+                "severity": "warning",
+            }
+        )
+
+
+def _validate_development_convention(data: dict[str, Any], errors: list[dict]) -> None:
+    _validate_enum(data, "category", CONVENTION_CATEGORIES, errors)
 
 
 def _validate_component(data: dict[str, Any], errors: list[dict]) -> None:
