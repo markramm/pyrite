@@ -21,13 +21,14 @@ from .connection import ConnectionMixin
 from .crud import CRUDMixin
 from .kb_ops import KBOpsMixin
 from .queries import QueryMixin
+from .review_ops import ReviewOpsMixin
 from .user_ops import UserOpsMixin
 
 if TYPE_CHECKING:
     from .backends.protocol import SearchBackend
 
 
-class PyriteDB(ConnectionMixin, KBOpsMixin, CRUDMixin, QueryMixin, UserOpsMixin):
+class PyriteDB(ConnectionMixin, KBOpsMixin, CRUDMixin, QueryMixin, UserOpsMixin, ReviewOpsMixin):
     """
     SQLite database for indexing multiple knowledge bases.
 

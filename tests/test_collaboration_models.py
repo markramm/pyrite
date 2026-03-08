@@ -409,7 +409,7 @@ class TestSchemaVersion:
     def test_schema_version_is_14(self, db):
         """DB should be at schema version 14 after migration."""
         version = db.get_schema_version()
-        assert version == 14
+        assert version == 15
 
     def test_collaboration_tables_exist(self, db):
         """All collaboration tables should exist."""

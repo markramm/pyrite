@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 14
+CURRENT_VERSION = 15
 
 
 @dataclass
@@ -297,6 +297,30 @@ MIGRATIONS: list[Migration] = [
         up="",
         down="""
         -- SQLite < 3.35 does not support DROP COLUMN; columns remain but are unused.
+        """,
+    ),
+    Migration(
+        version=15,
+        description="Add review table for QA reviews",
+        up="""
+        CREATE TABLE IF NOT EXISTS review (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id TEXT NOT NULL,
+            kb_name TEXT NOT NULL,
+            content_hash TEXT NOT NULL,
+            reviewer TEXT NOT NULL,
+            reviewer_type TEXT NOT NULL,
+            result TEXT NOT NULL,
+            details TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (entry_id, kb_name) REFERENCES entry(id, kb_name) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_review_entry ON review(entry_id, kb_name);
+        CREATE INDEX IF NOT EXISTS idx_review_content_hash ON review(content_hash);
+        CREATE INDEX IF NOT EXISTS idx_review_reviewer ON review(reviewer);
+        """,
+        down="""
+        DROP TABLE IF EXISTS review;
         """,
     ),
 ]

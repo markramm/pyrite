@@ -94,6 +94,7 @@ class Entry(Base):
         "Link", back_populates="source_entry", cascade="all, delete-orphan"
     )
     versions = relationship("EntryVersion", back_populates="entry", cascade="all, delete-orphan")
+    reviews = relationship("Review", back_populates="entry", cascade="all, delete-orphan")
     blocks = relationship("Block", cascade="all, delete-orphan")
 
 
@@ -407,6 +408,38 @@ class Block(Base):
         Index("idx_block_entry", "entry_id", "kb_name"),
         Index("idx_block_block_id", "block_id"),
     )
+
+
+# =========================================================================
+# Settings
+# =========================================================================
+
+
+class Review(Base):
+    __tablename__ = "review"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entry_id = Column(String, nullable=False)
+    kb_name = Column(String, nullable=False)
+    content_hash = Column(String(40), nullable=False)
+    reviewer = Column(String, nullable=False)
+    reviewer_type = Column(String, nullable=False)
+    result = Column(String, nullable=False)
+    details = Column(Text)
+    created_at = Column(String, server_default="CURRENT_TIMESTAMP")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["entry_id", "kb_name"],
+            ["entry.id", "entry.kb_name"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_review_entry", "entry_id", "kb_name"),
+        Index("idx_review_content_hash", "content_hash"),
+        Index("idx_review_reviewer", "reviewer"),
+    )
+
+    entry = relationship("Entry", back_populates="reviews")
 
 
 # =========================================================================
