@@ -3,7 +3,7 @@ id: collections-and-views
 type: backlog_item
 title: "Collections and Views"
 kind: feature
-status: in_progress
+status: done
 priority: high
 effort: XL
 tags: [architecture, schema, views, ui, core]

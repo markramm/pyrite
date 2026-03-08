@@ -176,7 +176,7 @@ Recommended execution order. Grouped by milestone.
 
 | Priority | Item | Effort | Rationale |
 |----------|------|--------|-----------|
-| **1** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality | **in_progress** (Phase 1 ✅, Phase 2 ✅) |
+| **1** | [[intent-layer]] | M | Guidelines, goals, rubrics for entry quality | **done** |
 | **2** | [[event-bus-webhooks]] | M | Integration story, live graph updates |
 | **3** | [[kb-orchestrator-skill]] | M | Multi-KB agent coordination pattern |
 | **4** | [[db-backup-restore]] | S | Operational tooling | **done** |
@@ -316,7 +316,7 @@ Recommended execution order. Grouped by milestone.
 
 | # | Item | Kind | Effort |
 |---|------|------|--------|
-| 92 | [[intent-layer]] | feature | M |
+| 92 | [[intent-layer]] | feature | M | **done** |
 | 95 | [[event-bus-webhooks]] | feature | M |
 | 96 | [[db-backup-restore]] | feature | S | **done** |
 | 98 | [[kb-orchestrator-skill]] | feature | M |
