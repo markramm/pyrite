@@ -11,6 +11,7 @@ from .entry_types import (
     COMPONENT_KINDS,
     CONVENTION_CATEGORIES,
     DESIGN_DOC_STATUSES,
+    MILESTONE_STATUSES,
     RUNBOOK_KINDS,
     STANDARD_CATEGORIES,
     VALIDATION_CATEGORIES,
@@ -39,6 +40,8 @@ def validate_software_kb(
         _validate_backlog_item(data, errors)
     elif entry_type == "runbook":
         _validate_runbook(data, errors)
+    elif entry_type == "milestone":
+        _validate_milestone(data, errors)
 
     return errors
 
@@ -162,6 +165,10 @@ def _validate_backlog_item(data: dict[str, Any], errors: list[dict]) -> None:
                 "got": effort,
             }
         )
+
+
+def _validate_milestone(data: dict[str, Any], errors: list[dict]) -> None:
+    _validate_enum(data, "status", MILESTONE_STATUSES, errors, "open")
 
 
 def _validate_runbook(data: dict[str, Any], errors: list[dict]) -> None:

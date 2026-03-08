@@ -16,10 +16,11 @@ VALIDATION_CATEGORIES = STANDARD_CATEGORIES
 CONVENTION_CATEGORIES = STANDARD_CATEGORIES
 COMPONENT_KINDS = ("module", "service", "package", "library", "cli", "api", "database", "application", "utility", "endpoint", "docs")
 BACKLOG_KINDS = ("feature", "bug", "tech_debt", "improvement", "spike", "enhancement", "documentation", "docs", "task")
-BACKLOG_STATUSES = ("proposed", "planned", "accepted", "in_progress", "done", "completed", "retired", "deferred", "wont_do")
+BACKLOG_STATUSES = ("proposed", "planned", "accepted", "in_progress", "review", "done", "completed", "retired", "deferred", "wont_do")
 BACKLOG_PRIORITIES = ("critical", "high", "medium", "low")
 BACKLOG_EFFORTS = ("XS", "S", "M", "L", "XL")
 RUNBOOK_KINDS = ("howto", "troubleshooting", "setup", "operations", "onboarding")
+MILESTONE_STATUSES = ("open", "closed")
 
 
 # Helper for NoteEntry-based from_frontmatter
@@ -330,4 +331,30 @@ class RunbookEntry(NoteEntry):
             **kwargs,
             runbook_kind=meta.get("runbook_kind", ""),
             audience=meta.get("audience", ""),
+        )
+
+
+@dataclass
+class MilestoneEntry(Statusable, NoteEntry):
+    """Project milestone for grouping backlog items."""
+
+    status: str = "open"
+
+    @property
+    def entry_type(self) -> str:
+        return "milestone"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = super().to_frontmatter()
+        meta["type"] = "milestone"
+        if self.status != "open":
+            meta["status"] = self.status
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "MilestoneEntry":
+        kwargs = _note_base_kwargs(meta, body)
+        return cls(
+            **kwargs,
+            status=meta.get("status", "open"),
         )

@@ -432,6 +432,149 @@ def sw_migrate_standards(
         db.close()
 
 
+@sw_app.command("milestones")
+def sw_milestones(
+    status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """List milestones with completion progress."""
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        rows = _query_entries(db, "milestone", kb_name)
+
+        if status:
+            rows = [r for r in rows if r["_meta"].get("status", "open") == status]
+
+        if not rows:
+            if fmt == "json":
+                _json_output([])
+            else:
+                console.print("[dim]No milestones found.[/dim]")
+            return
+
+        # Compute completion for each milestone
+        results = []
+        for row in rows:
+            meta = row["_meta"]
+            linked = db.get_outlinks(row["id"], row.get("kb_name", ""))
+            total = 0
+            completed = 0
+            for link in linked:
+                if link.get("entry_type") == "backlog_item":
+                    total += 1
+                    link_meta = {}
+                    if link.get("metadata"):
+                        try:
+                            link_meta = json.loads(link["metadata"]) if isinstance(link["metadata"], str) else link.get("metadata", {})
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    if link_meta.get("status") in ("done", "completed"):
+                        completed += 1
+            pct = round(completed / total * 100) if total > 0 else 0
+            results.append({
+                "title": row["title"],
+                "status": meta.get("status", "open"),
+                "total_items": total,
+                "completed_items": completed,
+                "completion_pct": pct,
+            })
+
+        if fmt == "json":
+            _json_output(results)
+            return
+
+        table = Table(title="Milestones")
+        table.add_column("Title")
+        table.add_column("Status", style="yellow")
+        table.add_column("Progress", style="green")
+
+        for r in results:
+            progress = f"{r['completed_items']}/{r['total_items']} ({r['completion_pct']}%)"
+            table.add_row(r["title"], r["status"], progress)
+
+        console.print(table)
+    finally:
+        db.close()
+
+
+@sw_app.command("board")
+def sw_board_cmd(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """View kanban board with backlog items grouped by lane."""
+    from pathlib import Path
+
+    from .board import load_board_config
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        # Load board config
+        if kb_name:
+            kb_conf = config.get_kb(kb_name)
+            board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+        else:
+            board_config = load_board_config(Path("."))
+
+        rows = _query_entries(db, "backlog_item", kb_name)
+
+        # Build status→lane mapping
+        status_to_lane: dict[str, int] = {}
+        for i, lane in enumerate(board_config["lanes"]):
+            for s in lane["statuses"]:
+                status_to_lane[s] = i
+
+        # Group items
+        lane_items: dict[int, list] = {i: [] for i in range(len(board_config["lanes"]))}
+        for row in rows:
+            meta = row["_meta"]
+            item_status = meta.get("status", "proposed")
+            lane_idx = status_to_lane.get(item_status)
+            if lane_idx is not None:
+                lane_items[lane_idx].append(row)
+
+        lanes = []
+        for i, lane_def in enumerate(board_config["lanes"]):
+            items = lane_items.get(i, [])
+            wip_limit = lane_def.get("wip_limit")
+            lane: dict = {
+                "name": lane_def["name"],
+                "count": len(items),
+            }
+            if wip_limit is not None:
+                lane["wip_limit"] = wip_limit
+                lane["over_limit"] = len(items) > wip_limit
+            lanes.append(lane)
+
+        if fmt == "json":
+            _json_output({"lanes": lanes, "wip_policy": board_config.get("wip_policy", "warn")})
+            return
+
+        table = Table(title="Board")
+        table.add_column("Lane")
+        table.add_column("Items", justify="right")
+        table.add_column("WIP Limit", justify="right")
+        table.add_column("Status", style="yellow")
+
+        for lane in lanes:
+            wip_str = str(lane.get("wip_limit", "")) if "wip_limit" in lane else "-"
+            status_str = ""
+            if lane.get("over_limit"):
+                status_str = "[red]OVER LIMIT[/red]"
+            elif "wip_limit" in lane:
+                status_str = "[green]OK[/green]"
+            table.add_row(lane["name"], str(lane["count"]), wip_str, status_str)
+
+        console.print(table)
+    finally:
+        db.close()
+
+
 @sw_app.command("components")
 def sw_components(
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),

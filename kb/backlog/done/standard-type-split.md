@@ -3,7 +3,7 @@ id: standard-type-split
 type: backlog_item
 title: "Split standard type into programmatic_validation and development_convention"
 kind: feature
-status: proposed
+status: completed
 priority: high
 effort: M
 tags: [software, agents, workflow, wave-2]

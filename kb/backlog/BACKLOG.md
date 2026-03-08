@@ -168,8 +168,8 @@ Recommended execution order. Grouped by milestone.
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
-| **1** | [[kanban-entity-types]] | M | Milestone, review_queue, lane entity types | proposed |
-| **2** | [[standard-type-split]] | M | Split standard → programmatic_validation + development_convention | proposed |
+| **1** | [[kanban-entity-types]] | L | Milestone type, board config (board.yaml), review workflow | proposed |
+| **2** | [[standard-type-split]] | M | Split standard → programmatic_validation + development_convention | **done** |
 | **3** | [[kanban-mcp-tools]] | L | sw_pull_next, sw_context_for_item, sw_review_queue, sw_validate | proposed |
 
 **Future:**

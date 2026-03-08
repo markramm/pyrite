@@ -1,7 +1,7 @@
 ---
 id: kanban-entity-types
 type: backlog_item
-title: "Add milestone entry type and board configuration"
+title: "Milestone entry type, board config, and review workflow"
 kind: feature
 status: proposed
 priority: high
@@ -21,13 +21,38 @@ links:
     note: "Standard split should land first so sw_validate has types to work with"
 ---
 
-# Add milestone entry type and board configuration
+# Milestone entry type, board config, and review workflow
 
 ## Problem
 
-ADR-0019 established kanban flow for agent teams. ADR-0020 revised the entity model: milestone is a knowledge artifact (entry type), lanes are board configuration (YAML), review queue is a computed view (query). This item covers the entry type and config work.
+ADR-0019 established kanban flow for agent teams. ADR-0020 revised the entity model: milestone is a knowledge artifact (entry type), lanes are board configuration (YAML), review queue is a computed view (query). This item covers the entry type, extension config mechanism, and review workflow additions.
 
 ## Solution
+
+### Extension config files
+
+KBs already require specific extensions for their types (`kb_type: software` implies software-kb). Extensions can own config files in the KB root — separate from `kb.yaml` so each has its own git diff history and no namespace collisions.
+
+For software-kb, the board config lives in `board.yaml` at the KB root:
+
+```yaml
+lanes:
+  - name: Backlog
+    statuses: [proposed, planned]
+  - name: Ready
+    statuses: [accepted]
+  - name: In Progress
+    statuses: [in_progress]
+    wip_limit: 5
+  - name: Review
+    statuses: [review]
+    wip_limit: 3
+  - name: Done
+    statuses: [done, completed]
+wip_policy: warn  # warn | enforce
+```
+
+The extension reads this file from the KB path when needed. No changes to core `kb.yaml` schema required.
 
 ### Milestone entry type
 
@@ -39,35 +64,10 @@ New `milestone` entry type in software-kb extension:
 - **CLI:** `pyrite sw milestones` — lists milestones with completion percentage
 - **MCP:** `sw_milestones` read tool
 
-### Board configuration
-
-Board config in KB settings defines kanban topology:
-
-```yaml
-board:
-  lanes:
-    - name: Backlog
-      statuses: [proposed, planned]
-    - name: Ready
-      statuses: [accepted]
-    - name: In Progress
-      statuses: [in_progress]
-      wip_limit: 5
-    - name: Review
-      statuses: [review]
-      wip_limit: 3
-    - name: Done
-      statuses: [done, completed]
-  wip_policy: warn  # warn | enforce
-```
-
-Lanes map to existing backlog item statuses — no new status values needed except `review`.
-
 ### Backlog item changes
 
 - Add `review` to BACKLOG_STATUSES (new status for items awaiting human review)
-- Add `milestone` optional field for linking to a milestone
-- Workflow: add `in_progress → review` transition
+- Workflow: add `in_progress → review` and `review → done`/`review → completed` transitions
 
 ### CLI
 
@@ -77,8 +77,8 @@ Lanes map to existing backlog item statuses — no new status values needed exce
 ## Acceptance Criteria
 
 - `milestone` type registered in software-kb plugin with validator
-- Board config schema defined and loaded from KB settings
+- Board config loaded from `board.yaml` in KB root
 - `pyrite sw milestones` shows milestones with completion %
 - `pyrite sw board` shows lane state with WIP usage
 - `review` status added to backlog workflow
-- Software preset template updated with default board config
+- Software preset template updated with default `board.yaml`

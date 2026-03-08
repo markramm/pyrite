@@ -9,6 +9,7 @@ from .entry_types import (
     ComponentEntry,
     DesignDocEntry,
     DevelopmentConventionEntry,
+    MilestoneEntry,
     ProgrammaticValidationEntry,
     RunbookEntry,
     StandardEntry,
@@ -54,6 +55,7 @@ class SoftwareKBPlugin:
             "component": ComponentEntry,
             "backlog_item": BacklogItemEntry,
             "runbook": RunbookEntry,
+            "milestone": MilestoneEntry,
         }
 
     def get_kb_types(self) -> list[str]:
@@ -169,6 +171,33 @@ class SoftwareKBPlugin:
                 },
                 "handler": self._mcp_conventions,
             }
+            tools["sw_milestones"] = {
+                "description": "List milestones with completion stats from linked backlog items",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                        "status": {
+                            "type": "string",
+                            "enum": ["open", "closed"],
+                            "description": "Filter by milestone status",
+                        },
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_milestones,
+            }
+            tools["sw_board"] = {
+                "description": "View kanban board with backlog items grouped into lanes by status",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_board,
+            }
             tools["sw_backlog"] = {
                 "description": "List backlog items (features, bugs, tech debt), filter by status/priority/kind",
                 "inputSchema": {
@@ -177,7 +206,7 @@ class SoftwareKBPlugin:
                         "kb_name": {"type": "string", "description": "KB name (optional)"},
                         "status": {
                             "type": "string",
-                            "enum": ["proposed", "accepted", "in_progress", "done", "wont_do"],
+                            "enum": ["proposed", "accepted", "in_progress", "review", "done", "wont_do"],
                             "description": "Filter by status",
                         },
                         "priority": {
@@ -585,6 +614,150 @@ class SoftwareKBPlugin:
                 )
 
             return {"count": len(items), "items": items}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_milestones(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List milestones with completion stats."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+        status_filter = args.get("status")
+
+        try:
+            query = "SELECT * FROM entry WHERE entry_type = 'milestone'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+            query += " ORDER BY created_at DESC"
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+            milestones = []
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                status = meta.get("status", "open")
+                if status_filter and status != status_filter:
+                    continue
+
+                # Get linked backlog items via outlinks
+                linked = db.get_outlinks(row["id"], row["kb_name"])
+                total = 0
+                completed = 0
+                for link in linked:
+                    if link.get("entry_type") == "backlog_item":
+                        total += 1
+                        link_meta = {}
+                        if link.get("metadata"):
+                            try:
+                                link_meta = json.loads(link["metadata"]) if isinstance(link["metadata"], str) else link.get("metadata", {})
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                        if link_meta.get("status") in ("done", "completed"):
+                            completed += 1
+
+                pct = round(completed / total * 100) if total > 0 else 0
+                milestones.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "status": status,
+                        "total_items": total,
+                        "completed_items": completed,
+                        "completion_pct": pct,
+                        "kb_name": row["kb_name"],
+                    }
+                )
+
+            return {"count": len(milestones), "milestones": milestones}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_board(self, args: dict[str, Any]) -> dict[str, Any]:
+        """View kanban board."""
+        import json
+
+        from .board import load_board_config
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+
+        try:
+            # Load board config
+            if self.ctx is not None and kb_name:
+                from pyrite.config import load_config
+
+                config = load_config()
+                kb_conf = config.get_kb(kb_name)
+                board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+            else:
+                from pathlib import Path
+
+                board_config = load_board_config(Path("."))
+
+            # Query all backlog items
+            query = "SELECT * FROM entry WHERE entry_type = 'backlog_item'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+
+            # Build status→lane mapping
+            status_to_lane: dict[str, int] = {}
+            for i, lane in enumerate(board_config["lanes"]):
+                for s in lane["statuses"]:
+                    status_to_lane[s] = i
+
+            # Group items into lanes
+            lane_items: dict[int, list] = {i: [] for i in range(len(board_config["lanes"]))}
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                status = meta.get("status", "proposed")
+                lane_idx = status_to_lane.get(status)
+                if lane_idx is not None:
+                    lane_items[lane_idx].append(
+                        {
+                            "id": row["id"],
+                            "title": row["title"],
+                            "status": status,
+                            "priority": meta.get("priority", "medium"),
+                            "kind": meta.get("kind", ""),
+                        }
+                    )
+
+            lanes = []
+            for i, lane_def in enumerate(board_config["lanes"]):
+                items = lane_items.get(i, [])
+                wip_limit = lane_def.get("wip_limit")
+                lane = {
+                    "name": lane_def["name"],
+                    "count": len(items),
+                    "items": items,
+                }
+                if wip_limit is not None:
+                    lane["wip_limit"] = wip_limit
+                    lane["over_limit"] = len(items) > wip_limit
+                lanes.append(lane)
+
+            return {
+                "lanes": lanes,
+                "wip_policy": board_config.get("wip_policy", "warn"),
+            }
         finally:
             if should_close:
                 db.close()

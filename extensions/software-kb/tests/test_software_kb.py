@@ -13,6 +13,7 @@ from pyrite_software_kb.entry_types import (
     COMPONENT_KINDS,
     CONVENTION_CATEGORIES,
     DESIGN_DOC_STATUSES,
+    MILESTONE_STATUSES,
     RUNBOOK_KINDS,
     STANDARD_CATEGORIES,
     VALIDATION_CATEGORIES,
@@ -21,6 +22,7 @@ from pyrite_software_kb.entry_types import (
     ComponentEntry,
     DesignDocEntry,
     DevelopmentConventionEntry,
+    MilestoneEntry,
     ProgrammaticValidationEntry,
     RunbookEntry,
     StandardEntry,
@@ -1176,3 +1178,176 @@ class TestBacklogStatusColumn:
                 assert row["_meta"]["status"] == "proposed"
             finally:
                 db.close()
+
+
+# =========================================================================
+# MilestoneEntry
+# =========================================================================
+
+
+class TestMilestoneEntry:
+    def test_entry_type(self):
+        entry = MilestoneEntry(id="m1", title="v1.0")
+        assert entry.entry_type == "milestone"
+
+    def test_defaults(self):
+        entry = MilestoneEntry(id="m1", title="v1.0")
+        assert entry.status == "open"
+
+    def test_to_frontmatter_omits_defaults(self):
+        entry = MilestoneEntry(id="m1", title="v1.0")
+        fm = entry.to_frontmatter()
+        assert fm["type"] == "milestone"
+        assert "status" not in fm  # default "open" omitted
+
+    def test_to_frontmatter_with_status(self):
+        entry = MilestoneEntry(id="m1", title="v1.0", status="closed")
+        fm = entry.to_frontmatter()
+        assert fm["status"] == "closed"
+
+    def test_from_frontmatter(self):
+        meta = {"id": "m1", "title": "v1.0", "type": "milestone", "status": "closed"}
+        entry = MilestoneEntry.from_frontmatter(meta, "Release notes")
+        assert entry.id == "m1"
+        assert entry.title == "v1.0"
+        assert entry.status == "closed"
+        assert entry.body == "Release notes"
+
+    def test_roundtrip(self):
+        entry = MilestoneEntry(id="m1", title="v1.0", status="closed")
+        fm = entry.to_frontmatter()
+        restored = MilestoneEntry.from_frontmatter(fm, entry.body)
+        assert restored.status == entry.status
+        assert restored.title == entry.title
+
+
+# =========================================================================
+# Milestone validator
+# =========================================================================
+
+
+class TestMilestoneValidator:
+    def test_valid_status(self):
+        errors = validate_software_kb("milestone", {"status": "open"}, {})
+        assert errors == []
+
+    def test_valid_closed(self):
+        errors = validate_software_kb("milestone", {"status": "closed"}, {})
+        assert errors == []
+
+    def test_invalid_status(self):
+        errors = validate_software_kb("milestone", {"status": "invalid"}, {})
+        assert any(e["field"] == "status" for e in errors)
+
+    def test_default_status_ok(self):
+        errors = validate_software_kb("milestone", {}, {})
+        assert errors == []
+
+
+# =========================================================================
+# Board config
+# =========================================================================
+
+
+class TestBoardConfig:
+    def test_fallback_to_defaults(self):
+        from pyrite_software_kb.board import DEFAULT_BOARD_CONFIG, load_board_config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = load_board_config(Path(tmpdir))
+            assert config["lanes"] == DEFAULT_BOARD_CONFIG["lanes"]
+            assert config["wip_policy"] == "warn"
+
+    def test_load_from_file(self):
+        from pyrite_software_kb.board import load_board_config
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            board_file = Path(tmpdir) / "board.yaml"
+            board_file.write_text(
+                "lanes:\n"
+                "  - name: Todo\n"
+                "    statuses: [proposed]\n"
+                "  - name: Done\n"
+                "    statuses: [done]\n"
+                "wip_policy: block\n"
+            )
+            config = load_board_config(Path(tmpdir))
+            assert len(config["lanes"]) == 2
+            assert config["lanes"][0]["name"] == "Todo"
+            assert config["wip_policy"] == "block"
+
+    def test_lane_structure(self):
+        from pyrite_software_kb.board import DEFAULT_BOARD_CONFIG
+
+        for lane in DEFAULT_BOARD_CONFIG["lanes"]:
+            assert "name" in lane
+            assert "statuses" in lane
+            assert isinstance(lane["statuses"], list)
+
+
+# =========================================================================
+# Review workflow transitions
+# =========================================================================
+
+
+class TestReviewWorkflow:
+    def test_review_in_states(self):
+        assert "review" in BACKLOG_WORKFLOW["states"]
+
+    def test_in_progress_to_review(self):
+        assert can_transition(BACKLOG_WORKFLOW, "in_progress", "review", "write")
+
+    def test_review_to_done(self):
+        assert can_transition(BACKLOG_WORKFLOW, "review", "done", "write")
+
+    def test_review_to_completed(self):
+        assert can_transition(BACKLOG_WORKFLOW, "review", "completed", "write")
+
+    def test_review_to_in_progress(self):
+        assert can_transition(BACKLOG_WORKFLOW, "review", "in_progress", "write")
+
+    def test_review_to_in_progress_requires_reason(self):
+        assert requires_reason(BACKLOG_WORKFLOW, "review", "in_progress")
+
+    def test_in_progress_to_review_no_reason(self):
+        assert not requires_reason(BACKLOG_WORKFLOW, "in_progress", "review")
+
+    def test_review_to_done_no_reason(self):
+        assert not requires_reason(BACKLOG_WORKFLOW, "review", "done")
+
+    def test_review_in_backlog_statuses(self):
+        assert "review" in BACKLOG_STATUSES
+
+
+# =========================================================================
+# Plugin registration updates
+# =========================================================================
+
+
+class TestMilestonePluginRegistration:
+    def test_milestone_type_registered(self):
+        plugin = SoftwareKBPlugin()
+        types = plugin.get_entry_types()
+        assert "milestone" in types
+        assert types["milestone"] is MilestoneEntry
+
+    def test_milestone_mcp_tools(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("read")
+        assert "sw_milestones" in tools
+        assert "sw_board" in tools
+
+    def test_milestone_statuses_enum(self):
+        assert MILESTONE_STATUSES == ("open", "closed")
+
+    def test_preset_has_milestone(self):
+        assert "milestone" in SOFTWARE_KB_PRESET["types"]
+        assert SOFTWARE_KB_PRESET["types"]["milestone"]["subdirectory"] == "milestones/"
+
+    def test_preset_has_milestones_dir(self):
+        assert "milestones" in SOFTWARE_KB_PRESET["directories"]
+
+    def test_preset_has_default_board(self):
+        assert "default_board" in SOFTWARE_KB_PRESET
+        assert "lanes" in SOFTWARE_KB_PRESET["default_board"]
+        assert "wip_policy" in SOFTWARE_KB_PRESET["default_board"]

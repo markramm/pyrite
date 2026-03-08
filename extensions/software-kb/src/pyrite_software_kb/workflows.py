@@ -34,7 +34,7 @@ ADR_LIFECYCLE = {
 }
 
 BACKLOG_WORKFLOW = {
-    "states": ["proposed", "planned", "accepted", "in_progress", "done", "completed", "retired", "deferred", "wont_do"],
+    "states": ["proposed", "planned", "accepted", "in_progress", "review", "done", "completed", "retired", "deferred", "wont_do"],
     "initial": "proposed",
     "field": "status",
     "transitions": [
@@ -64,6 +64,12 @@ BACKLOG_WORKFLOW = {
         },
         {
             "from": "in_progress",
+            "to": "review",
+            "requires": "write",
+            "description": "Submit for human review",
+        },
+        {
+            "from": "in_progress",
             "to": "done",
             "requires": "write",
             "description": "Mark item as done",
@@ -73,6 +79,25 @@ BACKLOG_WORKFLOW = {
             "to": "completed",
             "requires": "write",
             "description": "Mark item as completed",
+        },
+        {
+            "from": "review",
+            "to": "done",
+            "requires": "write",
+            "description": "Approve and mark as done",
+        },
+        {
+            "from": "review",
+            "to": "completed",
+            "requires": "write",
+            "description": "Approve and mark as completed",
+        },
+        {
+            "from": "review",
+            "to": "in_progress",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Send back for rework",
         },
         {
             "from": "done",

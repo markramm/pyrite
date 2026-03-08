@@ -52,6 +52,12 @@ SOFTWARE_KB_PRESET = {
             "optional": ["runbook_kind", "audience"],
             "subdirectory": "runbooks/",
         },
+        "milestone": {
+            "description": "Project milestone for grouping backlog items",
+            "required": ["title"],
+            "optional": ["status"],
+            "subdirectory": "milestones/",
+        },
     },
     "policies": {
         "team_owned": True,
@@ -63,5 +69,15 @@ SOFTWARE_KB_PRESET = {
             {"field": "status", "enum": ["proposed", "accepted", "deprecated", "superseded"]},
         ],
     },
-    "directories": ["adrs", "designs", "standards", "validations", "conventions", "components", "backlog", "runbooks"],
+    "directories": ["adrs", "designs", "standards", "validations", "conventions", "components", "backlog", "runbooks", "milestones"],
+    "default_board": {
+        "lanes": [
+            {"name": "Backlog", "statuses": ["proposed", "planned"]},
+            {"name": "Ready", "statuses": ["accepted"]},
+            {"name": "In Progress", "statuses": ["in_progress"], "wip_limit": 5},
+            {"name": "Review", "statuses": ["review"], "wip_limit": 3},
+            {"name": "Done", "statuses": ["done", "completed"]},
+        ],
+        "wip_policy": "warn",
+    },
 }
