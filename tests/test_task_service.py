@@ -5,9 +5,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from pyrite_task.service import TaskService
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.services.task_service import TaskService
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.repository import KBRepository
 
@@ -66,22 +66,30 @@ class TestCreateTask:
             kb_name="test-tasks",
             title="Sub task",
             body="Do the thing",
-            parent_task="parent-123",
+            parent="parent-123",
             priority=3,
             assignee="agent:test",
             dependencies=["dep-1"],
         )
         assert result["created"] is True
-        assert result["parent_task"] == "parent-123"
+        assert result["parent"] == "parent-123"
         assert result["assignee"] == "agent:test"
         assert result["priority"] == 3
+
+    def test_create_task_with_tags(self, task_env):
+        svc = task_env["svc"]
+        result = svc.create_task(
+            kb_name="test-tasks",
+            title="Tagged task",
+            tags=["qa", "auto-generated"],
+        )
+        assert result["created"] is True
 
     def test_create_indexes_entry(self, task_env):
         svc = task_env["svc"]
         result = svc.create_task(kb_name="test-tasks", title="Indexed task")
         entry_id = result["entry_id"]
 
-        # Verify it's in the index
         row = task_env["db"]._raw_conn.execute(
             "SELECT * FROM entry WHERE id = ? AND kb_name = ?",
             (entry_id, "test-tasks"),
@@ -119,10 +127,8 @@ class TestClaimTask:
         created = svc.create_task(kb_name="test-tasks", title="Already claimed")
         entry_id = created["entry_id"]
 
-        # First claim succeeds
         svc.claim_task(entry_id, "test-tasks", "agent:first")
 
-        # Second claim fails
         result = svc.claim_task(entry_id, "test-tasks", "agent:second")
         assert result["claimed"] is False
         assert "not 'open'" in result["error"]
@@ -139,19 +145,46 @@ class TestClaimTask:
         created = svc.create_task(kb_name="test-tasks", title="Rollback test")
         entry_id = created["entry_id"]
 
-        # Make file update fail by patching update_entry
         with patch.object(svc.kb_svc, "update_entry", side_effect=OSError("disk full")):
             result = svc.claim_task(entry_id, "test-tasks", "agent:fail")
 
         assert result["claimed"] is False
         assert "File update failed" in result["error"]
 
-        # Verify index was rolled back to open
         row = task_env["db"]._raw_conn.execute(
             "SELECT status FROM entry WHERE id = ?",
             (entry_id,),
         ).fetchone()
         assert row["status"] == "open"
+
+
+class TestClaimEntry:
+    """Tests for the protocol-level claim_entry on KBService."""
+
+    def test_claim_entry_directly(self, task_env):
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Direct claim")
+        entry_id = created["entry_id"]
+
+        result = svc.kb_svc.claim_entry(entry_id, "test-tasks", "agent:direct")
+        assert result["claimed"] is True
+        assert result["assignee"] == "agent:direct"
+
+    def test_claim_entry_custom_statuses(self, task_env):
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Custom claim")
+        entry_id = created["entry_id"]
+
+        # Claim with default statuses first
+        svc.kb_svc.claim_entry(entry_id, "test-tasks", "agent:x")
+
+        # Try custom from_status/to_status
+        result = svc.kb_svc.claim_entry(
+            entry_id, "test-tasks", "agent:y",
+            from_status="claimed", to_status="in_progress"
+        )
+        assert result["claimed"] is True
+        assert result["status"] == "in_progress"
 
 
 class TestDecomposeTask:
@@ -170,11 +203,10 @@ class TestDecomposeTask:
         assert len(results) == 3
         assert all(r["created"] for r in results)
 
-        # Verify parent_task is set on children
         child_tasks = svc.list_tasks(kb_name="test-tasks", parent=parent_id)
         assert len(child_tasks) == 3
         for ct in child_tasks:
-            assert ct["parent_task"] == parent_id
+            assert ct["parent"] == parent_id
 
     def test_decompose_parent_not_found(self, task_env):
         svc = task_env["svc"]
@@ -196,7 +228,6 @@ class TestCheckpointTask:
         assert result["checkpointed"] is True
         assert result["message"] == "Found 3 public records"
 
-        # Verify body was updated
         repo = KBRepository(task_env["kb_config"])
         entry = repo.load(entry_id)
         assert "Initial body" in entry.body
@@ -218,7 +249,6 @@ class TestCheckpointTask:
         assert result["confidence"] == 0.85
         assert result["evidence"] == ["record-1", "record-2"]
 
-        # Verify body has evidence
         repo = KBRepository(task_env["kb_config"])
         entry = repo.load(entry_id)
         assert "85%" in entry.body
@@ -233,7 +263,6 @@ class TestCheckpointTask:
             entry_id, "test-tasks", "Progress", confidence=0.7
         )
 
-        # Verify agent_context updated
         repo = KBRepository(task_env["kb_config"])
         entry = repo.load(entry_id)
         assert entry.agent_context["confidence"] == 0.7
@@ -247,28 +276,30 @@ class TestRollupParent:
         parent = svc.create_task(kb_name="test-tasks", title="Parent task")
         parent_id = parent["entry_id"]
 
-        # Create children
         c1 = svc.create_task(
-            kb_name="test-tasks", title="Child 1", parent_task=parent_id
+            kb_name="test-tasks", title="Child 1", parent=parent_id
         )
         c2 = svc.create_task(
-            kb_name="test-tasks", title="Child 2", parent_task=parent_id
+            kb_name="test-tasks", title="Child 2", parent=parent_id
         )
 
-        # Mark parent as in_progress first (need valid transitions)
         svc.update_task(parent_id, "test-tasks", status="claimed")
         svc.update_task(parent_id, "test-tasks", status="in_progress")
 
-        # Complete children through valid transitions
-        for cid in [c1["entry_id"], c2["entry_id"]]:
-            svc.update_task(cid, "test-tasks", status="claimed")
-            svc.update_task(cid, "test-tasks", status="in_progress")
-            svc.update_task(cid, "test-tasks", status="done")
+        # Complete first child
+        svc.update_task(c1["entry_id"], "test-tasks", status="claimed")
+        svc.update_task(c1["entry_id"], "test-tasks", status="in_progress")
+        svc.update_task(c1["entry_id"], "test-tasks", status="done")
 
-        result = svc.rollup_parent(parent_id, "test-tasks")
-        assert result is not None
-        assert result["rolled_up"] is True
-        assert result["children_count"] == 2
+        # Complete second child — core after_save hook triggers automatic rollup
+        svc.update_task(c2["entry_id"], "test-tasks", status="claimed")
+        svc.update_task(c2["entry_id"], "test-tasks", status="in_progress")
+        svc.update_task(c2["entry_id"], "test-tasks", status="done")
+
+        # Parent should have been auto-rolled-up by the core hook
+        repo = KBRepository(task_env["kb_config"])
+        parent_entry = repo.load(parent_id)
+        assert parent_entry.status == "done"
 
     def test_rollup_partial(self, task_env):
         svc = task_env["svc"]
@@ -276,13 +307,12 @@ class TestRollupParent:
         parent_id = parent["entry_id"]
 
         c1 = svc.create_task(
-            kb_name="test-tasks", title="Done child", parent_task=parent_id
+            kb_name="test-tasks", title="Done child", parent=parent_id
         )
         svc.create_task(
-            kb_name="test-tasks", title="Open child", parent_task=parent_id
+            kb_name="test-tasks", title="Open child", parent=parent_id
         )
 
-        # Complete only one child
         svc.update_task(c1["entry_id"], "test-tasks", status="claimed")
         svc.update_task(c1["entry_id"], "test-tasks", status="in_progress")
         svc.update_task(c1["entry_id"], "test-tasks", status="done")
@@ -291,63 +321,34 @@ class TestRollupParent:
         assert result is None
 
     def test_rollup_cascading(self, task_env):
-        from pyrite_task.plugin import TaskPlugin
+        svc = task_env["svc"]
 
-        import pyrite.plugins.registry as reg_module
-        from pyrite.plugins.context import PluginContext
-        from pyrite.plugins.registry import PluginRegistry
-
-        # Register plugin so after_save hooks fire for cascade
-        registry = PluginRegistry()
-        plugin = TaskPlugin()
-        plugin.set_context(
-            PluginContext(
-                config=task_env["config"],
-                db=task_env["db"],
-                kb_name="test-tasks",
-                kb_type="task",
-            )
+        # Grandparent → parent → child
+        gp = svc.create_task(kb_name="test-tasks", title="Grandparent")
+        gp_id = gp["entry_id"]
+        p = svc.create_task(
+            kb_name="test-tasks", title="Parent", parent=gp_id
         )
-        registry.register(plugin)
-        old_registry = reg_module._registry
-        reg_module._registry = registry
+        p_id = p["entry_id"]
+        c = svc.create_task(
+            kb_name="test-tasks", title="Child", parent=p_id
+        )
+        c_id = c["entry_id"]
 
-        try:
-            svc = task_env["svc"]
+        # Advance grandparent and parent to in_progress
+        for tid in [gp_id, p_id]:
+            svc.update_task(tid, "test-tasks", status="claimed")
+            svc.update_task(tid, "test-tasks", status="in_progress")
 
-            # Grandparent → parent → child
-            gp = svc.create_task(kb_name="test-tasks", title="Grandparent")
-            gp_id = gp["entry_id"]
-            p = svc.create_task(
-                kb_name="test-tasks", title="Parent", parent_task=gp_id
-            )
-            p_id = p["entry_id"]
-            c = svc.create_task(
-                kb_name="test-tasks", title="Child", parent_task=p_id
-            )
-            c_id = c["entry_id"]
+        # Complete child — core hook should cascade: child done → parent done → grandparent done
+        svc.update_task(c_id, "test-tasks", status="claimed")
+        svc.update_task(c_id, "test-tasks", status="in_progress")
+        svc.update_task(c_id, "test-tasks", status="done")
 
-            # Advance grandparent and parent to in_progress
-            for tid in [gp_id, p_id]:
-                svc.update_task(tid, "test-tasks", status="claimed")
-                svc.update_task(tid, "test-tasks", status="in_progress")
-
-            # Complete child
-            svc.update_task(c_id, "test-tasks", status="claimed")
-            svc.update_task(c_id, "test-tasks", status="in_progress")
-            svc.update_task(c_id, "test-tasks", status="done")
-
-            # Rollup parent (should also cascade to grandparent via hook)
-            result = svc.rollup_parent(p_id, "test-tasks")
-            assert result is not None
-            assert result["rolled_up"] is True
-
-            # Grandparent should also be done (via after_save hook on parent)
-            repo = KBRepository(task_env["kb_config"])
-            gp_entry = repo.load(gp_id)
-            assert gp_entry.status == "done"
-        finally:
-            reg_module._registry = old_registry
+        # Grandparent should be done (cascading via core hooks)
+        repo = KBRepository(task_env["kb_config"])
+        gp_entry = repo.load(gp_id)
+        assert gp_entry.status == "done"
 
 
 class TestListTasks:

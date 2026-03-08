@@ -2,17 +2,13 @@
 
 from typing import Any
 
-from .entry_types import TASK_STATUSES
+from .task import TASK_STATUSES
 
 
 def validate_task(
     entry_type: str, data: dict[str, Any], context: dict[str, Any]
 ) -> list[dict]:
-    """Validate task-specific rules.
-
-    KB-type scoping is handled at the registry level — this validator
-    only fires when the plugin matches the KB type.
-    """
+    """Validate task-specific rules."""
     errors: list[dict] = []
 
     if entry_type != "task":
@@ -63,11 +59,11 @@ def _validate_task(data: dict[str, Any], errors: list[dict]) -> None:
                 }
             )
 
-    parent = data.get("parent_task")
+    parent = data.get("parent") or data.get("parent_task")
     if parent is not None and not isinstance(parent, str):
         errors.append(
             {
-                "field": "parent_task",
+                "field": "parent",
                 "rule": "type",
                 "expected": "string",
                 "got": type(parent).__name__,

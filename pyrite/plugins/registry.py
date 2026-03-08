@@ -19,6 +19,29 @@ from .protocol import PyritePlugin
 
 logger = logging.getLogger(__name__)
 
+# Core relationship types (platform-level, not plugin-provided)
+CORE_RELATIONSHIP_TYPES: dict[str, dict] = {
+    "subtask_of": {
+        "inverse": "has_subtask",
+        "description": "Task is a subtask of another task",
+    },
+    "has_subtask": {
+        "inverse": "subtask_of",
+        "description": "Task has a subtask",
+    },
+    "produces": {
+        "inverse": "produced_by",
+        "description": "Task produces an entry as evidence",
+    },
+    "produced_by": {
+        "inverse": "produces",
+        "description": "Entry was produced by a task",
+    },
+}
+
+# Core KB presets (platform-level)
+CORE_KB_PRESETS: dict[str, dict] = {}  # Populated lazily to avoid circular import
+
 # Singleton registry
 _registry: "PluginRegistry | None" = None
 
@@ -206,8 +229,11 @@ class PluginRegistry:
         return self._aggregate_list("get_db_columns")
 
     def get_all_relationship_types(self) -> dict[str, dict]:
-        """Get all relationship types from all plugins."""
-        return self._aggregate_dict("get_relationship_types", "relationship type")
+        """Get all relationship types: core + plugins."""
+        result = dict(CORE_RELATIONSHIP_TYPES)
+        plugin_types = self._aggregate_dict("get_relationship_types", "relationship type")
+        result.update(plugin_types)
+        return result
 
     def get_all_workflows(self) -> dict[str, dict]:
         """Get all workflow definitions from all plugins."""
@@ -255,8 +281,16 @@ class PluginRegistry:
         return entry
 
     def get_all_kb_presets(self) -> dict[str, dict]:
-        """Get all KB presets from all plugins."""
-        return self._aggregate_dict("get_kb_presets", "KB preset")
+        """Get all KB presets: core + plugins."""
+        # Lazy-load core preset to avoid circular import
+        if not CORE_KB_PRESETS:
+            from ..models.task import TASK_KB_PRESET
+
+            CORE_KB_PRESETS["task"] = TASK_KB_PRESET
+        result = dict(CORE_KB_PRESETS)
+        plugin_presets = self._aggregate_dict("get_kb_presets", "KB preset")
+        result.update(plugin_presets)
+        return result
 
     def get_all_type_metadata(self) -> dict[str, dict]:
         """Get type metadata from all plugins (deep-merged per type)."""

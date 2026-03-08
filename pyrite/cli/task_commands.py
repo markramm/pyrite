@@ -7,10 +7,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from pyrite.config import load_config
-from pyrite.storage.database import PyriteDB
-
-from .service import TaskService
+from ..config import load_config
+from ..services.task_service import TaskService
+from ..storage.database import PyriteDB
 
 task_app = typer.Typer(help="Task management commands")
 console = Console()
@@ -20,7 +19,7 @@ def _format_output(data: dict, fmt: str) -> str | None:
     """Format data using the format registry. Returns None for default (rich) output."""
     if fmt == "rich":
         return None
-    from pyrite.formats import format_response
+    from ..formats import format_response
 
     content, _ = format_response(data, fmt)
     return content
@@ -31,29 +30,6 @@ def _get_service() -> tuple[TaskService, PyriteDB]:
     config = load_config()
     db = PyriteDB(config.settings.index_path)
     return TaskService(config, db), db
-
-
-def _query_tasks(db: PyriteDB, kb_name: str | None = None) -> list[dict]:
-    """Query task entries with parsed metadata."""
-    query = "SELECT * FROM entry WHERE entry_type = ?"
-    params: list = ["task"]
-    if kb_name:
-        query += " AND kb_name = ?"
-        params.append(kb_name)
-    query += " ORDER BY created_at DESC"
-    rows = db._raw_conn.execute(query, params).fetchall()
-    results = []
-    for row in rows:
-        item = dict(row)
-        meta = {}
-        if row["metadata"]:
-            try:
-                meta = json.loads(row["metadata"])
-            except (json.JSONDecodeError, TypeError):
-                pass
-        item["_meta"] = meta
-        results.append(item)
-    return results
 
 
 @task_app.command("create")
@@ -73,7 +49,7 @@ def task_create(
             kb_name=kb_name,
             title=title,
             body=body or "",
-            parent_task=parent or "",
+            parent=parent or "",
             priority=priority,
             assignee=assignee or "",
         )
@@ -132,7 +108,7 @@ def task_list(
                 item["status"],
                 str(item["priority"]),
                 item["assignee"],
-                item["parent_task"][:12] if item["parent_task"] else "",
+                item["parent"][:12] if item["parent"] else "",
             )
         console.print(table)
     finally:
@@ -172,7 +148,7 @@ def task_status(
             "status": meta.get("status", "open"),
             "assignee": meta.get("assignee", ""),
             "priority": meta.get("priority", 5),
-            "parent_task": meta.get("parent_task", ""),
+            "parent": meta.get("parent", ""),
             "dependencies": meta.get("dependencies", []),
             "evidence": meta.get("evidence", []),
             "due_date": meta.get("due_date", ""),
@@ -192,8 +168,8 @@ def task_status(
         console.print(f"  Priority: {result['priority']}")
         if result["assignee"]:
             console.print(f"  Assignee: [yellow]{result['assignee']}[/yellow]")
-        if result["parent_task"]:
-            console.print(f"  Parent: {result['parent_task']}")
+        if result["parent"]:
+            console.print(f"  Parent: {result['parent']}")
         if result["due_date"]:
             console.print(f"  Due: {result['due_date']}")
         if result["dependencies"]:

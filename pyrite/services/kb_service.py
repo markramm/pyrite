@@ -1032,12 +1032,86 @@ class KBService:
         return None
 
     # =========================================================================
+    # Protocol-level operations
+    # =========================================================================
+
+    def claim_entry(
+        self,
+        entry_id: str,
+        kb_name: str,
+        assignee: str,
+        *,
+        from_status: str = "open",
+        to_status: str = "claimed",
+    ) -> dict[str, Any]:
+        """Atomically claim an Assignable + Statusable entry via CAS.
+
+        Uses compare-and-swap on the index to ensure only one agent can claim.
+        On success, updates the markdown file to match.
+
+        Returns:
+            Dict with claimed=True on success, or error details.
+        """
+        from sqlalchemy import text
+
+        session = self.db.session
+
+        # CAS: only update if status matches from_status
+        status_clause = f"(status = '{from_status}' OR status IS NULL)" if from_status == "open" else f"status = '{from_status}'"
+        result = session.execute(
+            text(f"""UPDATE entry
+               SET status = :to_status,
+                   assignee = :assignee
+               WHERE id = :entry_id AND kb_name = :kb_name
+               AND {status_clause}"""),
+            {"assignee": assignee, "entry_id": entry_id, "kb_name": kb_name, "to_status": to_status},
+        )
+        session.commit()
+
+        if result.rowcount == 0:
+            rows = self.db.execute_sql(
+                "SELECT status FROM entry WHERE id = :entry_id AND kb_name = :kb_name",
+                {"entry_id": entry_id, "kb_name": kb_name},
+            )
+            if not rows:
+                return {"claimed": False, "error": f"Entry '{entry_id}' not found in KB '{kb_name}'"}
+            current = rows[0].get("status", from_status)
+            return {
+                "claimed": False,
+                "error": f"Entry '{entry_id}' is '{current}', not '{from_status}'",
+                "current_status": current,
+            }
+
+        # Update the markdown file to match
+        try:
+            self.update_entry(entry_id, kb_name, status=to_status, assignee=assignee)
+        except Exception as e:
+            # Rollback index CAS on file error
+            logger.warning("File update failed for claim on %s, rolling back: %s", entry_id, e)
+            session.execute(
+                text(f"""UPDATE entry
+                   SET status = '{from_status}',
+                       assignee = NULL
+                   WHERE id = :entry_id AND kb_name = :kb_name"""),
+                {"entry_id": entry_id, "kb_name": kb_name},
+            )
+            session.commit()
+            return {"claimed": False, "error": f"File update failed: {e}"}
+
+        return {
+            "claimed": True,
+            "task_id": entry_id,
+            "assignee": assignee,
+            "status": to_status,
+        }
+
+    # =========================================================================
     # Hooks
     # =========================================================================
 
     @staticmethod
     def _run_hooks(hook_name: str, entry: Entry, context: dict) -> Entry:
-        """Run plugin lifecycle hooks, scoped by KB type. Returns the (possibly modified) entry.
+        """Run core hooks then plugin hooks, scoped by KB type.
 
         Hook ordering:
         - ``before_save`` / ``before_delete``: Run BEFORE persistence. If any hook
@@ -1047,6 +1121,18 @@ class KBService:
           already committed. Exceptions are logged but swallowed — the operation
           is considered successful.
         """
+        # Run core hooks first
+        for hook_fn in _CORE_HOOKS.get(hook_name, []):
+            try:
+                result = hook_fn(entry, context)
+                if result is not None:
+                    entry = result
+            except Exception:
+                if hook_name.startswith("before_"):
+                    raise
+                logger.warning("Core hook %s failed", hook_fn.__name__, exc_info=True)
+
+        # Then run plugin hooks
         try:
             from ..plugins import get_registry
 
@@ -1273,3 +1359,65 @@ class KBService:
             PyriteError: KB is not in a git repository
         """
         return self._export_svc.push_kb(kb_name, remote=remote, branch=branch)
+
+
+# =============================================================================
+# Core hooks — platform-level lifecycle hooks (run before plugin hooks)
+# =============================================================================
+
+
+def _task_validate_transition(entry: Any, context: dict) -> Any:
+    """Validate task status transitions against workflow on update."""
+    if context.get("operation") != "update":
+        return entry
+    if not hasattr(entry, "entry_type") or entry.entry_type != "task":
+        return entry
+
+    old_status = context.get("old_status")
+    new_status = getattr(entry, "status", None)
+    if not old_status or not new_status or old_status == new_status:
+        return entry
+
+    from ..models.task import TASK_WORKFLOW, can_transition
+
+    if not can_transition(TASK_WORKFLOW, old_status, new_status, "write"):
+        raise ValueError(f"Invalid task transition: {old_status} → {new_status}")
+
+    return entry
+
+
+def _parent_rollup(entry: Any, context: dict) -> Any:
+    """Auto-complete parent when all Parentable children reach terminal status."""
+    if not hasattr(entry, "entry_type"):
+        return entry
+    if getattr(entry, "status", "") != "done":
+        return entry
+
+    parent_id = getattr(entry, "parent", "")
+    if not parent_id:
+        return entry
+
+    kb_name = context.get("kb_name", "")
+    if not kb_name:
+        return entry
+
+    try:
+        config = context.get("config")
+        db = context.get("db")
+        if not config or not db:
+            return entry
+
+        from .task_service import TaskService
+
+        svc = TaskService(config, db)
+        svc.rollup_parent(parent_id, kb_name)
+    except Exception as e:
+        logger.warning("Parent rollup failed for %s: %s", parent_id, e)
+
+    return entry
+
+
+_CORE_HOOKS: dict[str, list] = {
+    "before_save": [_task_validate_transition],
+    "after_save": [_parent_rollup],
+}

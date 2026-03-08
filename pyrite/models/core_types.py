@@ -587,6 +587,7 @@ ENTRY_TYPE_REGISTRY: dict[str, type[Entry]] = {
 }
 
 
+
 def get_entry_class(entry_type: str) -> type[Entry]:
     """Get the entry class for a type name.
 

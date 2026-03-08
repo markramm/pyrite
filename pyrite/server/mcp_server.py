@@ -205,6 +205,14 @@ class PyriteMCPServer:
         return self._qa_svc_cache
 
     @property
+    def task_svc(self):
+        if not hasattr(self, "_task_svc_cache"):
+            from ..services.task_service import TaskService
+
+            self._task_svc_cache = TaskService(self.config, self.db)
+        return self._task_svc_cache
+
+    @property
     def search_svc(self):
         if not hasattr(self, "_search_svc_cache"):
             from ..services.search_service import SearchService
@@ -818,6 +826,126 @@ class PyriteMCPServer:
             "target_id": target_id,
             "relation": relation,
         }
+
+    # =========================================================================
+    # Task handlers
+    # =========================================================================
+
+    def _task_list(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List tasks with filters."""
+        tasks = self.task_svc.list_tasks(
+            kb_name=args.get("kb_name"),
+            status=args.get("status"),
+            assignee=args.get("assignee"),
+            parent=args.get("parent"),
+        )
+        return {"count": len(tasks), "tasks": tasks}
+
+    def _task_status(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get task details with children, deps, evidence."""
+        import json as _json
+
+        task_id = args.get("task_id")
+        kb_name = args.get("kb_name")
+
+        task = self.task_svc.get_task(task_id, kb_name)
+        if not task:
+            return {"error": f"Task '{task_id}' not found"}
+
+        meta = task.get("metadata", {})
+        if isinstance(meta, str):
+            try:
+                meta = _json.loads(meta)
+            except (ValueError, TypeError):
+                meta = {}
+
+        children_list = self.task_svc.list_tasks(kb_name=kb_name, parent=task_id)
+        children = [
+            {"id": c["id"], "title": c["title"], "status": c["status"]}
+            for c in children_list
+        ]
+
+        return {
+            "id": task["id"],
+            "title": task["title"],
+            "status": meta.get("status", "open"),
+            "assignee": meta.get("assignee", ""),
+            "priority": meta.get("priority", 5),
+            "parent": meta.get("parent", ""),
+            "dependencies": meta.get("dependencies", []),
+            "evidence": meta.get("evidence", []),
+            "due_date": meta.get("due_date", ""),
+            "agent_context": meta.get("agent_context", {}),
+            "children": children,
+            "kb_name": task.get("kb_name", kb_name or ""),
+        }
+
+    def _task_create(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create a new task."""
+        return self.task_svc.create_task(
+            kb_name=args["kb_name"],
+            title=args["title"],
+            body=args.get("body", ""),
+            parent=args.get("parent", ""),
+            priority=args.get("priority", 5),
+            assignee=args.get("assignee", ""),
+            dependencies=args.get("dependencies"),
+        )
+
+    def _task_update(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Update task fields."""
+        task_id = args.get("task_id")
+        kb_name = args.get("kb_name")
+        if not task_id:
+            return {"error": "task_id is required"}
+        if not kb_name:
+            return {"error": "kb_name is required"}
+
+        updates = {}
+        if "status" in args:
+            updates["status"] = args["status"]
+        if "assignee" in args:
+            updates["assignee"] = args["assignee"]
+        if "priority" in args:
+            updates["priority"] = args["priority"]
+
+        if not updates:
+            return {"error": "No updates specified"}
+
+        return self.task_svc.update_task(task_id, kb_name, **updates)
+
+    def _task_claim(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Atomically claim an open task."""
+        return self.task_svc.claim_task(
+            task_id=args["task_id"],
+            kb_name=args["kb_name"],
+            assignee=args["assignee"],
+        )
+
+    def _task_decompose(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Decompose a parent task into children."""
+        try:
+            results = self.task_svc.decompose_task(
+                parent_id=args["parent_id"],
+                kb_name=args["kb_name"],
+                children=args["children"],
+            )
+            return {"decomposed": True, "parent_id": args["parent_id"], "children": results}
+        except ValueError as e:
+            return {"error": str(e)}
+
+    def _task_checkpoint(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Log a checkpoint on a task."""
+        try:
+            return self.task_svc.checkpoint_task(
+                task_id=args["task_id"],
+                kb_name=args["kb_name"],
+                message=args["message"],
+                confidence=args.get("confidence", 0.0),
+                partial_evidence=args.get("partial_evidence"),
+            )
+        except ValueError as e:
+            return {"error": str(e)}
 
     # =========================================================================
     # Admin handlers

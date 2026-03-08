@@ -335,9 +335,9 @@ class QAService:
     def _maybe_create_task(
         self, entry_id: str, kb_name: str, assessment_id: str, issues: list[dict]
     ) -> None:
-        """Try to create a task for failed assessment. No-op if task plugin absent."""
+        """Create a task for failed assessment."""
         try:
-            from pyrite_task.service import TaskService
+            from .task_service import TaskService
 
             task_svc = TaskService(self.config, self.db)
             error_count = sum(1 for i in issues if i.get("severity") == "error")
@@ -348,8 +348,6 @@ class QAService:
                 priority=8,
                 tags=["qa", "auto-generated"],
             )
-        except ImportError:
-            logger.debug("Task plugin not available, skipping task creation")
         except Exception as e:
             logger.debug("Task creation failed: %s", e)
 

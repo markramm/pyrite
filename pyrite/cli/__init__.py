@@ -39,6 +39,7 @@ from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
 from .schema_commands import schema_app
 from .search_commands import register_search_command
+from .task_commands import task_app
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,9 @@ app.add_typer(auth_app, name="auth")
 
 # Register search command
 register_search_command(app)
+
+# Task management (core, not plugin)
+app.add_typer(task_app, name="task")
 
 # Register plugin CLI commands
 try:

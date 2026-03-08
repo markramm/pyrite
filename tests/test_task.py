@@ -1,113 +1,60 @@
-"""Tests for the Task extension."""
+"""Tests for core task entry type, workflow, validators, and hooks."""
 
-from pyrite_task.entry_types import TASK_STATUSES, TaskEntry
-from pyrite_task.plugin import TaskPlugin
-from pyrite_task.preset import TASK_KB_PRESET
-from pyrite_task.validators import validate_task
-from pyrite_task.workflows import (
+import pytest
+
+from pyrite.models.task import (
+    TASK_KB_PRESET,
+    TASK_STATUSES,
     TASK_WORKFLOW,
+    TaskEntry,
     can_transition,
     get_allowed_transitions,
     requires_reason,
 )
+from pyrite.models.task_validators import validate_task
+from pyrite.server.tool_schemas import READ_TOOLS, WRITE_TOOLS
 
-from pyrite.plugins.registry import PluginRegistry
 
 # =========================================================================
-# Plugin registration
+# Core registration
 # =========================================================================
 
 
-class TestPluginRegistration:
-    def test_plugin_has_name(self):
-        plugin = TaskPlugin()
-        assert plugin.name == "task"
+class TestCoreRegistration:
+    def test_entry_type_in_registry(self):
+        from pyrite.models.core_types import ENTRY_TYPE_REGISTRY
 
-    def test_register_with_registry(self):
-        registry = PluginRegistry()
-        plugin = TaskPlugin()
-        registry.register(plugin)
-        assert "task" in registry.list_plugins()
+        assert "task" in ENTRY_TYPE_REGISTRY
+        assert ENTRY_TYPE_REGISTRY["task"] is TaskEntry
 
-    def test_entry_types_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        types = registry.get_all_entry_types()
-        assert "task" in types
-        assert types["task"] is TaskEntry
+    def test_get_entry_class_returns_task(self):
+        from pyrite.models.core_types import get_entry_class
 
-    def test_validators_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        validators = registry.get_all_validators()
-        assert validate_task in validators
+        assert get_entry_class("task") is TaskEntry
 
-    def test_cli_commands_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        commands = registry.get_all_cli_commands()
-        cmd_names = [name for name, _ in commands]
-        assert "task" in cmd_names
+    def test_relationship_types_include_core(self):
+        from pyrite.plugins.registry import CORE_RELATIONSHIP_TYPES
 
-    def test_workflows_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        workflows = registry.get_all_workflows()
-        assert "task_workflow" in workflows
+        assert "subtask_of" in CORE_RELATIONSHIP_TYPES
+        assert "has_subtask" in CORE_RELATIONSHIP_TYPES
+        assert "produces" in CORE_RELATIONSHIP_TYPES
+        assert CORE_RELATIONSHIP_TYPES["subtask_of"]["inverse"] == "has_subtask"
+        assert CORE_RELATIONSHIP_TYPES["produces"]["inverse"] == "produced_by"
 
-    def test_mcp_read_tools_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        tools = registry.get_all_mcp_tools("read")
-        assert "task_list" in tools
-        assert "task_status" in tools
+    def test_kb_presets_include_task(self):
+        from pyrite.plugins.registry import PluginRegistry
 
-    def test_mcp_write_tools_registered(self):
         registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        tools = registry.get_all_mcp_tools("write")
-        assert "task_create" in tools
-        assert "task_update" in tools
-        assert "task_claim" in tools
-        assert "task_decompose" in tools
-        assert "task_checkpoint" in tools
-        # Read tools also available at write tier
-        assert "task_list" in tools
-
-    def test_mcp_read_tier_no_write_tools(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        tools = registry.get_all_mcp_tools("read")
-        assert "task_create" not in tools
-        assert "task_update" not in tools
-        assert "task_claim" not in tools
-        assert "task_decompose" not in tools
-        assert "task_checkpoint" not in tools
-
-    def test_relationship_types_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        rels = registry.get_all_relationship_types()
-        assert "subtask_of" in rels
-        assert "has_subtask" in rels
-        assert "produces" in rels
-        assert rels["subtask_of"]["inverse"] == "has_subtask"
-        assert rels["produces"]["inverse"] == "produced_by"
-
-    def test_kb_presets_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
         presets = registry.get_all_kb_presets()
         assert "task" in presets
 
-    def test_hooks_registered(self):
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-        hooks = registry.get_all_hooks()
-        assert "before_save" in hooks
-        assert "after_save" in hooks
-        assert len(hooks["before_save"]) >= 1
-        assert len(hooks["after_save"]) >= 1
+    def test_core_hooks_registered(self):
+        from pyrite.services.kb_service import _CORE_HOOKS
+
+        assert "before_save" in _CORE_HOOKS
+        assert "after_save" in _CORE_HOOKS
+        assert len(_CORE_HOOKS["before_save"]) >= 1
+        assert len(_CORE_HOOKS["after_save"]) >= 1
 
 
 # =========================================================================
@@ -121,7 +68,7 @@ class TestTaskEntry:
         assert entry.entry_type == "task"
         assert entry.status == "open"
         assert entry.assignee == ""
-        assert entry.parent_task == ""
+        assert entry.parent == ""
         assert entry.dependencies == []
         assert entry.evidence == []
         assert entry.priority == 5
@@ -134,7 +81,7 @@ class TestTaskEntry:
             title="Implement Feature",
             status="in_progress",
             assignee="agent:claude-code-7a3f",
-            parent_task="parent-123",
+            parent="parent-123",
             dependencies=["dep-1", "dep-2"],
             evidence=["doc-1"],
             priority=3,
@@ -145,7 +92,7 @@ class TestTaskEntry:
         assert fm["type"] == "task"
         assert fm["status"] == "in_progress"
         assert fm["assignee"] == "agent:claude-code-7a3f"
-        assert fm["parent_task"] == "parent-123"
+        assert fm["parent"] == "parent-123"
         assert fm["dependencies"] == ["dep-1", "dep-2"]
         assert fm["evidence"] == ["doc-1"]
         assert fm["priority"] == 3
@@ -157,7 +104,7 @@ class TestTaskEntry:
         fm = entry.to_frontmatter()
         assert "status" not in fm  # open is default
         assert "assignee" not in fm
-        assert "parent_task" not in fm
+        assert "parent" not in fm
         assert "dependencies" not in fm
         assert "evidence" not in fm
         assert "priority" not in fm  # 5 is default
@@ -171,7 +118,7 @@ class TestTaskEntry:
             "type": "task",
             "status": "claimed",
             "assignee": "agent:test",
-            "parent_task": "epic-1",
+            "parent": "epic-1",
             "dependencies": ["task-000"],
             "evidence": ["doc-1"],
             "priority": 2,
@@ -183,7 +130,7 @@ class TestTaskEntry:
         assert entry.id == "task-001"
         assert entry.status == "claimed"
         assert entry.assignee == "agent:test"
-        assert entry.parent_task == "epic-1"
+        assert entry.parent == "epic-1"
         assert entry.dependencies == ["task-000"]
         assert entry.evidence == ["doc-1"]
         assert entry.priority == 2
@@ -191,6 +138,17 @@ class TestTaskEntry:
         assert entry.agent_context == {"checkpoint": "step3"}
         assert entry.tags == ["api"]
         assert "REST API" in entry.body
+
+    def test_from_frontmatter_legacy_parent_task(self):
+        """Legacy parent_task field should be accepted."""
+        meta = {
+            "id": "task-002",
+            "title": "Legacy task",
+            "type": "task",
+            "parent_task": "old-parent",
+        }
+        entry = TaskEntry.from_frontmatter(meta, "")
+        assert entry.parent == "old-parent"
 
     def test_roundtrip_markdown(self):
         entry = TaskEntry(
@@ -264,10 +222,6 @@ class TestTaskWorkflow:
 
 
 class TestValidators:
-    """Validator tests — KB-type scoping is handled at the registry level,
-    so validate_task always validates when entry_type == "task".
-    """
-
     def test_valid_task(self):
         errors = validate_task("task", {"status": "open", "priority": 5}, {})
         assert errors == []
@@ -289,25 +243,27 @@ class TestValidators:
         assert errors == []
 
     def test_validates_any_task_entry(self):
-        """All task entries are validated regardless of fields present."""
         errors = validate_task("task", {"status": "todo"}, {})
         assert any(e["field"] == "status" for e in errors)
 
+    def test_parent_field_validated(self):
+        errors = validate_task("task", {"parent": 123}, {})
+        assert any(e["field"] == "parent" for e in errors)
+
 
 # =========================================================================
-# Core integration
+# Hooks
 # =========================================================================
 
 
 class TestHooks:
     def test_before_save_validates_transition_with_old_status(self):
-        plugin = TaskPlugin()
-        entry = TaskEntry(id="t1", title="Test", status="done")
-        # Simulate a PluginContext-like dict with old_status in extra
         from unittest.mock import MagicMock
 
         from pyrite.plugins.context import PluginContext
+        from pyrite.services.kb_service import _task_validate_transition
 
+        entry = TaskEntry(id="t1", title="Test", status="done")
         ctx = PluginContext(
             config=MagicMock(),
             db=MagicMock(),
@@ -317,18 +273,16 @@ class TestHooks:
             extra={"old_status": "open"},
         )
         # open → done is not a valid transition
-        import pytest
-
         with pytest.raises(ValueError, match="Invalid task transition"):
-            plugin._hook_validate_transition(entry, ctx)
+            _task_validate_transition(entry, ctx)
 
     def test_before_save_allows_valid_transition(self):
-        plugin = TaskPlugin()
-        entry = TaskEntry(id="t1", title="Test", status="claimed")
         from unittest.mock import MagicMock
 
         from pyrite.plugins.context import PluginContext
+        from pyrite.services.kb_service import _task_validate_transition
 
+        entry = TaskEntry(id="t1", title="Test", status="claimed")
         ctx = PluginContext(
             config=MagicMock(),
             db=MagicMock(),
@@ -337,17 +291,16 @@ class TestHooks:
             kb_type="task",
             extra={"old_status": "open"},
         )
-        # open → claimed is valid
-        result = plugin._hook_validate_transition(entry, ctx)
+        result = _task_validate_transition(entry, ctx)
         assert result.status == "claimed"
 
     def test_before_save_ignores_non_update(self):
-        plugin = TaskPlugin()
-        entry = TaskEntry(id="t1", title="Test", status="done")
         from unittest.mock import MagicMock
 
         from pyrite.plugins.context import PluginContext
+        from pyrite.services.kb_service import _task_validate_transition
 
+        entry = TaskEntry(id="t1", title="Test", status="done")
         ctx = PluginContext(
             config=MagicMock(),
             db=MagicMock(),
@@ -356,70 +309,40 @@ class TestHooks:
             kb_type="task",
             extra={"old_status": "open"},
         )
-        # Should not validate on create
-        result = plugin._hook_validate_transition(entry, ctx)
+        result = _task_validate_transition(entry, ctx)
         assert result.status == "done"
 
 
+# =========================================================================
+# MCP tool schemas
+# =========================================================================
+
+
 class TestMCPToolSchemas:
+    def test_task_list_in_read_tools(self):
+        assert "task_list" in READ_TOOLS
+        assert "task_status" in READ_TOOLS
+
+    def test_task_write_tools_present(self):
+        assert "task_create" in WRITE_TOOLS
+        assert "task_update" in WRITE_TOOLS
+        assert "task_claim" in WRITE_TOOLS
+        assert "task_decompose" in WRITE_TOOLS
+        assert "task_checkpoint" in WRITE_TOOLS
+
     def test_task_create_requires_kb_name_and_title(self):
-        plugin = TaskPlugin()
-        tools = plugin.get_mcp_tools("write")
-        schema = tools["task_create"]["inputSchema"]
+        schema = WRITE_TOOLS["task_create"]["inputSchema"]
         assert "kb_name" in schema["required"]
         assert "title" in schema["required"]
 
-    def test_task_update_requires_task_id_and_kb_name(self):
-        plugin = TaskPlugin()
-        tools = plugin.get_mcp_tools("write")
-        schema = tools["task_update"]["inputSchema"]
-        assert "task_id" in schema["required"]
-        assert "kb_name" in schema["required"]
-
     def test_task_claim_requires_all_fields(self):
-        plugin = TaskPlugin()
-        tools = plugin.get_mcp_tools("write")
-        schema = tools["task_claim"]["inputSchema"]
+        schema = WRITE_TOOLS["task_claim"]["inputSchema"]
         assert set(schema["required"]) == {"task_id", "kb_name", "assignee"}
 
     def test_task_decompose_schema(self):
-        plugin = TaskPlugin()
-        tools = plugin.get_mcp_tools("write")
-        schema = tools["task_decompose"]["inputSchema"]
+        schema = WRITE_TOOLS["task_decompose"]["inputSchema"]
         assert "parent_id" in schema["required"]
         assert "children" in schema["required"]
-
-    def test_task_checkpoint_schema(self):
-        plugin = TaskPlugin()
-        tools = plugin.get_mcp_tools("write")
-        schema = tools["task_checkpoint"]["inputSchema"]
-        assert "task_id" in schema["required"]
-        assert "message" in schema["required"]
-
-
-# =========================================================================
-# Core integration
-# =========================================================================
-
-
-class TestCoreIntegration:
-    def test_entry_class_resolution(self):
-        """Plugin entry types resolve via get_entry_class when registered."""
-        import pyrite.plugins.registry as reg_module
-        from pyrite.plugins.registry import PluginRegistry
-
-        registry = PluginRegistry()
-        registry.register(TaskPlugin())
-
-        old = reg_module._registry
-        reg_module._registry = registry
-
-        try:
-            from pyrite.models.core_types import get_entry_class
-
-            assert get_entry_class("task") is TaskEntry
-        finally:
-            reg_module._registry = old
 
 
 # =========================================================================

@@ -484,6 +484,40 @@ READ_TOOLS = {
             "required": [],
         },
     },
+    "task_list": {
+        "description": "List tasks, filter by status/assignee/parent. Use to find available work or check progress.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kb_name": {"type": "string", "description": "KB name (optional)"},
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "claimed", "in_progress", "blocked", "review", "done", "failed"],
+                    "description": "Filter by task status",
+                },
+                "assignee": {
+                    "type": "string",
+                    "description": "Filter by assignee (e.g. agent:claude-code-7a3f)",
+                },
+                "parent": {
+                    "type": "string",
+                    "description": "Filter by parent task ID",
+                },
+            },
+            "required": [],
+        },
+    },
+    "task_status": {
+        "description": "Get task details including children, dependencies, and evidence links.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task entry ID"},
+                "kb_name": {"type": "string", "description": "KB name (optional)"},
+            },
+            "required": ["task_id"],
+        },
+    },
 }
 
 WRITE_TOOLS = {
@@ -661,6 +695,120 @@ WRITE_TOOLS = {
                 },
             },
             "required": ["source_id", "source_kb", "target_id"],
+        },
+    },
+    "task_create": {
+        "description": "Create a new task with optional parent, priority, and assignee.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kb_name": {"type": "string", "description": "KB name"},
+                "title": {"type": "string", "description": "Task title"},
+                "parent": {"type": "string", "description": "Parent task entry ID"},
+                "priority": {
+                    "type": "integer",
+                    "description": "Priority 1-10 (default 5)",
+                    "minimum": 1,
+                    "maximum": 10,
+                },
+                "assignee": {
+                    "type": "string",
+                    "description": "Assignee (e.g. agent:claude-code-7a3f)",
+                },
+                "body": {"type": "string", "description": "Task description"},
+                "dependencies": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Dependency entry IDs",
+                },
+            },
+            "required": ["kb_name", "title"],
+        },
+    },
+    "task_update": {
+        "description": "Update task fields (status, assignee, priority).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task entry ID"},
+                "kb_name": {"type": "string", "description": "KB name"},
+                "status": {
+                    "type": "string",
+                    "enum": ["open", "claimed", "in_progress", "blocked", "review", "done", "failed"],
+                    "description": "New status",
+                },
+                "assignee": {"type": "string", "description": "New assignee"},
+                "priority": {
+                    "type": "integer",
+                    "description": "New priority 1-10",
+                    "minimum": 1,
+                    "maximum": 10,
+                },
+            },
+            "required": ["task_id", "kb_name"],
+        },
+    },
+    "task_claim": {
+        "description": "Atomically claim an open task. Fails if task is not open.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task entry ID"},
+                "kb_name": {"type": "string", "description": "KB name"},
+                "assignee": {
+                    "type": "string",
+                    "description": "Assignee (e.g. agent:claude-code-7a3f)",
+                },
+            },
+            "required": ["task_id", "kb_name", "assignee"],
+        },
+    },
+    "task_decompose": {
+        "description": "Decompose a parent task into child tasks.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "parent_id": {"type": "string", "description": "Parent task entry ID"},
+                "kb_name": {"type": "string", "description": "KB name"},
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "body": {"type": "string"},
+                            "priority": {"type": "integer", "minimum": 1, "maximum": 10},
+                            "assignee": {"type": "string"},
+                        },
+                        "required": ["title"],
+                    },
+                    "description": "Child task specs",
+                },
+            },
+            "required": ["parent_id", "kb_name", "children"],
+        },
+    },
+    "task_checkpoint": {
+        "description": "Log a checkpoint on a task with optional confidence and evidence.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task entry ID"},
+                "kb_name": {"type": "string", "description": "KB name"},
+                "message": {"type": "string", "description": "Checkpoint message"},
+                "confidence": {
+                    "type": "number",
+                    "description": "Confidence 0.0-1.0",
+                    "minimum": 0,
+                    "maximum": 1,
+                },
+                "partial_evidence": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Evidence entry IDs",
+                },
+            },
+            "required": ["task_id", "kb_name", "message"],
         },
     },
     "kb_qa_assess": {

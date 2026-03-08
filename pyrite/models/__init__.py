@@ -24,10 +24,15 @@ from .protocols import (
     PROTOCOL_REGISTRY,
     Assignable,
     Locatable,
+    Parentable,
     Prioritizable,
     Statusable,
     Temporal,
 )
+from .task import TaskEntry
+
+# Register TaskEntry in core registry (avoids circular import via core_types.py)
+ENTRY_TYPE_REGISTRY["task"] = TaskEntry
 
 __all__ = [
     "Entry",
@@ -38,6 +43,7 @@ __all__ = [
     "DocumentEntry",
     "TopicEntry",
     "RelationshipEntry",
+    "TaskEntry",
     "TimelineEntry",
     "GenericEntry",
     "ENTRY_TYPE_REGISTRY",
@@ -48,6 +54,7 @@ __all__ = [
     "Locatable",
     "Statusable",
     "Prioritizable",
+    "Parentable",
     "PROTOCOL_REGISTRY",
     "PROTOCOL_FIELDS",
 ]

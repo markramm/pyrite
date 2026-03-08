@@ -119,7 +119,7 @@ class Statusable:
 class Prioritizable:
     """Protocol for entries with priority ranking."""
 
-    priority: str = ""
+    priority: int | str = ""
 
     def _prioritizable_to_frontmatter(self) -> dict[str, Any]:
         """Return non-default Prioritizable fields for frontmatter."""
@@ -131,8 +131,30 @@ class Prioritizable:
     @staticmethod
     def _prioritizable_from_frontmatter(meta: dict[str, Any]) -> dict[str, Any]:
         """Extract Prioritizable fields from frontmatter dict."""
+        raw = meta.get("priority", "")
         return {
-            "priority": str(meta.get("priority", "")),
+            "priority": raw if isinstance(raw, int) else str(raw),
+        }
+
+
+@dataclass
+class Parentable:
+    """Protocol for entries with parent-child hierarchy."""
+
+    parent: str = ""
+
+    def _parentable_to_frontmatter(self) -> dict[str, Any]:
+        """Return non-default Parentable fields for frontmatter."""
+        result: dict[str, Any] = {}
+        if self.parent:
+            result["parent"] = self.parent
+        return result
+
+    @staticmethod
+    def _parentable_from_frontmatter(meta: dict[str, Any]) -> dict[str, Any]:
+        """Extract Parentable fields from frontmatter dict."""
+        return {
+            "parent": meta.get("parent", ""),
         }
 
 
@@ -143,6 +165,7 @@ PROTOCOL_REGISTRY: dict[str, type] = {
     "locatable": Locatable,
     "statusable": Statusable,
     "prioritizable": Prioritizable,
+    "parentable": Parentable,
 }
 
 # Map protocol field names to their protocol class
@@ -157,6 +180,7 @@ PROTOCOL_FIELDS: dict[str, type] = {
     "coordinates": Locatable,
     "status": Statusable,
     "priority": Prioritizable,
+    "parent": Parentable,
 }
 
 # Field names promoted to DB columns by IndexManager

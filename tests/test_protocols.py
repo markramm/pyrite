@@ -236,7 +236,8 @@ class TestProtocolRegistry:
         assert "locatable" in PROTOCOL_REGISTRY
         assert "statusable" in PROTOCOL_REGISTRY
         assert "prioritizable" in PROTOCOL_REGISTRY
-        assert len(PROTOCOL_REGISTRY) == 5
+        assert "parentable" in PROTOCOL_REGISTRY
+        assert len(PROTOCOL_REGISTRY) == 6
 
     def test_field_mapping(self):
         assert PROTOCOL_FIELDS["assignee"] is Assignable
