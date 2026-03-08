@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ..config import PyriteConfig, Settings, load_config
+from ..services.index_worker import IndexWorker
 from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
@@ -45,6 +46,7 @@ def _init_app_state(application: FastAPI, config: PyriteConfig) -> None:
     application.state.pyrite_config = config
     application.state.pyrite_db = None
     application.state.pyrite_index_mgr = None
+    application.state.pyrite_index_worker = None
     application.state.pyrite_kb_service = None
     application.state.pyrite_kb_registry = None
     application.state.pyrite_llm_service = None
@@ -79,6 +81,16 @@ def get_index_mgr() -> IndexManager:
     config = load_config()
     db = PyriteDB(config.settings.index_path)
     return IndexManager(db, config)
+
+
+def get_index_worker() -> IndexWorker:
+    """Get or create index worker.
+
+    Overridden via ``dependency_overrides`` inside FastAPI apps.
+    """
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    return IndexWorker(db, config)
 
 
 def get_kb_service(
@@ -479,9 +491,40 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             )
         return application.state.pyrite_kb_registry
 
+    def _app_get_index_worker() -> IndexWorker:
+        if application.state.pyrite_index_worker is None:
+            worker = IndexWorker(_app_get_db(), _app_get_config())
+
+            # Wire WebSocket broadcast for progress updates
+            def _ws_progress(job_id: str, current: int, total: int):
+                import asyncio
+
+                from .websocket import manager
+
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            manager.broadcast(
+                                {
+                                    "type": "index_progress",
+                                    "job_id": job_id,
+                                    "current": current,
+                                    "total": total,
+                                }
+                            )
+                        )
+                except RuntimeError:
+                    pass
+
+            worker.on_progress = _ws_progress
+            application.state.pyrite_index_worker = worker
+        return application.state.pyrite_index_worker
+
     application.dependency_overrides[get_config] = _app_get_config
     application.dependency_overrides[get_db] = _app_get_db
     application.dependency_overrides[get_index_mgr] = _app_get_index_mgr
+    application.dependency_overrides[get_index_worker] = _app_get_index_worker
     application.dependency_overrides[get_kb_registry] = _app_get_kb_registry
 
     # Seed config KBs into DB registry

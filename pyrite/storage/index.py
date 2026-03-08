@@ -488,9 +488,17 @@ class IndexManager:
 
         return health
 
-    def sync_incremental(self, kb_name: str | None = None) -> dict[str, int]:
+    def sync_incremental(
+        self,
+        kb_name: str | None = None,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> dict[str, int]:
         """
         Incremental sync: only update changed/new files.
+
+        Args:
+            kb_name: Sync specific KB (all if None)
+            progress_callback: Optional callback(current, total) for progress updates
 
         Returns dict with counts of added, updated, removed entries.
         """
@@ -498,6 +506,15 @@ class IndexManager:
 
         kbs = [self.config.get_kb(kb_name)] if kb_name else self.config.knowledge_bases
         kbs = [kb for kb in kbs if kb and kb.path.exists()]
+
+        # Count total files across all KBs for progress
+        total_files = 0
+        if progress_callback:
+            for kb in kbs:
+                repo = KBRepository(kb)
+                total_files += repo.count()
+
+        processed = 0
 
         for kb in kbs:
             repo = KBRepository(kb)
@@ -532,6 +549,10 @@ class IndexManager:
                         except Exception:
                             logger.warning("Stale check failed for %s", entry.id, exc_info=True)
 
+                processed += 1
+                if progress_callback and processed % 10 == 0:
+                    progress_callback(processed, total_files)
+
             # Remove deleted entries
             for entry_id in indexed:
                 if entry_id not in seen_ids:
@@ -540,6 +561,10 @@ class IndexManager:
 
             # Update KB stats
             self.db.update_kb_indexed(kb.name, len(seen_ids))
+
+        # Final progress callback
+        if progress_callback:
+            progress_callback(processed, total_files)
 
         return results
 

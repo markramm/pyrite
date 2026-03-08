@@ -36,6 +36,7 @@ def index_build(
         False, "--with-attribution", help="Extract git history for attribution"
     ),
     no_embed: bool = typer.Option(False, "--no-embed", help="Skip auto-embedding after build"),
+    background: bool = typer.Option(False, "--background", help="Run in background thread"),
 ):
     """Build or rebuild the search index."""
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
@@ -43,6 +44,26 @@ def index_build(
     from ..storage import IndexManager
 
     config, db = get_config_and_db()
+
+    if background:
+        from ..services.index_worker import IndexWorker
+
+        worker = IndexWorker(db, config)
+        if kb_name:
+            job_id = worker.submit_rebuild(kb_name)
+        else:
+            # Submit rebuild for each KB
+            job_ids = []
+            for kb in config.knowledge_bases:
+                if kb.path.exists():
+                    job_ids.append(worker.submit_rebuild(kb.name))
+            console.print(f"[green]Submitted {len(job_ids)} rebuild job(s)[/green]")
+            console.print("Use 'pyrite index jobs' to check progress.")
+            return
+        console.print(f"[green]Rebuild job submitted:[/green] {job_id}")
+        console.print("Use 'pyrite index jobs' to check progress.")
+        return
+
     index_mgr = IndexManager(db, config)
 
     if kb_name:
@@ -117,11 +138,22 @@ def index_build(
 def index_sync(
     kb_name: str | None = typer.Argument(None, help="KB to sync (all if omitted)"),
     no_embed: bool = typer.Option(False, "--no-embed", help="Skip auto-embedding after sync"),
+    background: bool = typer.Option(False, "--background", help="Run in background thread"),
 ):
     """Incremental sync: update index for changed files only."""
     from ..storage import IndexManager
 
     config, db = get_config_and_db()
+
+    if background:
+        from ..services.index_worker import IndexWorker
+
+        worker = IndexWorker(db, config)
+        job_id = worker.submit_sync(kb_name)
+        console.print(f"[green]Sync job submitted:[/green] {job_id}")
+        console.print("Use 'pyrite index jobs' to check progress.")
+        return
+
     index_mgr = IndexManager(db, config)
 
     results = index_mgr.sync_incremental(kb_name)
@@ -378,3 +410,64 @@ def index_reconcile(
 
     console.print(f"\n[green]Moved {moved} file(s).[/green]")
     console.print("Run 'pyrite index sync' to update the index.")
+
+
+@index_app.command("jobs")
+def index_jobs():
+    """List active and recent index jobs."""
+    from ..services.index_worker import IndexWorker
+
+    config, db = get_config_and_db()
+    worker = IndexWorker(db, config)
+
+    # Show recent jobs (active and completed)
+    jobs = worker.get_recent_jobs()
+
+    if not jobs:
+        console.print("[dim]No index jobs found.[/dim]")
+        return
+
+    table = Table(title="Index Jobs")
+    table.add_column("Job ID", style="cyan")
+    table.add_column("KB")
+    table.add_column("Operation")
+    table.add_column("Status")
+    table.add_column("Progress")
+    table.add_column("Results")
+    table.add_column("Created")
+
+    for job in jobs:
+        status_style = {
+            "pending": "yellow",
+            "running": "blue",
+            "completed": "green",
+            "failed": "red",
+        }.get(job["status"], "")
+
+        progress = ""
+        if job["progress_total"]:
+            progress = f"{job['progress_current']}/{job['progress_total']}"
+
+        result_parts = []
+        if job["added"]:
+            result_parts.append(f"+{job['added']}")
+        if job["updated"]:
+            result_parts.append(f"~{job['updated']}")
+        if job["removed"]:
+            result_parts.append(f"-{job['removed']}")
+        results_str = " ".join(result_parts) if result_parts else ""
+
+        if job["error"]:
+            results_str = job["error"][:40]
+
+        table.add_row(
+            job["job_id"],
+            job["kb_name"] or "all",
+            job["operation"],
+            f"[{status_style}]{job['status']}[/{status_style}]",
+            progress,
+            results_str,
+            job["created_at"][:19] if job["created_at"] else "",
+        )
+
+    console.print(table)

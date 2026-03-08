@@ -156,7 +156,13 @@ def rest_api_env(indexed_test_env):
     """
     from starlette.testclient import TestClient
 
-    from pyrite.server.api import create_app, get_config, get_db, get_index_mgr
+    from pyrite.server.api import (
+        create_app,
+        get_config,
+        get_db,
+        get_index_mgr,
+        get_index_worker,
+    )
 
     config = indexed_test_env["config"]
     db = indexed_test_env["db"]
@@ -167,6 +173,11 @@ def rest_api_env(indexed_test_env):
     app.dependency_overrides[get_config] = lambda: config
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_index_mgr] = lambda: index_mgr
+
+    from pyrite.services.index_worker import IndexWorker
+
+    _index_worker = IndexWorker(db, config)
+    app.dependency_overrides[get_index_worker] = lambda: _index_worker
     client = TestClient(app)
 
     yield {

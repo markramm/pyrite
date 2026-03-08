@@ -116,6 +116,7 @@ class PyriteMCPServer:
         self.db = PyriteDB(self.config.settings.index_path)
         self.index_mgr = IndexManager(self.db, self.config)
         self.svc = KBService(self.config, self.db)
+        self._index_worker = None  # Lazy-init
 
         # KB registry (seeded from config on init)
         from ..services.kb_registry_service import KBRegistryService
@@ -823,8 +824,15 @@ class PyriteMCPServer:
     # =========================================================================
 
     def _kb_index_sync(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Sync index with file changes."""
+        """Sync index with file changes. Set background=true for async execution."""
         kb_name = args.get("kb_name")
+        background = args.get("background", False)
+
+        if background:
+            worker = self._get_index_worker()
+            job_id = worker.submit_sync(kb_name)
+            return {"submitted": True, "job_id": job_id}
+
         results = self.index_mgr.sync_incremental(kb_name)
         return {
             "synced": True,
@@ -832,6 +840,28 @@ class PyriteMCPServer:
             "updated": results["updated"],
             "removed": results["removed"],
         }
+
+    def _kb_index_job_status(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Check status of a background index job."""
+        job_id = args.get("job_id")
+        if not job_id:
+            # List active jobs
+            worker = self._get_index_worker()
+            return {"jobs": worker.get_active_jobs()}
+
+        worker = self._get_index_worker()
+        job = worker.get_job(job_id)
+        if not job:
+            return _error("NOT_FOUND", f"Job '{job_id}' not found")
+        return job
+
+    def _get_index_worker(self):
+        """Lazy-init IndexWorker."""
+        if self._index_worker is None:
+            from ..services.index_worker import IndexWorker
+
+            self._index_worker = IndexWorker(self.db, self.config)
+        return self._index_worker
 
     def _kb_manage(self, args: dict[str, Any]) -> dict[str, Any]:
         """Manage knowledge bases."""

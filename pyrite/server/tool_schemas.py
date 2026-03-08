@@ -471,6 +471,19 @@ READ_TOOLS = {
             "required": ["location"],
         },
     },
+    "kb_index_job_status": {
+        "description": "Check status of a background index job. Omit job_id to list active jobs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "job_id": {
+                    "type": "string",
+                    "description": "Job ID to check (optional - lists active jobs if not provided)",
+                }
+            },
+            "required": [],
+        },
+    },
 }
 
 WRITE_TOOLS = {
@@ -683,14 +696,19 @@ WRITE_TOOLS = {
 
 ADMIN_TOOLS = {
     "kb_index_sync": {
-        "description": "Sync the search index with file changes. Use after editing files directly.",
+        "description": "Sync the search index with file changes. Use after editing files directly. Set background=true for async execution.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "kb_name": {
                     "type": "string",
                     "description": "Sync specific KB (optional - syncs all if not provided)",
-                }
+                },
+                "background": {
+                    "type": "boolean",
+                    "description": "Run in background (returns job_id for polling). Default: false",
+                    "default": False,
+                },
             },
             "required": [],
         },

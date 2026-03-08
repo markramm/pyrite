@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from ...config import PyriteConfig
 from ...exceptions import KBNotFoundError, KBProtectedError
 from ...services.auth_service import AuthService
+from ...services.index_worker import IndexWorker
 from ...services.kb_registry_service import KBRegistryService
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
@@ -16,6 +17,7 @@ from ..api import (
     get_config,
     get_db,
     get_index_mgr,
+    get_index_worker,
     get_kb_registry,
     get_kb_service,
     get_llm_service,
@@ -27,7 +29,6 @@ from ..schemas import (
     AIStatusResponse,
     KBReindexResponse,
     StatsResponse,
-    SyncResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,30 +44,31 @@ def get_stats(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)
     return StatsResponse(**stats)
 
 
-@router.post(
-    "/index/sync", response_model=SyncResponse, dependencies=[Depends(requires_tier("admin"))]
-)
+@router.post("/index/sync", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
-def sync_index(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)):
-    """Trigger incremental index sync."""
-    result = index_mgr.sync_incremental()
-    # Broadcast WebSocket event
-    import asyncio
+def sync_index(request: Request, worker: IndexWorker = Depends(get_index_worker)):
+    """Submit a background index sync job. Returns immediately with job_id."""
+    job_id = worker.submit_sync()
+    return {"job_id": job_id, "status": "submitted"}
 
-    from ..websocket import manager
 
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(manager.broadcast({"type": "kb_synced", "entry_id": "", "kb_name": ""}))
-    except RuntimeError:
-        pass
+@router.get("/index/jobs/{job_id}", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("100/minute")
+def get_index_job(request: Request, job_id: str, worker: IndexWorker = Depends(get_index_worker)):
+    """Get status of an index job."""
+    job = worker.get_job(job_id)
+    if not job:
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"Job '{job_id}' not found"}
+        )
+    return job
 
-    return SyncResponse(
-        synced=True,
-        added=result.get("added", 0),
-        updated=result.get("updated", 0),
-        removed=result.get("removed", 0),
-    )
+
+@router.get("/index/jobs", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("100/minute")
+def list_index_jobs(request: Request, worker: IndexWorker = Depends(get_index_worker)):
+    """List active index jobs."""
+    return {"jobs": worker.get_active_jobs()}
 
 
 @router.get("/ai/status", response_model=AIStatusResponse)
