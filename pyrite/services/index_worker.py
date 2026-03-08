@@ -31,6 +31,9 @@ class IndexWorker:
         self.db = db
         self.config = config
         self._lock = threading.Lock()
+        # Optional progress callback: on_progress(job_id, current, total).
+        # Called from worker THREADS, not the main thread — callers must
+        # handle cross-thread concerns (e.g. asyncio bridge).
         self.on_progress: Callable[[str, int, int], None] | None = None
         self._ensure_table()
 

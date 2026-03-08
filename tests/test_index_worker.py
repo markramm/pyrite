@@ -220,3 +220,16 @@ class TestAdminEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert "jobs" in data
+
+    def test_sync_wait_returns_sync_response(self, rest_api_env):
+        """?wait=true blocks and returns legacy SyncResponse format."""
+        client = rest_api_env["client"]
+        resp = client.post("/api/index/sync?wait=true")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["synced"] is True
+        assert "added" in data
+        assert "updated" in data
+        assert "removed" in data
+        # Should NOT have job_id — this is the synchronous path
+        assert "job_id" not in data

@@ -29,6 +29,7 @@ from ..schemas import (
     AIStatusResponse,
     KBReindexResponse,
     StatsResponse,
+    SyncResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,8 +47,40 @@ def get_stats(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)
 
 @router.post("/index/sync", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
-def sync_index(request: Request, worker: IndexWorker = Depends(get_index_worker)):
-    """Submit a background index sync job. Returns immediately with job_id."""
+def sync_index(
+    request: Request,
+    wait: bool = False,
+    worker: IndexWorker = Depends(get_index_worker),
+    index_mgr: IndexManager = Depends(get_index_mgr),
+):
+    """Sync the search index.
+
+    By default submits a background job and returns immediately with a job_id.
+    Pass ?wait=true to block until completion and return the legacy SyncResponse
+    format with counts.
+    """
+    if wait:
+        result = index_mgr.sync_incremental()
+        # Broadcast WebSocket event
+        import asyncio
+
+        from ..websocket import manager
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(
+                manager.broadcast({"type": "kb_synced", "entry_id": "", "kb_name": ""})
+            )
+        except RuntimeError:
+            pass
+
+        return SyncResponse(
+            synced=True,
+            added=result.get("added", 0),
+            updated=result.get("updated", 0),
+            removed=result.get("removed", 0),
+        )
+
     job_id = worker.submit_sync()
     return {"job_id": job_id, "status": "submitted"}
 
