@@ -3,7 +3,7 @@ id: adr-0019
 type: adr
 title: "Pull-Based Kanban Workflow Over Sprint Iterations for Agent Teams"
 adr_number: 19
-status: proposed
+status: accepted
 deciders: ["markr"]
 date: "2026-03-08"
 tags: [architecture, agents, workflow, software]
