@@ -1,6 +1,6 @@
 """Tests for WikilinkService.
 
-Tests all 4 methods: list_entry_titles, resolve_entry, resolve_batch, get_wanted_pages.
+Tests all 5 methods: list_entry_titles, resolve_entry, resolve_batch, get_wanted_pages, check_links.
 Uses shared fixtures from conftest.py.
 """
 
@@ -179,14 +179,14 @@ class TestGetWantedPages:
         assert "referenced_by" in shared[0]
 
 
-class TestGetBrokenLinks:
+class TestCheckLinks:
     def test_no_broken_links_initially(self, wikilink_env):
         """Clean index has no broken links."""
-        results = wikilink_env["svc"].get_broken_links()
+        results = wikilink_env["svc"].check_links()
         assert results == []
 
     def test_broken_link_detected(self, wikilink_env):
-        """A wikilink to a nonexistent entry is detected as broken."""
+        """A wikilink to a nonexistent entry appears as a missing target."""
         from pyrite.services.kb_service import KBService
         from pyrite.storage.index import IndexManager
 
@@ -200,17 +200,45 @@ class TestGetBrokenLinks:
         )
         IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental("test-events")
 
-        results = wikilink_env["svc"].get_broken_links()
+        results = wikilink_env["svc"].check_links()
         assert len(results) >= 1
         target_ids = [r["target_id"] for r in results]
         assert "nonexistent-target" in target_ids
-        # Check row structure
+        # Check nested structure
         row = next(r for r in results if r["target_id"] == "nonexistent-target")
-        assert row["source_id"] == "broken-src"
-        assert row["source_kb"] == "test-events"
+        assert row["ref_count"] == 1
+        assert row["references"][0]["source_id"] == "broken-src"
+        assert row["references"][0]["source_kb"] == "test-events"
 
-    def test_filter_by_source_kb(self, wikilink_env):
-        """source_kb filter restricts results to links from that KB."""
+    def test_sorted_by_ref_count(self, wikilink_env):
+        """Targets with more references appear first."""
+        from pyrite.services.kb_service import KBService
+        from pyrite.storage.index import IndexManager
+
+        svc = KBService(wikilink_env["config"], wikilink_env["db"])
+        # Two entries link to popular-missing, one to rare-missing
+        svc.create_entry(
+            "test-events", "a1", "A1", "note", body="See [[popular-missing]]."
+        )
+        svc.create_entry(
+            "test-events", "a2", "A2", "note", body="See [[popular-missing]]."
+        )
+        svc.create_entry(
+            "test-events", "a3", "A3", "note", body="See [[rare-missing]]."
+        )
+        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental(
+            "test-events"
+        )
+
+        results = wikilink_env["svc"].check_links()
+        popular = next(r for r in results if r["target_id"] == "popular-missing")
+        rare = next(r for r in results if r["target_id"] == "rare-missing")
+        assert results.index(popular) < results.index(rare)
+        assert popular["ref_count"] == 2
+        assert rare["ref_count"] == 1
+
+    def test_filter_by_kb(self, wikilink_env):
+        """kb_name filter restricts to links originating from that KB."""
         from pyrite.services.kb_service import KBService
         from pyrite.storage.index import IndexManager
 
@@ -222,30 +250,16 @@ class TestGetBrokenLinks:
             "note",
             body="See [[missing-from-events]].",
         )
-        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental("test-events")
-
-        results = wikilink_env["svc"].get_broken_links(source_kb="test-events")
-        assert all(r["source_kb"] == "test-events" for r in results)
-
-        results_other = wikilink_env["svc"].get_broken_links(source_kb="nonexistent-kb")
-        assert results_other == []
-
-    def test_filter_by_target_kb(self, wikilink_env):
-        """target_kb filter restricts results to links targeting that KB."""
-        from pyrite.services.kb_service import KBService
-        from pyrite.storage.index import IndexManager
-
-        svc = KBService(wikilink_env["config"], wikilink_env["db"])
-        svc.create_entry(
-            "test-events",
-            "src-target-filter",
-            "Target filter test",
-            "note",
-            body="See [[missing-target-kb]].",
+        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental(
+            "test-events"
         )
-        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental("test-events")
 
-        # Links from test-events body default to target_kb=test-events
-        results = wikilink_env["svc"].get_broken_links(target_kb="test-events")
-        for r in results:
-            assert r["target_kb"] == "test-events"
+        results = wikilink_env["svc"].check_links(kb_name="test-events")
+        assert len(results) >= 1
+        # All references should come from test-events
+        for target in results:
+            for ref in target["references"]:
+                assert ref["source_kb"] == "test-events"
+
+        results_other = wikilink_env["svc"].check_links(kb_name="nonexistent-kb")
+        assert results_other == []

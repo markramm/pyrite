@@ -951,17 +951,13 @@ class KBService:
         """Get link targets that don't exist as entries (wanted pages)."""
         return self.wikilinks.get_wanted_pages(kb_name=kb_name, limit=limit)
 
-    def get_broken_links(
+    def check_links(
         self,
         kb_name: str | None = None,
-        source_kb: str | None = None,
-        target_kb: str | None = None,
         limit: int = 500,
     ) -> list[dict[str, Any]]:
-        """Get individual broken links (source→missing target)."""
-        return self.wikilinks.get_broken_links(
-            kb_name=kb_name, source_kb=source_kb, target_kb=target_kb, limit=limit
-        )
+        """Check for broken links, grouped by missing target."""
+        return self.wikilinks.check_links(kb_name=kb_name, limit=limit)
 
     def list_daily_dates(self, kb_name: str, month: str) -> list[str]:
         """List dates that have daily notes for a given month (YYYY-MM)."""

@@ -1,8 +1,9 @@
-"""Tests for link CLI commands (pyrite links broken/wanted).
+"""Tests for link CLI commands (pyrite links check).
 
-Uses shared fixtures and config patching from test_cli_commands.
+Uses shared fixtures and config patching.
 """
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -72,16 +73,16 @@ def _patch_config(env):
 
 
 @pytest.mark.cli
-class TestLinksBroken:
-    def test_links_broken_empty(self, link_env):
+class TestLinksCheck:
+    def test_check_empty(self, link_env):
         """Clean KB shows no broken links."""
         with _patch_config(link_env):
-            result = runner.invoke(app, ["links", "broken"])
+            result = runner.invoke(app, ["links", "check"])
             assert result.exit_code == 0
             assert "No broken links" in result.output
 
-    def test_links_broken_with_results(self, link_env):
-        """Broken links are shown when present."""
+    def test_check_with_results(self, link_env):
+        """Broken links appear grouped by missing target."""
         from pyrite.services.kb_service import KBService
 
         config = link_env["config"]
@@ -89,55 +90,67 @@ class TestLinksBroken:
         svc = KBService(config, db)
         svc.create_entry(
             "test-events",
-            "broken-link-entry",
-            "Entry with broken link",
+            "src-1",
+            "Source 1",
             "note",
-            body="See [[no-such-page]].",
+            body="See [[missing-page]].",
+        )
+        svc.create_entry(
+            "test-events",
+            "src-2",
+            "Source 2",
+            "note",
+            body="Also [[missing-page]].",
         )
         IndexManager(db, config).sync_incremental("test-events")
         db.close()
 
         with _patch_config(link_env):
-            result = runner.invoke(app, ["links", "broken", "--format", "json"])
+            result = runner.invoke(app, ["links", "check", "--format", "json"])
             assert result.exit_code == 0
-            import json
-
             data = json.loads(result.output)
-            assert data["count"] >= 1
-            targets = [l["target_id"] for l in data["broken_links"]]
-            assert "no-such-page" in targets
+            assert data["missing_targets"] >= 1
+            assert data["total_references"] >= 2
+            target = next(
+                t for t in data["targets"] if t["target_id"] == "missing-page"
+            )
+            assert target["ref_count"] == 2
+            assert len(target["references"]) == 2
 
-    def test_links_broken_json(self, link_env):
-        """JSON format includes count and broken_links array."""
+    def test_check_json_structure(self, link_env):
+        """JSON output has expected top-level keys."""
         with _patch_config(link_env):
-            result = runner.invoke(app, ["links", "broken", "--format", "json"])
+            result = runner.invoke(app, ["links", "check", "--format", "json"])
             assert result.exit_code == 0
-            import json
-
             data = json.loads(result.output)
-            assert "count" in data
-            assert "broken_links" in data
+            assert "missing_targets" in data
+            assert "total_references" in data
+            assert "targets" in data
 
+    def test_check_detail_flag(self, link_env):
+        """--detail shows per-link breakdown."""
+        from pyrite.services.kb_service import KBService
 
-@pytest.mark.cli
-class TestLinksWanted:
-    def test_links_wanted_empty(self, link_env):
-        """Clean KB shows no wanted pages."""
+        config = link_env["config"]
+        db = PyriteDB(config.settings.index_path)
+        svc = KBService(config, db)
+        svc.create_entry(
+            "test-events",
+            "detail-src",
+            "Detail source",
+            "note",
+            body="See [[detail-target]].",
+        )
+        IndexManager(db, config).sync_incremental("test-events")
+        db.close()
+
         with _patch_config(link_env):
-            result = runner.invoke(app, ["links", "wanted"])
+            result = runner.invoke(app, ["links", "check", "--detail"])
             assert result.exit_code == 0
-            assert "No wanted pages" in result.output
-
-    def test_links_wanted_json(self, link_env):
-        """JSON format includes count and wanted_pages array."""
-        with _patch_config(link_env):
-            result = runner.invoke(app, ["links", "wanted", "--format", "json"])
-            assert result.exit_code == 0
-            import json
-
-            data = json.loads(result.output)
-            assert "count" in data
-            assert "wanted_pages" in data
+            # Detail mode shows the arrow notation
+            assert "\u2190" in result.output
+            assert "detail-target" in result.output
+            assert "detail-src" in result.output
 
 
 @pytest.mark.cli
@@ -147,8 +160,6 @@ class TestIndexHealthBrokenLinks:
         with _patch_config(link_env):
             result = runner.invoke(app, ["index", "health", "--format", "json"])
             assert result.exit_code == 0
-            import json
-
             data = json.loads(result.output)
             assert "broken_links" in data
 
@@ -172,8 +183,6 @@ class TestIndexHealthBrokenLinks:
         with _patch_config(link_env):
             result = runner.invoke(app, ["index", "health", "--format", "json"])
             assert result.exit_code == 0
-            import json
-
             data = json.loads(result.output)
             assert data["status"] == "warning"
             assert data["broken_links"] >= 1

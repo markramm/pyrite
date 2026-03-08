@@ -322,7 +322,7 @@ def index_health(
     if broken_links:
         console.print(
             f"[yellow]⚠ {broken_links} broken link(s) found.[/yellow]"
-            " Run 'pyrite links broken' for details."
+            " Run 'pyrite links check' for details."
         )
 
     if health["missing_files"]:
