@@ -726,7 +726,10 @@ class QAService:
         # Build fields dict for validation
         fields = {k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")}
 
-        # Extract _schema_version from metadata for version-aware validation
+        # Extract _schema_version and merge custom fields from metadata
+        # Custom type-specific fields (e.g. writing_type, source_type, date_range)
+        # are stored in the metadata JSON blob, not as top-level entry attributes.
+        # The validator needs them in the fields dict to check required fields.
         metadata = entry.get("metadata")
         schema_version = 0
         if metadata:
@@ -737,9 +740,18 @@ class QAService:
                     meta_dict = json.loads(metadata)
                     schema_version = int(meta_dict.get("_schema_version", 0))
                 except (json.JSONDecodeError, ValueError):
+                    meta_dict = {}
                     logger.debug("Could not parse metadata schema version")
             elif isinstance(metadata, dict):
+                meta_dict = metadata
                 schema_version = int(metadata.get("_schema_version", 0))
+            else:
+                meta_dict = {}
+            # Merge metadata fields into fields dict so custom type fields
+            # are visible to the schema validator
+            for k, v in meta_dict.items():
+                if k not in fields and k != "_schema_version" and v is not None:
+                    fields[k] = v
 
         result = schema.validate_entry(
             entry_type,
@@ -807,6 +819,7 @@ class QAService:
                 k: v for k, v in entry.items() if v is not None and k not in ("id", "kb_name")
             }
 
+            # Extract _schema_version and merge custom fields from metadata
             metadata = entry.get("metadata")
             schema_version = 0
             if metadata:
@@ -817,9 +830,18 @@ class QAService:
                         meta_dict = json.loads(metadata)
                         schema_version = int(meta_dict.get("_schema_version", 0))
                     except (json.JSONDecodeError, ValueError):
+                        meta_dict = {}
                         logger.debug("Could not parse metadata schema version")
                 elif isinstance(metadata, dict):
+                    meta_dict = metadata
                     schema_version = int(metadata.get("_schema_version", 0))
+                else:
+                    meta_dict = {}
+                # Merge metadata fields into fields dict so custom type fields
+                # are visible to the schema validator
+                for k, v in meta_dict.items():
+                    if k not in fields and k != "_schema_version" and v is not None:
+                        fields[k] = v
 
             result = schema.validate_entry(
                 entry_type,
