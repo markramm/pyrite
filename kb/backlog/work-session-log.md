@@ -3,7 +3,7 @@ id: work-session-log
 type: backlog_item
 title: "Work session log for backlog items"
 kind: feature
-status: proposed
+status: in_progress
 priority: medium
 effort: M
 tags: [software, agents, workflow, kanban]

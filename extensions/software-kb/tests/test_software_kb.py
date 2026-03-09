@@ -26,6 +26,7 @@ from pyrite_software_kb.entry_types import (
     ProgrammaticValidationEntry,
     RunbookEntry,
     StandardEntry,
+    WorkLogEntry,
 )
 from pyrite_software_kb.plugin import SoftwareKBPlugin
 from pyrite_software_kb.preset import SOFTWARE_KB_PRESET
@@ -2244,5 +2245,215 @@ class TestSubmit:
                 result = plugin._mcp_submit({"item_id": "nonexistent", "kb_name": "test"})
                 assert result["submitted"] is False
                 assert "not found" in result["error"]
+            finally:
+                db.close()
+
+
+# =========================================================================
+# WorkLogEntry
+# =========================================================================
+
+
+class TestWorkLogEntry:
+    def test_work_log_defaults(self):
+        entry = WorkLogEntry(id="test", title="Test")
+        assert entry.entry_type == "work_log"
+        assert entry.item_id == ""
+        assert entry.decisions == ""
+        assert entry.rejected == ""
+        assert entry.open_questions == ""
+        assert entry.date == ""
+
+    def test_work_log_to_frontmatter(self):
+        entry = WorkLogEntry(
+            id="item-1-log-20260308",
+            title="Session 1",
+            item_id="item-1",
+            date="2026-03-08",
+            decisions="Used REST over GraphQL",
+            rejected="Tried gRPC, too complex",
+            open_questions="Auth strategy TBD",
+        )
+        fm = entry.to_frontmatter()
+        assert fm["type"] == "work_log"
+        assert fm["item_id"] == "item-1"
+        assert fm["date"] == "2026-03-08"
+        assert fm["decisions"] == "Used REST over GraphQL"
+        assert fm["rejected"] == "Tried gRPC, too complex"
+        assert fm["open_questions"] == "Auth strategy TBD"
+
+    def test_work_log_to_frontmatter_omits_defaults(self):
+        entry = WorkLogEntry(id="test", title="Test")
+        fm = entry.to_frontmatter()
+        assert "item_id" not in fm
+        assert "date" not in fm
+        assert "decisions" not in fm
+        assert "rejected" not in fm
+        assert "open_questions" not in fm
+
+    def test_work_log_from_frontmatter(self):
+        meta = {
+            "id": "item-1-log-20260308",
+            "title": "Session 1",
+            "type": "work_log",
+            "item_id": "item-1",
+            "date": "2026-03-08",
+            "decisions": "Used REST",
+            "rejected": "gRPC",
+            "open_questions": "Auth?",
+        }
+        entry = WorkLogEntry.from_frontmatter(meta, "Session summary")
+        assert entry.item_id == "item-1"
+        assert entry.date == "2026-03-08"
+        assert entry.decisions == "Used REST"
+        assert entry.rejected == "gRPC"
+        assert entry.open_questions == "Auth?"
+        assert entry.body == "Session summary"
+
+    def test_work_log_roundtrip(self):
+        entry = WorkLogEntry(
+            id="log-1", title="Session",
+            item_id="item-1", date="2026-03-08",
+            decisions="d", rejected="r", open_questions="q",
+        )
+        fm = entry.to_frontmatter()
+        restored = WorkLogEntry.from_frontmatter(fm, entry.body)
+        assert restored.item_id == entry.item_id
+        assert restored.date == entry.date
+        assert restored.decisions == entry.decisions
+        assert restored.rejected == entry.rejected
+        assert restored.open_questions == entry.open_questions
+
+
+# =========================================================================
+# WorkLog validator
+# =========================================================================
+
+
+class TestWorkLogValidator:
+    def test_work_log_validator_requires_item_id(self):
+        errors = validate_software_kb("work_log", {}, {})
+        assert any(e["field"] == "item_id" and e["rule"] == "required" for e in errors)
+
+    def test_work_log_validator_valid(self):
+        errors = validate_software_kb("work_log", {"item_id": "item-1"}, {})
+        assert errors == []
+
+
+# =========================================================================
+# sw_log tool
+# =========================================================================
+
+
+class TestSwLog:
+    def test_sw_log_tool_registered(self):
+        """sw_log is in write tier, not in read tier."""
+        plugin = SoftwareKBPlugin()
+        write_tools = plugin.get_mcp_tools("write")
+        read_tools = plugin.get_mcp_tools("read")
+        assert "sw_log" in write_tools
+        assert "sw_log" not in read_tools
+
+    def test_sw_log_returns_frontmatter(self):
+        """Handler returns correct structure with link."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "My Task", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_log({
+                    "item_id": "item-1",
+                    "kb_name": "test",
+                    "summary": "Implemented REST endpoints",
+                    "decisions": "Used FastAPI",
+                    "rejected": "Flask too minimal",
+                    "open_questions": "Rate limiting approach",
+                })
+                assert result["created"] is True
+                assert result["item_id"] == "item-1"
+                assert result["id"].startswith("item-1-log-")
+                assert result["body"] == "Implemented REST endpoints"
+                assert result["frontmatter"]["type"] == "work_log"
+                assert result["frontmatter"]["item_id"] == "item-1"
+                assert result["frontmatter"]["decisions"] == "Used FastAPI"
+                assert result["frontmatter"]["rejected"] == "Flask too minimal"
+                assert result["frontmatter"]["open_questions"] == "Rate limiting approach"
+                assert result["link"]["target"] == "item-1"
+                assert result["link"]["relation"] == "session_for"
+                assert result["link"]["inverse"] == "has_session"
+                assert result["filename"].startswith("work-logs/")
+            finally:
+                db.close()
+
+    def test_sw_log_item_not_found(self):
+        """Nonexistent item → error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_log({
+                    "item_id": "nonexistent",
+                    "kb_name": "test",
+                    "summary": "Session notes",
+                })
+                assert result["created"] is False
+                assert "not found" in result["error"]
+            finally:
+                db.close()
+
+    def test_sw_log_optional_fields_omitted(self):
+        """Optional fields not in frontmatter when empty."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "My Task", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_log({
+                    "item_id": "item-1",
+                    "kb_name": "test",
+                    "summary": "Quick session",
+                })
+                assert result["created"] is True
+                assert "decisions" not in result["frontmatter"]
+                assert "rejected" not in result["frontmatter"]
+                assert "open_questions" not in result["frontmatter"]
+            finally:
+                db.close()
+
+
+# =========================================================================
+# Context surfaces work logs
+# =========================================================================
+
+
+class TestContextSurfacesWorkLogs:
+    def test_context_surfaces_work_logs(self):
+        """work_log entries appear in context work_logs bucket."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-1", "title": "My Task", "status": "in_progress",
+                     "entry_type": "backlog_item",
+                     "meta": {"kind": "feature", "status": "in_progress"}},
+                    {"id": "item-1-log-1", "title": "Session 1", "entry_type": "work_log",
+                     "meta": {"item_id": "item-1", "date": "2026-03-08"}},
+                ],
+                links=[
+                    {"source": "item-1-log-1", "target": "item-1",
+                     "relation": "session_for", "inverse": "has_session"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_context_for_item({"item_id": "item-1", "kb_name": "test"})
+                assert "work_logs" in result
+                assert len(result["work_logs"]) == 1
+                assert result["work_logs"][0]["id"] == "item-1-log-1"
+                assert result["work_logs"][0]["entry_type"] == "work_log"
             finally:
                 db.close()

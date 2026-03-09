@@ -335,6 +335,47 @@ class RunbookEntry(NoteEntry):
 
 
 @dataclass
+class WorkLogEntry(Temporal, NoteEntry):
+    """Structured work session note linked to a backlog item."""
+
+    item_id: str = ""
+    decisions: str = ""
+    rejected: str = ""
+    open_questions: str = ""
+
+    @property
+    def entry_type(self) -> str:
+        return "work_log"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = super().to_frontmatter()
+        meta["type"] = "work_log"
+        if self.item_id:
+            meta["item_id"] = self.item_id
+        if self.date:
+            meta["date"] = self.date
+        if self.decisions:
+            meta["decisions"] = self.decisions
+        if self.rejected:
+            meta["rejected"] = self.rejected
+        if self.open_questions:
+            meta["open_questions"] = self.open_questions
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "WorkLogEntry":
+        kwargs = _note_base_kwargs(meta, body)
+        return cls(
+            **kwargs,
+            item_id=meta.get("item_id", ""),
+            date=meta.get("date", ""),
+            decisions=meta.get("decisions", ""),
+            rejected=meta.get("rejected", ""),
+            open_questions=meta.get("open_questions", ""),
+        )
+
+
+@dataclass
 class MilestoneEntry(Statusable, NoteEntry):
     """Project milestone for grouping backlog items."""
 

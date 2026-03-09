@@ -13,6 +13,7 @@ from .entry_types import (
     ProgrammaticValidationEntry,
     RunbookEntry,
     StandardEntry,
+    WorkLogEntry,
 )
 from .preset import SOFTWARE_KB_PRESET
 from .validators import validate_software_kb
@@ -56,6 +57,7 @@ class SoftwareKBPlugin:
             "backlog_item": BacklogItemEntry,
             "runbook": RunbookEntry,
             "milestone": MilestoneEntry,
+            "work_log": WorkLogEntry,
         }
 
     def get_kb_types(self) -> list[str]:
@@ -352,6 +354,22 @@ class SoftwareKBPlugin:
                 },
                 "handler": self._mcp_create_backlog_item,
             }
+            tools["sw_log"] = {
+                "description": "Log a work session for a backlog item: decisions, rejected approaches, open questions",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID this session is for"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "summary": {"type": "string", "description": "Session summary (becomes the entry body)"},
+                        "decisions": {"type": "string", "description": "Design choices made and rationale"},
+                        "rejected": {"type": "string", "description": "Approaches tried and abandoned"},
+                        "open_questions": {"type": "string", "description": "Unresolved issues for next session"},
+                    },
+                    "required": ["item_id", "kb_name", "summary"],
+                },
+                "handler": self._mcp_log,
+            }
 
         return tools
 
@@ -404,6 +422,14 @@ class SoftwareKBPlugin:
             "blocked_by": {
                 "inverse": "blocks",
                 "description": "Backlog item cannot start until blocker completes",
+            },
+            "session_for": {
+                "inverse": "has_session",
+                "description": "Work log records a session for a backlog item",
+            },
+            "has_session": {
+                "inverse": "session_for",
+                "description": "Backlog item has a work session log",
             },
         }
 
@@ -1095,6 +1121,7 @@ class SoftwareKBPlugin:
                 "validations": [],
                 "conventions": [],
                 "milestones": [],
+                "work_logs": [],
                 "related": [],
             }
             type_to_bucket = {
@@ -1103,6 +1130,7 @@ class SoftwareKBPlugin:
                 "programmatic_validation": "validations",
                 "development_convention": "conventions",
                 "milestone": "milestones",
+                "work_log": "work_logs",
             }
 
             for link in outlinks + backlinks:
@@ -1552,3 +1580,59 @@ class SoftwareKBPlugin:
             "body": body,
             "note": "Create the markdown file with this frontmatter and body to complete.",
         }
+
+    def _mcp_log(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Log a work session for a backlog item."""
+        import json
+        from datetime import datetime, timezone
+
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+        summary = args["summary"]
+        decisions = args.get("decisions", "")
+        rejected = args.get("rejected", "")
+        open_questions = args.get("open_questions", "")
+
+        db, should_close = self._get_db()
+        try:
+            entry = db.get_entry(item_id, kb_name)
+            if not entry:
+                return {"created": False, "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'"}
+
+            now = datetime.now(timezone.utc)
+            timestamp = now.strftime("%Y%m%dT%H%M%S")
+            log_id = f"{item_id}-log-{timestamp}"
+            date = now.strftime("%Y-%m-%d")
+
+            frontmatter = {
+                "type": "work_log",
+                "item_id": item_id,
+                "date": date,
+            }
+            if decisions:
+                frontmatter["decisions"] = decisions
+            if rejected:
+                frontmatter["rejected"] = rejected
+            if open_questions:
+                frontmatter["open_questions"] = open_questions
+
+            link = {
+                "target": item_id,
+                "relation": "session_for",
+                "inverse": "has_session",
+            }
+
+            return {
+                "created": True,
+                "id": log_id,
+                "item_id": item_id,
+                "date": date,
+                "frontmatter": frontmatter,
+                "body": summary,
+                "link": link,
+                "filename": f"work-logs/{log_id}.md",
+                "note": "Create the markdown file with this frontmatter, body, and link to complete.",
+            }
+        finally:
+            if should_close:
+                db.close()

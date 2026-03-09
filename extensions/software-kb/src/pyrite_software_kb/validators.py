@@ -43,6 +43,8 @@ def validate_software_kb(
         _validate_runbook(data, errors)
     elif entry_type == "milestone":
         _validate_milestone(data, errors)
+    elif entry_type == "work_log":
+        _validate_work_log(data, errors)
 
     return errors
 
@@ -194,6 +196,18 @@ def _validate_backlog_item(data: dict[str, Any], errors: list[dict]) -> None:
 
 def _validate_milestone(data: dict[str, Any], errors: list[dict]) -> None:
     _validate_enum(data, "status", MILESTONE_STATUSES, errors, "open")
+
+
+def _validate_work_log(data: dict[str, Any], errors: list[dict]) -> None:
+    if not data.get("item_id"):
+        errors.append(
+            {
+                "field": "item_id",
+                "rule": "required",
+                "expected": "backlog item ID",
+                "got": None,
+            }
+        )
 
 
 def _validate_runbook(data: dict[str, Any], errors: list[dict]) -> None:
