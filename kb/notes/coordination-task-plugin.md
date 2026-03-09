@@ -7,8 +7,7 @@ tags:
 - core
 - agent-infrastructure
 kind: feature
-priority: medium
-status: in_progress
+status: review
 effort: XL
 ---
 
