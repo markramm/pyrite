@@ -240,8 +240,8 @@ class KBRepository:
             rel = md_file.relative_to(self.path)
             if any(part.startswith(".") for part in rel.parts):
                 continue
-            # Skip templates
-            if "template" in md_file.name.lower():
+            # Skip template scaffold files in _templates directories
+            if "_templates" in rel.parts:
                 continue
             yield md_file
 
