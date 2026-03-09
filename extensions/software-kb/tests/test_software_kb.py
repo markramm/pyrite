@@ -1351,3 +1351,324 @@ class TestMilestonePluginRegistration:
         assert "default_board" in SOFTWARE_KB_PRESET
         assert "lanes" in SOFTWARE_KB_PRESET["default_board"]
         assert "wip_policy" in SOFTWARE_KB_PRESET["default_board"]
+
+
+# =========================================================================
+# Kanban Flow Tools — helpers
+# =========================================================================
+
+
+def _make_test_db(tmpdir, entries=None, links=None):
+    """Create a test DB with a KB and optional entries/links."""
+    from pyrite.storage.database import PyriteDB
+
+    db_path = Path(tmpdir) / "test.db"
+    db = PyriteDB(db_path)
+    db._raw_conn.execute(
+        "INSERT INTO kb (name, path, kb_type) VALUES (?, ?, ?)",
+        ("test", str(tmpdir), "generic"),
+    )
+    for e in (entries or []):
+        meta = e.get("meta", {})
+        db._raw_conn.execute(
+            "INSERT INTO entry (id, kb_name, entry_type, title, body, status, priority, assignee, metadata, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                e["id"],
+                "test",
+                e.get("entry_type", "backlog_item"),
+                e.get("title", e["id"]),
+                e.get("body", ""),
+                e.get("status"),
+                e.get("priority"),
+                e.get("assignee"),
+                json.dumps(meta),
+                e.get("created_at", "2026-01-01T00:00:00"),
+                e.get("updated_at", "2026-01-01T00:00:00"),
+            ),
+        )
+    for lnk in (links or []):
+        db._raw_conn.execute(
+            "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                lnk["source"],
+                "test",
+                lnk["target"],
+                "test",
+                lnk.get("relation", "tracks"),
+                lnk.get("inverse", "tracked_by"),
+            ),
+        )
+    db._raw_conn.commit()
+    return db
+
+
+def _make_plugin_with_db(db):
+    """Create a plugin with injected DB context."""
+
+    class _Ctx:
+        def __init__(self, db):
+            self.db = db
+
+    plugin = SoftwareKBPlugin()
+    plugin.set_context(_Ctx(db))
+    return plugin
+
+
+# =========================================================================
+# TestReviewQueue
+# =========================================================================
+
+
+class TestReviewQueue:
+    def test_review_queue_returns_review_items(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Review Me", "status": "review", "priority": "high",
+                 "meta": {"kind": "bug", "status": "review", "priority": "high"},
+                 "updated_at": "2026-01-01T10:00:00"},
+                {"id": "item-2", "title": "In Progress", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}},
+                {"id": "item-3", "title": "Also Review", "status": "review", "priority": "medium",
+                 "meta": {"kind": "feature", "status": "review", "priority": "medium"},
+                 "updated_at": "2026-01-02T10:00:00"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_review_queue({"kb_name": "test"})
+                assert result["count"] == 2
+                assert result["items"][0]["id"] == "item-1"  # older first
+                assert result["items"][1]["id"] == "item-3"
+            finally:
+                db.close()
+
+    def test_review_queue_excludes_non_review(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Accepted", "status": "accepted",
+                 "meta": {"kind": "feature", "status": "accepted"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_review_queue({"kb_name": "test"})
+                assert result["count"] == 0
+                assert result["items"] == []
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestContextForItem
+# =========================================================================
+
+
+class TestContextForItem:
+    def test_context_categorizes_linked_entries(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-1", "title": "My Task", "status": "accepted",
+                     "entry_type": "backlog_item",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                    {"id": "adr-1", "title": "Use REST", "entry_type": "adr",
+                     "meta": {"status": "accepted"}},
+                    {"id": "comp-1", "title": "API Server", "entry_type": "component",
+                     "meta": {"kind": "service"}},
+                    {"id": "val-1", "title": "Ruff Check", "entry_type": "programmatic_validation",
+                     "meta": {"category": "coding"}},
+                ],
+                links=[
+                    {"source": "item-1", "target": "adr-1", "relation": "tracks", "inverse": "tracked_by"},
+                    {"source": "item-1", "target": "comp-1", "relation": "tracks", "inverse": "tracked_by"},
+                    {"source": "item-1", "target": "val-1", "relation": "tracks", "inverse": "tracked_by"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_context_for_item({"item_id": "item-1", "kb_name": "test"})
+                assert result["item"]["id"] == "item-1"
+                assert result["item"]["title"] == "My Task"
+                assert len(result["adrs"]) == 1
+                assert result["adrs"][0]["id"] == "adr-1"
+                assert len(result["components"]) == 1
+                assert result["components"][0]["id"] == "comp-1"
+                assert len(result["validations"]) == 1
+                assert result["validations"][0]["id"] == "val-1"
+            finally:
+                db.close()
+
+    def test_context_not_found(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_context_for_item({"item_id": "nonexistent", "kb_name": "test"})
+                assert "error" in result
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestPullNext
+# =========================================================================
+
+
+class TestPullNext:
+    def test_pull_next_returns_highest_priority(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "low-1", "title": "Low Priority", "status": "accepted", "priority": "low",
+                 "meta": {"kind": "feature", "status": "accepted", "priority": "low"},
+                 "created_at": "2026-01-01T00:00:00"},
+                {"id": "high-1", "title": "High Priority", "status": "accepted", "priority": "high",
+                 "meta": {"kind": "bug", "status": "accepted", "priority": "high"},
+                 "created_at": "2026-01-02T00:00:00"},
+                {"id": "crit-1", "title": "Critical", "status": "accepted", "priority": "critical",
+                 "meta": {"kind": "bug", "status": "accepted", "priority": "critical"},
+                 "created_at": "2026-01-03T00:00:00"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_pull_next({"kb_name": "test"})
+                assert result["recommendation"] is not None
+                assert result["recommendation"]["id"] == "crit-1"
+                assert result["recommendation"]["priority"] == "critical"
+            finally:
+                db.close()
+
+    def test_pull_next_no_accepted_items(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Proposed", "status": "proposed",
+                 "meta": {"kind": "feature", "status": "proposed"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_pull_next({"kb_name": "test"})
+                assert result["recommendation"] is None
+                assert "No accepted" in result["reason"]
+            finally:
+                db.close()
+
+    def test_pull_next_wip_limit_enforce(self):
+        """When WIP limit is reached and policy is enforce, return no recommendation."""
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write a board config with enforce policy and wip_limit=1
+            board_file = Path(tmpdir) / "board.yaml"
+            board_file.write_text(
+                "lanes:\n"
+                "  - name: In Progress\n"
+                "    statuses: [in_progress]\n"
+                "    wip_limit: 1\n"
+                "wip_policy: enforce\n"
+            )
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "ip-1", "title": "Already Working", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}},
+                {"id": "acc-1", "title": "Waiting", "status": "accepted",
+                 "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                from pyrite_software_kb.board import load_board_config as real_load
+
+                with patch(
+                    "pyrite_software_kb.board.load_board_config",
+                    side_effect=lambda p: real_load(Path(tmpdir)),
+                ):
+                    result = plugin._mcp_pull_next({"kb_name": "test"})
+                assert result["recommendation"] is None
+                assert "WIP limit" in result["reason"]
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestClaim
+# =========================================================================
+
+
+class TestClaim:
+    def test_claim_validates_transition(self):
+        """Cannot claim from proposed (must be accepted first)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Proposed Item", "status": "proposed",
+                 "meta": {"kind": "feature", "status": "proposed"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_claim({
+                    "item_id": "item-1", "kb_name": "test", "assignee": "agent-1",
+                })
+                assert result["claimed"] is False
+                assert "Cannot transition" in result["error"]
+                assert "allowed_transitions" in result
+            finally:
+                db.close()
+
+    def test_claim_not_found(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_claim({
+                    "item_id": "nonexistent", "kb_name": "test", "assignee": "agent-1",
+                })
+                assert result["claimed"] is False
+                assert "not found" in result["error"]
+            finally:
+                db.close()
+
+    def test_claim_already_in_progress(self):
+        """Cannot claim an item already in_progress."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Already Working", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}, "assignee": "someone"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_claim({
+                    "item_id": "item-1", "kb_name": "test", "assignee": "agent-2",
+                })
+                assert result["claimed"] is False
+                assert "Cannot transition" in result["error"]
+            finally:
+                db.close()
+
+
+# =========================================================================
+# Plugin registration for flow tools
+# =========================================================================
+
+
+class TestFlowToolRegistration:
+    def test_read_tier_has_review_queue(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("read")
+        assert "sw_review_queue" in tools
+
+    def test_read_tier_has_pull_next(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("read")
+        assert "sw_pull_next" in tools
+
+    def test_read_tier_has_context_for_item(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("read")
+        assert "sw_context_for_item" in tools
+
+    def test_write_tier_has_claim(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("write")
+        assert "sw_claim" in tools
+
+    def test_read_tier_does_not_have_claim(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("read")
+        assert "sw_claim" not in tools

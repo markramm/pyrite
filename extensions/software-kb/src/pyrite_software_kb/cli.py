@@ -575,6 +575,165 @@ def sw_board_cmd(
         db.close()
 
 
+@sw_app.command("review-queue")
+def sw_review_queue(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """View items in review status, sorted by wait time."""
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        rows = _query_entries(db, "backlog_item", kb_name)
+
+        # Filter to review status, sort by updated_at ascending (longest waiting first)
+        review_items = []
+        for r in rows:
+            status = r.get("status") or r["_meta"].get("status", "proposed")
+            if status == "review":
+                review_items.append(r)
+        review_items.sort(key=lambda r: r.get("updated_at", "") or "")
+
+        if not review_items:
+            if fmt == "json":
+                _json_output([])
+            else:
+                console.print("[dim]No items in review.[/dim]")
+            return
+
+        if fmt == "json":
+            _json_output([
+                {
+                    "id": r["id"],
+                    "title": r["title"],
+                    "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
+                    "assignee": r.get("assignee") or r["_meta"].get("assignee", ""),
+                    "updated_at": str(r.get("updated_at", "")),
+                }
+                for r in review_items
+            ])
+            return
+
+        table = Table(title="Review Queue")
+        table.add_column("Title")
+        table.add_column("Priority", style="red")
+        table.add_column("Assignee", style="cyan")
+        table.add_column("Waiting Since", style="dim")
+
+        for row in review_items:
+            meta = row["_meta"]
+            table.add_row(
+                row["title"],
+                row.get("priority") or meta.get("priority", "medium"),
+                row.get("assignee") or meta.get("assignee", ""),
+                str(row.get("updated_at", "")),
+            )
+
+        console.print(table)
+    finally:
+        db.close()
+
+
+@sw_app.command("claim")
+def sw_claim(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    assignee: str = typer.Option(..., "--assignee", "-a", help="Who is claiming the item"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+):
+    """Claim a backlog item: transition to in_progress and set assignee."""
+    from pyrite.services.kb_service import KBService
+
+    from .workflows import BACKLOG_WORKFLOW, can_transition, get_allowed_transitions
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        rows = _query_entries(db, "backlog_item", kb_name)
+        match = [r for r in rows if r["id"] == item_id]
+        if not match:
+            console.print(f"[red]Error:[/red] Backlog item '{item_id}' not found.")
+            raise typer.Exit(1)
+
+        row = match[0]
+        current_status = row.get("status") or row["_meta"].get("status", "proposed")
+        item_kb = row.get("kb_name", kb_name or "")
+
+        if not can_transition(BACKLOG_WORKFLOW, current_status, "in_progress", "write"):
+            allowed = get_allowed_transitions(BACKLOG_WORKFLOW, current_status, "write")
+            targets = [t["to"] for t in allowed]
+            console.print(
+                f"[red]Error:[/red] Cannot transition from '{current_status}' to 'in_progress'. "
+                f"Allowed: {', '.join(targets) or 'none'}"
+            )
+            raise typer.Exit(1)
+
+        svc = KBService(config, db)
+        result = svc.claim_entry(
+            item_id, item_kb, assignee,
+            from_status=current_status, to_status="in_progress",
+        )
+
+        if result.get("claimed"):
+            console.print(f"[green]Claimed:[/green] {row['title']}")
+            console.print(f"  Assignee: [cyan]{assignee}[/cyan]")
+            console.print(f"  Status: [yellow]in_progress[/yellow]")
+        else:
+            console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
+            raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+@sw_app.command("submit")
+def sw_submit(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+):
+    """Submit an in-progress item for review."""
+    from pyrite.services.kb_service import KBService
+
+    from .workflows import BACKLOG_WORKFLOW, can_transition
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        rows = _query_entries(db, "backlog_item", kb_name)
+        match = [r for r in rows if r["id"] == item_id]
+        if not match:
+            console.print(f"[red]Error:[/red] Backlog item '{item_id}' not found.")
+            raise typer.Exit(1)
+
+        row = match[0]
+        current_status = row.get("status") or row["_meta"].get("status", "proposed")
+        item_kb = row.get("kb_name", kb_name or "")
+
+        if not can_transition(BACKLOG_WORKFLOW, current_status, "review", "write"):
+            console.print(
+                f"[red]Error:[/red] Cannot transition from '{current_status}' to 'review'. "
+                f"Item must be 'in_progress'."
+            )
+            raise typer.Exit(1)
+
+        assignee = row.get("assignee") or row["_meta"].get("assignee", "")
+        svc = KBService(config, db)
+        result = svc.claim_entry(
+            item_id, item_kb, assignee,
+            from_status=current_status, to_status="review",
+        )
+
+        if result.get("claimed"):
+            console.print(f"[green]Submitted for review:[/green] {row['title']}")
+            console.print(f"  Status: [yellow]review[/yellow]")
+        else:
+            console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
+            raise typer.Exit(1)
+    finally:
+        db.close()
+
+
 @sw_app.command("components")
 def sw_components(
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),

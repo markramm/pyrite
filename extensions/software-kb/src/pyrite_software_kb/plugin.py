@@ -198,6 +198,40 @@ class SoftwareKBPlugin:
                 },
                 "handler": self._mcp_board,
             }
+            tools["sw_review_queue"] = {
+                "description": "View items in review status, sorted by wait time. Shows WIP limit info.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_review_queue,
+            }
+            tools["sw_context_for_item"] = {
+                "description": "Assemble full context bundle for a backlog item: linked ADRs, components, validations, conventions, milestones",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["item_id", "kb_name"],
+                },
+                "handler": self._mcp_context_for_item,
+            }
+            tools["sw_pull_next"] = {
+                "description": "Recommend next work item based on priority and WIP limits",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_pull_next,
+            }
             tools["sw_backlog"] = {
                 "description": "List backlog items (features, bugs, tech debt), filter by status/priority/kind",
                 "inputSchema": {
@@ -250,6 +284,19 @@ class SoftwareKBPlugin:
                     "required": ["title"],
                 },
                 "handler": self._mcp_create_adr,
+            }
+            tools["sw_claim"] = {
+                "description": "Claim a backlog item: transition to in_progress and set assignee (atomic CAS)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "assignee": {"type": "string", "description": "Who is claiming the item"},
+                    },
+                    "required": ["item_id", "kb_name", "assignee"],
+                },
+                "handler": self._mcp_claim,
             }
             tools["sw_create_backlog_item"] = {
                 "description": "Create a new backlog item (feature, bug, tech debt)",
@@ -815,6 +862,326 @@ class SoftwareKBPlugin:
                 "deciders": args.get("deciders", []),
                 "note": "Create the markdown file with this frontmatter and body to complete.",
             }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_review_queue(self, args: dict[str, Any]) -> dict[str, Any]:
+        """View items in review status, sorted by wait time."""
+        import json
+        from pathlib import Path
+
+        from .board import load_board_config
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+
+        try:
+            query = "SELECT * FROM entry WHERE entry_type = 'backlog_item'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+            query += " ORDER BY updated_at ASC"
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+            items = []
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                status = row["status"] or meta.get("status", "proposed")
+                if status != "review":
+                    continue
+                items.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "kind": meta.get("kind", ""),
+                        "priority": row["priority"] or meta.get("priority", "medium"),
+                        "assignee": row["assignee"] or meta.get("assignee", ""),
+                        "updated_at": row["updated_at"] or "",
+                    }
+                )
+
+            # Load board config for review lane WIP limit
+            wip_limit = None
+            try:
+                if self.ctx is not None and kb_name:
+                    from pyrite.config import load_config
+
+                    config = load_config()
+                    kb_conf = config.get_kb(kb_name)
+                    board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                else:
+                    board_config = load_board_config(Path("."))
+
+                for lane in board_config["lanes"]:
+                    if "review" in lane.get("statuses", []):
+                        wip_limit = lane.get("wip_limit")
+                        break
+            except Exception:
+                pass
+
+            result: dict[str, Any] = {
+                "items": items,
+                "count": len(items),
+            }
+            if wip_limit is not None:
+                result["wip_limit"] = wip_limit
+                result["over_limit"] = len(items) > wip_limit
+
+            return result
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_context_for_item(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Assemble full context bundle for a backlog item."""
+        import json
+
+        db, should_close = self._get_db()
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+
+        try:
+            # Get the item itself
+            entry = db.get_entry(item_id, kb_name)
+            if not entry:
+                return {"error": f"Entry '{item_id}' not found in KB '{kb_name}'"}
+
+            meta = {}
+            if entry.get("metadata"):
+                try:
+                    meta = json.loads(entry["metadata"]) if isinstance(entry["metadata"], str) else entry.get("metadata", {})
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            item_info = {
+                "id": entry["id"],
+                "title": entry["title"],
+                "status": entry.get("status") or meta.get("status", "proposed"),
+                "kind": meta.get("kind", ""),
+                "priority": entry.get("priority") or meta.get("priority", "medium"),
+                "body": entry.get("body", ""),
+            }
+
+            # Get linked entries (both directions)
+            outlinks = db.get_outlinks(item_id, kb_name)
+            backlinks = db.get_backlinks(item_id, kb_name)
+
+            # Categorize by entry_type
+            buckets: dict[str, list] = {
+                "adrs": [],
+                "components": [],
+                "validations": [],
+                "conventions": [],
+                "milestones": [],
+                "related": [],
+            }
+            type_to_bucket = {
+                "adr": "adrs",
+                "component": "components",
+                "programmatic_validation": "validations",
+                "development_convention": "conventions",
+                "milestone": "milestones",
+            }
+
+            for link in outlinks + backlinks:
+                entry_type = link.get("entry_type", "")
+                bucket = type_to_bucket.get(entry_type, "related")
+                body = link.get("body", "") or ""
+                buckets[bucket].append(
+                    {
+                        "id": link.get("id", ""),
+                        "title": link.get("title", ""),
+                        "entry_type": entry_type,
+                        "relation": link.get("relation", ""),
+                        "body_preview": body[:200] if body else "",
+                    }
+                )
+
+            return {"item": item_info, **buckets}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_pull_next(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Recommend next work item based on priority and WIP limits."""
+        import json
+        from pathlib import Path
+
+        from .board import load_board_config
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+
+        try:
+            # Load board config for WIP limits
+            try:
+                if self.ctx is not None and kb_name:
+                    from pyrite.config import load_config
+
+                    config = load_config()
+                    kb_conf = config.get_kb(kb_name)
+                    board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                else:
+                    board_config = load_board_config(Path("."))
+            except Exception:
+                board_config = {"lanes": [], "wip_policy": "warn"}
+
+            # Count in_progress items and find WIP limit
+            ip_query = "SELECT COUNT(*) as cnt FROM entry WHERE entry_type = 'backlog_item'"
+            ip_params: list = []
+            if kb_name:
+                ip_query += " AND kb_name = ?"
+                ip_params.append(kb_name)
+            ip_query += " AND status = 'in_progress'"
+            ip_count = db._raw_conn.execute(ip_query, ip_params).fetchone()["cnt"]
+
+            wip_limit = None
+            wip_policy = board_config.get("wip_policy", "warn")
+            for lane in board_config["lanes"]:
+                if "in_progress" in lane.get("statuses", []):
+                    wip_limit = lane.get("wip_limit")
+                    break
+
+            wip_status = {
+                "current": ip_count,
+                "limit": wip_limit,
+                "policy": wip_policy,
+            }
+
+            # Check if over WIP limit with enforce policy
+            if wip_limit is not None and ip_count >= wip_limit and wip_policy == "enforce":
+                return {
+                    "recommendation": None,
+                    "reason": "WIP limit reached",
+                    "wip_status": wip_status,
+                }
+
+            # Query accepted items, rank by priority then created_at
+            query = "SELECT * FROM entry WHERE entry_type = 'backlog_item'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+            query += " ORDER BY created_at ASC"
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+
+            priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            candidates = []
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                status = row["status"] or meta.get("status", "proposed")
+                if status != "accepted":
+                    continue
+                priority = row["priority"] or meta.get("priority", "medium")
+                candidates.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "kind": meta.get("kind", ""),
+                        "priority": priority,
+                        "effort": meta.get("effort", ""),
+                        "_rank": priority_rank.get(priority, 2),
+                        "_created": row["created_at"] or "",
+                    }
+                )
+
+            # Sort by priority rank (ascending), then created_at (ascending)
+            candidates.sort(key=lambda c: (c["_rank"], c["_created"]))
+
+            if not candidates:
+                return {
+                    "recommendation": None,
+                    "reason": "No accepted items available",
+                    "wip_status": wip_status,
+                }
+
+            top = candidates[0]
+            # Get context preview counts
+            outlinks = db.get_outlinks(top["id"], kb_name or "")
+            adr_count = sum(1 for l in outlinks if l.get("entry_type") == "adr")
+            component_count = sum(1 for l in outlinks if l.get("entry_type") == "component")
+            validation_count = sum(1 for l in outlinks if l.get("entry_type") == "programmatic_validation")
+
+            return {
+                "recommendation": {
+                    "id": top["id"],
+                    "title": top["title"],
+                    "kind": top["kind"],
+                    "priority": top["priority"],
+                    "effort": top["effort"],
+                },
+                "context_preview": {
+                    "adr_count": adr_count,
+                    "component_count": component_count,
+                    "validation_count": validation_count,
+                },
+                "wip_status": wip_status,
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_claim(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Claim a backlog item: transition to in_progress and set assignee."""
+        import json
+
+        from .workflows import BACKLOG_WORKFLOW, can_transition, get_allowed_transitions
+
+        db, should_close = self._get_db()
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+        assignee = args["assignee"]
+
+        try:
+            # Get current entry
+            query = "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
+            row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
+            if not row:
+                return {"claimed": False, "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'"}
+
+            meta = {}
+            if row["metadata"]:
+                try:
+                    meta = json.loads(row["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            current_status = row["status"] or meta.get("status", "proposed")
+
+            # Validate transition
+            if not can_transition(BACKLOG_WORKFLOW, current_status, "in_progress", "write"):
+                allowed = get_allowed_transitions(BACKLOG_WORKFLOW, current_status, "write")
+                return {
+                    "claimed": False,
+                    "error": f"Cannot transition from '{current_status}' to 'in_progress'",
+                    "current_status": current_status,
+                    "allowed_transitions": [t["to"] for t in allowed],
+                }
+
+            # Use KBService CAS pattern
+            from pyrite.config import load_config
+            from pyrite.services.kb_service import KBService
+
+            config = load_config()
+            svc = KBService(config, db)
+            result = svc.claim_entry(
+                item_id, kb_name, assignee,
+                from_status=current_status, to_status="in_progress",
+            )
+            return result
         finally:
             if should_close:
                 db.close()
