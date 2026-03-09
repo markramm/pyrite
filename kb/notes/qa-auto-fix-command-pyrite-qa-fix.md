@@ -11,8 +11,9 @@ links:
   relation: subtask_of
   kb: pyrite
 kind: feature
-status: accepted
+status: review
 priority: high
+assignee: agent-d
 effort: M
 ---
 

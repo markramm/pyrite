@@ -527,6 +527,95 @@ def qa_gaps(
                 console.print(f"  {label}: {c}")
 
 
+@qa_app.command("fix")
+def qa_fix(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB to fix"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would change without writing"),
+    fix_rule: list[str] | None = typer.Option(
+        None, "--fix-rule", help="Only fix specific rule types (e.g. invalid_date, broken_link, tag_case)"
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich"
+    ),
+):
+    """Auto-fix safe structural issues found by validation.
+
+    Fixes: date normalisation, missing field defaults, broken wikilinks
+    (by edit distance), and tag casing. Unsafe or ambiguous issues are
+    reported for manual resolution.
+
+    Use --dry-run to preview changes before applying them.
+    """
+    import json as json_mod
+
+    from ..services.qa_service import QAService
+
+    with cli_context() as (config, db, svc):
+        qa = QAService(config, db)
+        result = qa.fix_kb(kb_name, dry_run=dry_run, fix_rules=fix_rule or None)
+
+        if output_format == "json":
+            typer.echo(json_mod.dumps(result, indent=2, default=str))
+            return
+
+        # Rich output
+        mode_label = "[bold yellow]DRY RUN[/bold yellow] — " if dry_run else ""
+        console.print(f"\n{mode_label}[bold]QA Fix Report: {kb_name}[/bold]")
+
+        # Fixed
+        if result["fixed"]:
+            console.print(f"\n[bold green]Fixed ({result['fixed_count']}):[/bold green]")
+            table = Table()
+            table.add_column("Entry", style="cyan")
+            table.add_column("Rule", style="dim")
+            table.add_column("Field")
+            table.add_column("Change", style="green")
+
+            for f in result["fixed"]:
+                table.add_row(
+                    f.get("entry_id", ""),
+                    f.get("rule", ""),
+                    f.get("field", ""),
+                    f.get("message", ""),
+                )
+            console.print(table)
+        else:
+            console.print("\n[green]No fixable issues found.[/green]")
+
+        # Manual
+        if result["manual"]:
+            console.print(
+                f"\n[bold yellow]Needs manual attention ({result['manual_count']}):[/bold yellow]"
+            )
+            table = Table()
+            table.add_column("Entry", style="cyan")
+            table.add_column("Rule", style="dim")
+            table.add_column("Message")
+            table.add_column("Reason", style="yellow")
+
+            for m in result["manual"]:
+                table.add_row(
+                    m.get("entry_id", ""),
+                    m.get("rule", ""),
+                    m.get("message", ""),
+                    m.get("reason", ""),
+                )
+            console.print(table)
+
+        # Skipped
+        if result["skipped"]:
+            console.print(f"\n[dim]Skipped: {result['skipped_count']} (filtered by --fix-rule)[/dim]")
+
+        # Summary
+        console.print(
+            f"\n[bold]Summary:[/bold] {result['fixed_count']} fixed, "
+            f"{result['manual_count']} manual, {result['skipped_count']} skipped"
+        )
+
+        if dry_run and result["fixed_count"] > 0:
+            console.print("\n[yellow]Run without --dry-run to apply these fixes.[/yellow]")
+
+
 @qa_app.command("stale")
 def qa_stale(
     kb_name: str = typer.Argument(..., help="KB to check for stale entries"),
