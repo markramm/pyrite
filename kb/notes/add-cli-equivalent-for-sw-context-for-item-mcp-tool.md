@@ -7,7 +7,9 @@ tags:
 - software-kb
 - agent
 kind: bug
+status: in_progress
 priority: high
+assignee: agent-f
 effort: S
 ---
 
