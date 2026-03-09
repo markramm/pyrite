@@ -4,7 +4,10 @@ title: Template Service
 type: component
 tags:
 - core
-- service
+- templates
+kind: service
+path: pyrite/services/template_service.py
+owner: markr
 ---
 
-Entry template and preset system. Loads templates from KB schema, applies defaults, supports type-specific presets. Used by CLI create commands and MCP tools for guided entry creation.
+Manages user-defined markdown templates that scaffold new KB entries. Templates are stored as markdown files with YAML frontmatter in `_templates/` within each KB directory. Supports variable placeholders (`{{title}}`, `{{date}}`, etc.), preset-based template provisioning, and rendering with auto-populated built-in variables.

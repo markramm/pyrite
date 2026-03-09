@@ -3,19 +3,23 @@ id: software-project-plugin
 title: "Software Project Management Plugin (Wave 2)"
 type: backlog_item
 tags:
-- feature
 - plugin
-- software
 - agents
+- software
+- feature
 - wave-2
+- extension:software-kb
+links:
+- target: launch-plan
+  relation: related
+- target: bhag-self-configuring-knowledge-infrastructure
+  relation: related
+- target: roadmap
+  relation: related
 kind: feature
+status: planned
 priority: high
 effort: L
-status: planned
-links:
-- launch-plan
-- bhag-self-configuring-knowledge-infrastructure
-- roadmap
 ---
 
 ## Problem

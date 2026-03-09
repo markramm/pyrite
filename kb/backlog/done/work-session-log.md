@@ -1,19 +1,23 @@
 ---
 id: work-session-log
-type: backlog_item
 title: "Work session log for backlog items"
-kind: feature
-status: in_progress
-priority: medium
-effort: M
-tags: [software, agents, workflow, kanban]
+type: backlog_item
+tags:
+- workflow
+- agents
+- software
+- kanban
+- extension:software-kb
 links:
-  - target: adr-0020
-    relation: tracks
-    note: "Feedback and learning dimension for kanban flow"
-  - target: kanban-mcp-tools
-    relation: tracks
-    note: "Extends flow tools with session context"
+- target: adr-0020
+  relation: tracks
+  note: "Feedback and learning dimension for kanban flow"
+- target: kanban-mcp-tools
+  relation: tracks
+  note: "Extends flow tools with session context"
+kind: feature
+status: completed
+effort: M
 ---
 
 ## Problem

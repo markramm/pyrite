@@ -2,12 +2,13 @@
 id: oauth-providers
 title: OAuth Providers
 type: component
-kind: module
-path: pyrite/services/oauth_providers.py
-owner: core
 tags:
 - core
 - auth
+kind: service
+path: pyrite/services/oauth_providers.py
+owner: markr
+dependencies: '["auth_service"]'
 ---
 
-OAuth authentication provider implementations. Currently supports GitHub OAuth flow. Handles authorization URL generation, token exchange, and user profile retrieval.
+Protocol-based OAuth provider abstraction with a concrete GitHub implementation. Handles OAuth code exchange (token retrieval via httpx) and normalized user profile fetching. Provides OAuthToken and OAuthProfile dataclasses for provider-agnostic identity. Used by AuthService for 'Sign in with GitHub' flow.

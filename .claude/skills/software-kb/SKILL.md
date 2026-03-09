@@ -62,6 +62,7 @@ Side exits: `proposed → wont_do`, `proposed → deferred → proposed`, `done 
 | `sw_review` | Record review outcome: `review → done` or `review → in_progress` | `item_id`, `kb_name`, `outcome`, `reviewer`, `feedback` |
 | `sw_create_adr` | Create auto-numbered ADR | `title`, `kb_name` |
 | `sw_create_backlog_item` | Create backlog item | `title`, `kind` |
+| `sw_log` | Log work session: decisions, rejected approaches, open questions | `item_id`, `kb_name`, `summary` |
 
 ---
 
@@ -116,6 +117,24 @@ If `sw_pull_next` returns blocked items, check if you can unblock them by comple
 - `changes_requested` → transitions back to `in_progress` (feedback required)
 - Prior review feedback is surfaced in `sw_context_for_item` so rework addresses specific issues
 - `rework_count` in the review queue shows how many times an item has been sent back
+
+### Logging Work Sessions
+
+Record session context so the next agent doesn't repeat dead ends:
+
+```
+sw_log(item_id, kb_name, summary,
+       decisions="...",       # what you chose and why
+       rejected="...",        # what you tried and abandoned
+       open_questions="...")   # what's unresolved for next session
+```
+
+The tool creates a `work_log` entry linked to the backlog item via `session_for` / `has_session`. These entries surface automatically in `sw_context_for_item`.
+
+Log at the end of a work session, especially when:
+- You made non-obvious design choices
+- You tried an approach that didn't work
+- You're handing off unfinished work
 
 ### Checking the Board
 
@@ -172,6 +191,7 @@ Backlog items gain value from links to other entries:
 | Validations | Automated checks to run |
 | Conventions | Style/approach guidance to follow |
 | Milestones | Which milestone this contributes to |
+| Work logs | Prior session decisions, rejected approaches, open questions |
 | Other backlog items | `blocked_by` / `blocks` dependencies |
 
 `sw_context_for_item` assembles all of these in one call. Use it before starting work — it's the single source of truth for what an item needs.
@@ -182,9 +202,11 @@ Backlog items gain value from links to other entries:
 
 | Don't | Do instead |
 |-------|------------|
-| Skip `sw_context_for_item` before working | Always gather context — prior reviews, linked validations, dependencies |
+| Skip `sw_context_for_item` before working | Always gather context — prior reviews, linked validations, work logs, dependencies |
 | Claim multiple items at once | Respect WIP limits; finish one before pulling another |
 | Submit without running validations | Check `sw_context_for_item` for linked programmatic validations; run them |
 | Review without feedback | Always provide `feedback`, even for approvals ("LGTM" is fine) |
 | Ignore `rework_count` | Items sent back multiple times likely need a different approach |
 | Create items without `kind` | Kind drives board grouping and reporting |
+| Hand-edit YAML frontmatter for field changes | Use `pyrite update <id> -k <kb> -f field=value` — validates and syncs the index |
+| End a session without logging context | Use `sw_log` to record decisions, rejected approaches, and open questions |

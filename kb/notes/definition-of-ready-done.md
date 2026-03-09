@@ -1,16 +1,20 @@
 ---
 id: definition-of-ready-done
-type: backlog_item
 title: "Support Definition of Ready and Definition of Done for backlog items"
-kind: feature
-status: proposed
-priority: medium
-effort: L
-tags: [software, agents, workflow, kanban, quality]
+type: backlog_item
+tags:
+- workflow
+- agents
+- quality
+- software
+- kanban
+- extension:software-kb
 links:
-  - target: adr-0020
-    relation: tracks
-    note: "Quality gates for the kanban workflow"
+- target: adr-0020
+  relation: tracks
+  note: "Quality gates for the kanban workflow"
+kind: feature
+effort: L
 ---
 
 ## Problem

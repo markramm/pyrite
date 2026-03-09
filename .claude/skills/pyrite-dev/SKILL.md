@@ -210,14 +210,21 @@ Ask: "Did I encounter any non-obvious behavior that would trip up the next agent
 
 When implementation + verification are done, follow the backlog process:
 
-1. Set `status: completed` in the backlog item's YAML frontmatter
+1. Update the item's status via CLI (validates + syncs index automatically):
+   ```bash
+   .venv/bin/pyrite update <item-id> -k pyrite -f status=completed
+   ```
+   **Never hand-edit YAML frontmatter for status changes** — the CLI validates field values and keeps the index in sync. Hand-editing skips validation and leaves the index stale until the next `pyrite index sync`.
 2. Move the file from `kb/backlog/` to `kb/backlog/done/`
 3. Update `kb/backlog/BACKLOG.md` — move to Completed section, re-number
 4. If work revealed new tech debt or follow-on features:
-   - Create new `backlog_item` files
-   - Place in `kb/backlog/` (priority) or `kb/backlog/future-ideas/` (low priority)
+   - Create new backlog items via CLI:
+     ```bash
+     .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags enhancement
+     ```
+   - Move files to `kb/backlog/` (priority) or `kb/backlog/future-ideas/` (low priority)
    - Add to `BACKLOG.md` in the correct position
-5. Run `pyrite index sync` and verify with `pyrite sw backlog`
+5. Verify with `pyrite sw backlog`
 6. Commit the backlog changes
 
 ---

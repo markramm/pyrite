@@ -515,12 +515,13 @@ def sw_milestones(
                             link_meta = json.loads(link["metadata"]) if isinstance(link["metadata"], str) else link.get("metadata", {})
                         except (json.JSONDecodeError, TypeError):
                             pass
-                    if link_meta.get("status") in ("done", "completed"):
+                    link_status = link.get("status") or link_meta.get("status", "proposed")
+                    if link_status in ("done", "completed"):
                         completed += 1
             pct = round(completed / total * 100) if total > 0 else 0
             results.append({
                 "title": row["title"],
-                "status": meta.get("status", "open"),
+                "status": row.get("status") or meta.get("status", "open"),
                 "total_items": total,
                 "completed_items": completed,
                 "completion_pct": pct,
@@ -577,7 +578,7 @@ def sw_board_cmd(
         lane_items: dict[int, list] = {i: [] for i in range(len(board_config["lanes"]))}
         for row in rows:
             meta = row["_meta"]
-            item_status = meta.get("status", "proposed")
+            item_status = row.get("status") or meta.get("status", "proposed")
             lane_idx = status_to_lane.get(item_status)
             if lane_idx is not None:
                 lane_items[lane_idx].append(row)

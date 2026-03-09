@@ -3,18 +3,21 @@ id: plugin-repo-extraction
 title: "Extract Extensions to Separate Repositories"
 type: backlog_item
 tags:
-- feature
 - plugins
 - distribution
+- feature
 - launch
-kind: feature
-priority: medium
-effort: M
-status: deferred
+- extensions
 links:
-- pypi-publish
-- extension-registry
-- roadmap
+- target: pypi-publish
+  relation: related
+- target: extension-registry
+  relation: related
+- target: roadmap
+  relation: related
+kind: feature
+status: deferred
+effort: M
 ---
 
 ## Problem

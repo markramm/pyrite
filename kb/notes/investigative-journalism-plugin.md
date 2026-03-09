@@ -3,19 +3,22 @@ id: investigative-journalism-plugin
 title: "Investigative Journalism Plugin (Wave 3)"
 type: backlog_item
 tags:
-- feature
 - plugin
 - journalism
 - osint
+- feature
 - wave-3
-kind: feature
-priority: medium
-effort: XL
-status: planned
+- extension:cascade
 links:
-- launch-plan
-- bhag-self-configuring-knowledge-infrastructure
-- roadmap
+- target: launch-plan
+  relation: related
+- target: bhag-self-configuring-knowledge-infrastructure
+  relation: related
+- target: roadmap
+  relation: related
+kind: feature
+status: planned
+effort: XL
 ---
 
 ## Problem

@@ -477,7 +477,7 @@ class SoftwareKBPlugin:
                         meta = json.loads(row["metadata"])
                     except (json.JSONDecodeError, TypeError):
                         pass
-                status = meta.get("status", "proposed")
+                status = row["status"] or meta.get("status", "proposed")
                 if status_filter and status != status_filter:
                     continue
                 adrs.append(
@@ -703,9 +703,10 @@ class SoftwareKBPlugin:
                         meta = json.loads(row["metadata"])
                     except (json.JSONDecodeError, TypeError):
                         pass
-                status = meta.get("status", "proposed")
-                priority = meta.get("priority", "medium")
+                status = row["status"] or meta.get("status", "proposed")
+                priority = row["priority"] or meta.get("priority", "medium")
                 kind = meta.get("kind", "")
+                assignee = row["assignee"] or meta.get("assignee", "")
                 if status_filter and status != status_filter:
                     continue
                 if priority_filter and priority != priority_filter:
@@ -720,7 +721,7 @@ class SoftwareKBPlugin:
                         "status": status,
                         "priority": priority,
                         "effort": meta.get("effort", ""),
-                        "assignee": meta.get("assignee", ""),
+                        "assignee": assignee,
                         "kb_name": row["kb_name"],
                     }
                 )
@@ -755,7 +756,7 @@ class SoftwareKBPlugin:
                         meta = json.loads(row["metadata"])
                     except (json.JSONDecodeError, TypeError):
                         pass
-                status = meta.get("status", "open")
+                status = row["status"] or meta.get("status", "open")
                 if status_filter and status != status_filter:
                     continue
 
@@ -772,7 +773,8 @@ class SoftwareKBPlugin:
                                 link_meta = json.loads(link["metadata"]) if isinstance(link["metadata"], str) else link.get("metadata", {})
                             except (json.JSONDecodeError, TypeError):
                                 pass
-                        if link_meta.get("status") in ("done", "completed"):
+                        link_status = link.get("status") or link_meta.get("status", "proposed")
+                        if link_status in ("done", "completed"):
                             completed += 1
 
                 pct = round(completed / total * 100) if total > 0 else 0
@@ -796,6 +798,7 @@ class SoftwareKBPlugin:
     def _mcp_board(self, args: dict[str, Any]) -> dict[str, Any]:
         """View kanban board."""
         import json
+        from pathlib import Path
 
         from .board import load_board_config
 
@@ -811,8 +814,6 @@ class SoftwareKBPlugin:
                 kb_conf = config.get_kb(kb_name)
                 board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
             else:
-                from pathlib import Path
-
                 board_config = load_board_config(Path("."))
 
             # Query all backlog items
@@ -839,7 +840,7 @@ class SoftwareKBPlugin:
                         meta = json.loads(row["metadata"])
                     except (json.JSONDecodeError, TypeError):
                         pass
-                status = meta.get("status", "proposed")
+                status = row["status"] or meta.get("status", "proposed")
                 lane_idx = status_to_lane.get(status)
                 if lane_idx is not None:
                     lane_items[lane_idx].append(
@@ -847,7 +848,7 @@ class SoftwareKBPlugin:
                             "id": row["id"],
                             "title": row["title"],
                             "status": status,
-                            "priority": meta.get("priority", "medium"),
+                            "priority": row["priority"] or meta.get("priority", "medium"),
                             "kind": meta.get("kind", ""),
                         }
                     )

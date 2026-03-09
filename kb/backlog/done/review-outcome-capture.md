@@ -1,22 +1,28 @@
 ---
 id: review-outcome-capture
-type: backlog_item
 title: "Review outcome capture (sw_review tool)"
+type: backlog_item
+tags:
+- workflow
+- agents
+- quality
+- software
+- kanban
+- extension:software-kb
+links:
+- target: adr-0020
+  relation: tracks
+  note: "Feedback loop for review workflow"
+- target: kanban-mcp-tools
+  relation: tracks
+  note: "Completes the review workflow with structured outcomes"
+- target: definition-of-ready-done
+  relation: tracks
+  note: "Review outcomes are the enforcement point for Definition of Done"
 kind: feature
 status: done
 priority: high
 effort: M
-tags: [software, agents, workflow, kanban, quality]
-links:
-  - target: adr-0020
-    relation: tracks
-    note: "Feedback loop for review workflow"
-  - target: kanban-mcp-tools
-    relation: tracks
-    note: "Completes the review workflow with structured outcomes"
-  - target: definition-of-ready-done
-    relation: tracks
-    note: "Review outcomes are the enforcement point for Definition of Done"
 ---
 
 ## Problem

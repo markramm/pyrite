@@ -1,19 +1,24 @@
 ---
 id: backlog-item-dependencies
-type: backlog_item
 title: "Backlog item dependencies (blocked_by/blocks)"
+type: backlog_item
+tags:
+- workflow
+- agents
+- software
+- kanban
+- extension:software-kb
+links:
+- target: adr-0020
+  relation: tracks
+  note: "Dependency ordering for pull-based flow"
+- target: kanban-mcp-tools
+  relation: tracks
+  note: "sw_pull_next needs dependency awareness"
 kind: feature
 status: done
 priority: high
 effort: M
-tags: [software, agents, workflow, kanban]
-links:
-  - target: adr-0020
-    relation: tracks
-    note: "Dependency ordering for pull-based flow"
-  - target: kanban-mcp-tools
-    relation: tracks
-    note: "sw_pull_next needs dependency awareness"
 ---
 
 ## Problem

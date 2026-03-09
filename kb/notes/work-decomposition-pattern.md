@@ -1,16 +1,19 @@
 ---
 id: work-decomposition-pattern
-type: backlog_item
 title: "Unit of Work decomposition pattern for large backlog items"
-kind: feature
-status: proposed
-priority: medium
-effort: L
-tags: [software, agents, workflow, kanban]
+type: backlog_item
+tags:
+- workflow
+- agents
+- software
+- kanban
+- extension:software-kb
 links:
-  - target: adr-0020
-    relation: tracks
-    note: "Extends kanban flow with decomposition rules"
+- target: adr-0020
+  relation: tracks
+  note: "Extends kanban flow with decomposition rules"
+kind: feature
+effort: L
 ---
 
 ## Problem

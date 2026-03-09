@@ -1,27 +1,33 @@
 ---
 id: kanban-mcp-tools
-type: backlog_item
 title: "Add kanban flow tools: sw_pull_next, sw_context_for_item, sw_review_queue, sw_validate, sw_claim"
+type: backlog_item
+tags:
+- mcp
+- workflow
+- agents
+- software
+- wave-2
+- extension:software-kb
+links:
+- target: adr-0019
+  relation: implements
+  note: "MCP tool changes from the kanban ADR"
+- target: adr-0020
+  relation: implements
+  note: "Review queue as computed view, not entity"
+- target: software-project-plugin
+  relation: part_of
+- target: kanban-entity-types
+  relation: depends_on
+  note: "Needs milestone type and board config"
+- target: standard-type-split
+  relation: depends_on
+  note: "sw_validate needs programmatic_validation type"
 kind: feature
 status: completed
 priority: high
 effort: L
-tags: [software, agents, mcp, workflow, wave-2]
-links:
-  - target: adr-0019
-    relation: implements
-    note: "MCP tool changes from the kanban ADR"
-  - target: adr-0020
-    relation: implements
-    note: "Review queue as computed view, not entity"
-  - target: software-project-plugin
-    relation: part_of
-  - target: kanban-entity-types
-    relation: depends_on
-    note: "Needs milestone type and board config"
-  - target: standard-type-split
-    relation: depends_on
-    note: "sw_validate needs programmatic_validation type"
 ---
 
 # Add kanban flow tools

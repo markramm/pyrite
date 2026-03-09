@@ -3,18 +3,21 @@ id: extension-registry
 title: "Extension Registry and Public KB Directory"
 type: backlog_item
 tags:
-- feature
+- extensions
 - infrastructure
+- feature
 - community
 - extensions
-kind: feature
-priority: medium
-effort: M
-status: planned
 links:
-- launch-plan
-- bhag-self-configuring-knowledge-infrastructure
-- roadmap
+- target: launch-plan
+  relation: related
+- target: bhag-self-configuring-knowledge-infrastructure
+  relation: related
+- target: roadmap
+  relation: related
+kind: feature
+status: planned
+effort: M
 ---
 
 ## Problem

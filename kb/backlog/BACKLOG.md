@@ -96,7 +96,8 @@ Recommended execution order. Grouped by milestone.
 | **1** | [[entry-id-collision-across-types]] | M | Silent index overwrites from title-derived ID collisions | **done** (explicit `id` fields added) |
 | **2** | [[priority-type-mismatch]] | S | DB Integer column vs string values from entry types | **done** (column changed to String) |
 | **3** | [[sw-adrs-date-field-empty]] | XS | sw adrs reading date from metadata instead of DB column | **done** (column-first reads) |
-| **4** | [[schema-validate-cli-command]] | M | No validation gate between authoring and indexing | **done** (`schema validate` + pre-commit hook) |
+| **4** | [[sw-mcp-tools-read-status-from-metadata-json-instead-of-db-column]] | S | sw_* MCP tools read status from metadata JSON instead of DB column | **done** (column-first fallback) |
+| **5** | [[schema-validate-cli-command]] | M | No validation gate between authoring and indexing | **done** (`schema validate` + pre-commit hook) |
 
 *Reliability:*
 
@@ -168,9 +169,11 @@ Recommended execution order. Grouped by milestone.
 
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
-| **1** | [[kanban-entity-types]] | L | Milestone type, board config (board.yaml), review workflow | proposed |
+| **1** | [[kanban-entity-types]] | L | Milestone type, board config (board.yaml), review workflow | **done** |
 | **2** | [[standard-type-split]] | M | Split standard → programmatic_validation + development_convention | **done** |
-| **3** | [[kanban-mcp-tools]] | L | sw_pull_next, sw_context_for_item, sw_review_queue, sw_validate | proposed |
+| **3** | [[kanban-mcp-tools]] | L | sw_pull_next, sw_context_for_item, sw_review_queue, sw_claim, sw_submit, sw_review, sw_log | **done** |
+| **4** | [[work-session-log]] | S | sw_log tool + WorkLogEntry for persisting session context | **done** |
+| **5** | [[enhance-orient-for-software-type-kbs-with-kanban-and-architecture-context]] | M | Orient command with kanban board and architecture overview | proposed |
 
 **Future:**
 
@@ -433,6 +436,7 @@ Lower-priority items in [`future-ideas/`](future-ideas/):
 | — | [[entry-id-collision-across-types]] | high | **done** (explicit `id` fields) |
 | — | [[schema-validate-cli-command]] | high | **done** (`schema validate` command) |
 | — | [[sw-adrs-date-field-empty]] | medium | **done** (column-first reads) |
+| — | [[sw-mcp-tools-read-status-from-metadata-json-instead-of-db-column]] | high | **done** (column-first fallback) |
 | — | [[priority-type-mismatch]] | medium | **done** (Integer → String) |
 | 66 | [[health-check-timezone-fix]] | — | **done** |
 | 67 | [[create-body-file-nested-yaml-bug]] | — | **done** |

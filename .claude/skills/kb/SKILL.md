@@ -196,11 +196,18 @@ The backlog lives in `kb/backlog/` with three zones:
 
 ### When completing a feature:
 
-1. Set `status: completed` in the item's YAML frontmatter
+1. Update the item's status via CLI (validates + syncs index automatically):
+   ```bash
+   pyrite update <item-id> -k <kb> -f status=completed
+   ```
+   **Never hand-edit YAML frontmatter for field updates** — the CLI validates values and keeps the index in sync. Hand-editing skips validation and leaves the index stale.
 2. Move the file from `kb/backlog/` to `kb/backlog/done/`
 3. Update `BACKLOG.md` — move item to the Completed section
 4. If the work revealed new tech debt, cleanup needs, or follow-on features:
-   - Create new `backlog_item` files for each
+   - Create new backlog items via CLI:
+     ```bash
+     pyrite create -k <kb> -t backlog_item --title "..." -b "..."
+     ```
    - Place in `kb/backlog/` if high priority, or `kb/backlog/future-ideas/` if low
    - Add to `BACKLOG.md` in the correct priority position
 5. Re-number priorities in `BACKLOG.md` if needed to keep the list clean

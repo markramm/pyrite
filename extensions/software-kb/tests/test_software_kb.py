@@ -2457,3 +2457,169 @@ class TestContextSurfacesWorkLogs:
                 assert result["work_logs"][0]["entry_type"] == "work_log"
             finally:
                 db.close()
+
+
+# =========================================================================
+# Column-first status fallback (bug fix regression tests)
+# =========================================================================
+
+
+class TestColumnFirstStatusFallback:
+    """Verify MCP handlers read status/priority/assignee from DB columns first,
+    falling back to metadata JSON only when columns are NULL.
+
+    Regression tests for the bug where sw_backlog, sw_board, and sw_milestones
+    read status only from metadata JSON, ignoring the authoritative DB column.
+    """
+
+    def test_backlog_uses_db_column_over_metadata(self):
+        """sw_backlog returns status from DB column even when metadata disagrees."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Column wins",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "priority": "high",
+                        "assignee": "alice",
+                        "meta": {
+                            "kind": "feature",
+                            "status": "proposed",
+                            "priority": "low",
+                            "assignee": "bob",
+                        },
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test"})
+                assert result["count"] == 1
+                item = result["items"][0]
+                assert item["status"] == "in_progress"
+                assert item["priority"] == "high"
+                assert item["assignee"] == "alice"
+            finally:
+                db.close()
+
+    def test_backlog_falls_back_to_metadata_when_column_null(self):
+        """sw_backlog falls back to metadata JSON when DB column is NULL."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Metadata fallback",
+                        "entry_type": "backlog_item",
+                        "status": None,
+                        "priority": None,
+                        "assignee": None,
+                        "meta": {
+                            "kind": "bug",
+                            "status": "accepted",
+                            "priority": "critical",
+                            "assignee": "carol",
+                        },
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test"})
+                assert result["count"] == 1
+                item = result["items"][0]
+                assert item["status"] == "accepted"
+                assert item["priority"] == "critical"
+                assert item["assignee"] == "carol"
+            finally:
+                db.close()
+
+    def test_board_uses_db_column_for_lane_routing(self):
+        """sw_board routes items to lanes based on DB column status, not metadata."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "In progress item",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "priority": "high",
+                        "meta": {
+                            "kind": "feature",
+                            "status": "proposed",
+                        },
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_board({"kb_name": "test"})
+                found = False
+                for lane in result["lanes"]:
+                    for item in lane["items"]:
+                        if item["id"] == "item-1":
+                            assert item["status"] == "in_progress"
+                            found = True
+                assert found, "Item should appear on the board"
+            finally:
+                db.close()
+
+    def test_backlog_filter_uses_db_column(self):
+        """sw_backlog status filter matches against DB column, not metadata."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Actually in progress",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "priority": "medium",
+                        "meta": {
+                            "kind": "feature",
+                            "status": "proposed",
+                        },
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test", "status": "in_progress"})
+                assert result["count"] == 1
+                result = plugin._mcp_backlog({"kb_name": "test", "status": "proposed"})
+                assert result["count"] == 0
+            finally:
+                db.close()
+
+    def test_adrs_use_db_column_status(self):
+        """sw_adrs reads status from DB column first."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "adr-1",
+                        "title": "Use Typer",
+                        "entry_type": "adr",
+                        "status": "accepted",
+                        "meta": {
+                            "adr_number": 1,
+                            "status": "proposed",
+                        },
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_adrs({"kb_name": "test"})
+                assert result["count"] == 1
+                assert result["adrs"][0]["status"] == "accepted"
+            finally:
+                db.close()

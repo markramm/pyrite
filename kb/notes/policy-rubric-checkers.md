@@ -3,18 +3,20 @@ id: policy-rubric-checkers
 title: "Policy Rubric Checkers: User-Configurable Constraint Rules"
 type: backlog_item
 tags:
+- schema
 - feature
 - qa
 - intent-engineering
-- schema
-kind: feature
-priority: medium
-effort: M
-status: proposed
+- extension:software-kb
 links:
-- intent-layer
-- intent-layer-guidelines-and-goals
-- pyrite-ci-command
+- target: intent-layer
+  relation: related
+- target: intent-layer-guidelines-and-goals
+  relation: related
+- target: pyrite-ci-command
+  relation: related
+kind: feature
+effort: M
 ---
 
 ## Problem

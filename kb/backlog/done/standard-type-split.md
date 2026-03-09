@@ -1,18 +1,23 @@
 ---
 id: standard-type-split
-type: backlog_item
 title: "Split standard type into programmatic_validation and development_convention"
+type: backlog_item
+tags:
+- workflow
+- agents
+- software
+- wave-2
+- extension:software-kb
+links:
+- target: adr-0019
+  relation: implements
+  note: "Ontological split from the kanban ADR"
+- target: software-project-plugin
+  relation: part_of
 kind: feature
 status: completed
 priority: high
 effort: M
-tags: [software, agents, workflow, wave-2]
-links:
-  - target: adr-0019
-    relation: implements
-    note: "Ontological split from the kanban ADR"
-  - target: software-project-plugin
-    relation: part_of
 ---
 
 # Split standard type into programmatic_validation and development_convention

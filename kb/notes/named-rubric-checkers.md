@@ -3,15 +3,12 @@ id: named-rubric-checkers
 title: "Named Rubric Checkers: Explicit Binding Between Rubric Items and Validation Functions"
 type: backlog_item
 tags:
+- plugins
+- schema
 - feature
 - qa
 - intent-engineering
-- plugins
-- schema
-kind: feature
-priority: high
-effort: L
-status: proposed
+- extension:software-kb
 links:
 - target: intent-layer
   relation: builds_on
@@ -23,6 +20,9 @@ links:
 - target: intent-layer-guidelines-and-goals
   relation: builds_on
   note: "Implements the 'deterministic rubric items become validation rules' design"
+kind: feature
+priority: high
+effort: L
 ---
 
 ## Problem

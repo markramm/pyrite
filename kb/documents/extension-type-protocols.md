@@ -2,17 +2,20 @@
 id: extension-type-protocols
 title: "Extension Type System: Structural Protocols for Knowledge Types"
 type: design_doc
-status: draft
 tags:
-- design
+- architecture
 - extensions
+- feature
 - protocols
 - type-system
-- architecture
+- extensions
 links:
-- bhag-self-configuring-knowledge-infrastructure
-- intent-layer-guidelines-and-goals
-- launch-plan
+- target: bhag-self-configuring-knowledge-infrastructure
+  relation: related
+- target: intent-layer-guidelines-and-goals
+  relation: related
+- target: launch-plan
+  relation: related
 ---
 
 ## Problem

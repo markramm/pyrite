@@ -1,24 +1,29 @@
 ---
 id: kanban-entity-types
-type: backlog_item
 title: "Milestone entry type, board config, and review workflow"
+type: backlog_item
+tags:
+- workflow
+- agents
+- software
+- wave-2
+- extension:software-kb
+links:
+- target: adr-0019
+  relation: implements
+  note: "Core entity types from the kanban ADR"
+- target: adr-0020
+  relation: implements
+  note: "Revised entity model — milestone as entry, lanes as config"
+- target: software-project-plugin
+  relation: part_of
+- target: standard-type-split
+  relation: depends_on
+  note: "Standard split should land first so sw_validate has types to work with"
 kind: feature
 status: completed
 priority: high
 effort: L
-tags: [software, agents, workflow, wave-2]
-links:
-  - target: adr-0019
-    relation: implements
-    note: "Core entity types from the kanban ADR"
-  - target: adr-0020
-    relation: implements
-    note: "Revised entity model — milestone as entry, lanes as config"
-  - target: software-project-plugin
-    relation: part_of
-  - target: standard-type-split
-    relation: depends_on
-    note: "Standard split should land first so sw_validate has types to work with"
 ---
 
 # Milestone entry type, board config, and review workflow
