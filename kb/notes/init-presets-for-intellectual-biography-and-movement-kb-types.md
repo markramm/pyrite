@@ -6,6 +6,7 @@ tags:
 - cli
 - templates
 - agent
+status: accepted
 kind: feature
 priority: high
 effort: S

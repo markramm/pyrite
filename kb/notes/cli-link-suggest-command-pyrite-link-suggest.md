@@ -6,13 +6,14 @@ tags:
 - cli
 - links
 - agent
-kind: feature
-priority: low
-effort: M
 links:
 - target: epic-agent-cli-feature-requests-for-kb-workflows
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: accepted
+priority: low
+effort: M
 ---
 
 ## Problem
