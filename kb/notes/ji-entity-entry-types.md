@@ -15,7 +15,7 @@ links:
   relation: informed_by
   kb: pyrite
 kind: feature
-status: proposed
+status: accepted
 priority: high
 effort: M
 ---

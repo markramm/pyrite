@@ -6,6 +6,7 @@ tags:
 - performance
 - links
 kind: improvement
+status: accepted
 effort: M
 ---
 
