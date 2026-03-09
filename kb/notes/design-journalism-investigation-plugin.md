@@ -21,6 +21,12 @@ links:
 - target: epic-refactor-cascade-to-extend-journalism-investigation
   relation: informs
   kb: pyrite
+- target: epic-investigation-ui-views
+  relation: informs
+  kb: pyrite
+- target: epic-cross-kb-investigation-search
+  relation: informs
+  kb: pyrite
 ---
 
 ## Overview
@@ -37,6 +43,49 @@ The journalism-investigation plugin (like the software-kb plugin) serves two pur
 2. **Platform validation** — exercising Pyrite core with demanding real-world patterns. Every plugin gap discovered (template filter bugs, missing CLI commands, backward status transitions, string-or-ref field handling) drives core improvements. The plugins are the proving ground for the platform.
 
 When designing features for this plugin, optimize for the real use case first. If core doesn't support what the plugin needs, file the core issue — don't work around it. The plugin's job is to find those gaps.
+
+## Journalist Workflow
+
+The investigation workflow is **iterative, not linear**. The journalist cycles through phases as new evidence reshapes understanding:
+
+```
+    ┌──────────────────────────────────────────────────┐
+    │                                                  │
+    ▼                                                  │
+ Create        Research &        Build the        Verify &
+ Investigation  Gather            Pack             Restructure
+    │              │                │                │
+    │         ┌────┴─────┐    ┌────┴─────┐          │
+    │         │ Pyrite KBs│    │ Actor bios│          │
+    │         │ Web search│    │ Timeline  │          │
+    │         │ Doc search│    │ Connections│         │
+    │         │ Panama    │    │ Claims    │          │
+    │         │ Papers MCP│    │ Narrative │          │
+    │         └────┬─────┘    └────┬─────┘          │
+    │              │                │                │
+    │              └────────────────┘                │
+    │                     ▲                          │
+    │                     │   new evidence           │
+    │                     │   reshapes the           │
+    │                     │   investigation           │
+    │                     └──────────────────────────┘
+    │
+    ▼
+ Publish / Export
+```
+
+### Key implications of the iterative model
+
+1. **Everything is provisional** — claims change status, timelines get reordered, entities get merged or split, connections get revised. The system cannot assume forward-only progress.
+2. **Context must be cheap to rebuild** — when the journalist returns after days away, "where was I?" must be a single query, not 20 minutes of re-reading files.
+3. **Narrative restructuring is first-class** — not just adding entries but reorganizing them: re-linking events to different themes, splitting investigations, promoting minor actors to key figures.
+4. **Multi-source research is simultaneous** — the journalist searches Pyrite KBs, the web, document collections, and specialized databases (Panama Papers, corporate registries) in the same research session via MCP tools.
+
+### Primary interfaces
+
+- **Web UI** — timeline visualization, network graphs, investigation dashboard, entity profiles, source management. The journalist persona needs visual tools, unlike the software-kb terminal user.
+- **Claude Desktop / Cowork** — MCP server is the primary agent interface. The journalist works conversationally: "What do we know about Company X across all our investigations?"
+- **CLI** — secondary interface for scripting, batch operations, CI/CD integration.
 
 ## Design Principles
 
