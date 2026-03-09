@@ -14,8 +14,15 @@ links:
   kb: pyrite
 kind: feature
 status: accepted
+priority: medium
 effort: M
 ---
+
+## Reference Implementation
+
+`/Users/markr/kleptocracy-timeline/timeline/scripts/generate.py` (~486 lines). A `TimelineGenerator` class that loads events from markdown, sorts by date, and produces multiple output formats. Read it for the exact field names and structures.
+
+Also: `/Users/markr/kleptocracy-timeline/timeline/scripts/generate_csv.py` for CSV export format.
 
 ## Problem
 
@@ -30,6 +37,29 @@ The current export pipeline produces:
 - `stats.json` (~1.7 KB) — summary statistics (total events, date range, top actors/tags, generation timestamp)
 
 The React viewer at capturecascade.org loads these static files. The Hugo site reads markdown directly. Both are built in CI/CD and deployed to GitHub Pages.
+
+### Output JSON Schemas
+
+**timeline.json** — bare array of event objects sorted by date:
+```json
+[{"id": "...", "title": "...", "date": "2025-01-20", "actors": [...], "tags": [...], "sources": [{"title": "...", "url": "..."}], "body": "...", ...}]
+```
+Date fields are ISO strings. Events include all frontmatter fields plus body.
+
+**actors.json** — array of `{name, count}` sorted by count descending:
+```json
+[{"name": "Donald Trump", "count": 1198}, {"name": "Elon Musk", "count": 487}, ...]
+```
+
+**tags.json** — array of `{name, count}` sorted by count descending:
+```json
+[{"name": "executive-power", "count": 892}, {"name": "judiciary", "count": 445}, ...]
+```
+
+**stats.json** — summary object:
+```json
+{"total_events": 4400, "total_tags": 150, "total_actors": 1235, "total_sources": 8800, "date_range": {"start": "1142-01-01", "end": "2026-03-09"}, "status_counts": {"verified": 2000, ...}, "top_tags": [...], "top_actors": [...], "generated": "2026-03-09T..."}
+```
 
 ## Scope
 

@@ -29,6 +29,11 @@ When migrating an existing timeline (like the kleptocracy timeline's 4,400+ even
 
 No automated tooling exists for this migration path.
 
+## Reference Files
+
+- Alias mapping: `/Users/markr/kleptocracy-timeline/timeline/data/actor_aliases.json` (880 lines, ~250 canonical actors). Format: `{"canonical name": ["alias1", "alias2"]}` sorted alphabetically.
+- Alias suggestion tool: `/Users/markr/kleptocracy-timeline/timeline/scripts/maintenance/suggest_actor_aliases.py` (produces the alias file)
+
 ## Context
 
 The kleptocracy timeline has ~1,235 unique canonical actor names (after alias normalization) appearing ~7,780 times across 4,400+ events. Actors range from individuals (Donald Trump, Pete Hegseth) to organizations (FBI, Heritage Foundation) to informal groups (Congressional Oversight). Many actors appear with multiple name variants that are mapped via an 880-line actor_aliases.json file.

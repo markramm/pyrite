@@ -11,6 +11,12 @@ links:
 - target: epic-migrate-kleptocracy-timeline-to-pyrite-managed-kb
   relation: subtask_of
   kb: pyrite
+- target: actor-extraction-and-migration-tool-for-cascade-timelines
+  relation: blocks
+  kb: pyrite
+- target: backlink-indexing-for-string-based-actor-references
+  relation: blocks
+  kb: pyrite
 kind: feature
 status: accepted
 priority: high

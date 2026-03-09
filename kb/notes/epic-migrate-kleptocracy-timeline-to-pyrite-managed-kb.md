@@ -26,6 +26,12 @@ links:
 - target: source-url-validation-and-content-verification-for-qa
   relation: has_subtask
   kb: pyrite
+- target: source-content-verification-via-llm
+  relation: has_subtask
+  kb: pyrite
+- target: ai-hallucination-detection-for-research-kbs
+  relation: has_subtask
+  kb: pyrite
 kind: epic
 status: accepted
 priority: high
@@ -67,7 +73,9 @@ Migrate the kleptocracy timeline project (capturecascade.org) from its current a
 3. **Actor extraction and migration tool** — create actor entries from event string references
 4. **Backlink indexing for string-based actor references** — index string actors for backlinks/graph
 5. **Cascade timeline static export for viewer consumption** — replace custom generate.py
-6. **Source URL validation and content verification** — fact-checking QA layer
+6. **Source URL liveness checking** — verify source URLs return 200
+7. **Source content verification via LLM** — verify sources support entry claims
+8. **AI hallucination detection** — web search for independent corroboration
 
 ## Migration Steps
 
