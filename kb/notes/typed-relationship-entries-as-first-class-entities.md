@@ -12,6 +12,9 @@ links:
 - target: design-journalism-investigation-plugin
   relation: informed_by
   kb: pyrite
+- target: adr-0022
+  relation: informed_by
+  kb: pyrite
 - target: ji-connection-entry-types
   relation: blocks
   kb: pyrite
@@ -108,18 +111,18 @@ Putin holds a 51% beneficial ownership stake in Company X through a Cyprus-regis
 - `pyrite/storage/database.py` / `queries.py` — index edge endpoints for efficient querying
 - `pyrite/services/graph_service.py` — traverse edge-entities in network queries
 
-## Open Questions
+## Design Decisions (resolved in ADR-0022)
 
-- Should auto-generated links be stored in the entry's frontmatter, or only in the index? (Index-only is cleaner but means backlinks disappear without re-indexing.)
-- Should edge-type entries be required to have both endpoints set, or allow partial edges (e.g., ownership with unknown owner)?
-- How does this interact with the existing `links` array? Are edge-entity-derived links merged with manual links in backlinks output?
+1. **Index-only storage** — auto-generated backlinks stored in the index, not in endpoint entries' frontmatter. Consistent with how wikilink backlinks work. No cascading writes. Rebuilt by `pyrite index sync`.
+2. **Both endpoints required** — enforced by schema validation. Provisional or uncertain relationships should be modeled as claims, not edge-entities. "Ownership of ?" is meaningless; if you don't know the asset, you don't have an ownership relationship, you have a research question.
+3. **Merged backlinks, labeled by source type** — `pyrite backlinks` returns unified results from three sources (edge endpoints, manual links, wikilinks), each labeled with its source type (e.g., `edge: ownership.asset`). One query, no separate namespaces.
 
 ## Acceptance Criteria
 
 - A plugin can declare an entry type as an edge type with two endpoint fields
-- Saving an edge-entity auto-generates bidirectional backlinks on both endpoints
-- `pyrite backlinks <entity-id>` includes edge-entities
+- Saving an edge-entity creates index-based backlinks on both endpoints (no frontmatter modification)
+- `pyrite backlinks <entity-id>` includes edge-entities, labeled with `edge:` source type
 - Graph service traverses edge-entities to build network views
-- Deleting an edge-entity cleans up auto-generated links
-- Schema validation enforces endpoint field presence
+- `pyrite index sync` rebuilds all edge-derived backlinks
+- Schema validation rejects edge-type entries with missing endpoints
 - At least one plugin (journalism-investigation) uses this for ownership/membership/funding types
