@@ -29,6 +29,15 @@ A reusable Pyrite plugin for investigative journalism projects. Provides entry t
 
 Informed by OCCRP's FollowTheMoney (FtM) data model (~69 schemata for financial crime investigation) but adapted for Pyrite's markdown-first architecture. FtM is JSON-first with entities as database records; Pyrite entries are markdown files where the body carries narrative context — a strength for journalism.
 
+## Strategic Role
+
+The journalism-investigation plugin (like the software-kb plugin) serves two purposes:
+
+1. **Production use** — real investigative journalism projects (kleptocracy timeline, future investigations). These plugins are not demos; they handle real data at scale (4,400+ events, 1,235 actors, complex relationship graphs).
+2. **Platform validation** — exercising Pyrite core with demanding real-world patterns. Every plugin gap discovered (template filter bugs, missing CLI commands, backward status transitions, string-or-ref field handling) drives core improvements. The plugins are the proving ground for the platform.
+
+When designing features for this plugin, optimize for the real use case first. If core doesn't support what the plugin needs, file the core issue — don't work around it. The plugin's job is to find those gaps.
+
 ## Design Principles
 
 1. **Relationships are entries, not just links.** An ownership stake is an entry with its own properties (percentage, dates, legal basis), body text for context, and source citations. This mirrors FtM's edge-entity pattern.
