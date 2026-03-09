@@ -6,7 +6,9 @@ tags:
 - epic
 - software-kb
 kind: epic
+status: done
 priority: high
+assignee: claude
 effort: XL
 ---
 
