@@ -1,7 +1,7 @@
 """Deterministic rubric checker functions for QA evaluation.
 
-Each checker receives an entry dict and optional KBSchema, returns an issue dict or None.
-Checkers are matched to rubric item text via regex patterns.
+Each checker receives an entry dict, optional KBSchema, and optional params dict.
+Checkers can be matched by name (NAMED_CHECKERS) or by regex (legacy RUBRIC_CHECKERS).
 """
 
 from __future__ import annotations
@@ -17,8 +17,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Type alias for checker functions
-RubricChecker = Callable[[dict[str, Any], "KBSchema | None"], dict[str, Any] | None]
+# Type alias for checker functions — params is optional for backward compatibility
+RubricChecker = Callable[
+    [dict[str, Any], "KBSchema | None", dict[str, Any] | None],
+    dict[str, Any] | None,
+]
 
 # =========================================================================
 # Generic title blocklist
@@ -54,11 +57,35 @@ def is_already_covered(rubric_item: str) -> bool:
 
 
 # =========================================================================
+# Helper: parse metadata from entry
+# =========================================================================
+
+
+def _parse_metadata(entry: dict[str, Any]) -> dict[str, Any]:
+    """Extract metadata dict from entry, handling JSON string or dict."""
+    metadata = entry.get("metadata")
+    if not metadata:
+        return {}
+    if isinstance(metadata, str):
+        try:
+            return json.loads(metadata)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+    if isinstance(metadata, dict):
+        return metadata
+    return {}
+
+
+# =========================================================================
 # Individual checker functions
 # =========================================================================
 
 
-def check_descriptive_title(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
+def check_descriptive_title(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Check that entry has a descriptive (non-generic) title."""
     title = entry.get("title", "") or ""
     if title.strip().lower() in GENERIC_TITLES:
@@ -69,12 +96,16 @@ def check_descriptive_title(entry: dict[str, Any], schema: KBSchema | None) -> d
             "severity": "warning",
             "field": "title",
             "message": f"Entry '{entry['id']}' has a generic title: '{title}'",
-            "rubric_item": "Entry has a descriptive title",
+            "rubric_item": (params or {}).get("rubric_text", "Entry has a descriptive title"),
         }
     return None
 
 
-def check_has_tags(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
+def check_has_tags(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Check that entry has at least one tag."""
     tag_count = entry.get("_tag_count", 0)
     if tag_count == 0:
@@ -85,12 +116,16 @@ def check_has_tags(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, 
             "severity": "warning",
             "field": "tags",
             "message": f"Entry '{entry['id']}' has no tags",
-            "rubric_item": "Entry has at least one tag",
+            "rubric_item": (params or {}).get("rubric_text", "Entry has at least one tag"),
         }
     return None
 
 
-def check_has_outlinks(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
+def check_has_outlinks(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Check that entry links to at least one related entry (unless a stub)."""
     link_count = entry.get("_outlink_count", 0)
     if link_count > 0:
@@ -108,81 +143,33 @@ def check_has_outlinks(entry: dict[str, Any], schema: KBSchema | None) -> dict[s
         "severity": "warning",
         "field": "links",
         "message": f"Entry '{entry['id']}' has no outgoing links",
-        "rubric_item": "Entry links to at least one related entry (unless a stub)",
+        "rubric_item": (params or {}).get(
+            "rubric_text", "Entry links to at least one related entry (unless a stub)"
+        ),
     }
 
 
-def _make_metadata_field_checker(
-    field_name: str, rubric_text: str
-) -> RubricChecker:
-    """Factory: create a checker that verifies a metadata JSON field is present."""
+def _bind_params(fn: RubricChecker, bound_params: dict[str, Any]) -> RubricChecker:
+    """Bind default params to a parameterized checker for use in legacy registry."""
 
-    def checker(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
-        metadata = entry.get("metadata")
-        meta_dict: dict[str, Any] = {}
-        if metadata:
-            if isinstance(metadata, str):
-                try:
-                    meta_dict = json.loads(metadata)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-            elif isinstance(metadata, dict):
-                meta_dict = metadata
+    def wrapper(
+        entry: dict[str, Any],
+        schema: KBSchema | None,
+        params: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        merged = dict(bound_params)
+        if params:
+            merged.update(params)
+        return fn(entry, schema, merged)
 
-        if meta_dict.get(field_name):
-            return None
-
-        return {
-            "entry_id": entry["id"],
-            "kb_name": entry["kb_name"],
-            "rule": "rubric_violation",
-            "severity": "warning",
-            "field": f"metadata.{field_name}",
-            "message": f"Entry '{entry['id']}' is missing '{field_name}' in metadata",
-            "rubric_item": rubric_text,
-        }
-
-    return checker
+    return wrapper
 
 
-def _make_metadata_any_field_checker(
-    field_names: list[str], rubric_text: str
-) -> RubricChecker:
-    """Factory: check that at least one of several metadata fields is present."""
-
-    def checker(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
-        metadata = entry.get("metadata")
-        meta_dict: dict[str, Any] = {}
-        if metadata:
-            if isinstance(metadata, str):
-                try:
-                    meta_dict = json.loads(metadata)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-            elif isinstance(metadata, dict):
-                meta_dict = metadata
-
-        for field_name in field_names:
-            if meta_dict.get(field_name):
-                return None
-
-        return {
-            "entry_id": entry["id"],
-            "kb_name": entry["kb_name"],
-            "rule": "rubric_violation",
-            "severity": "warning",
-            "field": "metadata",
-            "message": (
-                f"Entry '{entry['id']}' is missing "
-                f"{' or '.join(field_names)} in metadata"
-            ),
-            "rubric_item": rubric_text,
-        }
-
-    return checker
-
-
-def check_status_present(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
+def check_status_present(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Check that entry has a status value."""
     if entry.get("status"):
         return None
@@ -193,23 +180,17 @@ def check_status_present(entry: dict[str, Any], schema: KBSchema | None) -> dict
         "severity": "warning",
         "field": "status",
         "message": f"Entry '{entry['id']}' has no status",
-        "rubric_item": "status present",
+        "rubric_item": (params or {}).get("rubric_text", "status present"),
     }
 
 
-def check_priority_present(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
+def check_priority_present(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     """Check that entry has a priority value."""
-    metadata = entry.get("metadata")
-    meta_dict: dict[str, Any] = {}
-    if metadata:
-        if isinstance(metadata, str):
-            try:
-                meta_dict = json.loads(metadata)
-            except (json.JSONDecodeError, ValueError):
-                pass
-        elif isinstance(metadata, dict):
-            meta_dict = metadata
-
+    meta_dict = _parse_metadata(entry)
     if meta_dict.get("priority") is not None:
         return None
     return {
@@ -219,43 +200,141 @@ def check_priority_present(entry: dict[str, Any], schema: KBSchema | None) -> di
         "severity": "warning",
         "field": "metadata.priority",
         "message": f"Entry '{entry['id']}' has no priority",
-        "rubric_item": "priority present",
+        "rubric_item": (params or {}).get("rubric_text", "priority present"),
     }
 
 
-def _make_body_section_checker(
-    section_pattern: str, rubric_text: str
-) -> RubricChecker:
-    """Factory: check that body contains a section heading or pattern."""
-    compiled = re.compile(section_pattern, re.IGNORECASE | re.MULTILINE)
 
-    def checker(entry: dict[str, Any], schema: KBSchema | None) -> dict[str, Any] | None:
-        body = entry.get("body", "") or ""
-        if compiled.search(body):
+
+# =========================================================================
+# Parameterized checker functions (for named registry, use params at call time)
+# =========================================================================
+
+
+def check_has_field(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Check that a specific metadata field is present. Params: {field: "role"}."""
+    if not params or "field" not in params:
+        return None
+    field_name = params["field"]
+    meta_dict = _parse_metadata(entry)
+    if meta_dict.get(field_name):
+        return None
+    return {
+        "entry_id": entry["id"],
+        "kb_name": entry["kb_name"],
+        "rule": "rubric_violation",
+        "severity": "warning",
+        "field": f"metadata.{field_name}",
+        "message": f"Entry '{entry['id']}' is missing '{field_name}' in metadata",
+        "rubric_item": params.get("rubric_text", f"{field_name} present"),
+    }
+
+
+def check_has_any_field(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Check that at least one of several metadata fields is present. Params: {fields: ["url", "author"]}."""
+    if not params or "fields" not in params:
+        return None
+    field_names = params["fields"]
+    meta_dict = _parse_metadata(entry)
+    for fn in field_names:
+        if meta_dict.get(fn):
             return None
-        return {
-            "entry_id": entry["id"],
-            "kb_name": entry["kb_name"],
-            "rule": "rubric_violation",
-            "severity": "warning",
-            "field": "body",
-            "message": f"Entry '{entry['id']}' body missing expected section/pattern",
-            "rubric_item": rubric_text,
-        }
+    return {
+        "entry_id": entry["id"],
+        "kb_name": entry["kb_name"],
+        "rule": "rubric_violation",
+        "severity": "warning",
+        "field": "metadata",
+        "message": (
+            f"Entry '{entry['id']}' is missing "
+            f"{' or '.join(field_names)} in metadata"
+        ),
+        "rubric_item": params.get("rubric_text", f"has {' or '.join(field_names)}"),
+    }
 
-    return checker
+
+def check_body_has_section(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Check that body contains a markdown heading. Params: {heading: "Problem"}."""
+    if not params or "heading" not in params:
+        return None
+    heading = params["heading"]
+    body = entry.get("body", "") or ""
+    pattern = re.compile(rf"^##\s+{re.escape(heading)}", re.IGNORECASE | re.MULTILINE)
+    if pattern.search(body):
+        return None
+    return {
+        "entry_id": entry["id"],
+        "kb_name": entry["kb_name"],
+        "rule": "rubric_violation",
+        "severity": "warning",
+        "field": "body",
+        "message": f"Entry '{entry['id']}' body missing '## {heading}' section",
+        "rubric_item": params.get("rubric_text", f"body has {heading} section"),
+    }
 
 
-def _make_body_has_code_block_checker(rubric_text: str) -> RubricChecker:
-    """Factory: check that body contains a code block."""
-    return _make_body_section_checker(r"```", rubric_text)
+def check_body_has_pattern(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Check that body matches a regex pattern. Params: {pattern: "Sources?:"}."""
+    if not params or "pattern" not in params:
+        return None
+    body = entry.get("body", "") or ""
+    try:
+        compiled = re.compile(params["pattern"], re.IGNORECASE | re.MULTILINE)
+    except re.error:
+        return None
+    if compiled.search(body):
+        return None
+    return {
+        "entry_id": entry["id"],
+        "kb_name": entry["kb_name"],
+        "rule": "rubric_violation",
+        "severity": "warning",
+        "field": "body",
+        "message": f"Entry '{entry['id']}' body missing expected pattern",
+        "rubric_item": params.get("rubric_text", "body matches pattern"),
+    }
+
+
+def check_body_has_code_block(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Check that body contains a code block (```)."""
+    body = entry.get("body", "") or ""
+    if "```" in body:
+        return None
+    return {
+        "entry_id": entry["id"],
+        "kb_name": entry["kb_name"],
+        "rule": "rubric_violation",
+        "severity": "warning",
+        "field": "body",
+        "message": f"Entry '{entry['id']}' body has no code block",
+        "rubric_item": (params or {}).get("rubric_text", "body contains code block"),
+    }
 
 
 # =========================================================================
-# Rubric checker registry: (pattern, checker_fn) tuples
+# Legacy regex-based registry: (pattern, checker_fn) tuples
 # =========================================================================
 
-# System-level rubric checkers
 RUBRIC_CHECKERS: list[tuple[re.Pattern[str], RubricChecker]] = [
     # System-level
     (re.compile(r"descriptive title", re.IGNORECASE), check_descriptive_title),
@@ -264,29 +343,25 @@ RUBRIC_CHECKERS: list[tuple[re.Pattern[str], RubricChecker]] = [
     # Person type
     (
         re.compile(r"role or position", re.IGNORECASE),
-        _make_metadata_field_checker("role", "Person has a role or position described"),
+        _bind_params(check_has_field, {"field": "role", "rubric_text": "Person has a role or position described"}),
     ),
     # Document type
     (
         re.compile(r"source URL or author", re.IGNORECASE),
-        _make_metadata_any_field_checker(
-            ["url", "author"], "Document has a source URL or author"
-        ),
+        _bind_params(check_has_any_field, {"fields": ["url", "author"], "rubric_text": "Document has a source URL or author"}),
     ),
     (
         re.compile(r"document_type classification", re.IGNORECASE),
-        _make_metadata_field_checker(
-            "document_type", "Document has a document_type classification"
-        ),
+        _bind_params(check_has_field, {"field": "document_type", "rubric_text": "Document has a document_type classification"}),
     ),
     # Component type (KB-level)
     (
         re.compile(r"path present", re.IGNORECASE),
-        _make_metadata_field_checker("path", "path present"),
+        _bind_params(check_has_field, {"field": "path", "rubric_text": "path present"}),
     ),
     (
         re.compile(r"dependencies present", re.IGNORECASE),
-        _make_metadata_field_checker("dependencies", "dependencies present"),
+        _bind_params(check_has_field, {"field": "dependencies", "rubric_text": "dependencies present"}),
     ),
     # ADR/backlog_item status
     (
@@ -301,17 +376,35 @@ RUBRIC_CHECKERS: list[tuple[re.Pattern[str], RubricChecker]] = [
     # Body structure checks
     (
         re.compile(r"body.*code block|contains.*code block", re.IGNORECASE),
-        _make_body_has_code_block_checker("body contains code block"),
+        _bind_params(check_body_has_code_block, {"rubric_text": "body contains code block"}),
     ),
     (
         re.compile(r"section.*Problem|Problem.*section", re.IGNORECASE),
-        _make_body_section_checker(r"^##\s+Problem", "body has Problem section"),
+        _bind_params(check_body_has_pattern, {"pattern": r"^##\s+Problem", "rubric_text": "body has Problem section"}),
     ),
     (
         re.compile(r"section.*Alternatives|Alternatives.*section", re.IGNORECASE),
-        _make_body_section_checker(r"^##\s+Alternatives", "body has Alternatives section"),
+        _bind_params(check_body_has_pattern, {"pattern": r"^##\s+Alternatives", "rubric_text": "body has Alternatives section"}),
     ),
 ]
+
+
+# =========================================================================
+# Named checker registry
+# =========================================================================
+
+NAMED_CHECKERS: dict[str, RubricChecker] = {
+    "descriptive_title": check_descriptive_title,
+    "has_tags": check_has_tags,
+    "has_outlinks": check_has_outlinks,
+    "status_present": check_status_present,
+    "priority_present": check_priority_present,
+    "has_field": check_has_field,
+    "has_any_field": check_has_any_field,
+    "body_has_section": check_body_has_section,
+    "body_has_pattern": check_body_has_pattern,
+    "body_has_code_block": check_body_has_code_block,
+}
 
 
 def match_rubric_item(item: str) -> RubricChecker | None:

@@ -284,3 +284,15 @@ class PyritePlugin(Protocol):
             Example: {"claimable": ClaimableMixin}
         """
         ...
+
+    def get_rubric_checkers(self) -> dict[str, Callable]:
+        """
+        Return named rubric checker functions for QA evaluation.
+
+        Returns:
+            Dict mapping checker name to callable.
+            Names should be namespaced: "plugin_name.checker_name"
+
+            Example: {"software_kb.has_adr_number": check_adr_number}
+        """
+        ...

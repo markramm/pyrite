@@ -254,6 +254,170 @@ def qa_status(
                     console.print(f"    [{style}]{s}: {cnt}[/{style}]")
 
 
+@qa_app.command("checkers")
+def qa_checkers(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="Show rubric coverage for a specific KB"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich"
+    ),
+):
+    """List available rubric checkers and per-KB coverage.
+
+    Without --kb, lists all registered checkers (core + plugins).
+    With --kb, shows which rubric items are checker-bound, schema-covered,
+    or judgment-only for each type in that KB.
+    """
+
+    if kb_name:
+        _show_kb_coverage(kb_name, output_format)
+    else:
+        _show_all_checkers(output_format)
+
+
+def _show_all_checkers(output_format: str) -> None:
+    """List all registered checkers (core + plugins)."""
+    from ..plugins.registry import get_registry
+    from ..services.rubric_checkers import NAMED_CHECKERS
+
+    all_checkers = get_registry().get_all_rubric_checkers()
+
+    # Determine which are core vs plugin
+    core_names = set(NAMED_CHECKERS.keys())
+
+    if output_format == "json":
+        import json
+
+        data = {
+            "core": sorted(core_names),
+            "plugin": sorted(set(all_checkers.keys()) - core_names),
+        }
+        typer.echo(json.dumps(data, indent=2))
+        return
+
+    # Rich output
+    table = Table(title="Available Rubric Checkers")
+    table.add_column("Name", style="cyan")
+    table.add_column("Source", style="dim")
+    table.add_column("Description")
+
+    for name in sorted(all_checkers.keys()):
+        fn = all_checkers[name]
+        source = "core" if name in core_names else name.split(".")[0] if "." in name else "plugin"
+        doc = (fn.__doc__ or "").split("\n")[0].strip()
+        table.add_row(name, source, doc)
+
+    console.print(table)
+    console.print(f"\n[bold]{len(all_checkers)}[/bold] checkers available")
+
+
+def _show_kb_coverage(kb_name: str, output_format: str) -> None:
+    """Show rubric coverage for a specific KB."""
+    from ..plugins.registry import get_registry
+    from ..schema.core_types import SYSTEM_INTENT, resolve_type_metadata
+    from .context import cli_context
+
+    with cli_context() as (config, db, svc):
+        kb_config = config.get_kb(kb_name)
+        if not kb_config:
+            console.print(f"[red]KB '{kb_name}' not found[/red]")
+            raise typer.Exit(1)
+
+        kb_schema = kb_config.kb_schema
+        all_checkers = get_registry().get_all_rubric_checkers()
+
+        # Get all entry types in this KB
+        type_rows = db.execute_sql(
+            "SELECT DISTINCT entry_type FROM entry WHERE kb_name = :kb",
+            {"kb": kb_name},
+        )
+        entry_types = sorted(row["entry_type"] for row in type_rows if row["entry_type"])
+
+        total_checker = 0
+        total_schema = 0
+        total_judgment = 0
+
+        def _count_item(kind: str) -> None:
+            nonlocal total_checker, total_schema, total_judgment
+            if kind == "checker":
+                total_checker += 1
+            elif kind == "schema":
+                total_schema += 1
+            else:
+                total_judgment += 1
+
+        # System-level rubric (always applies)
+        system_rubric = SYSTEM_INTENT.get("evaluation_rubric", [])
+        if system_rubric:
+            console.print(f"\n[bold]System rubric ({len(system_rubric)} items):[/bold]")
+            for item in system_rubric:
+                label, kind = _classify_rubric_item(item, all_checkers)
+                _print_rubric_line(label, kind, item)
+                _count_item(kind)
+
+        # KB-level rubric
+        kb_rubric = (kb_schema.evaluation_rubric if kb_schema else []) or []
+        if kb_rubric:
+            console.print(f"\n[bold]KB-level rubric ({len(kb_rubric)} items):[/bold]")
+            for item in kb_rubric:
+                label, kind = _classify_rubric_item(item, all_checkers)
+                _print_rubric_line(label, kind, item)
+                _count_item(kind)
+
+        # Per-type rubric
+        for entry_type in entry_types:
+            type_meta = resolve_type_metadata(entry_type, kb_schema)
+            rubric = type_meta.get("evaluation_rubric", [])
+            if not rubric:
+                continue
+            console.print(f"\n[bold]Type: {entry_type} ({len(rubric)} items):[/bold]")
+            for item in rubric:
+                label, kind = _classify_rubric_item(item, all_checkers)
+                _print_rubric_line(label, kind, item)
+                _count_item(kind)
+
+        console.print(
+            f"\n[bold]Summary:[/bold] {total_checker} checker-bound, "
+            f"{total_schema} schema-covered, {total_judgment} judgment-only"
+        )
+
+
+def _classify_rubric_item(
+    item: str | dict, checkers: dict
+) -> tuple[str, str]:
+    """Classify a rubric item. Returns (display_text, kind)."""
+    from ..services.rubric_checkers import match_rubric_item
+
+    if isinstance(item, dict):
+        text = item.get("text", "")
+        if item.get("covered_by"):
+            return text, "schema"
+        checker_name = item.get("checker")
+        if checker_name:
+            if checker_name in checkers:
+                return text, "checker"
+            return text, "unknown"
+        return text, "judgment"
+    # Plain string
+    if match_rubric_item(item):
+        return item, "checker"
+    return item, "judgment"
+
+
+def _print_rubric_line(text: str, kind: str, item: str | dict) -> None:
+    """Print a single rubric item with classification tag."""
+    styles = {
+        "checker": "[green][checker][/green]",
+        "schema": "[blue][schema][/blue]",
+        "judgment": "[yellow][judgment][/yellow]",
+        "unknown": "[red][unknown][/red]",
+    }
+    tag = styles.get(kind, "[dim][?][/dim]")
+    checker_info = ""
+    if isinstance(item, dict) and item.get("checker"):
+        checker_info = f" → {item['checker']}"
+    console.print(f"  {tag}  \"{text}\"{checker_info}")
+
+
 @qa_app.command("stale")
 def qa_stale(
     kb_name: str = typer.Argument(..., help="KB to check for stale entries"),

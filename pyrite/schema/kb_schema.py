@@ -29,7 +29,7 @@ class KBSchema:
     schema_version: int = 0
     guidelines: dict[str, str] = field(default_factory=dict)
     goals: dict[str, str] = field(default_factory=dict)
-    evaluation_rubric: list[str] = field(default_factory=list)
+    evaluation_rubric: list[str | dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_yaml(cls, path: Path) -> "KBSchema":
@@ -186,9 +186,19 @@ class KBSchema:
         if self.goals:
             result["goals"] = self.goals
 
-        merged_rubric = list(SYSTEM_INTENT.get("evaluation_rubric", []))
-        for item in self.evaluation_rubric:
-            if item not in merged_rubric:
+        # Merge rubric items with text-based dedup; dicts override strings
+        merged_rubric: list[str | dict[str, Any]] = []
+        seen: dict[str, int] = {}  # text -> index in merged_rubric
+        for item in list(SYSTEM_INTENT.get("evaluation_rubric", [])) + list(self.evaluation_rubric):
+            key = item.get("text", "") if isinstance(item, dict) else item
+            if not key:
+                continue
+            if key in seen:
+                # Dict items override string items with same text
+                if isinstance(item, dict) and isinstance(merged_rubric[seen[key]], str):
+                    merged_rubric[seen[key]] = item
+            else:
+                seen[key] = len(merged_rubric)
                 merged_rubric.append(item)
         if merged_rubric:
             result["evaluation_rubric"] = merged_rubric

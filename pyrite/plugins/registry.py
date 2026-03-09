@@ -336,6 +336,15 @@ class PluginRegistry:
                     logger.warning("Plugin %s get_field_schemas failed: %s", plugin.name, e)
         return schemas
 
+    def get_all_rubric_checkers(self) -> dict[str, Any]:
+        """Collect named rubric checkers from core + all plugins."""
+        from ..services.rubric_checkers import NAMED_CHECKERS
+
+        checkers: dict[str, Any] = dict(NAMED_CHECKERS)
+        plugin_checkers = self._aggregate_dict("get_rubric_checkers", "rubric checker")
+        checkers.update(plugin_checkers)
+        return checkers
+
     def get_all_validators(self) -> list[Callable]:
         """Get all validators from all plugins."""
         return self._aggregate_list("get_validators")

@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..config import PyriteConfig
+from ..plugins.registry import get_registry
 from ..schema import validate_date, validate_importance
 from ..schema.core_types import SYSTEM_INTENT, resolve_type_metadata
 from ..storage.database import PyriteDB
@@ -885,36 +886,51 @@ class QAService:
     # Rubric evaluation
     # =========================================================================
 
-    def _get_rubric_items(self, entry_type: str, kb_name: str) -> list[str]:
+    def _get_rubric_items(self, entry_type: str, kb_name: str) -> list[str | dict[str, Any]]:
         """Collect rubric items applicable to an entry type.
 
         Merges system-level rubric, type-level rubric (from CORE_TYPE_METADATA
         or KB overrides), and KB-level rubric from kb.yaml.
+
+        Items can be plain strings (judgment-only or legacy regex-matched) or
+        dicts with {text, checker, params} or {text, covered_by}.
+        Deduplication keys on text content; dict items override string items.
         """
-        items: list[str] = []
-        seen: set[str] = set()
+        items: list[str | dict[str, Any]] = []
+        seen: dict[str, int] = {}  # text -> index in items list
+
+        def _text_key(item: str | dict[str, Any]) -> str:
+            if isinstance(item, dict):
+                return item.get("text", "")
+            return item
+
+        def _add_item(item: str | dict[str, Any]) -> None:
+            key = _text_key(item)
+            if not key:
+                return
+            if key in seen:
+                # Dict items override string items with same text
+                if isinstance(item, dict) and isinstance(items[seen[key]], str):
+                    items[seen[key]] = item
+                return
+            seen[key] = len(items)
+            items.append(item)
 
         # System-level rubric (always applies)
         for item in SYSTEM_INTENT.get("evaluation_rubric", []):
-            if item not in seen:
-                items.append(item)
-                seen.add(item)
+            _add_item(item)
 
         # Type-level rubric (resolved through 4-layer precedence)
         kb_config = self.config.get_kb(kb_name)
         kb_schema = kb_config.kb_schema if kb_config else None
         type_meta = resolve_type_metadata(entry_type, kb_schema)
         for item in type_meta.get("evaluation_rubric", []):
-            if item not in seen:
-                items.append(item)
-                seen.add(item)
+            _add_item(item)
 
         # KB-level rubric from kb.yaml
         if kb_schema:
             for item in kb_schema.evaluation_rubric:
-                if item not in seen:
-                    items.append(item)
-                    seen.add(item)
+                _add_item(item)
 
         return items
 
@@ -947,30 +963,78 @@ class QAService:
         kb_config = self.config.get_kb(kb_name)
         kb_schema = kb_config.kb_schema if kb_config else None
 
+        # Cache named checkers once for all items
+        named_checkers = get_registry().get_all_rubric_checkers()
+
         for item in rubric_items:
-            if is_already_covered(item):
+            if isinstance(item, str):
+                # Legacy string path: regex match, else judgment-only
+                if is_already_covered(item):
+                    continue
+                checker = match_rubric_item(item)
+                if checker is None:
+                    logger.debug(
+                        "Rubric item has no deterministic checker (judgment_only): %s", item
+                    )
+                    continue
+                try:
+                    issue = checker(enriched, kb_schema, None)
+                    if issue is not None:
+                        issues.append(issue)
+                except Exception:
+                    logger.warning("Rubric checker failed for item '%s'", item, exc_info=True)
                 continue
 
-            checker = match_rubric_item(item)
-            if checker is None:
-                logger.debug("Rubric item has no deterministic checker (judgment_only): %s", item)
+            # Dict rubric item
+            if item.get("covered_by"):
                 continue
 
+            checker_name = item.get("checker")
+            if not checker_name:
+                # Judgment-only dict (has text but no checker)
+                logger.debug(
+                    "Rubric item has no checker (judgment_only): %s", item.get("text", "")
+                )
+                continue
+
+            fn = named_checkers.get(checker_name)
+            if fn is None:
+                issues.append({
+                    "entry_id": entry_id,
+                    "kb_name": kb_name,
+                    "rule": "config_error",
+                    "severity": "warning",
+                    "field": "evaluation_rubric",
+                    "message": f"Unknown checker '{checker_name}' in rubric for type '{entry_type}'",
+                })
+                continue
+
+            params = dict(item.get("params", {}) or {})
+            params["rubric_text"] = item.get("text", "")
             try:
-                issue = checker(enriched, kb_schema)
+                issue = fn(enriched, kb_schema, params)
                 if issue is not None:
                     issues.append(issue)
             except Exception:
-                logger.warning("Rubric checker failed for item '%s'", item, exc_info=True)
+                logger.warning(
+                    "Named rubric checker '%s' failed", checker_name, exc_info=True
+                )
 
     def _collect_judgment_items(self, entry_type: str, kb_name: str) -> list[str]:
         """Filter rubric items to judgment-only (no deterministic checker, not already covered)."""
         all_items = self._get_rubric_items(entry_type, kb_name)
-        return [
-            item
-            for item in all_items
-            if not is_already_covered(item) and match_rubric_item(item) is None
-        ]
+        result: list[str] = []
+        for item in all_items:
+            if isinstance(item, str):
+                if not is_already_covered(item) and match_rubric_item(item) is None:
+                    result.append(item)
+            elif isinstance(item, dict):
+                if item.get("covered_by") or item.get("checker"):
+                    continue
+                text = item.get("text", "")
+                if text:
+                    result.append(text)
+        return result
 
     def _evaluate_llm_rubric(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Run LLM rubric evaluation on a single entry. Returns list of issues."""

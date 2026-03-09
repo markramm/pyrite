@@ -144,7 +144,7 @@ class TypeSchema:
     version: int = 0
     guidelines: str = ""  # Contributing standards, quality expectations
     goals: str = ""  # What entries of this type should achieve
-    evaluation_rubric: list[str] = field(default_factory=list)  # Assertions for QA validation
+    evaluation_rubric: list[str | dict[str, Any]] = field(default_factory=list)  # Assertions for QA validation
 
     def resolve_subdirectory(self, entry: Entry) -> str:
         """Return the resolved subdirectory, expanding template placeholders."""

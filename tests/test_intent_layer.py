@@ -112,8 +112,11 @@ class TestAgentSchemaIntent:
         schema = KBSchema.from_dict(data)
         agent = schema.to_agent_schema()
         rubric = agent["evaluation_rubric"]
-        # System items present
-        assert "Entry has a descriptive title" in rubric
+        # System items present (now dicts with text/checker keys)
+        rubric_texts = [
+            i.get("text", "") if isinstance(i, dict) else i for i in rubric
+        ]
+        assert "Entry has a descriptive title" in rubric_texts
         # Custom item appended
         assert "Custom rubric item" in rubric
 
@@ -154,10 +157,14 @@ class TestAgentSchemaIntent:
         """Core types with evaluation_rubric in CORE_TYPE_METADATA appear in output."""
         schema = KBSchema.from_dict({"name": "test"})
         agent = schema.to_agent_schema()
-        # Event has core rubric items
+        # Event has core rubric items (now dicts with text/covered_by)
         event = agent["types"]["event"]
         assert "evaluation_rubric" in event
-        assert "Event has a date field" in event["evaluation_rubric"]
+        rubric_texts = [
+            i.get("text", "") if isinstance(i, dict) else i
+            for i in event["evaluation_rubric"]
+        ]
+        assert "Event has a date field" in rubric_texts
 
 
 class TestResolveTypeMetadataIntent:
@@ -165,7 +172,11 @@ class TestResolveTypeMetadataIntent:
 
     def test_core_type_rubric_resolved(self):
         meta = resolve_type_metadata("event")
-        assert "Event has a date field" in meta["evaluation_rubric"]
+        rubric_texts = [
+            i.get("text", "") if isinstance(i, dict) else i
+            for i in meta["evaluation_rubric"]
+        ]
+        assert "Event has a date field" in rubric_texts
 
     def test_kb_override_intent(self):
         schema = KBSchema.from_dict({

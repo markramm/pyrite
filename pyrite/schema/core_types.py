@@ -102,10 +102,10 @@ SYSTEM_INTENT: dict[str, Any] = {
         "completeness": "Fill all required fields. Use summary for quick orientation.",
     },
     "evaluation_rubric": [
-        "Entry has a descriptive title",
-        "Entry body is non-empty",
-        "Entry has at least one tag",
-        "Entry links to at least one related entry (unless a stub)",
+        {"text": "Entry has a descriptive title", "checker": "descriptive_title"},
+        {"text": "Entry body is non-empty", "covered_by": "schema"},
+        {"text": "Entry has at least one tag", "checker": "has_tags"},
+        {"text": "Entry links to at least one related entry (unless a stub)", "checker": "has_outlinks"},
     ],
 }
 
@@ -146,8 +146,8 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         "protocols": ["temporal", "locatable", "statusable"],
         "display": {"icon": "calendar", "layout": "record"},
         "evaluation_rubric": [
-            "Event has a date field",
-            "Event has an importance score between 1 and 10",
+            {"text": "Event has a date field", "covered_by": "schema"},
+            {"text": "Event has an importance score between 1 and 10", "covered_by": "schema"},
         ],
     },
     "person": {
@@ -165,7 +165,7 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         "protocols": ["locatable"],
         "display": {"icon": "user", "layout": "record"},
         "evaluation_rubric": [
-            "Person has a role or position described",
+            {"text": "Person has a role or position described", "checker": "has_field", "params": {"field": "role"}},
         ],
     },
     "organization": {
@@ -198,8 +198,8 @@ CORE_TYPE_METADATA: dict[str, dict[str, Any]] = {
         "protocols": ["temporal"],
         "display": {"icon": "file", "layout": "document"},
         "evaluation_rubric": [
-            "Document has a source URL or author",
-            "Document has a document_type classification",
+            {"text": "Document has a source URL or author", "checker": "has_any_field", "params": {"fields": ["url", "author"]}},
+            {"text": "Document has a document_type classification", "checker": "has_field", "params": {"field": "document_type"}},
         ],
     },
     "topic": {
