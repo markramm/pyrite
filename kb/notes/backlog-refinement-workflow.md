@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: medium
 effort: L
-status: proposed
+status: done
 links:
 - target: adr-0021
   relation: implements

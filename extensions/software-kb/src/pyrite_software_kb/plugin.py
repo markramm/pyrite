@@ -268,6 +268,34 @@ class SoftwareKBPlugin:
                 },
                 "handler": self._mcp_backlog,
             }
+            tools["sw_check_ready"] = {
+                "description": "Check Definition of Ready for a backlog item without claiming it. Returns gate criteria with pass/fail status.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["item_id", "kb_name"],
+                },
+                "handler": self._mcp_check_ready,
+            }
+            tools["sw_refine"] = {
+                "description": "Scan backlog for DoR readiness gaps, sorted by priority. Returns items with gate results.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "status": {
+                            "type": "string",
+                            "enum": ["proposed", "accepted"],
+                            "description": "Filter by status (default: both proposed and accepted)",
+                        },
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_refine,
+            }
 
         if tier in ("write", "admin"):
             tools["sw_create_adr"] = {
@@ -1396,6 +1424,143 @@ class SoftwareKBPlugin:
             "criteria": criteria_results,
         }
 
+    def _load_board_config_safe(self, kb_name: str | None) -> dict[str, Any]:
+        """Load board config, falling back to defaults on error."""
+        from pathlib import Path
+
+        from .board import load_board_config
+
+        try:
+            from pyrite.config import load_config as _load_config
+
+            cfg = _load_config()
+            kb_conf = cfg.get_kb(kb_name) if kb_name else None
+            if kb_conf:
+                return load_board_config(kb_conf.path)
+            return load_board_config(Path("."))
+        except Exception:
+            return {"lanes": [], "wip_policy": "warn"}
+
+    def _mcp_check_ready(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Check Definition of Ready for a backlog item without claiming it."""
+        import json
+
+        db, should_close = self._get_db()
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+
+        try:
+            query = (
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
+            )
+            row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
+            if not row:
+                return {"error": f"Backlog item '{item_id}' not found in KB '{kb_name}'"}
+
+            meta = {}
+            if row["metadata"]:
+                try:
+                    meta = json.loads(row["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            status = row["status"] or meta.get("status", "proposed")
+            priority = row["priority"] or meta.get("priority", "medium")
+
+            board_config = self._load_board_config_safe(kb_name)
+            gate_result = self._evaluate_gate(db, board_config, "in_progress", row, meta)
+
+            return {
+                "item_id": item_id,
+                "title": row["title"],
+                "status": status,
+                "priority": priority,
+                "effort": meta.get("effort", ""),
+                "ready": gate_result["passed"] if gate_result else True,
+                "gate": gate_result,
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_refine(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Scan backlog for DoR readiness gaps, sorted by priority."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args["kb_name"]
+        status_filter = args.get("status")
+
+        try:
+            query = "SELECT * FROM entry WHERE entry_type = 'backlog_item' AND kb_name = ?"
+            params: list = [kb_name]
+            query += " ORDER BY created_at ASC"
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+
+            board_config = self._load_board_config_safe(kb_name)
+            priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+
+            not_ready_items: list[dict[str, Any]] = []
+            ready_items: list[dict[str, Any]] = []
+
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+
+                status = row["status"] or meta.get("status", "proposed")
+
+                # Only check proposed/accepted items
+                if status not in ("proposed", "accepted"):
+                    continue
+                if status_filter and status != status_filter:
+                    continue
+
+                priority = row["priority"] or meta.get("priority", "medium")
+                gate_result = self._evaluate_gate(db, board_config, "in_progress", row, meta)
+                is_ready = gate_result["passed"] if gate_result else True
+
+                item = {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "status": status,
+                    "priority": priority,
+                    "effort": meta.get("effort", ""),
+                    "ready": is_ready,
+                    "gate": gate_result,
+                    "_rank": priority_rank.get(priority, 2),
+                }
+
+                if is_ready:
+                    ready_items.append(item)
+                else:
+                    not_ready_items.append(item)
+
+            # Sort each group by priority rank (already sorted by age from query)
+            not_ready_items.sort(key=lambda x: x["_rank"])
+            ready_items.sort(key=lambda x: x["_rank"])
+
+            # Strip internal sort key
+            for item in not_ready_items + ready_items:
+                del item["_rank"]
+
+            all_items = not_ready_items + ready_items
+            return {
+                "summary": {
+                    "total": len(all_items),
+                    "ready": len(ready_items),
+                    "not_ready": len(not_ready_items),
+                },
+                "items": all_items,
+            }
+        finally:
+            if should_close:
+                db.close()
+
     def _mcp_context_for_item(self, args: dict[str, Any]) -> dict[str, Any]:
         """Assemble full context bundle for a backlog item."""
         import json
@@ -2001,6 +2166,14 @@ class SoftwareKBPlugin:
                     "error": "Feedback is required when requesting changes",
                 }
 
+            # Evaluate DoD gate when approving (transition to done)
+            gate_result = None
+            if target == "done":
+                board_config = self._load_board_config_safe(kb_name)
+                gate_result = self._evaluate_gate(db, board_config, "done", row, meta)
+                if gate_result and not gate_result["passed"] and gate_result["policy"] == "enforce":
+                    return {"reviewed": False, "error": "DoD gate check failed", "gate": gate_result}
+
             # Use KBService CAS pattern — pass current assignee to preserve it
             from pyrite.config import load_config
             from pyrite.services.kb_service import KBService
@@ -2033,13 +2206,16 @@ class SoftwareKBPlugin:
                 details=feedback,
             )
 
-            return {
+            result = {
                 "reviewed": True,
                 "id": item_id,
                 "outcome": outcome,
                 "new_status": target,
                 "review_id": review_record["id"],
             }
+            if gate_result:
+                result["gate"] = gate_result
+            return result
         finally:
             if should_close:
                 db.close()

@@ -365,6 +365,55 @@ def test_claim_evaluates_dor(gate_setup):
 # -- not_oversized checker unit tests --
 
 
+def test_review_approved_evaluates_dod(gate_setup):
+    """sw_review with outcome=approved evaluates DoD gate."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    meta = {"kind": "feature", "status": "review", "effort": "S"}
+    _insert_entry(db, "item-review-dod", "test-sw", "backlog_item", "Review me",
+                  status="review", metadata=meta, kb_dir=gate_setup["kb_dir"])
+
+    board_yaml = gate_setup["kb_dir"] / "board.yaml"
+    import yaml
+
+    yaml.dump(BOARD_WITH_WARN_GATE, board_yaml.open("w"))
+
+    result = plugin._mcp_review({
+        "item_id": "item-review-dod",
+        "kb_name": "test-sw",
+        "outcome": "approved",
+        "reviewer": "reviewer-1",
+        "feedback": "LGTM",
+    })
+    assert result["reviewed"] is True
+    assert result["new_status"] == "done"
+    assert "gate" in result
+    assert result["gate"]["gate_name"] == "Definition of Done"
+    assert result["gate"]["passed"] is True
+
+
+def test_review_changes_requested_no_dod(gate_setup):
+    """sw_review with outcome=changes_requested does not evaluate DoD."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    meta = {"kind": "feature", "status": "review", "effort": "S"}
+    _insert_entry(db, "item-review-cr", "test-sw", "backlog_item", "Needs work",
+                  status="review", metadata=meta, kb_dir=gate_setup["kb_dir"])
+
+    result = plugin._mcp_review({
+        "item_id": "item-review-cr",
+        "kb_name": "test-sw",
+        "outcome": "changes_requested",
+        "reviewer": "reviewer-1",
+        "feedback": "Fix the tests",
+    })
+    assert result["reviewed"] is True
+    assert result["new_status"] == "in_progress"
+    assert "gate" not in result
+
+
 def test_not_oversized_checker_passes():
     """not_oversized passes for M effort."""
     from pyrite.services.rubric_checkers import check_not_oversized
@@ -389,3 +438,125 @@ def test_not_oversized_checker_no_effort():
 
     entry = {"id": "t1", "kb_name": "kb", "metadata": {}}
     assert check_not_oversized(entry, None) is None
+
+
+# -- sw_check_ready tests --
+
+
+def test_check_ready_passes_when_dor_met(gate_setup):
+    """Item with effort, no blockers → ready: True."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    meta = {"effort": "M", "kind": "feature", "status": "accepted"}
+    _insert_entry(db, "ready-1", "test-sw", "backlog_item", "Ready item", status="accepted", metadata=meta)
+
+    result = plugin._mcp_check_ready({"item_id": "ready-1", "kb_name": "test-sw"})
+    assert result["ready"] is True
+    assert result["item_id"] == "ready-1"
+    assert result["title"] == "Ready item"
+    assert result["gate"] is not None
+    assert result["gate"]["passed"] is True
+
+
+def test_check_ready_fails_missing_effort(gate_setup):
+    """Item without effort → ready: False, criteria show failure."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    meta = {"kind": "feature", "status": "accepted"}
+    _insert_entry(db, "unready-1", "test-sw", "backlog_item", "Unready item", status="accepted", metadata=meta)
+
+    result = plugin._mcp_check_ready({"item_id": "unready-1", "kb_name": "test-sw"})
+    assert result["ready"] is False
+    assert result["gate"]["passed"] is False
+    effort_crit = [c for c in result["gate"]["criteria"] if "Effort" in c["text"]][0]
+    assert effort_crit["passed"] is False
+
+
+def test_check_ready_item_not_found(gate_setup):
+    """Nonexistent item → error response."""
+    plugin = gate_setup["plugin"]
+    result = plugin._mcp_check_ready({"item_id": "nope", "kb_name": "test-sw"})
+    assert "error" in result
+
+
+def test_check_ready_in_read_tier():
+    """sw_check_ready is registered in the read tier."""
+    from pyrite_software_kb.plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    tools = plugin.get_mcp_tools("read")
+    assert "sw_check_ready" in tools
+
+
+# -- sw_refine tests --
+
+
+def test_refine_sorts_by_priority(gate_setup):
+    """Items sorted by priority: critical before low."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    _insert_entry(db, "low-1", "test-sw", "backlog_item", "Low item",
+                  status="accepted", metadata={"effort": "S", "kind": "feature", "status": "accepted", "priority": "low"})
+    _insert_entry(db, "crit-1", "test-sw", "backlog_item", "Critical item",
+                  status="accepted", metadata={"effort": "M", "kind": "bug", "status": "accepted", "priority": "critical"})
+
+    result = plugin._mcp_refine({"kb_name": "test-sw"})
+    ids = [item["id"] for item in result["items"]]
+    assert ids.index("crit-1") < ids.index("low-1")
+
+
+def test_refine_filters_by_status(gate_setup):
+    """Only items matching status filter are returned."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    _insert_entry(db, "prop-1", "test-sw", "backlog_item", "Proposed",
+                  status="proposed", metadata={"effort": "S", "kind": "feature", "status": "proposed"})
+    _insert_entry(db, "acc-1", "test-sw", "backlog_item", "Accepted",
+                  status="accepted", metadata={"effort": "S", "kind": "feature", "status": "accepted"})
+
+    result = plugin._mcp_refine({"kb_name": "test-sw", "status": "proposed"})
+    statuses = {item["status"] for item in result["items"]}
+    assert statuses == {"proposed"}
+
+
+def test_refine_summary_counts(gate_setup):
+    """summary.ready + summary.not_ready == summary.total."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    _insert_entry(db, "r-1", "test-sw", "backlog_item", "Ready",
+                  status="accepted", metadata={"effort": "M", "kind": "feature", "status": "accepted"})
+    _insert_entry(db, "nr-1", "test-sw", "backlog_item", "Not ready",
+                  status="accepted", metadata={"kind": "feature", "status": "accepted"})
+
+    result = plugin._mcp_refine({"kb_name": "test-sw"})
+    s = result["summary"]
+    assert s["ready"] + s["not_ready"] == s["total"]
+    assert s["not_ready"] >= 1
+    assert s["ready"] >= 1
+
+
+def test_refine_excludes_in_progress(gate_setup):
+    """Items in in_progress/done/review are not included."""
+    plugin = gate_setup["plugin"]
+    db = gate_setup["db"]
+
+    _insert_entry(db, "wip-1", "test-sw", "backlog_item", "In progress item",
+                  status="in_progress", metadata={"effort": "M", "kind": "feature", "status": "in_progress"})
+
+    result = plugin._mcp_refine({"kb_name": "test-sw"})
+    ids = [item["id"] for item in result["items"]]
+    assert "wip-1" not in ids
+
+
+def test_refine_in_read_tier():
+    """sw_refine is registered in the read tier."""
+    from pyrite_software_kb.plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    tools = plugin.get_mcp_tools("read")
+    assert "sw_refine" in tools

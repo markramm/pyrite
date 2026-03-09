@@ -1051,3 +1051,98 @@ def sw_components(
         console.print(table)
     finally:
         db.close()
+
+
+@sw_app.command("check-ready")
+def sw_check_ready(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """Check Definition of Ready for a backlog item without claiming it."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_check_ready({"item_id": item_id, "kb_name": kb_name or ""})
+
+    if "error" in result:
+        console.print(f"[red]Error:[/red] {result['error']}")
+        raise typer.Exit(1)
+
+    if fmt == "json":
+        _json_output(result)
+        return
+
+    ready_str = "[green]Ready[/green]" if result["ready"] else "[red]Not Ready[/red]"
+    console.print(f"{ready_str}  [cyan]{result['item_id']}[/cyan]  {result['title']}")
+
+    gate = result.get("gate")
+    if gate and gate.get("criteria"):
+        for c in gate["criteria"]:
+            if c["passed"]:
+                if c["type"] in ("judgment", "agent_responsibility"):
+                    console.print(f"  [dim]⚑[/dim] {c['text']} [dim]({c['type']})[/dim]")
+                else:
+                    console.print(f"  [green]✓[/green] {c['text']}")
+            else:
+                msg = c.get("message", "")
+                console.print(f"  [red]✗[/red] {c['text']}" + (f" — {msg}" if msg else ""))
+
+
+@sw_app.command("refine")
+def sw_refine_cmd(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    status: str | None = typer.Option(None, "--status", "-s", help="Filter: proposed or accepted"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """Scan backlog for DoR gaps, sorted by priority."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    args: dict = {"kb_name": kb_name or ""}
+    if status:
+        args["status"] = status
+    result = plugin._mcp_refine(args)
+
+    if fmt == "json":
+        _json_output(result)
+        return
+
+    summary = result.get("summary", {})
+    not_ready = summary.get("not_ready", 0)
+    ready = summary.get("ready", 0)
+
+    if not_ready == 0 and ready == 0:
+        console.print("[dim]No proposed/accepted items found.[/dim]")
+        return
+
+    if not_ready > 0:
+        console.print(
+            f"[bold]DoR Gaps[/bold] ({not_ready} with issues, {ready} ready)\n"
+        )
+    else:
+        console.print(f"[bold green]All {ready} items ready to claim[/bold green]\n")
+
+    for item in result.get("items", []):
+        if item["ready"]:
+            continue
+        priority = item.get("priority", "medium")
+        console.print(
+            f"  [yellow]\\[{priority}][/yellow] [cyan]{item['id']}[/cyan]  {item['title']}"
+        )
+        gate = item.get("gate")
+        if gate and gate.get("criteria"):
+            for c in gate["criteria"]:
+                if c["passed"]:
+                    if c["type"] in ("judgment", "agent_responsibility"):
+                        console.print(
+                            f"    [dim]⚑[/dim] {c['text']} [dim]({c['type']})[/dim]"
+                        )
+                else:
+                    msg = c.get("message", "")
+                    console.print(
+                        f"    [red]✗[/red] {c['text']}" + (f" — {msg}" if msg else "")
+                    )
+
+    if ready > 0:
+        console.print(f"\n  [green]✓[/green] {ready} item{'s' if ready != 1 else ''} ready to claim")

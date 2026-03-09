@@ -52,6 +52,8 @@ Side exits: `proposed → wont_do`, `proposed → deferred → proposed`, `done 
 | `sw_validations` | Programmatic checks (pass/fail criteria) | `kb_name`, `category` |
 | `sw_conventions` | Development conventions (judgment guidance) | `kb_name`, `category` |
 | `sw_standards` | All standards (validations + conventions) | `kb_name`, `category` |
+| `sw_check_ready` | Check DoR for a single item without claiming | `item_id`, `kb_name` |
+| `sw_refine` | Scan backlog for DoR gaps, sorted by priority | `kb_name`, `status` |
 
 ### Write tier (mutates state)
 
@@ -77,6 +79,8 @@ pyrite sw review-queue -k <kb>         # Review queue
 pyrite sw claim <item-id> -k <kb> --assignee <name>
 pyrite sw submit <item-id> -k <kb>     # Submit for review
 pyrite sw transition <item-id> <status> -k <kb>  # Transition with gate check
+pyrite sw check-ready <item-id> -k <kb>        # Check DoR without claiming
+pyrite sw refine -k <kb>                       # Scan backlog for DoR gaps
 pyrite sw adrs -k <kb>                 # List ADRs
 pyrite sw new-adr --title "..." -k <kb>  # Create ADR
 pyrite sw components -k <kb>           # Component docs
@@ -199,6 +203,44 @@ claim → read gate → fix checker failures → self-evaluate judgment items �
 
 If policy is `enforce` and a checker failed, the claim is rejected. Fix the issue (e.g., `pyrite update <id> -k <kb> -f effort=M`) and retry the claim.
 
+### Backlog Refinement
+
+Proactively prepare backlog items so they pass DoR before anyone claims them.
+
+#### The refinement loop
+
+```
+1. pyrite sw refine -k <kb>              → scan for DoR gaps
+2. For each item with gaps, highest priority first:
+   a. Auto-fix what you can:
+      - Add effort estimate based on scope analysis
+      - Link to relevant ADRs/components
+      - Add missing tags
+      - Decompose XL items into subtasks
+   b. Flag what needs human input:
+      - Ambiguous requirements → add ## Open Questions to item body
+      - Missing acceptance criteria needing product context → note it
+      - Architectural questions → suggest creating an ADR
+   c. pyrite sw check-ready <id> -k <kb>  → verify fixes
+3. Transition ready items: proposed → accepted (if appropriate)
+```
+
+#### What agents can fix autonomously
+
+- Effort estimates (analyze scope, set S/M/L)
+- Missing tags (infer from title/body)
+- ADR/component links (search KB for related entries)
+- Decomposition (create sub-items for XL work, link with blocked_by)
+
+#### What needs human input
+
+- Acceptance criteria requiring product/business context
+- Priority decisions between competing items
+- Architectural choices not covered by existing ADRs
+- Scope questions ("should this include X?")
+
+For these, add a `## Open Questions` section to the item body with specific asks.
+
 ---
 
 ## Backlog Item Fields
@@ -267,3 +309,5 @@ Backlog items gain value from links to other entries:
 | End a session without logging context | Use `sw_log` to record decisions, rejected approaches, and open questions |
 | Ignore `gate` results after claim/transition | Read every criterion; address checker failures and self-evaluate judgment items |
 | Skip judgment criteria because they auto-pass | They're guidance — verify them yourself |
+| Invent acceptance criteria without domain knowledge | Add `## Open Questions` asking the human for specifics |
+| Rubber-stamp items as ready without checking | Run `pyrite sw check-ready` and address every gap |
