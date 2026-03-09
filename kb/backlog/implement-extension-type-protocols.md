@@ -1,6 +1,6 @@
 ---
-id: extension-type-protocols
-title: "Extension Type Protocols: Structural Subtyping for Knowledge Types"
+id: implement-extension-type-protocols
+title: "Implement Extension Type Protocols"
 type: backlog_item
 tags:
 - feature
@@ -13,10 +13,14 @@ priority: medium
 effort: L
 status: planned
 links:
-- extension-type-protocols
-- intent-layer-guidelines-and-goals
-- extension-registry
-- bhag-self-configuring-knowledge-infrastructure
+- target: extension-type-protocols
+  relation: implements
+- target: intent-layer-guidelines-and-goals
+  relation: related
+- target: extension-registry
+  relation: related
+- target: bhag-self-configuring-knowledge-infrastructure
+  relation: related
 ---
 
 ## Problem

@@ -7,7 +7,6 @@ tags:
 - infrastructure
 - feature
 - community
-- extensions
 links:
 - target: launch-plan
   relation: related

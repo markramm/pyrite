@@ -8,7 +8,6 @@ tags:
 - feature
 - protocols
 - type-system
-- extensions
 links:
 - target: bhag-self-configuring-knowledge-infrastructure
   relation: related

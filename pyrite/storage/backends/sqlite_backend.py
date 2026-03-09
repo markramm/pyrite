@@ -131,9 +131,11 @@ class SQLiteBackend:
     def _sync_tags(self, entry_id: str, kb_name: str, tags: list[str]) -> None:
         self._session.query(EntryTag).filter_by(entry_id=entry_id, kb_name=kb_name).delete()
         self._session.flush()
+        seen: set[str] = set()
         for tag_name in tags:
-            if not tag_name:
+            if not tag_name or tag_name in seen:
                 continue
+            seen.add(tag_name)
             tag = self._session.query(Tag).filter_by(name=tag_name).first()
             if not tag:
                 tag = Tag(name=tag_name)
