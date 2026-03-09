@@ -1,7 +1,7 @@
 """
 Link management commands for pyrite CLI.
 
-Commands: check, bulk-create
+Commands: check, bulk-create, suggest
 """
 
 from __future__ import annotations
@@ -270,3 +270,178 @@ def links_bulk_create(
         )
         for detail in failed_details:
             console.print(f"  [red]{detail}[/red]")
+
+
+def _build_suggest_query(entry: dict) -> str:
+    """Build an FTS5 OR query from an entry's title words and tags.
+
+    Uses OR to find entries sharing *any* term, which gives broader recall
+    and lets FTS5 rank by overlap.
+    """
+    import re
+
+    tokens: list[str] = []
+    title = entry.get("title", "")
+    if title:
+        # Split title into words, keep only alphanumeric tokens
+        tokens.extend(
+            w for w in re.split(r"\W+", title) if w and len(w) > 2
+        )
+    tags = entry.get("tags", [])
+    if tags:
+        tokens.extend(t for t in tags if t)
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for t in tokens:
+        lower = t.lower()
+        if lower not in seen:
+            seen.add(lower)
+            unique.append(t)
+    return " OR ".join(unique)
+
+
+def _suggest_links(
+    entry_id: str,
+    kb_name: str,
+    target_kb: str | None,
+    limit: int,
+) -> list[dict]:
+    """Find entries related to the given entry using FTS5 keyword search.
+
+    Returns a list of candidate dicts with id, kb_name, title, entry_type,
+    score, and snippet.
+    """
+    from ..services.kb_service import KBService
+    from ..services.search_service import SearchService
+
+    config, db = get_config_and_db()
+    try:
+        svc = KBService(config, db)
+        entry = svc.get_entry(entry_id, kb_name=kb_name)
+        if entry is None:
+            return []
+
+        query = _build_suggest_query(entry)
+        if not query.strip():
+            return []
+
+        search_svc = SearchService(db, settings=config.settings)
+        search_kb = target_kb or kb_name
+
+        # Fetch extra results so we can filter out self and existing links
+        raw_results = search_svc.search(
+            query=query,
+            kb_name=search_kb,
+            limit=limit + 20,
+            mode="keyword",
+        )
+
+        # Collect existing link targets to exclude
+        existing_targets = set()
+        for link in entry.get("outlinks", []) or []:
+            existing_targets.add(link.get("id", ""))
+        for link in entry.get("links", []) or []:
+            existing_targets.add(link.get("target_id") or link.get("target", ""))
+
+        candidates = []
+        for r in raw_results:
+            rid = r.get("id", "")
+            if rid == entry_id:
+                continue
+            if rid in existing_targets:
+                continue
+            candidates.append(
+                {
+                    "id": rid,
+                    "kb_name": r.get("kb_name", search_kb),
+                    "title": r.get("title", ""),
+                    "entry_type": r.get("entry_type", ""),
+                    "score": round(r.get("rank", 0.0), 4),
+                    "snippet": (r.get("snippet") or "")[:150],
+                }
+            )
+            if len(candidates) >= limit:
+                break
+
+        return candidates
+    finally:
+        db.close()
+
+
+@links_app.command("suggest")
+def links_suggest(
+    entry_id: str = typer.Argument(..., help="Entry ID to find suggestions for"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB containing the entry"),
+    target_kb: str | None = typer.Option(
+        None, "--target-kb", help="KB to search for candidates (default: same as --kb)"
+    ),
+    limit: int = typer.Option(10, "--limit", "-n", help="Max number of suggestions"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Suggest related entries that could be linked.
+
+    Uses FTS5 keyword search on title and tags to find entries
+    that are likely related. No LLM required.
+
+    \b
+    Examples:
+        pyrite links suggest my-entry --kb notes
+        pyrite links suggest my-entry --kb notes --target-kb other-kb --format json
+    """
+    from ..services.kb_service import KBService
+
+    config, db = get_config_and_db()
+    try:
+        svc = KBService(config, db)
+        entry = svc.get_entry(entry_id, kb_name=kb_name)
+    finally:
+        db.close()
+
+    if entry is None:
+        console.print(f"[red]Error:[/red] Entry not found: {entry_id} (kb={kb_name})")
+        raise typer.Exit(1)
+
+    candidates = _suggest_links(entry_id, kb_name, target_kb, limit)
+
+    data = {
+        "entry_id": entry_id,
+        "kb_name": kb_name,
+        "target_kb": target_kb or kb_name,
+        "count": len(candidates),
+        "suggestions": candidates,
+    }
+
+    formatted = _format_output(data, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    if not candidates:
+        console.print("[dim]No suggestions found.[/dim]")
+        return
+
+    console.print(
+        f"\n[bold]Link suggestions for[/bold] {entry_id}"
+        f" [dim](target KB: {target_kb or kb_name})[/dim]\n"
+    )
+
+    table = Table(show_lines=False)
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Entry ID")
+    table.add_column("Title")
+    table.add_column("Type", style="dim")
+    table.add_column("Score", justify="right")
+
+    for i, c in enumerate(candidates, 1):
+        table.add_row(
+            str(i),
+            c["id"],
+            c["title"][:60],
+            c["entry_type"],
+            str(c["score"]),
+        )
+
+    console.print(table)
