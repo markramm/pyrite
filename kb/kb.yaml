@@ -12,7 +12,8 @@ goals:
   success_criteria: "An agent can find any architectural decision, component API, or backlog item in under 3 search queries."
 
 evaluation_rubric:
-  - "Entry has a clear, specific title (not generic like 'Update' or 'Notes')"
+  - text: "Entry has a clear, specific title (not generic like 'Update' or 'Notes')"
+    checker: descriptive_title
   - "Entry body explains the why, not just the what"
   - "ADRs link to the backlog items that motivated them"
   - "Component docs specify dependencies and public API"
@@ -23,8 +24,14 @@ types:
     guidelines: "Document the module's responsibility, public API, and key dependencies. Include the filesystem path."
     goals: "Enable an agent to understand what a module does and how to use it without reading source code."
     evaluation_rubric:
-      - "Component specifies its filesystem path"
-      - "Component lists its dependencies"
+      - checker: has_field
+        params:
+          field: path
+        text: "Component specifies its filesystem path"
+      - checker: has_field
+        params:
+          field: dependencies
+        text: "Component lists its dependencies"
       - "Component describes its public API or responsibility"
 
   adr:
@@ -32,9 +39,16 @@ types:
     guidelines: "State the problem, considered alternatives, and rationale for the decision. Link to related ADRs."
     goals: "Preserve decision context so future developers understand why, not just what."
     evaluation_rubric:
-      - "ADR has a status (proposed, accepted, superseded, deprecated)"
-      - "ADR describes the problem being solved"
-      - "ADR lists alternatives that were considered"
+      - checker: status_present
+        text: "ADR has a status (proposed, accepted, superseded, deprecated)"
+      - checker: body_has_section
+        params:
+          heading: Problem
+        text: "ADR describes the problem being solved"
+      - checker: body_has_section
+        params:
+          heading: Alternatives
+        text: "ADR lists alternatives that were considered"
       - "ADR explains the rationale for the chosen approach"
 
   backlog_item:
@@ -42,8 +56,10 @@ types:
     guidelines: "Include clear acceptance criteria. Set priority and effort estimates. Link to relevant ADRs."
     goals: "Enable agents to pick up work items and understand what 'done' looks like."
     evaluation_rubric:
-      - "Backlog item has a status (proposed, planned, in-progress, done)"
-      - "Backlog item has a priority level"
+      - checker: status_present
+        text: "Backlog item has a status (proposed, planned, in-progress, done)"
+      - checker: priority_present
+        text: "Backlog item has a priority level"
       - "Backlog item describes acceptance criteria or definition of done"
 
   standard:

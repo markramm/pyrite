@@ -1,7 +1,7 @@
 """Deterministic rubric checker functions for QA evaluation.
 
 Each checker receives an entry dict, optional KBSchema, and optional params dict.
-Checkers can be matched by name (NAMED_CHECKERS) or by regex (legacy RUBRIC_CHECKERS).
+Checkers are matched by name via the NAMED_CHECKERS registry.
 """
 
 from __future__ import annotations
@@ -39,21 +39,6 @@ GENERIC_TITLES = frozenset({
     "placeholder",
     "wip",
 })
-
-# =========================================================================
-# Patterns for rubric items already covered by existing QA rules
-# =========================================================================
-
-ALREADY_COVERED_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"body is non-empty", re.IGNORECASE),
-    re.compile(r"has a date field", re.IGNORECASE),
-    re.compile(r"importance.*between", re.IGNORECASE),
-]
-
-
-def is_already_covered(rubric_item: str) -> bool:
-    """Check if a rubric item is already covered by existing QA rules."""
-    return any(p.search(rubric_item) for p in ALREADY_COVERED_PATTERNS)
 
 
 # =========================================================================
@@ -148,21 +133,6 @@ def check_has_outlinks(
         ),
     }
 
-
-def _bind_params(fn: RubricChecker, bound_params: dict[str, Any]) -> RubricChecker:
-    """Bind default params to a parameterized checker for use in legacy registry."""
-
-    def wrapper(
-        entry: dict[str, Any],
-        schema: KBSchema | None,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
-        merged = dict(bound_params)
-        if params:
-            merged.update(params)
-        return fn(entry, schema, merged)
-
-    return wrapper
 
 
 def check_status_present(
@@ -331,63 +301,6 @@ def check_body_has_code_block(
     }
 
 
-# =========================================================================
-# Legacy regex-based registry: (pattern, checker_fn) tuples
-# =========================================================================
-
-RUBRIC_CHECKERS: list[tuple[re.Pattern[str], RubricChecker]] = [
-    # System-level
-    (re.compile(r"descriptive title", re.IGNORECASE), check_descriptive_title),
-    (re.compile(r"at least one tag", re.IGNORECASE), check_has_tags),
-    (re.compile(r"links to at least one related", re.IGNORECASE), check_has_outlinks),
-    # Person type
-    (
-        re.compile(r"role or position", re.IGNORECASE),
-        _bind_params(check_has_field, {"field": "role", "rubric_text": "Person has a role or position described"}),
-    ),
-    # Document type
-    (
-        re.compile(r"source URL or author", re.IGNORECASE),
-        _bind_params(check_has_any_field, {"fields": ["url", "author"], "rubric_text": "Document has a source URL or author"}),
-    ),
-    (
-        re.compile(r"document_type classification", re.IGNORECASE),
-        _bind_params(check_has_field, {"field": "document_type", "rubric_text": "Document has a document_type classification"}),
-    ),
-    # Component type (KB-level)
-    (
-        re.compile(r"path present", re.IGNORECASE),
-        _bind_params(check_has_field, {"field": "path", "rubric_text": "path present"}),
-    ),
-    (
-        re.compile(r"dependencies present", re.IGNORECASE),
-        _bind_params(check_has_field, {"field": "dependencies", "rubric_text": "dependencies present"}),
-    ),
-    # ADR/backlog_item status
-    (
-        re.compile(r"status.*valid set|status present", re.IGNORECASE),
-        check_status_present,
-    ),
-    # Priority
-    (
-        re.compile(r"priority present", re.IGNORECASE),
-        check_priority_present,
-    ),
-    # Body structure checks
-    (
-        re.compile(r"body.*code block|contains.*code block", re.IGNORECASE),
-        _bind_params(check_body_has_code_block, {"rubric_text": "body contains code block"}),
-    ),
-    (
-        re.compile(r"section.*Problem|Problem.*section", re.IGNORECASE),
-        _bind_params(check_body_has_pattern, {"pattern": r"^##\s+Problem", "rubric_text": "body has Problem section"}),
-    ),
-    (
-        re.compile(r"section.*Alternatives|Alternatives.*section", re.IGNORECASE),
-        _bind_params(check_body_has_pattern, {"pattern": r"^##\s+Alternatives", "rubric_text": "body has Alternatives section"}),
-    ),
-]
-
 
 # =========================================================================
 # Named checker registry
@@ -407,9 +320,3 @@ NAMED_CHECKERS: dict[str, RubricChecker] = {
 }
 
 
-def match_rubric_item(item: str) -> RubricChecker | None:
-    """Return the checker function for a rubric item, or None if no match."""
-    for pattern, checker in RUBRIC_CHECKERS:
-        if pattern.search(item):
-            return checker
-    return None

@@ -385,8 +385,6 @@ def _classify_rubric_item(
     item: str | dict, checkers: dict
 ) -> tuple[str, str]:
     """Classify a rubric item. Returns (display_text, kind)."""
-    from ..services.rubric_checkers import match_rubric_item
-
     if isinstance(item, dict):
         text = item.get("text", "")
         if item.get("covered_by"):
@@ -397,9 +395,7 @@ def _classify_rubric_item(
                 return text, "checker"
             return text, "unknown"
         return text, "judgment"
-    # Plain string
-    if match_rubric_item(item):
-        return item, "checker"
+    # Plain string — always judgment-only
     return item, "judgment"
 
 

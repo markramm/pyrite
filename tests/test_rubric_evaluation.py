@@ -11,13 +11,12 @@ from pyrite.models import EventEntry, PersonEntry
 from pyrite.services.qa_service import QAService
 from pyrite.services.rubric_checkers import (
     GENERIC_TITLES,
+    NAMED_CHECKERS,
     check_descriptive_title,
     check_has_outlinks,
     check_has_tags,
     check_priority_present,
     check_status_present,
-    is_already_covered,
-    match_rubric_item,
 )
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.index import IndexManager
@@ -149,13 +148,12 @@ class TestRubricCheckers:
         result = check_has_outlinks(entry, None)
         assert result is None
 
-    def test_metadata_field_checker_person_role(self):
-        checker = match_rubric_item("Person has a role or position described")
-        assert checker is not None
+    def test_has_field_checker_person_role(self):
+        checker = NAMED_CHECKERS["has_field"]
 
         # Missing role
         entry = _make_entry_dict(entry_type="person", metadata="{}")
-        result = checker(entry, None)
+        result = checker(entry, None, {"field": "role"})
         assert result is not None
         assert "role" in result["message"]
 
@@ -163,44 +161,42 @@ class TestRubricCheckers:
         entry = _make_entry_dict(
             entry_type="person", metadata=json.dumps({"role": "Researcher"})
         )
-        result = checker(entry, None)
+        result = checker(entry, None, {"field": "role"})
         assert result is None
 
-    def test_metadata_field_checker_document_url_or_author(self):
-        checker = match_rubric_item("Document has a source URL or author")
-        assert checker is not None
+    def test_has_any_field_checker_document_url_or_author(self):
+        checker = NAMED_CHECKERS["has_any_field"]
 
         # Missing both
         entry = _make_entry_dict(entry_type="document", metadata="{}")
-        result = checker(entry, None)
+        result = checker(entry, None, {"fields": ["url", "author"]})
         assert result is not None
 
         # Has url
         entry = _make_entry_dict(
             entry_type="document", metadata=json.dumps({"url": "https://example.com"})
         )
-        result = checker(entry, None)
+        result = checker(entry, None, {"fields": ["url", "author"]})
         assert result is None
 
         # Has author
         entry = _make_entry_dict(
             entry_type="document", metadata=json.dumps({"author": "John"})
         )
-        result = checker(entry, None)
+        result = checker(entry, None, {"fields": ["url", "author"]})
         assert result is None
 
-    def test_metadata_field_checker_document_type(self):
-        checker = match_rubric_item("Document has a document_type classification")
-        assert checker is not None
+    def test_has_field_checker_document_type(self):
+        checker = NAMED_CHECKERS["has_field"]
 
         entry = _make_entry_dict(entry_type="document", metadata="{}")
-        result = checker(entry, None)
+        result = checker(entry, None, {"field": "document_type"})
         assert result is not None
 
         entry = _make_entry_dict(
             entry_type="document", metadata=json.dumps({"document_type": "report"})
         )
-        result = checker(entry, None)
+        result = checker(entry, None, {"field": "document_type"})
         assert result is None
 
     def test_status_present_checker(self):
@@ -219,21 +215,19 @@ class TestRubricCheckers:
         )
         assert result is None
 
-    def test_body_section_checker(self):
-        checker = match_rubric_item("body has Problem section")
-        assert checker is not None
+    def test_body_has_section_checker(self):
+        checker = NAMED_CHECKERS["body_has_section"]
 
         entry = _make_entry_dict(body="Just some text")
-        result = checker(entry, None)
+        result = checker(entry, None, {"heading": "Problem"})
         assert result is not None
 
         entry = _make_entry_dict(body="## Problem\n\nSomething is wrong.")
-        result = checker(entry, None)
+        result = checker(entry, None, {"heading": "Problem"})
         assert result is None
 
-    def test_body_code_block_checker(self):
-        checker = match_rubric_item("body contains code block")
-        assert checker is not None
+    def test_body_has_code_block_checker(self):
+        checker = NAMED_CHECKERS["body_has_code_block"]
 
         entry = _make_entry_dict(body="Just text, no code")
         result = checker(entry, None)
@@ -243,56 +237,6 @@ class TestRubricCheckers:
         result = checker(entry, None)
         assert result is None
 
-
-# =========================================================================
-# TestAlreadyCovered — deduplication
-# =========================================================================
-
-
-class TestAlreadyCovered:
-    """Test that already-covered rubric items are skipped."""
-
-    def test_body_non_empty_covered(self):
-        assert is_already_covered("Entry body is non-empty")
-
-    def test_date_field_covered(self):
-        assert is_already_covered("Event has a date field")
-
-    def test_importance_covered(self):
-        assert is_already_covered("Event has an importance score between 1 and 10")
-
-    def test_descriptive_title_not_covered(self):
-        assert not is_already_covered("Entry has a descriptive title")
-
-    def test_tags_not_covered(self):
-        assert not is_already_covered("Entry has at least one tag")
-
-
-# =========================================================================
-# TestMatchRubricItem — pattern matching
-# =========================================================================
-
-
-class TestMatchRubricItem:
-    """Test rubric item pattern matching."""
-
-    def test_known_items_match(self):
-        known = [
-            "Entry has a descriptive title",
-            "Entry has at least one tag",
-            "Entry links to at least one related entry (unless a stub)",
-            "Person has a role or position described",
-            "Document has a source URL or author",
-            "Document has a document_type classification",
-        ]
-        for item in known:
-            assert match_rubric_item(item) is not None, f"Should match: {item}"
-
-    def test_unknown_item_returns_none(self):
-        assert match_rubric_item("Entry body explains the why, not just the what") is None
-
-    def test_judgment_only_returns_none(self):
-        assert match_rubric_item("Content is well-organized and readable") is None
 
 
 # =========================================================================

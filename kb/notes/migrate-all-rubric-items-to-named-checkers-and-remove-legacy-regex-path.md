@@ -7,6 +7,7 @@ tags:
 - intent-engineering
 - cleanup
 kind: feature
+status: done
 effort: M
 links:
   - target: epic-software-kb-quality-gates-and-rubric-automation

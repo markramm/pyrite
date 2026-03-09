@@ -13,20 +13,24 @@ links:
     note: "Rubric checkers are used by QAService for evaluation"
 ---
 
-Pattern-matching registry of deterministic rubric checker functions. Each checker validates one rubric item (e.g., "Entry has a descriptive title") against an entry and returns an issue dict or None.
+Named registry of deterministic rubric checker functions. Each checker validates one rubric item against an entry and returns an issue dict or None. Checkers are looked up by name via the `NAMED_CHECKERS` registry.
 
 ## Architecture
 
-- `RUBRIC_CHECKERS`: list of `(re.Pattern, checker_fn)` tuples mapping rubric text to checker functions
-- `match_rubric_item(item)` — looks up the checker for a rubric item string, returns None for judgment-only items
-- `is_already_covered(item)` — returns True for rubric items already handled by existing QA rules (deduplication)
+- `NAMED_CHECKERS`: dict mapping checker names to callable functions — the sole lookup mechanism
 - `GENERIC_TITLES` — frozenset of title strings considered too vague (e.g., "Update", "Notes", "TODO")
+- `_parse_metadata(entry)` — extracts metadata dict from entry (handles JSON string or dict)
 
-## Checker Types
+## Checker Functions
 
-- **Direct checkers**: `check_descriptive_title`, `check_has_tags`, `check_has_outlinks`, `check_status_present`, `check_priority_present`
-- **Factory functions**: `_make_metadata_field_checker`, `_make_metadata_any_field_checker`, `_make_body_section_checker`, `_make_body_has_code_block_checker`
+All checkers accept `(entry, schema, params=None)` and return an issue dict or None.
+
+- **Structural**: `check_descriptive_title`, `check_has_tags`, `check_has_outlinks`, `check_status_present`, `check_priority_present`
+- **Parameterized field**: `check_has_field` (params: `{field}`), `check_has_any_field` (params: `{fields}`)
+- **Body structure**: `check_body_has_section` (params: `{heading}`), `check_body_has_pattern` (params: `{pattern}`), `check_body_has_code_block`
 
 ## Integration
 
-Called by `QAService._check_rubric_evaluation()` (single entry) and `QAService._check_rubric_all()` (bulk SQL path). Rubric items are sourced from `SYSTEM_INTENT`, `CORE_TYPE_METADATA`, and KB-level `kb.yaml` type schemas.
+Called by `QAService._check_rubric_evaluation()` via named lookup. Rubric items in `kb.yaml` bind to checkers using `{text, checker, params}` dict format. Plain string items are judgment-only (LLM-evaluated). Items with `covered_by: schema` are skipped.
+
+Plugins register additional checkers via `PyritePlugin.get_rubric_checkers()`, aggregated by `PluginRegistry.get_all_rubric_checkers()`.

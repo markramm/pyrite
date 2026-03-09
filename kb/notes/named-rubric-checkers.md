@@ -21,6 +21,7 @@ links:
   relation: builds_on
   note: "Implements the 'deterministic rubric items become validation rules' design"
 kind: feature
+status: done
 priority: high
 effort: L
 ---

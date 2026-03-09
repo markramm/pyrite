@@ -1,0 +1,69 @@
+---
+id: migrate-rubric-items-to-named-format
+title: Migrate Rubric Items to Named Format
+type: standard
+tags:
+- qa
+- migration
+- runbook
+---
+
+## What Changed
+
+String-format rubric items in `kb.yaml` are no longer matched by regex. The legacy regex path (`RUBRIC_CHECKERS`, `match_rubric_item()`, `is_already_covered()`) has been removed.
+
+Rubric items must now be either:
+- **Named format** (dict with `checker` key) — bound to a deterministic checker function
+- **Plain string** — evaluated by LLM judgment only
+
+## Available Checkers
+
+| Checker | Params | What it checks |
+|---------|--------|----------------|
+| `descriptive_title` | — | Title is not generic (TODO, Untitled, etc.) |
+| `has_tags` | — | Entry has at least one tag |
+| `has_outlinks` | — | Entry links to another entry (stubs exempt) |
+| `status_present` | — | Entry has a status value |
+| `priority_present` | — | Entry has `priority` in metadata |
+| `has_field` | `field: <name>` | Metadata contains the named field |
+| `has_any_field` | `fields: [a, b]` | Metadata contains at least one of the listed fields |
+| `body_has_section` | `heading: <name>` | Body contains `## <heading>` |
+| `body_has_pattern` | `pattern: <regex>` | Body matches the regex pattern |
+| `body_has_code_block` | — | Body contains a fenced code block |
+
+## How to Migrate
+
+For each string item in your `kb.yaml` `evaluation_rubric`:
+
+1. **If a checker exists** — convert to named format:
+   ```yaml
+   # Before
+   - "Component specifies its filesystem path"
+
+   # After
+   - checker: has_field
+     params:
+       field: path
+     text: "Component specifies its filesystem path"
+   ```
+
+2. **If no checker applies** — leave as a plain string for LLM judgment:
+   ```yaml
+   - "ADR explains the rationale for the chosen approach"
+   ```
+
+3. **If already enforced by schema validation** — mark as schema-covered:
+   ```yaml
+   - text: "Entry body is non-empty"
+     covered_by: schema
+   ```
+
+## Verifying Migration
+
+```bash
+# See current coverage — checkers vs judgment-only
+pyrite qa checkers --kb <name>
+
+# Run validation to catch issues
+pyrite qa validate --kb <name>
+```

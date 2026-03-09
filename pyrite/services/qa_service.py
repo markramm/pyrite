@@ -21,7 +21,6 @@ from ..plugins.registry import get_registry
 from ..schema import validate_date, validate_importance
 from ..schema.core_types import SYSTEM_INTENT, resolve_type_metadata
 from ..storage.database import PyriteDB
-from .rubric_checkers import is_already_covered, match_rubric_item
 
 logger = logging.getLogger(__name__)
 
@@ -968,21 +967,7 @@ class QAService:
 
         for item in rubric_items:
             if isinstance(item, str):
-                # Legacy string path: regex match, else judgment-only
-                if is_already_covered(item):
-                    continue
-                checker = match_rubric_item(item)
-                if checker is None:
-                    logger.debug(
-                        "Rubric item has no deterministic checker (judgment_only): %s", item
-                    )
-                    continue
-                try:
-                    issue = checker(enriched, kb_schema, None)
-                    if issue is not None:
-                        issues.append(issue)
-                except Exception:
-                    logger.warning("Rubric checker failed for item '%s'", item, exc_info=True)
+                # Plain strings are judgment-only, handled by LLM evaluation
                 continue
 
             # Dict rubric item
@@ -1021,13 +1006,12 @@ class QAService:
                 )
 
     def _collect_judgment_items(self, entry_type: str, kb_name: str) -> list[str]:
-        """Filter rubric items to judgment-only (no deterministic checker, not already covered)."""
+        """Filter rubric items to judgment-only (no deterministic checker, not schema-covered)."""
         all_items = self._get_rubric_items(entry_type, kb_name)
         result: list[str] = []
         for item in all_items:
             if isinstance(item, str):
-                if not is_already_covered(item) and match_rubric_item(item) is None:
-                    result.append(item)
+                result.append(item)
             elif isinstance(item, dict):
                 if item.get("covered_by") or item.get("checker"):
                     continue

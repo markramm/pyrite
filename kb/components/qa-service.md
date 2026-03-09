@@ -36,10 +36,19 @@ Structural validation and assessment service for knowledge bases. Validates KB i
 | `broken_link` | warning | Wikilink target doesn't exist |
 | `orphan` | info | Entry has no incoming links |
 | `schema_violation` | error/warning | Field violates kb.yaml type schema |
+| `rubric_violation` | warning | Entry fails a named rubric checker |
+| `config_error` | warning | Unknown checker name in rubric config |
 
 ## Schema Validation
 
 When `kb.yaml` exists, `_check_schema_all()` validates each entry against its type's `FieldSchema` definitions — required fields, select options, type constraints. Uses `KBSchema.validate_entry()` for the actual field checking.
+
+## Rubric Evaluation
+
+`_check_rubric_evaluation()` processes rubric items from `SYSTEM_INTENT`, `CORE_TYPE_METADATA`, and `kb.yaml`:
+- **Dict items with `checker`** — looked up in `NAMED_CHECKERS` (core + plugins), run deterministically
+- **Dict items with `covered_by`** — skipped (handled by schema validation)
+- **Plain strings** — judgment-only, collected for LLM evaluation by `_collect_judgment_items()`
 
 ## Consumers
 

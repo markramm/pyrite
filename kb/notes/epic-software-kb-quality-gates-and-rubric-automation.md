@@ -15,7 +15,7 @@ Follow-up epic to the kanban flow work. Adds structured quality enforcement to t
 ## Scope
 
 1. **Named Rubric Checkers** — Explicit binding between rubric items and validation functions so reviews can be partially automated *(done)*
-2. **Migrate All Rubric Items to Named Checkers** — Convert all demo/pyrite KB rubric items to named format, add migration tooling, remove legacy regex path
+2. **Migrate All Rubric Items to Named Checkers** — Convert all demo/pyrite KB rubric items to named format, add migration tooling, remove legacy regex path *(done)*
 3. **Definition of Ready / Definition of Done** — Gate transitions (e.g. accepted→in_progress, review→done) with configurable checklists
 4. **Policy Rubric Checkers** — User-configurable constraint rules that enforce project-specific policies
 5. **Enhance orient for software-type KBs** — Surface kanban board state, architecture context (ADRs, components), and active work items in the orient command
