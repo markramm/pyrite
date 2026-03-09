@@ -62,6 +62,7 @@ Side exits: `proposed → wont_do`, `proposed → deferred → proposed`, `done 
 | `sw_review` | Record review outcome: `review → done` or `review → in_progress` | `item_id`, `kb_name`, `outcome`, `reviewer`, `feedback` |
 | `sw_create_adr` | Create auto-numbered ADR | `title`, `kb_name` |
 | `sw_create_backlog_item` | Create backlog item | `title`, `kind` |
+| `sw_transition` | Transition to any valid status (with gate check) | `item_id`, `kb_name`, `to_status`, `reason` |
 | `sw_log` | Log work session: decisions, rejected approaches, open questions | `item_id`, `kb_name`, `summary` |
 
 ---
@@ -75,6 +76,7 @@ pyrite sw backlog -k <kb> --status accepted  # Filtered
 pyrite sw review-queue -k <kb>         # Review queue
 pyrite sw claim <item-id> -k <kb> --assignee <name>
 pyrite sw submit <item-id> -k <kb>     # Submit for review
+pyrite sw transition <item-id> <status> -k <kb>  # Transition with gate check
 pyrite sw adrs -k <kb>                 # List ADRs
 pyrite sw new-adr --title "..." -k <kb>  # Create ADR
 pyrite sw components -k <kb>           # Component docs
@@ -93,8 +95,13 @@ pyrite sw milestones -k <kb>           # Milestones
 1. sw_pull_next(kb_name=...)           → get recommendation
 2. sw_context_for_item(item_id, kb)    → read linked ADRs, validations, reviews
 3. sw_claim(item_id, kb, assignee=...) → lock the item (CAS — fails if already claimed)
-4. Do the work
-5. sw_submit(item_id, kb)              → move to review
+   ↳ Read the `gate` field in the response (Definition of Ready)
+4. Address gate results:
+   - checker failures → fix before proceeding (estimate effort, resolve blockers, decompose XL items)
+   - judgment items → self-evaluate and fill gaps (add ## Acceptance Criteria, link to ADR, etc.)
+   - If policy is "enforce" and checkers failed, the claim is rejected — fix and retry
+5. Do the work
+6. sw_submit(item_id, kb)              → move to review
 ```
 
 If `sw_pull_next` returns `"reason": "WIP limit reached"`, finish existing in-progress work first.
@@ -113,8 +120,9 @@ If `sw_pull_next` returns blocked items, check if you can unblock them by comple
      feedback=...)                      → record outcome
 ```
 
-- `approved` → transitions to `done`
+- `approved` → transitions to `done` (triggers DoD gate evaluation — check `gate` in response)
 - `changes_requested` → transitions back to `in_progress` (feedback required)
+- Before approving, verify `agent_responsibility` items: tests passing, clean working tree, KB docs updated
 - Prior review feedback is surfaced in `sw_context_for_item` so rework addresses specific issues
 - `rework_count` in the review queue shows how many times an item has been sent back
 
@@ -143,6 +151,53 @@ sw_board(kb_name=...)
 ```
 
 Returns lanes with item counts and WIP limit status. Use this for situational awareness — where is work piling up?
+
+### Quality Gates (DoR / DoD)
+
+`sw_claim` and `sw_transition` return a `gate` field containing quality criteria evaluated at transition boundaries:
+
+- **DoR (Definition of Ready)** fires at `sw_claim` / transition to `in_progress`
+- **DoD (Definition of Done)** fires at transition to `done`
+
+#### Criterion types
+
+| Type | Meaning | How to handle |
+|------|---------|---------------|
+| `checker` | Programmatic check (pass/fail) | Fix the underlying issue — add missing fields, resolve blockers, estimate effort |
+| `judgment` | Guidance for self-evaluation | Review the criterion and fill gaps yourself — add acceptance criteria, link to ADR, etc. |
+| `agent_responsibility` | Agent must verify before proceeding | Confirm the condition holds — tests passing, clean working tree, docs updated |
+
+#### Policy modes
+
+- **`warn`** — gate results are advisory; transition proceeds even if checkers fail
+- **`enforce`** — checker failures block the transition; fix issues and retry
+
+Judgment and agent_responsibility criteria always pass structurally — they rely on the agent to self-evaluate honestly.
+
+#### Example gate response
+
+```json
+{
+  "gate": {
+    "gate_type": "dor",
+    "policy": "warn",
+    "passed": false,
+    "criteria": [
+      {"name": "has_effort_estimate", "type": "checker", "passed": false, "message": "Missing effort estimate"},
+      {"name": "has_acceptance_criteria", "type": "judgment", "passed": true, "message": "Item should have clear acceptance criteria"},
+      {"name": "tests_passing", "type": "agent_responsibility", "passed": true, "message": "All tests should pass before starting"}
+    ]
+  }
+}
+```
+
+#### The self-check loop
+
+```
+claim → read gate → fix checker failures → self-evaluate judgment items → proceed
+```
+
+If policy is `enforce` and a checker failed, the claim is rejected. Fix the issue (e.g., `pyrite update <id> -k <kb> -f effort=M`) and retry the claim.
 
 ---
 
@@ -210,3 +265,5 @@ Backlog items gain value from links to other entries:
 | Create items without `kind` | Kind drives board grouping and reporting |
 | Hand-edit YAML frontmatter for field changes | Use `pyrite update <id> -k <kb> -f field=value` — validates and syncs the index |
 | End a session without logging context | Use `sw_log` to record decisions, rejected approaches, and open questions |
+| Ignore `gate` results after claim/transition | Read every criterion; address checker failures and self-evaluate judgment items |
+| Skip judgment criteria because they auto-pass | They're guidance — verify them yourself |

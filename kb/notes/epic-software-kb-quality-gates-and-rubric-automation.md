@@ -19,7 +19,7 @@ Follow-up epic to the kanban flow work. Adds structured quality enforcement to t
 3. **Definition of Ready / Definition of Done** — Gate transitions (e.g. accepted→in_progress, review→done) with configurable checklists *(done)*
 4. ~~**Policy Rubric Checkers**~~ — Moved out of scope; see `policy-rubric-checkers` backlog item
 5. **Enhance orient for software-type KBs** — Surface kanban board state, architecture context (ADRs, components), and active work items in the orient command *(done)*
-6. **Update software-kb skill for gates** — Teach agents to interpret and act on DoR/DoD gate results; see `update-software-kb-skill-for-gates`
+6. **Update software-kb skill for gates** — Teach agents to interpret and act on DoR/DoD gate results; see `update-software-kb-skill-for-gates` *(done)*
 7. **Backlog refinement workflow** — Proactive DoR checking and grooming without claiming; see `backlog-refinement-workflow`
 
 ## Success Criteria

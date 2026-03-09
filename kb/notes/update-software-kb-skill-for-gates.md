@@ -10,7 +10,7 @@ tags:
 kind: enhancement
 priority: high
 effort: M
-status: proposed
+status: done
 links:
 - target: adr-0021
   relation: implements
