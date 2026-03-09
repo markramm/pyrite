@@ -250,7 +250,7 @@ class SoftwareKBPlugin:
                         },
                         "kind": {
                             "type": "string",
-                            "enum": ["feature", "bug", "tech_debt", "improvement", "spike"],
+                            "enum": ["feature", "bug", "tech_debt", "improvement", "spike", "epic"],
                             "description": "Filter by kind",
                         },
                     },
@@ -307,7 +307,7 @@ class SoftwareKBPlugin:
                         "title": {"type": "string", "description": "Item title"},
                         "kind": {
                             "type": "string",
-                            "enum": ["feature", "bug", "tech_debt", "improvement", "spike"],
+                            "enum": ["feature", "bug", "tech_debt", "improvement", "spike", "epic"],
                             "description": "Item kind",
                         },
                         "priority": {
