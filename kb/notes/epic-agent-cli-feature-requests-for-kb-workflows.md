@@ -24,7 +24,7 @@ links:
   relation: has_subtask
   kb: pyrite
 kind: epic
-status: review
+status: done
 priority: high
 assignee: claude
 effort: XL

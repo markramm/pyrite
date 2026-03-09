@@ -6,7 +6,7 @@ tags:
 - bug
 - indexing
 kind: bug
-status: review
+status: done
 priority: high
 assignee: claude
 effort: XS
