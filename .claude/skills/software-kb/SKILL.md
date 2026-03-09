@@ -75,9 +75,8 @@ Side exits: `proposed → wont_do`, `proposed → deferred → proposed`, `done 
 
 ## CLI Equivalents
 
-**Note:** `sw_context_for_item` is MCP-only (no CLI equivalent yet — see backlog). For CLI agents, use `pyrite get <item-id> -k <kb>` + `pyrite search` + `pyrite backlinks <item-id> -k <kb>` as a workaround.
-
 ```bash
+pyrite sw context-for-item <item-id> -k <kb>  # Full context bundle (ADRs, components, deps, reviews, work logs)
 pyrite sw board -k <kb>                # Kanban board
 pyrite sw backlog -k <kb>              # List backlog
 pyrite sw backlog -k <kb> --status accepted  # Filtered

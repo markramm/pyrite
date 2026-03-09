@@ -1146,3 +1146,82 @@ def sw_refine_cmd(
 
     if ready > 0:
         console.print(f"\n  [green]✓[/green] {ready} item{'s' if ready != 1 else ''} ready to claim")
+
+
+@sw_app.command("context-for-item")
+def sw_context_for_item(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """Assemble full context bundle for a backlog item: linked ADRs, components, validations, conventions, reviews, work logs, dependencies."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_context_for_item({"item_id": item_id, "kb_name": kb_name})
+
+    if "error" in result:
+        console.print(f"[red]Error:[/red] {result['error']}")
+        raise typer.Exit(1)
+
+    if fmt == "json":
+        print(json.dumps(result, separators=(",", ":"), default=str))
+        return
+
+    # Rich output
+    item = result.get("item", {})
+    console.print(f"\n[bold]{item.get('title', '')}[/bold]")
+    console.print(f"  ID: [cyan]{item.get('id', '')}[/cyan]")
+    console.print(f"  Status: [yellow]{item.get('status', '')}[/yellow]")
+    console.print(f"  Kind: {item.get('kind', '')}")
+    console.print(f"  Priority: [red]{item.get('priority', '')}[/red]")
+
+    if item.get("body"):
+        console.print(f"\n[dim]{item['body'][:500]}[/dim]")
+
+    # Dependencies
+    deps = result.get("dependencies", {})
+    if deps.get("is_blocked"):
+        console.print("\n[red bold]BLOCKED[/red bold]")
+    if deps.get("blocked_by"):
+        console.print("\n[bold]Blocked By:[/bold]")
+        for d in deps["blocked_by"]:
+            status_style = "[green]" if d.get("status") == "done" else "[red]"
+            console.print(f"  {status_style}{d.get('status', '')!s}[/] {d.get('id', '')} — {d.get('title', '')}")
+    if deps.get("blocks"):
+        console.print("\n[bold]Blocks:[/bold]")
+        for d in deps["blocks"]:
+            console.print(f"  [cyan]{d.get('id', '')}[/cyan] — {d.get('title', '')}")
+
+    # Linked context sections
+    _section_labels = [
+        ("adrs", "Linked ADRs"),
+        ("components", "Linked Components"),
+        ("validations", "Validations"),
+        ("conventions", "Conventions"),
+        ("milestones", "Milestones"),
+        ("work_logs", "Work Logs"),
+        ("related", "Related"),
+    ]
+    for key, label in _section_labels:
+        items = result.get(key, [])
+        if items:
+            console.print(f"\n[bold]{label}:[/bold]")
+            for entry in items:
+                relation = f" ({entry['relation']})" if entry.get("relation") else ""
+                console.print(f"  [cyan]{entry.get('id', '')}[/cyan] {entry.get('title', '')}{relation}")
+                if entry.get("body_preview"):
+                    console.print(f"    [dim]{entry['body_preview']}[/dim]")
+
+    # Reviews
+    reviews = result.get("reviews", [])
+    if reviews:
+        console.print("\n[bold]Reviews:[/bold]")
+        for r in reviews:
+            result_style = "[green]" if r.get("result") == "approved" else "[yellow]"
+            console.print(
+                f"  {result_style}{r.get('result', '')}[/] by {r.get('reviewer', '')} "
+                f"[dim]{r.get('created_at', '')}[/dim]"
+            )
+            if r.get("details"):
+                console.print(f"    {r['details']}")

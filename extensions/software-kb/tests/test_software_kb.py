@@ -3307,3 +3307,194 @@ class TestWorkflowNormalization:
         from pyrite_software_kb.entry_types import BACKLOG_STATUSES
 
         assert "completed" not in BACKLOG_STATUSES
+
+
+# =========================================================================
+# CLI: context-for-item
+# =========================================================================
+
+
+class TestContextForItemCLI:
+    def test_command_exists(self):
+        """context-for-item should be a registered subcommand."""
+        from pyrite_software_kb.cli import sw_app
+
+        command_names = [cmd.name for cmd in sw_app.registered_commands]
+        assert "context-for-item" in command_names
+
+    def test_returns_item_details_json(self):
+        """context-for-item should return item details in JSON format."""
+        from unittest.mock import patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-ctx-1",
+                        "title": "Context Test Item",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "priority": "high",
+                        "body": "Some body text",
+                        "meta": {
+                            "kind": "feature",
+                            "status": "in_progress",
+                            "priority": "high",
+                        },
+                    },
+                ],
+            )
+            try:
+                with patch(
+                    "pyrite_software_kb.plugin.SoftwareKBPlugin._get_db",
+                    return_value=(db, False),
+                ):
+                    result = runner.invoke(
+                        sw_app,
+                        ["context-for-item", "item-ctx-1", "--kb", "test"],
+                    )
+
+                assert result.exit_code == 0, f"Failed: {result.output}"
+                data = json.loads(result.output)
+                assert data["item"]["id"] == "item-ctx-1"
+                assert data["item"]["title"] == "Context Test Item"
+                assert data["item"]["status"] == "in_progress"
+                assert data["item"]["priority"] == "high"
+            finally:
+                db.close()
+
+    def test_shows_linked_adrs(self):
+        """context-for-item should include linked ADRs."""
+        from unittest.mock import patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-ctx-2",
+                        "title": "Item With ADR",
+                        "entry_type": "backlog_item",
+                        "status": "accepted",
+                        "meta": {"kind": "feature", "status": "accepted"},
+                    },
+                    {
+                        "id": "adr-linked",
+                        "title": "Use REST API",
+                        "entry_type": "adr",
+                        "meta": {"adr_number": 1, "status": "accepted"},
+                    },
+                ],
+                links=[
+                    {
+                        "source": "item-ctx-2",
+                        "target": "adr-linked",
+                        "relation": "implements",
+                        "inverse": "implemented_by",
+                    },
+                ],
+            )
+            try:
+                with patch(
+                    "pyrite_software_kb.plugin.SoftwareKBPlugin._get_db",
+                    return_value=(db, False),
+                ):
+                    result = runner.invoke(
+                        sw_app,
+                        ["context-for-item", "item-ctx-2", "--kb", "test"],
+                    )
+
+                assert result.exit_code == 0, f"Failed: {result.output}"
+                data = json.loads(result.output)
+                assert len(data["adrs"]) >= 1
+                adr_ids = [a["id"] for a in data["adrs"]]
+                assert "adr-linked" in adr_ids
+            finally:
+                db.close()
+
+    def test_rich_output_format(self):
+        """context-for-item --format rich should produce human-readable output."""
+        from unittest.mock import patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-ctx-3",
+                        "title": "Rich Output Item",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "priority": "medium",
+                        "meta": {
+                            "kind": "bug",
+                            "status": "in_progress",
+                            "priority": "medium",
+                        },
+                    },
+                ],
+            )
+            try:
+                with patch(
+                    "pyrite_software_kb.plugin.SoftwareKBPlugin._get_db",
+                    return_value=(db, False),
+                ):
+                    result = runner.invoke(
+                        sw_app,
+                        [
+                            "context-for-item",
+                            "item-ctx-3",
+                            "--kb",
+                            "test",
+                            "--format",
+                            "rich",
+                        ],
+                    )
+
+                assert result.exit_code == 0, f"Failed: {result.output}"
+                assert "Rich Output Item" in result.output
+                assert "item-ctx-3" in result.output
+            finally:
+                db.close()
+
+    def test_error_for_missing_item(self):
+        """context-for-item should error for a non-existent item."""
+        from unittest.mock import patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                with patch(
+                    "pyrite_software_kb.plugin.SoftwareKBPlugin._get_db",
+                    return_value=(db, False),
+                ):
+                    result = runner.invoke(
+                        sw_app,
+                        ["context-for-item", "nonexistent-item", "--kb", "test"],
+                    )
+
+                assert result.exit_code != 0
+                assert "Error" in result.output or "not found" in result.output
+            finally:
+                db.close()
