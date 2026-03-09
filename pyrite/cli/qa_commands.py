@@ -414,6 +414,119 @@ def _print_rubric_line(text: str, kind: str, item: str | dict) -> None:
     console.print(f"  {tag}  \"{text}\"{checker_info}")
 
 
+@qa_app.command("gaps")
+def qa_gaps(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB to analyze"),
+    threshold: int = typer.Option(
+        3, "--threshold", "-t", help="Minimum entries per type to not flag as sparse"
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich"
+    ),
+):
+    """Report structural coverage gaps in a KB.
+
+    Identifies missing entry types, sparse types, unused tags from kb.yaml,
+    entries with no outbound/inbound links, and distribution stats.
+    No LLM dependency — pure structural analysis.
+    """
+    import json as json_mod
+
+    from ..services.qa_service import QAService
+
+    with cli_context() as (config, db, svc):
+        qa = QAService(config, db)
+        result = qa.analyze_gaps(kb_name, threshold=threshold)
+
+        if "error" in result:
+            console.print(f"[red]{result['error']}[/red]")
+            raise typer.Exit(1)
+
+        if output_format == "json":
+            typer.echo(json_mod.dumps(result, indent=2))
+            return
+
+        # Rich output
+        console.print(f"\n[bold]Coverage Gaps Report: {kb_name}[/bold]")
+        console.print(f"  Total entries: {result['total_entries']}")
+        console.print(f"  Threshold: {result['threshold']}")
+
+        # Empty types
+        if result["empty_types"]:
+            console.print(f"\n[bold yellow]Empty types ({len(result['empty_types'])}):[/bold yellow]")
+            for t in result["empty_types"]:
+                console.print(f"  [yellow]- {t}[/yellow]")
+        else:
+            console.print("\n[green]No empty types[/green]")
+
+        # Sparse types
+        if result["sparse_types"]:
+            console.print(
+                f"\n[bold yellow]Sparse types (<{threshold} entries, "
+                f"{len(result['sparse_types'])}):[/bold yellow]"
+            )
+            for item in result["sparse_types"]:
+                console.print(f"  [yellow]- {item['type']}: {item['count']} entries[/yellow]")
+
+        # Unused tags
+        if result["unused_tags"]:
+            console.print(
+                f"\n[bold yellow]Tags from kb.yaml with 0 entries "
+                f"({len(result['unused_tags'])}):[/bold yellow]"
+            )
+            for t in result["unused_tags"]:
+                console.print(f"  [yellow]- #{t}[/yellow]")
+
+        # No outlinks
+        no_out = result["no_outlinks"]
+        if no_out:
+            console.print(f"\n[bold]Entries with no outbound links ({len(no_out)}):[/bold]")
+            table = Table()
+            table.add_column("ID", style="cyan")
+            table.add_column("Type", style="dim")
+            table.add_column("Title")
+            for e in no_out[:50]:
+                table.add_row(e["id"], e["type"], e["title"])
+            console.print(table)
+            if len(no_out) > 50:
+                console.print(f"  [dim]... and {len(no_out) - 50} more[/dim]")
+
+        # No inlinks
+        no_in = result["no_inlinks"]
+        if no_in:
+            console.print(f"\n[bold]Entries with no inbound links ({len(no_in)}):[/bold]")
+            table = Table()
+            table.add_column("ID", style="cyan")
+            table.add_column("Type", style="dim")
+            table.add_column("Title")
+            for e in no_in[:50]:
+                table.add_row(e["id"], e["type"], e["title"])
+            console.print(table)
+            if len(no_in) > 50:
+                console.print(f"  [dim]... and {len(no_in) - 50} more[/dim]")
+
+        # Distribution
+        dist = result["distribution"]
+        if dist["entries_per_type"]:
+            console.print("\n[bold]Entries per type:[/bold]")
+            for t, c in sorted(dist["entries_per_type"].items(), key=lambda x: -x[1]):
+                console.print(f"  {t}: {c}")
+
+        if dist["top_tags"]:
+            console.print("\n[bold]Top tags (up to 20):[/bold]")
+            for item in dist["top_tags"]:
+                console.print(f"  #{item['tag']}: {item['count']}")
+
+        if dist["importance"]:
+            console.print("\n[bold]Entries per importance:[/bold]")
+            for band, c in sorted(
+                dist["importance"].items(),
+                key=lambda x: (x[0] == "unset", x[0]),
+            ):
+                label = f"importance={band}" if band != "unset" else "importance unset"
+                console.print(f"  {label}: {c}")
+
+
 @qa_app.command("stale")
 def qa_stale(
     kb_name: str = typer.Argument(..., help="KB to check for stale entries"),
