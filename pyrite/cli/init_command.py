@@ -140,6 +140,151 @@ BUILTIN_TEMPLATES = {
         "validation": {"enforce": False},
         "directories": ["notes", "events", "people", "organizations"],
     },
+    "intellectual-biography": {
+        "name": "my-biography",
+        "description": "Intellectual biography knowledge base for mapping a thinker's ideas, writings, and influence",
+        "types": {
+            "note": {
+                "description": "Core concept or idea",
+                "required": ["title"],
+                "optional": ["source_ref"],
+                "subdirectory": "notes/",
+            },
+            "writing": {
+                "description": "Published work by the subject",
+                "required": ["title"],
+                "optional": ["writing_type", "date", "url"],
+                "subdirectory": "writings/",
+            },
+            "era": {
+                "description": "Biographical period",
+                "required": ["title"],
+                "optional": ["date_range"],
+                "subdirectory": "eras/",
+            },
+            "event": {
+                "description": "Key moment or milestone",
+                "required": ["title"],
+                "optional": ["date", "importance"],
+                "subdirectory": "events/",
+            },
+            "person": {
+                "description": "People in the subject's network",
+                "required": ["title"],
+                "optional": ["role", "affiliation"],
+                "subdirectory": "people/",
+            },
+            "source": {
+                "description": "Reference material",
+                "required": ["title"],
+                "optional": ["source_type", "author", "date", "url"],
+                "subdirectory": "sources/",
+            },
+            "organization": {
+                "description": "Institutions involved",
+                "required": ["title"],
+                "optional": ["org_type", "jurisdiction"],
+                "subdirectory": "organizations/",
+            },
+        },
+        "policies": {},
+        "validation": {
+            "enforce": True,
+            "rules": [
+                {
+                    "field": "writing_type",
+                    "enum": ["book", "paper", "talk", "blog-post", "report"],
+                },
+                {
+                    "field": "source_type",
+                    "enum": ["book", "paper", "article", "documentary", "interview"],
+                },
+            ],
+        },
+        "directories": ["notes", "writings", "eras", "events", "people", "sources", "organizations"],
+    },
+    "movement": {
+        "name": "my-movement",
+        "description": "Movement knowledge base for mapping a school of thought, its practices, and participants",
+        "types": {
+            "note": {
+                "description": "Core concept or idea",
+                "required": ["title"],
+                "optional": ["source_ref"],
+                "subdirectory": "notes/",
+            },
+            "writing": {
+                "description": "Published work by movement participants",
+                "required": ["title"],
+                "optional": ["writing_type", "date", "url"],
+                "subdirectory": "writings/",
+            },
+            "era": {
+                "description": "Movement period or phase",
+                "required": ["title"],
+                "optional": ["date_range"],
+                "subdirectory": "eras/",
+            },
+            "event": {
+                "description": "Key moment or milestone",
+                "required": ["title"],
+                "optional": ["date", "importance"],
+                "subdirectory": "events/",
+            },
+            "person": {
+                "description": "People in the movement",
+                "required": ["title"],
+                "optional": ["role", "affiliation"],
+                "subdirectory": "people/",
+            },
+            "source": {
+                "description": "Reference material",
+                "required": ["title"],
+                "optional": ["source_type", "author", "date", "url"],
+                "subdirectory": "sources/",
+            },
+            "organization": {
+                "description": "Institutions involved",
+                "required": ["title"],
+                "optional": ["org_type", "jurisdiction"],
+                "subdirectory": "organizations/",
+            },
+            "practice": {
+                "description": "Method, framework, or technique",
+                "required": ["title"],
+                "optional": ["origin", "status"],
+                "subdirectory": "practices/",
+            },
+        },
+        "policies": {},
+        "validation": {
+            "enforce": True,
+            "rules": [
+                {
+                    "field": "writing_type",
+                    "enum": ["book", "paper", "talk", "blog-post", "report"],
+                },
+                {
+                    "field": "source_type",
+                    "enum": ["book", "paper", "article", "documentary", "interview"],
+                },
+                {
+                    "field": "status",
+                    "enum": ["active", "deprecated", "evolved"],
+                },
+            ],
+        },
+        "directories": [
+            "notes",
+            "writings",
+            "eras",
+            "events",
+            "people",
+            "sources",
+            "organizations",
+            "practices",
+        ],
+    },
     "empty": {
         "name": "my-kb",
         "description": "Empty knowledge base",
@@ -153,7 +298,7 @@ BUILTIN_TEMPLATES = {
 
 def init_kb(
     template: str = typer.Option(
-        ..., "--template", "-t", help="Template: software, zettelkasten, research, empty"
+        ..., "--template", "-t", help="Template: software, zettelkasten, research, intellectual-biography, movement, empty"
     ),
     path: Path = typer.Option(..., "--path", "-p", help="Directory for the new KB"),
     name: str | None = typer.Option(

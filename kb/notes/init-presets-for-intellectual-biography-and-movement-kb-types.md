@@ -6,7 +6,8 @@ tags:
 - cli
 - templates
 - agent
-status: accepted
+status: review
+assignee: agent-a
 kind: feature
 priority: high
 effort: S

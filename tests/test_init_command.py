@@ -136,6 +136,145 @@ class TestInitCommand:
         assert data["template"] == "software"
         assert "types" in data
 
+    def test_init_intellectual_biography_template(self, init_env):
+        """Init with intellectual-biography template creates expected directories and types."""
+        kb_path = init_env["tmpdir"] / "bio-kb"
+        config = init_env["config"]
+
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
+            result = runner.invoke(
+                test_app,
+                ["--template", "intellectual-biography", "--path", str(kb_path)],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert (kb_path / "kb.yaml").exists()
+        for subdir in ["notes", "writings", "eras", "events", "people", "sources", "organizations"]:
+            assert (kb_path / subdir).is_dir(), f"Missing directory: {subdir}"
+
+    def test_init_intellectual_biography_types(self, init_env):
+        """Intellectual-biography template produces valid kb.yaml with all 7 entry types."""
+        from pyrite.cli.init_command import BUILTIN_TEMPLATES
+
+        template = BUILTIN_TEMPLATES["intellectual-biography"]
+        expected_types = {"note", "writing", "era", "event", "person", "source", "organization"}
+        assert set(template["types"].keys()) == expected_types
+
+    def test_init_intellectual_biography_json_output(self, init_env):
+        """Intellectual-biography JSON output includes all types."""
+        kb_path = init_env["tmpdir"] / "bio-json-kb"
+        config = init_env["config"]
+
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
+            result = runner.invoke(
+                test_app,
+                [
+                    "--template",
+                    "intellectual-biography",
+                    "--path",
+                    str(kb_path),
+                    "--format",
+                    "json",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["status"] == "created"
+        assert data["template"] == "intellectual-biography"
+        assert len(data["types"]) == 7
+
+    def test_init_movement_template(self, init_env):
+        """Init with movement template creates expected directories and types."""
+        kb_path = init_env["tmpdir"] / "movement-kb"
+        config = init_env["config"]
+
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
+            result = runner.invoke(
+                test_app, ["--template", "movement", "--path", str(kb_path)]
+            )
+
+        assert result.exit_code == 0, result.output
+        assert (kb_path / "kb.yaml").exists()
+        for subdir in [
+            "notes",
+            "writings",
+            "eras",
+            "events",
+            "people",
+            "sources",
+            "organizations",
+            "practices",
+        ]:
+            assert (kb_path / subdir).is_dir(), f"Missing directory: {subdir}"
+
+    def test_init_movement_types(self, init_env):
+        """Movement template produces valid kb.yaml with all 8 entry types."""
+        from pyrite.cli.init_command import BUILTIN_TEMPLATES
+
+        template = BUILTIN_TEMPLATES["movement"]
+        expected_types = {
+            "note",
+            "writing",
+            "era",
+            "event",
+            "person",
+            "source",
+            "organization",
+            "practice",
+        }
+        assert set(template["types"].keys()) == expected_types
+
+    def test_init_movement_has_practice_type(self, init_env):
+        """Movement template includes practice type with status validation."""
+        from pyrite.cli.init_command import BUILTIN_TEMPLATES
+
+        template = BUILTIN_TEMPLATES["movement"]
+        practice = template["types"]["practice"]
+        assert practice["description"] == "Method, framework, or technique"
+        assert "origin" in practice["optional"]
+        assert "status" in practice["optional"]
+        # Check status validation rule exists
+        status_rules = [r for r in template["validation"]["rules"] if r["field"] == "status"]
+        assert len(status_rules) == 1
+        assert set(status_rules[0]["enum"]) == {"active", "deprecated", "evolved"}
+
+    def test_init_movement_json_output(self, init_env):
+        """Movement JSON output includes all types."""
+        kb_path = init_env["tmpdir"] / "movement-json-kb"
+        config = init_env["config"]
+
+        with (
+            patch("pyrite.config.load_config", return_value=config),
+            patch("pyrite.config.save_config"),
+        ):
+            result = runner.invoke(
+                test_app,
+                ["--template", "movement", "--path", str(kb_path), "--format", "json"],
+            )
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert data["status"] == "created"
+        assert data["template"] == "movement"
+        assert len(data["types"]) == 8
+
+    def test_both_new_templates_in_builtin(self):
+        """Both intellectual-biography and movement appear in BUILTIN_TEMPLATES."""
+        from pyrite.cli.init_command import BUILTIN_TEMPLATES
+
+        assert "intellectual-biography" in BUILTIN_TEMPLATES
+        assert "movement" in BUILTIN_TEMPLATES
+
     def test_init_unknown_template(self, init_env):
         """Unknown template exits with error."""
         kb_path = init_env["tmpdir"] / "bad-template"
