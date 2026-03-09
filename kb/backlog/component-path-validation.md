@@ -3,7 +3,7 @@ id: component-path-validation
 type: backlog_item
 title: "Component path validation against filesystem"
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [software, quality, validation]

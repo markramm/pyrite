@@ -1,5 +1,6 @@
 """Software KB validation rules."""
 
+from pathlib import Path
 from typing import Any
 
 from .entry_types import (
@@ -35,7 +36,7 @@ def validate_software_kb(
     elif entry_type == "development_convention":
         _validate_development_convention(data, errors)
     elif entry_type == "component":
-        _validate_component(data, errors)
+        _validate_component(data, errors, context)
     elif entry_type == "backlog_item":
         _validate_backlog_item(data, errors)
     elif entry_type == "runbook":
@@ -135,10 +136,11 @@ def _validate_development_convention(data: dict[str, Any], errors: list[dict]) -
     _validate_enum(data, "category", CONVENTION_CATEGORIES, errors)
 
 
-def _validate_component(data: dict[str, Any], errors: list[dict]) -> None:
+def _validate_component(data: dict[str, Any], errors: list[dict], context: dict[str, Any] | None = None) -> None:
     _validate_enum(data, "kind", COMPONENT_KINDS, errors)
 
-    if not data.get("path"):
+    component_path = data.get("path")
+    if not component_path:
         errors.append(
             {
                 "field": "path",
@@ -148,6 +150,29 @@ def _validate_component(data: dict[str, Any], errors: list[dict]) -> None:
                 "severity": "warning",
             }
         )
+    elif context and context.get("kb_path"):
+        kb_root = Path(context["kb_path"])
+        found = False
+        # Walk up from KB root (max 4 levels) since component paths
+        # are repo-relative but KB root may be a subdirectory
+        candidate = kb_root
+        for _ in range(5):
+            if (candidate / component_path).exists():
+                found = True
+                break
+            if candidate.parent == candidate:
+                break
+            candidate = candidate.parent
+        if not found:
+            errors.append(
+                {
+                    "field": "path",
+                    "rule": "path_not_found",
+                    "expected": f"path '{component_path}' to exist on disk",
+                    "got": component_path,
+                    "severity": "warning",
+                }
+            )
 
 
 def _validate_backlog_item(data: dict[str, Any], errors: list[dict]) -> None:

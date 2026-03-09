@@ -779,6 +779,31 @@ class TestValidators:
         warnings = [e for e in errors if e.get("severity") == "warning"]
         assert any(e["rule"] == "path_recommended" for e in warnings)
 
+    def test_component_path_exists_no_warning(self, tmp_path):
+        (tmp_path / "pyrite" / "services").mkdir(parents=True)
+        (tmp_path / "pyrite" / "services" / "foo.py").touch()
+        context = {"kb_path": str(tmp_path)}
+        errors = validate_software_kb(
+            "component", {"kind": "module", "path": "pyrite/services/foo.py"}, context
+        )
+        warnings = [e for e in errors if e.get("rule") == "path_not_found"]
+        assert warnings == []
+
+    def test_component_path_not_found_warning(self, tmp_path):
+        context = {"kb_path": str(tmp_path)}
+        errors = validate_software_kb(
+            "component", {"kind": "module", "path": "nonexistent/module/"}, context
+        )
+        warnings = [e for e in errors if e.get("rule") == "path_not_found"]
+        assert len(warnings) == 1
+        assert warnings[0]["severity"] == "warning"
+
+    def test_component_path_check_skipped_without_context(self):
+        errors = validate_software_kb(
+            "component", {"kind": "module", "path": "some/path/"}, {}
+        )
+        assert not any(e.get("rule") == "path_not_found" for e in errors)
+
     # Backlog validators
     def test_backlog_valid(self):
         errors = validate_software_kb(

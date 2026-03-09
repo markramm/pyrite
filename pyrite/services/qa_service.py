@@ -756,7 +756,7 @@ class QAService:
         result = schema.validate_entry(
             entry_type,
             fields,
-            context={"kb_type": kb_config.kb_type, "_schema_version": schema_version},
+            context={"kb_type": kb_config.kb_type, "_schema_version": schema_version, "kb_path": str(kb_config.path)},
         )
 
         for err in result.get("errors", []):
