@@ -11,6 +11,7 @@ tags:
 - agents
 kind: enhancement
 effort: M
+status: done
 ---
 
 ## Problem

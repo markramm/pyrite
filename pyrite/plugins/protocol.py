@@ -285,6 +285,22 @@ class PyritePlugin(Protocol):
         """
         ...
 
+    def get_orient_supplement(self, kb_name: str, kb_type: str) -> dict[str, Any] | None:
+        """
+        Return supplementary orient data for a KB.
+
+        Called during orient() to let plugins enrich the orientation summary
+        with domain-specific context. Return None to skip.
+
+        Args:
+            kb_name: Name of the knowledge base
+            kb_type: The KB's type identifier (e.g. "software", "default")
+
+        Returns:
+            Dict of additional keys to merge into the orient response, or None.
+        """
+        ...
+
     def get_rubric_checkers(self) -> dict[str, Callable]:
         """
         Return named rubric checker functions for QA evaluation.

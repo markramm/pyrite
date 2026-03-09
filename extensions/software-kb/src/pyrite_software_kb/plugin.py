@@ -849,6 +849,156 @@ class SoftwareKBPlugin:
             if should_close:
                 db.close()
 
+    def get_orient_supplement(self, kb_name: str, kb_type: str) -> dict[str, Any] | None:
+        """Return software-specific orient data for software KBs."""
+        if kb_type != "software":
+            return None
+
+        import json
+        from pathlib import Path
+
+        from .board import load_board_config
+
+        db, should_close = self._get_db()
+        try:
+            # Load board config
+            board_config = {"lanes": [], "wip_policy": "warn"}
+            try:
+                if self.ctx is not None:
+                    from pyrite.config import load_config
+
+                    config = load_config()
+                    kb_conf = config.get_kb(kb_name)
+                    if kb_conf:
+                        board_config = load_board_config(kb_conf.path)
+                    else:
+                        board_config = load_board_config(Path("."))
+                else:
+                    board_config = load_board_config(Path("."))
+            except Exception:
+                pass
+
+            # Query all backlog items for this KB
+            query = "SELECT * FROM entry WHERE entry_type = 'backlog_item' AND kb_name = ?"
+            rows = db._raw_conn.execute(query, [kb_name]).fetchall()
+
+            # Build status→lane mapping
+            status_to_lane: dict[str, int] = {}
+            for i, lane in enumerate(board_config.get("lanes", [])):
+                for s in lane["statuses"]:
+                    status_to_lane[s] = i
+
+            # Group items into lanes and collect in_progress/review
+            lane_counts: dict[int, int] = {i: 0 for i in range(len(board_config.get("lanes", [])))}
+            in_progress_items: list[dict] = []
+            review_items: list[dict] = []
+
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                status = row["status"] or meta.get("status", "proposed")
+                priority = row["priority"] or meta.get("priority", "medium")
+                kind = meta.get("kind", "")
+                lane_idx = status_to_lane.get(status)
+                if lane_idx is not None:
+                    lane_counts[lane_idx] = lane_counts.get(lane_idx, 0) + 1
+
+                item_slim = {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "priority": priority,
+                    "kind": kind,
+                }
+                if status == "in_progress":
+                    in_progress_items.append(item_slim)
+                elif status == "review":
+                    review_items.append(item_slim)
+
+            # Board summary (lane name → count + WIP status)
+            board_summary = []
+            for i, lane_def in enumerate(board_config.get("lanes", [])):
+                count = lane_counts.get(i, 0)
+                entry = {"name": lane_def["name"], "count": count}
+                wip_limit = lane_def.get("wip_limit")
+                if wip_limit is not None:
+                    entry["wip_limit"] = wip_limit
+                    entry["over_limit"] = count > wip_limit
+                board_summary.append(entry)
+
+            # Recent ADRs (last 5 accepted)
+            adr_query = (
+                "SELECT id, title, metadata FROM entry "
+                "WHERE entry_type = 'adr' AND kb_name = ? "
+                "ORDER BY created_at DESC LIMIT 5"
+            )
+            adr_rows = db._raw_conn.execute(adr_query, [kb_name]).fetchall()
+            recent_adrs = []
+            for row in adr_rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                recent_adrs.append({
+                    "id": row["id"],
+                    "title": row["title"],
+                    "adr_number": meta.get("adr_number"),
+                    "date": meta.get("date"),
+                })
+
+            # Top components (up to 10)
+            comp_query = (
+                "SELECT id, title, metadata FROM entry "
+                "WHERE entry_type = 'component' AND kb_name = ? "
+                "ORDER BY title ASC LIMIT 10"
+            )
+            comp_rows = db._raw_conn.execute(comp_query, [kb_name]).fetchall()
+            top_components = []
+            for row in comp_rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                top_components.append({
+                    "id": row["id"],
+                    "title": row["title"],
+                    "path": meta.get("path", ""),
+                    "kind": meta.get("kind", ""),
+                })
+
+            # Recommended next (reuse pull_next logic)
+            try:
+                pull_result = self._mcp_pull_next({"kb_name": kb_name})
+                rec = pull_result.get("recommendation")
+                recommended_next = (
+                    {"id": rec["id"], "title": rec["title"], "priority": rec["priority"]}
+                    if rec
+                    else None
+                )
+            except Exception:
+                recommended_next = None
+
+            return {
+                "software": {
+                    "board_summary": board_summary,
+                    "in_progress": in_progress_items,
+                    "review_queue": review_items,
+                    "recent_adrs": recent_adrs,
+                    "top_components": top_components,
+                    "recommended_next": recommended_next,
+                }
+            }
+        finally:
+            if should_close:
+                db.close()
+
     def _mcp_board(self, args: dict[str, Any]) -> dict[str, Any]:
         """View kanban board."""
         import json
@@ -1147,6 +1297,103 @@ class SoftwareKBPlugin:
             "blocked_by": blocked_by,
             "blocks": blocks,
             "is_blocked": any(not dep["resolved"] for dep in blocked_by),
+        }
+
+    def _check_no_open_blockers(
+        self, db, item_id: str, kb_name: str
+    ) -> dict[str, Any] | None:
+        """Return a failure dict if the item has unresolved blockers, else None."""
+        dep_status = self._get_dependency_status(db, item_id, kb_name)
+        if dep_status["is_blocked"]:
+            unresolved = [d for d in dep_status["blocked_by"] if not d["resolved"]]
+            ids = ", ".join(d["id"] for d in unresolved)
+            return {
+                "entry_id": item_id,
+                "kb_name": kb_name,
+                "rule": "rubric_violation",
+                "severity": "warning",
+                "message": f"Item has unresolved blockers: {ids}",
+            }
+        return None
+
+    def _evaluate_gate(
+        self,
+        db,
+        board_config: dict[str, Any],
+        to_status: str,
+        row,
+        meta: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Evaluate quality gate criteria for a status transition.
+
+        Returns gate result dict or None if no gate is configured for this status.
+        """
+        gates = board_config.get("gates", {})
+        gate_config = gates.get(to_status)
+        if not gate_config:
+            return None
+
+        from pyrite.services.rubric_checkers import NAMED_CHECKERS
+
+        criteria_results = []
+        all_checkers_passed = True
+
+        for criterion in gate_config.get("criteria", []):
+            crit_type = criterion.get("type", "checker")
+            text = criterion.get("text", "")
+            hint = criterion.get("hint")
+
+            if crit_type in ("judgment", "agent_responsibility"):
+                result = {"text": text, "passed": True, "type": crit_type}
+                if hint:
+                    result["hint"] = hint
+                criteria_results.append(result)
+                continue
+
+            # Checker-based criterion
+            checker_name = criterion.get("checker")
+            if not checker_name:
+                criteria_results.append({"text": text, "passed": True, "type": "checker"})
+                continue
+
+            # Special case: no_open_blockers needs DB access
+            if checker_name == "no_open_blockers":
+                item_id = row["id"] if isinstance(row, dict) else row["id"]
+                kb_name = row["kb_name"] if isinstance(row, dict) else row["kb_name"]
+                failure = self._check_no_open_blockers(db, item_id, kb_name)
+                passed = failure is None
+                result = {"text": text, "passed": passed, "type": "checker"}
+                if not passed:
+                    result["message"] = failure["message"]
+                    all_checkers_passed = False
+                criteria_results.append(result)
+                continue
+
+            # Standard named checker
+            checker_fn = NAMED_CHECKERS.get(checker_name)
+            if not checker_fn:
+                criteria_results.append({"text": text, "passed": True, "type": "checker"})
+                continue
+
+            # Build entry dict for the checker
+            entry_dict = dict(row) if not isinstance(row, dict) else row
+            entry_dict["metadata"] = meta
+            params = criterion.get("params")
+            failure = checker_fn(entry_dict, None, params)
+            passed = failure is None
+            result = {"text": text, "passed": passed, "type": "checker"}
+            if not passed:
+                result["message"] = failure.get("message", "")
+                all_checkers_passed = False
+            if hint:
+                result["hint"] = hint
+            criteria_results.append(result)
+
+        return {
+            "gate_name": gate_config.get("name", to_status),
+            "policy": gate_config.get("policy", "warn"),
+            "passed": all_checkers_passed,
+            "criteria": criteria_results,
         }
 
     def _mcp_context_for_item(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -1466,6 +1713,28 @@ class SoftwareKBPlugin:
                     "allowed_transitions": [t["to"] for t in allowed],
                 }
 
+            # Evaluate DoR gate
+            from pathlib import Path
+
+            from .board import load_board_config
+
+            board_config = {"lanes": [], "wip_policy": "warn"}
+            try:
+                from pyrite.config import load_config as _load_config
+
+                cfg = _load_config()
+                kb_conf = cfg.get_kb(kb_name)
+                if kb_conf:
+                    board_config = load_board_config(kb_conf.path)
+                else:
+                    board_config = load_board_config(Path("."))
+            except Exception:
+                pass
+
+            gate_result = self._evaluate_gate(db, board_config, "in_progress", row, meta)
+            if gate_result and not gate_result["passed"] and gate_result["policy"] == "enforce":
+                return {"claimed": False, "error": "Gate check failed", "gate": gate_result}
+
             # Use KBService CAS pattern
             from pyrite.config import load_config
             from pyrite.services.kb_service import KBService
@@ -1479,6 +1748,8 @@ class SoftwareKBPlugin:
                 from_status=current_status,
                 to_status="in_progress",
             )
+            if gate_result:
+                result["gate"] = gate_result
             return result
         finally:
             if should_close:
@@ -1609,6 +1880,32 @@ class SoftwareKBPlugin:
                     "error": f"Reason is required for transition from '{current_status}' to '{to_status}'",
                 }
 
+            # Evaluate quality gate
+            from pathlib import Path
+
+            from .board import load_board_config
+
+            board_config = {"lanes": [], "wip_policy": "warn"}
+            try:
+                from pyrite.config import load_config as _load_config
+
+                cfg = _load_config()
+                kb_conf = cfg.get_kb(kb_name)
+                if kb_conf:
+                    board_config = load_board_config(kb_conf.path)
+                else:
+                    board_config = load_board_config(Path("."))
+            except Exception:
+                pass
+
+            gate_result = self._evaluate_gate(db, board_config, to_status, row, meta)
+            if gate_result and not gate_result["passed"] and gate_result["policy"] == "enforce":
+                return {
+                    "transitioned": False,
+                    "error": "Gate check failed",
+                    "gate": gate_result,
+                }
+
             # Use KBService CAS pattern — preserve current assignee
             from pyrite.config import load_config
             from pyrite.services.kb_service import KBService
@@ -1630,13 +1927,16 @@ class SoftwareKBPlugin:
                     "error": cas_result.get("error", "CAS transition failed"),
                 }
 
-            return {
+            result = {
                 "transitioned": True,
                 "id": item_id,
                 "old_status": current_status,
                 "new_status": to_status,
                 "reason": reason,
             }
+            if gate_result:
+                result["gate"] = gate_result
+            return result
         finally:
             if should_close:
                 db.close()

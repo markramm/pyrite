@@ -345,6 +345,22 @@ class PluginRegistry:
         checkers.update(plugin_checkers)
         return checkers
 
+    def get_orient_supplements(self, kb_name: str, kb_type: str) -> dict[str, Any]:
+        """Collect orient supplements from all plugins."""
+        self.discover()
+        result: dict[str, Any] = {}
+        for plugin in self._plugins.values():
+            if hasattr(plugin, "get_orient_supplement"):
+                try:
+                    supplement = plugin.get_orient_supplement(kb_name, kb_type)
+                    if supplement:
+                        result.update(supplement)
+                except Exception as e:
+                    logger.warning(
+                        "Plugin %s get_orient_supplement failed: %s", plugin.name, e
+                    )
+        return result
+
     def get_all_validators(self) -> list[Callable]:
         """Get all validators from all plugins."""
         return self._aggregate_list("get_validators")

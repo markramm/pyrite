@@ -903,6 +903,62 @@ def orient_kb(
                     f"  {e.get('updated_at', '')[:19]}  [{e.get('entry_type', '')}]  {e.get('title', '')}"
                 )
 
+        # Software KB supplement
+        sw = result.get("software")
+        if sw:
+            # Board summary line
+            board_parts = []
+            for lane in sw.get("board_summary", []):
+                part = f"{lane['count']} {lane['name']}"
+                wip = lane.get("wip_limit")
+                if wip is not None:
+                    part += f" (limit {wip})"
+                    if lane.get("over_limit"):
+                        part = f"[red]{part}[/red]"
+                board_parts.append(part)
+            if board_parts:
+                console.print(f"\n[bold]Board:[/bold] {' | '.join(board_parts)}")
+
+            # In-progress table
+            ip_items = sw.get("in_progress", [])
+            if ip_items:
+                ip_table = Table(title="In Progress")
+                ip_table.add_column("ID", style="cyan", width=30)
+                ip_table.add_column("Title", width=40)
+                ip_table.add_column("Priority", width=10)
+                for item in ip_items:
+                    ip_table.add_row(item["id"], item["title"], item.get("priority", ""))
+                console.print(ip_table)
+
+            # Review queue table
+            rv_items = sw.get("review_queue", [])
+            if rv_items:
+                rv_table = Table(title="Review Queue")
+                rv_table.add_column("ID", style="cyan", width=30)
+                rv_table.add_column("Title", width=40)
+                rv_table.add_column("Priority", width=10)
+                for item in rv_items:
+                    rv_table.add_row(item["id"], item["title"], item.get("priority", ""))
+                console.print(rv_table)
+
+            # Recent ADRs
+            adrs = sw.get("recent_adrs", [])
+            if adrs:
+                adr_table = Table(title="Recent ADRs")
+                adr_table.add_column("ID", style="cyan", width=30)
+                adr_table.add_column("Title", width=50)
+                for adr in adrs:
+                    adr_table.add_row(adr["id"], adr["title"])
+                console.print(adr_table)
+
+            # Recommended next
+            rec = sw.get("recommended_next")
+            if rec:
+                console.print(
+                    f"\n[bold green]Recommended Next:[/bold green] {rec['title']} "
+                    f"[dim]({rec['id']})[/dim] — priority: {rec.get('priority', 'medium')}"
+                )
+
 
 # =============================================================================
 # Recent command

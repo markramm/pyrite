@@ -281,6 +281,28 @@ def check_body_has_pattern(
     }
 
 
+def check_not_oversized(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Fail if effort is XL or larger — item should be decomposed into subtasks."""
+    meta = _parse_metadata(entry)
+    effort = meta.get("effort", "")
+    oversized = {"XL", "XXL", "xl", "xxl"}
+    if effort in oversized:
+        return {
+            "entry_id": entry["id"],
+            "kb_name": entry["kb_name"],
+            "rule": "rubric_violation",
+            "severity": "warning",
+            "field": "metadata.effort",
+            "message": f"Item effort is {effort} — consider decomposing into subtasks",
+            "rubric_item": (params or {}).get("rubric_text", "not oversized"),
+        }
+    return None
+
+
 def check_body_has_code_block(
     entry: dict[str, Any],
     schema: KBSchema | None,
@@ -317,6 +339,7 @@ NAMED_CHECKERS: dict[str, RubricChecker] = {
     "body_has_section": check_body_has_section,
     "body_has_pattern": check_body_has_pattern,
     "body_has_code_block": check_body_has_code_block,
+    "not_oversized": check_not_oversized,
 }
 
 

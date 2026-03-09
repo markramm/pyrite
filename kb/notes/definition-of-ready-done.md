@@ -15,6 +15,7 @@ links:
   note: "Quality gates for the kanban workflow"
 kind: feature
 effort: L
+status: done
 ---
 
 ## Problem

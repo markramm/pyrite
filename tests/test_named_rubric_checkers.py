@@ -61,6 +61,7 @@ class TestNamedCheckerRegistry:
             "body_has_section",
             "body_has_pattern",
             "body_has_code_block",
+            "not_oversized",
         }
         assert expected == set(NAMED_CHECKERS.keys())
 

@@ -835,7 +835,7 @@ class KBService:
         # Guidelines from config (if available)
         guidelines = getattr(kb_config, "guidelines", None) or {}
 
-        return {
+        result = {
             "kb": kb_name,
             "description": kb_config.description or "",
             "kb_type": kb_config.kb_type or "default",
@@ -847,6 +847,17 @@ class KBService:
             "recent": recent_slim,
             "schema": schema_info,
         }
+
+        # Plugin orient supplements
+        from ..plugins.registry import get_registry
+
+        supplements = get_registry().get_orient_supplements(
+            kb_name, kb_config.kb_type or "default"
+        )
+        if supplements:
+            result.update(supplements)
+
+        return result
 
     def generate_readme(self, kb_name: str) -> str:
         """Generate a README.md for a knowledge base."""

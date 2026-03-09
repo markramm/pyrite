@@ -11,6 +11,54 @@ DEFAULT_BOARD_CONFIG = {
         {"name": "Done", "statuses": ["done"]},
     ],
     "wip_policy": "warn",
+    "gates": {
+        "in_progress": {
+            "name": "Definition of Ready",
+            "policy": "warn",
+            "criteria": [
+                {"text": "Problem statement is clear and specific", "type": "judgment"},
+                {
+                    "text": "Acceptance criteria or expected outcome defined",
+                    "type": "judgment",
+                    "hint": "Add an ## Acceptance Criteria section to the item body",
+                },
+                {
+                    "text": "Impacted code areas identified",
+                    "type": "judgment",
+                    "hint": "Add an ## Impacted Files section or link to components",
+                },
+                {
+                    "text": "Architectural approach decided (if applicable)",
+                    "type": "judgment",
+                    "hint": "Link to an ADR or add an ## Approach section",
+                },
+                {
+                    "text": "Effort estimated",
+                    "checker": "has_field",
+                    "params": {"field": "effort"},
+                },
+                {"text": "Not oversized (XL+) without subtasks", "checker": "not_oversized"},
+                {"text": "No unresolved blockers", "checker": "no_open_blockers"},
+            ],
+        },
+        "done": {
+            "name": "Definition of Done",
+            "policy": "warn",
+            "criteria": [
+                {"text": "Tests passing", "type": "agent_responsibility"},
+                {"text": "KB docs updated to reflect changes", "type": "judgment"},
+                {
+                    "text": "Backlog item updated with implementation notes",
+                    "type": "judgment",
+                    "hint": "Add an ## Implementation Notes section",
+                },
+                {
+                    "text": "Code ready to commit (clean working tree)",
+                    "type": "agent_responsibility",
+                },
+            ],
+        },
+    },
 }
 
 
