@@ -1,14 +1,18 @@
 """
 Link management commands for pyrite CLI.
 
-Commands: check
+Commands: check, bulk-create
 """
+
+from __future__ import annotations
+
+import sys
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from .context import get_config_and_db
+from .context import cli_context, get_config_and_db
 
 links_app = typer.Typer(help="Link validation and inspection")
 console = Console()
@@ -105,3 +109,164 @@ def links_check(
             console.print(
                 "\nRun with [bold]--detail[/bold] for per-link breakdown."
             )
+
+
+def _parse_link_specs(raw: str) -> list[dict]:
+    """Parse YAML link specifications from a string."""
+    import yaml
+
+    data = yaml.safe_load(raw)
+    if not isinstance(data, list):
+        raise typer.BadParameter("YAML input must be a list of link specs")
+    return data
+
+
+def _validate_link_spec(spec: dict, index: int) -> list[str]:
+    """Validate a single link spec dict. Returns list of error strings."""
+    errors = []
+    if not isinstance(spec, dict):
+        return [f"Link {index}: expected a mapping, got {type(spec).__name__}"]
+    if "source" not in spec:
+        errors.append(f"Link {index}: missing required field 'source'")
+    if "target" not in spec:
+        errors.append(f"Link {index}: missing required field 'target'")
+    return errors
+
+
+@links_app.command("bulk-create")
+def links_bulk_create(
+    file: str | None = typer.Argument(
+        None,
+        help="YAML file with link specs, or '-' for stdin",
+    ),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Source KB name"),
+    file_option: str | None = typer.Option(
+        None, "--file", "-f", help="YAML file with link specs"
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be created without writing"),
+):
+    """Bulk-create links from a YAML file or stdin.
+
+    YAML format (list of link specs):
+
+    \b
+    - source: entry-a
+      target: entry-b
+      relation: related_to
+      note: "optional note"
+      target_kb: other-kb
+
+    Each spec requires 'source' and 'target'. Optional fields:
+    'relation' (default: related_to), 'target_kb' (default: source KB), 'note'.
+    """
+    from datetime import UTC, datetime
+
+    from ..storage.repository import KBRepository
+
+    # Resolve input source: positional arg, --file option, or stdin
+    input_path = file or file_option
+    if input_path == "-" or (input_path is None and not sys.stdin.isatty()):
+        raw = sys.stdin.read()
+    elif input_path is not None:
+        from pathlib import Path
+
+        p = Path(input_path)
+        if not p.exists():
+            console.print(f"[red]Error:[/red] File not found: {input_path}")
+            raise typer.Exit(1)
+        raw = p.read_text(encoding="utf-8")
+    else:
+        console.print("[red]Error:[/red] Provide a YAML file path, --file, or pipe to stdin")
+        raise typer.Exit(1)
+
+    try:
+        specs = _parse_link_specs(raw)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Failed to parse YAML: {e}")
+        raise typer.Exit(1)
+
+    # Validate all specs up front
+    all_errors: list[str] = []
+    for i, spec in enumerate(specs):
+        all_errors.extend(_validate_link_spec(spec, i))
+    if all_errors:
+        for err in all_errors:
+            console.print(f"[red]{err}[/red]")
+        raise typer.Exit(1)
+
+    with cli_context() as (_config, _db, svc):
+        kb_config = _config.get_kb(kb_name)
+        if not kb_config:
+            console.print(f"[red]Error:[/red] KB not found: {kb_name}")
+            raise typer.Exit(1)
+        if kb_config.read_only:
+            console.print(f"[red]Error:[/red] KB is read-only: {kb_name}")
+            raise typer.Exit(1)
+
+        repo = KBRepository(kb_config)
+
+        created = 0
+        skipped = 0
+        failed = 0
+        failed_details: list[str] = []
+
+        for i, spec in enumerate(specs):
+            source_id = spec["source"]
+            target_id = spec["target"]
+            relation = spec.get("relation", "related_to")
+            target_kb = spec.get("target_kb", kb_name)
+            note = spec.get("note", "")
+
+            try:
+                entry = repo.load(source_id)
+                if entry is None:
+                    msg = f"Link {i}: source entry not found: {source_id}"
+                    failed += 1
+                    failed_details.append(msg)
+                    continue
+
+                # Check for duplicate
+                is_dup = False
+                for existing in entry.links:
+                    if existing.target == target_id and (existing.kb or kb_name) == target_kb:
+                        is_dup = True
+                        break
+
+                if is_dup:
+                    skipped += 1
+                    if dry_run:
+                        console.print(
+                            f"  [dim]skip[/dim] {source_id} --[{relation}]--> {target_id}"
+                            f" (duplicate)"
+                        )
+                    continue
+
+                if dry_run:
+                    console.print(
+                        f"  [green]create[/green] {source_id} --[{relation}]--> {target_id}"
+                        f" (target_kb={target_kb})"
+                    )
+                    created += 1
+                    continue
+
+                # Add the link and save the file (no per-entry index)
+                entry.add_link(target=target_id, relation=relation, note=note, kb=target_kb)
+                entry.updated_at = datetime.now(UTC)
+                repo.save(entry)
+                created += 1
+
+            except Exception as e:
+                failed += 1
+                failed_details.append(f"Link {i}: {e}")
+
+        # Single index sync after all writes (skip for dry-run)
+        if not dry_run and created > 0:
+            svc.sync_index(kb_name)
+
+        # Report
+        label = "Dry run" if dry_run else "Bulk create"
+        console.print(
+            f"\n[bold]{label}:[/bold] {created} created, {skipped} skipped, {failed} failed"
+        )
+        for detail in failed_details:
+            console.print(f"  [red]{detail}[/red]")
