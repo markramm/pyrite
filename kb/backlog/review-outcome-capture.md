@@ -3,7 +3,7 @@ id: review-outcome-capture
 type: backlog_item
 title: "Review outcome capture (sw_review tool)"
 kind: feature
-status: in_progress
+status: done
 priority: high
 effort: M
 tags: [software, agents, workflow, kanban, quality]
