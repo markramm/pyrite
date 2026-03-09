@@ -11,7 +11,7 @@ links:
   relation: subtask_of
   kb: pyrite
 kind: feature
-status: review
+status: done
 assignee: agent-b
 effort: M
 ---
