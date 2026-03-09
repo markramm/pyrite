@@ -391,12 +391,16 @@ class TestProgrammaticValidationEntry:
         assert restored.tags == ["ci"]
 
     def test_validation_category_enum(self):
-        errors = validate_software_kb("programmatic_validation", {"category": "coding", "check_command": "x"}, {})
+        errors = validate_software_kb(
+            "programmatic_validation", {"category": "coding", "check_command": "x"}, {}
+        )
         non_warnings = [e for e in errors if e.get("severity") != "warning"]
         assert non_warnings == []
 
     def test_invalid_category(self):
-        errors = validate_software_kb("programmatic_validation", {"category": "invalid", "check_command": "x"}, {})
+        errors = validate_software_kb(
+            "programmatic_validation", {"category": "invalid", "check_command": "x"}, {}
+        )
         assert any(e["field"] == "category" for e in errors)
 
     def test_check_command_warning(self):
@@ -405,7 +409,9 @@ class TestProgrammaticValidationEntry:
         assert any(e["rule"] == "check_command_recommended" for e in warnings)
 
     def test_no_warning_with_check_command(self):
-        errors = validate_software_kb("programmatic_validation", {"check_command": "ruff check ."}, {})
+        errors = validate_software_kb(
+            "programmatic_validation", {"check_command": "ruff check ."}, {}
+        )
         assert not any(e["rule"] == "check_command_recommended" for e in errors)
 
 
@@ -424,9 +430,7 @@ class TestDevelopmentConventionEntry:
         assert entry.category == ""
 
     def test_to_frontmatter(self):
-        entry = DevelopmentConventionEntry(
-            id="test", title="Naming Convention", category="coding"
-        )
+        entry = DevelopmentConventionEntry(id="test", title="Naming Convention", category="coding")
         fm = entry.to_frontmatter()
         assert fm["type"] == "development_convention"
         assert fm["category"] == "coding"
@@ -461,7 +465,9 @@ class TestDevelopmentConventionEntry:
 
 
 class TestStandardsMigration:
-    def _write_standard_file(self, path: Path, title: str, enforced: bool, category: str = "coding"):
+    def _write_standard_file(
+        self, path: Path, title: str, enforced: bool, category: str = "coding"
+    ):
         path.parent.mkdir(parents=True, exist_ok=True)
         enforced_str = "true" if enforced else "false"
         path.write_text(
@@ -519,8 +525,12 @@ class TestStandardsMigration:
         import re
 
         content = std_file.read_text()
-        content = re.sub(r'^type:\s*standard\s*$', 'type: programmatic_validation', content, flags=re.MULTILINE)
-        content = re.sub(r'^enforced:\s*(true|false)\s*\n', '', content, flags=re.MULTILINE | re.IGNORECASE)
+        content = re.sub(
+            r"^type:\s*standard\s*$", "type: programmatic_validation", content, flags=re.MULTILINE
+        )
+        content = re.sub(
+            r"^enforced:\s*(true|false)\s*\n", "", content, flags=re.MULTILINE | re.IGNORECASE
+        )
 
         new_dir = tmp_path / "validations"
         new_dir.mkdir(parents=True, exist_ok=True)
@@ -540,8 +550,12 @@ class TestStandardsMigration:
         import re
 
         content = std_file.read_text()
-        content = re.sub(r'^type:\s*standard\s*$', 'type: development_convention', content, flags=re.MULTILINE)
-        content = re.sub(r'^enforced:\s*(true|false)\s*\n', '', content, flags=re.MULTILINE | re.IGNORECASE)
+        content = re.sub(
+            r"^type:\s*standard\s*$", "type: development_convention", content, flags=re.MULTILINE
+        )
+        content = re.sub(
+            r"^enforced:\s*(true|false)\s*\n", "", content, flags=re.MULTILINE | re.IGNORECASE
+        )
 
         new_dir = tmp_path / "conventions"
         new_dir.mkdir(parents=True, exist_ok=True)
@@ -800,9 +814,7 @@ class TestValidators:
         assert warnings[0]["severity"] == "warning"
 
     def test_component_path_check_skipped_without_context(self):
-        errors = validate_software_kb(
-            "component", {"kind": "module", "path": "some/path/"}, {}
-        )
+        errors = validate_software_kb("component", {"kind": "module", "path": "some/path/"}, {})
         assert not any(e.get("rule") == "path_not_found" for e in errors)
 
     # Backlog validators
@@ -854,7 +866,13 @@ class TestValidators:
 
 class TestADRLifecycle:
     def test_states(self):
-        assert ADR_LIFECYCLE["states"] == ["proposed", "accepted", "rejected", "deprecated", "superseded"]
+        assert ADR_LIFECYCLE["states"] == [
+            "proposed",
+            "accepted",
+            "rejected",
+            "deprecated",
+            "superseded",
+        ]
         assert ADR_LIFECYCLE["initial"] == "proposed"
         assert ADR_LIFECYCLE["field"] == "status"
 
@@ -923,14 +941,8 @@ class TestBacklogWorkflow:
     def test_planned_to_accepted(self):
         assert can_transition(BACKLOG_WORKFLOW, "planned", "accepted", "write")
 
-    def test_in_progress_to_completed(self):
-        assert can_transition(BACKLOG_WORKFLOW, "in_progress", "completed", "write")
-
     def test_done_to_retired(self):
         assert can_transition(BACKLOG_WORKFLOW, "done", "retired", "write")
-
-    def test_completed_to_retired(self):
-        assert can_transition(BACKLOG_WORKFLOW, "completed", "retired", "write")
 
     def test_proposed_to_deferred(self):
         assert can_transition(BACKLOG_WORKFLOW, "proposed", "deferred", "write")
@@ -940,10 +952,6 @@ class TestBacklogWorkflow:
 
     def test_deferred_to_proposed(self):
         assert can_transition(BACKLOG_WORKFLOW, "deferred", "proposed", "write")
-
-    def test_reopen_from_completed(self):
-        assert can_transition(BACKLOG_WORKFLOW, "completed", "accepted", "write")
-        assert requires_reason(BACKLOG_WORKFLOW, "completed", "accepted")
 
     def test_cannot_skip_to_done(self):
         assert not can_transition(BACKLOG_WORKFLOW, "proposed", "done", "write")
@@ -1038,7 +1046,7 @@ class TestEnums:
         assert "accepted" in BACKLOG_STATUSES
         assert "in_progress" in BACKLOG_STATUSES
         assert "done" in BACKLOG_STATUSES
-        assert "completed" in BACKLOG_STATUSES
+        assert "completed" not in BACKLOG_STATUSES
         assert "retired" in BACKLOG_STATUSES
         assert "deferred" in BACKLOG_STATUSES
         assert "wont_do" in BACKLOG_STATUSES
@@ -1326,8 +1334,8 @@ class TestReviewWorkflow:
     def test_review_to_done(self):
         assert can_transition(BACKLOG_WORKFLOW, "review", "done", "write")
 
-    def test_review_to_completed(self):
-        assert can_transition(BACKLOG_WORKFLOW, "review", "completed", "write")
+    def test_review_to_completed_removed(self):
+        assert not can_transition(BACKLOG_WORKFLOW, "review", "completed", "write")
 
     def test_review_to_in_progress(self):
         assert can_transition(BACKLOG_WORKFLOW, "review", "in_progress", "write")
@@ -1394,7 +1402,7 @@ def _make_test_db(tmpdir, entries=None, links=None):
         "INSERT INTO kb (name, path, kb_type) VALUES (?, ?, ?)",
         ("test", str(tmpdir), "generic"),
     )
-    for e in (entries or []):
+    for e in entries or []:
         meta = e.get("meta", {})
         db._raw_conn.execute(
             "INSERT INTO entry (id, kb_name, entry_type, title, body, status, priority, assignee, metadata, created_at, updated_at) "
@@ -1413,7 +1421,7 @@ def _make_test_db(tmpdir, entries=None, links=None):
                 e.get("updated_at", "2026-01-01T00:00:00"),
             ),
         )
-    for lnk in (links or []):
+    for lnk in links or []:
         db._raw_conn.execute(
             "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -1450,16 +1458,33 @@ def _make_plugin_with_db(db):
 class TestReviewQueue:
     def test_review_queue_returns_review_items(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Review Me", "status": "review", "priority": "high",
-                 "meta": {"kind": "bug", "status": "review", "priority": "high"},
-                 "updated_at": "2026-01-01T10:00:00"},
-                {"id": "item-2", "title": "In Progress", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}},
-                {"id": "item-3", "title": "Also Review", "status": "review", "priority": "medium",
-                 "meta": {"kind": "feature", "status": "review", "priority": "medium"},
-                 "updated_at": "2026-01-02T10:00:00"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Review Me",
+                        "status": "review",
+                        "priority": "high",
+                        "meta": {"kind": "bug", "status": "review", "priority": "high"},
+                        "updated_at": "2026-01-01T10:00:00",
+                    },
+                    {
+                        "id": "item-2",
+                        "title": "In Progress",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                    {
+                        "id": "item-3",
+                        "title": "Also Review",
+                        "status": "review",
+                        "priority": "medium",
+                        "meta": {"kind": "feature", "status": "review", "priority": "medium"},
+                        "updated_at": "2026-01-02T10:00:00",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_review_queue({"kb_name": "test"})
@@ -1471,10 +1496,17 @@ class TestReviewQueue:
 
     def test_review_queue_excludes_non_review(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Accepted", "status": "accepted",
-                 "meta": {"kind": "feature", "status": "accepted"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Accepted",
+                        "status": "accepted",
+                        "meta": {"kind": "feature", "status": "accepted"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_review_queue({"kb_name": "test"})
@@ -1495,20 +1527,51 @@ class TestContextForItem:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-1", "title": "My Task", "status": "accepted",
-                     "entry_type": "backlog_item",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
-                    {"id": "adr-1", "title": "Use REST", "entry_type": "adr",
-                     "meta": {"status": "accepted"}},
-                    {"id": "comp-1", "title": "API Server", "entry_type": "component",
-                     "meta": {"kind": "service"}},
-                    {"id": "val-1", "title": "Ruff Check", "entry_type": "programmatic_validation",
-                     "meta": {"category": "coding"}},
+                    {
+                        "id": "item-1",
+                        "title": "My Task",
+                        "status": "accepted",
+                        "entry_type": "backlog_item",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
+                    {
+                        "id": "adr-1",
+                        "title": "Use REST",
+                        "entry_type": "adr",
+                        "meta": {"status": "accepted"},
+                    },
+                    {
+                        "id": "comp-1",
+                        "title": "API Server",
+                        "entry_type": "component",
+                        "meta": {"kind": "service"},
+                    },
+                    {
+                        "id": "val-1",
+                        "title": "Ruff Check",
+                        "entry_type": "programmatic_validation",
+                        "meta": {"category": "coding"},
+                    },
                 ],
                 links=[
-                    {"source": "item-1", "target": "adr-1", "relation": "tracks", "inverse": "tracked_by"},
-                    {"source": "item-1", "target": "comp-1", "relation": "tracks", "inverse": "tracked_by"},
-                    {"source": "item-1", "target": "val-1", "relation": "tracks", "inverse": "tracked_by"},
+                    {
+                        "source": "item-1",
+                        "target": "adr-1",
+                        "relation": "tracks",
+                        "inverse": "tracked_by",
+                    },
+                    {
+                        "source": "item-1",
+                        "target": "comp-1",
+                        "relation": "tracks",
+                        "inverse": "tracked_by",
+                    },
+                    {
+                        "source": "item-1",
+                        "target": "val-1",
+                        "relation": "tracks",
+                        "inverse": "tracked_by",
+                    },
                 ],
             )
             try:
@@ -1544,17 +1607,35 @@ class TestContextForItem:
 class TestPullNext:
     def test_pull_next_returns_highest_priority(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "low-1", "title": "Low Priority", "status": "accepted", "priority": "low",
-                 "meta": {"kind": "feature", "status": "accepted", "priority": "low"},
-                 "created_at": "2026-01-01T00:00:00"},
-                {"id": "high-1", "title": "High Priority", "status": "accepted", "priority": "high",
-                 "meta": {"kind": "bug", "status": "accepted", "priority": "high"},
-                 "created_at": "2026-01-02T00:00:00"},
-                {"id": "crit-1", "title": "Critical", "status": "accepted", "priority": "critical",
-                 "meta": {"kind": "bug", "status": "accepted", "priority": "critical"},
-                 "created_at": "2026-01-03T00:00:00"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "low-1",
+                        "title": "Low Priority",
+                        "status": "accepted",
+                        "priority": "low",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "low"},
+                        "created_at": "2026-01-01T00:00:00",
+                    },
+                    {
+                        "id": "high-1",
+                        "title": "High Priority",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "bug", "status": "accepted", "priority": "high"},
+                        "created_at": "2026-01-02T00:00:00",
+                    },
+                    {
+                        "id": "crit-1",
+                        "title": "Critical",
+                        "status": "accepted",
+                        "priority": "critical",
+                        "meta": {"kind": "bug", "status": "accepted", "priority": "critical"},
+                        "created_at": "2026-01-03T00:00:00",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_pull_next({"kb_name": "test"})
@@ -1566,10 +1647,17 @@ class TestPullNext:
 
     def test_pull_next_no_accepted_items(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Proposed", "status": "proposed",
-                 "meta": {"kind": "feature", "status": "proposed"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Proposed",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_pull_next({"kb_name": "test"})
@@ -1592,12 +1680,23 @@ class TestPullNext:
                 "    wip_limit: 1\n"
                 "wip_policy: enforce\n"
             )
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "ip-1", "title": "Already Working", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}},
-                {"id": "acc-1", "title": "Waiting", "status": "accepted",
-                 "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "ip-1",
+                        "title": "Already Working",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                    {
+                        "id": "acc-1",
+                        "title": "Waiting",
+                        "status": "accepted",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 from pyrite_software_kb.board import load_board_config as real_load
@@ -1622,15 +1721,26 @@ class TestClaim:
     def test_claim_validates_transition(self):
         """Cannot claim from proposed (must be accepted first)."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Proposed Item", "status": "proposed",
-                 "meta": {"kind": "feature", "status": "proposed"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Proposed Item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_claim({
-                    "item_id": "item-1", "kb_name": "test", "assignee": "agent-1",
-                })
+                result = plugin._mcp_claim(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "assignee": "agent-1",
+                    }
+                )
                 assert result["claimed"] is False
                 assert "Cannot transition" in result["error"]
                 assert "allowed_transitions" in result
@@ -1642,9 +1752,13 @@ class TestClaim:
             db = _make_test_db(tmpdir)
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_claim({
-                    "item_id": "nonexistent", "kb_name": "test", "assignee": "agent-1",
-                })
+                result = plugin._mcp_claim(
+                    {
+                        "item_id": "nonexistent",
+                        "kb_name": "test",
+                        "assignee": "agent-1",
+                    }
+                )
                 assert result["claimed"] is False
                 assert "not found" in result["error"]
             finally:
@@ -1653,15 +1767,27 @@ class TestClaim:
     def test_claim_already_in_progress(self):
         """Cannot claim an item already in_progress."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Already Working", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}, "assignee": "someone"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Already Working",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                        "assignee": "someone",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_claim({
-                    "item_id": "item-1", "kb_name": "test", "assignee": "agent-2",
-                })
+                result = plugin._mcp_claim(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "assignee": "agent-2",
+                    }
+                )
                 assert result["claimed"] is False
                 assert "Cannot transition" in result["error"]
             finally:
@@ -1710,9 +1836,8 @@ class TestNewAdrCreatesFile:
         """sw new-adr should create the actual markdown file."""
         from unittest.mock import patch
 
-        from typer.testing import CliRunner
-
         from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
 
         runner = CliRunner()
 
@@ -1724,15 +1849,23 @@ class TestNewAdrCreatesFile:
             db = _make_test_db(tmpdir)
             try:
                 # Mock load_config to return a config with our test KB path
-                mock_config = type("C", (), {
-                    "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                    "get_kb": lambda self, name: type("KB", (), {"path": kb_path})() if name else None,
-                    "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                })()
+                mock_config = type(
+                    "C",
+                    (),
+                    {
+                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                        "get_kb": lambda self, name: (
+                            type("KB", (), {"path": kb_path})() if name else None
+                        ),
+                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                    },
+                )()
 
                 with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
                     with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
-                        result = runner.invoke(sw_app, ["new-adr", "Use PostgreSQL", "--kb", "test"])
+                        result = runner.invoke(
+                            sw_app, ["new-adr", "Use PostgreSQL", "--kb", "test"]
+                        )
 
                 assert result.exit_code == 0
                 # Should have created the file
@@ -1754,9 +1887,8 @@ class TestNewAdrCreatesFile:
         """sw new-adr should pick the next sequential number."""
         from unittest.mock import patch
 
-        from typer.testing import CliRunner
-
         from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
 
         runner = CliRunner()
 
@@ -1765,16 +1897,29 @@ class TestNewAdrCreatesFile:
             adrs_dir = kb_path / "adrs"
             adrs_dir.mkdir()
 
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "adr-existing", "title": "Existing ADR", "entry_type": "adr",
-                 "meta": {"adr_number": 5, "status": "accepted"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "adr-existing",
+                        "title": "Existing ADR",
+                        "entry_type": "adr",
+                        "meta": {"adr_number": 5, "status": "accepted"},
+                    },
+                ],
+            )
             try:
-                mock_config = type("C", (), {
-                    "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                    "get_kb": lambda self, name: type("KB", (), {"path": kb_path})() if name else None,
-                    "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                })()
+                mock_config = type(
+                    "C",
+                    (),
+                    {
+                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                        "get_kb": lambda self, name: (
+                            type("KB", (), {"path": kb_path})() if name else None
+                        ),
+                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                    },
+                )()
 
                 with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
                     with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
@@ -1782,7 +1927,9 @@ class TestNewAdrCreatesFile:
 
                 assert result.exit_code == 0
                 expected_file = adrs_dir / "0006-use-redis.md"
-                assert expected_file.exists(), f"Expected {expected_file} (number 6 after existing 5)"
+                assert expected_file.exists(), (
+                    f"Expected {expected_file} (number 6 after existing 5)"
+                )
 
                 content = expected_file.read_text()
                 assert "adr_number: 6" in content
@@ -1793,9 +1940,8 @@ class TestNewAdrCreatesFile:
         """sw new-adr should create the adrs/ directory if it doesn't exist."""
         from unittest.mock import patch
 
-        from typer.testing import CliRunner
-
         from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
 
         runner = CliRunner()
 
@@ -1805,11 +1951,17 @@ class TestNewAdrCreatesFile:
 
             db = _make_test_db(tmpdir)
             try:
-                mock_config = type("C", (), {
-                    "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                    "get_kb": lambda self, name: type("KB", (), {"path": kb_path})() if name else None,
-                    "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                })()
+                mock_config = type(
+                    "C",
+                    (),
+                    {
+                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                        "get_kb": lambda self, name: (
+                            type("KB", (), {"path": kb_path})() if name else None
+                        ),
+                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                    },
+                )()
 
                 with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
                     with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
@@ -1844,13 +1996,28 @@ class TestBacklogDependencies:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
-                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "critical",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "critical"}},
+                    {
+                        "id": "item-a",
+                        "title": "Task A",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
+                    {
+                        "id": "item-b",
+                        "title": "Task B",
+                        "status": "accepted",
+                        "priority": "critical",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "critical"},
+                    },
                 ],
                 links=[
-                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                    {
+                        "source": "item-b",
+                        "target": "item-a",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
                 ],
             )
             try:
@@ -1862,24 +2029,39 @@ class TestBacklogDependencies:
                 db.close()
 
     def test_pull_next_resolved_deps_eligible(self):
-        """B blocked_by A, but A is completed. B is eligible."""
+        """B blocked_by A, but A is done. B is eligible."""
         with tempfile.TemporaryDirectory() as tmpdir:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-a", "title": "Task A", "status": "completed", "priority": "high",
-                     "meta": {"kind": "feature", "status": "completed", "priority": "high"}},
-                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "critical",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "critical"}},
+                    {
+                        "id": "item-a",
+                        "title": "Task A",
+                        "status": "done",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "done", "priority": "high"},
+                    },
+                    {
+                        "id": "item-b",
+                        "title": "Task B",
+                        "status": "accepted",
+                        "priority": "critical",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "critical"},
+                    },
                 ],
                 links=[
-                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                    {
+                        "source": "item-b",
+                        "target": "item-a",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
                 ],
             )
             try:
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_pull_next({"kb_name": "test"})
-                # A is completed so B is unblocked, and B has higher priority
+                # A is done so B is unblocked, and B has higher priority
                 assert result["recommendation"]["id"] == "item-b"
             finally:
                 db.close()
@@ -1890,13 +2072,28 @@ class TestBacklogDependencies:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
-                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "critical",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "critical"}},
+                    {
+                        "id": "item-a",
+                        "title": "Task A",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
+                    {
+                        "id": "item-b",
+                        "title": "Task B",
+                        "status": "accepted",
+                        "priority": "critical",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "critical"},
+                    },
                 ],
                 links=[
-                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                    {
+                        "source": "item-b",
+                        "target": "item-a",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
                 ],
             )
             try:
@@ -1916,21 +2113,46 @@ class TestBacklogDependencies:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
-                     "entry_type": "backlog_item"},
-                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
-                     "entry_type": "backlog_item"},
-                    {"id": "item-c", "title": "Task C", "status": "completed", "priority": "medium",
-                     "meta": {"kind": "bug", "status": "completed", "priority": "medium"},
-                     "entry_type": "backlog_item"},
+                    {
+                        "id": "item-a",
+                        "title": "Task A",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                        "entry_type": "backlog_item",
+                    },
+                    {
+                        "id": "item-b",
+                        "title": "Task B",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                        "entry_type": "backlog_item",
+                    },
+                    {
+                        "id": "item-c",
+                        "title": "Task C",
+                        "status": "done",
+                        "priority": "medium",
+                        "meta": {"kind": "bug", "status": "done", "priority": "medium"},
+                        "entry_type": "backlog_item",
+                    },
                 ],
                 links=[
                     # B is blocked_by A (A blocks B)
-                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
-                    # B is blocked_by C (C blocks B, but C is completed)
-                    {"source": "item-b", "target": "item-c", "relation": "blocked_by", "inverse": "blocks"},
+                    {
+                        "source": "item-b",
+                        "target": "item-a",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
+                    # B is blocked_by C (C blocks B, but C is done)
+                    {
+                        "source": "item-b",
+                        "target": "item-c",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
                 ],
             )
             try:
@@ -1953,18 +2175,35 @@ class TestBacklogDependencies:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
-                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                    {
+                        "id": "item-a",
+                        "title": "Task A",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
+                    {
+                        "id": "item-b",
+                        "title": "Task B",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
                 ],
                 links=[
-                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                    {
+                        "source": "item-b",
+                        "target": "item-a",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
                 ],
             )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_claim({"item_id": "item-b", "kb_name": "test", "assignee": "agent"})
+                result = plugin._mcp_claim(
+                    {"item_id": "item-b", "kb_name": "test", "assignee": "agent"}
+                )
                 assert result["claimed"] is False
                 assert "unresolved dependencies" in result["error"]
                 assert len(result["unresolved_dependencies"]) == 1
@@ -1978,24 +2217,49 @@ class TestBacklogDependencies:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-a", "title": "Task A", "status": "done", "priority": "high",
-                     "meta": {"kind": "feature", "status": "done", "priority": "high"}},
-                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "high",
-                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                    {
+                        "id": "item-a",
+                        "title": "Task A",
+                        "status": "done",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "done", "priority": "high"},
+                    },
+                    {
+                        "id": "item-b",
+                        "title": "Task B",
+                        "status": "accepted",
+                        "priority": "high",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                    },
                 ],
                 links=[
-                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                    {
+                        "source": "item-b",
+                        "target": "item-a",
+                        "relation": "blocked_by",
+                        "inverse": "blocks",
+                    },
                 ],
             )
             try:
                 plugin = _make_plugin_with_db(db)
                 # claim_entry needs KBService — mock it
-                from unittest.mock import patch, MagicMock
+                from unittest.mock import MagicMock, patch
+
                 mock_svc = MagicMock()
-                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-b", "status": "in_progress", "assignee": "agent"}
-                with patch("pyrite.config.load_config"), \
-                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
-                    result = plugin._mcp_claim({"item_id": "item-b", "kb_name": "test", "assignee": "agent"})
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-b",
+                    "status": "in_progress",
+                    "assignee": "agent",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_claim(
+                        {"item_id": "item-b", "kb_name": "test", "assignee": "agent"}
+                    )
                 assert result["claimed"] is True
             finally:
                 db.close()
@@ -2020,28 +2284,50 @@ class TestReview:
         from unittest.mock import MagicMock, patch
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Review Me", "status": "review",
-                 "meta": {"kind": "feature", "status": "review"}, "assignee": "dev-1"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Review Me",
+                        "status": "review",
+                        "meta": {"kind": "feature", "status": "review"},
+                        "assignee": "dev-1",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 mock_svc = MagicMock()
-                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "done", "assignee": "dev-1"}
-                with patch("pyrite.config.load_config"), \
-                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
-                    result = plugin._mcp_review({
-                        "item_id": "item-1", "kb_name": "test",
-                        "outcome": "approved", "reviewer": "reviewer-1",
-                    })
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-1",
+                    "status": "done",
+                    "assignee": "dev-1",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_review(
+                        {
+                            "item_id": "item-1",
+                            "kb_name": "test",
+                            "outcome": "approved",
+                            "reviewer": "reviewer-1",
+                        }
+                    )
                 assert result["reviewed"] is True
                 assert result["outcome"] == "approved"
                 assert result["new_status"] == "done"
                 assert "review_id" in result
                 # CAS was called with review → done
                 mock_svc.claim_entry.assert_called_once_with(
-                    "item-1", "test", "dev-1",
-                    from_status="review", to_status="done",
+                    "item-1",
+                    "test",
+                    "dev-1",
+                    from_status="review",
+                    to_status="done",
                 )
             finally:
                 db.close()
@@ -2051,27 +2337,49 @@ class TestReview:
         from unittest.mock import MagicMock, patch
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Review Me", "status": "review",
-                 "meta": {"kind": "bug", "status": "review"}, "assignee": "dev-1"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Review Me",
+                        "status": "review",
+                        "meta": {"kind": "bug", "status": "review"},
+                        "assignee": "dev-1",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 mock_svc = MagicMock()
-                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "in_progress", "assignee": "dev-1"}
-                with patch("pyrite.config.load_config"), \
-                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
-                    result = plugin._mcp_review({
-                        "item_id": "item-1", "kb_name": "test",
-                        "outcome": "changes_requested", "reviewer": "reviewer-1",
-                        "feedback": "Missing error handling in edge case",
-                    })
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-1",
+                    "status": "in_progress",
+                    "assignee": "dev-1",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_review(
+                        {
+                            "item_id": "item-1",
+                            "kb_name": "test",
+                            "outcome": "changes_requested",
+                            "reviewer": "reviewer-1",
+                            "feedback": "Missing error handling in edge case",
+                        }
+                    )
                 assert result["reviewed"] is True
                 assert result["outcome"] == "changes_requested"
                 assert result["new_status"] == "in_progress"
                 mock_svc.claim_entry.assert_called_once_with(
-                    "item-1", "test", "dev-1",
-                    from_status="review", to_status="in_progress",
+                    "item-1",
+                    "test",
+                    "dev-1",
+                    from_status="review",
+                    to_status="in_progress",
                 )
             finally:
                 db.close()
@@ -2079,16 +2387,27 @@ class TestReview:
     def test_review_changes_requested_requires_feedback(self):
         """changes_requested without feedback → error."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Review Me", "status": "review",
-                 "meta": {"kind": "feature", "status": "review"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Review Me",
+                        "status": "review",
+                        "meta": {"kind": "feature", "status": "review"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_review({
-                    "item_id": "item-1", "kb_name": "test",
-                    "outcome": "changes_requested", "reviewer": "reviewer-1",
-                })
+                result = plugin._mcp_review(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "outcome": "changes_requested",
+                        "reviewer": "reviewer-1",
+                    }
+                )
                 assert result["reviewed"] is False
                 assert "Feedback is required" in result["error"]
             finally:
@@ -2097,16 +2416,27 @@ class TestReview:
     def test_review_not_in_review_status_fails(self):
         """Item in accepted → review → error."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Not In Review", "status": "accepted",
-                 "meta": {"kind": "feature", "status": "accepted"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Not In Review",
+                        "status": "accepted",
+                        "meta": {"kind": "feature", "status": "accepted"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_review({
-                    "item_id": "item-1", "kb_name": "test",
-                    "outcome": "approved", "reviewer": "reviewer-1",
-                })
+                result = plugin._mcp_review(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "outcome": "approved",
+                        "reviewer": "reviewer-1",
+                    }
+                )
                 assert result["reviewed"] is False
                 assert "not 'review'" in result["error"]
             finally:
@@ -2118,10 +2448,14 @@ class TestReview:
             db = _make_test_db(tmpdir)
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_review({
-                    "item_id": "nonexistent", "kb_name": "test",
-                    "outcome": "approved", "reviewer": "reviewer-1",
-                })
+                result = plugin._mcp_review(
+                    {
+                        "item_id": "nonexistent",
+                        "kb_name": "test",
+                        "outcome": "approved",
+                        "reviewer": "reviewer-1",
+                    }
+                )
                 assert result["reviewed"] is False
                 assert "not found" in result["error"]
             finally:
@@ -2132,21 +2466,40 @@ class TestReview:
         from unittest.mock import MagicMock, patch
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Review Me", "status": "review",
-                 "meta": {"kind": "feature", "status": "review"}, "assignee": "dev-1"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Review Me",
+                        "status": "review",
+                        "meta": {"kind": "feature", "status": "review"},
+                        "assignee": "dev-1",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 mock_svc = MagicMock()
-                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "done", "assignee": "dev-1"}
-                with patch("pyrite.config.load_config"), \
-                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
-                    plugin._mcp_review({
-                        "item_id": "item-1", "kb_name": "test",
-                        "outcome": "approved", "reviewer": "reviewer-1",
-                        "feedback": "LGTM",
-                    })
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-1",
+                    "status": "done",
+                    "assignee": "dev-1",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    plugin._mcp_review(
+                        {
+                            "item_id": "item-1",
+                            "kb_name": "test",
+                            "outcome": "approved",
+                            "reviewer": "reviewer-1",
+                            "feedback": "LGTM",
+                        }
+                    )
                 # Verify review record in DB
                 reviews = db.get_reviews("item-1", "test")
                 assert len(reviews) == 1
@@ -2159,16 +2512,27 @@ class TestReview:
     def test_context_for_item_shows_reviews(self):
         """Item with prior review → reviews in context response."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Has Reviews", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Has Reviews",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                ],
+            )
             try:
                 # Insert a review record directly
                 db.create_review(
-                    entry_id="item-1", kb_name="test", content_hash="",
-                    reviewer="reviewer-1", reviewer_type="agent",
-                    result="changes_requested", details="Fix the tests",
+                    entry_id="item-1",
+                    kb_name="test",
+                    content_hash="",
+                    reviewer="reviewer-1",
+                    reviewer_type="agent",
+                    result="changes_requested",
+                    details="Fix the tests",
                 )
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_context_for_item({"item_id": "item-1", "kb_name": "test"})
@@ -2200,22 +2564,40 @@ class TestSubmit:
         from unittest.mock import MagicMock, patch
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Working On It", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}, "assignee": "dev-1"},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Working On It",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                        "assignee": "dev-1",
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 mock_svc = MagicMock()
-                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "review", "assignee": "dev-1"}
-                with patch("pyrite.config.load_config"), \
-                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-1",
+                    "status": "review",
+                    "assignee": "dev-1",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
                     result = plugin._mcp_submit({"item_id": "item-1", "kb_name": "test"})
                 assert result["submitted"] is True
                 assert result["new_status"] == "review"
                 mock_svc.claim_entry.assert_called_once_with(
-                    "item-1", "test", "dev-1",
-                    from_status="in_progress", to_status="review",
+                    "item-1",
+                    "test",
+                    "dev-1",
+                    from_status="in_progress",
+                    to_status="review",
                 )
             finally:
                 db.close()
@@ -2223,10 +2605,17 @@ class TestSubmit:
     def test_submit_not_in_progress_fails(self):
         """Item in accepted → submit → error."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "Not Started", "status": "accepted",
-                 "meta": {"kind": "feature", "status": "accepted"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "Not Started",
+                        "status": "accepted",
+                        "meta": {"kind": "feature", "status": "accepted"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
                 result = plugin._mcp_submit({"item_id": "item-1", "kb_name": "test"})
@@ -2312,9 +2701,13 @@ class TestWorkLogEntry:
 
     def test_work_log_roundtrip(self):
         entry = WorkLogEntry(
-            id="log-1", title="Session",
-            item_id="item-1", date="2026-03-08",
-            decisions="d", rejected="r", open_questions="q",
+            id="log-1",
+            title="Session",
+            item_id="item-1",
+            date="2026-03-08",
+            decisions="d",
+            rejected="r",
+            open_questions="q",
         )
         fm = entry.to_frontmatter()
         restored = WorkLogEntry.from_frontmatter(fm, entry.body)
@@ -2357,20 +2750,29 @@ class TestSwLog:
     def test_sw_log_returns_frontmatter(self):
         """Handler returns correct structure with link."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "My Task", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Task",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_log({
-                    "item_id": "item-1",
-                    "kb_name": "test",
-                    "summary": "Implemented REST endpoints",
-                    "decisions": "Used FastAPI",
-                    "rejected": "Flask too minimal",
-                    "open_questions": "Rate limiting approach",
-                })
+                result = plugin._mcp_log(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "summary": "Implemented REST endpoints",
+                        "decisions": "Used FastAPI",
+                        "rejected": "Flask too minimal",
+                        "open_questions": "Rate limiting approach",
+                    }
+                )
                 assert result["created"] is True
                 assert result["item_id"] == "item-1"
                 assert result["id"].startswith("item-1-log-")
@@ -2393,11 +2795,13 @@ class TestSwLog:
             db = _make_test_db(tmpdir)
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_log({
-                    "item_id": "nonexistent",
-                    "kb_name": "test",
-                    "summary": "Session notes",
-                })
+                result = plugin._mcp_log(
+                    {
+                        "item_id": "nonexistent",
+                        "kb_name": "test",
+                        "summary": "Session notes",
+                    }
+                )
                 assert result["created"] is False
                 assert "not found" in result["error"]
             finally:
@@ -2406,17 +2810,26 @@ class TestSwLog:
     def test_sw_log_optional_fields_omitted(self):
         """Optional fields not in frontmatter when empty."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = _make_test_db(tmpdir, entries=[
-                {"id": "item-1", "title": "My Task", "status": "in_progress",
-                 "meta": {"kind": "feature", "status": "in_progress"}},
-            ])
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Task",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                ],
+            )
             try:
                 plugin = _make_plugin_with_db(db)
-                result = plugin._mcp_log({
-                    "item_id": "item-1",
-                    "kb_name": "test",
-                    "summary": "Quick session",
-                })
+                result = plugin._mcp_log(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "summary": "Quick session",
+                    }
+                )
                 assert result["created"] is True
                 assert "decisions" not in result["frontmatter"]
                 assert "rejected" not in result["frontmatter"]
@@ -2437,15 +2850,27 @@ class TestContextSurfacesWorkLogs:
             db = _make_test_db(
                 tmpdir,
                 entries=[
-                    {"id": "item-1", "title": "My Task", "status": "in_progress",
-                     "entry_type": "backlog_item",
-                     "meta": {"kind": "feature", "status": "in_progress"}},
-                    {"id": "item-1-log-1", "title": "Session 1", "entry_type": "work_log",
-                     "meta": {"item_id": "item-1", "date": "2026-03-08"}},
+                    {
+                        "id": "item-1",
+                        "title": "My Task",
+                        "status": "in_progress",
+                        "entry_type": "backlog_item",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                    {
+                        "id": "item-1-log-1",
+                        "title": "Session 1",
+                        "entry_type": "work_log",
+                        "meta": {"item_id": "item-1", "date": "2026-03-08"},
+                    },
                 ],
                 links=[
-                    {"source": "item-1-log-1", "target": "item-1",
-                     "relation": "session_for", "inverse": "has_session"},
+                    {
+                        "source": "item-1-log-1",
+                        "target": "item-1",
+                        "relation": "session_for",
+                        "inverse": "has_session",
+                    },
                 ],
             )
             try:
@@ -2623,3 +3048,244 @@ class TestColumnFirstStatusFallback:
                 assert result["adrs"][0]["status"] == "accepted"
             finally:
                 db.close()
+
+
+# =========================================================================
+# Transition tool
+# =========================================================================
+
+
+class TestTransition:
+    def test_transition_tool_registered(self):
+        """sw_transition should be in write tier, not read tier."""
+        registry = PluginRegistry()
+        registry.register(SoftwareKBPlugin())
+        write_tools = registry.get_all_mcp_tools("write")
+        read_tools = registry.get_all_mcp_tools("read")
+        assert "sw_transition" in write_tools
+        assert "sw_transition" not in read_tools
+
+    def test_transition_proposed_to_accepted(self):
+        """Happy path: proposed -> accepted."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Feature",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-1",
+                    "status": "accepted",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_transition(
+                        {
+                            "item_id": "item-1",
+                            "kb_name": "test",
+                            "to_status": "accepted",
+                        }
+                    )
+                assert result["transitioned"] is True
+                assert result["old_status"] == "proposed"
+                assert result["new_status"] == "accepted"
+                mock_svc.claim_entry.assert_called_once_with(
+                    "item-1",
+                    "test",
+                    "",
+                    from_status="proposed",
+                    to_status="accepted",
+                )
+            finally:
+                db.close()
+
+    def test_transition_requires_reason(self):
+        """proposed -> wont_do without reason should error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Feature",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_transition(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "to_status": "wont_do",
+                    }
+                )
+                assert result["transitioned"] is False
+                assert "reason" in result["error"].lower() or "Reason" in result["error"]
+            finally:
+                db.close()
+
+    def test_transition_with_reason(self):
+        """proposed -> wont_do with reason should succeed."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Feature",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {
+                    "claimed": True,
+                    "id": "item-1",
+                    "status": "wont_do",
+                }
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_transition(
+                        {
+                            "item_id": "item-1",
+                            "kb_name": "test",
+                            "to_status": "wont_do",
+                            "reason": "Not needed anymore",
+                        }
+                    )
+                assert result["transitioned"] is True
+                assert result["new_status"] == "wont_do"
+                assert result["reason"] == "Not needed anymore"
+            finally:
+                db.close()
+
+    def test_transition_invalid(self):
+        """proposed -> in_progress should fail (must go through accepted)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Feature",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_transition(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "to_status": "in_progress",
+                    }
+                )
+                assert result["transitioned"] is False
+                assert "Cannot transition" in result["error"]
+            finally:
+                db.close()
+
+    def test_transition_not_found(self):
+        """Nonexistent item should return error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_transition(
+                    {
+                        "item_id": "nonexistent",
+                        "kb_name": "test",
+                        "to_status": "accepted",
+                    }
+                )
+                assert result["transitioned"] is False
+                assert "not found" in result["error"]
+            finally:
+                db.close()
+
+    def test_transition_shows_allowed(self):
+        """Error response should include allowed_transitions list."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "item-1",
+                        "title": "My Feature",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_transition(
+                    {
+                        "item_id": "item-1",
+                        "kb_name": "test",
+                        "to_status": "in_progress",
+                    }
+                )
+                assert result["transitioned"] is False
+                assert "allowed_transitions" in result
+                assert "accepted" in result["allowed_transitions"]
+            finally:
+                db.close()
+
+
+# =========================================================================
+# Workflow normalization
+# =========================================================================
+
+
+class TestWorkflowNormalization:
+    def test_completed_removed_from_workflow(self):
+        """completed should no longer be a valid state."""
+        assert "completed" not in BACKLOG_WORKFLOW["states"]
+        # No transitions should reference completed
+        for t in BACKLOG_WORKFLOW["transitions"]:
+            assert t["from"] != "completed"
+            assert t["to"] != "completed"
+
+    def test_done_is_terminal(self):
+        """done -> retired and done -> accepted (reopen) should work."""
+        assert can_transition(BACKLOG_WORKFLOW, "done", "retired", "write")
+        assert can_transition(BACKLOG_WORKFLOW, "done", "accepted", "write")
+        assert requires_reason(BACKLOG_WORKFLOW, "done", "accepted")
+
+    def test_completed_not_in_backlog_statuses(self):
+        """BACKLOG_STATUSES enum should not include completed."""
+        from pyrite_software_kb.entry_types import BACKLOG_STATUSES
+
+        assert "completed" not in BACKLOG_STATUSES

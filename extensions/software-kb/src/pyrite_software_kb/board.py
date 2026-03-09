@@ -8,7 +8,7 @@ DEFAULT_BOARD_CONFIG = {
         {"name": "Ready", "statuses": ["accepted"]},
         {"name": "In Progress", "statuses": ["in_progress"], "wip_limit": 5},
         {"name": "Review", "statuses": ["review"], "wip_limit": 3},
-        {"name": "Done", "statuses": ["done", "completed"]},
+        {"name": "Done", "statuses": ["done"]},
     ],
     "wip_policy": "warn",
 }

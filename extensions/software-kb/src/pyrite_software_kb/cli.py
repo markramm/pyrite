@@ -56,7 +56,11 @@ def sw_adrs(
         rows = _query_entries(db, "adr", kb_name)
 
         if status:
-            rows = [r for r in rows if (r.get("status") or r["_meta"].get("status", "proposed")) == status]
+            rows = [
+                r
+                for r in rows
+                if (r.get("status") or r["_meta"].get("status", "proposed")) == status
+            ]
 
         if not rows:
             if fmt == "json":
@@ -66,15 +70,17 @@ def sw_adrs(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "adr_number": r["_meta"].get("adr_number", ""),
-                    "title": r["title"],
-                    "status": r.get("status") or r["_meta"].get("status", "proposed"),
-                    "date": r.get("date") or r["_meta"].get("date", ""),
-                }
-                for r in rows
-            ])
+            _json_output(
+                [
+                    {
+                        "adr_number": r["_meta"].get("adr_number", ""),
+                        "title": r["title"],
+                        "status": r.get("status") or r["_meta"].get("status", "proposed"),
+                        "date": r.get("date") or r["_meta"].get("date", ""),
+                    }
+                    for r in rows
+                ]
+            )
             return
 
         table = Table(title="Architecture Decision Records")
@@ -142,7 +148,7 @@ def sw_new_adr(
             "---\n"
             f"id: adr-{next_num:04d}\n"
             "type: adr\n"
-            f"title: \"{title}\"\n"
+            f'title: "{title}"\n'
             f"adr_number: {next_num}\n"
             f"status: {status}\n"
             f"date: {today}\n"
@@ -189,9 +195,17 @@ def sw_backlog(
         rows = _query_entries(db, "backlog_item", kb_name)
 
         if status:
-            rows = [r for r in rows if (r.get("status") or r["_meta"].get("status", "proposed")) == status]
+            rows = [
+                r
+                for r in rows
+                if (r.get("status") or r["_meta"].get("status", "proposed")) == status
+            ]
         if priority:
-            rows = [r for r in rows if (r.get("priority") or r["_meta"].get("priority", "medium")) == priority]
+            rows = [
+                r
+                for r in rows
+                if (r.get("priority") or r["_meta"].get("priority", "medium")) == priority
+            ]
         if kind:
             rows = [r for r in rows if r["_meta"].get("kind", "") == kind]
 
@@ -203,17 +217,19 @@ def sw_backlog(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "id": r["id"],
-                    "title": r["title"],
-                    "kind": r["_meta"].get("kind", ""),
-                    "status": r.get("status") or r["_meta"].get("status", "proposed"),
-                    "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
-                    "effort": r["_meta"].get("effort", ""),
-                }
-                for r in rows
-            ])
+            _json_output(
+                [
+                    {
+                        "id": r["id"],
+                        "title": r["title"],
+                        "kind": r["_meta"].get("kind", ""),
+                        "status": r.get("status") or r["_meta"].get("status", "proposed"),
+                        "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
+                        "effort": r["_meta"].get("effort", ""),
+                    }
+                    for r in rows
+                ]
+            )
             return
 
         table = Table(title="Backlog")
@@ -266,15 +282,17 @@ def sw_standards(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "title": r["title"],
-                    "type": r["entry_type"],
-                    "category": r["_meta"].get("category", ""),
-                    "enforced": bool(r["_meta"].get("enforced")),
-                }
-                for r in rows
-            ])
+            _json_output(
+                [
+                    {
+                        "title": r["title"],
+                        "type": r["entry_type"],
+                        "category": r["_meta"].get("category", ""),
+                        "enforced": bool(r["_meta"].get("enforced")),
+                    }
+                    for r in rows
+                ]
+            )
             return
 
         table = Table(title="Standards")
@@ -317,15 +335,17 @@ def sw_validations(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "title": r["title"],
-                    "category": r["_meta"].get("category", ""),
-                    "check_command": r["_meta"].get("check_command", ""),
-                    "pass_criteria": r["_meta"].get("pass_criteria", ""),
-                }
-                for r in rows
-            ])
+            _json_output(
+                [
+                    {
+                        "title": r["title"],
+                        "category": r["_meta"].get("category", ""),
+                        "check_command": r["_meta"].get("check_command", ""),
+                        "pass_criteria": r["_meta"].get("pass_criteria", ""),
+                    }
+                    for r in rows
+                ]
+            )
             return
 
         table = Table(title="Programmatic Validations")
@@ -366,13 +386,15 @@ def sw_conventions(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "title": r["title"],
-                    "category": r["_meta"].get("category", ""),
-                }
-                for r in rows
-            ])
+            _json_output(
+                [
+                    {
+                        "title": r["title"],
+                        "category": r["_meta"].get("category", ""),
+                    }
+                    for r in rows
+                ]
+            )
             return
 
         table = Table(title="Development Conventions")
@@ -450,10 +472,14 @@ def sw_migrate_standards(
                 new_dir_name = "conventions"
 
             # Replace type field in frontmatter
-            content = re.sub(r'^type:\s*standard\s*$', f'type: {new_type}', content, flags=re.MULTILINE)
+            content = re.sub(
+                r"^type:\s*standard\s*$", f"type: {new_type}", content, flags=re.MULTILINE
+            )
 
             # Remove enforced field
-            content = re.sub(r'^enforced:\s*(true|false)\s*\n', '', content, flags=re.MULTILINE | re.IGNORECASE)
+            content = re.sub(
+                r"^enforced:\s*(true|false)\s*\n", "", content, flags=re.MULTILINE | re.IGNORECASE
+            )
 
             # Write back
             path.write_text(content)
@@ -512,20 +538,26 @@ def sw_milestones(
                     link_meta = {}
                     if link.get("metadata"):
                         try:
-                            link_meta = json.loads(link["metadata"]) if isinstance(link["metadata"], str) else link.get("metadata", {})
+                            link_meta = (
+                                json.loads(link["metadata"])
+                                if isinstance(link["metadata"], str)
+                                else link.get("metadata", {})
+                            )
                         except (json.JSONDecodeError, TypeError):
                             pass
                     link_status = link.get("status") or link_meta.get("status", "proposed")
-                    if link_status in ("done", "completed"):
+                    if link_status == "done":
                         completed += 1
             pct = round(completed / total * 100) if total > 0 else 0
-            results.append({
-                "title": row["title"],
-                "status": row.get("status") or meta.get("status", "open"),
-                "total_items": total,
-                "completed_items": completed,
-                "completion_pct": pct,
-            })
+            results.append(
+                {
+                    "title": row["title"],
+                    "status": row.get("status") or meta.get("status", "open"),
+                    "total_items": total,
+                    "completed_items": completed,
+                    "completion_pct": pct,
+                }
+            )
 
         if fmt == "json":
             _json_output(results)
@@ -562,7 +594,9 @@ def sw_board_cmd(
         # Load board config
         if kb_name:
             kb_conf = config.get_kb(kb_name)
-            board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+            board_config = (
+                load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+            )
         else:
             board_config = load_board_config(Path("."))
 
@@ -648,16 +682,18 @@ def sw_review_queue(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "id": r["id"],
-                    "title": r["title"],
-                    "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
-                    "assignee": r.get("assignee") or r["_meta"].get("assignee", ""),
-                    "updated_at": str(r.get("updated_at", "")),
-                }
-                for r in review_items
-            ])
+            _json_output(
+                [
+                    {
+                        "id": r["id"],
+                        "title": r["title"],
+                        "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
+                        "assignee": r.get("assignee") or r["_meta"].get("assignee", ""),
+                        "updated_at": str(r.get("updated_at", "")),
+                    }
+                    for r in review_items
+                ]
+            )
             return
 
         table = Table(title="Review Queue")
@@ -716,14 +752,17 @@ def sw_claim(
 
         svc = KBService(config, db)
         result = svc.claim_entry(
-            item_id, item_kb, assignee,
-            from_status=current_status, to_status="in_progress",
+            item_id,
+            item_kb,
+            assignee,
+            from_status=current_status,
+            to_status="in_progress",
         )
 
         if result.get("claimed"):
             console.print(f"[green]Claimed:[/green] {row['title']}")
             console.print(f"  Assignee: [cyan]{assignee}[/cyan]")
-            console.print(f"  Status: [yellow]in_progress[/yellow]")
+            console.print("  Status: [yellow]in_progress[/yellow]")
         else:
             console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
             raise typer.Exit(1)
@@ -765,18 +804,196 @@ def sw_submit(
         assignee = row.get("assignee") or row["_meta"].get("assignee", "")
         svc = KBService(config, db)
         result = svc.claim_entry(
-            item_id, item_kb, assignee,
-            from_status=current_status, to_status="review",
+            item_id,
+            item_kb,
+            assignee,
+            from_status=current_status,
+            to_status="review",
         )
 
         if result.get("claimed"):
             console.print(f"[green]Submitted for review:[/green] {row['title']}")
-            console.print(f"  Status: [yellow]review[/yellow]")
+            console.print("  Status: [yellow]review[/yellow]")
         else:
             console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
             raise typer.Exit(1)
     finally:
         db.close()
+
+
+@sw_app.command("transition")
+def sw_transition(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    to_status: str = typer.Argument(..., help="Target status"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    reason: str | None = typer.Option(
+        None, "--reason", "-r", help="Reason (required for some transitions)"
+    ),
+):
+    """Transition a backlog item to a new status (validates workflow rules)."""
+    from pyrite.services.kb_service import KBService
+
+    from .workflows import (
+        BACKLOG_WORKFLOW,
+        can_transition,
+        get_allowed_transitions,
+        requires_reason,
+    )
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        rows = _query_entries(db, "backlog_item", kb_name)
+        match = [r for r in rows if r["id"] == item_id]
+        if not match:
+            console.print(f"[red]Error:[/red] Backlog item '{item_id}' not found.")
+            raise typer.Exit(1)
+
+        row = match[0]
+        current_status = row.get("status") or row["_meta"].get("status", "proposed")
+        item_kb = row.get("kb_name", kb_name or "")
+
+        if not can_transition(BACKLOG_WORKFLOW, current_status, to_status, "write"):
+            allowed = get_allowed_transitions(BACKLOG_WORKFLOW, current_status, "write")
+            targets = [t["to"] for t in allowed]
+            console.print(
+                f"[red]Error:[/red] Cannot transition from '{current_status}' to '{to_status}'. "
+                f"Allowed: {', '.join(targets) or 'none'}"
+            )
+            raise typer.Exit(1)
+
+        if requires_reason(BACKLOG_WORKFLOW, current_status, to_status) and not reason:
+            console.print(
+                f"[red]Error:[/red] Reason is required for transition from '{current_status}' to '{to_status}'. "
+                f"Use --reason."
+            )
+            raise typer.Exit(1)
+
+        assignee = row.get("assignee") or row["_meta"].get("assignee", "")
+        svc = KBService(config, db)
+        result = svc.claim_entry(
+            item_id,
+            item_kb,
+            assignee,
+            from_status=current_status,
+            to_status=to_status,
+        )
+
+        if result.get("claimed"):
+            console.print(f"[green]Transitioned:[/green] {row['title']}")
+            console.print(f"  {current_status} -> [yellow]{to_status}[/yellow]")
+            if reason:
+                console.print(f"  Reason: {reason}")
+        else:
+            console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
+            raise typer.Exit(1)
+    finally:
+        db.close()
+
+
+@sw_app.command("pull-next")
+def sw_pull_next(
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """Recommend the next work item based on priority and WIP limits."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_pull_next({"kb_name": kb_name})
+
+    if fmt == "json":
+        _json_output(result)
+        return
+
+    rec = result.get("recommendation")
+    if not rec:
+        console.print(f"[dim]{result.get('reason', 'No items available')}[/dim]")
+        return
+
+    table = Table(title="Recommended Next Item")
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+    table.add_row("ID", rec["id"])
+    table.add_row("Title", rec["title"])
+    table.add_row("Kind", rec.get("kind", ""))
+    table.add_row("Priority", rec.get("priority", ""))
+    table.add_row("Effort", rec.get("effort", ""))
+
+    wip = result.get("wip_status", {})
+    if wip:
+        limit_str = str(wip.get("limit", "-"))
+        table.add_row("WIP", f"{wip.get('current', 0)}/{limit_str}")
+
+    console.print(table)
+
+
+@sw_app.command("review")
+def sw_review_cmd(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    outcome: str = typer.Option(
+        ..., "--outcome", "-o", help="Review outcome: approved or changes_requested"
+    ),
+    reviewer: str = typer.Option(..., "--reviewer", help="Who is reviewing"),
+    feedback: str | None = typer.Option(None, "--feedback", help="Review notes/feedback"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+):
+    """Record a review outcome for an item in review status."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_review(
+        {
+            "item_id": item_id,
+            "kb_name": kb_name or "",
+            "outcome": outcome,
+            "reviewer": reviewer,
+            "feedback": feedback,
+        }
+    )
+
+    if result.get("reviewed"):
+        console.print(f"[green]Reviewed:[/green] {item_id}")
+        console.print(f"  Outcome: [yellow]{outcome}[/yellow]")
+        console.print(f"  New status: [yellow]{result.get('new_status', '')}[/yellow]")
+    else:
+        console.print(f"[red]Error:[/red] {result.get('error', 'Unknown error')}")
+        raise typer.Exit(1)
+
+
+@sw_app.command("log")
+def sw_log_cmd(
+    item_id: str = typer.Argument(..., help="Backlog item ID"),
+    summary: str = typer.Option(..., "--summary", "-s", help="Session summary"),
+    decisions: str | None = typer.Option(None, "--decisions", help="Design choices made"),
+    rejected: str | None = typer.Option(None, "--rejected", help="Approaches tried and abandoned"),
+    open_questions: str | None = typer.Option(None, "--open-questions", help="Unresolved issues"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+):
+    """Log a work session for a backlog item."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_log(
+        {
+            "item_id": item_id,
+            "kb_name": kb_name or "",
+            "summary": summary,
+            "decisions": decisions or "",
+            "rejected": rejected or "",
+            "open_questions": open_questions or "",
+        }
+    )
+
+    if result.get("created"):
+        console.print(f"[green]Logged:[/green] {result['id']}")
+        console.print(f"  Item: {item_id}")
+        console.print(f"  Date: {result.get('date', '')}")
+        console.print(f"  File: [cyan]{result.get('filename', '')}[/cyan]")
+    else:
+        console.print(f"[red]Error:[/red] {result.get('error', 'Unknown error')}")
+        raise typer.Exit(1)
 
 
 @sw_app.command("components")
@@ -803,15 +1020,17 @@ def sw_components(
             return
 
         if fmt == "json":
-            _json_output([
-                {
-                    "title": r["title"],
-                    "kind": r["_meta"].get("kind", ""),
-                    "path": r["_meta"].get("path", ""),
-                    "owner": r["_meta"].get("owner", ""),
-                }
-                for r in rows
-            ])
+            _json_output(
+                [
+                    {
+                        "title": r["title"],
+                        "kind": r["_meta"].get("kind", ""),
+                        "path": r["_meta"].get("path", ""),
+                        "owner": r["_meta"].get("owner", ""),
+                    }
+                    for r in rows
+                ]
+            )
             return
 
         table = Table(title="Components")

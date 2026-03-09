@@ -14,9 +14,42 @@ DESIGN_DOC_STATUSES = ("draft", "review", "approved", "implemented", "obsolete",
 STANDARD_CATEGORIES = ("coding", "testing", "api", "git", "documentation", "security", "deployment")
 VALIDATION_CATEGORIES = STANDARD_CATEGORIES
 CONVENTION_CATEGORIES = STANDARD_CATEGORIES
-COMPONENT_KINDS = ("module", "service", "package", "library", "cli", "api", "database", "application", "utility", "endpoint", "docs")
-BACKLOG_KINDS = ("feature", "bug", "tech_debt", "improvement", "spike", "enhancement", "documentation", "docs", "task", "epic")
-BACKLOG_STATUSES = ("proposed", "planned", "accepted", "in_progress", "review", "done", "completed", "retired", "deferred", "wont_do")
+COMPONENT_KINDS = (
+    "module",
+    "service",
+    "package",
+    "library",
+    "cli",
+    "api",
+    "database",
+    "application",
+    "utility",
+    "endpoint",
+    "docs",
+)
+BACKLOG_KINDS = (
+    "feature",
+    "bug",
+    "tech_debt",
+    "improvement",
+    "spike",
+    "enhancement",
+    "documentation",
+    "docs",
+    "task",
+    "epic",
+)
+BACKLOG_STATUSES = (
+    "proposed",
+    "planned",
+    "accepted",
+    "in_progress",
+    "review",
+    "done",
+    "retired",
+    "deferred",
+    "wont_do",
+)
 BACKLOG_PRIORITIES = ("critical", "high", "medium", "low")
 BACKLOG_EFFORTS = ("XS", "S", "M", "L", "XL")
 RUNBOOK_KINDS = ("howto", "troubleshooting", "setup", "operations", "onboarding")

@@ -1,6 +1,7 @@
 """Software KB plugin — ADRs, design docs, standards, components, backlog, runbooks for pyrite."""
 
 from collections.abc import Callable
+from datetime import UTC
 from typing import Any
 
 from .entry_types import (
@@ -242,7 +243,14 @@ class SoftwareKBPlugin:
                         "kb_name": {"type": "string", "description": "KB name (optional)"},
                         "status": {
                             "type": "string",
-                            "enum": ["proposed", "accepted", "in_progress", "review", "done", "wont_do"],
+                            "enum": [
+                                "proposed",
+                                "accepted",
+                                "in_progress",
+                                "review",
+                                "done",
+                                "wont_do",
+                            ],
                             "description": "Filter by status",
                         },
                         "priority": {
@@ -332,7 +340,7 @@ class SoftwareKBPlugin:
                 "handler": self._mcp_submit,
             }
             tools["sw_create_backlog_item"] = {
-                "description": "Create a new backlog item (feature, bug, tech debt)",
+                "description": "Create a new backlog item (feature, bug, tech debt). Persists the entry to the KB.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -349,22 +357,64 @@ class SoftwareKBPlugin:
                             "description": "Priority level",
                         },
                         "body": {"type": "string", "description": "Item description"},
+                        "effort": {
+                            "type": "string",
+                            "enum": ["XS", "S", "M", "L", "XL"],
+                            "description": "Effort estimate",
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Tags for categorization",
+                        },
                     },
-                    "required": ["title", "kind"],
+                    "required": ["title", "kind", "kb_name"],
                 },
                 "handler": self._mcp_create_backlog_item,
+            }
+            tools["sw_transition"] = {
+                "description": "Transition a backlog item to a new status (validates workflow rules)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "to_status": {"type": "string", "description": "Target status"},
+                        "reason": {
+                            "type": "string",
+                            "description": "Required for some transitions (wont_do, reopen, rework)",
+                        },
+                    },
+                    "required": ["item_id", "kb_name", "to_status"],
+                },
+                "handler": self._mcp_transition,
             }
             tools["sw_log"] = {
                 "description": "Log a work session for a backlog item: decisions, rejected approaches, open questions",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "item_id": {"type": "string", "description": "Backlog item ID this session is for"},
+                        "item_id": {
+                            "type": "string",
+                            "description": "Backlog item ID this session is for",
+                        },
                         "kb_name": {"type": "string", "description": "KB name"},
-                        "summary": {"type": "string", "description": "Session summary (becomes the entry body)"},
-                        "decisions": {"type": "string", "description": "Design choices made and rationale"},
-                        "rejected": {"type": "string", "description": "Approaches tried and abandoned"},
-                        "open_questions": {"type": "string", "description": "Unresolved issues for next session"},
+                        "summary": {
+                            "type": "string",
+                            "description": "Session summary (becomes the entry body)",
+                        },
+                        "decisions": {
+                            "type": "string",
+                            "description": "Design choices made and rationale",
+                        },
+                        "rejected": {
+                            "type": "string",
+                            "description": "Approaches tried and abandoned",
+                        },
+                        "open_questions": {
+                            "type": "string",
+                            "description": "Unresolved issues for next session",
+                        },
                     },
                     "required": ["item_id", "kb_name", "summary"],
                 },
@@ -770,11 +820,15 @@ class SoftwareKBPlugin:
                         link_meta = {}
                         if link.get("metadata"):
                             try:
-                                link_meta = json.loads(link["metadata"]) if isinstance(link["metadata"], str) else link.get("metadata", {})
+                                link_meta = (
+                                    json.loads(link["metadata"])
+                                    if isinstance(link["metadata"], str)
+                                    else link.get("metadata", {})
+                                )
                             except (json.JSONDecodeError, TypeError):
                                 pass
                         link_status = link.get("status") or link_meta.get("status", "proposed")
-                        if link_status in ("done", "completed"):
+                        if link_status == "done":
                             completed += 1
 
                 pct = round(completed / total * 100) if total > 0 else 0
@@ -812,7 +866,9 @@ class SoftwareKBPlugin:
 
                 config = load_config()
                 kb_conf = config.get_kb(kb_name)
-                board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                board_config = (
+                    load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                )
             else:
                 board_config = load_board_config(Path("."))
 
@@ -967,7 +1023,9 @@ class SoftwareKBPlugin:
                 rework_count = 0
                 try:
                     prior_reviews = db.get_reviews(row["id"], kb_name or row["kb_name"])
-                    rework_count = sum(1 for r in prior_reviews if r["result"] == "changes_requested")
+                    rework_count = sum(
+                        1 for r in prior_reviews if r["result"] == "changes_requested"
+                    )
                 except Exception:
                     pass
 
@@ -991,7 +1049,9 @@ class SoftwareKBPlugin:
 
                     config = load_config()
                     kb_conf = config.get_kb(kb_name)
-                    board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                    board_config = (
+                        load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                    )
                 else:
                     board_config = load_board_config(Path("."))
 
@@ -1015,7 +1075,7 @@ class SoftwareKBPlugin:
             if should_close:
                 db.close()
 
-    _RESOLVED_STATUSES = frozenset({"done", "completed", "retired", "wont_do"})
+    _RESOLVED_STATUSES = frozenset({"done", "retired", "wont_do"})
 
     def _get_dependency_status(self, db, item_id: str, kb_name: str) -> dict[str, Any]:
         """Return dependency info for a backlog item.
@@ -1036,18 +1096,24 @@ class SoftwareKBPlugin:
                 meta = {}
                 if dep_entry.get("metadata"):
                     try:
-                        meta = json.loads(dep_entry["metadata"]) if isinstance(dep_entry["metadata"], str) else dep_entry["metadata"]
+                        meta = (
+                            json.loads(dep_entry["metadata"])
+                            if isinstance(dep_entry["metadata"], str)
+                            else dep_entry["metadata"]
+                        )
                     except (json.JSONDecodeError, TypeError):
                         pass
                 dep_status = dep_entry.get("status") or meta.get("status", "proposed")
             else:
                 dep_status = "unknown"
-            blocked_by.append({
-                "id": link["id"],
-                "title": link.get("title", ""),
-                "status": dep_status,
-                "resolved": dep_status in self._RESOLVED_STATUSES,
-            })
+            blocked_by.append(
+                {
+                    "id": link["id"],
+                    "title": link.get("title", ""),
+                    "status": dep_status,
+                    "resolved": dep_status in self._RESOLVED_STATUSES,
+                }
+            )
 
         # Backlinks with relation "blocked_by" → the source item is blocked by *this* item,
         # meaning this item blocks that source.
@@ -1059,17 +1125,23 @@ class SoftwareKBPlugin:
                 meta = {}
                 if dep_entry.get("metadata"):
                     try:
-                        meta = json.loads(dep_entry["metadata"]) if isinstance(dep_entry["metadata"], str) else dep_entry["metadata"]
+                        meta = (
+                            json.loads(dep_entry["metadata"])
+                            if isinstance(dep_entry["metadata"], str)
+                            else dep_entry["metadata"]
+                        )
                     except (json.JSONDecodeError, TypeError):
                         pass
                 dep_status = dep_entry.get("status") or meta.get("status", "proposed")
             else:
                 dep_status = "unknown"
-            blocks.append({
-                "id": link["id"],
-                "title": link.get("title", ""),
-                "status": dep_status,
-            })
+            blocks.append(
+                {
+                    "id": link["id"],
+                    "title": link.get("title", ""),
+                    "status": dep_status,
+                }
+            )
 
         return {
             "blocked_by": blocked_by,
@@ -1094,7 +1166,11 @@ class SoftwareKBPlugin:
             meta = {}
             if entry.get("metadata"):
                 try:
-                    meta = json.loads(entry["metadata"]) if isinstance(entry["metadata"], str) else entry.get("metadata", {})
+                    meta = (
+                        json.loads(entry["metadata"])
+                        if isinstance(entry["metadata"], str)
+                        else entry.get("metadata", {})
+                    )
                 except (json.JSONDecodeError, TypeError):
                     pass
 
@@ -1113,7 +1189,9 @@ class SoftwareKBPlugin:
 
             # Build dependency info from blocks/blocked_by links
             dep_status = self._get_dependency_status(db, item_id, kb_name)
-            dep_link_ids = {d["id"] for d in dep_status["blocked_by"]} | {d["id"] for d in dep_status["blocks"]}
+            dep_link_ids = {d["id"] for d in dep_status["blocked_by"]} | {
+                d["id"] for d in dep_status["blocks"]
+            }
 
             # Categorize by entry_type
             buckets: dict[str, list] = {
@@ -1196,7 +1274,9 @@ class SoftwareKBPlugin:
 
                     config = load_config()
                     kb_conf = config.get_kb(kb_name)
-                    board_config = load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                    board_config = (
+                        load_board_config(kb_conf.path) if kb_conf else load_board_config(Path("."))
+                    )
                 else:
                     board_config = load_board_config(Path("."))
             except Exception:
@@ -1283,11 +1363,13 @@ class SoftwareKBPlugin:
             for candidate in candidates:
                 dep = self._get_dependency_status(db, candidate["id"], kb_name or "")
                 if dep["is_blocked"]:
-                    blocked_items.append({
-                        "id": candidate["id"],
-                        "title": candidate["title"],
-                        "blocked_by": [d["id"] for d in dep["blocked_by"] if not d["resolved"]],
-                    })
+                    blocked_items.append(
+                        {
+                            "id": candidate["id"],
+                            "title": candidate["title"],
+                            "blocked_by": [d["id"] for d in dep["blocked_by"] if not d["resolved"]],
+                        }
+                    )
                 elif top is None:
                     top = candidate
 
@@ -1303,7 +1385,9 @@ class SoftwareKBPlugin:
             outlinks = db.get_outlinks(top["id"], kb_name or "")
             adr_count = sum(1 for l in outlinks if l.get("entry_type") == "adr")
             component_count = sum(1 for l in outlinks if l.get("entry_type") == "component")
-            validation_count = sum(1 for l in outlinks if l.get("entry_type") == "programmatic_validation")
+            validation_count = sum(
+                1 for l in outlinks if l.get("entry_type") == "programmatic_validation"
+            )
 
             result = {
                 "recommendation": {
@@ -1340,10 +1424,15 @@ class SoftwareKBPlugin:
 
         try:
             # Get current entry
-            query = "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
+            query = (
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
+            )
             row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
             if not row:
-                return {"claimed": False, "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'"}
+                return {
+                    "claimed": False,
+                    "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'",
+                }
 
             meta = {}
             if row["metadata"]:
@@ -1384,8 +1473,11 @@ class SoftwareKBPlugin:
             config = load_config()
             svc = KBService(config, db)
             result = svc.claim_entry(
-                item_id, kb_name, assignee,
-                from_status=current_status, to_status="in_progress",
+                item_id,
+                kb_name,
+                assignee,
+                from_status=current_status,
+                to_status="in_progress",
             )
             return result
         finally:
@@ -1405,8 +1497,7 @@ class SoftwareKBPlugin:
         try:
             # Get current entry
             query = (
-                "SELECT * FROM entry WHERE id = ? AND kb_name = ?"
-                " AND entry_type = 'backlog_item'"
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
             )
             row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
             if not row:
@@ -1442,8 +1533,11 @@ class SoftwareKBPlugin:
             svc = KBService(config, db)
             current_assignee = row["assignee"] or meta.get("assignee", "")
             cas_result = svc.claim_entry(
-                item_id, kb_name, current_assignee,
-                from_status=current_status, to_status="review",
+                item_id,
+                kb_name,
+                current_assignee,
+                from_status=current_status,
+                to_status="review",
             )
 
             if not cas_result.get("claimed"):
@@ -1456,6 +1550,92 @@ class SoftwareKBPlugin:
                 "submitted": True,
                 "id": item_id,
                 "new_status": "review",
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_transition(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Transition a backlog item to a new status."""
+        import json
+
+        from .workflows import (
+            BACKLOG_WORKFLOW,
+            can_transition,
+            get_allowed_transitions,
+            requires_reason,
+        )
+
+        db, should_close = self._get_db()
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+        to_status = args["to_status"]
+        reason = args.get("reason")
+
+        try:
+            query = (
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
+            )
+            row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
+            if not row:
+                return {
+                    "transitioned": False,
+                    "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'",
+                }
+
+            meta = {}
+            if row["metadata"]:
+                try:
+                    meta = json.loads(row["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            current_status = row["status"] or meta.get("status", "proposed")
+
+            # Validate transition
+            if not can_transition(BACKLOG_WORKFLOW, current_status, to_status, "write"):
+                allowed = get_allowed_transitions(BACKLOG_WORKFLOW, current_status, "write")
+                return {
+                    "transitioned": False,
+                    "error": f"Cannot transition from '{current_status}' to '{to_status}'",
+                    "current_status": current_status,
+                    "allowed_transitions": [t["to"] for t in allowed],
+                }
+
+            # Check if reason is required
+            if requires_reason(BACKLOG_WORKFLOW, current_status, to_status) and not reason:
+                return {
+                    "transitioned": False,
+                    "error": f"Reason is required for transition from '{current_status}' to '{to_status}'",
+                }
+
+            # Use KBService CAS pattern — preserve current assignee
+            from pyrite.config import load_config
+            from pyrite.services.kb_service import KBService
+
+            config = load_config()
+            svc = KBService(config, db)
+            current_assignee = row["assignee"] or meta.get("assignee", "")
+            cas_result = svc.claim_entry(
+                item_id,
+                kb_name,
+                current_assignee,
+                from_status=current_status,
+                to_status=to_status,
+            )
+
+            if not cas_result.get("claimed"):
+                return {
+                    "transitioned": False,
+                    "error": cas_result.get("error", "CAS transition failed"),
+                }
+
+            return {
+                "transitioned": True,
+                "id": item_id,
+                "old_status": current_status,
+                "new_status": to_status,
+                "reason": reason,
             }
         finally:
             if should_close:
@@ -1477,15 +1657,13 @@ class SoftwareKBPlugin:
         try:
             # Get current entry
             query = (
-                "SELECT * FROM entry WHERE id = ? AND kb_name = ?"
-                " AND entry_type = 'backlog_item'"
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
             )
             row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
             if not row:
                 return {
                     "reviewed": False,
-                    "error": f"Backlog item '{item_id}' not found"
-                    f" in KB '{kb_name}'",
+                    "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'",
                 }
 
             meta = {}
@@ -1531,8 +1709,11 @@ class SoftwareKBPlugin:
             svc = KBService(config, db)
             current_assignee = row["assignee"] or meta.get("assignee", "")
             cas_result = svc.claim_entry(
-                item_id, kb_name, current_assignee,
-                from_status="review", to_status=target,
+                item_id,
+                kb_name,
+                current_assignee,
+                from_status="review",
+                to_status=target,
             )
 
             if not cas_result.get("claimed"):
@@ -1564,28 +1745,59 @@ class SoftwareKBPlugin:
                 db.close()
 
     def _mcp_create_backlog_item(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Create a new backlog item."""
+        """Create a new backlog item and persist it to the KB."""
+        import re
+
+        from pyrite.config import load_config
+        from pyrite.services.kb_service import KBService
+
         title = args["title"]
         kind = args["kind"]
+        kb_name = args["kb_name"]
         priority = args.get("priority", "medium")
         body = args.get("body", "")
-        slug = title.lower().replace(" ", "-")
+        effort = args.get("effort", "")
+        tags = args.get("tags", [])
 
-        return {
-            "created": True,
-            "title": title,
-            "kind": kind,
-            "priority": priority,
-            "status": "proposed",
-            "filename": f"backlog/{slug}.md",
-            "body": body,
-            "note": "Create the markdown file with this frontmatter and body to complete.",
-        }
+        # Generate slug-based entry ID
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+        entry_id = slug
+
+        db, should_close = self._get_db()
+        try:
+            config = load_config()
+            svc = KBService(config, db)
+
+            kwargs: dict[str, Any] = {
+                "kind": kind,
+                "priority": priority,
+                "status": "proposed",
+            }
+            if effort:
+                kwargs["effort"] = effort
+            if tags:
+                kwargs["tags"] = tags
+
+            svc.create_entry(kb_name, entry_id, title, "backlog_item", body, **kwargs)
+
+            return {
+                "created": True,
+                "id": entry_id,
+                "title": title,
+                "kind": kind,
+                "priority": priority,
+                "status": "proposed",
+                "effort": effort,
+            }
+        except Exception as e:
+            return {"created": False, "error": str(e)}
+        finally:
+            if should_close:
+                db.close()
 
     def _mcp_log(self, args: dict[str, Any]) -> dict[str, Any]:
         """Log a work session for a backlog item."""
-        import json
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         item_id = args["item_id"]
         kb_name = args["kb_name"]
@@ -1598,9 +1810,12 @@ class SoftwareKBPlugin:
         try:
             entry = db.get_entry(item_id, kb_name)
             if not entry:
-                return {"created": False, "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'"}
+                return {
+                    "created": False,
+                    "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'",
+                }
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             timestamp = now.strftime("%Y%m%dT%H%M%S")
             log_id = f"{item_id}-log-{timestamp}"
             date = now.strftime("%Y-%m-%d")

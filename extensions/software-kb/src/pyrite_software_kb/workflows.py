@@ -34,7 +34,17 @@ ADR_LIFECYCLE = {
 }
 
 BACKLOG_WORKFLOW = {
-    "states": ["proposed", "planned", "accepted", "in_progress", "review", "done", "completed", "retired", "deferred", "wont_do"],
+    "states": [
+        "proposed",
+        "planned",
+        "accepted",
+        "in_progress",
+        "review",
+        "done",
+        "retired",
+        "deferred",
+        "wont_do",
+    ],
     "initial": "proposed",
     "field": "status",
     "transitions": [
@@ -75,22 +85,10 @@ BACKLOG_WORKFLOW = {
             "description": "Mark item as done",
         },
         {
-            "from": "in_progress",
-            "to": "completed",
-            "requires": "write",
-            "description": "Mark item as completed",
-        },
-        {
             "from": "review",
             "to": "done",
             "requires": "write",
             "description": "Approve and mark as done",
-        },
-        {
-            "from": "review",
-            "to": "completed",
-            "requires": "write",
-            "description": "Approve and mark as completed",
         },
         {
             "from": "review",
@@ -104,12 +102,6 @@ BACKLOG_WORKFLOW = {
             "to": "retired",
             "requires": "write",
             "description": "Retire a done item (no longer relevant)",
-        },
-        {
-            "from": "completed",
-            "to": "retired",
-            "requires": "write",
-            "description": "Retire a completed item",
         },
         {
             "from": "proposed",
@@ -145,13 +137,6 @@ BACKLOG_WORKFLOW = {
         },
         {
             "from": "done",
-            "to": "accepted",
-            "requires": "write",
-            "requires_reason": True,
-            "description": "Reopen a completed item",
-        },
-        {
-            "from": "completed",
             "to": "accepted",
             "requires": "write",
             "requires_reason": True,
