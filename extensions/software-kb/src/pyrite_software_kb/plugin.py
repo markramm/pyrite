@@ -366,6 +366,14 @@ class SoftwareKBPlugin:
                 "inverse": "tracks",
                 "description": "ADR/design doc tracked by a backlog item",
             },
+            "blocks": {
+                "inverse": "blocked_by",
+                "description": "Backlog item must complete before another can start",
+            },
+            "blocked_by": {
+                "inverse": "blocks",
+                "description": "Backlog item cannot start until blocker completes",
+            },
         }
 
     def get_db_tables(self) -> list[dict]:
@@ -939,6 +947,68 @@ class SoftwareKBPlugin:
             if should_close:
                 db.close()
 
+    _RESOLVED_STATUSES = frozenset({"done", "completed", "retired", "wont_do"})
+
+    def _get_dependency_status(self, db, item_id: str, kb_name: str) -> dict[str, Any]:
+        """Return dependency info for a backlog item.
+
+        Returns dict with blocked_by, blocks, and is_blocked.
+        """
+        import json
+
+        blocked_by: list[dict[str, Any]] = []
+        blocks: list[dict[str, Any]] = []
+
+        # Outlinks with relation "blocked_by" → this item is blocked by those targets
+        for link in db.get_outlinks(item_id, kb_name):
+            if link.get("relation") != "blocked_by":
+                continue
+            dep_entry = db.get_entry(link["id"], link.get("kb_name", kb_name))
+            if dep_entry:
+                meta = {}
+                if dep_entry.get("metadata"):
+                    try:
+                        meta = json.loads(dep_entry["metadata"]) if isinstance(dep_entry["metadata"], str) else dep_entry["metadata"]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                dep_status = dep_entry.get("status") or meta.get("status", "proposed")
+            else:
+                dep_status = "unknown"
+            blocked_by.append({
+                "id": link["id"],
+                "title": link.get("title", ""),
+                "status": dep_status,
+                "resolved": dep_status in self._RESOLVED_STATUSES,
+            })
+
+        # Backlinks with relation "blocked_by" → the source item is blocked by *this* item,
+        # meaning this item blocks that source.
+        for link in db.get_backlinks(item_id, kb_name):
+            if link.get("relation") != "blocked_by":
+                continue
+            dep_entry = db.get_entry(link["id"], link.get("kb_name", kb_name))
+            if dep_entry:
+                meta = {}
+                if dep_entry.get("metadata"):
+                    try:
+                        meta = json.loads(dep_entry["metadata"]) if isinstance(dep_entry["metadata"], str) else dep_entry["metadata"]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                dep_status = dep_entry.get("status") or meta.get("status", "proposed")
+            else:
+                dep_status = "unknown"
+            blocks.append({
+                "id": link["id"],
+                "title": link.get("title", ""),
+                "status": dep_status,
+            })
+
+        return {
+            "blocked_by": blocked_by,
+            "blocks": blocks,
+            "is_blocked": any(not dep["resolved"] for dep in blocked_by),
+        }
+
     def _mcp_context_for_item(self, args: dict[str, Any]) -> dict[str, Any]:
         """Assemble full context bundle for a backlog item."""
         import json
@@ -973,6 +1043,10 @@ class SoftwareKBPlugin:
             outlinks = db.get_outlinks(item_id, kb_name)
             backlinks = db.get_backlinks(item_id, kb_name)
 
+            # Build dependency info from blocks/blocked_by links
+            dep_status = self._get_dependency_status(db, item_id, kb_name)
+            dep_link_ids = {d["id"] for d in dep_status["blocked_by"]} | {d["id"] for d in dep_status["blocks"]}
+
             # Categorize by entry_type
             buckets: dict[str, list] = {
                 "adrs": [],
@@ -991,6 +1065,9 @@ class SoftwareKBPlugin:
             }
 
             for link in outlinks + backlinks:
+                # Skip dependency links — they go in the dependencies bucket
+                if link.get("id", "") in dep_link_ids:
+                    continue
                 entry_type = link.get("entry_type", "")
                 bucket = type_to_bucket.get(entry_type, "related")
                 body = link.get("body", "") or ""
@@ -1004,7 +1081,13 @@ class SoftwareKBPlugin:
                     }
                 )
 
-            return {"item": item_info, **buckets}
+            dependencies = {
+                "blocked_by": dep_status["blocked_by"],
+                "blocks": dep_status["blocks"],
+                "is_blocked": dep_status["is_blocked"],
+            }
+
+            return {"item": item_info, "dependencies": dependencies, **buckets}
         finally:
             if should_close:
                 db.close()
@@ -1108,14 +1191,35 @@ class SoftwareKBPlugin:
                     "wip_status": wip_status,
                 }
 
-            top = candidates[0]
+            # Filter out blocked candidates
+            blocked_items = []
+            top = None
+            for candidate in candidates:
+                dep = self._get_dependency_status(db, candidate["id"], kb_name or "")
+                if dep["is_blocked"]:
+                    blocked_items.append({
+                        "id": candidate["id"],
+                        "title": candidate["title"],
+                        "blocked_by": [d["id"] for d in dep["blocked_by"] if not d["resolved"]],
+                    })
+                elif top is None:
+                    top = candidate
+
+            if top is None:
+                return {
+                    "recommendation": None,
+                    "reason": "All accepted items are blocked by dependencies",
+                    "blocked_items": blocked_items,
+                    "wip_status": wip_status,
+                }
+
             # Get context preview counts
             outlinks = db.get_outlinks(top["id"], kb_name or "")
             adr_count = sum(1 for l in outlinks if l.get("entry_type") == "adr")
             component_count = sum(1 for l in outlinks if l.get("entry_type") == "component")
             validation_count = sum(1 for l in outlinks if l.get("entry_type") == "programmatic_validation")
 
-            return {
+            result = {
                 "recommendation": {
                     "id": top["id"],
                     "title": top["title"],
@@ -1130,6 +1234,9 @@ class SoftwareKBPlugin:
                 },
                 "wip_status": wip_status,
             }
+            if blocked_items:
+                result["blocked_items"] = blocked_items
+            return result
         finally:
             if should_close:
                 db.close()
@@ -1160,6 +1267,19 @@ class SoftwareKBPlugin:
                     pass
 
             current_status = row["status"] or meta.get("status", "proposed")
+
+            # Check dependencies before allowing claim
+            dep_status = self._get_dependency_status(db, item_id, kb_name)
+            if dep_status["is_blocked"]:
+                unresolved = [d for d in dep_status["blocked_by"] if not d["resolved"]]
+                return {
+                    "claimed": False,
+                    "error": "Item has unresolved dependencies",
+                    "unresolved_dependencies": [
+                        {"id": d["id"], "title": d["title"], "status": d["status"]}
+                        for d in unresolved
+                    ],
+                }
 
             # Validate transition
             if not can_transition(BACKLOG_WORKFLOW, current_status, "in_progress", "write"):

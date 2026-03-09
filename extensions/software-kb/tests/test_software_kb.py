@@ -1794,3 +1794,182 @@ class TestNewAdrCreatesFile:
                 assert expected_file.exists()
             finally:
                 db.close()
+
+
+# =========================================================================
+# TestBacklogDependencies
+# =========================================================================
+
+
+class TestBacklogDependencies:
+    """Tests for blocks/blocked_by dependency support in flow tools."""
+
+    def test_relationship_types_include_blocks(self):
+        plugin = SoftwareKBPlugin()
+        rel_types = plugin.get_relationship_types()
+        assert "blocks" in rel_types
+        assert "blocked_by" in rel_types
+        assert rel_types["blocks"]["inverse"] == "blocked_by"
+        assert rel_types["blocked_by"]["inverse"] == "blocks"
+
+    def test_pull_next_skips_blocked_items(self):
+        """B is blocked_by A (unresolved). pull_next returns A."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "critical",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "critical"}},
+                ],
+                links=[
+                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_pull_next({"kb_name": "test"})
+                # B has higher priority (critical) but is blocked, so A is recommended
+                assert result["recommendation"]["id"] == "item-a"
+            finally:
+                db.close()
+
+    def test_pull_next_resolved_deps_eligible(self):
+        """B blocked_by A, but A is completed. B is eligible."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-a", "title": "Task A", "status": "completed", "priority": "high",
+                     "meta": {"kind": "feature", "status": "completed", "priority": "high"}},
+                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "critical",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "critical"}},
+                ],
+                links=[
+                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_pull_next({"kb_name": "test"})
+                # A is completed so B is unblocked, and B has higher priority
+                assert result["recommendation"]["id"] == "item-b"
+            finally:
+                db.close()
+
+    def test_pull_next_blocked_items_field(self):
+        """Blocked items appear in blocked_items response field."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "critical",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "critical"}},
+                ],
+                links=[
+                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_pull_next({"kb_name": "test"})
+                assert "blocked_items" in result
+                blocked = result["blocked_items"]
+                assert len(blocked) == 1
+                assert blocked[0]["id"] == "item-b"
+                assert "item-a" in blocked[0]["blocked_by"]
+            finally:
+                db.close()
+
+    def test_context_for_item_shows_dependencies(self):
+        """context_for_item includes dependencies bucket with status info."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                     "entry_type": "backlog_item"},
+                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"},
+                     "entry_type": "backlog_item"},
+                    {"id": "item-c", "title": "Task C", "status": "completed", "priority": "medium",
+                     "meta": {"kind": "bug", "status": "completed", "priority": "medium"},
+                     "entry_type": "backlog_item"},
+                ],
+                links=[
+                    # B is blocked_by A (A blocks B)
+                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                    # B is blocked_by C (C blocks B, but C is completed)
+                    {"source": "item-b", "target": "item-c", "relation": "blocked_by", "inverse": "blocks"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_context_for_item({"item_id": "item-b", "kb_name": "test"})
+                assert "dependencies" in result
+                deps = result["dependencies"]
+                assert len(deps["blocked_by"]) == 2
+                assert deps["is_blocked"] is True
+                # Check resolved flags
+                by_id = {d["id"]: d for d in deps["blocked_by"]}
+                assert by_id["item-a"]["resolved"] is False
+                assert by_id["item-c"]["resolved"] is True
+            finally:
+                db.close()
+
+    def test_claim_blocked_item_fails(self):
+        """Claiming an item with unresolved deps returns error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-a", "title": "Task A", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                ],
+                links=[
+                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_claim({"item_id": "item-b", "kb_name": "test", "assignee": "agent"})
+                assert result["claimed"] is False
+                assert "unresolved dependencies" in result["error"]
+                assert len(result["unresolved_dependencies"]) == 1
+                assert result["unresolved_dependencies"][0]["id"] == "item-a"
+            finally:
+                db.close()
+
+    def test_claim_resolved_deps_succeeds(self):
+        """Claiming an item whose blockers are all done succeeds."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {"id": "item-a", "title": "Task A", "status": "done", "priority": "high",
+                     "meta": {"kind": "feature", "status": "done", "priority": "high"}},
+                    {"id": "item-b", "title": "Task B", "status": "accepted", "priority": "high",
+                     "meta": {"kind": "feature", "status": "accepted", "priority": "high"}},
+                ],
+                links=[
+                    {"source": "item-b", "target": "item-a", "relation": "blocked_by", "inverse": "blocks"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                # claim_entry needs KBService — mock it
+                from unittest.mock import patch, MagicMock
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-b", "status": "in_progress", "assignee": "agent"}
+                with patch("pyrite.config.load_config"), \
+                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
+                    result = plugin._mcp_claim({"item_id": "item-b", "kb_name": "test", "assignee": "agent"})
+                assert result["claimed"] is True
+            finally:
+                db.close()
