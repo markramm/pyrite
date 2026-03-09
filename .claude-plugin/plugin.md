@@ -22,8 +22,12 @@ Multi-KB research infrastructure for citizen journalists and AI agents. Git-nati
 
 ## Skills Available
 
-- **kb** (`.claude/skills/kb/`) -- Search, read, create, and update KB entries
+- **kb** (`.claude/skills/kb/`) -- Search, read, create, and update KB entries via CLI
+- **software-kb** (`.claude/skills/software-kb/`) -- Kanban development workflow: pull, claim, submit, review via sw_* tools
 - **pyrite-dev** (`.claude/skills/pyrite-dev/`) -- Development workflow for Pyrite core, extensions, web frontend, and API
+- **extension-builder** (`.claude/skills/extension-builder/`) -- Scaffold new Pyrite extensions from a description
+- **investigation** (`.claude/skills/investigation/`) -- Entity investigation across KBs with source chain tracking
+- **research-flow** (`.claude/skills/research-flow/`) -- Structured topic research with Gather-Connect-Analyze-Synthesize
 
 ## Project Knowledge
 

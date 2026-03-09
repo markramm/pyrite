@@ -3,7 +3,7 @@ id: backlog-item-dependencies
 type: backlog_item
 title: "Backlog item dependencies (blocked_by/blocks)"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [software, agents, workflow, kanban]

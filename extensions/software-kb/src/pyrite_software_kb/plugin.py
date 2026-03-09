@@ -298,6 +298,37 @@ class SoftwareKBPlugin:
                 },
                 "handler": self._mcp_claim,
             }
+            tools["sw_review"] = {
+                "description": "Record review outcome for a backlog item in review status",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "outcome": {
+                            "type": "string",
+                            "enum": ["approved", "changes_requested"],
+                            "description": "Review outcome",
+                        },
+                        "feedback": {"type": "string", "description": "Review notes/feedback"},
+                        "reviewer": {"type": "string", "description": "Who is reviewing"},
+                    },
+                    "required": ["item_id", "kb_name", "outcome", "reviewer"],
+                },
+                "handler": self._mcp_review,
+            }
+            tools["sw_submit"] = {
+                "description": "Submit an in-progress item for review",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {"type": "string", "description": "Backlog item ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["item_id", "kb_name"],
+                },
+                "handler": self._mcp_submit,
+            }
             tools["sw_create_backlog_item"] = {
                 "description": "Create a new backlog item (feature, bug, tech debt)",
                 "inputSchema": {
@@ -904,6 +935,15 @@ class SoftwareKBPlugin:
                 status = row["status"] or meta.get("status", "proposed")
                 if status != "review":
                     continue
+
+                # Count prior changes_requested reviews for rework count
+                rework_count = 0
+                try:
+                    prior_reviews = db.get_reviews(row["id"], kb_name or row["kb_name"])
+                    rework_count = sum(1 for r in prior_reviews if r["result"] == "changes_requested")
+                except Exception:
+                    pass
+
                 items.append(
                     {
                         "id": row["id"],
@@ -912,6 +952,7 @@ class SoftwareKBPlugin:
                         "priority": row["priority"] or meta.get("priority", "medium"),
                         "assignee": row["assignee"] or meta.get("assignee", ""),
                         "updated_at": row["updated_at"] or "",
+                        "rework_count": rework_count,
                     }
                 )
 
@@ -1087,7 +1128,23 @@ class SoftwareKBPlugin:
                 "is_blocked": dep_status["is_blocked"],
             }
 
-            return {"item": item_info, "dependencies": dependencies, **buckets}
+            # Surface review history
+            reviews = []
+            try:
+                review_records = db.get_reviews(item_id, kb_name)
+                reviews = [
+                    {
+                        "reviewer": r["reviewer"],
+                        "result": r["result"],
+                        "details": r.get("details"),
+                        "created_at": r.get("created_at", ""),
+                    }
+                    for r in review_records
+                ]
+            except Exception:
+                pass
+
+            return {"item": item_info, "dependencies": dependencies, "reviews": reviews, **buckets}
         finally:
             if should_close:
                 db.close()
@@ -1302,6 +1359,177 @@ class SoftwareKBPlugin:
                 from_status=current_status, to_status="in_progress",
             )
             return result
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_submit(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Submit an in-progress backlog item for review."""
+        import json
+
+        from .workflows import BACKLOG_WORKFLOW, can_transition, get_allowed_transitions
+
+        db, should_close = self._get_db()
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+
+        try:
+            # Get current entry
+            query = (
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ?"
+                " AND entry_type = 'backlog_item'"
+            )
+            row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
+            if not row:
+                return {
+                    "submitted": False,
+                    "error": f"Backlog item '{item_id}' not found in KB '{kb_name}'",
+                }
+
+            meta = {}
+            if row["metadata"]:
+                try:
+                    meta = json.loads(row["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            current_status = row["status"] or meta.get("status", "proposed")
+
+            # Validate transition
+            if not can_transition(BACKLOG_WORKFLOW, current_status, "review", "write"):
+                allowed = get_allowed_transitions(BACKLOG_WORKFLOW, current_status, "write")
+                return {
+                    "submitted": False,
+                    "error": f"Cannot transition from '{current_status}' to 'review'",
+                    "current_status": current_status,
+                    "allowed_transitions": [t["to"] for t in allowed],
+                }
+
+            # Use KBService CAS — preserve current assignee
+            from pyrite.config import load_config
+            from pyrite.services.kb_service import KBService
+
+            config = load_config()
+            svc = KBService(config, db)
+            current_assignee = row["assignee"] or meta.get("assignee", "")
+            cas_result = svc.claim_entry(
+                item_id, kb_name, current_assignee,
+                from_status=current_status, to_status="review",
+            )
+
+            if not cas_result.get("claimed"):
+                return {
+                    "submitted": False,
+                    "error": cas_result.get("error", "CAS transition failed"),
+                }
+
+            return {
+                "submitted": True,
+                "id": item_id,
+                "new_status": "review",
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_review(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Record review outcome for a backlog item in review status."""
+        import json
+
+        from .workflows import BACKLOG_WORKFLOW, can_transition, get_allowed_transitions
+
+        db, should_close = self._get_db()
+        item_id = args["item_id"]
+        kb_name = args["kb_name"]
+        outcome = args["outcome"]
+        feedback = args.get("feedback")
+        reviewer = args["reviewer"]
+
+        try:
+            # Get current entry
+            query = (
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ?"
+                " AND entry_type = 'backlog_item'"
+            )
+            row = db._raw_conn.execute(query, (item_id, kb_name)).fetchone()
+            if not row:
+                return {
+                    "reviewed": False,
+                    "error": f"Backlog item '{item_id}' not found"
+                    f" in KB '{kb_name}'",
+                }
+
+            meta = {}
+            if row["metadata"]:
+                try:
+                    meta = json.loads(row["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            current_status = row["status"] or meta.get("status", "proposed")
+
+            if current_status != "review":
+                return {
+                    "reviewed": False,
+                    "error": f"Item is in '{current_status}' status, not 'review'",
+                    "current_status": current_status,
+                }
+
+            # Determine target status
+            target = "done" if outcome == "approved" else "in_progress"
+
+            # Validate workflow transition
+            if not can_transition(BACKLOG_WORKFLOW, "review", target, "write"):
+                allowed = get_allowed_transitions(BACKLOG_WORKFLOW, "review", "write")
+                return {
+                    "reviewed": False,
+                    "error": f"Cannot transition from 'review' to '{target}'",
+                    "allowed_transitions": [t["to"] for t in allowed],
+                }
+
+            # For changes_requested, feedback is required (workflow requires_reason)
+            if outcome == "changes_requested" and not feedback:
+                return {
+                    "reviewed": False,
+                    "error": "Feedback is required when requesting changes",
+                }
+
+            # Use KBService CAS pattern — pass current assignee to preserve it
+            from pyrite.config import load_config
+            from pyrite.services.kb_service import KBService
+
+            config = load_config()
+            svc = KBService(config, db)
+            current_assignee = row["assignee"] or meta.get("assignee", "")
+            cas_result = svc.claim_entry(
+                item_id, kb_name, current_assignee,
+                from_status="review", to_status=target,
+            )
+
+            if not cas_result.get("claimed"):
+                return {
+                    "reviewed": False,
+                    "error": cas_result.get("error", "CAS transition failed"),
+                }
+
+            # Record review via DB-level create_review
+            review_record = db.create_review(
+                entry_id=item_id,
+                kb_name=kb_name,
+                content_hash="",
+                reviewer=reviewer,
+                reviewer_type="agent",
+                result=outcome,
+                details=feedback,
+            )
+
+            return {
+                "reviewed": True,
+                "id": item_id,
+                "outcome": outcome,
+                "new_status": target,
+                "review_id": review_record["id"],
+            }
         finally:
             if should_close:
                 db.close()

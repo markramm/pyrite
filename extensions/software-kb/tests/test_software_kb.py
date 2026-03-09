@@ -1973,3 +1973,251 @@ class TestBacklogDependencies:
                 assert result["claimed"] is True
             finally:
                 db.close()
+
+
+# =========================================================================
+# TestReview — sw_review tool
+# =========================================================================
+
+
+class TestReview:
+    def test_review_tool_registered(self):
+        """sw_review is in write tier, not in read tier."""
+        plugin = SoftwareKBPlugin()
+        write_tools = plugin.get_mcp_tools("write")
+        read_tools = plugin.get_mcp_tools("read")
+        assert "sw_review" in write_tools
+        assert "sw_review" not in read_tools
+
+    def test_review_approved_transitions_to_done(self):
+        """Item in review → approved → status becomes done."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Review Me", "status": "review",
+                 "meta": {"kind": "feature", "status": "review"}, "assignee": "dev-1"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "done", "assignee": "dev-1"}
+                with patch("pyrite.config.load_config"), \
+                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
+                    result = plugin._mcp_review({
+                        "item_id": "item-1", "kb_name": "test",
+                        "outcome": "approved", "reviewer": "reviewer-1",
+                    })
+                assert result["reviewed"] is True
+                assert result["outcome"] == "approved"
+                assert result["new_status"] == "done"
+                assert "review_id" in result
+                # CAS was called with review → done
+                mock_svc.claim_entry.assert_called_once_with(
+                    "item-1", "test", "dev-1",
+                    from_status="review", to_status="done",
+                )
+            finally:
+                db.close()
+
+    def test_review_changes_requested_transitions_to_in_progress(self):
+        """Item in review → changes_requested → status becomes in_progress."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Review Me", "status": "review",
+                 "meta": {"kind": "bug", "status": "review"}, "assignee": "dev-1"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "in_progress", "assignee": "dev-1"}
+                with patch("pyrite.config.load_config"), \
+                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
+                    result = plugin._mcp_review({
+                        "item_id": "item-1", "kb_name": "test",
+                        "outcome": "changes_requested", "reviewer": "reviewer-1",
+                        "feedback": "Missing error handling in edge case",
+                    })
+                assert result["reviewed"] is True
+                assert result["outcome"] == "changes_requested"
+                assert result["new_status"] == "in_progress"
+                mock_svc.claim_entry.assert_called_once_with(
+                    "item-1", "test", "dev-1",
+                    from_status="review", to_status="in_progress",
+                )
+            finally:
+                db.close()
+
+    def test_review_changes_requested_requires_feedback(self):
+        """changes_requested without feedback → error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Review Me", "status": "review",
+                 "meta": {"kind": "feature", "status": "review"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_review({
+                    "item_id": "item-1", "kb_name": "test",
+                    "outcome": "changes_requested", "reviewer": "reviewer-1",
+                })
+                assert result["reviewed"] is False
+                assert "Feedback is required" in result["error"]
+            finally:
+                db.close()
+
+    def test_review_not_in_review_status_fails(self):
+        """Item in accepted → review → error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Not In Review", "status": "accepted",
+                 "meta": {"kind": "feature", "status": "accepted"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_review({
+                    "item_id": "item-1", "kb_name": "test",
+                    "outcome": "approved", "reviewer": "reviewer-1",
+                })
+                assert result["reviewed"] is False
+                assert "not 'review'" in result["error"]
+            finally:
+                db.close()
+
+    def test_review_not_found_fails(self):
+        """Nonexistent item → error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_review({
+                    "item_id": "nonexistent", "kb_name": "test",
+                    "outcome": "approved", "reviewer": "reviewer-1",
+                })
+                assert result["reviewed"] is False
+                assert "not found" in result["error"]
+            finally:
+                db.close()
+
+    def test_review_creates_review_record(self):
+        """After approved, review record exists in DB."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Review Me", "status": "review",
+                 "meta": {"kind": "feature", "status": "review"}, "assignee": "dev-1"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "done", "assignee": "dev-1"}
+                with patch("pyrite.config.load_config"), \
+                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
+                    plugin._mcp_review({
+                        "item_id": "item-1", "kb_name": "test",
+                        "outcome": "approved", "reviewer": "reviewer-1",
+                        "feedback": "LGTM",
+                    })
+                # Verify review record in DB
+                reviews = db.get_reviews("item-1", "test")
+                assert len(reviews) == 1
+                assert reviews[0]["reviewer"] == "reviewer-1"
+                assert reviews[0]["result"] == "approved"
+                assert reviews[0]["details"] == "LGTM"
+            finally:
+                db.close()
+
+    def test_context_for_item_shows_reviews(self):
+        """Item with prior review → reviews in context response."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Has Reviews", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}},
+            ])
+            try:
+                # Insert a review record directly
+                db.create_review(
+                    entry_id="item-1", kb_name="test", content_hash="",
+                    reviewer="reviewer-1", reviewer_type="agent",
+                    result="changes_requested", details="Fix the tests",
+                )
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_context_for_item({"item_id": "item-1", "kb_name": "test"})
+                assert "reviews" in result
+                assert len(result["reviews"]) == 1
+                assert result["reviews"][0]["reviewer"] == "reviewer-1"
+                assert result["reviews"][0]["result"] == "changes_requested"
+                assert result["reviews"][0]["details"] == "Fix the tests"
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestSubmit — sw_submit tool
+# =========================================================================
+
+
+class TestSubmit:
+    def test_submit_tool_registered(self):
+        """sw_submit is in write tier, not in read tier."""
+        plugin = SoftwareKBPlugin()
+        write_tools = plugin.get_mcp_tools("write")
+        read_tools = plugin.get_mcp_tools("read")
+        assert "sw_submit" in write_tools
+        assert "sw_submit" not in read_tools
+
+    def test_submit_transitions_to_review(self):
+        """Item in in_progress → submit → status becomes review."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Working On It", "status": "in_progress",
+                 "meta": {"kind": "feature", "status": "in_progress"}, "assignee": "dev-1"},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                mock_svc.claim_entry.return_value = {"claimed": True, "id": "item-1", "status": "review", "assignee": "dev-1"}
+                with patch("pyrite.config.load_config"), \
+                     patch("pyrite.services.kb_service.KBService", return_value=mock_svc):
+                    result = plugin._mcp_submit({"item_id": "item-1", "kb_name": "test"})
+                assert result["submitted"] is True
+                assert result["new_status"] == "review"
+                mock_svc.claim_entry.assert_called_once_with(
+                    "item-1", "test", "dev-1",
+                    from_status="in_progress", to_status="review",
+                )
+            finally:
+                db.close()
+
+    def test_submit_not_in_progress_fails(self):
+        """Item in accepted → submit → error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "item-1", "title": "Not Started", "status": "accepted",
+                 "meta": {"kind": "feature", "status": "accepted"}},
+            ])
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_submit({"item_id": "item-1", "kb_name": "test"})
+                assert result["submitted"] is False
+                assert "Cannot transition" in result["error"]
+                assert result["current_status"] == "accepted"
+            finally:
+                db.close()
+
+    def test_submit_not_found_fails(self):
+        """Nonexistent item → error."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_submit({"item_id": "nonexistent", "kb_name": "test"})
+                assert result["submitted"] is False
+                assert "not found" in result["error"]
+            finally:
+                db.close()
