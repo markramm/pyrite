@@ -3,7 +3,7 @@ id: adr-0018-web-ui-kb-management-backlog
 type: backlog_item
 title: "ADR-0018: Web UI KB Management via Git Forks"
 kind: feature
-status: completed
+status: done
 milestone: "0.18"
 priority: medium
 effort: XS

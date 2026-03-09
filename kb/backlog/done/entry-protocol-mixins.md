@@ -3,7 +3,7 @@ id: entry-protocol-mixins
 title: "Entry Protocol Mixins: Composable Field Patterns"
 type: backlog_item
 kind: feature
-status: completed
+status: done
 priority: high
 effort: L
 tags:

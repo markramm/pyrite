@@ -36,7 +36,7 @@ links:
   relation: tracks
   note: "Pending — quality gates at claim and submit"
 kind: epic
-status: in_progress
+status: done
 priority: high
 effort: XL
 ---
