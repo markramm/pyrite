@@ -24,6 +24,9 @@ links:
 - target: ji-source-reliability-framework
   relation: has_subtask
   kb: pyrite
+- target: ji-claim-to-edge-promotion
+  relation: has_subtask
+  kb: pyrite
 kind: epic
 status: accepted
 priority: high
@@ -41,6 +44,7 @@ This is what makes an investigation publishable — the evidence chain from clai
 1. **Claim lifecycle** — claim entry type with status transitions, corroboration tracking, dispute resolution
 2. **Evidence chain tracking** — link claims to evidence to source documents, visualize chains
 3. **Source reliability framework** — reliability ratings, source tier system, cross-source consistency checks
+4. **Claim-to-edge promotion** — convert corroborated claims about relationships into structural edge-entities
 
 ## Success Criteria
 
