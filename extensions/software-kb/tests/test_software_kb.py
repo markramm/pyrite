@@ -1672,3 +1672,125 @@ class TestFlowToolRegistration:
         plugin = SoftwareKBPlugin()
         tools = plugin.get_mcp_tools("read")
         assert "sw_claim" not in tools
+
+
+# =========================================================================
+# sw new-adr file creation
+# =========================================================================
+
+
+class TestNewAdrCreatesFile:
+    def test_creates_adr_file(self):
+        """sw new-adr should create the actual markdown file."""
+        from unittest.mock import patch
+
+        from typer.testing import CliRunner
+
+        from pyrite_software_kb.cli import sw_app
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kb_path = Path(tmpdir)
+            adrs_dir = kb_path / "adrs"
+            adrs_dir.mkdir()
+
+            db = _make_test_db(tmpdir)
+            try:
+                # Mock load_config to return a config with our test KB path
+                mock_config = type("C", (), {
+                    "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                    "get_kb": lambda self, name: type("KB", (), {"path": kb_path})() if name else None,
+                    "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                })()
+
+                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
+                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
+                        result = runner.invoke(sw_app, ["new-adr", "Use PostgreSQL", "--kb", "test"])
+
+                assert result.exit_code == 0
+                # Should have created the file
+                expected_file = adrs_dir / "0001-use-postgresql.md"
+                assert expected_file.exists(), f"Expected {expected_file} to be created"
+
+                content = expected_file.read_text()
+                assert "type: adr" in content
+                assert "adr_number: 1" in content
+                assert "status: proposed" in content
+                assert "title:" in content
+                assert "## Context" in content
+                assert "## Decision" in content
+                assert "## Consequences" in content
+            finally:
+                db.close()
+
+    def test_auto_increments_number(self):
+        """sw new-adr should pick the next sequential number."""
+        from unittest.mock import patch
+
+        from typer.testing import CliRunner
+
+        from pyrite_software_kb.cli import sw_app
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kb_path = Path(tmpdir)
+            adrs_dir = kb_path / "adrs"
+            adrs_dir.mkdir()
+
+            db = _make_test_db(tmpdir, entries=[
+                {"id": "adr-existing", "title": "Existing ADR", "entry_type": "adr",
+                 "meta": {"adr_number": 5, "status": "accepted"}},
+            ])
+            try:
+                mock_config = type("C", (), {
+                    "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                    "get_kb": lambda self, name: type("KB", (), {"path": kb_path})() if name else None,
+                    "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                })()
+
+                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
+                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
+                        result = runner.invoke(sw_app, ["new-adr", "Use Redis", "--kb", "test"])
+
+                assert result.exit_code == 0
+                expected_file = adrs_dir / "0006-use-redis.md"
+                assert expected_file.exists(), f"Expected {expected_file} (number 6 after existing 5)"
+
+                content = expected_file.read_text()
+                assert "adr_number: 6" in content
+            finally:
+                db.close()
+
+    def test_creates_adrs_directory_if_missing(self):
+        """sw new-adr should create the adrs/ directory if it doesn't exist."""
+        from unittest.mock import patch
+
+        from typer.testing import CliRunner
+
+        from pyrite_software_kb.cli import sw_app
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kb_path = Path(tmpdir)
+            # Intentionally do NOT create adrs/
+
+            db = _make_test_db(tmpdir)
+            try:
+                mock_config = type("C", (), {
+                    "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                    "get_kb": lambda self, name: type("KB", (), {"path": kb_path})() if name else None,
+                    "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                })()
+
+                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
+                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
+                        result = runner.invoke(sw_app, ["new-adr", "Use Kafka", "--kb", "test"])
+
+                assert result.exit_code == 0
+                expected_file = kb_path / "adrs" / "0001-use-kafka.md"
+                assert expected_file.exists()
+            finally:
+                db.close()

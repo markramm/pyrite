@@ -3,7 +3,7 @@ id: kanban-mcp-tools
 type: backlog_item
 title: "Add kanban flow tools: sw_pull_next, sw_context_for_item, sw_review_queue, sw_validate, sw_claim"
 kind: feature
-status: proposed
+status: completed
 priority: high
 effort: L
 tags: [software, agents, mcp, workflow, wave-2]

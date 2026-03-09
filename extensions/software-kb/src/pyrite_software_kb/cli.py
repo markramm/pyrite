@@ -105,6 +105,9 @@ def sw_new_adr(
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
 ):
     """Create a new ADR with the next sequential number."""
+    from datetime import date
+    from pathlib import Path
+
     config = load_config()
     db = PyriteDB(config.settings.index_path)
 
@@ -117,14 +120,55 @@ def sw_new_adr(
                 max_num = num
         next_num = max_num + 1
 
-        console.print(f"[green]ADR-{next_num:04d}:[/green] {title}")
+        slug = title.lower().replace(" ", "-")
+        filename = f"{next_num:04d}-{slug}.md"
+        today = date.today().isoformat()
+
+        # Resolve KB path for file creation
+        kb_path = None
+        if kb_name:
+            kb_conf = config.get_kb(kb_name)
+            if kb_conf:
+                kb_path = kb_conf.path
+        if kb_path is None:
+            kb_path = Path(".")
+
+        adrs_dir = kb_path / "adrs"
+        adrs_dir.mkdir(parents=True, exist_ok=True)
+        file_path = adrs_dir / filename
+
+        # Build the ADR file content
+        content = (
+            "---\n"
+            f"id: adr-{next_num:04d}\n"
+            "type: adr\n"
+            f"title: \"{title}\"\n"
+            f"adr_number: {next_num}\n"
+            f"status: {status}\n"
+            f"date: {today}\n"
+            "---\n"
+            "\n"
+            f"# ADR-{next_num:04d}: {title}\n"
+            "\n"
+            "## Context\n"
+            "\n"
+            "TODO: What is the issue that we're seeing that is motivating this decision or change?\n"
+            "\n"
+            "## Decision\n"
+            "\n"
+            "TODO: What is the change that we're proposing and/or doing?\n"
+            "\n"
+            "## Consequences\n"
+            "\n"
+            "TODO: What becomes easier or more difficult to do because of this change?\n"
+        )
+
+        file_path.write_text(content)
+
+        console.print(f"[green]Created ADR-{next_num:04d}:[/green] {title}")
+        console.print(f"  File: [cyan]{file_path}[/cyan]")
         console.print(f"  Status: [yellow]{status}[/yellow]")
-        console.print(
-            f"[dim]Create file: adrs/{next_num:04d}-{title.lower().replace(' ', '-')}.md[/dim]"
-        )
-        console.print(
-            "[dim]Add frontmatter: type: adr, adr_number: " f"{next_num}, status: {status}[/dim]"
-        )
+        console.print("[dim]Run `pyrite index sync` to update the index.[/dim]")
     finally:
         db.close()
 

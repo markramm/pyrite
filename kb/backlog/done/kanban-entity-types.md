@@ -3,7 +3,7 @@ id: kanban-entity-types
 type: backlog_item
 title: "Milestone entry type, board config, and review workflow"
 kind: feature
-status: proposed
+status: completed
 priority: high
 effort: L
 tags: [software, agents, workflow, wave-2]

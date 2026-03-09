@@ -3,7 +3,7 @@ id: sw-new-adr-dry-run-bug
 type: backlog_item
 title: "Bug: `pyrite sw new-adr` prints instructions but does not create file"
 kind: bug
-status: proposed
+status: completed
 priority: high
 effort: S
 tags: [software-kb, cli, bug]
