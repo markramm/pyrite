@@ -956,6 +956,24 @@ class TestBacklogWorkflow:
     def test_cannot_skip_to_done(self):
         assert not can_transition(BACKLOG_WORKFLOW, "proposed", "done", "write")
 
+    def test_accepted_to_proposed(self):
+        assert can_transition(BACKLOG_WORKFLOW, "accepted", "proposed", "write")
+
+    def test_accepted_to_proposed_requires_reason(self):
+        assert requires_reason(BACKLOG_WORKFLOW, "accepted", "proposed")
+
+    def test_accepted_to_deferred(self):
+        assert can_transition(BACKLOG_WORKFLOW, "accepted", "deferred", "write")
+
+    def test_accepted_to_deferred_no_reason(self):
+        assert not requires_reason(BACKLOG_WORKFLOW, "accepted", "deferred")
+
+    def test_in_progress_to_accepted(self):
+        assert can_transition(BACKLOG_WORKFLOW, "in_progress", "accepted", "write")
+
+    def test_in_progress_to_accepted_requires_reason(self):
+        assert requires_reason(BACKLOG_WORKFLOW, "in_progress", "accepted")
+
 
 # =========================================================================
 # Preset

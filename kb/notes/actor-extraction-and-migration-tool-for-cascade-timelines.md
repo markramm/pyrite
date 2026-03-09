@@ -8,10 +8,17 @@ tags:
 - migration
 - cli
 links:
+- target: epic-migrate-kleptocracy-timeline-to-pyrite-managed-kb
+  relation: subtask_of
+  kb: pyrite
 - target: support-string-or-ref-actor-fields-in-cascade-events
   relation: depends_on
   kb: pyrite
+- target: actor-alias-suggestion-and-fuzzy-matching-tool
+  relation: depends_on
+  kb: pyrite
 kind: feature
+status: accepted
 priority: high
 effort: L
 ---

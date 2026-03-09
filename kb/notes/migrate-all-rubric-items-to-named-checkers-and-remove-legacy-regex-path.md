@@ -6,14 +6,14 @@ tags:
 - qa
 - intent-engineering
 - cleanup
-kind: feature
-status: done
-effort: M
 links:
-  - target: epic-software-kb-quality-gates-and-rubric-automation
-    relation: part_of
-  - target: named-rubric-checkers
-    relation: depends_on
+- target: epic-software-kb-quality-gates-and-rubric-automation
+  relation: part_of
+- target: named-rubric-checkers
+  relation: depends_on
+kind: feature
+status: accepted
+effort: M
 ---
 
 ## Problem

@@ -7,15 +7,14 @@ tags:
 - workflow
 - agents
 - grooming
-kind: feature
-priority: medium
-effort: L
-status: done
 links:
 - target: adr-0021
   relation: implements
 - target: definition-of-ready-done
   relation: related
+kind: feature
+status: accepted
+effort: L
 ---
 
 ## Problem

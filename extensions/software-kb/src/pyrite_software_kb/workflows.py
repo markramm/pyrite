@@ -142,6 +142,26 @@ BACKLOG_WORKFLOW = {
             "requires_reason": True,
             "description": "Reopen a completed item",
         },
+        {
+            "from": "accepted",
+            "to": "proposed",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Demote back to backlog (e.g., blocker discovered)",
+        },
+        {
+            "from": "accepted",
+            "to": "deferred",
+            "requires": "write",
+            "description": "Defer an accepted item",
+        },
+        {
+            "from": "in_progress",
+            "to": "accepted",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Unclaim and return to ready queue",
+        },
     ],
 }
 

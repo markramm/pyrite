@@ -6,10 +6,22 @@ tags:
 - feature
 - ai
 - quality
-kind: feature
+- epic
+kind: epic
 priority: medium
 effort: XL
 status: proposed
+links:
+- target: qa-phase-1-tier-1-structural-validation
+  relation: has_subtask
+- target: qa-phase-2-qa-assessment-entry-type-and-storage
+  relation: has_subtask
+- target: qa-phase-3-tier-2-llm-assisted-consistency-checks
+  relation: has_subtask
+- target: qa-phase-4-tier-3-factual-verification
+  relation: has_subtask
+- target: qa-phase-5-continuous-qa-pipeline-and-dashboard
+  relation: has_subtask
 ---
 
 ## Problem

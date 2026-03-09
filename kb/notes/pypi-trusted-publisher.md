@@ -6,13 +6,18 @@ tags:
 - ops
 - packaging
 - ci
+links:
+- target: pypi-publish
+  relation: related
 kind: task
+status: deferred
 priority: high
 effort: S
-status: proposed
-links:
-- pypi-publish
 ---
+
+## Blocker
+
+Waiting on PyPI support team to resolve project access ticket for the `pyrite` project on PyPI. Cannot configure trusted publisher until access is granted. (2026-03-09)
 
 ## Problem
 

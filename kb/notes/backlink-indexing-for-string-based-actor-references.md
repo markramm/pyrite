@@ -8,7 +8,15 @@ tags:
 - index
 - backlinks
 - search
+links:
+- target: epic-migrate-kleptocracy-timeline-to-pyrite-managed-kb
+  relation: subtask_of
+  kb: pyrite
+- target: support-string-or-ref-actor-fields-in-cascade-events
+  relation: depends_on
+  kb: pyrite
 kind: feature
+status: accepted
 priority: high
 effort: M
 ---
@@ -43,4 +51,3 @@ This is related to "Support string-or-ref actor fields in Cascade events" but fo
 - String references are distinguishable from explicit wikilinks in output (e.g., different link type)
 - Index rebuilds correctly when actor aliases change
 - Performance: indexing 4,400+ events with 7,780+ actor references completes in under 30 seconds
-

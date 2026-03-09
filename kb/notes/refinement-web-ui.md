@@ -10,9 +10,6 @@ kind: feature
 priority: low
 effort: M
 status: proposed
-links:
-- target: backlog-refinement-workflow
-  relation: blocked_by
 ---
 
 ## Problem

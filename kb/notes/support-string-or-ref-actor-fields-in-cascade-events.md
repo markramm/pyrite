@@ -7,7 +7,12 @@ tags:
 - actors
 - migration
 - schema
+links:
+- target: epic-migrate-kleptocracy-timeline-to-pyrite-managed-kb
+  relation: subtask_of
+  kb: pyrite
 kind: feature
+status: accepted
 priority: high
 effort: L
 ---
@@ -41,4 +46,3 @@ The kleptocracy timeline at capturecascade.org has 4,400+ events with ~1,235 uni
 - `pyrite search --type=cascade_event --field actors="Donald Trump"` returns correct results regardless of reference format
 - QA validation warns on unresolved string actors but does not block
 - Mixed formats within a single event's actor list are supported
-

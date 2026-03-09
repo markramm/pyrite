@@ -1,13 +1,11 @@
 ---
 id: kb-component-documentation-gaps
-type: backlog_item
 title: "Fill KB component documentation gaps for undocumented modules"
-kind: improvement
-status: proposed
-milestone: "0.17"
-priority: medium
-effort: M
+type: backlog_item
 tags: [documentation, kb, architecture]
+kind: improvement
+status: accepted
+effort: M
 ---
 
 # Fill KB component documentation gaps for undocumented modules

@@ -10,8 +10,8 @@ tags:
 - kanban
 - agents
 kind: enhancement
+status: accepted
 effort: M
-status: done
 ---
 
 ## Problem
@@ -38,4 +38,3 @@ For software-type KBs, orient should additionally return:
 - Recommended next item (from sw_pull_next logic)
 
 This could be implemented as a plugin hook on orient, or by having the orient command detect kb_type=software and call into the software-kb plugin for supplementary data.
-

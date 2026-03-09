@@ -7,15 +7,17 @@ tags:
 - frontend
 - web-ui
 - quality
+links:
+- target: web-ui-auth
+  relation: related
+- target: ux-accessibility-fixes
+  relation: related
+- target: demo-site-deployment
+  relation: related
 kind: feature
+status: accepted
 priority: high
 effort: M
-status: proposed
-milestone: "0.13"
-links:
-- web-ui-auth
-- ux-accessibility-fixes
-- demo-site-deployment
 ---
 
 ## Problem

@@ -12,9 +12,8 @@ metadata:
   effort: M
   status: proposed
 kind: feature
-priority: medium
+status: accepted
 effort: M
-status: proposed
 ---
 
 ## Problem

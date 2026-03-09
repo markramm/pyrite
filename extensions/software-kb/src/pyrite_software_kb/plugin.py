@@ -1406,6 +1406,20 @@ class SoftwareKBPlugin:
             # Build entry dict for the checker
             entry_dict = dict(row) if not isinstance(row, dict) else row
             entry_dict["metadata"] = meta
+
+            # Enrich with link data for checkers that need it (e.g. not_oversized)
+            if "_links" not in entry_dict:
+                item_id = entry_dict.get("id", "")
+                kb_name = entry_dict.get("kb_name", "")
+                link_rows = db._raw_conn.execute(
+                    "SELECT target_id, relation FROM link WHERE source_id = ? AND source_kb = ?",
+                    (item_id, kb_name),
+                ).fetchall()
+                entry_dict["_links"] = [
+                    {"target": lr["target_id"], "relation": lr["relation"]}
+                    for lr in link_rows
+                ]
+
             params = criterion.get("params")
             failure = checker_fn(entry_dict, None, params)
             passed = failure is None

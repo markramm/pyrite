@@ -8,7 +8,12 @@ tags:
 - aliases
 - qa
 - normalization
+links:
+- target: epic-migrate-kleptocracy-timeline-to-pyrite-managed-kb
+  relation: subtask_of
+  kb: pyrite
 kind: feature
+status: accepted
 priority: high
 effort: L
 ---
@@ -55,4 +60,3 @@ This is a general-purpose capability that applies to any KB with person, organiz
 - Applied aliases are written to the entry's `aliases` field
 - Known acronym dictionary is extensible via kb.yaml or a config file
 - Incremental mode avoids re-scanning already-processed entries
-

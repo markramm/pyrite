@@ -27,9 +27,13 @@ sw_pull_next  sw_context    sw_claim       (you)        sw_submit     sw_review
 
 ```
 proposed → accepted → in_progress → review → done
-                          ↑                    │
-                          └── changes_requested─┘
+   ↑          ↑           ↑                    │
+   │          │           └── changes_requested─┘
+   │          └── in_progress (unclaim)
+   └── accepted (demote)
 ```
+
+Backward transitions: `accepted → proposed`, `accepted → deferred`, `in_progress → accepted`.
 
 Side exits: `proposed → wont_do`, `proposed → deferred → proposed`, `done → retired`.
 
@@ -223,6 +227,10 @@ Proactively prepare backlog items so they pass DoR before anyone claims them.
       - Architectural questions → suggest creating an ADR
    c. pyrite sw check-ready <id> -k <kb>  → verify fixes
 3. Transition ready items: proposed → accepted (if appropriate)
+   - ALWAYS provide a descriptive reason that captures WHY the item is ready
+   - Format: "Per refinement: <effort>, <risk>, <impact> (<rationale>)"
+   - Example: "Per refinement: Small, low risk, high impact (unblocks backward transitions for blocked items)"
+   - NEVER use generic reasons like "Ready per refinement" — the reason should help future readers understand the decision
 ```
 
 #### What agents can fix autonomously
@@ -311,3 +319,4 @@ Backlog items gain value from links to other entries:
 | Skip judgment criteria because they auto-pass | They're guidance — verify them yourself |
 | Invent acceptance criteria without domain knowledge | Add `## Open Questions` asking the human for specifics |
 | Rubber-stamp items as ready without checking | Run `pyrite sw check-ready` and address every gap |
+| Use generic transition reasons ("Ready per refinement") | Write reasons that capture effort, risk, impact, and rationale for the decision |

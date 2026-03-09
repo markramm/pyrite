@@ -286,11 +286,19 @@ def check_not_oversized(
     schema: KBSchema | None,
     params: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
-    """Fail if effort is XL or larger — item should be decomposed into subtasks."""
+    """Fail if effort is XL or larger and item has no subtask links."""
     meta = _parse_metadata(entry)
     effort = meta.get("effort", "")
     oversized = {"XL", "XXL", "xl", "xxl"}
     if effort in oversized:
+        # Pass if the item has has_subtask links (decomposed into subtasks)
+        links = entry.get("_links", [])
+        has_subtasks = any(
+            (isinstance(lnk, dict) and lnk.get("relation") == "has_subtask")
+            for lnk in links
+        )
+        if has_subtasks:
+            return None
         return {
             "entry_id": entry["id"],
             "kb_name": entry["kb_name"],
