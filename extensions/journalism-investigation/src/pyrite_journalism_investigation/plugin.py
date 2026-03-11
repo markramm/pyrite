@@ -216,6 +216,78 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_evidence_chain,
             }
+        if tier in ("write", "admin"):
+            tools["investigation_create_entity"] = {
+                "description": "Create a person, organization, asset, or account entity in the investigation",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entity_type": {"type": "string", "description": "Type: person, organization, asset, account"},
+                        "title": {"type": "string", "description": "Entity name/title"},
+                        "body": {"type": "string", "description": "Description and context"},
+                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
+                        "fields": {"type": "object", "description": "Type-specific fields (e.g. asset_type, jurisdiction)"},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["entity_type", "title", "kb_name"],
+                },
+                "handler": self._mcp_create_entity,
+            }
+            tools["investigation_create_event"] = {
+                "description": "Create an investigation event, transaction, or legal action",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "event_type": {"type": "string", "description": "Type: investigation_event, transaction, legal_action"},
+                        "title": {"type": "string", "description": "Event title"},
+                        "date": {"type": "string", "description": "Event date (YYYY-MM-DD)"},
+                        "body": {"type": "string", "description": "Narrative context"},
+                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
+                        "fields": {"type": "object", "description": "Type-specific fields (e.g. sender, receiver, case_type)"},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["event_type", "title", "date", "kb_name"],
+                },
+                "handler": self._mcp_create_event,
+            }
+            tools["investigation_create_claim"] = {
+                "description": "Create a factual claim with evidence links for verification tracking",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Claim title"},
+                        "assertion": {"type": "string", "description": "The specific factual assertion"},
+                        "evidence_refs": {"type": "array", "items": {"type": "string"}, "description": "Wikilinks to evidence entries"},
+                        "body": {"type": "string", "description": "Narrative context"},
+                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["title", "assertion", "kb_name"],
+                },
+                "handler": self._mcp_create_claim,
+            }
+            tools["investigation_log_source"] = {
+                "description": "Log a source document with reliability and classification metadata",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Source document title"},
+                        "url": {"type": "string", "description": "Source URL"},
+                        "reliability": {"type": "string", "description": "Reliability: high, medium, low, unknown"},
+                        "classification": {"type": "string", "description": "Classification: public, leaked, foia, court_filing, etc."},
+                        "obtained_method": {"type": "string", "description": "How the source was obtained"},
+                        "body": {"type": "string", "description": "Notes about the source"},
+                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["title", "kb_name"],
+                },
+                "handler": self._mcp_log_source,
+            }
         return tools
 
     # =========================================================================
@@ -539,6 +611,174 @@ class JournalismInvestigationPlugin:
         finally:
             if should_close:
                 db.close()
+
+    # =========================================================================
+    # Write-tier MCP tool handlers
+    # =========================================================================
+
+    def _get_kb_service(self):
+        """Get KBService from context."""
+        if self.ctx is not None and hasattr(self.ctx, "kb_service"):
+            return self.ctx.kb_service
+        return None
+
+    def _mcp_create_entity(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create an entity entry."""
+        from pyrite.schema import generate_entry_id
+
+        kb_name = args["kb_name"]
+        entity_type = args["entity_type"]
+        title = args["title"]
+
+        valid_types = {"person", "organization", "asset", "account"}
+        if entity_type not in valid_types:
+            return {"error": f"Invalid entity_type: {entity_type}. Must be one of {valid_types}"}
+
+        entry_id = generate_entry_id(title)
+        fields = args.get("fields", {}) or {}
+        meta = {
+            "id": entry_id,
+            "type": entity_type,
+            "title": title,
+            "importance": args.get("importance", 5),
+            "tags": args.get("tags", []),
+            **fields,
+        }
+
+        kb_service = self._get_kb_service()
+        if kb_service is None:
+            return {"error": "No KB service available — write tools require a running server context"}
+
+        try:
+            kb_service.create_entry(
+                kb_name=kb_name,
+                entry_id=entry_id,
+                frontmatter=meta,
+                body=args.get("body", ""),
+            )
+            return {"created": entry_id, "type": entity_type, "title": title}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _mcp_create_event(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create an event entry."""
+        from pyrite.schema import generate_entry_id
+
+        kb_name = args["kb_name"]
+        event_type = args["event_type"]
+        title = args["title"]
+        date = args["date"]
+
+        valid_types = {"investigation_event", "transaction", "legal_action"}
+        if event_type not in valid_types:
+            return {"error": f"Invalid event_type: {event_type}. Must be one of {valid_types}"}
+
+        entry_id = generate_entry_id(title)
+        fields = args.get("fields", {}) or {}
+        meta = {
+            "id": entry_id,
+            "type": event_type,
+            "title": title,
+            "date": date,
+            "importance": args.get("importance", 5),
+            "tags": args.get("tags", []),
+            **fields,
+        }
+
+        kb_service = self._get_kb_service()
+        if kb_service is None:
+            return {"error": "No KB service available — write tools require a running server context"}
+
+        try:
+            kb_service.create_entry(
+                kb_name=kb_name,
+                entry_id=entry_id,
+                frontmatter=meta,
+                body=args.get("body", ""),
+            )
+            return {"created": entry_id, "type": event_type, "title": title}
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _mcp_create_claim(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create a claim entry."""
+        from pyrite.schema import generate_entry_id
+
+        kb_name = args["kb_name"]
+        title = args["title"]
+        assertion = args["assertion"]
+
+        entry_id = generate_entry_id(title)
+        evidence_refs = args.get("evidence_refs", []) or []
+        warnings = []
+
+        if not evidence_refs:
+            warnings.append("Claim created with no evidence references — mark for follow-up")
+
+        meta = {
+            "id": entry_id,
+            "type": "claim",
+            "title": title,
+            "assertion": assertion,
+            "claim_status": "unverified",
+            "confidence": "low",
+            "evidence_refs": evidence_refs,
+            "importance": args.get("importance", 5),
+            "tags": args.get("tags", []),
+        }
+
+        kb_service = self._get_kb_service()
+        if kb_service is None:
+            return {"error": "No KB service available — write tools require a running server context"}
+
+        try:
+            kb_service.create_entry(
+                kb_name=kb_name,
+                entry_id=entry_id,
+                frontmatter=meta,
+                body=args.get("body", ""),
+            )
+            result: dict[str, Any] = {"created": entry_id, "type": "claim", "title": title}
+            if warnings:
+                result["warnings"] = warnings
+            return result
+        except Exception as e:
+            return {"error": str(e)}
+
+    def _mcp_log_source(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Log a source document."""
+        from pyrite.schema import generate_entry_id
+
+        kb_name = args["kb_name"]
+        title = args["title"]
+
+        entry_id = generate_entry_id(title)
+        meta = {
+            "id": entry_id,
+            "type": "document_source",
+            "title": title,
+            "reliability": args.get("reliability", "unknown"),
+            "classification": args.get("classification", ""),
+            "url": args.get("url", ""),
+            "obtained_method": args.get("obtained_method", ""),
+            "importance": args.get("importance", 5),
+            "tags": args.get("tags", []),
+        }
+
+        kb_service = self._get_kb_service()
+        if kb_service is None:
+            return {"error": "No KB service available — write tools require a running server context"}
+
+        try:
+            kb_service.create_entry(
+                kb_name=kb_name,
+                entry_id=entry_id,
+                frontmatter=meta,
+                body=args.get("body", ""),
+            )
+            return {"created": entry_id, "type": "document_source", "title": title}
+        except Exception as e:
+            return {"error": str(e)}
 
 
 def _validate_investigation_entry(entry: Any) -> list[str]:

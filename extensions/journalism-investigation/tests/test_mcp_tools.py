@@ -13,6 +13,8 @@ class TestMCPToolRegistration:
         assert "investigation_sources" in tools
         assert "investigation_claims" in tools
         assert "investigation_evidence_chain" in tools
+        # Write-tier tools should NOT be in read tier
+        assert "investigation_create_entity" not in tools
 
     def test_write_tier_inherits_read(self):
         plugin = JournalismInvestigationPlugin()
@@ -82,14 +84,75 @@ class TestMCPToolRegistration:
 
     def test_all_tools_have_handler(self):
         plugin = JournalismInvestigationPlugin()
-        tools = plugin.get_mcp_tools("read")
-        for name, tool in tools.items():
-            assert "handler" in tool, f"{name} missing handler"
-            assert callable(tool["handler"]), f"{name} handler not callable"
+        for tier in ("read", "write", "admin"):
+            tools = plugin.get_mcp_tools(tier)
+            for name, tool in tools.items():
+                assert "handler" in tool, f"{name} missing handler"
+                assert callable(tool["handler"]), f"{name} handler not callable"
 
     def test_all_tools_have_description(self):
         plugin = JournalismInvestigationPlugin()
-        tools = plugin.get_mcp_tools("read")
-        for name, tool in tools.items():
-            assert "description" in tool, f"{name} missing description"
-            assert len(tool["description"]) > 10, f"{name} description too short"
+        for tier in ("read", "write", "admin"):
+            tools = plugin.get_mcp_tools(tier)
+            for name, tool in tools.items():
+                assert "description" in tool, f"{name} missing description"
+                assert len(tool["description"]) > 10, f"{name} description too short"
+
+
+class TestMCPWriteToolRegistration:
+    def test_write_tier_has_create_tools(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("write")
+        assert "investigation_create_entity" in tools
+        assert "investigation_create_event" in tools
+        assert "investigation_create_claim" in tools
+        assert "investigation_log_source" in tools
+
+    def test_write_tier_also_has_read_tools(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("write")
+        assert "investigation_timeline" in tools
+        assert "investigation_claims" in tools
+
+    def test_create_entity_schema(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["investigation_create_entity"]["inputSchema"]
+        props = schema["properties"]
+        assert "entity_type" in props
+        assert "title" in props
+        assert "kb_name" in props
+        assert "title" in schema["required"]
+        assert "entity_type" in schema["required"]
+        assert "kb_name" in schema["required"]
+
+    def test_create_event_schema(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["investigation_create_event"]["inputSchema"]
+        props = schema["properties"]
+        assert "event_type" in props
+        assert "title" in props
+        assert "date" in props
+        assert "kb_name" in props
+
+    def test_create_claim_schema(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["investigation_create_claim"]["inputSchema"]
+        props = schema["properties"]
+        assert "title" in props
+        assert "assertion" in props
+        assert "evidence_refs" in props
+        assert "kb_name" in props
+
+    def test_log_source_schema(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("write")
+        schema = tools["investigation_log_source"]["inputSchema"]
+        props = schema["properties"]
+        assert "title" in props
+        assert "url" in props
+        assert "reliability" in props
+        assert "classification" in props
+        assert "kb_name" in props
