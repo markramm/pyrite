@@ -5,6 +5,7 @@ from pyrite_journalism_investigation.entry_types import (
     AssetEntry,
     ClaimEntry,
     DocumentSourceEntry,
+    EvidenceEntry,
     InvestigationEventEntry,
     LegalActionEntry,
     TransactionEntry,
@@ -144,6 +145,18 @@ class TestLegalActionValidation:
         )
         errors = _validate_investigation_entry(entry)
         assert any("jurisdiction" in e for e in errors)
+
+
+class TestEvidenceValidation:
+    def test_valid_evidence(self):
+        entry = EvidenceEntry(id="test", title="Test", evidence_type="record")
+        errors = _validate_investigation_entry(entry)
+        assert errors == []
+
+    def test_missing_evidence_type(self):
+        entry = EvidenceEntry(id="test", title="Test")
+        errors = _validate_investigation_entry(entry)
+        assert any("evidence_type" in e for e in errors)
 
 
 class TestClaimValidation:

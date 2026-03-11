@@ -18,6 +18,7 @@ class TestPlugin:
         assert "transaction" in types
         assert "legal_action" in types
         assert "claim" in types
+        assert "evidence" in types
 
     def test_get_kb_types(self):
         plugin = JournalismInvestigationPlugin()
@@ -34,6 +35,8 @@ class TestPlugin:
         assert rels["corroborates"]["inverse"] == "corroborated_by"
         assert rels["beneficial_owner_of"]["inverse"] == "beneficially_owned_by"
         assert rels["party_to"]["inverse"] == "has_party"
+        assert rels["supports"]["inverse"] == "supported_by"
+        assert rels["supported_by"]["inverse"] == "supports"
         # These are registered by cascade, not here
         assert "member_of" not in rels
         assert "funded_by" not in rels

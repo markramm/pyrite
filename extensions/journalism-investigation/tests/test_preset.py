@@ -27,6 +27,11 @@ class TestPreset:
         assert "claim" in types
         assert types["claim"]["subdirectory"] == "claims/"
 
+    def test_evidence_type_present(self):
+        types = JOURNALISM_INVESTIGATION_PRESET["types"]
+        assert "evidence" in types
+        assert types["evidence"]["subdirectory"] == "evidence/"
+
     def test_core_types_present(self):
         """Core types (person, organization) should be in preset for discoverability."""
         types = JOURNALISM_INVESTIGATION_PRESET["types"]
@@ -50,6 +55,7 @@ class TestPreset:
         assert "events" in dirs
         assert "sources" in dirs
         assert "claims" in dirs
+        assert "evidence" in dirs
 
     def test_all_types_have_required_fields(self):
         for type_name, type_def in JOURNALISM_INVESTIGATION_PRESET["types"].items():

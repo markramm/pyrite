@@ -72,6 +72,11 @@ CASE_STATUSES = (
     "convicted", "acquitted",
 )
 
+# Evidence enum tuples
+EVIDENCE_TYPES = (
+    "document", "testimony", "record", "data", "photo", "video", "other",
+)
+
 # Claim enum tuples
 CLAIM_STATUSES = (
     "unverified", "partially_verified", "corroborated", "disputed", "retracted",
@@ -395,6 +400,56 @@ class LegalActionEntry(EventEntry):
             case_status=meta.get("case_status", ""),
             outcome=meta.get("outcome", ""),
             case_number=meta.get("case_number", ""),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Evidence type
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EvidenceEntry(Entry):
+    """A piece of evidence linked to a source document and supporting claims."""
+
+    evidence_type: str = ""
+    source_document: str = ""
+    reliability: str = "unknown"
+    obtained_date: str = ""
+    chain_of_custody: str = ""
+
+    @property
+    def entry_type(self) -> str:
+        return "evidence"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = self._base_frontmatter()
+        meta["type"] = "evidence"
+        if self.evidence_type:
+            meta["evidence_type"] = self.evidence_type
+        if self.source_document:
+            meta["source_document"] = self.source_document
+        if self.reliability != "unknown":
+            meta["reliability"] = self.reliability
+        if self.obtained_date:
+            meta["obtained_date"] = self.obtained_date
+        if self.chain_of_custody:
+            meta["chain_of_custody"] = self.chain_of_custody
+        if self.summary:
+            meta["summary"] = self.summary
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "EvidenceEntry":
+        kw = _base_kwargs(meta, body)
+        return cls(
+            **kw,
+            importance=int(meta.get("importance", 5)),
+            evidence_type=meta.get("evidence_type", ""),
+            source_document=meta.get("source_document", ""),
+            reliability=meta.get("reliability", "unknown"),
+            obtained_date=str(meta.get("obtained_date", "")),
+            chain_of_custody=meta.get("chain_of_custody", ""),
         )
 
 

@@ -12,6 +12,7 @@ class TestMCPToolRegistration:
         assert "investigation_network" in tools
         assert "investigation_sources" in tools
         assert "investigation_claims" in tools
+        assert "investigation_evidence_chain" in tools
 
     def test_write_tier_inherits_read(self):
         plugin = JournalismInvestigationPlugin()
@@ -70,6 +71,13 @@ class TestMCPToolRegistration:
         assert "claim_status" in props
         assert "confidence" in props
         assert "kb_name" in props
+        assert "kb_name" in schema["required"]
+
+    def test_evidence_chain_tool_schema(self):
+        plugin = JournalismInvestigationPlugin()
+        tools = plugin.get_mcp_tools("read")
+        schema = tools["investigation_evidence_chain"]["inputSchema"]
+        assert "claim_id" in schema["required"]
         assert "kb_name" in schema["required"]
 
     def test_all_tools_have_handler(self):

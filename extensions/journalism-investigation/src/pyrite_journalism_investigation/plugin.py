@@ -10,6 +10,7 @@ from .entry_types import (
     ClaimEntry,
     CONFIDENCE_LEVELS,
     DocumentSourceEntry,
+    EvidenceEntry,
     InvestigationEventEntry,
     LegalActionEntry,
     TransactionEntry,
@@ -42,6 +43,7 @@ class JournalismInvestigationPlugin:
             "transaction": TransactionEntry,
             "legal_action": LegalActionEntry,
             "claim": ClaimEntry,
+            "evidence": EvidenceEntry,
         }
 
     def get_kb_types(self) -> list[str]:
@@ -110,6 +112,14 @@ class JournalismInvestigationPlugin:
             "has_party": {
                 "inverse": "party_to",
                 "description": "Legal action has an entity as a party",
+            },
+            "supports": {
+                "inverse": "supported_by",
+                "description": "Evidence supports a claim",
+            },
+            "supported_by": {
+                "inverse": "supports",
+                "description": "Claim is supported by evidence",
             },
         }
 
@@ -193,6 +203,18 @@ class JournalismInvestigationPlugin:
                     "required": ["kb_name"],
                 },
                 "handler": self._mcp_claims,
+            }
+            tools["investigation_evidence_chain"] = {
+                "description": "Trace the evidence chain for a claim: claim → evidence entries → source documents",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "claim_id": {"type": "string", "description": "Claim entry ID to trace"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["claim_id", "kb_name"],
+                },
+                "handler": self._mcp_evidence_chain,
             }
         return tools
 
@@ -429,6 +451,95 @@ class JournalismInvestigationPlugin:
             if should_close:
                 db.close()
 
+    def _mcp_evidence_chain(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Trace evidence chain from claim to source documents."""
+        import json
+
+        db, should_close = self._get_db()
+        claim_id = args["claim_id"]
+        kb_name = args["kb_name"]
+
+        try:
+            claim = db.get_entry(claim_id, kb_name)
+            if not claim:
+                return {"error": f"Claim '{claim_id}' not found"}
+
+            meta = claim.get("metadata") or {}
+            if isinstance(meta, str):
+                try:
+                    meta = json.loads(meta)
+                except (json.JSONDecodeError, TypeError):
+                    meta = {}
+
+            evidence_refs = meta.get("evidence_refs", []) or []
+            chain: list[dict[str, Any]] = []
+            gaps: list[str] = []
+
+            if not evidence_refs:
+                gaps.append(f"Claim '{claim_id}' has no evidence references")
+
+            for ref in evidence_refs:
+                # Strip wikilink brackets
+                eid = ref.strip("[]").replace("[[", "").replace("]]", "")
+                evidence = db.get_entry(eid, kb_name)
+                if not evidence:
+                    gaps.append(f"Evidence '{eid}' not found")
+                    chain.append({"evidence_id": eid, "status": "missing"})
+                    continue
+
+                emeta = evidence.get("metadata") or {}
+                if isinstance(emeta, str):
+                    try:
+                        emeta = json.loads(emeta)
+                    except (json.JSONDecodeError, TypeError):
+                        emeta = {}
+
+                source_doc_ref = emeta.get("source_document", "")
+                source_doc_id = source_doc_ref.strip("[]").replace("[[", "").replace("]]", "")
+
+                source_info = None
+                if source_doc_id:
+                    source = db.get_entry(source_doc_id, kb_name)
+                    if source:
+                        smeta = source.get("metadata") or {}
+                        if isinstance(smeta, str):
+                            try:
+                                smeta = json.loads(smeta)
+                            except (json.JSONDecodeError, TypeError):
+                                smeta = {}
+                        source_info = {
+                            "id": source_doc_id,
+                            "title": source.get("title", ""),
+                            "reliability": smeta.get("reliability", "unknown"),
+                        }
+                    else:
+                        gaps.append(f"Source document '{source_doc_id}' not found")
+                else:
+                    gaps.append(f"Evidence '{eid}' has no source document link")
+
+                chain.append({
+                    "evidence_id": eid,
+                    "title": evidence.get("title", ""),
+                    "evidence_type": emeta.get("evidence_type", ""),
+                    "reliability": emeta.get("reliability", "unknown"),
+                    "source_document": source_info,
+                })
+
+            return {
+                "claim": {
+                    "id": claim_id,
+                    "title": claim.get("title", ""),
+                    "assertion": meta.get("assertion", ""),
+                    "claim_status": meta.get("claim_status", "unverified"),
+                    "confidence": meta.get("confidence", "low"),
+                },
+                "evidence_chain": chain,
+                "gaps": gaps,
+            }
+        finally:
+            if should_close:
+                db.close()
+
 
 def _validate_investigation_entry(entry: Any) -> list[str]:
     """Validate journalism-investigation entries."""
@@ -470,6 +581,10 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
             errors.append("Legal action must have a case_type")
         if not getattr(entry, "jurisdiction", ""):
             errors.append("Legal action must have a jurisdiction")
+
+    if entry_type == "evidence":
+        if not getattr(entry, "evidence_type", ""):
+            errors.append("Evidence must have an evidence_type")
 
     if entry_type == "claim":
         if not getattr(entry, "assertion", ""):
