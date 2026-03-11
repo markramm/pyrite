@@ -72,6 +72,11 @@ CASE_STATUSES = (
     "convicted", "acquitted",
 )
 
+# Connection enum tuples
+FUNDING_MECHANISMS = (
+    "grant", "donation", "contract", "lobbying", "dark_money", "other",
+)
+
 # Evidence enum tuples
 EVIDENCE_TYPES = (
     "document", "testimony", "record", "data", "photo", "video", "other",
@@ -538,4 +543,160 @@ class ClaimEntry(Entry):
             claim_status=meta.get("claim_status", "unverified"),
             evidence_refs=meta.get("evidence_refs", []) or [],
             disputed_by=meta.get("disputed_by", []) or [],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Connection types (edge-entities)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class OwnershipEntry(Entry):
+    """Ownership relationship between an entity and an asset/organization."""
+
+    owner: str = ""
+    asset: str = ""
+    percentage: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    legal_basis: str = ""
+    beneficial: bool = False
+
+    @property
+    def entry_type(self) -> str:
+        return "ownership"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = self._base_frontmatter()
+        meta["type"] = "ownership"
+        if self.owner:
+            meta["owner"] = self.owner
+        if self.asset:
+            meta["asset"] = self.asset
+        if self.percentage:
+            meta["percentage"] = self.percentage
+        if self.start_date:
+            meta["start_date"] = self.start_date
+        if self.end_date:
+            meta["end_date"] = self.end_date
+        if self.legal_basis:
+            meta["legal_basis"] = self.legal_basis
+        if self.beneficial:
+            meta["beneficial"] = self.beneficial
+        if self.summary:
+            meta["summary"] = self.summary
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "OwnershipEntry":
+        kw = _base_kwargs(meta, body)
+        return cls(
+            **kw,
+            importance=int(meta.get("importance", 5)),
+            owner=meta.get("owner", ""),
+            asset=meta.get("asset", ""),
+            percentage=str(meta.get("percentage", "")),
+            start_date=str(meta.get("start_date", "")),
+            end_date=str(meta.get("end_date", "")),
+            legal_basis=meta.get("legal_basis", ""),
+            beneficial=bool(meta.get("beneficial", False)),
+        )
+
+
+@dataclass
+class MembershipEntry(Entry):
+    """Membership relationship between a person and an organization."""
+
+    person: str = ""
+    organization: str = ""
+    role: str = ""
+    start_date: str = ""
+    end_date: str = ""
+
+    @property
+    def entry_type(self) -> str:
+        return "membership"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = self._base_frontmatter()
+        meta["type"] = "membership"
+        if self.person:
+            meta["person"] = self.person
+        if self.organization:
+            meta["organization"] = self.organization
+        if self.role:
+            meta["role"] = self.role
+        if self.start_date:
+            meta["start_date"] = self.start_date
+        if self.end_date:
+            meta["end_date"] = self.end_date
+        if self.summary:
+            meta["summary"] = self.summary
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "MembershipEntry":
+        kw = _base_kwargs(meta, body)
+        return cls(
+            **kw,
+            importance=int(meta.get("importance", 5)),
+            person=meta.get("person", ""),
+            organization=meta.get("organization", ""),
+            role=meta.get("role", ""),
+            start_date=str(meta.get("start_date", "")),
+            end_date=str(meta.get("end_date", "")),
+        )
+
+
+@dataclass
+class FundingEntry(Entry):
+    """Funding relationship between entities."""
+
+    funder: str = ""
+    recipient: str = ""
+    amount: str = ""
+    currency: str = ""
+    date_range: str = ""
+    purpose: str = ""
+    mechanism: str = ""
+
+    @property
+    def entry_type(self) -> str:
+        return "funding"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = self._base_frontmatter()
+        meta["type"] = "funding"
+        if self.funder:
+            meta["funder"] = self.funder
+        if self.recipient:
+            meta["recipient"] = self.recipient
+        if self.amount:
+            meta["amount"] = self.amount
+        if self.currency:
+            meta["currency"] = self.currency
+        if self.date_range:
+            meta["date_range"] = self.date_range
+        if self.purpose:
+            meta["purpose"] = self.purpose
+        if self.mechanism:
+            meta["mechanism"] = self.mechanism
+        if self.summary:
+            meta["summary"] = self.summary
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "FundingEntry":
+        kw = _base_kwargs(meta, body)
+        return cls(
+            **kw,
+            importance=int(meta.get("importance", 5)),
+            funder=meta.get("funder", ""),
+            recipient=meta.get("recipient", ""),
+            amount=str(meta.get("amount", "")),
+            currency=meta.get("currency", ""),
+            date_range=meta.get("date_range", ""),
+            purpose=meta.get("purpose", ""),
+            mechanism=meta.get("mechanism", ""),
         )

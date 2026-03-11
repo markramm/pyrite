@@ -6,8 +6,11 @@ from pyrite_journalism_investigation.entry_types import (
     ClaimEntry,
     DocumentSourceEntry,
     EvidenceEntry,
+    FundingEntry,
     InvestigationEventEntry,
     LegalActionEntry,
+    MembershipEntry,
+    OwnershipEntry,
     TransactionEntry,
 )
 from pyrite_journalism_investigation.plugin import _validate_investigation_entry
@@ -145,6 +148,57 @@ class TestLegalActionValidation:
         )
         errors = _validate_investigation_entry(entry)
         assert any("jurisdiction" in e for e in errors)
+
+
+class TestOwnershipValidation:
+    def test_valid_ownership(self):
+        entry = OwnershipEntry(id="test", title="Test", owner="[[x]]", asset="[[y]]")
+        errors = _validate_investigation_entry(entry)
+        assert errors == []
+
+    def test_missing_owner(self):
+        entry = OwnershipEntry(id="test", title="Test", asset="[[y]]")
+        errors = _validate_investigation_entry(entry)
+        assert any("owner" in e for e in errors)
+
+    def test_missing_asset(self):
+        entry = OwnershipEntry(id="test", title="Test", owner="[[x]]")
+        errors = _validate_investigation_entry(entry)
+        assert any("asset" in e for e in errors)
+
+
+class TestMembershipValidation:
+    def test_valid_membership(self):
+        entry = MembershipEntry(id="test", title="Test", person="[[x]]", organization="[[y]]")
+        errors = _validate_investigation_entry(entry)
+        assert errors == []
+
+    def test_missing_person(self):
+        entry = MembershipEntry(id="test", title="Test", organization="[[y]]")
+        errors = _validate_investigation_entry(entry)
+        assert any("person" in e for e in errors)
+
+    def test_missing_organization(self):
+        entry = MembershipEntry(id="test", title="Test", person="[[x]]")
+        errors = _validate_investigation_entry(entry)
+        assert any("organization" in e for e in errors)
+
+
+class TestFundingValidation:
+    def test_valid_funding(self):
+        entry = FundingEntry(id="test", title="Test", funder="[[x]]", recipient="[[y]]")
+        errors = _validate_investigation_entry(entry)
+        assert errors == []
+
+    def test_missing_funder(self):
+        entry = FundingEntry(id="test", title="Test", recipient="[[y]]")
+        errors = _validate_investigation_entry(entry)
+        assert any("funder" in e for e in errors)
+
+    def test_missing_recipient(self):
+        entry = FundingEntry(id="test", title="Test", funder="[[x]]")
+        errors = _validate_investigation_entry(entry)
+        assert any("recipient" in e for e in errors)
 
 
 class TestEvidenceValidation:

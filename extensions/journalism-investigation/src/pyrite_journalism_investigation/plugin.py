@@ -11,8 +11,11 @@ from .entry_types import (
     CONFIDENCE_LEVELS,
     DocumentSourceEntry,
     EvidenceEntry,
+    FundingEntry,
     InvestigationEventEntry,
     LegalActionEntry,
+    MembershipEntry,
+    OwnershipEntry,
     TransactionEntry,
 )
 
@@ -44,6 +47,9 @@ class JournalismInvestigationPlugin:
             "legal_action": LegalActionEntry,
             "claim": ClaimEntry,
             "evidence": EvidenceEntry,
+            "ownership": OwnershipEntry,
+            "membership": MembershipEntry,
+            "funding": FundingEntry,
         }
 
     def get_kb_types(self) -> list[str]:
@@ -821,6 +827,24 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
             errors.append("Legal action must have a case_type")
         if not getattr(entry, "jurisdiction", ""):
             errors.append("Legal action must have a jurisdiction")
+
+    if entry_type == "ownership":
+        if not getattr(entry, "owner", ""):
+            errors.append("Ownership must have an owner")
+        if not getattr(entry, "asset", ""):
+            errors.append("Ownership must have an asset")
+
+    if entry_type == "membership":
+        if not getattr(entry, "person", ""):
+            errors.append("Membership must have a person")
+        if not getattr(entry, "organization", ""):
+            errors.append("Membership must have an organization")
+
+    if entry_type == "funding":
+        if not getattr(entry, "funder", ""):
+            errors.append("Funding must have a funder")
+        if not getattr(entry, "recipient", ""):
+            errors.append("Funding must have a recipient")
 
     if entry_type == "evidence":
         if not getattr(entry, "evidence_type", ""):

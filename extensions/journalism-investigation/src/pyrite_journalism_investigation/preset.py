@@ -55,6 +55,25 @@ JOURNALISM_INVESTIGATION_PRESET = {
             "optional": ["date", "case_type", "jurisdiction", "parties", "case_status", "outcome", "case_number", "importance"],
             "subdirectory": "events/",
         },
+        # Connection types (edge-entities)
+        "ownership": {
+            "description": "Ownership relationship between an entity and an asset/organization",
+            "required": ["title"],
+            "optional": ["owner", "asset", "percentage", "start_date", "end_date", "legal_basis", "beneficial", "importance"],
+            "subdirectory": "connections/",
+        },
+        "membership": {
+            "description": "Membership relationship between a person and an organization",
+            "required": ["title"],
+            "optional": ["person", "organization", "role", "start_date", "end_date", "importance"],
+            "subdirectory": "connections/",
+        },
+        "funding": {
+            "description": "Funding relationship between entities",
+            "required": ["title"],
+            "optional": ["funder", "recipient", "amount", "currency", "date_range", "purpose", "mechanism", "importance"],
+            "subdirectory": "connections/",
+        },
         # Evidence type
         "evidence": {
             "description": "A piece of evidence linked to a source document",
@@ -84,5 +103,5 @@ JOURNALISM_INVESTIGATION_PRESET = {
         "enforce": True,
         "rules": [],
     },
-    "directories": ["entities", "events", "sources", "evidence", "claims", "notes"],
+    "directories": ["entities", "events", "sources", "connections", "evidence", "claims", "notes"],
 }

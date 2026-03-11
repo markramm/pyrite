@@ -19,6 +19,9 @@ class TestPlugin:
         assert "legal_action" in types
         assert "claim" in types
         assert "evidence" in types
+        assert "ownership" in types
+        assert "membership" in types
+        assert "funding" in types
 
     def test_get_kb_types(self):
         plugin = JournalismInvestigationPlugin()
