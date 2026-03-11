@@ -113,7 +113,257 @@ class JournalismInvestigationPlugin:
         return [_validate_investigation_entry]
 
     def get_mcp_tools(self, tier: str) -> dict[str, dict]:
-        return {}  # MCP tools will be added in ji-mcp-tools-read-tier
+        tools: dict[str, dict[str, Any]] = {}
+        if tier in ("read", "write", "admin"):
+            tools["investigation_timeline"] = {
+                "description": "Query investigation events by date range, actor, event type, and importance",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "from_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
+                        "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
+                        "actor": {"type": "string", "description": "Filter by actor name (substring match)"},
+                        "event_type": {"type": "string", "description": "Filter by type: investigation_event, transaction, legal_action"},
+                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "limit": {"type": "integer", "description": "Max results (default 50)"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_timeline,
+            }
+            tools["investigation_entities"] = {
+                "description": "Query investigation entities (person, organization, asset, account) by type, importance, and jurisdiction",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entity_type": {"type": "string", "description": "Filter by type: person, organization, asset, account"},
+                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "jurisdiction": {"type": "string", "description": "Filter by jurisdiction (substring match)"},
+                        "limit": {"type": "integer", "description": "Max results (default 50)"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_entities,
+            }
+            tools["investigation_network"] = {
+                "description": "Get the connection network for an entity — all outlinks, backlinks, and related entries",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entry_id": {"type": "string", "description": "Entry ID to get network for"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["entry_id", "kb_name"],
+                },
+                "handler": self._mcp_network,
+            }
+            tools["investigation_sources"] = {
+                "description": "Query source documents by reliability, classification, and date range",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "reliability": {"type": "string", "description": "Filter by reliability: high, medium, low, unknown"},
+                        "classification": {"type": "string", "description": "Filter by classification: public, leaked, foia, court_filing, etc."},
+                        "from_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
+                        "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
+                        "limit": {"type": "integer", "description": "Max results (default 50)"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_sources,
+            }
+        return tools
+
+    # =========================================================================
+    # Internal helpers
+    # =========================================================================
+
+    def _get_db(self):
+        """Get DB from injected context, falling back to self-bootstrap."""
+        if self.ctx is not None:
+            return self.ctx.db, False
+        from pyrite.config import load_config
+        from pyrite.storage.database import PyriteDB
+
+        config = load_config()
+        return PyriteDB(config.settings.index_path), True
+
+    # =========================================================================
+    # MCP tool handlers
+    # =========================================================================
+
+    def _mcp_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Query investigation events by date range, actor, and type."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args["kb_name"]
+        from_date = args.get("from_date", "")
+        to_date = args.get("to_date", "")
+        actor_filter = args.get("actor", "").lower()
+        event_type = args.get("event_type", "")
+        min_importance = args.get("min_importance", 0)
+        limit = args.get("limit", 50)
+
+        event_types = ["investigation_event", "transaction", "legal_action"]
+        if event_type and event_type in event_types:
+            event_types = [event_type]
+
+        try:
+            events = []
+            for etype in event_types:
+                results = db.list_entries(kb_name=kb_name, entry_type=etype, limit=5000)
+                for r in results:
+                    imp = int(r.get("importance", 5))
+                    if min_importance and imp < min_importance:
+                        continue
+                    date = str(r.get("date", ""))
+                    if from_date and date < from_date:
+                        continue
+                    if to_date and date > to_date:
+                        continue
+                    meta = r.get("metadata") or {}
+                    if isinstance(meta, str):
+                        try:
+                            meta = json.loads(meta)
+                        except (json.JSONDecodeError, TypeError):
+                            meta = {}
+                    actors = meta.get("actors") or []
+                    if actor_filter and not any(actor_filter in a.lower() for a in actors):
+                        continue
+                    events.append({
+                        "id": r.get("id"),
+                        "title": r.get("title"),
+                        "type": etype,
+                        "date": date,
+                        "importance": imp,
+                        "actors": actors,
+                    })
+                    if len(events) >= limit:
+                        break
+                if len(events) >= limit:
+                    break
+            events.sort(key=lambda e: e.get("date", ""))
+            return {"count": len(events), "events": events[:limit]}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_entities(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Query investigation entities."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args["kb_name"]
+        entity_type = args.get("entity_type", "")
+        min_importance = args.get("min_importance", 0)
+        jurisdiction_filter = args.get("jurisdiction", "").lower()
+        limit = args.get("limit", 50)
+
+        entity_types = ["person", "organization", "asset", "account"]
+        if entity_type and entity_type in entity_types:
+            entity_types = [entity_type]
+
+        try:
+            entities = []
+            for etype in entity_types:
+                results = db.list_entries(kb_name=kb_name, entry_type=etype, limit=5000)
+                for r in results:
+                    imp = int(r.get("importance", 5))
+                    if min_importance and imp < min_importance:
+                        continue
+                    meta = r.get("metadata") or {}
+                    if isinstance(meta, str):
+                        try:
+                            meta = json.loads(meta)
+                        except (json.JSONDecodeError, TypeError):
+                            meta = {}
+                    jurisdiction = str(meta.get("jurisdiction", "")).lower()
+                    if jurisdiction_filter and jurisdiction_filter not in jurisdiction:
+                        continue
+                    entities.append({
+                        "id": r.get("id"),
+                        "title": r.get("title"),
+                        "type": etype,
+                        "importance": imp,
+                    })
+            entities.sort(key=lambda e: e["importance"], reverse=True)
+            return {"count": len(entities[:limit]), "entities": entities[:limit]}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_network(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get connection network for an entity."""
+        db, should_close = self._get_db()
+        entry_id = args["entry_id"]
+        kb_name = args["kb_name"]
+
+        try:
+            entry = db.get_entry(entry_id, kb_name)
+            if not entry:
+                return {"error": f"Entry '{entry_id}' not found"}
+
+            outlinks = db.get_outlinks(entry_id, kb_name)
+            backlinks = db.get_backlinks(entry_id, kb_name)
+
+            return {
+                "center": {"id": entry_id, "title": entry.get("title", "")},
+                "outlinks": outlinks,
+                "backlinks": backlinks,
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_sources(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Query source documents."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args["kb_name"]
+        reliability_filter = args.get("reliability", "")
+        classification_filter = args.get("classification", "")
+        from_date = args.get("from_date", "")
+        to_date = args.get("to_date", "")
+        limit = args.get("limit", 50)
+
+        try:
+            results = db.list_entries(kb_name=kb_name, entry_type="document_source", limit=5000)
+            sources = []
+            for r in results:
+                meta = r.get("metadata") or {}
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except (json.JSONDecodeError, TypeError):
+                        meta = {}
+                reliability = meta.get("reliability", "unknown")
+                if reliability_filter and reliability != reliability_filter:
+                    continue
+                classification = meta.get("classification", "")
+                if classification_filter and classification != classification_filter:
+                    continue
+                date = str(r.get("date", meta.get("obtained_date", "")))
+                if from_date and date < from_date:
+                    continue
+                if to_date and date > to_date:
+                    continue
+                sources.append({
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "reliability": reliability,
+                    "classification": classification,
+                    "date": date,
+                })
+            sources.sort(key=lambda s: s.get("date", ""))
+            return {"count": len(sources[:limit]), "sources": sources[:limit]}
+        finally:
+            if should_close:
+                db.close()
 
 
 def _validate_investigation_entry(entry: Any) -> list[str]:
