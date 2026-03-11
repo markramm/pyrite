@@ -435,13 +435,25 @@ class ClaimEntry(Entry):
         """Check if the claim can transition to the target status."""
         return target_status in self.valid_transitions(self.claim_status)
 
-    def auto_confidence(self) -> str:
-        """Calculate confidence from evidence count and dispute status."""
+    def auto_confidence(self, source_tiers: dict[str, int] | None = None) -> str:
+        """Calculate confidence from evidence count, tiers, and dispute status.
+
+        Args:
+            source_tiers: Optional mapping of evidence_ref -> tier number.
+                If provided and sources span multiple tiers, confidence is "high".
+        """
         if self.disputed_by:
             return "low"
-        if len(self.evidence_refs) >= 2:
-            return "medium"
-        return "low"
+        if len(self.evidence_refs) < 2:
+            return "low"
+        # Check for cross-tier corroboration
+        if source_tiers is not None:
+            tiers = {source_tiers.get(ref, 0) for ref in self.evidence_refs}
+            # Filter out default tier (0 = unknown ref)
+            tiers.discard(0)
+            if len(tiers) >= 2:
+                return "high"
+        return "medium"
 
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
