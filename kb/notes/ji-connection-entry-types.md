@@ -19,8 +19,9 @@ links:
   relation: depends_on
   kb: pyrite
 kind: feature
-status: accepted
+status: done
 priority: high
+assignee: claude
 effort: M
 ---
 

@@ -15,8 +15,9 @@ links:
   relation: informed_by
   kb: pyrite
 kind: feature
-status: accepted
+status: done
 priority: high
+assignee: claude
 effort: M
 ---
 
