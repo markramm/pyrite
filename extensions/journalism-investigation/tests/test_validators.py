@@ -3,6 +3,7 @@
 from pyrite_journalism_investigation.entry_types import (
     AccountEntry,
     AssetEntry,
+    ClaimEntry,
     DocumentSourceEntry,
     InvestigationEventEntry,
     LegalActionEntry,
@@ -143,6 +144,36 @@ class TestLegalActionValidation:
         )
         errors = _validate_investigation_entry(entry)
         assert any("jurisdiction" in e for e in errors)
+
+
+class TestClaimValidation:
+    def test_valid_claim(self):
+        entry = ClaimEntry(
+            id="test", title="Test", assertion="X paid Y",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert errors == []
+
+    def test_missing_assertion(self):
+        entry = ClaimEntry(id="test", title="Test")
+        errors = _validate_investigation_entry(entry)
+        assert any("assertion" in e for e in errors)
+
+    def test_invalid_claim_status(self):
+        entry = ClaimEntry(
+            id="test", title="Test", assertion="X paid Y",
+            claim_status="bogus",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert any("claim_status" in e.lower() or "status" in e.lower() for e in errors)
+
+    def test_invalid_confidence(self):
+        entry = ClaimEntry(
+            id="test", title="Test", assertion="X paid Y",
+            confidence="very_high",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert any("confidence" in e.lower() for e in errors)
 
 
 class TestImportanceValidation:

@@ -55,6 +55,13 @@ JOURNALISM_INVESTIGATION_PRESET = {
             "optional": ["date", "case_type", "jurisdiction", "parties", "case_status", "outcome", "case_number", "importance"],
             "subdirectory": "events/",
         },
+        # Claim type
+        "claim": {
+            "description": "A factual assertion with verification lifecycle tracking",
+            "required": ["title"],
+            "optional": ["assertion", "confidence", "claim_status", "evidence_refs", "disputed_by", "importance"],
+            "subdirectory": "claims/",
+        },
         # General-purpose types
         "note": {
             "description": "General research note or analysis",
@@ -70,5 +77,5 @@ JOURNALISM_INVESTIGATION_PRESET = {
         "enforce": True,
         "rules": [],
     },
-    "directories": ["entities", "events", "sources", "notes"],
+    "directories": ["entities", "events", "sources", "claims", "notes"],
 }

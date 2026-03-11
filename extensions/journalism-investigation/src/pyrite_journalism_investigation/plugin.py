@@ -6,6 +6,9 @@ from .preset import JOURNALISM_INVESTIGATION_PRESET
 from .entry_types import (
     AccountEntry,
     AssetEntry,
+    CLAIM_STATUSES,
+    ClaimEntry,
+    CONFIDENCE_LEVELS,
     DocumentSourceEntry,
     InvestigationEventEntry,
     LegalActionEntry,
@@ -38,6 +41,7 @@ class JournalismInvestigationPlugin:
             "investigation_event": InvestigationEventEntry,
             "transaction": TransactionEntry,
             "legal_action": LegalActionEntry,
+            "claim": ClaimEntry,
         }
 
     def get_kb_types(self) -> list[str]:
@@ -174,6 +178,21 @@ class JournalismInvestigationPlugin:
                     "required": ["kb_name"],
                 },
                 "handler": self._mcp_sources,
+            }
+            tools["investigation_claims"] = {
+                "description": "Query claims by status, confidence level, and importance",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "claim_status": {"type": "string", "description": "Filter by status: unverified, partially_verified, corroborated, disputed, retracted"},
+                        "confidence": {"type": "string", "description": "Filter by confidence: high, medium, low"},
+                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "limit": {"type": "integer", "description": "Max results (default 50)"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_claims,
             }
         return tools
 
@@ -365,6 +384,51 @@ class JournalismInvestigationPlugin:
             if should_close:
                 db.close()
 
+    def _mcp_claims(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Query claims by status, confidence, and importance."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args["kb_name"]
+        status_filter = args.get("claim_status", "")
+        confidence_filter = args.get("confidence", "")
+        min_importance = args.get("min_importance", 0)
+        limit = args.get("limit", 50)
+
+        try:
+            results = db.list_entries(kb_name=kb_name, entry_type="claim", limit=5000)
+            claims = []
+            for r in results:
+                imp = int(r.get("importance", 5))
+                if min_importance and imp < min_importance:
+                    continue
+                meta = r.get("metadata") or {}
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except (json.JSONDecodeError, TypeError):
+                        meta = {}
+                claim_status = meta.get("claim_status", "unverified")
+                if status_filter and claim_status != status_filter:
+                    continue
+                confidence = meta.get("confidence", "low")
+                if confidence_filter and confidence != confidence_filter:
+                    continue
+                claims.append({
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "assertion": meta.get("assertion", ""),
+                    "claim_status": claim_status,
+                    "confidence": confidence,
+                    "importance": imp,
+                    "evidence_count": len(meta.get("evidence_refs", []) or []),
+                })
+            claims.sort(key=lambda c: c["importance"], reverse=True)
+            return {"count": len(claims[:limit]), "claims": claims[:limit]}
+        finally:
+            if should_close:
+                db.close()
+
 
 def _validate_investigation_entry(entry: Any) -> list[str]:
     """Validate journalism-investigation entries."""
@@ -406,6 +470,16 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
             errors.append("Legal action must have a case_type")
         if not getattr(entry, "jurisdiction", ""):
             errors.append("Legal action must have a jurisdiction")
+
+    if entry_type == "claim":
+        if not getattr(entry, "assertion", ""):
+            errors.append("Claim must have an assertion")
+        claim_status = getattr(entry, "claim_status", "")
+        if claim_status and claim_status not in CLAIM_STATUSES:
+            errors.append(f"Invalid claim_status: {claim_status}")
+        confidence = getattr(entry, "confidence", "")
+        if confidence and confidence not in CONFIDENCE_LEVELS:
+            errors.append(f"Invalid confidence: {confidence}")
 
     importance = getattr(entry, "importance", None)
     if importance is not None and isinstance(importance, int):

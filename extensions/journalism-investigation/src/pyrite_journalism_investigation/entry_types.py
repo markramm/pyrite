@@ -72,6 +72,12 @@ CASE_STATUSES = (
     "convicted", "acquitted",
 )
 
+# Claim enum tuples
+CLAIM_STATUSES = (
+    "unverified", "partially_verified", "corroborated", "disputed", "retracted",
+)
+CONFIDENCE_LEVELS = ("high", "medium", "low")
+
 
 @dataclass
 class AssetEntry(Entry):
@@ -389,4 +395,80 @@ class LegalActionEntry(EventEntry):
             case_status=meta.get("case_status", ""),
             outcome=meta.get("outcome", ""),
             case_number=meta.get("case_number", ""),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Claim type
+# ---------------------------------------------------------------------------
+
+# Status transition map: from_status -> set of valid to_statuses
+_CLAIM_TRANSITIONS: dict[str, set[str]] = {
+    "unverified": {"partially_verified"},
+    "partially_verified": {"corroborated", "disputed"},
+    "disputed": {"retracted", "corroborated"},
+    "corroborated": set(),
+    "retracted": set(),
+}
+
+
+@dataclass
+class ClaimEntry(Entry):
+    """A factual assertion with verification lifecycle tracking."""
+
+    assertion: str = ""
+    confidence: str = "low"
+    claim_status: str = "unverified"
+    evidence_refs: list[str] = field(default_factory=list)
+    disputed_by: list[str] = field(default_factory=list)
+
+    @property
+    def entry_type(self) -> str:
+        return "claim"
+
+    @staticmethod
+    def valid_transitions(from_status: str) -> set[str]:
+        """Return valid target statuses for a given current status."""
+        return _CLAIM_TRANSITIONS.get(from_status, set())
+
+    def can_transition_to(self, target_status: str) -> bool:
+        """Check if the claim can transition to the target status."""
+        return target_status in self.valid_transitions(self.claim_status)
+
+    def auto_confidence(self) -> str:
+        """Calculate confidence from evidence count and dispute status."""
+        if self.disputed_by:
+            return "low"
+        if len(self.evidence_refs) >= 2:
+            return "medium"
+        return "low"
+
+    def to_frontmatter(self) -> dict[str, Any]:
+        meta = self._base_frontmatter()
+        meta["type"] = "claim"
+        if self.assertion:
+            meta["assertion"] = self.assertion
+        if self.confidence != "low":
+            meta["confidence"] = self.confidence
+        if self.claim_status != "unverified":
+            meta["claim_status"] = self.claim_status
+        if self.evidence_refs:
+            meta["evidence_refs"] = self.evidence_refs
+        if self.disputed_by:
+            meta["disputed_by"] = self.disputed_by
+        if self.summary:
+            meta["summary"] = self.summary
+        return meta
+
+    @classmethod
+    def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ClaimEntry":
+        kw = _base_kwargs(meta, body)
+        return cls(
+            **kw,
+            importance=int(meta.get("importance", 5)),
+            assertion=meta.get("assertion", ""),
+            confidence=meta.get("confidence", "low"),
+            claim_status=meta.get("claim_status", "unverified"),
+            evidence_refs=meta.get("evidence_refs", []) or [],
+            disputed_by=meta.get("disputed_by", []) or [],
         )
