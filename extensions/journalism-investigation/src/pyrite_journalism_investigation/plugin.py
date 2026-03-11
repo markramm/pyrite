@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .preset import JOURNALISM_INVESTIGATION_PRESET
 from .entry_types import (
     AccountEntry,
     AssetEntry,
@@ -41,6 +42,9 @@ class JournalismInvestigationPlugin:
 
     def get_kb_types(self) -> list[str]:
         return ["journalism-investigation"]
+
+    def get_kb_presets(self) -> dict[str, dict]:
+        return {"journalism-investigation": JOURNALISM_INVESTIGATION_PRESET}
 
     def get_relationship_types(self) -> dict[str, dict]:
         # Note: member_of/has_member, funded_by/funds, investigated/investigated_by
