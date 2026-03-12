@@ -1,32 +1,33 @@
 """Journalism Investigation plugin for pyrite."""
 
-import json
 from typing import Any
 
 from .preset import JOURNALISM_INVESTIGATION_PRESET
 from .entry_types import (
-    ACCOUNT_TYPES,
     AccountEntry,
-    ASSET_TYPES,
     AssetEntry,
-    CASE_STATUSES,
-    CASE_TYPES,
-    CLAIM_STATUSES,
     ClaimEntry,
-    CONFIDENCE_LEVELS,
     DocumentSourceEntry,
-    EVIDENCE_TYPES,
     EvidenceEntry,
-    FUNDING_MECHANISMS,
     FundingEntry,
     InvestigationEventEntry,
     LegalActionEntry,
     MembershipEntry,
     OwnershipEntry,
-    RELIABILITY_LEVELS,
-    TRANSACTION_TYPES,
     TransactionEntry,
 )
+from .hooks import enrich_connection_links
+from .queries import (
+    ENTITY_TYPE_ALIASES,
+    query_claims,
+    query_entities,
+    query_evidence_chain,
+    query_network,
+    query_sources,
+    query_timeline,
+)
+from .utils import parse_meta
+from .validators import validate_investigation_entry
 
 
 class JournalismInvestigationPlugin:
@@ -144,10 +145,10 @@ class JournalismInvestigationPlugin:
         }
 
     def get_validators(self) -> list:
-        return [_validate_investigation_entry]
+        return [validate_investigation_entry]
 
     def get_hooks(self) -> dict[str, list]:
-        return {"before_save": [_enrich_connection_links]}
+        return {"before_save": [enrich_connection_links]}
 
     def get_mcp_tools(self, tier: str) -> dict[str, dict]:
         tools: dict[str, dict[str, Any]] = {}
@@ -340,287 +341,85 @@ class JournalismInvestigationPlugin:
         return PyriteDB(config.settings.index_path), True
 
     # =========================================================================
-    # MCP tool handlers
+    # Read-tier MCP tool handlers — delegate to pure query functions
     # =========================================================================
 
     def _mcp_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Query investigation events by date range, actor, and type."""
         db, should_close = self._get_db()
-        kb_name = args["kb_name"]
-        from_date = args.get("from_date", "")
-        to_date = args.get("to_date", "")
-        actor_filter = args.get("actor", "").lower()
-        event_type = args.get("event_type", "")
-        min_importance = args.get("min_importance", 0)
-        limit = args.get("limit", 50)
-
-        event_types = ["investigation_event", "transaction", "legal_action"]
-        if event_type and event_type in event_types:
-            event_types = [event_type]
-
         try:
-            events = []
-            for etype in event_types:
-                results = db.list_entries(kb_name=kb_name, entry_type=etype, limit=5000)
-                for r in results:
-                    imp = int(r.get("importance", 5))
-                    if min_importance and imp < min_importance:
-                        continue
-                    date = str(r.get("date", ""))
-                    if from_date and date < from_date:
-                        continue
-                    if to_date and date > to_date:
-                        continue
-                    meta = _parse_meta(r)
-                    actors = meta.get("actors") or []
-                    if actor_filter and not any(actor_filter in a.lower() for a in actors):
-                        continue
-                    events.append({
-                        "id": r.get("id"),
-                        "title": r.get("title"),
-                        "type": etype,
-                        "date": date,
-                        "importance": imp,
-                        "actors": actors,
-                    })
-                    if len(events) >= limit:
-                        break
-                if len(events) >= limit:
-                    break
-            events.sort(key=lambda e: e.get("date", ""))
-            return {"count": len(events), "events": events[:limit]}
+            return query_timeline(
+                db, args["kb_name"],
+                from_date=args.get("from_date", ""),
+                to_date=args.get("to_date", ""),
+                actor=args.get("actor", ""),
+                event_type=args.get("event_type", ""),
+                min_importance=args.get("min_importance", 0),
+                limit=args.get("limit", 50),
+            )
         finally:
             if should_close:
                 db.close()
 
-    # Map user-facing entity type names to DB-stored types.
-    # Core types like "person" and "organization" get resolved to plugin
-    # subtypes ("actor", "cascade_org") by KBService._resolve_entry_type.
-    _ENTITY_TYPE_ALIASES: dict[str, list[str]] = {
-        "person": ["person", "actor"],
-        "organization": ["organization", "cascade_org"],
-        "asset": ["asset"],
-        "account": ["account"],
-    }
-
     def _mcp_entities(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Query investigation entities."""
         db, should_close = self._get_db()
-        kb_name = args["kb_name"]
-        entity_type = args.get("entity_type", "")
-        min_importance = args.get("min_importance", 0)
-        jurisdiction_filter = args.get("jurisdiction", "").lower()
-        limit = args.get("limit", 50)
-
-        if entity_type and entity_type in self._ENTITY_TYPE_ALIASES:
-            # Query all aliases for the requested type
-            db_types = self._ENTITY_TYPE_ALIASES[entity_type]
-        elif entity_type:
-            db_types = [entity_type]
-        else:
-            # All entity types — expand aliases
-            db_types = []
-            for aliases in self._ENTITY_TYPE_ALIASES.values():
-                db_types.extend(aliases)
-
         try:
-            entities = []
-            for etype in db_types:
-                results = db.list_entries(kb_name=kb_name, entry_type=etype, limit=5000)
-                for r in results:
-                    imp = int(r.get("importance", 5))
-                    if min_importance and imp < min_importance:
-                        continue
-                    meta = _parse_meta(r)
-                    jurisdiction = str(meta.get("jurisdiction", "")).lower()
-                    if jurisdiction_filter and jurisdiction_filter not in jurisdiction:
-                        continue
-                    entities.append({
-                        "id": r.get("id"),
-                        "title": r.get("title"),
-                        "type": etype,
-                        "importance": imp,
-                    })
-            entities.sort(key=lambda e: e["importance"], reverse=True)
-            return {"count": len(entities[:limit]), "entities": entities[:limit]}
+            return query_entities(
+                db, args["kb_name"],
+                entity_type=args.get("entity_type", ""),
+                min_importance=args.get("min_importance", 0),
+                jurisdiction=args.get("jurisdiction", ""),
+                limit=args.get("limit", 50),
+            )
         finally:
             if should_close:
                 db.close()
 
     def _mcp_network(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get connection network for an entity."""
         db, should_close = self._get_db()
-        entry_id = args["entry_id"]
-        kb_name = args["kb_name"]
-
         try:
-            entry = db.get_entry(entry_id, kb_name)
-            if not entry:
-                return {"error": f"Entry '{entry_id}' not found"}
-
-            outlinks = db.get_outlinks(entry_id, kb_name)
-            backlinks = db.get_backlinks(entry_id, kb_name)
-
-            return {
-                "center": {"id": entry_id, "title": entry.get("title", "")},
-                "outlinks": outlinks,
-                "backlinks": backlinks,
-            }
+            return query_network(db, args["kb_name"], args["entry_id"])
         finally:
             if should_close:
                 db.close()
 
     def _mcp_sources(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Query source documents."""
         db, should_close = self._get_db()
-        kb_name = args["kb_name"]
-        reliability_filter = args.get("reliability", "")
-        classification_filter = args.get("classification", "")
-        from_date = args.get("from_date", "")
-        to_date = args.get("to_date", "")
-        limit = args.get("limit", 50)
-
         try:
-            results = db.list_entries(kb_name=kb_name, entry_type="document_source", limit=5000)
-            sources = []
-            for r in results:
-                meta = _parse_meta(r)
-                reliability = meta.get("reliability", "unknown")
-                if reliability_filter and reliability != reliability_filter:
-                    continue
-                classification = meta.get("classification", "")
-                if classification_filter and classification != classification_filter:
-                    continue
-                date = str(r.get("date", meta.get("obtained_date", "")))
-                if from_date and date < from_date:
-                    continue
-                if to_date and date > to_date:
-                    continue
-                sources.append({
-                    "id": r.get("id"),
-                    "title": r.get("title"),
-                    "reliability": reliability,
-                    "classification": classification,
-                    "date": date,
-                })
-            sources.sort(key=lambda s: s.get("date", ""))
-            return {"count": len(sources[:limit]), "sources": sources[:limit]}
+            return query_sources(
+                db, args["kb_name"],
+                reliability=args.get("reliability", ""),
+                classification=args.get("classification", ""),
+                from_date=args.get("from_date", ""),
+                to_date=args.get("to_date", ""),
+                limit=args.get("limit", 50),
+            )
         finally:
             if should_close:
                 db.close()
 
     def _mcp_claims(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Query claims by status, confidence, and importance."""
         db, should_close = self._get_db()
-        kb_name = args["kb_name"]
-        status_filter = args.get("claim_status", "")
-        confidence_filter = args.get("confidence", "")
-        min_importance = args.get("min_importance", 0)
-        limit = args.get("limit", 50)
-
         try:
-            results = db.list_entries(kb_name=kb_name, entry_type="claim", limit=5000)
-            claims = []
-            for r in results:
-                imp = int(r.get("importance", 5))
-                if min_importance and imp < min_importance:
-                    continue
-                meta = _parse_meta(r)
-                claim_status = meta.get("claim_status", "unverified")
-                if status_filter and claim_status != status_filter:
-                    continue
-                confidence = meta.get("confidence", "low")
-                if confidence_filter and confidence != confidence_filter:
-                    continue
-                claims.append({
-                    "id": r.get("id"),
-                    "title": r.get("title"),
-                    "assertion": meta.get("assertion", ""),
-                    "claim_status": claim_status,
-                    "confidence": confidence,
-                    "importance": imp,
-                    "evidence_count": len(meta.get("evidence_refs", []) or []),
-                })
-            claims.sort(key=lambda c: c["importance"], reverse=True)
-            return {"count": len(claims[:limit]), "claims": claims[:limit]}
+            return query_claims(
+                db, args["kb_name"],
+                claim_status=args.get("claim_status", ""),
+                confidence=args.get("confidence", ""),
+                min_importance=args.get("min_importance", 0),
+                limit=args.get("limit", 50),
+            )
         finally:
             if should_close:
                 db.close()
 
     def _mcp_evidence_chain(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Trace evidence chain from claim to source documents."""
         db, should_close = self._get_db()
-        claim_id = args["claim_id"]
-        kb_name = args["kb_name"]
-
         try:
-            claim = db.get_entry(claim_id, kb_name)
-            if not claim:
-                return {"error": f"Claim '{claim_id}' not found"}
-
-            meta = _parse_meta(claim)
-
-            evidence_refs = meta.get("evidence_refs", []) or []
-            chain: list[dict[str, Any]] = []
-            gaps: list[str] = []
-
-            if not evidence_refs:
-                gaps.append(f"Claim '{claim_id}' has no evidence references")
-
-            for ref in evidence_refs:
-                # Strip wikilink brackets
-                eid = ref.strip("[]").replace("[[", "").replace("]]", "")
-                evidence = db.get_entry(eid, kb_name)
-                if not evidence:
-                    gaps.append(f"Evidence '{eid}' not found")
-                    chain.append({"evidence_id": eid, "status": "missing"})
-                    continue
-
-                emeta = _parse_meta(evidence)
-
-                source_doc_ref = emeta.get("source_document", "")
-                source_doc_id = source_doc_ref.strip("[]").replace("[[", "").replace("]]", "")
-
-                source_info = None
-                if source_doc_id:
-                    source = db.get_entry(source_doc_id, kb_name)
-                    if source:
-                        smeta = _parse_meta(source)
-                        source_info = {
-                            "id": source_doc_id,
-                            "title": source.get("title", ""),
-                            "reliability": smeta.get("reliability", "unknown"),
-                        }
-                    else:
-                        gaps.append(f"Source document '{source_doc_id}' not found")
-                else:
-                    gaps.append(f"Evidence '{eid}' has no source document link")
-
-                chain.append({
-                    "evidence_id": eid,
-                    "title": evidence.get("title", ""),
-                    "evidence_type": emeta.get("evidence_type", ""),
-                    "reliability": emeta.get("reliability", "unknown"),
-                    "source_document": source_info,
-                })
-
-            return {
-                "claim": {
-                    "id": claim_id,
-                    "title": claim.get("title", ""),
-                    "assertion": meta.get("assertion", ""),
-                    "claim_status": meta.get("claim_status", "unverified"),
-                    "confidence": meta.get("confidence", "low"),
-                },
-                "evidence_chain": chain,
-                "gaps": gaps,
-            }
+            return query_evidence_chain(db, args["kb_name"], args["claim_id"])
         finally:
             if should_close:
                 db.close()
 
     def _mcp_qa_report(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get investigation quality metrics."""
         from .qa import compute_qa_metrics
 
         db, should_close = self._get_db()
@@ -785,158 +584,6 @@ class JournalismInvestigationPlugin:
             return {"error": str(e)}
 
 
-# ---------------------------------------------------------------------------
-# Connection entry → auto-link mapping
-# Maps (entry_type) → [(field_name, relation_on_field, relation_on_other)]
-# e.g. ownership: owner field gets "owned_by" link (pointing at owner),
-#                  asset field gets "owns" link (pointing at asset)
-# ---------------------------------------------------------------------------
-
-_CONNECTION_LINK_SPECS: dict[str, list[tuple[str, str, str]]] = {
-    "ownership": [
-        # (field, link relation TO field target, link relation TO the other target)
-        ("owner", "owned_by", "owns"),
-        ("asset", "owns", "owned_by"),
-    ],
-    "membership": [
-        ("person", "has_member", "member_of"),
-        ("organization", "member_of", "has_member"),
-    ],
-    "funding": [
-        ("funder", "funded_by", "funds"),
-        ("recipient", "funds", "funded_by"),
-    ],
-}
-
-
-def _strip_wikilink(ref: str) -> str:
-    """Extract entry ID from a wikilink reference like [[some-id]]."""
-    return ref.strip().strip("[]").replace("[[", "").replace("]]", "")
-
-
-def _enrich_connection_links(entry: Any, context: Any) -> Any:
-    """Before-save hook: add bidirectional links for connection entry types."""
-    entry_type = getattr(entry, "entry_type", "")
-    specs = _CONNECTION_LINK_SPECS.get(entry_type)
-    if not specs:
-        return entry
-
-    # Collect existing link (target, relation) pairs to avoid duplicates
-    existing = {(l.target, l.relation) for l in entry.links}
-
-    for field_name, relation, _inverse in specs:
-        ref = getattr(entry, field_name, "")
-        if not ref:
-            continue
-        target_id = _strip_wikilink(ref)
-        if not target_id:
-            continue
-        if (target_id, relation) not in existing:
-            entry.add_link(target=target_id, relation=relation)
-            existing.add((target_id, relation))
-
-    return entry
-
-
-def _parse_meta(entry_dict: dict[str, Any]) -> dict[str, Any]:
-    """Parse metadata from a DB entry dict, handling JSON strings."""
-    meta = entry_dict.get("metadata") or {}
-    if isinstance(meta, str):
-        try:
-            meta = json.loads(meta)
-        except (json.JSONDecodeError, TypeError):
-            meta = {}
-    return meta
-
-
-def _validate_enum(
-    value: str, valid_values: tuple[str, ...], field_name: str, errors: list[str],
-) -> None:
-    """Append an error if value is non-empty and not in valid_values."""
-    if value and value not in valid_values:
-        errors.append(f"Invalid {field_name}: {value}")
-
-
-def _validate_investigation_entry(entry: Any) -> list[str]:
-    """Validate journalism-investigation entries."""
-    errors = []
-    entry_type = getattr(entry, "entry_type", "")
-
-    if entry_type == "asset":
-        if not getattr(entry, "asset_type", ""):
-            errors.append("Asset must have an asset_type")
-        _validate_enum(getattr(entry, "asset_type", ""), ASSET_TYPES, "asset_type", errors)
-
-    if entry_type == "account":
-        if not getattr(entry, "account_type", ""):
-            errors.append("Account must have an account_type")
-        _validate_enum(getattr(entry, "account_type", ""), ACCOUNT_TYPES, "account_type", errors)
-
-    if entry_type == "document_source":
-        if not getattr(entry, "reliability", ""):
-            errors.append("Document source must have a reliability level")
-        _validate_enum(getattr(entry, "reliability", ""), RELIABILITY_LEVELS, "reliability", errors)
-
-    if entry_type == "investigation_event":
-        if not getattr(entry, "date", ""):
-            errors.append("Investigation event must have a date")
-
-    if entry_type == "transaction":
-        if not getattr(entry, "date", ""):
-            errors.append("Transaction must have a date")
-        txn_type = getattr(entry, "transaction_type", "")
-        _validate_enum(txn_type, TRANSACTION_TYPES, "transaction_type", errors)
-        if txn_type in ("payment", "bribe", "kickback"):
-            if not getattr(entry, "amount", ""):
-                errors.append(f"Transaction of type '{txn_type}' must have an amount")
-        if not getattr(entry, "sender", ""):
-            errors.append("Transaction must have a sender")
-        if not getattr(entry, "receiver", ""):
-            errors.append("Transaction must have a receiver")
-
-    if entry_type == "legal_action":
-        if not getattr(entry, "date", ""):
-            errors.append("Legal action must have a date")
-        if not getattr(entry, "case_type", ""):
-            errors.append("Legal action must have a case_type")
-        _validate_enum(getattr(entry, "case_type", ""), CASE_TYPES, "case_type", errors)
-        if not getattr(entry, "jurisdiction", ""):
-            errors.append("Legal action must have a jurisdiction")
-        _validate_enum(getattr(entry, "case_status", ""), CASE_STATUSES, "case_status", errors)
-
-    if entry_type == "ownership":
-        if not getattr(entry, "owner", ""):
-            errors.append("Ownership must have an owner")
-        if not getattr(entry, "asset", ""):
-            errors.append("Ownership must have an asset")
-
-    if entry_type == "membership":
-        if not getattr(entry, "person", ""):
-            errors.append("Membership must have a person")
-        if not getattr(entry, "organization", ""):
-            errors.append("Membership must have an organization")
-
-    if entry_type == "funding":
-        if not getattr(entry, "funder", ""):
-            errors.append("Funding must have a funder")
-        if not getattr(entry, "recipient", ""):
-            errors.append("Funding must have a recipient")
-        _validate_enum(getattr(entry, "mechanism", ""), FUNDING_MECHANISMS, "mechanism", errors)
-
-    if entry_type == "evidence":
-        if not getattr(entry, "evidence_type", ""):
-            errors.append("Evidence must have an evidence_type")
-        _validate_enum(getattr(entry, "evidence_type", ""), EVIDENCE_TYPES, "evidence_type", errors)
-
-    if entry_type == "claim":
-        if not getattr(entry, "assertion", ""):
-            errors.append("Claim must have an assertion")
-        _validate_enum(getattr(entry, "claim_status", ""), CLAIM_STATUSES, "claim_status", errors)
-        _validate_enum(getattr(entry, "confidence", ""), CONFIDENCE_LEVELS, "confidence", errors)
-
-    importance = getattr(entry, "importance", None)
-    if importance is not None and isinstance(importance, int):
-        if importance < 1 or importance > 10:
-            errors.append(f"Importance must be 1-10, got: {importance}")
-
-    return errors
+# Backward-compatible aliases for external code that imports private names
+_parse_meta = parse_meta
+_validate_investigation_entry = validate_investigation_entry

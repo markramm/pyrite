@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .plugin import _parse_meta
+from .utils import parse_meta
 
 
 def compute_qa_metrics(db: Any, kb_name: str, stale_days: int = 30) -> dict[str, Any]:
@@ -20,7 +20,7 @@ def compute_qa_metrics(db: Any, kb_name: str, stale_days: int = 30) -> dict[str,
     sources = db.list_entries(kb_name=kb_name, entry_type="document_source", limit=10000)
     tier_counts = {"high": 0, "medium": 0, "low": 0, "unknown": 0}
     for s in sources:
-        meta = _parse_meta(s)
+        meta = parse_meta(s)
         reliability = meta.get("reliability", "unknown")
         if reliability in tier_counts:
             tier_counts[reliability] += 1
@@ -44,7 +44,7 @@ def compute_qa_metrics(db: Any, kb_name: str, stale_days: int = 30) -> dict[str,
     status_counts = {}
 
     for c in claims:
-        meta = _parse_meta(c)
+        meta = parse_meta(c)
         evidence_refs = meta.get("evidence_refs", []) or []
         if not evidence_refs:
             orphans += 1

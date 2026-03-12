@@ -9,7 +9,7 @@ from rich.table import Table
 from pyrite.config import load_config
 from pyrite.storage.database import PyriteDB
 
-from .plugin import JournalismInvestigationPlugin, _parse_meta
+from .plugin import JournalismInvestigationPlugin
 
 investigation_app = typer.Typer(help="Journalism investigation commands")
 console = Console()
