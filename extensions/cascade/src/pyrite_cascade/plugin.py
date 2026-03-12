@@ -34,6 +34,11 @@ class CascadePlugin:
         """Receive shared dependencies from the plugin infrastructure."""
         self.ctx = ctx
 
+    def get_cli_commands(self) -> list[tuple[str, Any]]:
+        from .cli import cascade_app
+
+        return [("cascade", cascade_app)]
+
     def get_entry_types(self) -> dict[str, type]:
         return {
             "actor": ActorEntry,

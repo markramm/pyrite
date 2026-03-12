@@ -144,10 +144,6 @@ class IndexManager:
         # importance (promoted to base Entry)
         data["importance"] = entry.importance
 
-        # Event-specific backward compat: actors/participants
-        if isinstance(entry, EventEntry):
-            data["actors"] = entry.participants if hasattr(entry, "participants") else []
-
         # For GenericEntry types: promote protocol fields from metadata to DB columns
         # This handles kb.yaml types that declare protocols: [temporal, assignable, ...]
         if hasattr(entry, "metadata") and entry.metadata:

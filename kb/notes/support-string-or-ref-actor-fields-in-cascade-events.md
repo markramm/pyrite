@@ -18,7 +18,7 @@ links:
   relation: blocks
   kb: pyrite
 kind: feature
-status: in_progress
+status: done
 priority: high
 effort: L
 ---
