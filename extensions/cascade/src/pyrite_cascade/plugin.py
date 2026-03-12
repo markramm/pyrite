@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .hooks import resolve_actor_links, _on_actor_saved
 from .entry_types import (
     ActorEntry,
     CascadeEventEntry,
@@ -100,10 +101,24 @@ class CascadePlugin:
                 "inverse": "responded_to",
                 "description": "Capture event provoked a solidarity response",
             },
+            "actor_reference": {
+                "inverse": "has_actor",
+                "description": "Event references an actor (resolved from string or wikilink)",
+            },
+            "has_actor": {
+                "inverse": "actor_reference",
+                "description": "Actor is referenced by an event",
+            },
         }
 
     def get_validators(self) -> list:
         return [_validate_cascade_entry]
+
+    def get_hooks(self) -> dict[str, list]:
+        return {
+            "before_save": [resolve_actor_links],
+            "after_save": [_on_actor_saved],
+        }
 
     def get_mcp_tools(self, tier: str) -> dict[str, dict]:
         tools: dict[str, dict[str, Any]] = {}
