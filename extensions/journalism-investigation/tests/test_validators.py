@@ -27,6 +27,11 @@ class TestAssetValidation:
         errors = _validate_investigation_entry(entry)
         assert any("asset_type" in e for e in errors)
 
+    def test_invalid_asset_type(self):
+        entry = AssetEntry(id="test", title="Test", asset_type="spaceship")
+        errors = _validate_investigation_entry(entry)
+        assert any("asset_type" in e for e in errors)
+
 
 class TestAccountValidation:
     def test_valid_account(self):
@@ -36,6 +41,11 @@ class TestAccountValidation:
 
     def test_missing_account_type(self):
         entry = AccountEntry(id="test", title="Test")
+        errors = _validate_investigation_entry(entry)
+        assert any("account_type" in e for e in errors)
+
+    def test_invalid_account_type(self):
+        entry = AccountEntry(id="test", title="Test", account_type="spaceship")
         errors = _validate_investigation_entry(entry)
         assert any("account_type" in e for e in errors)
 
@@ -51,6 +61,11 @@ class TestDocumentSourceValidation:
         entry = DocumentSourceEntry(id="test", title="Test")
         errors = _validate_investigation_entry(entry)
         assert errors == []
+
+    def test_invalid_reliability(self):
+        entry = DocumentSourceEntry(id="test", title="Test", reliability="excellent")
+        errors = _validate_investigation_entry(entry)
+        assert any("reliability" in e for e in errors)
 
 
 class TestInvestigationEventValidation:
@@ -118,6 +133,14 @@ class TestTransactionValidation:
         errors = _validate_investigation_entry(entry)
         assert errors == []
 
+    def test_invalid_transaction_type(self):
+        entry = TransactionEntry(
+            id="test", title="Test", date="2020-01-01",
+            sender="A", receiver="B", transaction_type="teleportation",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert any("transaction_type" in e for e in errors)
+
 
 class TestLegalActionValidation:
     def test_valid_legal_action(self):
@@ -148,6 +171,22 @@ class TestLegalActionValidation:
         )
         errors = _validate_investigation_entry(entry)
         assert any("jurisdiction" in e for e in errors)
+
+    def test_invalid_case_type(self):
+        entry = LegalActionEntry(
+            id="test", title="Test", date="2020-01-01",
+            case_type="kangaroo_court", jurisdiction="US",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert any("case_type" in e for e in errors)
+
+    def test_invalid_case_status(self):
+        entry = LegalActionEntry(
+            id="test", title="Test", date="2020-01-01",
+            case_type="criminal", jurisdiction="US", case_status="vibes",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert any("case_status" in e for e in errors)
 
 
 class TestOwnershipValidation:
@@ -200,6 +239,14 @@ class TestFundingValidation:
         errors = _validate_investigation_entry(entry)
         assert any("recipient" in e for e in errors)
 
+    def test_invalid_mechanism(self):
+        entry = FundingEntry(
+            id="test", title="Test", funder="[[x]]", recipient="[[y]]",
+            mechanism="telepathy",
+        )
+        errors = _validate_investigation_entry(entry)
+        assert any("mechanism" in e for e in errors)
+
 
 class TestEvidenceValidation:
     def test_valid_evidence(self):
@@ -209,6 +256,11 @@ class TestEvidenceValidation:
 
     def test_missing_evidence_type(self):
         entry = EvidenceEntry(id="test", title="Test")
+        errors = _validate_investigation_entry(entry)
+        assert any("evidence_type" in e for e in errors)
+
+    def test_invalid_evidence_type(self):
+        entry = EvidenceEntry(id="test", title="Test", evidence_type="telepathy")
         errors = _validate_investigation_entry(entry)
         assert any("evidence_type" in e for e in errors)
 

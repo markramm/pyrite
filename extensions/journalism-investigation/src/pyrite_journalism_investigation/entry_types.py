@@ -12,6 +12,22 @@ from pyrite.schema import EventStatus, Provenance, generate_entry_id
 # Helper: build common kwargs from frontmatter meta dict
 # ---------------------------------------------------------------------------
 
+def _parse_event_status(meta: dict[str, Any]) -> "EventStatus":
+    """Parse EventStatus from frontmatter, defaulting to CONFIRMED."""
+    status_str = meta.get("status", "confirmed")
+    try:
+        return EventStatus(status_str)
+    except ValueError:
+        return EventStatus.CONFIRMED
+
+
+def _str_or_empty(value: Any) -> str:
+    """Convert a value to string, treating None as empty string."""
+    if value is None:
+        return ""
+    return str(value)
+
+
 def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
     """Extract base Entry fields from frontmatter dict."""
     prov_data = meta.get("provenance")
@@ -133,11 +149,11 @@ class AssetEntry(Entry):
             **kw,
             importance=int(meta.get("importance", 5)),
             asset_type=meta.get("asset_type", ""),
-            value=str(meta.get("value", "")),
+            value=_str_or_empty(meta.get("value", "")),
             currency=meta.get("currency", ""),
             jurisdiction=meta.get("jurisdiction", ""),
             registered_owner=meta.get("registered_owner", ""),
-            acquisition_date=str(meta.get("acquisition_date", "")),
+            acquisition_date=_str_or_empty(meta.get("acquisition_date", "")),
             description=meta.get("description", ""),
         )
 
@@ -186,8 +202,8 @@ class AccountEntry(Entry):
             institution=meta.get("institution", ""),
             jurisdiction=meta.get("jurisdiction", ""),
             holder=meta.get("holder", ""),
-            opened_date=str(meta.get("opened_date", "")),
-            closed_date=str(meta.get("closed_date", "")),
+            opened_date=_str_or_empty(meta.get("opened_date", "")),
+            closed_date=_str_or_empty(meta.get("closed_date", "")),
         )
 
 
@@ -229,7 +245,7 @@ class DocumentSourceEntry(DocumentEntry):
             url=meta.get("url", ""),
             reliability=meta.get("reliability", "unknown"),
             classification=meta.get("classification", ""),
-            obtained_date=str(meta.get("obtained_date", "")),
+            obtained_date=_str_or_empty(meta.get("obtained_date", "")),
             obtained_method=meta.get("obtained_method", ""),
         )
 
@@ -266,17 +282,11 @@ class InvestigationEventEntry(EventEntry):
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "InvestigationEventEntry":
         kw = _base_kwargs(meta, body)
 
-        status_str = meta.get("status", "confirmed")
-        try:
-            status = EventStatus(status_str)
-        except ValueError:
-            status = EventStatus.CONFIRMED
-
         return cls(
             **kw,
-            date=str(meta.get("date", "")),
+            date=_str_or_empty(meta.get("date", "")),
             importance=int(meta.get("importance", 5)),
-            status=status,
+            status=_parse_event_status(meta),
             location=meta.get("location", ""),
             participants=meta.get("participants", []) or [],
             notes=meta.get("notes", ""),
@@ -325,21 +335,15 @@ class TransactionEntry(EventEntry):
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TransactionEntry":
         kw = _base_kwargs(meta, body)
 
-        status_str = meta.get("status", "confirmed")
-        try:
-            status = EventStatus(status_str)
-        except ValueError:
-            status = EventStatus.CONFIRMED
-
         return cls(
             **kw,
-            date=str(meta.get("date", "")),
+            date=_str_or_empty(meta.get("date", "")),
             importance=int(meta.get("importance", 5)),
-            status=status,
+            status=_parse_event_status(meta),
             location=meta.get("location", ""),
             participants=meta.get("participants", []) or [],
             notes=meta.get("notes", ""),
-            amount=str(meta.get("amount", "")),
+            amount=_str_or_empty(meta.get("amount", "")),
             currency=meta.get("currency", ""),
             sender=meta.get("sender", ""),
             receiver=meta.get("receiver", ""),
@@ -385,17 +389,11 @@ class LegalActionEntry(EventEntry):
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "LegalActionEntry":
         kw = _base_kwargs(meta, body)
 
-        status_str = meta.get("status", "confirmed")
-        try:
-            status = EventStatus(status_str)
-        except ValueError:
-            status = EventStatus.CONFIRMED
-
         return cls(
             **kw,
-            date=str(meta.get("date", "")),
+            date=_str_or_empty(meta.get("date", "")),
             importance=int(meta.get("importance", 5)),
-            status=status,
+            status=_parse_event_status(meta),
             location=meta.get("location", ""),
             participants=meta.get("participants", []) or [],
             notes=meta.get("notes", ""),
@@ -453,7 +451,7 @@ class EvidenceEntry(Entry):
             evidence_type=meta.get("evidence_type", ""),
             source_document=meta.get("source_document", ""),
             reliability=meta.get("reliability", "unknown"),
-            obtained_date=str(meta.get("obtained_date", "")),
+            obtained_date=_str_or_empty(meta.get("obtained_date", "")),
             chain_of_custody=meta.get("chain_of_custody", ""),
         )
 
@@ -596,9 +594,9 @@ class OwnershipEntry(Entry):
             importance=int(meta.get("importance", 5)),
             owner=meta.get("owner", ""),
             asset=meta.get("asset", ""),
-            percentage=str(meta.get("percentage", "")),
-            start_date=str(meta.get("start_date", "")),
-            end_date=str(meta.get("end_date", "")),
+            percentage=_str_or_empty(meta.get("percentage", "")),
+            start_date=_str_or_empty(meta.get("start_date", "")),
+            end_date=_str_or_empty(meta.get("end_date", "")),
             legal_basis=meta.get("legal_basis", ""),
             beneficial=bool(meta.get("beneficial", False)),
         )
@@ -644,8 +642,8 @@ class MembershipEntry(Entry):
             person=meta.get("person", ""),
             organization=meta.get("organization", ""),
             role=meta.get("role", ""),
-            start_date=str(meta.get("start_date", "")),
-            end_date=str(meta.get("end_date", "")),
+            start_date=_str_or_empty(meta.get("start_date", "")),
+            end_date=_str_or_empty(meta.get("end_date", "")),
         )
 
 
@@ -694,7 +692,7 @@ class FundingEntry(Entry):
             importance=int(meta.get("importance", 5)),
             funder=meta.get("funder", ""),
             recipient=meta.get("recipient", ""),
-            amount=str(meta.get("amount", "")),
+            amount=_str_or_empty(meta.get("amount", "")),
             currency=meta.get("currency", ""),
             date_range=meta.get("date_range", ""),
             purpose=meta.get("purpose", ""),

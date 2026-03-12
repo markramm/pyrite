@@ -1,21 +1,30 @@
 """Journalism Investigation plugin for pyrite."""
 
+import json
 from typing import Any
 
 from .preset import JOURNALISM_INVESTIGATION_PRESET
 from .entry_types import (
+    ACCOUNT_TYPES,
     AccountEntry,
+    ASSET_TYPES,
     AssetEntry,
+    CASE_STATUSES,
+    CASE_TYPES,
     CLAIM_STATUSES,
     ClaimEntry,
     CONFIDENCE_LEVELS,
     DocumentSourceEntry,
+    EVIDENCE_TYPES,
     EvidenceEntry,
+    FUNDING_MECHANISMS,
     FundingEntry,
     InvestigationEventEntry,
     LegalActionEntry,
     MembershipEntry,
     OwnershipEntry,
+    RELIABILITY_LEVELS,
+    TRANSACTION_TYPES,
     TransactionEntry,
 )
 
@@ -316,8 +325,6 @@ class JournalismInvestigationPlugin:
 
     def _mcp_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query investigation events by date range, actor, and type."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args["kb_name"]
         from_date = args.get("from_date", "")
@@ -344,12 +351,7 @@ class JournalismInvestigationPlugin:
                         continue
                     if to_date and date > to_date:
                         continue
-                    meta = r.get("metadata") or {}
-                    if isinstance(meta, str):
-                        try:
-                            meta = json.loads(meta)
-                        except (json.JSONDecodeError, TypeError):
-                            meta = {}
+                    meta = _parse_meta(r)
                     actors = meta.get("actors") or []
                     if actor_filter and not any(actor_filter in a.lower() for a in actors):
                         continue
@@ -373,8 +375,6 @@ class JournalismInvestigationPlugin:
 
     def _mcp_entities(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query investigation entities."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args["kb_name"]
         entity_type = args.get("entity_type", "")
@@ -394,12 +394,7 @@ class JournalismInvestigationPlugin:
                     imp = int(r.get("importance", 5))
                     if min_importance and imp < min_importance:
                         continue
-                    meta = r.get("metadata") or {}
-                    if isinstance(meta, str):
-                        try:
-                            meta = json.loads(meta)
-                        except (json.JSONDecodeError, TypeError):
-                            meta = {}
+                    meta = _parse_meta(r)
                     jurisdiction = str(meta.get("jurisdiction", "")).lower()
                     if jurisdiction_filter and jurisdiction_filter not in jurisdiction:
                         continue
@@ -440,8 +435,6 @@ class JournalismInvestigationPlugin:
 
     def _mcp_sources(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query source documents."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args["kb_name"]
         reliability_filter = args.get("reliability", "")
@@ -454,12 +447,7 @@ class JournalismInvestigationPlugin:
             results = db.list_entries(kb_name=kb_name, entry_type="document_source", limit=5000)
             sources = []
             for r in results:
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = _parse_meta(r)
                 reliability = meta.get("reliability", "unknown")
                 if reliability_filter and reliability != reliability_filter:
                     continue
@@ -486,8 +474,6 @@ class JournalismInvestigationPlugin:
 
     def _mcp_claims(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query claims by status, confidence, and importance."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args["kb_name"]
         status_filter = args.get("claim_status", "")
@@ -502,12 +488,7 @@ class JournalismInvestigationPlugin:
                 imp = int(r.get("importance", 5))
                 if min_importance and imp < min_importance:
                     continue
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = _parse_meta(r)
                 claim_status = meta.get("claim_status", "unverified")
                 if status_filter and claim_status != status_filter:
                     continue
@@ -531,8 +512,6 @@ class JournalismInvestigationPlugin:
 
     def _mcp_evidence_chain(self, args: dict[str, Any]) -> dict[str, Any]:
         """Trace evidence chain from claim to source documents."""
-        import json
-
         db, should_close = self._get_db()
         claim_id = args["claim_id"]
         kb_name = args["kb_name"]
@@ -542,12 +521,7 @@ class JournalismInvestigationPlugin:
             if not claim:
                 return {"error": f"Claim '{claim_id}' not found"}
 
-            meta = claim.get("metadata") or {}
-            if isinstance(meta, str):
-                try:
-                    meta = json.loads(meta)
-                except (json.JSONDecodeError, TypeError):
-                    meta = {}
+            meta = _parse_meta(claim)
 
             evidence_refs = meta.get("evidence_refs", []) or []
             chain: list[dict[str, Any]] = []
@@ -565,12 +539,7 @@ class JournalismInvestigationPlugin:
                     chain.append({"evidence_id": eid, "status": "missing"})
                     continue
 
-                emeta = evidence.get("metadata") or {}
-                if isinstance(emeta, str):
-                    try:
-                        emeta = json.loads(emeta)
-                    except (json.JSONDecodeError, TypeError):
-                        emeta = {}
+                emeta = _parse_meta(evidence)
 
                 source_doc_ref = emeta.get("source_document", "")
                 source_doc_id = source_doc_ref.strip("[]").replace("[[", "").replace("]]", "")
@@ -579,12 +548,7 @@ class JournalismInvestigationPlugin:
                 if source_doc_id:
                     source = db.get_entry(source_doc_id, kb_name)
                     if source:
-                        smeta = source.get("metadata") or {}
-                        if isinstance(smeta, str):
-                            try:
-                                smeta = json.loads(smeta)
-                            except (json.JSONDecodeError, TypeError):
-                                smeta = {}
+                        smeta = _parse_meta(source)
                         source_info = {
                             "id": source_doc_id,
                             "title": source.get("title", ""),
@@ -787,6 +751,25 @@ class JournalismInvestigationPlugin:
             return {"error": str(e)}
 
 
+def _parse_meta(entry_dict: dict[str, Any]) -> dict[str, Any]:
+    """Parse metadata from a DB entry dict, handling JSON strings."""
+    meta = entry_dict.get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = json.loads(meta)
+        except (json.JSONDecodeError, TypeError):
+            meta = {}
+    return meta
+
+
+def _validate_enum(
+    value: str, valid_values: tuple[str, ...], field_name: str, errors: list[str],
+) -> None:
+    """Append an error if value is non-empty and not in valid_values."""
+    if value and value not in valid_values:
+        errors.append(f"Invalid {field_name}: {value}")
+
+
 def _validate_investigation_entry(entry: Any) -> list[str]:
     """Validate journalism-investigation entries."""
     errors = []
@@ -795,14 +778,17 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
     if entry_type == "asset":
         if not getattr(entry, "asset_type", ""):
             errors.append("Asset must have an asset_type")
+        _validate_enum(getattr(entry, "asset_type", ""), ASSET_TYPES, "asset_type", errors)
 
     if entry_type == "account":
         if not getattr(entry, "account_type", ""):
             errors.append("Account must have an account_type")
+        _validate_enum(getattr(entry, "account_type", ""), ACCOUNT_TYPES, "account_type", errors)
 
     if entry_type == "document_source":
         if not getattr(entry, "reliability", ""):
             errors.append("Document source must have a reliability level")
+        _validate_enum(getattr(entry, "reliability", ""), RELIABILITY_LEVELS, "reliability", errors)
 
     if entry_type == "investigation_event":
         if not getattr(entry, "date", ""):
@@ -812,6 +798,7 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
         if not getattr(entry, "date", ""):
             errors.append("Transaction must have a date")
         txn_type = getattr(entry, "transaction_type", "")
+        _validate_enum(txn_type, TRANSACTION_TYPES, "transaction_type", errors)
         if txn_type in ("payment", "bribe", "kickback"):
             if not getattr(entry, "amount", ""):
                 errors.append(f"Transaction of type '{txn_type}' must have an amount")
@@ -825,8 +812,10 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
             errors.append("Legal action must have a date")
         if not getattr(entry, "case_type", ""):
             errors.append("Legal action must have a case_type")
+        _validate_enum(getattr(entry, "case_type", ""), CASE_TYPES, "case_type", errors)
         if not getattr(entry, "jurisdiction", ""):
             errors.append("Legal action must have a jurisdiction")
+        _validate_enum(getattr(entry, "case_status", ""), CASE_STATUSES, "case_status", errors)
 
     if entry_type == "ownership":
         if not getattr(entry, "owner", ""):
@@ -845,20 +834,18 @@ def _validate_investigation_entry(entry: Any) -> list[str]:
             errors.append("Funding must have a funder")
         if not getattr(entry, "recipient", ""):
             errors.append("Funding must have a recipient")
+        _validate_enum(getattr(entry, "mechanism", ""), FUNDING_MECHANISMS, "mechanism", errors)
 
     if entry_type == "evidence":
         if not getattr(entry, "evidence_type", ""):
             errors.append("Evidence must have an evidence_type")
+        _validate_enum(getattr(entry, "evidence_type", ""), EVIDENCE_TYPES, "evidence_type", errors)
 
     if entry_type == "claim":
         if not getattr(entry, "assertion", ""):
             errors.append("Claim must have an assertion")
-        claim_status = getattr(entry, "claim_status", "")
-        if claim_status and claim_status not in CLAIM_STATUSES:
-            errors.append(f"Invalid claim_status: {claim_status}")
-        confidence = getattr(entry, "confidence", "")
-        if confidence and confidence not in CONFIDENCE_LEVELS:
-            errors.append(f"Invalid confidence: {confidence}")
+        _validate_enum(getattr(entry, "claim_status", ""), CLAIM_STATUSES, "claim_status", errors)
+        _validate_enum(getattr(entry, "confidence", ""), CONFIDENCE_LEVELS, "confidence", errors)
 
     importance = getattr(entry, "importance", None)
     if importance is not None and isinstance(importance, int):

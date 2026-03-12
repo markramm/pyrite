@@ -48,6 +48,13 @@ class TestAssetEntry:
         assert fm["currency"] == "GBP"
         assert fm["jurisdiction"] == "United Kingdom"
 
+    def test_null_fields_produce_empty_strings(self):
+        """YAML null values should become empty strings, not 'None'."""
+        meta = {"title": "Test", "value": None, "acquisition_date": None}
+        entry = AssetEntry.from_frontmatter(meta, "")
+        assert entry.value == ""
+        assert entry.acquisition_date == ""
+
     def test_defaults(self):
         entry = AssetEntry.from_frontmatter({"title": "Unknown Asset"}, "")
         assert entry.asset_type == ""
