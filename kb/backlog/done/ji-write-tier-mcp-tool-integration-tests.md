@@ -7,7 +7,9 @@ tags:
 - testing
 - integration
 kind: tech_debt
+status: done
 priority: high
+assignee: claude
 effort: S
 ---
 

@@ -7,6 +7,8 @@ tags:
 - quality
 - refactor
 kind: tech_debt
+status: done
+assignee: claude
 effort: S
 ---
 

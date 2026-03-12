@@ -13,6 +13,7 @@ class TestMCPToolRegistration:
         assert "investigation_sources" in tools
         assert "investigation_claims" in tools
         assert "investigation_evidence_chain" in tools
+        assert "investigation_qa_report" in tools
         # Write-tier tools should NOT be in read tier
         assert "investigation_create_entity" not in tools
 

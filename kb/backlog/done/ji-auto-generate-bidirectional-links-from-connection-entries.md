@@ -7,7 +7,9 @@ tags:
 - connections
 - graph
 kind: feature
+status: done
 priority: high
+assignee: claude
 effort: M
 ---
 

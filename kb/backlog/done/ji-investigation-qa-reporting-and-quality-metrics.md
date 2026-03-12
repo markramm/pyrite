@@ -7,6 +7,8 @@ tags:
 - qa
 - metrics
 kind: feature
+status: done
+assignee: claude
 effort: M
 ---
 

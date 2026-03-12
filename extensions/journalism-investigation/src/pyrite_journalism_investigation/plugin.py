@@ -61,6 +61,11 @@ class JournalismInvestigationPlugin:
             "funding": FundingEntry,
         }
 
+    def get_cli_commands(self) -> list[tuple[str, Any]]:
+        from .cli import investigation_app
+
+        return [("investigation", investigation_app)]
+
     def get_kb_types(self) -> list[str]:
         return ["journalism-investigation"]
 
@@ -140,6 +145,9 @@ class JournalismInvestigationPlugin:
 
     def get_validators(self) -> list:
         return [_validate_investigation_entry]
+
+    def get_hooks(self) -> dict[str, list]:
+        return {"before_save": [_enrich_connection_links]}
 
     def get_mcp_tools(self, tier: str) -> dict[str, dict]:
         tools: dict[str, dict[str, Any]] = {}
@@ -230,6 +238,18 @@ class JournalismInvestigationPlugin:
                     "required": ["claim_id", "kb_name"],
                 },
                 "handler": self._mcp_evidence_chain,
+            }
+            tools["investigation_qa_report"] = {
+                "description": "Get investigation quality metrics: source reliability, claim coverage, orphan claims, quality score, and warnings",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "stale_days": {"type": "integer", "description": "Days before unverified claims are stale (default 30)"},
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_qa_report,
             }
         if tier in ("write", "admin"):
             tools["investigation_create_entity"] = {
@@ -373,6 +393,16 @@ class JournalismInvestigationPlugin:
             if should_close:
                 db.close()
 
+    # Map user-facing entity type names to DB-stored types.
+    # Core types like "person" and "organization" get resolved to plugin
+    # subtypes ("actor", "cascade_org") by KBService._resolve_entry_type.
+    _ENTITY_TYPE_ALIASES: dict[str, list[str]] = {
+        "person": ["person", "actor"],
+        "organization": ["organization", "cascade_org"],
+        "asset": ["asset"],
+        "account": ["account"],
+    }
+
     def _mcp_entities(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query investigation entities."""
         db, should_close = self._get_db()
@@ -382,13 +412,20 @@ class JournalismInvestigationPlugin:
         jurisdiction_filter = args.get("jurisdiction", "").lower()
         limit = args.get("limit", 50)
 
-        entity_types = ["person", "organization", "asset", "account"]
-        if entity_type and entity_type in entity_types:
-            entity_types = [entity_type]
+        if entity_type and entity_type in self._ENTITY_TYPE_ALIASES:
+            # Query all aliases for the requested type
+            db_types = self._ENTITY_TYPE_ALIASES[entity_type]
+        elif entity_type:
+            db_types = [entity_type]
+        else:
+            # All entity types — expand aliases
+            db_types = []
+            for aliases in self._ENTITY_TYPE_ALIASES.values():
+                db_types.extend(aliases)
 
         try:
             entities = []
-            for etype in entity_types:
+            for etype in db_types:
                 results = db.list_entries(kb_name=kb_name, entry_type=etype, limit=5000)
                 for r in results:
                     imp = int(r.get("importance", 5))
@@ -582,6 +619,20 @@ class JournalismInvestigationPlugin:
             if should_close:
                 db.close()
 
+    def _mcp_qa_report(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get investigation quality metrics."""
+        from .qa import compute_qa_metrics
+
+        db, should_close = self._get_db()
+        try:
+            return compute_qa_metrics(
+                db, args["kb_name"],
+                stale_days=args.get("stale_days", 30),
+            )
+        finally:
+            if should_close:
+                db.close()
+
     # =========================================================================
     # Write-tier MCP tool handlers
     # =========================================================================
@@ -606,14 +657,6 @@ class JournalismInvestigationPlugin:
 
         entry_id = generate_entry_id(title)
         fields = args.get("fields", {}) or {}
-        meta = {
-            "id": entry_id,
-            "type": entity_type,
-            "title": title,
-            "importance": args.get("importance", 5),
-            "tags": args.get("tags", []),
-            **fields,
-        }
 
         kb_service = self._get_kb_service()
         if kb_service is None:
@@ -623,8 +666,12 @@ class JournalismInvestigationPlugin:
             kb_service.create_entry(
                 kb_name=kb_name,
                 entry_id=entry_id,
-                frontmatter=meta,
+                title=title,
+                entry_type=entity_type,
                 body=args.get("body", ""),
+                importance=args.get("importance", 5),
+                tags=args.get("tags", []),
+                **fields,
             )
             return {"created": entry_id, "type": entity_type, "title": title}
         except Exception as e:
@@ -645,15 +692,6 @@ class JournalismInvestigationPlugin:
 
         entry_id = generate_entry_id(title)
         fields = args.get("fields", {}) or {}
-        meta = {
-            "id": entry_id,
-            "type": event_type,
-            "title": title,
-            "date": date,
-            "importance": args.get("importance", 5),
-            "tags": args.get("tags", []),
-            **fields,
-        }
 
         kb_service = self._get_kb_service()
         if kb_service is None:
@@ -663,8 +701,13 @@ class JournalismInvestigationPlugin:
             kb_service.create_entry(
                 kb_name=kb_name,
                 entry_id=entry_id,
-                frontmatter=meta,
+                title=title,
+                entry_type=event_type,
                 body=args.get("body", ""),
+                date=date,
+                importance=args.get("importance", 5),
+                tags=args.get("tags", []),
+                **fields,
             )
             return {"created": entry_id, "type": event_type, "title": title}
         except Exception as e:
@@ -685,18 +728,6 @@ class JournalismInvestigationPlugin:
         if not evidence_refs:
             warnings.append("Claim created with no evidence references — mark for follow-up")
 
-        meta = {
-            "id": entry_id,
-            "type": "claim",
-            "title": title,
-            "assertion": assertion,
-            "claim_status": "unverified",
-            "confidence": "low",
-            "evidence_refs": evidence_refs,
-            "importance": args.get("importance", 5),
-            "tags": args.get("tags", []),
-        }
-
         kb_service = self._get_kb_service()
         if kb_service is None:
             return {"error": "No KB service available — write tools require a running server context"}
@@ -705,8 +736,15 @@ class JournalismInvestigationPlugin:
             kb_service.create_entry(
                 kb_name=kb_name,
                 entry_id=entry_id,
-                frontmatter=meta,
+                title=title,
+                entry_type="claim",
                 body=args.get("body", ""),
+                assertion=assertion,
+                claim_status="unverified",
+                confidence="low",
+                evidence_refs=evidence_refs,
+                importance=args.get("importance", 5),
+                tags=args.get("tags", []),
             )
             result: dict[str, Any] = {"created": entry_id, "type": "claim", "title": title}
             if warnings:
@@ -723,17 +761,6 @@ class JournalismInvestigationPlugin:
         title = args["title"]
 
         entry_id = generate_entry_id(title)
-        meta = {
-            "id": entry_id,
-            "type": "document_source",
-            "title": title,
-            "reliability": args.get("reliability", "unknown"),
-            "classification": args.get("classification", ""),
-            "url": args.get("url", ""),
-            "obtained_method": args.get("obtained_method", ""),
-            "importance": args.get("importance", 5),
-            "tags": args.get("tags", []),
-        }
 
         kb_service = self._get_kb_service()
         if kb_service is None:
@@ -743,12 +770,72 @@ class JournalismInvestigationPlugin:
             kb_service.create_entry(
                 kb_name=kb_name,
                 entry_id=entry_id,
-                frontmatter=meta,
+                title=title,
+                entry_type="document_source",
                 body=args.get("body", ""),
+                reliability=args.get("reliability", "unknown"),
+                classification=args.get("classification", ""),
+                url=args.get("url", ""),
+                obtained_method=args.get("obtained_method", ""),
+                importance=args.get("importance", 5),
+                tags=args.get("tags", []),
             )
             return {"created": entry_id, "type": "document_source", "title": title}
         except Exception as e:
             return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Connection entry → auto-link mapping
+# Maps (entry_type) → [(field_name, relation_on_field, relation_on_other)]
+# e.g. ownership: owner field gets "owned_by" link (pointing at owner),
+#                  asset field gets "owns" link (pointing at asset)
+# ---------------------------------------------------------------------------
+
+_CONNECTION_LINK_SPECS: dict[str, list[tuple[str, str, str]]] = {
+    "ownership": [
+        # (field, link relation TO field target, link relation TO the other target)
+        ("owner", "owned_by", "owns"),
+        ("asset", "owns", "owned_by"),
+    ],
+    "membership": [
+        ("person", "has_member", "member_of"),
+        ("organization", "member_of", "has_member"),
+    ],
+    "funding": [
+        ("funder", "funded_by", "funds"),
+        ("recipient", "funds", "funded_by"),
+    ],
+}
+
+
+def _strip_wikilink(ref: str) -> str:
+    """Extract entry ID from a wikilink reference like [[some-id]]."""
+    return ref.strip().strip("[]").replace("[[", "").replace("]]", "")
+
+
+def _enrich_connection_links(entry: Any, context: Any) -> Any:
+    """Before-save hook: add bidirectional links for connection entry types."""
+    entry_type = getattr(entry, "entry_type", "")
+    specs = _CONNECTION_LINK_SPECS.get(entry_type)
+    if not specs:
+        return entry
+
+    # Collect existing link (target, relation) pairs to avoid duplicates
+    existing = {(l.target, l.relation) for l in entry.links}
+
+    for field_name, relation, _inverse in specs:
+        ref = getattr(entry, field_name, "")
+        if not ref:
+            continue
+        target_id = _strip_wikilink(ref)
+        if not target_id:
+            continue
+        if (target_id, relation) not in existing:
+            entry.add_link(target=target_id, relation=relation)
+            existing.add((target_id, relation))
+
+    return entry
 
 
 def _parse_meta(entry_dict: dict[str, Any]) -> dict[str, Any]:
