@@ -320,6 +320,42 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_create_claim,
             }
+            tools["investigation_start"] = {
+                "description": "Start a new investigation — create the investigation entry with scope, key questions, and initial entities to research",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Investigation title"},
+                        "scope": {"type": "string", "description": "What the investigation is about"},
+                        "key_questions": {"type": "array", "items": {"type": "string"}, "description": "Key questions to investigate"},
+                        "initial_entities": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string"},
+                                    "type": {"type": "string", "description": "person, organization, asset, account"},
+                                },
+                            },
+                            "description": "Initial entities to create",
+                        },
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                    },
+                    "required": ["title"],
+                },
+                "handler": self._mcp_investigation_start,
+            }
+            tools["investigation_status"] = {
+                "description": "Get a comprehensive status report for the investigation — entity/event/claim counts, unverified claims, and evidence gaps. Use this to rebuild context when returning to an investigation",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_investigation_status,
+            }
             tools["investigation_promote_claim"] = {
                 "description": "Promote a corroborated or partially-verified claim to a structured edge-entity (ownership, membership, funding) in the investigation graph",
                 "inputSchema": {
@@ -611,6 +647,35 @@ class JournalismInvestigationPlugin:
             return {"created": entry_id, "type": "document_source", "title": title}
         except Exception as e:
             return {"error": str(e)}
+
+    def _mcp_investigation_start(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create a new investigation."""
+        from .investigation_setup import create_investigation
+
+        db, should_close = self._get_db()
+        try:
+            return create_investigation(
+                db=db,
+                kb_name=self._resolve_kb(args),
+                title=args.get("title", ""),
+                scope=args.get("scope", ""),
+                key_questions=args.get("key_questions"),
+                initial_entities=args.get("initial_entities"),
+            )
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_investigation_status(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get investigation status report."""
+        from .investigation_setup import build_investigation_status
+
+        db, should_close = self._get_db()
+        try:
+            return build_investigation_status(db, self._resolve_kb(args))
+        finally:
+            if should_close:
+                db.close()
 
     def _mcp_promote_claim(self, args: dict[str, Any]) -> dict[str, Any]:
         """Promote a corroborated claim to an edge-entity."""

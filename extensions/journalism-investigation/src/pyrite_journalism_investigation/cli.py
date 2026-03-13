@@ -372,6 +372,87 @@ def qa_report(
         db.close()
 
 
+@investigation_app.command("start")
+def start_investigation(
+    title: str = typer.Option(..., "--title", help="Investigation title"),
+    scope: str = typer.Option("", "--scope", help="Investigation scope/description"),
+    questions: list[str] = typer.Option([], "--question", "-q", help="Key questions (repeat for multiple)"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Create a new investigation with guided setup."""
+    from .investigation_setup import create_investigation
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        result = create_investigation(
+            db=db,
+            kb_name=kb_name,
+            title=title,
+            scope=scope,
+            key_questions=questions if questions else None,
+        )
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        if "error" in result:
+            console.print(f"[red]Error:[/red] {result['error']}")
+            raise typer.Exit(1)
+
+        console.print(f"[green]Created investigation:[/green] {result['created']}")
+        console.print(f"  Title: {result['title']}")
+        if result.get("entities_created"):
+            console.print(f"  Initial entities: {len(result['entities_created'])}")
+            for ent in result["entities_created"]:
+                console.print(f"    - {ent['title']} ({ent['type']})")
+    finally:
+        db.close()
+
+
+@investigation_app.command("status")
+def investigation_status(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Show investigation status — entity/event/claim counts and unverified claims."""
+    from .investigation_setup import build_investigation_status
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        result = build_investigation_status(db, kb_name)
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        console.print(f"[bold]Investigation Status: {kb_name}[/bold]")
+        console.print()
+        console.print(f"  Entities: {result['entity_count']}")
+        console.print(f"  Events:   {result['event_count']}")
+        console.print(f"  Claims:   {result['claim_count']}")
+        console.print(f"  Sources:  {result['source_count']}")
+        console.print()
+
+        if result["claim_breakdown"]:
+            console.print("[bold]Claim Breakdown:[/bold]")
+            for status, count in sorted(result["claim_breakdown"].items()):
+                console.print(f"  {status}: {count}")
+            console.print()
+
+        if result["unverified_claims"]:
+            console.print("[yellow]Unverified Claims Needing Attention:[/yellow]")
+            for c in result["unverified_claims"]:
+                console.print(f"  - {c['title']} (importance: {c['importance']})")
+        else:
+            console.print("[green]No unverified claims.[/green]")
+    finally:
+        db.close()
+
+
 @investigation_app.command("promote-claim")
 def promote_claim(
     claim_id: str = typer.Argument(..., help="Claim entry ID to promote"),
