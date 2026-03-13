@@ -13,7 +13,8 @@ links:
 - target: definition-of-ready-done
   relation: related
 kind: feature
-status: accepted
+status: done
+assignee: claude
 effort: L
 ---
 
