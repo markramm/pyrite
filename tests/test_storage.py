@@ -535,6 +535,7 @@ class TestIntegrationWithExistingKBs:
             return path
         pytest.skip("CascadeSeries not found")
 
+    @pytest.mark.slow
     def test_index_timeline(self, cascade_series_path):
         """Test indexing the actual timeline KB."""
         with tempfile.TemporaryDirectory() as tmpdir:

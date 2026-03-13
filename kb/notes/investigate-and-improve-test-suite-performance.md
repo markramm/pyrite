@@ -7,7 +7,8 @@ tags:
 - dx
 - improvement
 kind: improvement
-status: accepted
+status: done
+assignee: claude
 effort: M
 ---
 
