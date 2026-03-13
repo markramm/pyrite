@@ -255,6 +255,22 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_evidence_chain,
             }
+            tools["investigation_money_flow"] = {
+                "description": "Trace money flows for an entity — follow transaction chains, aggregate totals, and detect circular flows",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entry_id": {"type": "string", "description": "Entity entry ID to trace flows for"},
+                        "direction": {"type": "string", "description": "Flow direction: outbound, inbound, or both (default both)"},
+                        "max_hops": {"type": "integer", "description": "Max transaction hops to follow (default 3)"},
+                        "from_date": {"type": "string", "description": "Start date filter (YYYY-MM-DD)"},
+                        "to_date": {"type": "string", "description": "End date filter (YYYY-MM-DD)"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                    },
+                    "required": ["entry_id"],
+                },
+                "handler": self._mcp_money_flow,
+            }
             tools["investigation_qa_report"] = {
                 "description": "Run a quality check on your investigation — finds missing sources, unverified claims, and structural issues",
                 "inputSchema": {
@@ -266,6 +282,19 @@ class JournalismInvestigationPlugin:
                     "required": [],
                 },
                 "handler": self._mcp_qa_report,
+            }
+            tools["investigation_ownership_chain"] = {
+                "description": "Trace ownership chains for an entity through intermediaries to find beneficial owners, compute effective ownership percentages, and detect shell companies",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entry_id": {"type": "string", "description": "Entity entry ID to trace ownership for"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "max_depth": {"type": "integer", "description": "Maximum chain depth to traverse (default 5)"},
+                    },
+                    "required": ["entry_id"],
+                },
+                "handler": self._mcp_ownership_chain,
             }
         if tier in ("write", "admin"):
             tools["investigation_create_entity"] = {
@@ -404,6 +433,31 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_log_source,
             }
+            tools["investigation_bulk_edges"] = {
+                "description": "Create multiple connection entries (ownership, membership, funding) at once. Validates all edges before creating, skips duplicates, and auto-generates titles/IDs",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "edges": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string", "description": "Edge type: ownership, membership, funding"},
+                                    "fields": {"type": "object", "description": "Type-specific fields (e.g. owner, asset for ownership)"},
+                                    "title": {"type": "string", "description": "Optional custom title (auto-generated if omitted)"},
+                                },
+                                "required": ["type", "fields"],
+                            },
+                            "description": "Array of edge definitions to create",
+                        },
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "dry_run": {"type": "boolean", "description": "Preview without creating (default false)"},
+                    },
+                    "required": ["edges"],
+                },
+                "handler": self._mcp_bulk_edges,
+            }
         return tools
 
     # =========================================================================
@@ -499,6 +553,23 @@ class JournalismInvestigationPlugin:
             if should_close:
                 db.close()
 
+    def _mcp_money_flow(self, args: dict[str, Any]) -> dict[str, Any]:
+        from .money_flow import trace_money_flow
+
+        db, should_close = self._get_db()
+        try:
+            return trace_money_flow(
+                db, self._resolve_kb(args),
+                args["entry_id"],
+                direction=args.get("direction", "both"),
+                max_hops=args.get("max_hops", 3),
+                from_date=args.get("from_date", ""),
+                to_date=args.get("to_date", ""),
+            )
+        finally:
+            if should_close:
+                db.close()
+
     def _mcp_qa_report(self, args: dict[str, Any]) -> dict[str, Any]:
         from .qa import compute_qa_metrics
 
@@ -507,6 +578,20 @@ class JournalismInvestigationPlugin:
             return compute_qa_metrics(
                 db, self._resolve_kb(args),
                 stale_days=args.get("stale_days", 30),
+            )
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_ownership_chain(self, args: dict[str, Any]) -> dict[str, Any]:
+        from .ownership import trace_ownership_chain
+
+        db, should_close = self._get_db()
+        try:
+            return trace_ownership_chain(
+                db, self._resolve_kb(args),
+                entity_id=args["entry_id"],
+                max_depth=args.get("max_depth", 5),
             )
         finally:
             if should_close:
@@ -717,6 +802,23 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return build_investigation_status(db, self._resolve_kb(args))
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_bulk_edges(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Create multiple connection entries in batch."""
+        from .bulk import create_edge_batch
+
+        db, should_close = self._get_db()
+        kb_name = self._resolve_kb(args)
+        try:
+            return create_edge_batch(
+                db=db,
+                kb_name=kb_name,
+                edges=args.get("edges", []),
+                dry_run=args.get("dry_run", False),
+            )
         finally:
             if should_close:
                 db.close()

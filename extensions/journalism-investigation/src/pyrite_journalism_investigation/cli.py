@@ -528,6 +528,208 @@ def investigation_status(
         db.close()
 
 
+@investigation_app.command("ownership")
+def ownership_chain(
+    entity_id: str = typer.Argument(..., help="Entity entry ID to trace ownership for"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    depth: int = typer.Option(5, "--depth", help="Maximum chain depth (default 5)"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Trace ownership chains to find beneficial owners and shell companies."""
+    from .ownership import trace_ownership_chain
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        result = trace_ownership_chain(db, kb_name, entity_id, max_depth=depth)
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        entity = result["entity"]
+        console.print(f"[bold]Ownership Analysis: {entity['title']}[/bold] ({entity['id']})")
+        console.print()
+
+        if not result["chains"]:
+            console.print("[dim]No ownership chains found.[/dim]")
+            return
+
+        console.print(f"[green]Ownership Chains ({len(result['chains'])}):[/green]")
+        for i, chain in enumerate(result["chains"], 1):
+            path_str = " -> ".join(
+                f"{n['title']} ({n['percentage']}%)" for n in reversed(chain["path"])
+            )
+            console.print(f"  {i}. {path_str} -> {entity['title']}")
+            console.print(f"     Effective ownership: {chain['effective_percentage']:.1f}%")
+        console.print()
+
+        if result["beneficial_owners"]:
+            console.print("[green]Beneficial Owners:[/green]")
+            for bo in result["beneficial_owners"]:
+                console.print(f"  - {bo['title']} ({bo['id']})")
+            console.print()
+
+        if result["shell_indicators"]:
+            console.print("[yellow]Shell Company Indicators:[/yellow]")
+            for s in result["shell_indicators"]:
+                console.print(f"  ! {s['title']} ({s['id']})")
+    finally:
+        db.close()
+
+
+@investigation_app.command("money-flow")
+def money_flow(
+    entity_id: str = typer.Argument(..., help="Entity ID to trace money flows for"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    direction: str = typer.Option("both", "--direction", "-d", help="Flow direction: outbound, inbound, or both"),
+    hops: int = typer.Option(3, "--hops", help="Max transaction hops to follow"),
+    from_date: str = typer.Option("", "--from", help="Start date (YYYY-MM-DD)"),
+    to_date: str = typer.Option("", "--to", help="End date (YYYY-MM-DD)"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Trace money flows for an entity through transaction chains."""
+    from .money_flow import aggregate_flows, trace_money_flow
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        result = trace_money_flow(
+            db, kb_name, entity_id,
+            direction=direction,
+            max_hops=hops,
+            from_date=from_date,
+            to_date=to_date,
+        )
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        entity = result["entity"]
+        console.print(f"[bold]Money Flow: {entity['title']}[/bold] ({entity['id']})")
+        console.print(f"  Direction: {result['direction']}")
+        console.print()
+
+        if not result["flows"] and not result["circular_flows"]:
+            console.print("[dim]No money flows found.[/dim]")
+            return
+
+        if result["flows"]:
+            table = Table(title=f"Flow Paths ({len(result['flows'])})")
+            table.add_column("#", justify="right", style="dim")
+            table.add_column("Path", style="cyan")
+            table.add_column("Total", justify="right", style="green")
+
+            for i, flow in enumerate(result["flows"], 1):
+                path_parts = []
+                for step in flow["path"]:
+                    amt = step.get("amount", "?")
+                    path_parts.append(f"{step['title']} ({amt})")
+                table.add_row(str(i), " → ".join(path_parts), flow["total_amount"])
+            console.print(table)
+
+        if result["circular_flows"]:
+            console.print()
+            console.print("[red bold]Circular Flows Detected:[/red bold]")
+            for i, flow in enumerate(result["circular_flows"], 1):
+                path_parts = []
+                for step in flow["path"]:
+                    amt = step.get("amount", "?")
+                    path_parts.append(f"{step['title']} ({amt})")
+                console.print(f"  {i}. {' → '.join(path_parts)} → [red]BACK TO {entity['title']}[/red]")
+
+        # Also show aggregate summary
+        console.print()
+        agg = aggregate_flows(db, kb_name, entity_id, from_date=from_date, to_date=to_date)
+        if agg["inflows"] or agg["outflows"]:
+            console.print("[bold]Aggregate Summary:[/bold]")
+            if agg["outflows"]:
+                console.print("  [red]Outflows:[/red]")
+                for o in agg["outflows"]:
+                    console.print(f"    → {o['counterparty']['title']}: {o['total']} ({o['count']} txn(s))")
+            if agg["inflows"]:
+                console.print("  [green]Inflows:[/green]")
+                for i in agg["inflows"]:
+                    console.print(f"    ← {i['counterparty']['title']}: {i['total']} ({i['count']} txn(s))")
+            console.print(f"  Net flow: {agg['net_flow']}")
+    finally:
+        db.close()
+
+
+@investigation_app.command("bulk-edges")
+def bulk_edges(
+    file: str = typer.Option("", "--file", "-f", help="JSON or YAML file with edge definitions"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without creating"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Create multiple connection edges from JSON/YAML input."""
+    import sys
+
+    from .bulk import create_edge_batch
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        # Load edges from file or stdin
+        if file:
+            with open(file) as f:
+                raw = f.read()
+        else:
+            raw = sys.stdin.read()
+
+        # Parse as JSON first, fall back to YAML
+        try:
+            data = json_mod.loads(raw)
+        except json_mod.JSONDecodeError:
+            try:
+                import yaml
+                data = yaml.safe_load(raw)
+            except Exception:
+                console.print("[red]Error:[/red] Could not parse input as JSON or YAML")
+                raise typer.Exit(1)
+
+        # Accept either a list of edges or {"edges": [...]}
+        if isinstance(data, dict) and "edges" in data:
+            edges = data["edges"]
+        elif isinstance(data, list):
+            edges = data
+        else:
+            console.print("[red]Error:[/red] Input must be a list of edges or {\"edges\": [...]}")
+            raise typer.Exit(1)
+
+        result = create_edge_batch(db, kb_name, edges, dry_run=dry_run)
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        if dry_run:
+            console.print("[bold]Dry run — no entries created[/bold]")
+
+        console.print(f"  Created: {result['created']}  Skipped: {result['skipped']}  Errors: {result['errors']}")
+
+        if result["entries"]:
+            table = Table(title="Edge Results")
+            table.add_column("ID", style="cyan")
+            table.add_column("Type", style="green")
+            table.add_column("Title")
+            table.add_column("Status")
+
+            for e in result["entries"]:
+                status_style = {"created": "green", "skipped": "yellow", "error": "red", "would_create": "dim"}.get(e["status"], "")
+                table.add_row(
+                    e.get("id") or "-",
+                    e.get("type", ""),
+                    e.get("title") or "-",
+                    f"[{status_style}]{e['status']}[/{status_style}]",
+                )
+            console.print(table)
+    finally:
+        db.close()
+
+
 @investigation_app.command("promote-claim")
 def promote_claim(
     claim_id: str = typer.Argument(..., help="Claim entry ID to promote"),
