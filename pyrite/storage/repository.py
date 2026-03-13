@@ -243,6 +243,9 @@ class KBRepository:
             # Skip template scaffold files in _templates directories
             if "_templates" in rel.parts:
                 continue
+            # Skip README files (case-insensitive) — they lack frontmatter
+            if md_file.name.lower() == "readme.md":
+                continue
             yield md_file
 
     def list_entries(self) -> Iterator[tuple[Entry, Path]]:

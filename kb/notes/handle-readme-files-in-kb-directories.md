@@ -7,8 +7,8 @@ tags:
 - indexing
 - dx
 kind: feature
-status: accepted
-priority: medium
+status: done
+assignee: claude
 effort: S
 ---
 
