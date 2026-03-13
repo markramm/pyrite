@@ -372,6 +372,81 @@ def qa_report(
         db.close()
 
 
+@investigation_app.command("search")
+def search_all(
+    query: str = typer.Argument(..., help="Search query"),
+    kb_names: list[str] = typer.Option([], "--kb", "-k", help="KB names to search (repeat for multiple; omit for all)"),
+    correlate: bool = typer.Option(False, "--correlate", "-c", help="Correlate results by entity identity across KBs"),
+    entry_type: str = typer.Option("", "--type", help="Filter by entry type"),
+    limit: int = typer.Option(50, "--limit", help="Max results"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Search across all KBs with optional entity correlation."""
+    from .cross_kb_search import correlate_results, cross_kb_search
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        result = cross_kb_search(
+            db,
+            query,
+            kb_names=kb_names if kb_names else None,
+            entry_type=entry_type if entry_type else None,
+            limit=limit,
+        )
+
+        if correlate:
+            # Flatten and correlate
+            flat = [r for g in result["groups"] for r in g["results"]]
+            correlated = correlate_results(flat)
+            if output_json:
+                console.print(json_mod.dumps({"query": query, "correlated": correlated}, indent=2))
+                return
+
+            if not correlated:
+                console.print("[dim]No results found.[/dim]")
+                return
+
+            console.print(f"[bold]Cross-KB Entity Correlation ({len(correlated)} entities)[/bold]")
+            console.print()
+            for group in correlated:
+                kb_label = f"[green]{group['kb_count']} KBs[/green]" if group["kb_count"] > 1 else "1 KB"
+                console.print(f"  [bold]{group['title']}[/bold]  ({kb_label}, importance: {group['max_importance']})")
+                for app in group["appearances"]:
+                    console.print(f"    - {app['kb_name']}: {app['id']} ({app['entry_type']})")
+                console.print()
+            return
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        if result["total_count"] == 0:
+            console.print("[dim]No results found.[/dim]")
+            return
+
+        console.print(f"[bold]Cross-KB Search: \"{query}\" ({result['total_count']} results)[/bold]")
+        console.print()
+        for group in result["groups"]:
+            console.print(f"[green]{group['kb_name']}[/green] ({group['count']} results)")
+            table = Table(show_header=True)
+            table.add_column("ID", style="cyan")
+            table.add_column("Type", style="dim")
+            table.add_column("Title")
+            table.add_column("Imp", justify="right")
+            for r in group["results"]:
+                table.add_row(
+                    r.get("id", ""),
+                    r.get("entry_type", ""),
+                    r.get("title", ""),
+                    str(r.get("importance", "")),
+                )
+            console.print(table)
+            console.print()
+    finally:
+        db.close()
+
+
 @investigation_app.command("start")
 def start_investigation(
     title: str = typer.Option(..., "--title", help="Investigation title"),

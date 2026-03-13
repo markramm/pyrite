@@ -320,6 +320,21 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_create_claim,
             }
+            tools["investigation_search_all"] = {
+                "description": "Search across all your investigation KBs at once. Returns results grouped by KB so you can see where an entity or topic appears across investigations",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "kb_names": {"type": "array", "items": {"type": "string"}, "description": "Specific KBs to search (omit for all)"},
+                        "entry_type": {"type": "string", "description": "Filter by entry type"},
+                        "correlate": {"type": "boolean", "description": "Group results by entity identity across KBs (default false)"},
+                        "limit": {"type": "integer", "description": "Max results (default 50)"},
+                    },
+                    "required": ["query"],
+                },
+                "handler": self._mcp_search_all,
+            }
             tools["investigation_start"] = {
                 "description": "Start a new investigation — create the investigation entry with scope, key questions, and initial entities to research",
                 "inputSchema": {
@@ -647,6 +662,35 @@ class JournalismInvestigationPlugin:
             return {"created": entry_id, "type": "document_source", "title": title}
         except Exception as e:
             return {"error": str(e)}
+
+    def _mcp_search_all(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Search across all KBs with optional correlation."""
+        from .cross_kb_search import correlate_results, cross_kb_search
+
+        db, should_close = self._get_db()
+        try:
+            result = cross_kb_search(
+                db,
+                args["query"],
+                kb_names=args.get("kb_names"),
+                entry_type=args.get("entry_type"),
+                limit=args.get("limit", 50),
+            )
+
+            if args.get("correlate"):
+                flat = [r for g in result["groups"] for r in g["results"]]
+                correlated = correlate_results(flat)
+                return {
+                    "query": args["query"],
+                    "total_count": result["total_count"],
+                    "correlated": correlated,
+                    "summary": f"Found {len(correlated)} entities across {len(result['groups'])} KBs",
+                }
+
+            return result
+        finally:
+            if should_close:
+                db.close()
 
     def _mcp_investigation_start(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a new investigation."""
