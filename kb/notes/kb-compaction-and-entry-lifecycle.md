@@ -12,7 +12,8 @@ metadata:
   effort: M
   status: proposed
 kind: feature
-status: accepted
+status: done
+assignee: claude
 effort: M
 ---
 
