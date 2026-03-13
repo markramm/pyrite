@@ -67,7 +67,9 @@ def query_timeline(
         if len(events) >= limit:
             break
     events.sort(key=lambda e: e.get("date", ""))
-    return {"count": len(events), "events": events[:limit]}
+    trimmed = events[:limit]
+    summary = f"Found {len(trimmed)} events between {from_date or 'start'} and {to_date or 'now'}"
+    return {"count": len(trimmed), "events": trimmed, "summary": summary}
 
 
 def query_entities(
@@ -109,7 +111,10 @@ def query_entities(
                 "importance": imp,
             })
     entities.sort(key=lambda e: e["importance"], reverse=True)
-    return {"count": len(entities[:limit]), "entities": entities[:limit]}
+    trimmed = entities[:limit]
+    type_label = entity_type or "entities"
+    summary = f"Found {len(trimmed)} {type_label} in {kb_name}"
+    return {"count": len(trimmed), "entities": trimmed, "summary": summary}
 
 
 def query_network(
@@ -166,7 +171,15 @@ def query_sources(
             "date": date,
         })
     sources.sort(key=lambda s: s.get("date", ""))
-    return {"count": len(sources[:limit]), "sources": sources[:limit]}
+    trimmed = sources[:limit]
+    # Build tier breakdown
+    tier_counts: dict[str, int] = {}
+    for s in trimmed:
+        rel = s.get("reliability", "unknown")
+        tier_counts[rel] = tier_counts.get(rel, 0) + 1
+    tier_parts = ", ".join(f"{v} {k}" for k, v in sorted(tier_counts.items()))
+    summary = f"Found {len(trimmed)} sources ({tier_parts})" if tier_parts else f"Found {len(trimmed)} sources"
+    return {"count": len(trimmed), "sources": trimmed, "summary": summary}
 
 
 def query_claims(
@@ -202,7 +215,15 @@ def query_claims(
             "evidence_count": len(meta.get("evidence_refs", []) or []),
         })
     claims.sort(key=lambda c: c["importance"], reverse=True)
-    return {"count": len(claims[:limit]), "claims": claims[:limit]}
+    trimmed = claims[:limit]
+    # Build status breakdown
+    status_counts: dict[str, int] = {}
+    for c in trimmed:
+        st = c.get("claim_status", "unverified")
+        status_counts[st] = status_counts.get(st, 0) + 1
+    status_parts = ", ".join(f"{v} {k}" for k, v in sorted(status_counts.items()))
+    summary = f"Found {len(trimmed)} claims ({status_parts})" if status_parts else f"Found {len(trimmed)} claims"
+    return {"count": len(trimmed), "claims": trimmed, "summary": summary}
 
 
 def query_evidence_chain(

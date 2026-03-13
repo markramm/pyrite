@@ -1,4 +1,4 @@
-"""Journalism Investigation KB preset definition."""
+"""Journalism Investigation KB preset definitions."""
 
 JOURNALISM_INVESTIGATION_PRESET = {
     "name": "my-investigation",
@@ -104,4 +104,31 @@ JOURNALISM_INVESTIGATION_PRESET = {
         "rules": [],
     },
     "directories": ["entities", "events", "sources", "connections", "evidence", "claims", "notes"],
+}
+
+KNOWN_ENTITIES_PRESET = {
+    "name": "known-entities",
+    "description": "Reference KB of known entities (people, organizations, agencies) shared across investigations",
+    "kb_type": "known-entities",
+    "types": {
+        "person": {
+            "description": "A known person — politician, oligarch, executive, official, etc.",
+            "required": ["title"],
+            "optional": ["role", "affiliations", "aliases", "nationality", "importance"],
+            "subdirectory": "people/",
+        },
+        "organization": {
+            "description": "A known organization — company, government body, NGO, agency, etc.",
+            "required": ["title"],
+            "optional": ["org_type", "jurisdiction", "aliases", "founded", "importance"],
+            "subdirectory": "organizations/",
+        },
+    },
+    "guidelines": (
+        "Maintain canonical entity records with stable IDs. "
+        "Use aliases for alternate names, abbreviations, and transliterations. "
+        "Keep entries neutral and factual — link to investigation KBs for editorial context. "
+        "Update existing records rather than creating duplicates."
+    ),
+    "directories": ["people", "organizations"],
 }

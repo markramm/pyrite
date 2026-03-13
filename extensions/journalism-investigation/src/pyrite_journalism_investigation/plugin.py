@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from .preset import JOURNALISM_INVESTIGATION_PRESET
+from .preset import JOURNALISM_INVESTIGATION_PRESET, KNOWN_ENTITIES_PRESET
 from .entry_types import (
     AccountEntry,
     AssetEntry,
@@ -47,6 +47,18 @@ class JournalismInvestigationPlugin:
         """Receive shared dependencies from the plugin infrastructure."""
         self.ctx = ctx
 
+    def _default_investigation_kb(self) -> str | None:
+        """Return the name of the first journalism-investigation KB, or None."""
+        if self.ctx is not None and hasattr(self.ctx, "config") and self.ctx.config:
+            for kb in self.ctx.config.knowledge_bases:
+                if getattr(kb, "kb_type", None) == "journalism-investigation":
+                    return kb.name
+        return None
+
+    def _resolve_kb(self, args: dict[str, Any]) -> str:
+        """Resolve kb_name from args, default investigation KB, or 'investigation'."""
+        return args.get("kb_name") or self._default_investigation_kb() or "investigation"
+
     def get_entry_types(self) -> dict[str, type]:
         return {
             "asset": AssetEntry,
@@ -68,10 +80,13 @@ class JournalismInvestigationPlugin:
         return [("investigation", investigation_app)]
 
     def get_kb_types(self) -> list[str]:
-        return ["journalism-investigation"]
+        return ["journalism-investigation", "known-entities"]
 
     def get_kb_presets(self) -> dict[str, dict]:
-        return {"journalism-investigation": JOURNALISM_INVESTIGATION_PRESET}
+        return {
+            "journalism-investigation": JOURNALISM_INVESTIGATION_PRESET,
+            "known-entities": KNOWN_ENTITIES_PRESET,
+        }
 
     def get_relationship_types(self) -> dict[str, dict]:
         # Note: member_of/has_member, funded_by/funds, investigated/investigated_by
@@ -154,7 +169,7 @@ class JournalismInvestigationPlugin:
         tools: dict[str, dict[str, Any]] = {}
         if tier in ("read", "write", "admin"):
             tools["investigation_timeline"] = {
-                "description": "Query investigation events by date range, actor, event type, and importance",
+                "description": "Search for events in your investigation by date, actor, or type. Example: find all events involving 'Putin' since 2020",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -164,14 +179,14 @@ class JournalismInvestigationPlugin:
                         "event_type": {"type": "string", "description": "Filter by type: investigation_event, transaction, legal_action"},
                         "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["kb_name"],
+                    "required": [],
                 },
                 "handler": self._mcp_timeline,
             }
             tools["investigation_entities"] = {
-                "description": "Query investigation entities (person, organization, asset, account) by type, importance, and jurisdiction",
+                "description": "Look up people, organizations, or assets in your investigation. Filter by type (person/org/asset), jurisdiction, or importance",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -179,26 +194,26 @@ class JournalismInvestigationPlugin:
                         "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
                         "jurisdiction": {"type": "string", "description": "Filter by jurisdiction (substring match)"},
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["kb_name"],
+                    "required": [],
                 },
                 "handler": self._mcp_entities,
             }
             tools["investigation_network"] = {
-                "description": "Get the connection network for an entity — all outlinks, backlinks, and related entries",
+                "description": "See all connections for a specific entity — who they're linked to, what events involve them, and through what relationships",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "entry_id": {"type": "string", "description": "Entry ID to get network for"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["entry_id", "kb_name"],
+                    "required": ["entry_id"],
                 },
                 "handler": self._mcp_network,
             }
             tools["investigation_sources"] = {
-                "description": "Query source documents by reliability, classification, and date range",
+                "description": "Find source documents by reliability tier, classification, or date range. Helps identify gaps in sourcing",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -207,14 +222,14 @@ class JournalismInvestigationPlugin:
                         "from_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
                         "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["kb_name"],
+                    "required": [],
                 },
                 "handler": self._mcp_sources,
             }
             tools["investigation_claims"] = {
-                "description": "Query claims by status, confidence level, and importance",
+                "description": "Review claims by verification status. Find unverified claims that need evidence, or see what's been corroborated",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -222,39 +237,39 @@ class JournalismInvestigationPlugin:
                         "confidence": {"type": "string", "description": "Filter by confidence: high, medium, low"},
                         "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["kb_name"],
+                    "required": [],
                 },
                 "handler": self._mcp_claims,
             }
             tools["investigation_evidence_chain"] = {
-                "description": "Trace the evidence chain for a claim: claim → evidence entries → source documents",
+                "description": "Trace the full evidence chain for a claim — from the claim through supporting evidence to original source documents",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
                         "claim_id": {"type": "string", "description": "Claim entry ID to trace"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["claim_id", "kb_name"],
+                    "required": ["claim_id"],
                 },
                 "handler": self._mcp_evidence_chain,
             }
             tools["investigation_qa_report"] = {
-                "description": "Get investigation quality metrics: source reliability, claim coverage, orphan claims, quality score, and warnings",
+                "description": "Run a quality check on your investigation — finds missing sources, unverified claims, and structural issues",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                         "stale_days": {"type": "integer", "description": "Days before unverified claims are stale (default 30)"},
                     },
-                    "required": ["kb_name"],
+                    "required": [],
                 },
                 "handler": self._mcp_qa_report,
             }
         if tier in ("write", "admin"):
             tools["investigation_create_entity"] = {
-                "description": "Create a person, organization, asset, or account entity in the investigation",
+                "description": "Add a new person, organization, or asset to your investigation. Provide a type and title at minimum",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -264,14 +279,14 @@ class JournalismInvestigationPlugin:
                         "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
                         "fields": {"type": "object", "description": "Type-specific fields (e.g. asset_type, jurisdiction)"},
                         "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["entity_type", "title", "kb_name"],
+                    "required": ["entity_type", "title"],
                 },
                 "handler": self._mcp_create_entity,
             }
             tools["investigation_create_event"] = {
-                "description": "Create an investigation event, transaction, or legal action",
+                "description": "Record a new event or incident in your investigation timeline. Specify a type, title, and date",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -282,14 +297,14 @@ class JournalismInvestigationPlugin:
                         "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
                         "fields": {"type": "object", "description": "Type-specific fields (e.g. sender, receiver, case_type)"},
                         "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["event_type", "title", "date", "kb_name"],
+                    "required": ["event_type", "title", "date"],
                 },
                 "handler": self._mcp_create_event,
             }
             tools["investigation_create_claim"] = {
-                "description": "Create a factual claim with evidence links for verification tracking",
+                "description": "Document a claim or allegation that needs verification. Provide the assertion text and optionally link evidence",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -299,14 +314,28 @@ class JournalismInvestigationPlugin:
                         "body": {"type": "string", "description": "Narrative context"},
                         "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
                         "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["title", "assertion", "kb_name"],
+                    "required": ["title", "assertion"],
                 },
                 "handler": self._mcp_create_claim,
             }
+            tools["investigation_promote_claim"] = {
+                "description": "Promote a corroborated or partially-verified claim to a structured edge-entity (ownership, membership, funding) in the investigation graph",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "claim_id": {"type": "string", "description": "ID of the claim entry to promote"},
+                        "edge_type": {"type": "string", "description": "Edge type: ownership, membership, funding"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "dry_run": {"type": "boolean", "description": "Preview without creating (default false)"},
+                    },
+                    "required": ["claim_id", "edge_type"],
+                },
+                "handler": self._mcp_promote_claim,
+            }
             tools["investigation_log_source"] = {
-                "description": "Log a source document with reliability and classification metadata",
+                "description": "Log a source document (news article, court filing, leak, etc.) with reliability assessment and classification",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -318,9 +347,9 @@ class JournalismInvestigationPlugin:
                         "body": {"type": "string", "description": "Notes about the source"},
                         "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
                         "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name"},
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
                     },
-                    "required": ["title", "kb_name"],
+                    "required": ["title"],
                 },
                 "handler": self._mcp_log_source,
             }
@@ -348,7 +377,7 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_timeline(
-                db, args["kb_name"],
+                db, self._resolve_kb(args),
                 from_date=args.get("from_date", ""),
                 to_date=args.get("to_date", ""),
                 actor=args.get("actor", ""),
@@ -364,7 +393,7 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_entities(
-                db, args["kb_name"],
+                db, self._resolve_kb(args),
                 entity_type=args.get("entity_type", ""),
                 min_importance=args.get("min_importance", 0),
                 jurisdiction=args.get("jurisdiction", ""),
@@ -377,7 +406,7 @@ class JournalismInvestigationPlugin:
     def _mcp_network(self, args: dict[str, Any]) -> dict[str, Any]:
         db, should_close = self._get_db()
         try:
-            return query_network(db, args["kb_name"], args["entry_id"])
+            return query_network(db, self._resolve_kb(args), args["entry_id"])
         finally:
             if should_close:
                 db.close()
@@ -386,7 +415,7 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_sources(
-                db, args["kb_name"],
+                db, self._resolve_kb(args),
                 reliability=args.get("reliability", ""),
                 classification=args.get("classification", ""),
                 from_date=args.get("from_date", ""),
@@ -401,7 +430,7 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_claims(
-                db, args["kb_name"],
+                db, self._resolve_kb(args),
                 claim_status=args.get("claim_status", ""),
                 confidence=args.get("confidence", ""),
                 min_importance=args.get("min_importance", 0),
@@ -414,7 +443,7 @@ class JournalismInvestigationPlugin:
     def _mcp_evidence_chain(self, args: dict[str, Any]) -> dict[str, Any]:
         db, should_close = self._get_db()
         try:
-            return query_evidence_chain(db, args["kb_name"], args["claim_id"])
+            return query_evidence_chain(db, self._resolve_kb(args), args["claim_id"])
         finally:
             if should_close:
                 db.close()
@@ -425,7 +454,7 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return compute_qa_metrics(
-                db, args["kb_name"],
+                db, self._resolve_kb(args),
                 stale_days=args.get("stale_days", 30),
             )
         finally:
@@ -446,7 +475,7 @@ class JournalismInvestigationPlugin:
         """Create an entity entry."""
         from pyrite.schema import generate_entry_id
 
-        kb_name = args["kb_name"]
+        kb_name = self._resolve_kb(args)
         entity_type = args["entity_type"]
         title = args["title"]
 
@@ -480,7 +509,7 @@ class JournalismInvestigationPlugin:
         """Create an event entry."""
         from pyrite.schema import generate_entry_id
 
-        kb_name = args["kb_name"]
+        kb_name = self._resolve_kb(args)
         event_type = args["event_type"]
         title = args["title"]
         date = args["date"]
@@ -516,7 +545,7 @@ class JournalismInvestigationPlugin:
         """Create a claim entry."""
         from pyrite.schema import generate_entry_id
 
-        kb_name = args["kb_name"]
+        kb_name = self._resolve_kb(args)
         title = args["title"]
         assertion = args["assertion"]
 
@@ -556,7 +585,7 @@ class JournalismInvestigationPlugin:
         """Log a source document."""
         from pyrite.schema import generate_entry_id
 
-        kb_name = args["kb_name"]
+        kb_name = self._resolve_kb(args)
         title = args["title"]
 
         entry_id = generate_entry_id(title)
@@ -582,6 +611,31 @@ class JournalismInvestigationPlugin:
             return {"created": entry_id, "type": "document_source", "title": title}
         except Exception as e:
             return {"error": str(e)}
+
+    def _mcp_promote_claim(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Promote a corroborated claim to an edge-entity."""
+        from .promote import promote_claim_to_edge
+
+        db, should_close = self._get_db()
+        kb_service = self._get_kb_service()
+        if kb_service is None:
+            if should_close:
+                db.close()
+            return {"error": "No KB service available — write tools require a running server context"}
+
+        kb_name = self._resolve_kb(args)
+        try:
+            return promote_claim_to_edge(
+                db=db,
+                kb_name=kb_name,
+                claim_id=args["claim_id"],
+                edge_type=args["edge_type"],
+                kb_service=kb_service,
+                dry_run=args.get("dry_run", False),
+            )
+        finally:
+            if should_close:
+                db.close()
 
 
 # Backward-compatible aliases for external code that imports private names

@@ -370,3 +370,51 @@ def qa_report(
             console.print("[green]No warnings.[/green]")
     finally:
         db.close()
+
+
+@investigation_app.command("promote-claim")
+def promote_claim(
+    claim_id: str = typer.Argument(..., help="Claim entry ID to promote"),
+    edge_type: str = typer.Option(..., "--edge-type", help="Edge type: ownership, membership, funding"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without creating"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Promote a corroborated claim to an edge-entity."""
+    from .promote import promote_claim_to_edge
+    from pyrite.services.kb_service import KBService
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    kb_service = KBService(config, db)
+    try:
+        result = promote_claim_to_edge(
+            db=db,
+            kb_name=kb_name,
+            claim_id=claim_id,
+            edge_type=edge_type,
+            kb_service=kb_service,
+            dry_run=dry_run,
+        )
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        if "error" in result:
+            console.print(f"[red]Error:[/red] {result['error']}")
+            raise typer.Exit(1)
+
+        if dry_run:
+            console.print("[bold]Dry run — no entry created[/bold]")
+            proposed = result["proposed"]
+            console.print(f"  Entry ID: {proposed['entry_id']}")
+            console.print(f"  Title: {proposed['title']}")
+            console.print(f"  Type: {proposed['edge_type']}")
+            console.print(f"  Sourced from: {proposed['sourced_from']}")
+        else:
+            console.print(f"[green]Created[/green] {result['edge_type']} edge: {result['created']}")
+            console.print(f"  Title: {result['title']}")
+            console.print(f"  Source claim: {result['source_claim']}")
+    finally:
+        db.close()
