@@ -710,3 +710,64 @@ def qa_compact(
     console.print(table)
     console.print(f"\n[yellow]{len(results)} archival candidates found[/yellow]")
     console.print("[dim]Use 'pyrite update <id> -k <kb> --lifecycle archived' to archive entries[/dim]")
+
+
+@qa_app.command("check-urls")
+def qa_check_urls(
+    kb_name: str = typer.Argument(..., help="KB to check source URLs"),
+    sample: int = typer.Option(0, "--sample", "-s", help="Check a random sample of N URLs (0=all)"),
+    cache_file: str = typer.Option("", "--cache", help="Path to URL check cache file"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich"
+    ),
+):
+    """Check source URLs for liveness (HTTP status).
+
+    Validates that source URLs in KB entries are reachable. Results are cached
+    to avoid rechecking on subsequent runs.
+    """
+    from pathlib import Path
+
+    from ..services.url_checker import URLChecker
+
+    ctx = cli_context()
+    cache_path = Path(cache_file) if cache_file else None
+    checker = URLChecker(ctx.db, cache_path=cache_path)
+
+    console.print(f"Collecting URLs from '{kb_name}'...")
+    url_entries = checker.collect_urls(kb_name)
+
+    if not url_entries:
+        console.print("[green]No source URLs found.[/green]")
+        return
+
+    urls = list(url_entries.keys())
+    if sample and sample < len(urls):
+        import random
+        urls = random.sample(urls, sample)
+
+    console.print(f"Checking {len(urls)} unique URL(s)...")
+    results = checker.check_urls(urls)
+    report = checker.build_report(url_entries, results)
+
+    if output_format == "json":
+        import json
+        console.print(json.dumps(report, indent=2))
+        return
+
+    console.print(f"\n[green]OK: {report['ok']}[/green]  [red]Broken: {report['broken']}[/red]  Total: {report['total_urls']}")
+
+    if report["broken_details"]:
+        table = Table(title="Broken URLs")
+        table.add_column("URL", style="red", max_width=60)
+        table.add_column("Status", justify="right")
+        table.add_column("Entries", style="cyan")
+
+        for detail in report["broken_details"]:
+            entries = ", ".join(detail["entry_ids"][:3])
+            if len(detail["entry_ids"]) > 3:
+                entries += f" (+{len(detail['entry_ids']) - 3} more)"
+            status = str(detail["status_code"]) if detail["status_code"] else detail.get("error", "error")
+            table.add_row(detail["url"], status, entries)
+
+        console.print(table)
