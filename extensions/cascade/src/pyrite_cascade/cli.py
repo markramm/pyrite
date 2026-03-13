@@ -120,3 +120,45 @@ def extract_actors_cmd(
                 typer.echo(f"Skipped (existing): {len(skipped)} — {', '.join(skipped[:5])}")
     finally:
         db.close()
+
+
+@cascade_app.command("export")
+def export_cmd(
+    kb_name: str = typer.Option("cascade-timeline", "--kb", "-k", help="KB name"),
+    output_dir: Path = typer.Option(
+        Path("./api"), "--output-dir", "-o", help="Output directory for JSON files"
+    ),
+    from_date: str = typer.Option("", "--from", help="Start date filter (YYYY-MM-DD)"),
+    to_date: str = typer.Option("", "--to", help="End date filter (YYYY-MM-DD)"),
+    min_importance: int = typer.Option(0, "--min-importance", help="Minimum importance"),
+) -> None:
+    """Export timeline to static JSON files for viewer consumption."""
+    from pyrite.config import load_config
+    from pyrite.storage.database import PyriteDB
+
+    from .static_export import export_timeline, write_export
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        result = export_timeline(
+            db, kb_name,
+            from_date=from_date,
+            to_date=to_date,
+            min_importance=min_importance,
+        )
+
+        timeline = result["timeline"]
+        if not timeline:
+            typer.echo("No events found.")
+            raise typer.Exit()
+
+        write_export(result, output_dir)
+
+        stats = result["stats"]
+        typer.echo(f"Exported {stats['total_events']} events to {output_dir}/")
+        typer.echo(f"  {stats['total_actors']} actors, {stats['total_tags']} tags, {stats['total_sources']} sources")
+        typer.echo(f"  Date range: {stats['date_range']['start']} to {stats['date_range']['end']}")
+    finally:
+        db.close()

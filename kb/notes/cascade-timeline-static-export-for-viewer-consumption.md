@@ -13,8 +13,8 @@ links:
   relation: subtask_of
   kb: pyrite
 kind: feature
-status: accepted
-priority: medium
+status: done
+assignee: claude
 effort: M
 ---
 
