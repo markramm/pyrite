@@ -159,24 +159,59 @@ class SQLiteBackend:
             )
 
     def _sync_links(self, entry_id: str, kb_name: str, links: list[dict[str, Any]]) -> None:
-        self._session.query(Link).filter_by(source_id=entry_id, source_kb=kb_name).delete()
-        for link in links:
-            from ...schema import get_inverse_relation
+        from ...schema import get_inverse_relation
 
+        # Build desired state as a dict keyed by (target_id, target_kb, relation)
+        desired: dict[tuple[str, str, str], dict[str, Any]] = {}
+        for link in links:
             relation = link.get("relation", "related_to")
-            inverse = get_inverse_relation(relation)
             target_kb = link.get("kb", kb_name)
-            self._session.add(
-                Link(
-                    source_id=entry_id,
-                    source_kb=kb_name,
-                    target_id=link.get("target"),
-                    target_kb=target_kb,
-                    relation=relation,
-                    inverse_relation=inverse,
-                    note=link.get("note", ""),
+            target_id = link.get("target", "")
+            key = (target_id, target_kb, relation)
+            desired[key] = {
+                "note": link.get("note", ""),
+                "inverse_relation": get_inverse_relation(relation),
+            }
+
+        # Load existing links from DB
+        existing = (
+            self._session.query(Link)
+            .filter_by(source_id=entry_id, source_kb=kb_name)
+            .all()
+        )
+
+        existing_keys: dict[tuple[str, str, str], Link] = {}
+        for row in existing:
+            key = (row.target_id, row.target_kb, row.relation)
+            existing_keys[key] = row
+
+        # Delete links no longer in desired set
+        for key, row in existing_keys.items():
+            if key not in desired:
+                self._session.delete(row)
+
+        # Add new links and update changed ones
+        for key, attrs in desired.items():
+            if key in existing_keys:
+                # Update note/inverse if changed
+                row = existing_keys[key]
+                if row.note != attrs["note"] or row.inverse_relation != attrs["inverse_relation"]:
+                    row.note = attrs["note"]
+                    row.inverse_relation = attrs["inverse_relation"]
+            else:
+                # Insert new link
+                target_id, target_kb, relation = key
+                self._session.add(
+                    Link(
+                        source_id=entry_id,
+                        source_kb=kb_name,
+                        target_id=target_id,
+                        target_kb=target_kb,
+                        relation=relation,
+                        inverse_relation=attrs["inverse_relation"],
+                        note=attrs["note"],
+                    )
                 )
-            )
 
     def _sync_entry_refs(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
         self._session.query(EntryRef).filter_by(source_id=entry_id, source_kb=kb_name).delete()
