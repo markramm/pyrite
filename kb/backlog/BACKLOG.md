@@ -528,5 +528,8 @@ All items below are done. Detail lives in the individual backlog item files in [
 ### Wave 19 — Backend Polish & E2E Coverage
 [[db-backup-restore]] (SQLite `conn.backup()` backup/restore commands), [[entry-lifecycle-field-and-search-filtering]] (lifecycle field, migration v11, archive-aware search), comprehensive Playwright E2E expansion (7 new specs: search, collections, qa, settings, daily, entry-crud, auth)
 
+### JI Plugin Batch — Journalism Investigation Features
+[[ji-claim-to-edge-promotion]] (claim→edge-entity promotion), [[ji-known-entities-kb-pattern]] (cross-KB entity lookup + preset), [[ji-mcp-conversational-optimization]] (conversational descriptions, default KB, summaries), [[ji-investigation-guided-setup]] (investigation start/status CLI + MCP tools)
+
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[silent-error-logging]], [[test-coverage-gaps]]
