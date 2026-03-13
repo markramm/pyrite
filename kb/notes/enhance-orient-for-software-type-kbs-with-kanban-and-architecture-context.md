@@ -10,7 +10,8 @@ tags:
 - kanban
 - agents
 kind: enhancement
-status: accepted
+status: done
+assignee: claude
 effort: M
 ---
 
