@@ -63,3 +63,60 @@ def suggest_aliases(
             typer.echo(f"Written to {output}")
     finally:
         db.close()
+
+
+@cascade_app.command("extract-actors")
+def extract_actors_cmd(
+    kb_name: str = typer.Option("cascade-timeline", "--kb", "-k", help="KB name"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Show what would be created without creating"
+    ),
+    alias_file: Optional[Path] = typer.Option(
+        None, "--alias-file", "-a", help="Import alias mappings from JSON file"
+    ),
+    min_importance: int = typer.Option(
+        0, "--min-importance", help="Only create actors with importance >= this value"
+    ),
+) -> None:
+    """Extract actor names from events and create actor entries."""
+    from pyrite.config import load_config
+    from pyrite.storage.database import PyriteDB
+
+    from .extract_actors import extract_actors
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        result = extract_actors(
+            db, kb_name,
+            config=config,
+            alias_file=alias_file,
+            dry_run=dry_run,
+        )
+
+        actors = result["actors"]
+        if not actors:
+            typer.echo("No actors found in events.")
+            raise typer.Exit()
+
+        # Filter by importance
+        if min_importance:
+            actors = {k: v for k, v in actors.items() if v["importance"] >= min_importance}
+
+        typer.echo(f"Found {len(actors)} unique actor(s):\n")
+
+        for name, info in sorted(actors.items(), key=lambda x: -x[1]["count"]):
+            aliases = info.get("aliases", [])
+            alias_str = f" (aliases: {', '.join(aliases)})" if aliases else ""
+            typer.echo(f"  [{info['importance']:2d}] {name} ({info['count']} refs){alias_str}")
+
+        if dry_run:
+            typer.echo(f"\nDry run: {len(actors)} actor(s) would be created.")
+        else:
+            skipped = result.get("skipped", [])
+            typer.echo(f"\nCreated: {result['created']} actor(s)")
+            if skipped:
+                typer.echo(f"Skipped (existing): {len(skipped)} — {', '.join(skipped[:5])}")
+    finally:
+        db.close()
