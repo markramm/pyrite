@@ -157,6 +157,10 @@ class JournalismInvestigationPlugin:
                 "inverse": "supports",
                 "description": "Claim is supported by evidence",
             },
+            "same_as": {
+                "inverse": "same_as",
+                "description": "Entity is the same as another entity in a different KB",
+            },
         }
 
     def get_validators(self) -> list:
@@ -283,6 +287,20 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_qa_report,
             }
+            tools["investigation_export_pack"] = {
+                "description": "Export the investigation as a self-contained pack in JSON or Markdown format. Includes timeline, entities, connections, claims, sources, and evidence chains",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "format": {"type": "string", "description": "Export format: json or markdown (default json)"},
+                        "redact_sources": {"type": "boolean", "description": "Redact source URLs and titles (default false)"},
+                        "min_importance": {"type": "integer", "description": "Minimum importance filter (1-10, default 0 = all)"},
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_export_pack,
+            }
             tools["investigation_ownership_chain"] = {
                 "description": "Trace ownership chains for an entity through intermediaries to find beneficial owners, compute effective ownership percentages, and detect shell companies",
                 "inputSchema": {
@@ -295,6 +313,47 @@ class JournalismInvestigationPlugin:
                     "required": ["entry_id"],
                 },
                 "handler": self._mcp_ownership_chain,
+            }
+            tools["investigation_find_duplicates"] = {
+                "description": "Scan for duplicate entities across multiple KBs using exact, alias, and fuzzy title matching",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "KBs to scan (omit for all)",
+                        },
+                        "entry_types": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Filter to specific types (default: person, organization, asset, account)",
+                        },
+                        "threshold": {
+                            "type": "number",
+                            "description": "Minimum fuzzy match ratio (default 0.85)",
+                        },
+                        "kb_name": {"type": "string", "description": "KB name (for context, auto-detected if omitted)"},
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_find_duplicates,
+            }
+            tools["investigation_ftm_export"] = {
+                "description": "Export investigation entries as FollowTheMoney (FtM) JSON for Aleph interop. Optionally filter by entry type",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "entry_types": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Entry types to export (e.g. person, organization). Omit for all",
+                        },
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_ftm_export,
             }
         if tier in ("write", "admin"):
             tools["investigation_create_entity"] = {
@@ -458,6 +517,23 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_bulk_edges,
             }
+            tools["investigation_ftm_import"] = {
+                "description": "Import FollowTheMoney (FtM) entities into the investigation KB for Aleph interop",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "entities": {
+                            "type": "array",
+                            "items": {"type": "object"},
+                            "description": "Array of FtM entity objects with id, schema, and properties",
+                        },
+                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "dry_run": {"type": "boolean", "description": "Preview without importing (default false)"},
+                    },
+                    "required": ["entities"],
+                },
+                "handler": self._mcp_ftm_import,
+            }
         return tools
 
     # =========================================================================
@@ -553,6 +629,24 @@ class JournalismInvestigationPlugin:
             if should_close:
                 db.close()
 
+    def _mcp_export_pack(self, args: dict[str, Any]) -> dict[str, Any]:
+        from .export import build_investigation_pack, export_as_json, export_as_markdown
+
+        db, should_close = self._get_db()
+        try:
+            pack = build_investigation_pack(
+                db, self._resolve_kb(args),
+                redact_sources=args.get("redact_sources", False),
+                min_importance=args.get("min_importance", 0),
+            )
+            fmt = args.get("format", "json")
+            if fmt == "markdown":
+                return {"format": "markdown", "content": export_as_markdown(pack)}
+            return {"format": "json", "content": export_as_json(pack)}
+        finally:
+            if should_close:
+                db.close()
+
     def _mcp_money_flow(self, args: dict[str, Any]) -> dict[str, Any]:
         from .money_flow import trace_money_flow
 
@@ -593,6 +687,23 @@ class JournalismInvestigationPlugin:
                 entity_id=args["entry_id"],
                 max_depth=args.get("max_depth", 5),
             )
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_find_duplicates(self, args: dict[str, Any]) -> dict[str, Any]:
+        from .dedup import find_duplicates
+
+        db, should_close = self._get_db()
+        try:
+            return {
+                "duplicates": find_duplicates(
+                    db,
+                    kb_names=args.get("kb_names"),
+                    entry_types=args.get("entry_types"),
+                    threshold=args.get("threshold", 0.85),
+                ),
+            }
         finally:
             if should_close:
                 db.close()
@@ -842,6 +953,37 @@ class JournalismInvestigationPlugin:
                 claim_id=args["claim_id"],
                 edge_type=args["edge_type"],
                 kb_service=kb_service,
+                dry_run=args.get("dry_run", False),
+            )
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_ftm_export(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Export KB entries as FtM JSON."""
+        from .ftm import export_ftm
+
+        db, should_close = self._get_db()
+        try:
+            return {
+                "entities": export_ftm(
+                    db, self._resolve_kb(args),
+                    entry_types=args.get("entry_types"),
+                ),
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_ftm_import(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Import FtM entities into the KB."""
+        from .ftm import import_ftm
+
+        db, should_close = self._get_db()
+        try:
+            return import_ftm(
+                db, self._resolve_kb(args),
+                args.get("entities", []),
                 dry_run=args.get("dry_run", False),
             )
         finally:

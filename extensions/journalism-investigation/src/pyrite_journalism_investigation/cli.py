@@ -657,6 +657,41 @@ def money_flow(
         db.close()
 
 
+@investigation_app.command("export")
+def export_pack(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Export format: json or markdown"),
+    output: str = typer.Option("", "--output", "-o", help="Output file path (default: stdout)"),
+    redact_sources: bool = typer.Option(False, "--redact-sources", help="Redact source URLs and titles"),
+    min_importance: int = typer.Option(0, "--min-importance", help="Minimum importance filter (1-10)"),
+):
+    """Export investigation as a self-contained pack."""
+    from .export import build_investigation_pack, export_as_json, export_as_markdown
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        pack = build_investigation_pack(
+            db, kb_name,
+            redact_sources=redact_sources,
+            min_importance=min_importance,
+        )
+
+        if fmt == "markdown":
+            content = export_as_markdown(pack)
+        else:
+            content = export_as_json(pack)
+
+        if output:
+            with open(output, "w") as f:
+                f.write(content)
+            console.print(f"[green]Exported to {output}[/green]")
+        else:
+            console.print(content)
+    finally:
+        db.close()
+
+
 @investigation_app.command("bulk-edges")
 def bulk_edges(
     file: str = typer.Option("", "--file", "-f", help="JSON or YAML file with edge definitions"),
@@ -730,6 +765,114 @@ def bulk_edges(
         db.close()
 
 
+@investigation_app.command("ftm-import")
+def ftm_import(
+    file: str = typer.Option(..., "--file", "-f", help="Path to FtM JSON file (one entity per line, or JSON array)"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without importing"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Import FollowTheMoney (FtM) entities from a JSON file."""
+    from .ftm import import_ftm
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        # Read and parse file
+        with open(file) as f:
+            raw = f.read().strip()
+
+        # Support JSON array or newline-delimited JSON
+        try:
+            data = json_mod.loads(raw)
+            if isinstance(data, dict):
+                entities = [data]
+            elif isinstance(data, list):
+                entities = data
+            else:
+                console.print("[red]Error:[/red] File must contain a JSON array or object")
+                raise typer.Exit(1)
+        except json_mod.JSONDecodeError:
+            # Try newline-delimited JSON
+            entities = []
+            for line in raw.split("\n"):
+                line = line.strip()
+                if line:
+                    try:
+                        entities.append(json_mod.loads(line))
+                    except json_mod.JSONDecodeError:
+                        console.print(f"[red]Error:[/red] Could not parse line as JSON: {line[:80]}...")
+                        raise typer.Exit(1)
+
+        result = import_ftm(db, kb_name, entities, dry_run=dry_run)
+
+        if output_json:
+            console.print(json_mod.dumps(result, indent=2))
+            return
+
+        if dry_run:
+            console.print("[bold]Dry run — no entries imported[/bold]")
+
+        console.print(f"  Imported: {result['imported']}  Skipped: {result['skipped']}  Unmapped: {result['unmapped']}  Errors: {result['errors']}")
+
+        if result["unmapped_schemas"]:
+            console.print(f"  Unmapped schemas: {', '.join(result['unmapped_schemas'])}")
+
+        if result["entries"]:
+            table = Table(title="Import Results")
+            table.add_column("ID", style="cyan")
+            table.add_column("Type", style="green")
+            table.add_column("Title")
+            table.add_column("Status")
+
+            for e in result["entries"]:
+                status_style = {
+                    "imported": "green", "skipped": "yellow",
+                    "error": "red", "would_import": "dim",
+                }.get(e["status"], "")
+                table.add_row(
+                    e.get("id", ""),
+                    e.get("type", ""),
+                    e.get("title", ""),
+                    f"[{status_style}]{e['status']}[/{status_style}]",
+                )
+            console.print(table)
+    finally:
+        db.close()
+
+
+@investigation_app.command("ftm-export")
+def ftm_export(
+    output: str = typer.Option("", "--output", "-o", help="Output file path (default: stdout)"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    types: list[str] = typer.Option([], "--types", "-t", help="Entry types to export (repeat for multiple; omit for all)"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON (always JSON, this flag is for consistency)"),
+):
+    """Export KB entries as FollowTheMoney (FtM) JSON."""
+    import sys
+
+    from .ftm import export_ftm
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        entry_types = types if types else None
+        result = export_ftm(db, kb_name, entry_types=entry_types)
+
+        json_output = json_mod.dumps(result, indent=2)
+
+        if output:
+            with open(output, "w") as f:
+                f.write(json_output)
+                f.write("\n")
+            console.print(f"[green]Exported {len(result)} entities to {output}[/green]")
+        else:
+            sys.stdout.write(json_output)
+            sys.stdout.write("\n")
+    finally:
+        db.close()
+
+
 @investigation_app.command("promote-claim")
 def promote_claim(
     claim_id: str = typer.Argument(..., help="Claim entry ID to promote"),
@@ -776,3 +919,81 @@ def promote_claim(
             console.print(f"  Source claim: {result['source_claim']}")
     finally:
         db.close()
+
+
+@investigation_app.command("dedup")
+def dedup(
+    kb_names: list[str] = typer.Option([], "--kb", "-k", help="KB names to scan (repeat for multiple; omit for all)"),
+    threshold: float = typer.Option(0.85, "--threshold", help="Minimum fuzzy match ratio (0.0-1.0)"),
+    link: bool = typer.Option(False, "--link", help="Auto-link high-confidence matches (confidence >= 0.95)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview without creating links"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+):
+    """Find and review duplicate entities across KBs."""
+    from .dedup import create_same_as_links, find_duplicates
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+    try:
+        groups = find_duplicates(
+            db,
+            kb_names=kb_names if kb_names else None,
+            threshold=threshold,
+        )
+
+        if output_json:
+            console.print(json_mod.dumps(groups, indent=2))
+            if link:
+                _auto_link_groups(db, groups, dry_run=dry_run)
+            return
+
+        if not groups:
+            console.print("[dim]No duplicate entities found.[/dim]")
+            return
+
+        console.print(f"[bold]Duplicate Entity Groups ({len(groups)})[/bold]")
+        console.print()
+
+        for i, group in enumerate(groups, 1):
+            canonical = group["canonical"]
+            console.print(
+                f"  [bold]{i}. {canonical['title']}[/bold]"
+                f"  (canonical: {canonical['id']} @ {canonical['kb_name']})"
+            )
+            for dup in group["duplicates"]:
+                conf_pct = f"{dup['confidence'] * 100:.0f}%"
+                console.print(
+                    f"     - {dup['title']} ({dup['id']} @ {dup['kb_name']}) "
+                    f"[{dup['match_type']}, {conf_pct}]"
+                )
+            console.print()
+
+        if link:
+            linked_total = _auto_link_groups(db, groups, dry_run=dry_run)
+            if dry_run:
+                console.print(f"[dim]Dry run: would link {linked_total} duplicate pair(s).[/dim]")
+            else:
+                console.print(f"[green]Linked {linked_total} duplicate pair(s).[/green]")
+    finally:
+        db.close()
+
+
+def _auto_link_groups(db, groups: list[dict], *, dry_run: bool = False) -> int:
+    """Auto-link high-confidence matches (>= 0.95)."""
+    from .dedup import create_same_as_links
+
+    total = 0
+    for group in groups:
+        canonical = group["canonical"]
+        high_conf = [
+            {"id": d["id"], "kb_name": d["kb_name"]}
+            for d in group["duplicates"]
+            if d["confidence"] >= 0.95
+        ]
+        if high_conf:
+            result = create_same_as_links(
+                db, canonical["id"], canonical["kb_name"],
+                high_conf, dry_run=dry_run,
+            )
+            total += result["linked"]
+    return total
