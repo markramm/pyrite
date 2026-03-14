@@ -274,6 +274,38 @@ class IndexManager:
         if refs:
             data["_refs"] = refs
 
+        # Extract edge endpoints for edge_endpoint table
+        edge_endpoints = []
+        try:
+            kb_config = self.config.get_kb(kb_name)
+            if kb_config and kb_config.kb_yaml_path.exists():
+                schema = kb_config.kb_schema
+                entry_type_name = entry.entry_type
+                type_schema = schema.types.get(entry_type_name)
+                if type_schema and getattr(type_schema, "edge_type", False):
+                    fm = entry.to_frontmatter()
+                    for role, endpoint_spec in type_schema.endpoints.items():
+                        value = fm.get(endpoint_spec.field)
+                        if value and isinstance(value, str):
+                            # Strip wikilink brackets if present: [[target]] -> target
+                            endpoint_id = value.strip()
+                            if endpoint_id.startswith("[[") and endpoint_id.endswith("]]"):
+                                endpoint_id = endpoint_id[2:-2].strip()
+                            if endpoint_id:
+                                edge_endpoints.append(
+                                    {
+                                        "role": role,
+                                        "field_name": endpoint_spec.field,
+                                        "endpoint_id": endpoint_id,
+                                        "endpoint_kb": kb_name,
+                                        "edge_type": entry_type_name,
+                                    }
+                                )
+        except Exception:
+            logger.debug("Schema not available for edge endpoint extraction: %s", entry.id)
+        if edge_endpoints:
+            data["_edge_endpoints"] = edge_endpoints
+
         # Extract blocks for block-level references
         body = entry.body or ""
         if body:

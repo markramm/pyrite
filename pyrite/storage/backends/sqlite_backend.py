@@ -16,7 +16,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..models import Block, Entry, EntryRef, EntryTag, Link, Source, Tag
+from ..models import Block, EdgeEndpoint, Entry, EntryRef, EntryTag, Link, Source, Tag
 
 
 class _SafeEncoder(json.JSONEncoder):
@@ -61,6 +61,7 @@ class SQLiteBackend:
             self._sync_links(entry_id, kb_name, entry_data.get("links", []))
             self._sync_entry_refs(entry_id, kb_name, entry_data)
             self._sync_blocks(entry_id, kb_name, entry_data)
+            self._sync_edge_endpoints(entry_id, kb_name, entry_data)
             self._session.commit()
         except Exception:
             self._session.rollback()
@@ -239,6 +240,23 @@ class SQLiteBackend:
                     content=blk["content"],
                     position=blk["position"],
                     block_type=blk["block_type"],
+                )
+            )
+
+    def _sync_edge_endpoints(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
+        self._session.query(EdgeEndpoint).filter_by(
+            edge_entry_id=entry_id, edge_entry_kb=kb_name
+        ).delete()
+        for ep in entry_data.get("_edge_endpoints", []):
+            self._session.add(
+                EdgeEndpoint(
+                    edge_entry_id=entry_id,
+                    edge_entry_kb=kb_name,
+                    role=ep["role"],
+                    field_name=ep["field_name"],
+                    endpoint_id=ep["endpoint_id"],
+                    endpoint_kb=ep.get("endpoint_kb", kb_name),
+                    edge_type=ep["edge_type"],
                 )
             )
 
