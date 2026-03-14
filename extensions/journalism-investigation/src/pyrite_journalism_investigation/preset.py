@@ -58,18 +58,33 @@ JOURNALISM_INVESTIGATION_PRESET = {
         # Connection types (edge-entities)
         "ownership": {
             "description": "Ownership relationship between an entity and an asset/organization",
+            "edge_type": True,
+            "endpoints": {
+                "source": {"field": "owner", "accepts": ["person", "organization"]},
+                "target": {"field": "asset", "accepts": ["organization", "asset", "account"]},
+            },
             "required": ["title"],
             "optional": ["owner", "asset", "percentage", "start_date", "end_date", "legal_basis", "beneficial", "importance"],
             "subdirectory": "connections/",
         },
         "membership": {
             "description": "Membership relationship between a person and an organization",
+            "edge_type": True,
+            "endpoints": {
+                "source": {"field": "person", "accepts": ["person"]},
+                "target": {"field": "organization", "accepts": ["organization"]},
+            },
             "required": ["title"],
             "optional": ["person", "organization", "role", "start_date", "end_date", "importance"],
             "subdirectory": "connections/",
         },
         "funding": {
             "description": "Funding relationship between entities",
+            "edge_type": True,
+            "endpoints": {
+                "source": {"field": "funder", "accepts": ["person", "organization"]},
+                "target": {"field": "recipient", "accepts": ["person", "organization"]},
+            },
             "required": ["title"],
             "optional": ["funder", "recipient", "amount", "currency", "date_range", "purpose", "mechanism", "importance"],
             "subdirectory": "connections/",
