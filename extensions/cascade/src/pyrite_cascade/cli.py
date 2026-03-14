@@ -6,6 +6,8 @@ from typing import Optional
 
 import typer
 
+from .migration import audit_ji_compat, backfill_ji_fields
+
 cascade_app = typer.Typer(help="Cascade Series commands")
 
 
@@ -160,5 +162,60 @@ def export_cmd(
         typer.echo(f"Exported {stats['total_events']} events to {output_dir}/")
         typer.echo(f"  {stats['total_actors']} actors, {stats['total_tags']} tags, {stats['total_sources']} sources")
         typer.echo(f"  Date range: {stats['date_range']['start']} to {stats['date_range']['end']}")
+    finally:
+        db.close()
+
+
+@cascade_app.command("audit-compat")
+def audit_compat_cmd(
+    kb_name: str = typer.Option("cascade-timeline", "--kb", "-k", help="KB name"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Audit timeline events for JI field compatibility."""
+    from pyrite.config import load_config
+    from pyrite.storage.database import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        result = audit_ji_compat(db, kb_name)
+
+        if output_json:
+            typer.echo(json.dumps(result, indent=2))
+        else:
+            typer.echo(f"JI compatibility audit for '{kb_name}':")
+            typer.echo(f"  Total timeline events: {result['total']}")
+            typer.echo(f"  With source_refs:      {result['with_source_refs']}")
+            typer.echo(f"  With verification:     {result['with_verification_status']}")
+            typer.echo(f"  Fully compatible:      {result['fully_compatible']}")
+            typer.echo(f"  Needs backfill:        {result['needs_backfill']}")
+    finally:
+        db.close()
+
+
+@cascade_app.command("backfill-ji")
+def backfill_ji_cmd(
+    kb_name: str = typer.Option("cascade-timeline", "--kb", "-k", help="KB name"),
+    dry_run: bool = typer.Option(False, "--dry-run", "-n", help="Show what would be updated"),
+    output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Backfill JI default fields on timeline events."""
+    from pyrite.config import load_config
+    from pyrite.storage.database import PyriteDB
+
+    config = load_config()
+    db = PyriteDB(config.settings.index_path)
+
+    try:
+        result = backfill_ji_fields(db, kb_name, dry_run=dry_run)
+
+        if output_json:
+            typer.echo(json.dumps(result, indent=2))
+        else:
+            mode = "Dry run" if result["dry_run"] else "Backfill"
+            typer.echo(f"{mode} complete for '{kb_name}':")
+            typer.echo(f"  Updated: {result['updated']}")
+            typer.echo(f"  Skipped: {result['skipped']}")
     finally:
         db.close()

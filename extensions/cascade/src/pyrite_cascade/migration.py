@@ -3,8 +3,14 @@
 Run once on copied files to normalize frontmatter before Pyrite indexing.
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pyrite.storage.database import PyriteDB
 
 # Folder prefixes to strip from wikilinks in research KB
 _WIKILINK_PREFIXES = (
@@ -227,3 +233,94 @@ def normalize_timeline_frontmatter(kb_path: str | Path) -> dict[str, int]:
             md_file.write_text(new_content, encoding="utf-8")
 
     return counts
+
+
+# ---------------------------------------------------------------------------
+# JI compatibility audit and backfill
+# ---------------------------------------------------------------------------
+
+_JI_DEFAULTS: dict[str, Any] = {
+    "source_refs": [],
+    "verification_status": "unverified",
+}
+
+
+def audit_ji_compat(db: PyriteDB, kb_name: str) -> dict[str, Any]:
+    """Scan all timeline_event entries and report JI field coverage.
+
+    Returns a dict with counts:
+      total, with_source_refs, with_verification_status,
+      fully_compatible, needs_backfill
+    """
+    entries = db.list_entries(kb_name=kb_name, entry_type="timeline_event", limit=100_000)
+
+    total = len(entries)
+    with_source_refs = 0
+    with_verification_status = 0
+
+    for entry in entries:
+        meta = entry.get("metadata", {}) or {}
+        if "source_refs" in meta:
+            with_source_refs += 1
+        if "verification_status" in meta:
+            with_verification_status += 1
+
+    fully_compatible = sum(
+        1
+        for e in entries
+        if "source_refs" in (e.get("metadata") or {})
+        and "verification_status" in (e.get("metadata") or {})
+    )
+
+    return {
+        "total": total,
+        "with_source_refs": with_source_refs,
+        "with_verification_status": with_verification_status,
+        "fully_compatible": fully_compatible,
+        "needs_backfill": total - fully_compatible,
+    }
+
+
+def backfill_ji_fields(
+    db: PyriteDB, kb_name: str, *, dry_run: bool = False
+) -> dict[str, Any]:
+    """Backfill JI default fields on timeline_event entries that lack them.
+
+    For entries missing ``source_refs`` or ``verification_status`` in their
+    metadata, this sets the canonical defaults (``[]`` and ``"unverified"``
+    respectively).  The data already loads correctly without these — this
+    just makes the stored metadata explicit.
+
+    Returns ``{"updated": int, "skipped": int, "dry_run": bool}``.
+    """
+    entries = db.list_entries(kb_name=kb_name, entry_type="timeline_event", limit=100_000)
+
+    updated = 0
+    skipped = 0
+
+    for entry in entries:
+        meta = entry.get("metadata", {}) or {}
+        needs_update = False
+
+        for field in _JI_DEFAULTS:
+            if field not in meta:
+                needs_update = True
+                break
+
+        if not needs_update:
+            skipped += 1
+            continue
+
+        if not dry_run:
+            new_meta = dict(meta)
+            for field, default in _JI_DEFAULTS.items():
+                if field not in new_meta:
+                    new_meta[field] = default
+
+            entry_data = dict(entry)
+            entry_data["metadata"] = new_meta
+            db.upsert_entry(entry_data)
+
+        updated += 1
+
+    return {"updated": updated, "skipped": skipped, "dry_run": dry_run}

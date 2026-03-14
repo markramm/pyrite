@@ -2,7 +2,9 @@
 
 from typing import Any
 
-from .hooks import resolve_actor_links, _on_actor_saved
+from pyrite_journalism_investigation.queries import query_network
+from pyrite_journalism_investigation.utils import parse_meta
+
 from .entry_types import (
     ActorEntry,
     CascadeEventEntry,
@@ -15,6 +17,7 @@ from .entry_types import (
     TimelineEventEntry,
     VictimEntry,
 )
+from .hooks import _on_actor_saved, resolve_actor_links
 
 
 class CascadePlugin:
@@ -135,8 +138,14 @@ class CascadePlugin:
                     "properties": {
                         "capture_lane": {"type": "string", "description": "Filter by capture lane"},
                         "era": {"type": "string", "description": "Filter by era"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
-                        "kb_name": {"type": "string", "description": "KB name (default: cascade-research)"},
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance (1-10)",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (default: cascade-research)",
+                        },
                     },
                     "required": [],
                 },
@@ -151,9 +160,15 @@ class CascadePlugin:
                         "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
                         "capture_lane": {"type": "string", "description": "Filter by capture lane"},
                         "actor": {"type": "string", "description": "Filter by actor name"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance (1-10)",
+                        },
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name (default: cascade-timeline)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (default: cascade-timeline)",
+                        },
                     },
                     "required": [],
                 },
@@ -164,7 +179,10 @@ class CascadePlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "entry_id": {"type": "string", "description": "Entry ID to get network for"},
+                        "entry_id": {
+                            "type": "string",
+                            "description": "Entry ID to get network for",
+                        },
                         "kb_name": {"type": "string", "description": "KB name"},
                     },
                     "required": ["entry_id", "kb_name"],
@@ -178,11 +196,20 @@ class CascadePlugin:
                     "properties": {
                         "from_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
                         "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
-                        "infrastructure_type": {"type": "string", "description": "Filter by infrastructure type"},
+                        "infrastructure_type": {
+                            "type": "string",
+                            "description": "Filter by infrastructure type",
+                        },
                         "actor": {"type": "string", "description": "Filter by actor name"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance (1-10)",
+                        },
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name (default: cascade-solidarity)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (default: cascade-solidarity)",
+                        },
                     },
                     "required": [],
                 },
@@ -193,7 +220,10 @@ class CascadePlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "kb_name": {"type": "string", "description": "KB name (default: cascade-solidarity)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (default: cascade-solidarity)",
+                        },
                     },
                     "required": [],
                 },
@@ -232,8 +262,6 @@ class CascadePlugin:
 
     def _mcp_actors(self, args: dict[str, Any]) -> dict[str, Any]:
         """List actors with optional filters."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args.get("kb_name", "cascade-research")
         capture_lane = args.get("capture_lane", "").lower()
@@ -247,25 +275,22 @@ class CascadePlugin:
                 imp = int(r.get("importance", 5))
                 if min_importance and imp < min_importance:
                     continue
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_meta(r)
                 lanes = [l.lower() for l in (meta.get("capture_lanes") or [])]
                 if capture_lane and capture_lane not in lanes:
                     continue
                 actor_era = str(meta.get("era", "")).lower()
                 if era and era not in actor_era:
                     continue
-                actors.append({
-                    "id": r.get("id"),
-                    "title": r.get("title"),
-                    "importance": imp,
-                    "era": meta.get("era", ""),
-                    "capture_lanes": meta.get("capture_lanes", []),
-                })
+                actors.append(
+                    {
+                        "id": r.get("id"),
+                        "title": r.get("title"),
+                        "importance": imp,
+                        "era": meta.get("era", ""),
+                        "capture_lanes": meta.get("capture_lanes", []),
+                    }
+                )
             actors.sort(key=lambda a: a["importance"], reverse=True)
             return {"count": len(actors), "actors": actors}
         finally:
@@ -274,8 +299,6 @@ class CascadePlugin:
 
     def _mcp_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query timeline events."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args.get("kb_name", "cascade-timeline")
         from_date = args.get("from_date", "")
@@ -292,12 +315,7 @@ class CascadePlugin:
                 imp = int(r.get("importance", 5))
                 if min_importance and imp < min_importance:
                     continue
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_meta(r)
                 date = str(r.get("date", meta.get("date", "")))
                 if from_date and date < from_date:
                     continue
@@ -309,13 +327,15 @@ class CascadePlugin:
                 lanes = [l.lower() for l in (meta.get("capture_lanes") or [])]
                 if capture_lane and capture_lane not in lanes:
                     continue
-                events.append({
-                    "id": r.get("id"),
-                    "title": r.get("title"),
-                    "date": date,
-                    "importance": imp,
-                    "actors": meta.get("actors", []),
-                })
+                events.append(
+                    {
+                        "id": r.get("id"),
+                        "title": r.get("title"),
+                        "date": date,
+                        "importance": imp,
+                        "actors": meta.get("actors", []),
+                    }
+                )
                 if len(events) >= limit:
                     break
             events.sort(key=lambda e: e.get("date", ""))
@@ -325,32 +345,19 @@ class CascadePlugin:
                 db.close()
 
     def _mcp_network(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get connection network for an entity."""
+        """Get connection network for an entity.
+
+        Delegates to journalism-investigation query_network — identical logic.
+        """
         db, should_close = self._get_db()
-        entry_id = args["entry_id"]
-        kb_name = args["kb_name"]
-
         try:
-            entry = db.get_entry(entry_id, kb_name)
-            if not entry:
-                return {"error": f"Entry '{entry_id}' not found"}
-
-            outlinks = db.get_outlinks(entry_id, kb_name)
-            backlinks = db.get_backlinks(entry_id, kb_name)
-
-            return {
-                "center": {"id": entry_id, "title": entry.get("title", "")},
-                "outlinks": outlinks,
-                "backlinks": backlinks,
-            }
+            return query_network(db, args["kb_name"], args["entry_id"])
         finally:
             if should_close:
                 db.close()
 
     def _mcp_solidarity_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
         """Query solidarity events."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args.get("kb_name", "cascade-solidarity")
         from_date = args.get("from_date", "")
@@ -367,12 +374,7 @@ class CascadePlugin:
                 imp = int(r.get("importance", 5))
                 if min_importance and imp < min_importance:
                     continue
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_meta(r)
                 date = str(r.get("date", meta.get("date", "")))
                 if from_date and date < from_date:
                     continue
@@ -384,14 +386,16 @@ class CascadePlugin:
                 types_list = [t.lower() for t in (meta.get("infrastructure_types") or [])]
                 if infra_type and not any(infra_type in t for t in types_list):
                     continue
-                events.append({
-                    "id": r.get("id"),
-                    "title": r.get("title"),
-                    "date": date,
-                    "importance": imp,
-                    "actors": meta.get("actors", []),
-                    "infrastructure_types": meta.get("infrastructure_types", []),
-                })
+                events.append(
+                    {
+                        "id": r.get("id"),
+                        "title": r.get("title"),
+                        "date": date,
+                        "importance": imp,
+                        "actors": meta.get("actors", []),
+                        "infrastructure_types": meta.get("infrastructure_types", []),
+                    }
+                )
                 if len(events) >= limit:
                     break
             events.sort(key=lambda e: e.get("date", ""))
@@ -402,8 +406,6 @@ class CascadePlugin:
 
     def _mcp_solidarity_infrastructure_types(self, args: dict[str, Any]) -> dict[str, Any]:
         """List all infrastructure types with counts."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args.get("kb_name", "cascade-solidarity")
 
@@ -411,15 +413,12 @@ class CascadePlugin:
             results = db.list_entries(kb_name=kb_name, limit=5000)
             type_counts: dict[str, int] = {}
             for r in results:
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_meta(r)
                 for t in meta.get("infrastructure_types") or []:
                     type_counts[t] = type_counts.get(t, 0) + 1
-            types = [{"type": k, "count": v} for k, v in sorted(type_counts.items(), key=lambda x: -x[1])]
+            types = [
+                {"type": k, "count": v} for k, v in sorted(type_counts.items(), key=lambda x: -x[1])
+            ]
             return {"count": len(types), "infrastructure_types": types}
         finally:
             if should_close:
@@ -427,8 +426,6 @@ class CascadePlugin:
 
     def _mcp_capture_lanes(self, args: dict[str, Any]) -> dict[str, Any]:
         """List all capture lanes with counts."""
-        import json
-
         db, should_close = self._get_db()
         kb_name = args.get("kb_name")
 
@@ -436,15 +433,12 @@ class CascadePlugin:
             results = db.list_entries(kb_name=kb_name, limit=5000)
             lane_counts: dict[str, int] = {}
             for r in results:
-                meta = r.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_meta(r)
                 for lane in meta.get("capture_lanes") or []:
                     lane_counts[lane] = lane_counts.get(lane, 0) + 1
-            lanes = [{"lane": k, "count": v} for k, v in sorted(lane_counts.items(), key=lambda x: -x[1])]
+            lanes = [
+                {"lane": k, "count": v} for k, v in sorted(lane_counts.items(), key=lambda x: -x[1])
+            ]
             return {"count": len(lanes), "lanes": lanes}
         finally:
             if should_close:
