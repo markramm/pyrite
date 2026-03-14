@@ -15,7 +15,7 @@ links:
   relation: depends_on
   kb: pyrite
 kind: improvement
-status: proposed
+status: accepted
 priority: low
 effort: S
 ---

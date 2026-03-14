@@ -12,8 +12,7 @@ links:
   relation: subtask_of
   kb: pyrite
 kind: feature
-status: proposed
-priority: medium
+status: accepted
 effort: M
 ---
 
