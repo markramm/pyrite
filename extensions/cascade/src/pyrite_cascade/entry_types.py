@@ -5,6 +5,7 @@ from typing import Any
 
 from pyrite.models.base import Entry, parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import EventEntry, OrganizationEntry, PersonEntry, TopicEntry
+from pyrite_journalism_investigation.entry_types import InvestigationEventEntry
 from pyrite.models.protocols import Locatable
 from pyrite.schema import Provenance, generate_entry_id
 
@@ -195,11 +196,14 @@ class CascadeEventEntry(EventEntry):
 # ---------------------------------------------------------------------------
 
 @dataclass
-class TimelineEventEntry(EventEntry):
-    """A timeline event from the Cascade Series timeline KB."""
+class TimelineEventEntry(InvestigationEventEntry):
+    """A timeline event from the Cascade Series timeline KB.
+
+    Extends InvestigationEventEntry to inherit actors, source_refs, and
+    verification_status fields from the journalism-investigation plugin.
+    """
 
     capture_lanes: list[str] = field(default_factory=list)
-    actors: list[str] = field(default_factory=list)
     capture_type: str = ""
     connections: list[str] = field(default_factory=list)
     patterns: list[str] = field(default_factory=list)
@@ -213,8 +217,6 @@ class TimelineEventEntry(EventEntry):
         meta["type"] = "timeline_event"
         if self.capture_lanes:
             meta["capture_lanes"] = self.capture_lanes
-        if self.actors:
-            meta["actors"] = self.actors
         if self.capture_type:
             meta["capture_type"] = self.capture_type
         if self.connections:
@@ -242,8 +244,12 @@ class TimelineEventEntry(EventEntry):
             location=meta.get("location", ""),
             participants=meta.get("participants", []) or [],
             notes=meta.get("notes", ""),
-            capture_lanes=meta.get("capture_lanes", []) or [],
+            # JI-inherited fields
             actors=meta.get("actors", []) or [],
+            source_refs=meta.get("source_refs", []) or [],
+            verification_status=meta.get("verification_status", "unverified"),
+            # Cascade-specific fields
+            capture_lanes=meta.get("capture_lanes", []) or [],
             capture_type=meta.get("capture_type", ""),
             connections=meta.get("connections", []) or [],
             patterns=meta.get("patterns", []) or [],
