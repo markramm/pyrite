@@ -118,6 +118,22 @@ class QueryMixin:
         )
 
     # =========================================================================
+    # Edge endpoint queries
+    # =========================================================================
+
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge endpoints for an edge-type entry."""
+        return self._backend.get_edge_endpoints(entry_id, kb_name)
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries where this entity is an endpoint."""
+        return self._backend.get_edges_by_endpoint(endpoint_id, kb_name)
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries connecting two entities."""
+        return self._backend.get_edges_between(id_a, id_b, kb_name)
+
+    # =========================================================================
     # Analytics
     # =========================================================================
 

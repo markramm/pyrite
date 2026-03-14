@@ -746,6 +746,52 @@ class SQLiteBackend:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge endpoints for an edge-type entry (what does this edge connect?)."""
+        rows = self._raw_conn.execute(
+            """
+            SELECT ep.role, ep.field_name, ep.endpoint_id, ep.endpoint_kb,
+                   ep.edge_type, e.title, e.entry_type
+            FROM edge_endpoint ep
+            LEFT JOIN entry e ON ep.endpoint_id = e.id AND ep.endpoint_kb = e.kb_name
+            WHERE ep.edge_entry_id = ? AND ep.edge_entry_kb = ?
+            """,
+            (entry_id, kb_name),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries where this entity is an endpoint (what edges connect TO this entity?)."""
+        rows = self._raw_conn.execute(
+            """
+            SELECT ep.edge_entry_id as id, ep.edge_entry_kb as kb_name,
+                   ep.role, ep.field_name, ep.edge_type,
+                   e.title, e.entry_type
+            FROM edge_endpoint ep
+            JOIN entry e ON ep.edge_entry_id = e.id AND ep.edge_entry_kb = e.kb_name
+            WHERE ep.endpoint_id = ? AND ep.endpoint_kb = ?
+            """,
+            (endpoint_id, kb_name),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries that connect two entities (both are endpoints of the same edge)."""
+        rows = self._raw_conn.execute(
+            """
+            SELECT DISTINCT e.id, e.kb_name, e.title, e.entry_type,
+                   ep1.edge_type, ep1.role as role_a, ep2.role as role_b
+            FROM edge_endpoint ep1
+            JOIN edge_endpoint ep2 ON ep1.edge_entry_id = ep2.edge_entry_id
+                                   AND ep1.edge_entry_kb = ep2.edge_entry_kb
+            JOIN entry e ON ep1.edge_entry_id = e.id AND ep1.edge_entry_kb = e.kb_name
+            WHERE ep1.endpoint_id = ? AND ep2.endpoint_id = ?
+                  AND ep1.edge_entry_kb = ?
+            """,
+            (id_a, id_b, kb_name),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_graph_data(
         self,
         center: str | None = None,

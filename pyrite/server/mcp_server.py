@@ -633,6 +633,47 @@ class PyriteMCPServer:
         )
         return {"entries": rows, "count": len(rows), "location": location}
 
+    def _list_edge_types(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List available edge types with their endpoint schemas."""
+        kb_name = args.get("kb_name")
+
+        edge_types = []
+
+        for kb_config in self.config.knowledge_bases:
+            if kb_name and kb_config.name != kb_name:
+                continue
+
+            schema = kb_config.kb_schema
+            for type_name, type_schema in schema.types.items():
+                if not getattr(type_schema, "edge_type", False):
+                    continue
+
+                endpoints = {}
+                for role, ep in type_schema.endpoints.items():
+                    endpoints[role] = {
+                        "field": ep.field,
+                        "accepts": ep.accepts,
+                    }
+
+                # Count existing edges of this type
+                count = self.db.count_entries(
+                    kb_name=kb_config.name,
+                    entry_type=type_name,
+                )
+
+                edge_types.append({
+                    "type": type_name,
+                    "kb_name": kb_config.name,
+                    "description": type_schema.description,
+                    "endpoints": endpoints,
+                    "count": count,
+                })
+
+        return {
+            "edge_types": edge_types,
+            "total": len(edge_types),
+        }
+
     # =========================================================================
     # Write handlers
     # =========================================================================

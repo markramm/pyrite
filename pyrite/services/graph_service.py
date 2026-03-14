@@ -55,3 +55,70 @@ class GraphService:
     def get_outlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries that this entry links TO."""
         return self.db.get_outlinks(entry_id, kb_name)
+
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get endpoints of an edge-type entry."""
+        return self.db.get_edge_endpoints(entry_id, kb_name)
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries where this entity is an endpoint."""
+        return self.db.get_edges_by_endpoint(endpoint_id, kb_name)
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries connecting two entities."""
+        return self.db.get_edges_between(id_a, id_b, kb_name)
+
+    def get_merged_backlinks(
+        self,
+        entry_id: str,
+        kb_name: str,
+        limit: int = 0,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Get unified backlinks: link-derived + edge-derived, labeled by source type.
+
+        Each result has a 'source_type' field: 'link' or 'edge'.
+        Edge results include 'edge_type' and 'role' fields.
+        """
+        # Get link-derived backlinks
+        link_backlinks = self.db.get_backlinks(entry_id, kb_name, limit=0, offset=0)
+        for bl in link_backlinks:
+            bl["source_type"] = "link"
+
+        # Get edge-derived backlinks
+        edge_entries = self.db.get_edges_by_endpoint(entry_id, kb_name)
+        edge_backlinks = []
+        seen_edge_ids: set[str] = set()
+        for edge in edge_entries:
+            edge_id = edge.get("id", "")
+            if edge_id in seen_edge_ids:
+                continue
+            seen_edge_ids.add(edge_id)
+            edge_backlinks.append({
+                "id": edge_id,
+                "kb_name": edge.get("kb_name", kb_name),
+                "title": edge.get("title", ""),
+                "entry_type": edge.get("entry_type", ""),
+                "relation": f"edge:{edge.get('edge_type', '')}.{edge.get('role', '')}",
+                "source_type": "edge",
+                "edge_type": edge.get("edge_type", ""),
+                "role": edge.get("role", ""),
+            })
+
+        # Merge and deduplicate by (id, kb_name) — prefer link-derived
+        all_backlinks = link_backlinks + edge_backlinks
+        seen: set[tuple[str, str]] = set()
+        deduped = []
+        for bl in all_backlinks:
+            key = (bl.get("id", ""), bl.get("kb_name", ""))
+            if key not in seen:
+                seen.add(key)
+                deduped.append(bl)
+
+        # Apply limit/offset
+        if offset > 0:
+            deduped = deduped[offset:]
+        if limit > 0:
+            deduped = deduped[:limit]
+
+        return deduped

@@ -484,6 +484,19 @@ READ_TOOLS = {
             "required": [],
         },
     },
+    "list_edge_types": {
+        "description": "List available edge (relationship) types in a knowledge base. Edge types are entry types that represent typed relationships between entities (e.g. ownership, membership, funding). Returns schema information including endpoint fields and accepted entity types.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kb_name": {
+                    "type": "string",
+                    "description": "KB to query. If omitted, checks all KBs.",
+                },
+            },
+            "required": [],
+        },
+    },
     "task_list": {
         "description": "List tasks, filter by status/assignee/parent. Use to find available work or check progress.",
         "inputSchema": {
