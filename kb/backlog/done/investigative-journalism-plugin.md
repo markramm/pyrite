@@ -17,7 +17,7 @@ links:
 - target: roadmap
   relation: related
 kind: feature
-status: planned
+status: done
 effort: XL
 ---
 

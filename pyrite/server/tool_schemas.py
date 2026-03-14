@@ -51,7 +51,7 @@ READ_TOOLS = {
                 "mode": {
                     "type": "string",
                     "enum": ["keyword", "semantic", "hybrid"],
-                    "description": "Search mode: keyword (FTS5), semantic (vector), or hybrid. Default: keyword",
+                    "description": "Search mode: keyword (FTS5), semantic (vector), or hybrid. Default: hybrid",
                 },
                 "expand": {
                     "type": "boolean",

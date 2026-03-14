@@ -5,11 +5,14 @@ Unified search operations with FTS5 query sanitization and hybrid search.
 Used by API, CLI, and UI layers.
 """
 
+import logging
 import re
 from enum import StrEnum
 from typing import Any
 
 from ..storage.database import PyriteDB
+
+logger = logging.getLogger(__name__)
 
 
 class SearchMode(StrEnum):

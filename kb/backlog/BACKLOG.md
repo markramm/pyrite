@@ -146,8 +146,8 @@ Recommended execution order. Grouped by milestone.
 | Priority | Item | Effort | Rationale | Status |
 |----------|------|--------|-----------|--------|
 | **0** | [[entry-protocol-mixins]] | L | Composable field protocols (ADR-0017), prerequisite for extension-type-protocols | **done** |
-| **1** | [[software-project-plugin]] | L | Evolves from software-kb, grabs dev team eyeballs | |
-| **2** | [[investigative-journalism-plugin]] | XL | Proves general-purpose, different audience | |
+| **1** | [[software-project-plugin]] | L | Evolves from software-kb, grabs dev team eyeballs | **done** (Wave 1 scope) |
+| **2** | [[investigative-journalism-plugin]] | XL | Proves general-purpose, different audience | **done** |
 | **3** | [[extension-registry]] | M | Public directory for sharing extensions | |
 | **4** | [[extension-type-protocols]] Phase 1 | L | Protocol definitions for extension types | |
 | **5** | [[obsidian-migration]] | M | Import from Obsidian vaults | |
@@ -295,8 +295,8 @@ Recommended execution order. Grouped by milestone.
 
 | # | Item | Kind | Effort | Milestone |
 |---|------|------|--------|-----------|
-| 82 | [[software-project-plugin]] | feature | L | 0.18 |
-| 83 | [[investigative-journalism-plugin]] | feature | XL | 0.18 |
+| 82 | [[software-project-plugin]] | feature | L | 0.18 | **done** |
+| 83 | [[investigative-journalism-plugin]] | feature | XL | 0.18 | **done** |
 | 84 | [[extension-registry]] | feature | M | 0.18 |
 | 88 | [[obsidian-migration]] | feature | M | 0.18 |
 | 90 | [[pkm-capture-plugin]] | feature | L | 0.18 |

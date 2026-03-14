@@ -16,7 +16,7 @@ links:
   relation: related_to
   kb: pyrite
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: M
 ---

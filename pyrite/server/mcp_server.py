@@ -256,7 +256,7 @@ class PyriteMCPServer:
             date_to=args.get("date_to"),
             limit=limit,
             offset=args.get("offset", 0),
-            mode=args.get("mode", "keyword"),
+            mode=args.get("mode", "hybrid"),
             expand=args.get("expand", False),
         )
 
@@ -1432,6 +1432,7 @@ class PyriteMCPServer:
             handler = self.tools[name]["handler"]
             return handler(arguments)
         except Exception as e:
+            logger.exception("Tool %s failed with args %s", name, arguments)
             return _error("INTERNAL", str(e), retryable=True)
 
     def build_sdk_server(self):
