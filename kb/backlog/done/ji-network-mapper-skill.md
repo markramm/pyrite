@@ -16,7 +16,7 @@ links:
   relation: depends_on
   kb: pyrite
 kind: feature
-status: accepted
+status: done
 effort: L
 ---
 

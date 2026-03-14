@@ -7,7 +7,7 @@ tags:
 - journalism
 - investigation
 kind: epic
-status: accepted
+status: done
 priority: high
 effort: XL
 ---
