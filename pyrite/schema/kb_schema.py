@@ -8,7 +8,7 @@ from typing import Any
 from pyrite.utils.yaml import load_yaml_file
 
 from .core_types import CORE_TYPES, SYSTEM_INTENT, resolve_type_metadata
-from .field_schema import FieldSchema, TypeSchema, _validate_field_value
+from .field_schema import EndpointSpec, FieldSchema, TypeSchema, _validate_field_value
 from .provenance import get_all_relationship_types
 from .reserved import RESERVED_FIELD_NAMES
 from .validators import validate_date
@@ -65,6 +65,14 @@ class KBSchema:
                     for col_name in collisions:
                         del fields[col_name]
 
+                endpoints = {}
+                for role, ep_data in type_data.get("endpoints", {}).items():
+                    if isinstance(ep_data, dict):
+                        endpoints[role] = EndpointSpec(
+                            field=ep_data.get("field", ""),
+                            accepts=ep_data.get("accepts", []),
+                        )
+
                 types[type_name] = TypeSchema(
                     name=type_name,
                     description=type_data.get("description", ""),
@@ -81,6 +89,8 @@ class KBSchema:
                     guidelines=type_data.get("guidelines", ""),
                     goals=type_data.get("goals", ""),
                     evaluation_rubric=type_data.get("evaluation_rubric", []),
+                    edge_type=type_data.get("edge_type", False),
+                    endpoints=endpoints,
                 )
             else:
                 types[type_name] = TypeSchema(name=type_name)
@@ -299,6 +309,23 @@ class KBSchema:
                     else:
                         item["severity"] = "warning"
                         warnings.append(item)
+
+            # Edge-type endpoint validation
+            if getattr(type_schema, "edge_type", False) and getattr(
+                type_schema, "endpoints", {}
+            ):
+                for role, endpoint_spec in type_schema.endpoints.items():
+                    ep_field = endpoint_spec.field
+                    ep_value = fields.get(ep_field)
+                    if not ep_value:
+                        errors.append(
+                            {
+                                "field": ep_field,
+                                "rule": "edge_endpoint_required",
+                                "expected": "non-empty endpoint reference",
+                                "got": ep_value,
+                            }
+                        )
 
         # Check validation rules
         for rule in self.validation.get("rules", []):

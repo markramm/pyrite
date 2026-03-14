@@ -8,6 +8,7 @@ Supports per-KB schema customization via kb.yaml.
 from .core_types import CORE_TYPE_METADATA, CORE_TYPES, resolve_type_metadata
 from .enums import EventStatus, ResearchStatus, VerificationStatus
 from .field_schema import (
+    EndpointSpec,
     FieldSchema,
     TypeSchema,
     _validate_field_value,
@@ -34,6 +35,7 @@ from .validators import (
 __all__ = [
     "CORE_TYPE_METADATA",
     "CORE_TYPES",
+    "EndpointSpec",
     "EventStatus",
     "FieldSchema",
     "KBSchema",

@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 15
+CURRENT_VERSION = 16
 
 
 @dataclass
@@ -321,6 +321,30 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS review;
+        """,
+    ),
+    Migration(
+        version=16,
+        description="Add edge_endpoint table for typed relationship entries",
+        up="""
+        CREATE TABLE IF NOT EXISTS edge_endpoint (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            edge_entry_id TEXT NOT NULL,
+            edge_entry_kb TEXT NOT NULL,
+            role TEXT NOT NULL,
+            field_name TEXT NOT NULL,
+            endpoint_id TEXT NOT NULL,
+            endpoint_kb TEXT NOT NULL,
+            edge_type TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (edge_entry_id, edge_entry_kb) REFERENCES entry(id, kb_name) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_edge_endpoint_edge ON edge_endpoint(edge_entry_id, edge_entry_kb);
+        CREATE INDEX IF NOT EXISTS idx_edge_endpoint_target ON edge_endpoint(endpoint_id, endpoint_kb);
+        CREATE INDEX IF NOT EXISTS idx_edge_endpoint_type ON edge_endpoint(edge_type, edge_entry_kb);
+        """,
+        down="""
+        DROP TABLE IF EXISTS edge_endpoint;
         """,
     ),
 ]

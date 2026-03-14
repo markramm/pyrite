@@ -127,6 +127,14 @@ class FieldSchema:
 
 
 @dataclass
+class EndpointSpec:
+    """Schema for an edge-type endpoint."""
+
+    field: str  # which entry field maps to this endpoint
+    accepts: list[str] = field(default_factory=list)  # accepted entry types
+
+
+@dataclass
 class TypeSchema:
     """Schema definition for an entry type (core or custom)."""
 
@@ -145,6 +153,8 @@ class TypeSchema:
     guidelines: str = ""  # Contributing standards, quality expectations
     goals: str = ""  # What entries of this type should achieve
     evaluation_rubric: list[str | dict[str, Any]] = field(default_factory=list)  # Assertions for QA validation
+    edge_type: bool = False  # Whether this type represents an edge/relationship
+    endpoints: dict[str, EndpointSpec] = field(default_factory=dict)  # Edge endpoint specs
 
     def resolve_subdirectory(self, entry: Entry) -> str:
         """Return the resolved subdirectory, expanding template placeholders."""
@@ -180,6 +190,13 @@ class TypeSchema:
             result["goals"] = self.goals
         if self.evaluation_rubric:
             result["evaluation_rubric"] = self.evaluation_rubric
+        if self.edge_type:
+            result["edge_type"] = True
+        if self.endpoints:
+            result["endpoints"] = {
+                role: {"field": ep.field, "accepts": ep.accepts}
+                for role, ep in self.endpoints.items()
+            }
         return result
 
 

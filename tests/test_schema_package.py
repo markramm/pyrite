@@ -143,6 +143,7 @@ def test_dunder_all_completeness():
     expected = {
         "CORE_TYPE_METADATA",
         "CORE_TYPES",
+        "EndpointSpec",
         "EventStatus",
         "FieldSchema",
         "KBSchema",

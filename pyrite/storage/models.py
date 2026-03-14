@@ -180,6 +180,31 @@ class EntryRef(Base):
     )
 
 
+class EdgeEndpoint(Base):
+    __tablename__ = "edge_endpoint"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    edge_entry_id = Column(String, nullable=False)
+    edge_entry_kb = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # e.g. 'source', 'target'
+    field_name = Column(String, nullable=False)  # e.g. 'owner', 'asset'
+    endpoint_id = Column(String, nullable=False)  # the referenced entry ID
+    endpoint_kb = Column(String, nullable=False)
+    edge_type = Column(String, nullable=False)  # e.g. 'ownership'
+    created_at = Column(String, server_default="CURRENT_TIMESTAMP")
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["edge_entry_id", "edge_entry_kb"],
+            ["entry.id", "entry.kb_name"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_edge_endpoint_edge", "edge_entry_id", "edge_entry_kb"),
+        Index("idx_edge_endpoint_target", "endpoint_id", "endpoint_kb"),
+        Index("idx_edge_endpoint_type", "edge_type", "edge_entry_kb"),
+    )
+
+
 class Source(Base):
     __tablename__ = "source"
 
