@@ -28,6 +28,7 @@ import type {
 	KBHealthResponse,
 	KBInfo,
 	KBListResponse,
+	KBOrientResponse,
 	KBPermissionsResponse,
 	KBReindexResponse,
 	PluginDetail,
@@ -135,6 +136,10 @@ class ApiClient {
 
 	async getKBHealth(name: string): Promise<KBHealthResponse> {
 		return this.request(`/api/kbs/${encodeURIComponent(name)}/health`);
+	}
+
+	async getKBOrient(name: string, recent: number = 10): Promise<KBOrientResponse> {
+		return this.request(`/api/kbs/${encodeURIComponent(name)}/orient?recent=${recent}`);
 	}
 
 	async getKBPermissions(name: string): Promise<KBPermissionsResponse> {

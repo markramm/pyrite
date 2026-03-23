@@ -223,7 +223,7 @@
 					<div class="space-y-2">
 						{#each kbStore.kbs as kb}
 							<a
-								href="/entries?kb={kb.name}"
+								href="/orient?kb={kb.name}"
 								class="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-3 transition-colors hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500"
 							>
 								<div>

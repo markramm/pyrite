@@ -37,6 +37,22 @@ export interface KBReindexResponse {
 	removed: number;
 }
 
+// Orient
+
+export interface KBOrientResponse {
+	kb: string;
+	description: string;
+	kb_type: string;
+	read_only: boolean;
+	guidelines: Record<string, string>;
+	total_entries: number;
+	types: Array<{ type: string; count: number }>;
+	top_tags: Array<{ name: string; count: number }>;
+	recent: Array<{ id: string; title: string; entry_type: string; updated_at: string }>;
+	schema: Record<string, unknown>;
+	[key: string]: unknown;
+}
+
 // Permissions
 
 export interface KBPermissionGrant {
