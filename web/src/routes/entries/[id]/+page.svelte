@@ -12,10 +12,15 @@
 	import AIPanel from '$lib/components/entry/AIPanel.svelte';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import { api } from '$lib/api/client';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { parseWikilinks } from '$lib/editor/wikilink-utils';
+
+	const canEdit = $derived(
+		!authStore.authConfig.enabled || authStore.isAuthenticated
+	);
 
 	let editing = $state(false);
 	let editorContent = $state('');
@@ -215,12 +220,14 @@
 												{entryStore.saving ? 'Saving...' : 'Save'}
 											</button>
 										{/if}
+										{#if canEdit || editing}
 										<button
 											onclick={toggleEdit}
 											class="rounded-md border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-600"
 										>
 											{editing ? 'View' : 'Edit'}
 										</button>
+										{/if}
 										{#if editing}
 											<button
 												onclick={() => uiStore.toggleEditorMode()}

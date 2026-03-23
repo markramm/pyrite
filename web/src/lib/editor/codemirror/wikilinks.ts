@@ -246,18 +246,22 @@ const wikilinkMatcher = new MatchDecorator({
 const wikilinkDecorations = ViewPlugin.fromClass(
 	class {
 		decorations: DecorationSet;
+		view: EditorView;
 
 		constructor(view: EditorView) {
+			this.view = view;
 			this.decorations = wikilinkMatcher.createDeco(view);
 		}
 
 		update(update: ViewUpdate) {
+			this.view = update.view;
 			this.decorations = wikilinkMatcher.updateDeco(update, this.decorations);
 		}
 	},
 	{
 		decorations: (v) => {
 			// Hide decorations when cursor is inside a wikilink
+			if (!v.view) return v.decorations;
 			const { from, to } = v.view.state.selection.main;
 			const doc = v.view.state.doc;
 
@@ -708,18 +712,22 @@ const transclusionMatcher = new MatchDecorator({
 const transclusionDecorations = ViewPlugin.fromClass(
 	class {
 		decorations: DecorationSet;
+		view: EditorView;
 
 		constructor(view: EditorView) {
+			this.view = view;
 			this.decorations = transclusionMatcher.createDeco(view);
 		}
 
 		update(update: ViewUpdate) {
+			this.view = update.view;
 			this.decorations = transclusionMatcher.updateDeco(update, this.decorations);
 		}
 	},
 	{
 		decorations: (v) => {
 			// Hide decorations when cursor is inside a transclusion
+			if (!v.view) return v.decorations;
 			const { from, to } = v.view.state.selection.main;
 			const doc = v.view.state.doc;
 

@@ -35,13 +35,17 @@
 	}
 
 	onMount(() => {
-		createView(content);
 		return () => view?.destroy();
 	});
 
-	// Update content from outside (e.g., loading a new entry)
+	// Initialize or update editor when content or container changes
 	$effect(() => {
-		if (view && content !== view.state.doc.toString()) {
+		if (!editorContainer) return;
+		if (!view) {
+			// First render — create the editor with current content
+			createView(content);
+		} else if (content !== view.state.doc.toString()) {
+			// Content changed from outside — update editor
 			view.dispatch({
 				changes: { from: 0, to: view.state.doc.length, insert: content }
 			});
