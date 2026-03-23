@@ -166,7 +166,7 @@ async def get_auth_config(
         enabled=config.settings.auth.enabled,
         allow_registration=config.settings.auth.allow_registration,
         providers=providers,
-        anonymous_tier=config.settings.auth.anonymous_tier,
+        anonymous_tier=config.settings.auth.anonymous_tier or "none",
     )
 
 
