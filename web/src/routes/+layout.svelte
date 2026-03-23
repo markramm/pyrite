@@ -122,7 +122,7 @@
 		<Sidebar />
 		<main class="flex flex-1 flex-col overflow-hidden">
 			{#key $page.url.pathname}
-				<div class="flex flex-1 flex-col overflow-hidden" in:fade={{ duration: 150, delay: 50 }} out:fade={{ duration: 100 }}>
+				<div class="flex min-h-0 flex-1 flex-col" in:fade={{ duration: 150, delay: 50 }} out:fade={{ duration: 100 }}>
 					{@render children()}
 				</div>
 			{/key}
