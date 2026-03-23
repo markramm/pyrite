@@ -7,6 +7,10 @@ status: proposed
 priority: high
 effort: S
 tags: [web, bug, editor]
+links:
+- target: epic-web-ui-feature-parity
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem
