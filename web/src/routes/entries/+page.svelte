@@ -15,47 +15,37 @@
 	// Get params from URL
 	const urlKB = $derived($page.url.searchParams.get('kb') ?? undefined);
 	const urlTag = $derived($page.url.searchParams.get('tag') ?? undefined);
+	const activeKB = $derived(urlKB ?? kbStore.activeKB ?? undefined);
 
-	onMount(async () => {
+	onMount(() => {
 		// Read initial filter from URL
 		filterType = $page.url.searchParams.get('type') ?? '';
+	});
 
-		loadEntries();
-
-		// Load dynamic types
-		try {
-			const kb = urlKB ?? kbStore.activeKB ?? undefined;
-			const res = await api.getEntryTypes(kb);
-			entryTypes = res.types;
-		} catch {
-			// Fall back to empty — dropdown will just show "All types"
+	// Load entries when KB, type filter, or tag changes
+	$effect(() => {
+		const kb = activeKB;
+		const type = filterType || undefined;
+		const tag = urlTag;
+		if (kb) {
+			entryStore.loadList({ kb, entry_type: type, tag });
 		}
 	});
 
-	function loadEntries() {
-		const kb = urlKB ?? kbStore.activeKB ?? undefined;
-		entryStore.loadList({
-			kb,
-			entry_type: filterType || undefined,
-			tag: urlTag,
-		});
-	}
-
-	// Reload when KB or tag changes
+	// Load entry types when KB changes
 	$effect(() => {
-		const kb = urlKB ?? kbStore.activeKB ?? undefined;
-		const tag = urlTag;
-		if (kb || tag) {
-			entryStore.loadList({
-				kb,
-				entry_type: filterType || undefined,
-				tag,
+		const kb = activeKB;
+		if (kb) {
+			api.getEntryTypes(kb).then((res) => {
+				entryTypes = res.types;
+			}).catch(() => {
+				entryTypes = [];
 			});
 		}
 	});
 
 	function onFilterChange() {
-		loadEntries();
+		// filterType is $state — the $effect above will re-run automatically
 	}
 
 	function onSortChange(e: Event) {

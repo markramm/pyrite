@@ -5,7 +5,7 @@ import type { AuthConfig, AuthUser } from '$lib/types/auth';
 
 class AuthStore {
 	user = $state<AuthUser | null>(null);
-	authConfig = $state<AuthConfig>({ enabled: false, allow_registration: false, providers: [] });
+	authConfig = $state<AuthConfig>({ enabled: false, allow_registration: false, providers: [], anonymous_tier: 'none' });
 	loading = $state(true);
 	error = $state<string | null>(null);
 
@@ -17,15 +17,24 @@ class AuthStore {
 		return this.user?.role === 'admin';
 	}
 
+	get allowsAnonymous(): boolean {
+		return this.authConfig.anonymous_tier !== 'none';
+	}
+
 	async init() {
 		this.loading = true;
 		try {
 			this.authConfig = await api.getAuthConfig();
 			if (this.authConfig.enabled) {
-				this.user = await api.getMe();
+				try {
+					this.user = await api.getMe();
+				} catch {
+					// Not authenticated — anonymous user, leave user as null
+					this.user = null;
+				}
 			}
 		} catch {
-			// Auth endpoint not available — auth is disabled
+			// Auth config endpoint not available — auth is disabled
 			this.authConfig = { enabled: false, allow_registration: false, providers: [] };
 		} finally {
 			this.loading = false;

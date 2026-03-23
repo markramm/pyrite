@@ -14,6 +14,7 @@ export interface AuthConfig {
 	enabled: boolean;
 	allow_registration: boolean;
 	providers: string[];
+	anonymous_tier: string;
 }
 
 export interface LoginRequest {

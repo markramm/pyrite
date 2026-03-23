@@ -33,7 +33,7 @@
 			const path = $page.url.pathname;
 			const isAuthRoute = AUTH_ROUTES.includes(path);
 
-			if (authStore.authConfig.enabled && !authStore.isAuthenticated && !isAuthRoute) {
+			if (authStore.authConfig.enabled && !authStore.isAuthenticated && !authStore.allowsAnonymous && !isAuthRoute) {
 				goto('/login');
 				return;
 			}
@@ -111,7 +111,7 @@
 	<div class="flex h-screen items-center justify-center bg-zinc-900">
 		<p class="text-zinc-400">Loading...</p>
 	</div>
-{:else if authStore.authConfig.enabled && !authStore.isAuthenticated && !AUTH_ROUTES.includes($page.url.pathname)}
+{:else if authStore.authConfig.enabled && !authStore.isAuthenticated && !authStore.allowsAnonymous && !AUTH_ROUTES.includes($page.url.pathname)}
 	<div class="flex h-screen items-center justify-center bg-zinc-900">
 		<p class="text-zinc-400">Redirecting to login...</p>
 	</div>
