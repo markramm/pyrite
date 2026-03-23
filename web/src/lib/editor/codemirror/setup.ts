@@ -5,7 +5,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { bracketMatching, indentOnInput } from '@codemirror/language';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
-import type { Extension } from '@codemirror/state';
+import { Compartment, type Extension } from '@codemirror/state';
 import {
 	EditorView,
 	drawSelection,
@@ -15,6 +15,9 @@ import {
 	keymap,
 	lineNumbers
 } from '@codemirror/view';
+
+/** Compartment for swapping the theme dynamically without recreating the editor. */
+export const themeCompartment = new Compartment();
 import { slashCommandCompletions } from './slash-commands';
 import { darkTheme, lightTheme } from './theme';
 import { wikilinkCompletions, wikilinkExtension } from './wikilinks';
@@ -55,7 +58,7 @@ export function createEditorExtensions(options: {
 		history(),
 		markdown({ base: markdownLanguage }),
 		wikilinkExtension(),
-		dark ? darkTheme : lightTheme,
+		themeCompartment.of(dark ? darkTheme : lightTheme),
 		keymap.of([...saveKeymap, indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap])
 	];
 

@@ -3,7 +3,8 @@
 	import { EditorView } from '@codemirror/view';
 	import { onMount } from 'svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
-	import { createEditorExtensions } from './codemirror/setup';
+	import { createEditorExtensions, themeCompartment } from './codemirror/setup';
+	import { darkTheme, lightTheme } from './codemirror/theme';
 
 	interface Props {
 		content: string;
@@ -15,13 +16,16 @@
 	let { content, onchange, onsave, readonly = false }: Props = $props();
 
 	let editorContainer: HTMLDivElement;
-	let view: EditorView | undefined;
+	let view = $state<EditorView | undefined>();
 
 	function createView(doc: string) {
 		if (view) view.destroy();
 
+		const isDark = typeof document !== 'undefined'
+			? document.documentElement.classList.contains('dark')
+			: uiStore.theme === 'dark';
 		const extensions = createEditorExtensions({
-			dark: uiStore.theme === 'dark',
+			dark: isDark,
 			onSave: onsave,
 			onChange: onchange
 		});
@@ -48,6 +52,19 @@
 			// Content changed from outside — update editor
 			view.dispatch({
 				changes: { from: 0, to: view.state.doc.length, insert: content }
+			});
+		}
+	});
+
+	// Swap theme dynamically when light/dark mode changes
+	$effect(() => {
+		// Read uiStore.theme to create a reactive dependency
+		const _theme = uiStore.theme;
+		// But check the actual DOM class for the ground truth (handles localStorage hydration race)
+		if (view && typeof document !== 'undefined') {
+			const isDark = document.documentElement.classList.contains('dark');
+			view.dispatch({
+				effects: themeCompartment.reconfigure(isDark ? darkTheme : lightTheme)
 			});
 		}
 	});

@@ -22,7 +22,16 @@ class SearchStore {
 		this.debounceTimer = setTimeout(() => this.execute(), 300);
 	}
 
-	async execute(options: { kb?: string; type?: string; mode?: 'keyword' | 'semantic' | 'hybrid' } = {}) {
+	async execute(
+		options: {
+			kb?: string;
+			type?: string;
+			mode?: 'keyword' | 'semantic' | 'hybrid';
+			date_from?: string;
+			date_to?: string;
+			tags?: string;
+		} = {}
+	) {
 		if (!this.query.trim()) return;
 		this.loading = true;
 		this.error = null;
@@ -30,7 +39,10 @@ class SearchStore {
 			const res = await api.search(this.query, {
 				kb: options.kb,
 				type: options.type,
-				mode: options.mode ?? this.mode
+				mode: options.mode ?? this.mode,
+				date_from: options.date_from,
+				date_to: options.date_to,
+				tags: options.tags,
 			});
 			this.results = res.results;
 		} catch (e) {

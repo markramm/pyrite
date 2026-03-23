@@ -59,7 +59,7 @@
 
 	const kbNames = $derived(kbStore.kbs.map((kb) => kb.name));
 
-	const hasCentrality = $derived(nodes.some((n) => (n.centrality ?? 0) > 0));
+	const hasCentrality = true; // Always show — toggling on triggers API reload with centrality data
 
 	// Derive type counts from nodes for the legend
 	const typeCounts = $derived(() => {

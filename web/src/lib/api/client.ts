@@ -220,6 +220,8 @@ class ApiClient {
 			tags?: string;
 			limit?: number;
 			mode?: 'keyword' | 'semantic' | 'hybrid';
+			date_from?: string;
+			date_to?: string;
 		} = {}
 	): Promise<SearchResponse> {
 		const params = new URLSearchParams({ q: query });
@@ -228,6 +230,8 @@ class ApiClient {
 		if (options.tags) params.set('tags', options.tags);
 		if (options.limit) params.set('limit', String(options.limit));
 		if (options.mode) params.set('mode', options.mode);
+		if (options.date_from) params.set('date_from', options.date_from);
+		if (options.date_to) params.set('date_to', options.date_to);
 		return this.request(`/api/search?${params}`);
 	}
 

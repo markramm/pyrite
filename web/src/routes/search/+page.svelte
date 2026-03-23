@@ -11,6 +11,10 @@
 	let searchInput = $state<HTMLInputElement | null>(null);
 	let selectedKb = $state('');
 	let selectedType = $state('');
+	let dateFrom = $state('');
+	let dateTo = $state('');
+	let tagFilter = $state('');
+	let showAdvanced = $state(false);
 	let entryTypes = $state<string[]>([]);
 
 	function highlightSnippet(snippet: string, query: string): string {
@@ -42,6 +46,9 @@
 			kb: selectedKb || undefined,
 			type: selectedType || undefined,
 			mode: searchStore.mode,
+			date_from: dateFrom || undefined,
+			date_to: dateTo || undefined,
+			tags: tagFilter || undefined,
 		});
 	}
 
@@ -157,6 +164,14 @@
 				{/each}
 			</select>
 
+			<!-- Advanced toggle -->
+			<button
+				onclick={() => (showAdvanced = !showAdvanced)}
+				class="text-xs text-zinc-500 hover:text-zinc-300"
+			>
+				{showAdvanced ? 'Less' : 'More'} filters
+			</button>
+
 			<!-- Result count -->
 			{#if !searchStore.loading && searchStore.query.trim() && searchStore.results.length > 0}
 				<span class="ml-auto text-sm text-zinc-500">
@@ -164,6 +179,51 @@
 				</span>
 			{/if}
 		</div>
+
+		<!-- Advanced filters -->
+		{#if showAdvanced}
+			<div class="mt-3 flex flex-wrap items-end gap-3">
+				<div>
+					<label for="date-from" class="mb-1 block text-xs text-zinc-500">From</label>
+					<input
+						id="date-from"
+						type="date"
+						bind:value={dateFrom}
+						onchange={() => { if (searchStore.query.trim()) runSearch(); }}
+						class="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+					/>
+				</div>
+				<div>
+					<label for="date-to" class="mb-1 block text-xs text-zinc-500">To</label>
+					<input
+						id="date-to"
+						type="date"
+						bind:value={dateTo}
+						onchange={() => { if (searchStore.query.trim()) runSearch(); }}
+						class="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+					/>
+				</div>
+				<div>
+					<label for="tag-filter" class="mb-1 block text-xs text-zinc-500">Tags (comma-separated)</label>
+					<input
+						id="tag-filter"
+						type="text"
+						bind:value={tagFilter}
+						placeholder="tag1, tag2"
+						onchange={() => { if (searchStore.query.trim()) runSearch(); }}
+						class="rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+					/>
+				</div>
+				{#if dateFrom || dateTo || tagFilter}
+					<button
+						onclick={() => { dateFrom = ''; dateTo = ''; tagFilter = ''; if (searchStore.query.trim()) runSearch(); }}
+						class="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 dark:border-zinc-700"
+					>
+						Clear filters
+					</button>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	<!-- Results area -->
