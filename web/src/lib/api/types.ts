@@ -581,3 +581,27 @@ export interface ClipResponse {
 	title: string;
 	source_url: string;
 }
+
+// Index Management
+
+export interface EmbedStatusResponse {
+	pending: number;
+	processing: number;
+	failed: number;
+	total: number;
+}
+
+export interface IndexJob {
+	id: string;
+	kb: string;
+	operation: string;
+	status: string;
+	progress?: number;
+	result?: Record<string, unknown>;
+	error?: string;
+	created_at?: string;
+}
+
+export interface IndexJobsResponse {
+	jobs: IndexJob[];
+}

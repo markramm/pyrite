@@ -149,4 +149,25 @@ describe('ApiClient', () => {
 			expect(mockFetch.mock.calls[0][1].method).toBe('POST');
 		});
 	});
+
+	describe('getEmbedStatus', () => {
+		it('fetches /api/index/embed-status', async () => {
+			const payload = { pending: 5, processing: 1, failed: 0, total: 6 };
+			mockFetch.mockResolvedValueOnce(jsonResponse(payload));
+			const result = await api.getEmbedStatus();
+			expect(result.pending).toBe(5);
+			expect(result.total).toBe(6);
+			expect(mockFetch.mock.calls[0][0]).toContain('/api/index/embed-status');
+		});
+	});
+
+	describe('getIndexJobs', () => {
+		it('fetches /api/index/jobs', async () => {
+			const payload = { jobs: [{ id: 'j1', status: 'running', kb: 'test', operation: 'sync' }] };
+			mockFetch.mockResolvedValueOnce(jsonResponse(payload));
+			const result = await api.getIndexJobs();
+			expect(result.jobs).toHaveLength(1);
+			expect(result.jobs[0].status).toBe('running');
+		});
+	});
 });

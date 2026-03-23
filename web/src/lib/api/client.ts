@@ -62,7 +62,9 @@ import type {
 	UpdateEntryRequest,
 	UpdateResponse,
 	UserListResponse,
-	VersionListResponse
+	VersionListResponse,
+	EmbedStatusResponse,
+	IndexJobsResponse
 } from './types';
 
 class ApiClient {
@@ -360,6 +362,14 @@ class ApiClient {
 	// Index sync
 	async syncIndex(): Promise<{ synced: boolean; added: number; updated: number; removed: number }> {
 		return this.request('/api/index/sync', { method: 'POST' });
+	}
+
+	async getEmbedStatus(): Promise<EmbedStatusResponse> {
+		return this.request('/api/index/embed-status');
+	}
+
+	async getIndexJobs(): Promise<IndexJobsResponse> {
+		return this.request('/api/index/jobs');
 	}
 
 	// Starred Entries
