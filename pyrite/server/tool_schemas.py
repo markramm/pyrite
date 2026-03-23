@@ -505,7 +505,15 @@ READ_TOOLS = {
                 "kb_name": {"type": "string", "description": "KB name (optional)"},
                 "status": {
                     "type": "string",
-                    "enum": ["open", "claimed", "in_progress", "blocked", "review", "done", "failed"],
+                    "enum": [
+                        "open",
+                        "claimed",
+                        "in_progress",
+                        "blocked",
+                        "review",
+                        "done",
+                        "failed",
+                    ],
                     "description": "Filter by task status",
                 },
                 "assignee": {
@@ -747,7 +755,15 @@ WRITE_TOOLS = {
                 "kb_name": {"type": "string", "description": "KB name"},
                 "status": {
                     "type": "string",
-                    "enum": ["open", "claimed", "in_progress", "blocked", "review", "done", "failed"],
+                    "enum": [
+                        "open",
+                        "claimed",
+                        "in_progress",
+                        "blocked",
+                        "review",
+                        "done",
+                        "failed",
+                    ],
                     "description": "New status",
                 },
                 "assignee": {"type": "string", "description": "New assignee"},

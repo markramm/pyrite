@@ -304,14 +304,10 @@ class TestBundler:
     def many_entries(self):
         entries = []
         for i in range(10):
-            entries.append(
-                NoteEntry(id=f"note-{i}", title=f"Note {i}", body=f"Body {i}")
-            )
+            entries.append(NoteEntry(id=f"note-{i}", title=f"Note {i}", body=f"Body {i}"))
         for i in range(5):
             entries.append(
-                PersonEntry(
-                    id=f"person-{i}", title=f"Person {i}", body=f"Bio {i}", role="Role"
-                )
+                PersonEntry(id=f"person-{i}", title=f"Person {i}", body=f"Bio {i}", role="Role")
             )
         return entries
 
@@ -334,24 +330,20 @@ class TestBundler:
 
     def test_bundle_auto_small_collection(self):
         """Under 50 entries → one-per-entry."""
-        entries = [
-            NoteEntry(id=f"n-{i}", title=f"Note {i}", body="x") for i in range(10)
-        ]
+        entries = [NoteEntry(id=f"n-{i}", title=f"Note {i}", body="x") for i in range(10)]
         files = bundle_entries(entries, strategy=BundleStrategy.AUTO)
         assert len(files) == 10
 
     def test_bundle_auto_large_collection(self):
         """Over 50 entries → by-type."""
-        entries = [
-            NoteEntry(id=f"n-{i}", title=f"Note {i}", body="x") for i in range(60)
-        ]
+        entries = [NoteEntry(id=f"n-{i}", title=f"Note {i}", body="x") for i in range(60)]
         files = bundle_entries(entries, strategy=BundleStrategy.AUTO)
         # All same type, so one file
         assert len(files) == 1
 
     def test_bundle_by_type_content_has_headers(self, many_entries):
         files = bundle_entries(many_entries, strategy=BundleStrategy.BY_TYPE)
-        for filename, content in files.items():
+        for _filename, content in files.items():
             # Each entry within should still have its title as a heading
             assert "# " in content
 
@@ -383,9 +375,7 @@ class TestManifest:
         assert "person" in manifest
 
     def test_manifest_entry_count(self):
-        entries = [
-            NoteEntry(id=f"n{i}", title=f"Note {i}", body="x") for i in range(5)
-        ]
+        entries = [NoteEntry(id=f"n{i}", title=f"Note {i}", body="x") for i in range(5)]
         manifest = generate_manifest(entries)
         assert "5" in manifest  # entry count should appear
 

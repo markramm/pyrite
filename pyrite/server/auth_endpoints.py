@@ -106,9 +106,7 @@ _oauth_states: dict[str, dict] = {}  # {state: {"expiry": float, "flow": str, "u
 _OAUTH_STATE_TTL = 300  # 5 minutes
 
 
-def _create_oauth_state(
-    flow: str = "login", user_id: int | None = None
-) -> str:
+def _create_oauth_state(flow: str = "login", user_id: int | None = None) -> str:
     """Generate a CSRF state token and store it with flow metadata."""
     # Probabilistic cleanup (1 in 10 calls)
     if secrets.randbelow(10) == 0:
@@ -316,9 +314,7 @@ async def github_oauth_callback(
         if not connect_user_id:
             return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
         try:
-            auth_service.store_github_token(
-                connect_user_id, token.access_token, token.scope
-            )
+            auth_service.store_github_token(connect_user_id, token.access_token, token.scope)
             return RedirectResponse(url="/settings/kbs?github=connected", status_code=302)
         except Exception:
             logger.exception("Failed to store GitHub token")

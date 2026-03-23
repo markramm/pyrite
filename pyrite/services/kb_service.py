@@ -733,9 +733,7 @@ class KBService:
         """Get tags with counts as dicts."""
         return self.db.get_tags_as_dicts(kb_name=kb_name, limit=limit, offset=offset, prefix=prefix)
 
-    def get_most_linked(
-        self, kb_name: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         """Get most referenced entries."""
         return self.db.get_most_linked(kb_name, limit)
 
@@ -851,9 +849,7 @@ class KBService:
         # Plugin orient supplements
         from ..plugins.registry import get_registry
 
-        supplements = get_registry().get_orient_supplements(
-            kb_name, kb_config.kb_type or "default"
-        )
+        supplements = get_registry().get_orient_supplements(kb_name, kb_config.kb_type or "default")
         if supplements:
             result.update(supplements)
 
@@ -1076,14 +1072,23 @@ class KBService:
         session = self.db.session
 
         # CAS: only update if status matches from_status
-        status_clause = f"(status = '{from_status}' OR status IS NULL)" if from_status == "open" else f"status = '{from_status}'"
+        status_clause = (
+            f"(status = '{from_status}' OR status IS NULL)"
+            if from_status == "open"
+            else f"status = '{from_status}'"
+        )
         result = session.execute(
             text(f"""UPDATE entry
                SET status = :to_status,
                    assignee = :assignee
                WHERE id = :entry_id AND kb_name = :kb_name
                AND {status_clause}"""),
-            {"assignee": assignee, "entry_id": entry_id, "kb_name": kb_name, "to_status": to_status},
+            {
+                "assignee": assignee,
+                "entry_id": entry_id,
+                "kb_name": kb_name,
+                "to_status": to_status,
+            },
         )
         session.commit()
 
@@ -1093,7 +1098,10 @@ class KBService:
                 {"entry_id": entry_id, "kb_name": kb_name},
             )
             if not rows:
-                return {"claimed": False, "error": f"Entry '{entry_id}' not found in KB '{kb_name}'"}
+                return {
+                    "claimed": False,
+                    "error": f"Entry '{entry_id}' not found in KB '{kb_name}'",
+                }
             current = rows[0].get("status", from_status)
             return {
                 "claimed": False,
@@ -1201,21 +1209,15 @@ class KBService:
             details=details,
         )
 
-    def get_reviews(
-        self, entry_id: str, kb_name: str, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    def get_reviews(self, entry_id: str, kb_name: str, limit: int = 50) -> list[dict[str, Any]]:
         """Get reviews for an entry."""
         return self.db.get_reviews(entry_id, kb_name, limit=limit)
 
-    def get_latest_review(
-        self, entry_id: str, kb_name: str
-    ) -> dict[str, Any] | None:
+    def get_latest_review(self, entry_id: str, kb_name: str) -> dict[str, Any] | None:
         """Get the latest review for an entry."""
         return self.db.get_latest_review(entry_id, kb_name)
 
-    def is_review_current(
-        self, entry_id: str, kb_name: str
-    ) -> dict[str, Any]:
+    def is_review_current(self, entry_id: str, kb_name: str) -> dict[str, Any]:
         """Check if the latest review is still current (file unchanged).
 
         Returns dict with ``current`` bool and ``review`` (latest review or None).
@@ -1309,7 +1311,8 @@ class KBService:
     ) -> dict:
         """Export KB entries to a remote repo (clone, export, commit, push)."""
         return self._export_svc.export_kb_to_repo(
-            kb_name, repo_url,
+            kb_name,
+            repo_url,
             github_token=github_token,
             branch=branch,
             commit_message=commit_message,

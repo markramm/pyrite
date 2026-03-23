@@ -158,9 +158,7 @@ class TestRubricCheckers:
         assert "role" in result["message"]
 
         # Has role
-        entry = _make_entry_dict(
-            entry_type="person", metadata=json.dumps({"role": "Researcher"})
-        )
+        entry = _make_entry_dict(entry_type="person", metadata=json.dumps({"role": "Researcher"}))
         result = checker(entry, None, {"field": "role"})
         assert result is None
 
@@ -180,9 +178,7 @@ class TestRubricCheckers:
         assert result is None
 
         # Has author
-        entry = _make_entry_dict(
-            entry_type="document", metadata=json.dumps({"author": "John"})
-        )
+        entry = _make_entry_dict(entry_type="document", metadata=json.dumps({"author": "John"}))
         result = checker(entry, None, {"fields": ["url", "author"]})
         assert result is None
 
@@ -238,7 +234,6 @@ class TestRubricCheckers:
         assert result is None
 
 
-
 # =========================================================================
 # TestRubricEvaluation — integration with QAService
 # =========================================================================
@@ -251,8 +246,7 @@ class TestRubricEvaluation:
         """Entry without tags gets rubric_violation warning."""
         db = rubric_setup["db"]
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("no-tags-entry", "test-kb", "note", "Good Title", "Some body content"),
         )
         db._raw_conn.commit()
@@ -266,8 +260,7 @@ class TestRubricEvaluation:
         """Entry with generic title gets rubric_violation warning."""
         db = rubric_setup["db"]
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("generic-title", "test-kb", "note", "TODO", "Some body"),
         )
         db._raw_conn.commit()
@@ -317,8 +310,7 @@ class TestRubricEvaluation:
         db = rubric_setup["db"]
         # Entry with empty body — should get empty_body but NOT rubric_violation for body
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("empty-body-test", "test-kb", "note", "Good Title", ""),
         )
         db._raw_conn.commit()
@@ -349,8 +341,7 @@ class TestRubricBulk:
         """validate_kb detects entries with no tags."""
         db = rubric_setup["db"]
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("bulk-no-tags", "test-kb", "note", "Valid Title", "Valid body"),
         )
         db._raw_conn.commit()
@@ -358,9 +349,7 @@ class TestRubricBulk:
         result = rubric_setup["qa"].validate_kb("test-kb")
         rubric_issues = [i for i in result["issues"] if i["rule"] == "rubric_violation"]
         tag_issues = [
-            i
-            for i in rubric_issues
-            if i.get("field") == "tags" and i["entry_id"] == "bulk-no-tags"
+            i for i in rubric_issues if i.get("field") == "tags" and i["entry_id"] == "bulk-no-tags"
         ]
         assert len(tag_issues) >= 1
 
@@ -368,8 +357,7 @@ class TestRubricBulk:
         """validate_kb detects entries with generic titles."""
         db = rubric_setup["db"]
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("bulk-generic", "test-kb", "note", "Untitled", "Valid body"),
         )
         db._raw_conn.commit()
@@ -387,8 +375,7 @@ class TestRubricBulk:
         """validate_kb detects entries with no outgoing links."""
         db = rubric_setup["db"]
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("bulk-no-links", "test-kb", "note", "Valid Title", "Valid body"),
         )
         db._raw_conn.commit()
@@ -445,8 +432,7 @@ class TestRubricBulk:
         """All rubric issues use rule='rubric_violation'."""
         db = rubric_setup["db"]
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("rule-check", "test-kb", "note", "TODO", ""),
         )
         db._raw_conn.commit()

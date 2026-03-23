@@ -433,9 +433,7 @@ class PostgresBackend:
 
         query = self._session.query(Entry)
         if not include_archived:
-            query = query.filter(
-                sa_func.coalesce(Entry.lifecycle, "active") != "archived"
-            )
+            query = query.filter(sa_func.coalesce(Entry.lifecycle, "active") != "archived")
         if tag:
             query = (
                 query.join(

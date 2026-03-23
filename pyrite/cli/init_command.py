@@ -201,7 +201,15 @@ BUILTIN_TEMPLATES = {
                 },
             ],
         },
-        "directories": ["notes", "writings", "eras", "events", "people", "sources", "organizations"],
+        "directories": [
+            "notes",
+            "writings",
+            "eras",
+            "events",
+            "people",
+            "sources",
+            "organizations",
+        ],
     },
     "movement": {
         "name": "my-movement",
@@ -298,7 +306,10 @@ BUILTIN_TEMPLATES = {
 
 def init_kb(
     template: str = typer.Option(
-        ..., "--template", "-t", help="Template: software, zettelkasten, research, intellectual-biography, movement, empty"
+        ...,
+        "--template",
+        "-t",
+        help="Template: software, zettelkasten, research, intellectual-biography, movement, empty",
     ),
     path: Path = typer.Option(..., "--path", "-p", help="Directory for the new KB"),
     name: str | None = typer.Option(

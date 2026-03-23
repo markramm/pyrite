@@ -93,8 +93,13 @@ def test_orient_includes_software_supplement(software_kb_setup):
 
     # Add one backlog item so there's data
     _insert_entry(
-        db, "item-1", "test-sw", "backlog_item", "Fix bug",
-        status="in_progress", priority="high",
+        db,
+        "item-1",
+        "test-sw",
+        "backlog_item",
+        "Fix bug",
+        status="in_progress",
+        priority="high",
         metadata={"kind": "bug", "status": "in_progress", "priority": "high"},
     )
 
@@ -139,18 +144,33 @@ def test_software_supplement_board_summary(software_kb_setup):
     db = software_kb_setup["db"]
 
     _insert_entry(
-        db, "item-a", "test-sw", "backlog_item", "Task A",
-        status="proposed", priority="medium",
+        db,
+        "item-a",
+        "test-sw",
+        "backlog_item",
+        "Task A",
+        status="proposed",
+        priority="medium",
         metadata={"kind": "feature", "status": "proposed"},
     )
     _insert_entry(
-        db, "item-b", "test-sw", "backlog_item", "Task B",
-        status="in_progress", priority="high",
+        db,
+        "item-b",
+        "test-sw",
+        "backlog_item",
+        "Task B",
+        status="in_progress",
+        priority="high",
         metadata={"kind": "bug", "status": "in_progress"},
     )
     _insert_entry(
-        db, "item-c", "test-sw", "backlog_item", "Task C",
-        status="review", priority="medium",
+        db,
+        "item-c",
+        "test-sw",
+        "backlog_item",
+        "Task C",
+        status="review",
+        priority="medium",
         metadata={"kind": "feature", "status": "review"},
     )
 
@@ -199,11 +219,19 @@ def test_software_supplement_recent_adrs(software_kb_setup):
     svc = software_kb_setup["svc"]
 
     _insert_entry(
-        db, "adr-001", "test-sw", "adr", "Use REST for API",
+        db,
+        "adr-001",
+        "test-sw",
+        "adr",
+        "Use REST for API",
         metadata={"adr_number": 1, "status": "accepted", "date": "2025-01-15"},
     )
     _insert_entry(
-        db, "adr-002", "test-sw", "adr", "Adopt TypeScript",
+        db,
+        "adr-002",
+        "test-sw",
+        "adr",
+        "Adopt TypeScript",
         metadata={"adr_number": 2, "status": "accepted", "date": "2025-02-01"},
     )
 
@@ -220,7 +248,11 @@ def test_software_supplement_components(software_kb_setup):
     svc = software_kb_setup["svc"]
 
     _insert_entry(
-        db, "comp-api", "test-sw", "component", "API Server",
+        db,
+        "comp-api",
+        "test-sw",
+        "component",
+        "API Server",
         metadata={"path": "pyrite/server/", "kind": "service"},
     )
 

@@ -90,10 +90,14 @@ class TestCreateTask:
         result = svc.create_task(kb_name="test-tasks", title="Indexed task")
         entry_id = result["entry_id"]
 
-        row = task_env["db"]._raw_conn.execute(
-            "SELECT * FROM entry WHERE id = ? AND kb_name = ?",
-            (entry_id, "test-tasks"),
-        ).fetchone()
+        row = (
+            task_env["db"]
+            ._raw_conn.execute(
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ?",
+                (entry_id, "test-tasks"),
+            )
+            .fetchone()
+        )
         assert row is not None
         assert row["title"] == "Indexed task"
 
@@ -151,10 +155,14 @@ class TestClaimTask:
         assert result["claimed"] is False
         assert "File update failed" in result["error"]
 
-        row = task_env["db"]._raw_conn.execute(
-            "SELECT status FROM entry WHERE id = ?",
-            (entry_id,),
-        ).fetchone()
+        row = (
+            task_env["db"]
+            ._raw_conn.execute(
+                "SELECT status FROM entry WHERE id = ?",
+                (entry_id,),
+            )
+            .fetchone()
+        )
         assert row["status"] == "open"
 
 
@@ -180,8 +188,7 @@ class TestClaimEntry:
 
         # Try custom from_status/to_status
         result = svc.kb_svc.claim_entry(
-            entry_id, "test-tasks", "agent:y",
-            from_status="claimed", to_status="in_progress"
+            entry_id, "test-tasks", "agent:y", from_status="claimed", to_status="in_progress"
         )
         assert result["claimed"] is True
         assert result["status"] == "in_progress"
@@ -217,14 +224,10 @@ class TestDecomposeTask:
 class TestCheckpointTask:
     def test_checkpoint_appends_to_body(self, task_env):
         svc = task_env["svc"]
-        created = svc.create_task(
-            kb_name="test-tasks", title="Checkpoint me", body="Initial body"
-        )
+        created = svc.create_task(kb_name="test-tasks", title="Checkpoint me", body="Initial body")
         entry_id = created["entry_id"]
 
-        result = svc.checkpoint_task(
-            entry_id, "test-tasks", "Found 3 public records"
-        )
+        result = svc.checkpoint_task(entry_id, "test-tasks", "Found 3 public records")
         assert result["checkpointed"] is True
         assert result["message"] == "Found 3 public records"
 
@@ -259,9 +262,7 @@ class TestCheckpointTask:
         created = svc.create_task(kb_name="test-tasks", title="Context task")
         entry_id = created["entry_id"]
 
-        svc.checkpoint_task(
-            entry_id, "test-tasks", "Progress", confidence=0.7
-        )
+        svc.checkpoint_task(entry_id, "test-tasks", "Progress", confidence=0.7)
 
         repo = KBRepository(task_env["kb_config"])
         entry = repo.load(entry_id)
@@ -276,12 +277,8 @@ class TestRollupParent:
         parent = svc.create_task(kb_name="test-tasks", title="Parent task")
         parent_id = parent["entry_id"]
 
-        c1 = svc.create_task(
-            kb_name="test-tasks", title="Child 1", parent=parent_id
-        )
-        c2 = svc.create_task(
-            kb_name="test-tasks", title="Child 2", parent=parent_id
-        )
+        c1 = svc.create_task(kb_name="test-tasks", title="Child 1", parent=parent_id)
+        c2 = svc.create_task(kb_name="test-tasks", title="Child 2", parent=parent_id)
 
         svc.update_task(parent_id, "test-tasks", status="claimed")
         svc.update_task(parent_id, "test-tasks", status="in_progress")
@@ -306,12 +303,8 @@ class TestRollupParent:
         parent = svc.create_task(kb_name="test-tasks", title="Partial parent")
         parent_id = parent["entry_id"]
 
-        c1 = svc.create_task(
-            kb_name="test-tasks", title="Done child", parent=parent_id
-        )
-        svc.create_task(
-            kb_name="test-tasks", title="Open child", parent=parent_id
-        )
+        c1 = svc.create_task(kb_name="test-tasks", title="Done child", parent=parent_id)
+        svc.create_task(kb_name="test-tasks", title="Open child", parent=parent_id)
 
         svc.update_task(c1["entry_id"], "test-tasks", status="claimed")
         svc.update_task(c1["entry_id"], "test-tasks", status="in_progress")
@@ -326,13 +319,9 @@ class TestRollupParent:
         # Grandparent → parent → child
         gp = svc.create_task(kb_name="test-tasks", title="Grandparent")
         gp_id = gp["entry_id"]
-        p = svc.create_task(
-            kb_name="test-tasks", title="Parent", parent=gp_id
-        )
+        p = svc.create_task(kb_name="test-tasks", title="Parent", parent=gp_id)
         p_id = p["entry_id"]
-        c = svc.create_task(
-            kb_name="test-tasks", title="Child", parent=p_id
-        )
+        c = svc.create_task(kb_name="test-tasks", title="Child", parent=p_id)
         c_id = c["entry_id"]
 
         # Advance grandparent and parent to in_progress

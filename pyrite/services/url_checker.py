@@ -64,15 +64,22 @@ class URLChecker:
         self.max_concurrent = max_concurrent
 
     def collect_urls(
-        self, kb_name: str, entry_types: list[str] | None = None,
+        self,
+        kb_name: str,
+        entry_types: list[str] | None = None,
     ) -> dict[str, list[str]]:
         """Collect all source URLs from KB entries.
 
         Returns {url: [entry_id, ...]} mapping.
         """
         if entry_types is None:
-            entry_types = ["timeline_event", "solidarity_event", "scene",
-                           "investigation_event", "note"]
+            entry_types = [
+                "timeline_event",
+                "solidarity_event",
+                "scene",
+                "investigation_event",
+                "note",
+            ]
 
         url_entries: dict[str, list[str]] = defaultdict(list)
 
@@ -134,7 +141,9 @@ class URLChecker:
             )
 
     def check_urls(
-        self, urls: list[str], use_cache: bool = True,
+        self,
+        urls: list[str],
+        use_cache: bool = True,
     ) -> list[URLCheckResult]:
         """Check multiple URLs, using cache when available."""
         cached = self.load_cache() if use_cache and self.cache_path else {}
@@ -165,12 +174,14 @@ class URLChecker:
         broken_details = []
         for r in results:
             if not r.ok:
-                broken_details.append({
-                    "url": r.url,
-                    "status_code": r.status_code,
-                    "error": r.error,
-                    "entry_ids": url_entries.get(r.url, []),
-                })
+                broken_details.append(
+                    {
+                        "url": r.url,
+                        "status_code": r.status_code,
+                        "error": r.error,
+                        "entry_ids": url_entries.get(r.url, []),
+                    }
+                )
 
         return {
             "total_urls": len(results),

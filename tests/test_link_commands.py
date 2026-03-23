@@ -111,9 +111,7 @@ class TestLinksCheck:
             data = json.loads(result.output)
             assert data["missing_targets"] >= 1
             assert data["total_references"] >= 2
-            target = next(
-                t for t in data["targets"] if t["target_id"] == "missing-page"
-            )
+            target = next(t for t in data["targets"] if t["target_id"] == "missing-page")
             assert target["ref_count"] == 2
             assert len(target["references"]) == 2
 

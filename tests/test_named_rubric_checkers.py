@@ -369,8 +369,7 @@ class TestMixedFormatRubricEvaluation:
         db = named_rubric_setup["db"]
         # Insert an entry with a generic title
         db._raw_conn.execute(
-            "INSERT INTO entry (id, kb_name, entry_type, title, body) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO entry (id, kb_name, entry_type, title, body) VALUES (?, ?, ?, ?, ?)",
             ("generic-title", "test-kb", "note", "TODO", "Some body"),
         )
         db._raw_conn.commit()

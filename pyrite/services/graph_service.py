@@ -94,16 +94,18 @@ class GraphService:
             if edge_id in seen_edge_ids:
                 continue
             seen_edge_ids.add(edge_id)
-            edge_backlinks.append({
-                "id": edge_id,
-                "kb_name": edge.get("kb_name", kb_name),
-                "title": edge.get("title", ""),
-                "entry_type": edge.get("entry_type", ""),
-                "relation": f"edge:{edge.get('edge_type', '')}.{edge.get('role', '')}",
-                "source_type": "edge",
-                "edge_type": edge.get("edge_type", ""),
-                "role": edge.get("role", ""),
-            })
+            edge_backlinks.append(
+                {
+                    "id": edge_id,
+                    "kb_name": edge.get("kb_name", kb_name),
+                    "title": edge.get("title", ""),
+                    "entry_type": edge.get("entry_type", ""),
+                    "relation": f"edge:{edge.get('edge_type', '')}.{edge.get('role', '')}",
+                    "source_type": "edge",
+                    "edge_type": edge.get("edge_type", ""),
+                    "role": edge.get("role", ""),
+                }
+            )
 
         # Merge and deduplicate by (id, kb_name) — prefer link-derived
         all_backlinks = link_backlinks + edge_backlinks

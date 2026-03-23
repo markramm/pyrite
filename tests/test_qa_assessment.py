@@ -572,14 +572,16 @@ class TestLLMRubricInAssessEntry:
 
     def test_tier2_with_llm_includes_llm_issues(self, qa_env):
         """assess_entry(tier=2) with mock LLM includes LLM rubric issues."""
-        llm_response = json.dumps([
-            {
-                "item": "Entry body explains the why, not just the what",
-                "pass": False,
-                "confidence": 0.75,
-                "reasoning": "Body only lists facts",
-            },
-        ])
+        llm_response = json.dumps(
+            [
+                {
+                    "item": "Entry body explains the why, not just the what",
+                    "pass": False,
+                    "confidence": 0.75,
+                    "reasoning": "Body only lists facts",
+                },
+            ]
+        )
         mock_llm = self._make_mock_llm(response=llm_response)
         qa = QAService(qa_env["config"], qa_env["db"], llm_service=mock_llm)
 
@@ -614,14 +616,16 @@ class TestLLMRubricInAssessEntry:
 
     def test_llm_issues_distinct_rule_name(self, qa_env):
         """LLM issues use 'llm_rubric_violation' rule, distinct from 'rubric_violation'."""
-        llm_response = json.dumps([
-            {
-                "item": "Entry body explains the why, not just the what",
-                "pass": False,
-                "confidence": 0.8,
-                "reasoning": "lacks explanation",
-            },
-        ])
+        llm_response = json.dumps(
+            [
+                {
+                    "item": "Entry body explains the why, not just the what",
+                    "pass": False,
+                    "confidence": 0.8,
+                    "reasoning": "lacks explanation",
+                },
+            ]
+        )
         mock_llm = self._make_mock_llm(response=llm_response)
         qa = QAService(qa_env["config"], qa_env["db"], llm_service=mock_llm)
         result = qa.assess_entry("good-note", "test-kb", tier=2)

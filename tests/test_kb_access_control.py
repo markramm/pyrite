@@ -110,35 +110,27 @@ class TestKBDefaultRole:
     def test_register_kb_with_default_role(self, db):
         """register_kb persists default_role."""
         db.register_kb("test-kb", "generic", "/tmp/test", default_role="read")
-        row = db._raw_conn.execute(
-            "SELECT default_role FROM kb WHERE name = 'test-kb'"
-        ).fetchone()
+        row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = 'test-kb'").fetchone()
         assert row[0] == "read"
 
     def test_register_kb_no_default_role(self, db):
         """register_kb without default_role leaves it NULL."""
         db.register_kb("test-kb", "generic", "/tmp/test")
-        row = db._raw_conn.execute(
-            "SELECT default_role FROM kb WHERE name = 'test-kb'"
-        ).fetchone()
+        row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = 'test-kb'").fetchone()
         assert row[0] is None
 
     def test_update_kb_default_role(self, db):
         """update_kb_default_role changes the value."""
         db.register_kb("test-kb", "generic", "/tmp/test")
         assert db.update_kb_default_role("test-kb", "write") is True
-        row = db._raw_conn.execute(
-            "SELECT default_role FROM kb WHERE name = 'test-kb'"
-        ).fetchone()
+        row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = 'test-kb'").fetchone()
         assert row[0] == "write"
 
     def test_update_kb_default_role_to_none(self, db):
         """update_kb_default_role can set to None."""
         db.register_kb("test-kb", "generic", "/tmp/test", default_role="read")
         db.update_kb_default_role("test-kb", None)
-        row = db._raw_conn.execute(
-            "SELECT default_role FROM kb WHERE name = 'test-kb'"
-        ).fetchone()
+        row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = 'test-kb'").fetchone()
         assert row[0] is None
 
     def test_update_kb_default_role_not_found(self, db):
@@ -330,9 +322,7 @@ class TestEphemeralKBAdmin:
         """force_expire_kb returns False for non-ephemeral KB."""
         svc, config, db = setup
         # Register a normal KB
-        config.add_kb(
-            KBConfig(name="normal-kb", path=Path("/tmp/normal"), kb_type="generic")
-        )
+        config.add_kb(KBConfig(name="normal-kb", path=Path("/tmp/normal"), kb_type="generic"))
         result = svc.force_expire_kb("normal-kb")
         assert result is False
 

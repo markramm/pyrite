@@ -20,21 +20,15 @@ def export_collection(
         ..., help="Collection entry ID, or a query string (prefix with 'q:' for query mode)"
     ),
     kb: str = typer.Option(None, "-k", "--kb", help="Knowledge base name"),
-    output: Path = typer.Option(
-        Path("./export"), "-o", "--output", help="Output directory"
-    ),
+    output: Path = typer.Option(Path("./export"), "-o", "--output", help="Output directory"),
     bundle: str = typer.Option(
         "auto", "--bundle", help="Bundle strategy: auto, none, by-type, single"
     ),
-    sources: str = typer.Option(
-        "public", "--sources", help="Source mode: public, full, redact"
-    ),
+    sources: str = typer.Option("public", "--sources", help="Source mode: public, full, redact"),
     depth: int = typer.Option(
         0, "--depth", help="Link-following depth (0=no following, 1=direct links, etc.)"
     ),
-    title: str = typer.Option(
-        None, "--title", help="Title for the manifest document"
-    ),
+    title: str = typer.Option(None, "--title", help="Title for the manifest document"),
     format: str = typer.Option(
         "notebooklm", "--format", "-f", help="Export format (currently: notebooklm)"
     ),
@@ -143,9 +137,7 @@ def export_collection(
                                 import re
 
                                 text = md_file.read_text(encoding="utf-8")
-                                parts = re.split(
-                                    r"^---\s*$", text, flags=re.MULTILINE, maxsplit=2
-                                )
+                                parts = re.split(r"^---\s*$", text, flags=re.MULTILINE, maxsplit=2)
                                 if len(parts) >= 3:
                                     meta = load_yaml(parts[1])
                                     body = parts[2].strip()
@@ -182,12 +174,8 @@ def export_collection(
 @export_app.command("site")
 def export_site(
     kb: str = typer.Option(..., "-k", "--kb", help="Knowledge base name"),
-    output: Path = typer.Option(
-        Path("./site"), "-o", "--output", help="Output directory"
-    ),
-    format: str = typer.Option(
-        "quartz", "--format", "-f", help="Site format (currently: quartz)"
-    ),
+    output: Path = typer.Option(Path("./site"), "-o", "--output", help="Output directory"),
+    format: str = typer.Option("quartz", "--format", "-f", help="Site format (currently: quartz)"),
     exclude_types: str = typer.Option(
         None, "--exclude-types", help="Comma-separated entry types to exclude"
     ),
@@ -254,7 +242,9 @@ def export_site(
             raise typer.Exit(0)
 
         # Export to content/ subdirectory (or root if not --init)
-        content_dir = output / "content" if init or (output / "quartz.config.ts").exists() else output
+        content_dir = (
+            output / "content" if init or (output / "quartz.config.ts").exists() else output
+        )
         result = quartz_export(
             entries=entries,
             output_dir=content_dir,
@@ -311,9 +301,7 @@ def _load_entry_from_result(result: dict, svc, kb: str | None):
     return None
 
 
-def _follow_links(
-    entries: list, svc, kb_name: str, depth: int
-) -> list:
+def _follow_links(entries: list, svc, kb_name: str, depth: int) -> list:
     """Follow links from entries to include linked entries up to depth N."""
     seen_ids = {e.id for e in entries}
     all_entries = list(entries)

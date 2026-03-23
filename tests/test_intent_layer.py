@@ -113,9 +113,7 @@ class TestAgentSchemaIntent:
         agent = schema.to_agent_schema()
         rubric = agent["evaluation_rubric"]
         # System items present (now dicts with text/checker keys)
-        rubric_texts = [
-            i.get("text", "") if isinstance(i, dict) else i for i in rubric
-        ]
+        rubric_texts = [i.get("text", "") if isinstance(i, dict) else i for i in rubric]
         assert "Entry has a descriptive title" in rubric_texts
         # Custom item appended
         assert "Custom rubric item" in rubric
@@ -161,8 +159,7 @@ class TestAgentSchemaIntent:
         event = agent["types"]["event"]
         assert "evaluation_rubric" in event
         rubric_texts = [
-            i.get("text", "") if isinstance(i, dict) else i
-            for i in event["evaluation_rubric"]
+            i.get("text", "") if isinstance(i, dict) else i for i in event["evaluation_rubric"]
         ]
         assert "Event has a date field" in rubric_texts
 
@@ -173,23 +170,24 @@ class TestResolveTypeMetadataIntent:
     def test_core_type_rubric_resolved(self):
         meta = resolve_type_metadata("event")
         rubric_texts = [
-            i.get("text", "") if isinstance(i, dict) else i
-            for i in meta["evaluation_rubric"]
+            i.get("text", "") if isinstance(i, dict) else i for i in meta["evaluation_rubric"]
         ]
         assert "Event has a date field" in rubric_texts
 
     def test_kb_override_intent(self):
-        schema = KBSchema.from_dict({
-            "name": "test",
-            "types": {
-                "event": {
-                    "description": "An event",
-                    "guidelines": "Always include location.",
-                    "goals": "Track what happened.",
-                    "evaluation_rubric": ["Custom event rubric"],
-                }
-            },
-        })
+        schema = KBSchema.from_dict(
+            {
+                "name": "test",
+                "types": {
+                    "event": {
+                        "description": "An event",
+                        "guidelines": "Always include location.",
+                        "goals": "Track what happened.",
+                        "evaluation_rubric": ["Custom event rubric"],
+                    }
+                },
+            }
+        )
         meta = resolve_type_metadata("event", schema)
         assert meta["guidelines"] == "Always include location."
         assert meta["goals"] == "Track what happened."

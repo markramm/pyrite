@@ -96,9 +96,7 @@ class PluginRegistry:
                     raise
                 except Exception as e:
                     if strict:
-                        raise PluginError(
-                            f"Failed to load plugin {ep.name}: {e}"
-                        ) from e
+                        raise PluginError(f"Failed to load plugin {ep.name}: {e}") from e
                     logger.warning("Failed to load plugin %s: %s", ep.name, e)
 
         except PluginError:
@@ -356,9 +354,7 @@ class PluginRegistry:
                     if supplement:
                         result.update(supplement)
                 except Exception as e:
-                    logger.warning(
-                        "Plugin %s get_orient_supplement failed: %s", plugin.name, e
-                    )
+                    logger.warning("Plugin %s get_orient_supplement failed: %s", plugin.name, e)
         return result
 
     def get_all_validators(self) -> list[Callable]:

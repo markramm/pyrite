@@ -145,9 +145,7 @@ class ExportService:
             if not commit_message:
                 commit_message = f"Export KB '{kb_name}': {result['entries_exported']} entries"
 
-            commit_ok, commit_result = GitService.commit(
-                clone_path, commit_message
-            )
+            commit_ok, commit_result = GitService.commit(clone_path, commit_message)
             if not commit_ok:
                 return {
                     "success": False,

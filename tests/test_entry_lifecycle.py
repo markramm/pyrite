@@ -106,9 +106,7 @@ class TestLifecycleField:
 
         index_mgr.index_all()
 
-        results = pyrite_db.search(
-            "marimba", kb_name="test-events", include_archived=True
-        )
+        results = pyrite_db.search("marimba", kb_name="test-events", include_archived=True)
         result_ids = [r["id"] for r in results]
         assert active.id in result_ids
         assert archived.id in result_ids
@@ -207,9 +205,7 @@ class TestLifecycleField:
         assert active.id in result_ids
         assert archived.id not in result_ids
 
-    def test_list_entries_includes_archived_with_flag(
-        self, pyrite_db, kb_configs, index_mgr
-    ):
+    def test_list_entries_includes_archived_with_flag(self, pyrite_db, kb_configs, index_mgr):
         """list_entries includes archived entries with include_archived=True."""
         repo = KBRepository(kb_configs["events_kb"])
 
@@ -232,9 +228,7 @@ class TestLifecycleField:
 
         index_mgr.index_all()
 
-        results = pyrite_db.list_entries(
-            kb_name="test-events", include_archived=True
-        )
+        results = pyrite_db.list_entries(kb_name="test-events", include_archived=True)
         result_ids = [r["id"] for r in results]
         assert active.id in result_ids
         assert archived.id in result_ids

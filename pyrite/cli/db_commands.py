@@ -58,9 +58,7 @@ def db_backup(
 
 @db_app.command("restore")
 def db_restore(
-    backup_path: Annotated[
-        str, typer.Argument(help="Path to backup file to restore from")
-    ],
+    backup_path: Annotated[str, typer.Argument(help="Path to backup file to restore from")],
     force: Annotated[
         bool,
         typer.Option("--force", "-f", help="Skip confirmation prompt"),

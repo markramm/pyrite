@@ -16,24 +16,28 @@ from ..models.base import Entry
 from ..utils.yaml import dump_yaml
 
 # Frontmatter fields to carry through to Quartz (from to_frontmatter output)
-_QUARTZ_FIELDS = frozenset({
-    "title",
-    "tags",
-    "date",
-    "aliases",
-})
+_QUARTZ_FIELDS = frozenset(
+    {
+        "title",
+        "tags",
+        "date",
+        "aliases",
+    }
+)
 
 # Fields that are internal and should not appear in Quartz frontmatter
-_SKIP_FIELDS = frozenset({
-    "id",
-    "type",
-    "_schema_version",
-    "created_at",
-    "updated_at",
-    "sources",
-    "links",
-    "provenance",
-})
+_SKIP_FIELDS = frozenset(
+    {
+        "id",
+        "type",
+        "_schema_version",
+        "created_at",
+        "updated_at",
+        "sources",
+        "links",
+        "provenance",
+    }
+)
 
 # Regex for [[kb:target]] or [[kb:target|label]] or [[kb:target#heading]]
 _KB_PREFIX_RE = re.compile(r"\[\[kb:([^\]|#]+)(#[^\]|]*)?((\|)([^\]]*))?\]\]")
@@ -243,8 +247,9 @@ def _write_landing_page(
         lines.append(kb_description)
         lines.append("")
 
-    lines.append(f"This knowledge base contains **{total}** entries across "
-                 f"**{len(by_type)}** categories.")
+    lines.append(
+        f"This knowledge base contains **{total}** entries across **{len(by_type)}** categories."
+    )
     lines.append("")
 
     # Section links

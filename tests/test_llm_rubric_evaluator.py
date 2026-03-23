@@ -95,20 +95,22 @@ class TestPromptConstruction:
 
 class TestResponseParsing:
     def test_valid_json_array(self, evaluator, sample_entry):
-        response = json.dumps([
-            {
-                "item": "Entry body explains the why, not just the what",
-                "pass": False,
-                "confidence": 0.8,
-                "reasoning": "Body only states facts",
-            },
-            {
-                "item": "Confidence level matches evidence strength",
-                "pass": True,
-                "confidence": 0.9,
-                "reasoning": "Matches well",
-            },
-        ])
+        response = json.dumps(
+            [
+                {
+                    "item": "Entry body explains the why, not just the what",
+                    "pass": False,
+                    "confidence": 0.8,
+                    "reasoning": "Body only states facts",
+                },
+                {
+                    "item": "Confidence level matches evidence strength",
+                    "pass": True,
+                    "confidence": 0.9,
+                    "reasoning": "Matches well",
+                },
+            ]
+        )
         issues = evaluator._parse_response(response, sample_entry, SAMPLE_RUBRIC_ITEMS)
         assert len(issues) == 1
         assert issues[0]["rule"] == "llm_rubric_violation"
@@ -131,17 +133,31 @@ class TestResponseParsing:
         assert evaluator._parse_response("  ", sample_entry, SAMPLE_RUBRIC_ITEMS) == []
 
     def test_all_pass_no_issues(self, evaluator, sample_entry):
-        response = json.dumps([
-            {"item": "Entry body explains the why, not just the what", "pass": True, "confidence": 0.9, "reasoning": "ok"},
-        ])
+        response = json.dumps(
+            [
+                {
+                    "item": "Entry body explains the why, not just the what",
+                    "pass": True,
+                    "confidence": 0.9,
+                    "reasoning": "ok",
+                },
+            ]
+        )
         issues = evaluator._parse_response(response, sample_entry, SAMPLE_RUBRIC_ITEMS)
         assert issues == []
 
     def test_unknown_item_filtered_out(self, evaluator, sample_entry):
         """Items not in rubric_items list are filtered out."""
-        response = json.dumps([
-            {"item": "Some unknown rubric item", "pass": False, "confidence": 0.8, "reasoning": "bad"},
-        ])
+        response = json.dumps(
+            [
+                {
+                    "item": "Some unknown rubric item",
+                    "pass": False,
+                    "confidence": 0.8,
+                    "reasoning": "bad",
+                },
+            ]
+        )
         issues = evaluator._parse_response(response, sample_entry, SAMPLE_RUBRIC_ITEMS)
         assert issues == []
 
@@ -169,9 +185,18 @@ class TestEvaluation:
         assert ev.is_available() is False
 
     def test_failed_items_produce_issues(self, mock_llm, sample_entry):
-        mock_llm.complete = AsyncMock(return_value=json.dumps([
-            {"item": "Entry body explains the why, not just the what", "pass": False, "confidence": 0.72, "reasoning": "lacks rationale"},
-        ]))
+        mock_llm.complete = AsyncMock(
+            return_value=json.dumps(
+                [
+                    {
+                        "item": "Entry body explains the why, not just the what",
+                        "pass": False,
+                        "confidence": 0.72,
+                        "reasoning": "lacks rationale",
+                    },
+                ]
+            )
+        )
         ev = LLMRubricEvaluator(mock_llm)
         issues = asyncio.run(ev.evaluate(sample_entry, SAMPLE_RUBRIC_ITEMS))
         assert len(issues) == 1
@@ -181,9 +206,18 @@ class TestEvaluation:
         assert issues[0]["message"] == "lacks rationale"
 
     def test_evaluator_field_shows_provider_model(self, mock_llm, sample_entry):
-        mock_llm.complete = AsyncMock(return_value=json.dumps([
-            {"item": "Entry body explains the why, not just the what", "pass": False, "confidence": 0.8, "reasoning": "bad"},
-        ]))
+        mock_llm.complete = AsyncMock(
+            return_value=json.dumps(
+                [
+                    {
+                        "item": "Entry body explains the why, not just the what",
+                        "pass": False,
+                        "confidence": 0.8,
+                        "reasoning": "bad",
+                    },
+                ]
+            )
+        )
         ev = LLMRubricEvaluator(mock_llm)
         issues = asyncio.run(ev.evaluate(sample_entry, SAMPLE_RUBRIC_ITEMS))
         assert issues[0]["evaluator"] == "anthropic/claude-sonnet-4-20250514"
@@ -211,10 +245,24 @@ class TestBatching:
 
     def test_mixed_pass_fail(self, mock_llm, sample_entry):
         """Only failures returned as issues."""
-        mock_llm.complete = AsyncMock(return_value=json.dumps([
-            {"item": "Entry body explains the why, not just the what", "pass": False, "confidence": 0.8, "reasoning": "bad"},
-            {"item": "Confidence level matches evidence strength", "pass": True, "confidence": 0.9, "reasoning": "ok"},
-        ]))
+        mock_llm.complete = AsyncMock(
+            return_value=json.dumps(
+                [
+                    {
+                        "item": "Entry body explains the why, not just the what",
+                        "pass": False,
+                        "confidence": 0.8,
+                        "reasoning": "bad",
+                    },
+                    {
+                        "item": "Confidence level matches evidence strength",
+                        "pass": True,
+                        "confidence": 0.9,
+                        "reasoning": "ok",
+                    },
+                ]
+            )
+        )
         ev = LLMRubricEvaluator(mock_llm)
         issues = asyncio.run(ev.evaluate(sample_entry, SAMPLE_RUBRIC_ITEMS))
         assert len(issues) == 1

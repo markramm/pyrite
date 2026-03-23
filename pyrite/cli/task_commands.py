@@ -38,7 +38,9 @@ def task_create(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     parent: str | None = typer.Option(None, "--parent", "-p", help="Parent task entry ID"),
     priority: int = typer.Option(5, "--priority", help="Priority 1-10"),
-    assignee: str | None = typer.Option(None, "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"),
+    assignee: str | None = typer.Option(
+        None, "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"
+    ),
     body: str | None = typer.Option(None, "--body", "-b", help="Task description"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
@@ -138,8 +140,7 @@ def task_status(
 
         children_list = svc.list_tasks(kb_name=kb_name, parent=task_id)
         children = [
-            {"id": c["id"], "title": c["title"], "status": c["status"]}
-            for c in children_list
+            {"id": c["id"], "title": c["title"], "status": c["status"]} for c in children_list
         ]
 
         result = {
@@ -226,7 +227,9 @@ def task_update(
 def task_claim(
     task_id: str = typer.Argument(..., help="Task entry ID"),
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
-    assignee: str = typer.Option(..., "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"),
+    assignee: str = typer.Option(
+        ..., "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"
+    ),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Atomically claim an open task."""
@@ -287,7 +290,9 @@ def task_checkpoint(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     message: str = typer.Option(..., "--message", "-m", help="Checkpoint message"),
     confidence: float = typer.Option(0.0, "--confidence", help="Confidence 0.0-1.0"),
-    evidence: list[str] | None = typer.Option(None, "--evidence", "-e", help="Evidence entry IDs (repeatable)"),
+    evidence: list[str] | None = typer.Option(
+        None, "--evidence", "-e", help="Evidence entry IDs (repeatable)"
+    ),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Log a checkpoint on a task."""

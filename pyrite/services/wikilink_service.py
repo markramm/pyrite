@@ -193,9 +193,7 @@ class WikilinkService:
 
         # Build result sorted by ref_count desc, apply limit
         result = []
-        for (target_id, target_kb), refs in sorted(
-            targets.items(), key=lambda x: -len(x[1])
-        ):
+        for (target_id, target_kb), refs in sorted(targets.items(), key=lambda x: -len(x[1])):
             result.append(
                 {
                     "target_id": target_id,

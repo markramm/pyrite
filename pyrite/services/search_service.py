@@ -296,4 +296,3 @@ class SearchService:
         if kb_name == "All KBs":
             kb_name = None
         return self.db.search_by_tag(tag, kb_name, limit)
-

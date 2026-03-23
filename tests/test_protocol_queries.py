@@ -18,74 +18,84 @@ def db():
         db.register_kb("kb-b", "generic", "/tmp/b", "KB B")
 
         # Task entry: assigned, with due_date, status, priority
-        db.upsert_entry({
-            "id": "task-1",
-            "kb_name": "kb-a",
-            "entry_type": "task",
-            "title": "Investigate leads",
-            "body": "",
-            "assignee": "agent:alpha",
-            "status": "in_progress",
-            "due_date": "2026-02-01",
-            "priority": "high",
-            "tags": [],
-            "sources": [],
-            "links": [],
-        })
+        db.upsert_entry(
+            {
+                "id": "task-1",
+                "kb_name": "kb-a",
+                "entry_type": "task",
+                "title": "Investigate leads",
+                "body": "",
+                "assignee": "agent:alpha",
+                "status": "in_progress",
+                "due_date": "2026-02-01",
+                "priority": "high",
+                "tags": [],
+                "sources": [],
+                "links": [],
+            }
+        )
         # Task in different KB, same assignee, done
-        db.upsert_entry({
-            "id": "task-2",
-            "kb_name": "kb-b",
-            "entry_type": "task",
-            "title": "Write report",
-            "body": "",
-            "assignee": "agent:alpha",
-            "status": "done",
-            "due_date": "2026-03-01",
-            "tags": [],
-            "sources": [],
-            "links": [],
-        })
+        db.upsert_entry(
+            {
+                "id": "task-2",
+                "kb_name": "kb-b",
+                "entry_type": "task",
+                "title": "Write report",
+                "body": "",
+                "assignee": "agent:alpha",
+                "status": "done",
+                "due_date": "2026-03-01",
+                "tags": [],
+                "sources": [],
+                "links": [],
+            }
+        )
         # Event entry: has location, status
-        db.upsert_entry({
-            "id": "event-1",
-            "kb_name": "kb-a",
-            "entry_type": "event",
-            "title": "Board meeting",
-            "body": "",
-            "status": "confirmed",
-            "location": "New York City Hall",
-            "date": "2026-01-15",
-            "tags": [],
-            "sources": [],
-            "links": [],
-        })
+        db.upsert_entry(
+            {
+                "id": "event-1",
+                "kb_name": "kb-a",
+                "entry_type": "event",
+                "title": "Board meeting",
+                "body": "",
+                "status": "confirmed",
+                "location": "New York City Hall",
+                "date": "2026-01-15",
+                "tags": [],
+                "sources": [],
+                "links": [],
+            }
+        )
         # Backlog item: assigned, open, with location
-        db.upsert_entry({
-            "id": "backlog-1",
-            "kb_name": "kb-b",
-            "entry_type": "backlog_item",
-            "title": "Fix login bug",
-            "body": "",
-            "assignee": "bob",
-            "status": "open",
-            "location": "New York office",
-            "due_date": "2026-01-15",
-            "tags": [],
-            "sources": [],
-            "links": [],
-        })
+        db.upsert_entry(
+            {
+                "id": "backlog-1",
+                "kb_name": "kb-b",
+                "entry_type": "backlog_item",
+                "title": "Fix login bug",
+                "body": "",
+                "assignee": "bob",
+                "status": "open",
+                "location": "New York office",
+                "due_date": "2026-01-15",
+                "tags": [],
+                "sources": [],
+                "links": [],
+            }
+        )
         # Entry with no due_date (should not appear in overdue)
-        db.upsert_entry({
-            "id": "note-1",
-            "kb_name": "kb-a",
-            "entry_type": "note",
-            "title": "Random note",
-            "body": "",
-            "tags": [],
-            "sources": [],
-            "links": [],
-        })
+        db.upsert_entry(
+            {
+                "id": "note-1",
+                "kb_name": "kb-a",
+                "entry_type": "note",
+                "title": "Random note",
+                "body": "",
+                "tags": [],
+                "sources": [],
+                "links": [],
+            }
+        )
 
         yield db
         db.close()

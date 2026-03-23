@@ -32,9 +32,9 @@ def cli_context() -> Generator[tuple[PyriteConfig, PyriteDB, KBService], None, N
 
 
 @contextmanager
-def cli_registry_context() -> (
-    Generator[tuple[PyriteConfig, PyriteDB, KBService, KBRegistryService], None, None]
-):
+def cli_registry_context() -> Generator[
+    tuple[PyriteConfig, PyriteDB, KBService, KBRegistryService], None, None
+]:
     """Provide config, db, service, and registry for CLI commands that need KB management."""
     config, db, svc = _init_base()
     index_mgr = IndexManager(db, config)

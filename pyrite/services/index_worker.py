@@ -80,9 +80,7 @@ class IndexWorker:
             )
             self.db._raw_conn.commit()
 
-        thread = threading.Thread(
-            target=self._run_sync, args=(job_id, kb_name), daemon=True
-        )
+        thread = threading.Thread(target=self._run_sync, args=(job_id, kb_name), daemon=True)
         thread.start()
         return job_id
 
@@ -104,9 +102,7 @@ class IndexWorker:
             )
             self.db._raw_conn.commit()
 
-        thread = threading.Thread(
-            target=self._run_rebuild, args=(job_id, kb_name), daemon=True
-        )
+        thread = threading.Thread(target=self._run_rebuild, args=(job_id, kb_name), daemon=True)
         thread.start()
         return job_id
 
@@ -269,9 +265,17 @@ class IndexWorker:
             return dict(row)
         # Fallback for tuple rows
         cols = [
-            "job_id", "kb_name", "operation", "status",
-            "progress_current", "progress_total",
-            "added", "updated", "removed",
-            "error", "created_at", "completed_at",
+            "job_id",
+            "kb_name",
+            "operation",
+            "status",
+            "progress_current",
+            "progress_total",
+            "added",
+            "updated",
+            "removed",
+            "error",
+            "created_at",
+            "completed_at",
         ]
         return dict(zip(cols, row, strict=False))

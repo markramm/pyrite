@@ -95,7 +95,9 @@ def kb_add(
             result = registry.add_kb(
                 name=kb_name, path=str(resolved), kb_type=kb_type, description=description
             )
-            console.print(f"[green]Added KB:[/green] {result['name']} ({result['type']}) at {result['path']}")
+            console.print(
+                f"[green]Added KB:[/green] {result['name']} ({result['type']}) at {result['path']}"
+            )
         except ValueError as e:
             console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
@@ -325,7 +327,9 @@ def kb_reindex(
             return
 
         console.print(f"[green]Reindexed:[/green] {kb_name}")
-        console.print(f"  Added: {result['added']}, Updated: {result['updated']}, Removed: {result['removed']}")
+        console.print(
+            f"  Added: {result['added']}, Updated: {result['updated']}, Removed: {result['removed']}"
+        )
 
 
 @kb_app.command("health")
@@ -352,7 +356,9 @@ def kb_health(
 
         status = "[green]Healthy[/green]" if result["healthy"] else "[red]Unhealthy[/red]"
         console.print(f"\n[bold]{kb_name}[/bold]: {status}")
-        console.print(f"  Path: {result['path']} ({'exists' if result['path_exists'] else 'MISSING'})")
+        console.print(
+            f"  Path: {result['path']} ({'exists' if result['path_exists'] else 'MISSING'})"
+        )
         console.print(f"  Files: {result['file_count']}, Indexed entries: {result['entry_count']}")
         console.print(f"  Last indexed: {result['last_indexed'] or 'never'}")
         console.print(f"  Source: {result['source']}")

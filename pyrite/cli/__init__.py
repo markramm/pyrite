@@ -298,9 +298,7 @@ def ci_command(
                 if total_errors > 0:
                     parts.append(f"{total_errors} error{'s' if total_errors != 1 else ''}")
                 if fail_threshold >= 1 and total_warnings > 0:
-                    parts.append(
-                        f"{total_warnings} warning{'s' if total_warnings != 1 else ''}"
-                    )
+                    parts.append(f"{total_warnings} warning{'s' if total_warnings != 1 else ''}")
                 typer.echo(f"\nResult: FAIL ({', '.join(parts)})")
             else:
                 typer.echo("\nResult: PASS")

@@ -350,9 +350,7 @@ def manage_kb_permission(
     return {"granted": True, "user_id": user_id, "kb_name": name, "role": role}
 
 
-@router.put(
-    "/kbs/{name}/default-role", dependencies=[Depends(requires_tier("admin"))]
-)
+@router.put("/kbs/{name}/default-role", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def update_kb_default_role(
     request: Request,

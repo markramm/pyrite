@@ -1515,9 +1515,7 @@ class TestBodyChunking:
                     "body": "Short body text",
                 },
             )
-            result = server._dispatch_tool(
-                "kb_search", {"query": "Small Entry", "kb_name": "test"}
-            )
+            result = server._dispatch_tool("kb_search", {"query": "Small Entry", "kb_name": "test"})
             eid = result["results"][0]["id"]
             result = server._dispatch_tool("kb_get", {"entry_id": eid, "kb_name": "test"})
             entry = result["entry"]

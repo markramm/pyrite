@@ -183,9 +183,7 @@ class KBRegistryService:
         file_count = 0
         if path_exists:
             file_count = sum(
-                1
-                for f in kb_path.rglob("*.md")
-                if not any(p.startswith(".") for p in f.parts)
+                1 for f in kb_path.rglob("*.md") if not any(p.startswith(".") for p in f.parts)
             )
 
         entry_count = kb.entry_count or 0

@@ -98,7 +98,9 @@ class TestSubscribe:
         }
         client, _, _ = _make_client(tmpdir, mock_repo_service=mock_svc)
 
-        r = client.post("/api/repos/subscribe", json={"remote_url": "https://github.com/owner/repo"})
+        r = client.post(
+            "/api/repos/subscribe", json={"remote_url": "https://github.com/owner/repo"}
+        )
         assert r.status_code == 200
         assert r.json()["success"] is True
         assert r.json()["kbs"] == ["my-kb"]
@@ -108,7 +110,9 @@ class TestSubscribe:
         mock_svc.subscribe.return_value = {"success": False, "error": "Path already exists"}
         client, _, _ = _make_client(tmpdir, mock_repo_service=mock_svc)
 
-        r = client.post("/api/repos/subscribe", json={"remote_url": "https://github.com/owner/repo"})
+        r = client.post(
+            "/api/repos/subscribe", json={"remote_url": "https://github.com/owner/repo"}
+        )
         assert r.status_code == 400
 
 
@@ -198,6 +202,8 @@ class TestCreatePR:
         }
         client, _, _ = _make_client(tmpdir, mock_repo_service=mock_svc)
 
-        r = client.post("/api/repos/owner/repo/pr", json={"title": "Test PR", "body": "Description"})
+        r = client.post(
+            "/api/repos/owner/repo/pr", json={"title": "Test PR", "body": "Description"}
+        )
         assert r.status_code == 200
         assert r.json()["pr_url"] == "https://github.com/owner/repo/pull/1"

@@ -145,9 +145,7 @@ class TestDBRestore:
 
         # Now restore from it
         with _patch_config(db_env):
-            result = runner.invoke(
-                app, ["db", "restore", str(backup_path), "--force"]
-            )
+            result = runner.invoke(app, ["db", "restore", str(backup_path), "--force"])
             assert result.exit_code == 0, result.output
             assert "Restored" in result.output or "restored" in result.output
 
@@ -172,9 +170,7 @@ class TestDBRestore:
         bad_file = db_env["tmpdir"] / "not-a-db.txt"
         bad_file.write_text("this is not a sqlite database")
         with _patch_config(db_env):
-            result = runner.invoke(
-                app, ["db", "restore", str(bad_file), "--force"]
-            )
+            result = runner.invoke(app, ["db", "restore", str(bad_file), "--force"])
             assert result.exit_code == 1
             assert "not a valid" in result.output.lower() or "invalid" in result.output.lower()
 

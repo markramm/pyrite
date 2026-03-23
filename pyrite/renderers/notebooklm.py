@@ -32,19 +32,21 @@ class BundleStrategy(Enum):
 
 
 # Fields from to_frontmatter() that are internal / not useful to readers
-_SKIP_FIELDS = frozenset({
-    "id",
-    "type",
-    "title",
-    "_schema_version",
-    "created_at",
-    "updated_at",
-    "sources",
-    "links",
-    "provenance",
-    "metadata",
-    "aliases",
-})
+_SKIP_FIELDS = frozenset(
+    {
+        "id",
+        "type",
+        "title",
+        "_schema_version",
+        "created_at",
+        "updated_at",
+        "sources",
+        "links",
+        "provenance",
+        "metadata",
+        "aliases",
+    }
+)
 
 # Max entries before AUTO switches from NONE to BY_TYPE
 _AUTO_THRESHOLD = 50
@@ -174,9 +176,7 @@ def bundle_entries(
     """
     if strategy == BundleStrategy.AUTO:
         strategy = (
-            BundleStrategy.NONE
-            if len(entries) <= _AUTO_THRESHOLD
-            else BundleStrategy.BY_TYPE
+            BundleStrategy.NONE if len(entries) <= _AUTO_THRESHOLD else BundleStrategy.BY_TYPE
         )
 
     if strategy == BundleStrategy.NONE:
@@ -189,9 +189,7 @@ def bundle_entries(
         return _bundle_none(entries, source_mode)
 
 
-def _bundle_none(
-    entries: list[Entry], source_mode: SourceMode
-) -> dict[str, str]:
+def _bundle_none(entries: list[Entry], source_mode: SourceMode) -> dict[str, str]:
     """One file per entry."""
     files: dict[str, str] = {}
     for entry in entries:
@@ -200,9 +198,7 @@ def _bundle_none(
     return files
 
 
-def _bundle_by_type(
-    entries: list[Entry], source_mode: SourceMode
-) -> dict[str, str]:
+def _bundle_by_type(entries: list[Entry], source_mode: SourceMode) -> dict[str, str]:
     """Group entries by type into one file per type."""
     groups: dict[str, list[Entry]] = defaultdict(list)
     for entry in entries:
@@ -220,9 +216,7 @@ def _bundle_by_type(
     return files
 
 
-def _bundle_single(
-    entries: list[Entry], source_mode: SourceMode
-) -> dict[str, str]:
+def _bundle_single(entries: list[Entry], source_mode: SourceMode) -> dict[str, str]:
     """Everything in one document."""
     parts: list[str] = []
     for entry in entries:

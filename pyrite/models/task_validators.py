@@ -5,9 +5,7 @@ from typing import Any
 from .task import TASK_STATUSES
 
 
-def validate_task(
-    entry_type: str, data: dict[str, Any], context: dict[str, Any]
-) -> list[dict]:
+def validate_task(entry_type: str, data: dict[str, Any], context: dict[str, Any]) -> list[dict]:
     """Validate task-specific rules."""
     errors: list[dict] = []
 

@@ -20,18 +20,22 @@ def db_with_entry(tmp_path):
     db.register_kb("test", "standard", str(kb_path))
 
     # Create entries that will be endpoints
-    db.upsert_entry({
-        "id": "person-1",
-        "kb_name": "test",
-        "title": "Person 1",
-        "entry_type": "person",
-    })
-    db.upsert_entry({
-        "id": "company-1",
-        "kb_name": "test",
-        "title": "Company 1",
-        "entry_type": "organization",
-    })
+    db.upsert_entry(
+        {
+            "id": "person-1",
+            "kb_name": "test",
+            "title": "Person 1",
+            "entry_type": "person",
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "company-1",
+            "kb_name": "test",
+            "title": "Company 1",
+            "entry_type": "organization",
+        }
+    )
 
     yield db
     db.close()
@@ -42,28 +46,30 @@ class TestSyncEdgeEndpoints:
 
     def test_sync_edge_endpoints_populates_table(self, db_with_entry):
         """Upserting with _edge_endpoints creates rows in edge_endpoint table."""
-        db_with_entry.upsert_entry({
-            "id": "employment-1",
-            "kb_name": "test",
-            "title": "Employment Edge",
-            "entry_type": "employment",
-            "_edge_endpoints": [
-                {
-                    "role": "source",
-                    "field_name": "employee",
-                    "endpoint_id": "person-1",
-                    "endpoint_kb": "test",
-                    "edge_type": "employment",
-                },
-                {
-                    "role": "target",
-                    "field_name": "employer",
-                    "endpoint_id": "company-1",
-                    "endpoint_kb": "test",
-                    "edge_type": "employment",
-                },
-            ],
-        })
+        db_with_entry.upsert_entry(
+            {
+                "id": "employment-1",
+                "kb_name": "test",
+                "title": "Employment Edge",
+                "entry_type": "employment",
+                "_edge_endpoints": [
+                    {
+                        "role": "source",
+                        "field_name": "employee",
+                        "endpoint_id": "person-1",
+                        "endpoint_kb": "test",
+                        "edge_type": "employment",
+                    },
+                    {
+                        "role": "target",
+                        "field_name": "employer",
+                        "endpoint_id": "company-1",
+                        "endpoint_kb": "test",
+                        "edge_type": "employment",
+                    },
+                ],
+            }
+        )
         rows = db_with_entry._raw_conn.execute(
             "SELECT * FROM edge_endpoint WHERE edge_entry_id = ? AND edge_entry_kb = ?",
             ("employment-1", "test"),
@@ -74,21 +80,23 @@ class TestSyncEdgeEndpoints:
 
     def test_sync_edge_endpoints_clears_on_update(self, db_with_entry):
         """Re-upserting replaces old endpoints with new ones."""
-        db_with_entry.upsert_entry({
-            "id": "employment-1",
-            "kb_name": "test",
-            "title": "Employment Edge",
-            "entry_type": "employment",
-            "_edge_endpoints": [
-                {
-                    "role": "source",
-                    "field_name": "employee",
-                    "endpoint_id": "person-1",
-                    "endpoint_kb": "test",
-                    "edge_type": "employment",
-                },
-            ],
-        })
+        db_with_entry.upsert_entry(
+            {
+                "id": "employment-1",
+                "kb_name": "test",
+                "title": "Employment Edge",
+                "entry_type": "employment",
+                "_edge_endpoints": [
+                    {
+                        "role": "source",
+                        "field_name": "employee",
+                        "endpoint_id": "person-1",
+                        "endpoint_kb": "test",
+                        "edge_type": "employment",
+                    },
+                ],
+            }
+        )
         rows = db_with_entry._raw_conn.execute(
             "SELECT * FROM edge_endpoint WHERE edge_entry_id = ? AND edge_entry_kb = ?",
             ("employment-1", "test"),
@@ -96,21 +104,23 @@ class TestSyncEdgeEndpoints:
         assert len(rows) == 1
 
         # Update with different endpoint
-        db_with_entry.upsert_entry({
-            "id": "employment-1",
-            "kb_name": "test",
-            "title": "Employment Edge",
-            "entry_type": "employment",
-            "_edge_endpoints": [
-                {
-                    "role": "target",
-                    "field_name": "employer",
-                    "endpoint_id": "company-1",
-                    "endpoint_kb": "test",
-                    "edge_type": "employment",
-                },
-            ],
-        })
+        db_with_entry.upsert_entry(
+            {
+                "id": "employment-1",
+                "kb_name": "test",
+                "title": "Employment Edge",
+                "entry_type": "employment",
+                "_edge_endpoints": [
+                    {
+                        "role": "target",
+                        "field_name": "employer",
+                        "endpoint_id": "company-1",
+                        "endpoint_kb": "test",
+                        "edge_type": "employment",
+                    },
+                ],
+            }
+        )
         rows = db_with_entry._raw_conn.execute(
             "SELECT * FROM edge_endpoint WHERE edge_entry_id = ? AND edge_entry_kb = ?",
             ("employment-1", "test"),
@@ -121,13 +131,15 @@ class TestSyncEdgeEndpoints:
 
     def test_sync_edge_endpoints_empty_list(self, db_with_entry):
         """Upserting with empty _edge_endpoints creates no rows."""
-        db_with_entry.upsert_entry({
-            "id": "employment-1",
-            "kb_name": "test",
-            "title": "Employment Edge",
-            "entry_type": "employment",
-            "_edge_endpoints": [],
-        })
+        db_with_entry.upsert_entry(
+            {
+                "id": "employment-1",
+                "kb_name": "test",
+                "title": "Employment Edge",
+                "entry_type": "employment",
+                "_edge_endpoints": [],
+            }
+        )
         rows = db_with_entry._raw_conn.execute(
             "SELECT * FROM edge_endpoint WHERE edge_entry_id = ? AND edge_entry_kb = ?",
             ("employment-1", "test"),
@@ -136,12 +148,14 @@ class TestSyncEdgeEndpoints:
 
     def test_sync_edge_endpoints_no_key(self, db_with_entry):
         """Upserting without _edge_endpoints key causes no error and no rows."""
-        db_with_entry.upsert_entry({
-            "id": "employment-1",
-            "kb_name": "test",
-            "title": "Employment Edge",
-            "entry_type": "employment",
-        })
+        db_with_entry.upsert_entry(
+            {
+                "id": "employment-1",
+                "kb_name": "test",
+                "title": "Employment Edge",
+                "entry_type": "employment",
+            }
+        )
         rows = db_with_entry._raw_conn.execute(
             "SELECT * FROM edge_endpoint WHERE edge_entry_id = ? AND edge_entry_kb = ?",
             ("employment-1", "test"),
@@ -166,13 +180,15 @@ class TestSyncEdgeEndpoints:
                 "edge_type": "ownership",
             },
         ]
-        db_with_entry.upsert_entry({
-            "id": "ownership-1",
-            "kb_name": "test",
-            "title": "Ownership Edge",
-            "entry_type": "ownership",
-            "_edge_endpoints": endpoints,
-        })
+        db_with_entry.upsert_entry(
+            {
+                "id": "ownership-1",
+                "kb_name": "test",
+                "title": "Ownership Edge",
+                "entry_type": "ownership",
+                "_edge_endpoints": endpoints,
+            }
+        )
         rows = db_with_entry._raw_conn.execute(
             "SELECT edge_entry_id, edge_entry_kb, role, field_name, endpoint_id, endpoint_kb, edge_type "
             "FROM edge_endpoint WHERE edge_entry_id = ? AND edge_entry_kb = ?",

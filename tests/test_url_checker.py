@@ -26,7 +26,10 @@ def setup(tmp_path):
     svc = KBService(config, db)
 
     svc.create_entry(
-        "test", "e1", "Event 1", "timeline_event",
+        "test",
+        "e1",
+        "Event 1",
+        "timeline_event",
         date="2025-01-01",
         sources=[
             {"title": "Good Source", "url": "https://example.com/good"},
@@ -34,14 +37,20 @@ def setup(tmp_path):
         ],
     )
     svc.create_entry(
-        "test", "e2", "Event 2", "timeline_event",
+        "test",
+        "e2",
+        "Event 2",
+        "timeline_event",
         date="2025-02-01",
         sources=[
             {"title": "Another", "url": "https://example.com/good"},
         ],
     )
     svc.create_entry(
-        "test", "e3", "No sources", "timeline_event",
+        "test",
+        "e3",
+        "No sources",
+        "timeline_event",
         date="2025-03-01",
     )
 

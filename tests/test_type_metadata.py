@@ -56,13 +56,9 @@ class TestCoreTypeMetadata:
         for type_name, cls in type_classes.items():
             declared = set(CORE_TYPE_METADATA[type_name]["protocols"])
             actual = {
-                name
-                for name, mixin_cls in PROTOCOL_REGISTRY.items()
-                if issubclass(cls, mixin_cls)
+                name for name, mixin_cls in PROTOCOL_REGISTRY.items() if issubclass(cls, mixin_cls)
             }
-            assert declared == actual, (
-                f"{type_name}: declared={declared}, actual={actual}"
-            )
+            assert declared == actual, f"{type_name}: declared={declared}, actual={actual}"
 
 
 class TestResolveTypeMetadata:

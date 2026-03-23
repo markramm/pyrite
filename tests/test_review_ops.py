@@ -12,13 +12,15 @@ def db(tmp_path):
     """Create a fresh PyriteDB with a test KB and entry."""
     database = PyriteDB(tmp_path / "test.db")
     database.register_kb("test-kb", "generic", str(tmp_path / "kb"))
-    database.upsert_entry({
-        "id": "entry-1",
-        "kb_name": "test-kb",
-        "entry_type": "note",
-        "title": "Test Entry",
-        "body": "Hello",
-    })
+    database.upsert_entry(
+        {
+            "id": "entry-1",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Test Entry",
+            "body": "Hello",
+        }
+    )
     return database
 
 

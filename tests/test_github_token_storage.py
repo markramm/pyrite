@@ -224,7 +224,9 @@ class TestGitHubDisconnectEndpoint:
 
         # Manually store a token
         auth_service = AuthService(db, config.settings.auth)
-        user_row = db._raw_conn.execute("SELECT id FROM local_user WHERE username = 'alice'").fetchone()
+        user_row = db._raw_conn.execute(
+            "SELECT id FROM local_user WHERE username = 'alice'"
+        ).fetchone()
         auth_service.store_github_token(user_row[0], "ghp_test", "public_repo")
 
         # Disconnect

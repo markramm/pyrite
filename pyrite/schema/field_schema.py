@@ -152,7 +152,9 @@ class TypeSchema:
     version: int = 0
     guidelines: str = ""  # Contributing standards, quality expectations
     goals: str = ""  # What entries of this type should achieve
-    evaluation_rubric: list[str | dict[str, Any]] = field(default_factory=list)  # Assertions for QA validation
+    evaluation_rubric: list[str | dict[str, Any]] = field(
+        default_factory=list
+    )  # Assertions for QA validation
     edge_type: bool = False  # Whether this type represents an edge/relationship
     endpoints: dict[str, EndpointSpec] = field(default_factory=dict)  # Edge endpoint specs
 

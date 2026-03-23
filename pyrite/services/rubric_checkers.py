@@ -27,18 +27,20 @@ RubricChecker = Callable[
 # Generic title blocklist
 # =========================================================================
 
-GENERIC_TITLES = frozenset({
-    "update",
-    "notes",
-    "todo",
-    "untitled",
-    "new entry",
-    "draft",
-    "temp",
-    "test",
-    "placeholder",
-    "wip",
-})
+GENERIC_TITLES = frozenset(
+    {
+        "update",
+        "notes",
+        "todo",
+        "untitled",
+        "new entry",
+        "draft",
+        "temp",
+        "test",
+        "placeholder",
+        "wip",
+    }
+)
 
 
 # =========================================================================
@@ -134,7 +136,6 @@ def check_has_outlinks(
     }
 
 
-
 def check_status_present(
     entry: dict[str, Any],
     schema: KBSchema | None,
@@ -172,8 +173,6 @@ def check_priority_present(
         "message": f"Entry '{entry['id']}' has no priority",
         "rubric_item": (params or {}).get("rubric_text", "priority present"),
     }
-
-
 
 
 # =========================================================================
@@ -223,10 +222,7 @@ def check_has_any_field(
         "rule": "rubric_violation",
         "severity": "warning",
         "field": "metadata",
-        "message": (
-            f"Entry '{entry['id']}' is missing "
-            f"{' or '.join(field_names)} in metadata"
-        ),
+        "message": (f"Entry '{entry['id']}' is missing {' or '.join(field_names)} in metadata"),
         "rubric_item": params.get("rubric_text", f"has {' or '.join(field_names)}"),
     }
 
@@ -294,8 +290,7 @@ def check_not_oversized(
         # Pass if the item has has_subtask links (decomposed into subtasks)
         links = entry.get("_links", [])
         has_subtasks = any(
-            (isinstance(lnk, dict) and lnk.get("relation") == "has_subtask")
-            for lnk in links
+            (isinstance(lnk, dict) and lnk.get("relation") == "has_subtask") for lnk in links
         )
         if has_subtasks:
             return None
@@ -331,7 +326,6 @@ def check_body_has_code_block(
     }
 
 
-
 # =========================================================================
 # Named checker registry
 # =========================================================================
@@ -349,5 +343,3 @@ NAMED_CHECKERS: dict[str, RubricChecker] = {
     "body_has_code_block": check_body_has_code_block,
     "not_oversized": check_not_oversized,
 }
-
-

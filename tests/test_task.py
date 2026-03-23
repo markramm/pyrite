@@ -173,7 +173,13 @@ class TestTaskEntry:
 class TestTaskWorkflow:
     def test_states(self):
         assert TASK_WORKFLOW["states"] == [
-            "open", "claimed", "in_progress", "blocked", "review", "done", "failed"
+            "open",
+            "claimed",
+            "in_progress",
+            "blocked",
+            "review",
+            "done",
+            "failed",
         ]
         assert TASK_WORKFLOW["initial"] == "open"
         assert TASK_WORKFLOW["field"] == "status"

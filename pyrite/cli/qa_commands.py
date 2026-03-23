@@ -256,10 +256,10 @@ def qa_status(
 
 @qa_app.command("checkers")
 def qa_checkers(
-    kb_name: str | None = typer.Option(None, "--kb", "-k", help="Show rubric coverage for a specific KB"),
-    output_format: str = typer.Option(
-        "rich", "--format", help="Output format: json, rich"
+    kb_name: str | None = typer.Option(
+        None, "--kb", "-k", help="Show rubric coverage for a specific KB"
     ),
+    output_format: str = typer.Option("rich", "--format", help="Output format: json, rich"),
 ):
     """List available rubric checkers and per-KB coverage.
 
@@ -381,9 +381,7 @@ def _show_kb_coverage(kb_name: str, output_format: str) -> None:
         )
 
 
-def _classify_rubric_item(
-    item: str | dict, checkers: dict
-) -> tuple[str, str]:
+def _classify_rubric_item(item: str | dict, checkers: dict) -> tuple[str, str]:
     """Classify a rubric item. Returns (display_text, kind)."""
     if isinstance(item, dict):
         text = item.get("text", "")
@@ -411,7 +409,7 @@ def _print_rubric_line(text: str, kind: str, item: str | dict) -> None:
     checker_info = ""
     if isinstance(item, dict) and item.get("checker"):
         checker_info = f" → {item['checker']}"
-    console.print(f"  {tag}  \"{text}\"{checker_info}")
+    console.print(f'  {tag}  "{text}"{checker_info}')
 
 
 @qa_app.command("gaps")
@@ -420,9 +418,7 @@ def qa_gaps(
     threshold: int = typer.Option(
         3, "--threshold", "-t", help="Minimum entries per type to not flag as sparse"
     ),
-    output_format: str = typer.Option(
-        "rich", "--format", help="Output format: json, rich"
-    ),
+    output_format: str = typer.Option("rich", "--format", help="Output format: json, rich"),
 ):
     """Report structural coverage gaps in a KB.
 
@@ -453,7 +449,9 @@ def qa_gaps(
 
         # Empty types
         if result["empty_types"]:
-            console.print(f"\n[bold yellow]Empty types ({len(result['empty_types'])}):[/bold yellow]")
+            console.print(
+                f"\n[bold yellow]Empty types ({len(result['empty_types'])}):[/bold yellow]"
+            )
             for t in result["empty_types"]:
                 console.print(f"  [yellow]- {t}[/yellow]")
         else:
@@ -532,11 +530,11 @@ def qa_fix(
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB to fix"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show what would change without writing"),
     fix_rule: list[str] | None = typer.Option(
-        None, "--fix-rule", help="Only fix specific rule types (e.g. invalid_date, broken_link, tag_case)"
+        None,
+        "--fix-rule",
+        help="Only fix specific rule types (e.g. invalid_date, broken_link, tag_case)",
     ),
-    output_format: str = typer.Option(
-        "rich", "--format", help="Output format: json, rich"
-    ),
+    output_format: str = typer.Option("rich", "--format", help="Output format: json, rich"),
 ):
     """Auto-fix safe structural issues found by validation.
 
@@ -604,7 +602,9 @@ def qa_fix(
 
         # Skipped
         if result["skipped"]:
-            console.print(f"\n[dim]Skipped: {result['skipped_count']} (filtered by --fix-rule)[/dim]")
+            console.print(
+                f"\n[dim]Skipped: {result['skipped_count']} (filtered by --fix-rule)[/dim]"
+            )
 
         # Summary
         console.print(
@@ -619,7 +619,9 @@ def qa_fix(
 @qa_app.command("stale")
 def qa_stale(
     kb_name: str = typer.Argument(..., help="KB to check for stale entries"),
-    max_age: int = typer.Option(90, "--max-age", "-a", help="Days since last update to consider stale"),
+    max_age: int = typer.Option(
+        90, "--max-age", "-a", help="Days since last update to consider stale"
+    ),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
@@ -635,7 +637,12 @@ def qa_stale(
     svc = QAService(ctx.config, ctx.db)
     results = svc.find_stale(kb_name, max_age_days=max_age)
 
-    data = {"kb_name": kb_name, "max_age_days": max_age, "stale_count": len(results), "entries": results}
+    data = {
+        "kb_name": kb_name,
+        "max_age_days": max_age,
+        "stale_count": len(results),
+        "entries": results,
+    }
 
     formatted = _format_output(data, output_format)
     if formatted:
@@ -653,7 +660,9 @@ def qa_stale(
     table.add_column("Days Stale", justify="right", style="yellow")
 
     for entry in results:
-        table.add_row(entry["entry_id"], entry["entry_type"], entry["title"], str(entry["days_stale"]))
+        table.add_row(
+            entry["entry_id"], entry["entry_type"], entry["title"], str(entry["days_stale"])
+        )
 
     console.print(table)
     console.print(f"\n[yellow]{len(results)} stale entries found[/yellow]")
@@ -680,7 +689,12 @@ def qa_compact(
     svc = QAService(ctx.config, ctx.db)
     results = svc.find_archival_candidates(kb_name, min_age_days=min_age)
 
-    data = {"kb_name": kb_name, "min_age_days": min_age, "candidate_count": len(results), "entries": results}
+    data = {
+        "kb_name": kb_name,
+        "min_age_days": min_age,
+        "candidate_count": len(results),
+        "entries": results,
+    }
 
     formatted = _format_output(data, output_format)
     if formatted:
@@ -688,7 +702,9 @@ def qa_compact(
         return
 
     if not results:
-        console.print(f"[green]No archival candidates in '{kb_name}' (threshold: {min_age} days)[/green]")
+        console.print(
+            f"[green]No archival candidates in '{kb_name}' (threshold: {min_age} days)[/green]"
+        )
         return
 
     table = Table(title=f"Archival candidates in '{kb_name}' (>{min_age} days)")
@@ -709,7 +725,9 @@ def qa_compact(
 
     console.print(table)
     console.print(f"\n[yellow]{len(results)} archival candidates found[/yellow]")
-    console.print("[dim]Use 'pyrite update <id> -k <kb> --lifecycle archived' to archive entries[/dim]")
+    console.print(
+        "[dim]Use 'pyrite update <id> -k <kb> --lifecycle archived' to archive entries[/dim]"
+    )
 
 
 @qa_app.command("check-urls")
@@ -717,9 +735,7 @@ def qa_check_urls(
     kb_name: str = typer.Argument(..., help="KB to check source URLs"),
     sample: int = typer.Option(0, "--sample", "-s", help="Check a random sample of N URLs (0=all)"),
     cache_file: str = typer.Option("", "--cache", help="Path to URL check cache file"),
-    output_format: str = typer.Option(
-        "rich", "--format", help="Output format: json, rich"
-    ),
+    output_format: str = typer.Option("rich", "--format", help="Output format: json, rich"),
 ):
     """Check source URLs for liveness (HTTP status).
 
@@ -744,6 +760,7 @@ def qa_check_urls(
     urls = list(url_entries.keys())
     if sample and sample < len(urls):
         import random
+
         urls = random.sample(urls, sample)
 
     console.print(f"Checking {len(urls)} unique URL(s)...")
@@ -752,10 +769,13 @@ def qa_check_urls(
 
     if output_format == "json":
         import json
+
         console.print(json.dumps(report, indent=2))
         return
 
-    console.print(f"\n[green]OK: {report['ok']}[/green]  [red]Broken: {report['broken']}[/red]  Total: {report['total_urls']}")
+    console.print(
+        f"\n[green]OK: {report['ok']}[/green]  [red]Broken: {report['broken']}[/red]  Total: {report['total_urls']}"
+    )
 
     if report["broken_details"]:
         table = Table(title="Broken URLs")
@@ -767,7 +787,11 @@ def qa_check_urls(
             entries = ", ".join(detail["entry_ids"][:3])
             if len(detail["entry_ids"]) > 3:
                 entries += f" (+{len(detail['entry_ids']) - 3} more)"
-            status = str(detail["status_code"]) if detail["status_code"] else detail.get("error", "error")
+            status = (
+                str(detail["status_code"])
+                if detail["status_code"]
+                else detail.get("error", "error")
+            )
             table.add_row(detail["url"], status, entries)
 
         console.print(table)

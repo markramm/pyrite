@@ -57,7 +57,7 @@ def entry_with_wikilinks():
     return NoteEntry(
         id="wikilink-note",
         title="Wikilink Note",
-        body="Link: [[kb:target-id#heading]]\nPiped: [[ spaced | label ]]\nTransclusion: ![[embed-id]]{ view: \"table\", limit: 5 }",
+        body='Link: [[kb:target-id#heading]]\nPiped: [[ spaced | label ]]\nTransclusion: ![[embed-id]]{ view: "table", limit: 5 }',
     )
 
 
@@ -119,9 +119,7 @@ class TestBuildFrontmatter:
         assert "my-note" in fm["aliases"]
 
     def test_existing_aliases_preserved(self):
-        entry = NoteEntry(
-            id="test", title="Test", body="x", aliases=["alias1", "alias2"]
-        )
+        entry = NoteEntry(id="test", title="Test", body="x", aliases=["alias1", "alias2"])
         fm = _build_frontmatter(entry)
         assert "test" in fm["aliases"]
         assert "alias1" in fm["aliases"]
@@ -193,7 +191,7 @@ class TestNormalizeBody:
         assert result == "Just some plain text."
 
     def test_multiple_normalizations(self):
-        body = "Link [[kb:a]], piped [[ b | B ]], embed ![[c]]{ view: \"x\" }"
+        body = 'Link [[kb:a]], piped [[ b | B ]], embed ![[c]]{ view: "x" }'
         result = _normalize_body(body)
         assert "[[a]]" in result
         assert "[[b|B]]" in result
@@ -298,17 +296,13 @@ class TestExportSite:
 
     def test_exclude_types(self, tmp_path, mixed_entries):
         out = tmp_path / "site"
-        result = export_site(
-            mixed_entries, out, exclude_types={"backlog_item"}
-        )
+        result = export_site(mixed_entries, out, exclude_types={"backlog_item"})
         assert not (out / "backlog_item").exists()
         assert result["skipped"] >= 1
 
     def test_exclude_status(self, tmp_path, mixed_entries):
         out = tmp_path / "site"
-        result = export_site(
-            mixed_entries, out, exclude_statuses={"done"}
-        )
+        result = export_site(mixed_entries, out, exclude_statuses={"done"})
         # The backlog_done fixture has status=done in metadata
         assert result["skipped"] >= 1
         # Check the done item wasn't written

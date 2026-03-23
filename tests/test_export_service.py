@@ -62,33 +62,33 @@ class TestExportKBToDirectory:
 
 class TestCommitKB:
     @patch("pyrite.services.git_service.GitService")
-    def test_delegates_to_git_service(self, MockGitService, export_svc, mock_config):
+    def test_delegates_to_git_service(self, mock_git_svc, export_svc, mock_config):
         kb_cfg = MagicMock()
         kb_cfg.path = Path("/fake/kb")
         mock_config.get_kb.return_value = kb_cfg
-        MockGitService.is_git_repo.return_value = True
-        MockGitService.commit.return_value = (True, {"commit_hash": "abc123", "files_changed": 2})
+        mock_git_svc.is_git_repo.return_value = True
+        mock_git_svc.commit.return_value = (True, {"commit_hash": "abc123", "files_changed": 2})
 
         result = export_svc.commit_kb("test", "my commit")
 
-        MockGitService.commit.assert_called_once_with(
+        mock_git_svc.commit.assert_called_once_with(
             Path("/fake/kb"), "my commit", paths=None, sign_off=False
         )
         assert result["success"] is True
         assert result["commit_hash"] == "abc123"
 
     @patch("pyrite.services.git_service.GitService")
-    def test_raises_on_unknown_kb(self, MockGitService, export_svc, mock_config):
+    def test_raises_on_unknown_kb(self, mock_git_svc, export_svc, mock_config):
         mock_config.get_kb.return_value = None
         with pytest.raises(KBNotFoundError):
             export_svc.commit_kb("nonexistent", "msg")
 
     @patch("pyrite.services.git_service.GitService")
-    def test_raises_on_non_git_repo(self, MockGitService, export_svc, mock_config):
+    def test_raises_on_non_git_repo(self, mock_git_svc, export_svc, mock_config):
         kb_cfg = MagicMock()
         kb_cfg.path = Path("/fake/kb")
         mock_config.get_kb.return_value = kb_cfg
-        MockGitService.is_git_repo.return_value = False
+        mock_git_svc.is_git_repo.return_value = False
 
         with pytest.raises(PyriteError, match="not in a git repository"):
             export_svc.commit_kb("test", "msg")
@@ -96,21 +96,21 @@ class TestCommitKB:
 
 class TestPushKB:
     @patch("pyrite.services.git_service.GitService")
-    def test_delegates_to_git_service(self, MockGitService, export_svc, mock_config):
+    def test_delegates_to_git_service(self, mock_git_svc, export_svc, mock_config):
         kb_cfg = MagicMock()
         kb_cfg.path = Path("/fake/kb")
         mock_config.get_kb.return_value = kb_cfg
-        MockGitService.is_git_repo.return_value = True
-        MockGitService.push.return_value = (True, "pushed successfully")
+        mock_git_svc.is_git_repo.return_value = True
+        mock_git_svc.push.return_value = (True, "pushed successfully")
 
         result = export_svc.push_kb("test")
 
-        MockGitService.push.assert_called_once_with(Path("/fake/kb"), remote="origin", branch=None)
+        mock_git_svc.push.assert_called_once_with(Path("/fake/kb"), remote="origin", branch=None)
         assert result["success"] is True
         assert result["message"] == "pushed successfully"
 
     @patch("pyrite.services.git_service.GitService")
-    def test_raises_on_unknown_kb(self, MockGitService, export_svc, mock_config):
+    def test_raises_on_unknown_kb(self, mock_git_svc, export_svc, mock_config):
         mock_config.get_kb.return_value = None
         with pytest.raises(KBNotFoundError):
             export_svc.push_kb("nonexistent")

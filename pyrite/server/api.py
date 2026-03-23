@@ -309,9 +309,7 @@ async def _resolve_kb_name(request: Request) -> str | None:
     return None
 
 
-def resolve_kb_default_role(
-    config: PyriteConfig, db: PyriteDB, kb_name: str
-) -> str | None:
+def resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, kb_name: str) -> str | None:
     """Resolve a KB's default_role from config or DB.
 
     Config takes precedence; falls back to DB for user-registered KBs.
@@ -319,9 +317,7 @@ def resolve_kb_default_role(
     kb_config = config.get_kb(kb_name)
     if kb_config and kb_config.default_role is not None:
         return kb_config.default_role
-    row = db._raw_conn.execute(
-        "SELECT default_role FROM kb WHERE name = ?", (kb_name,)
-    ).fetchone()
+    row = db._raw_conn.execute("SELECT default_role FROM kb WHERE name = ?", (kb_name,)).fetchone()
     return row[0] if row else None
 
 
@@ -479,9 +475,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
     def _app_get_index_mgr() -> IndexManager:
         if application.state.pyrite_index_mgr is None:
-            application.state.pyrite_index_mgr = IndexManager(
-                _app_get_db(), _app_get_config()
-            )
+            application.state.pyrite_index_mgr = IndexManager(_app_get_db(), _app_get_config())
         return application.state.pyrite_index_mgr
 
     def _app_get_kb_registry() -> KBRegistryService:

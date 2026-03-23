@@ -141,15 +141,17 @@ class TaskService:
         tasks = []
         for row in rows:
             meta = _parse_metadata(row.get("metadata"))
-            tasks.append({
-                "id": row["id"],
-                "title": row["title"],
-                "status": meta.get("status", "open"),
-                "assignee": meta.get("assignee", ""),
-                "priority": meta.get("priority", 5),
-                "parent": meta.get("parent", ""),
-                "kb_name": row["kb_name"],
-            })
+            tasks.append(
+                {
+                    "id": row["id"],
+                    "title": row["title"],
+                    "status": meta.get("status", "open"),
+                    "assignee": meta.get("assignee", ""),
+                    "priority": meta.get("priority", 5),
+                    "parent": meta.get("parent", ""),
+                    "kb_name": row["kb_name"],
+                }
+            )
         return tasks
 
     def claim_task(self, task_id: str, kb_name: str, assignee: str) -> dict[str, Any]:

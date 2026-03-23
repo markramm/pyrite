@@ -226,7 +226,7 @@ def reconcile_env():
             "name: project\n"
             "types:\n"
             "  task:\n"
-            "    subdirectory: \"tasks/{status}\"\n"
+            '    subdirectory: "tasks/{status}"\n'
             "    fields:\n"
             "      status:\n"
             "        type: select\n"

@@ -78,7 +78,12 @@ class TestTemporal:
 
     def test_from_frontmatter(self):
         result = Temporal._temporal_from_frontmatter(
-            {"date": "2026-01-01", "start_date": "2026-01-01", "end_date": "2026-12-31", "due_date": "2026-06-01"}
+            {
+                "date": "2026-01-01",
+                "start_date": "2026-01-01",
+                "end_date": "2026-12-31",
+                "due_date": "2026-06-01",
+            }
         )
         assert result == {
             "date": "2026-01-01",
@@ -256,6 +261,7 @@ class TestImportancePromotion:
         from pyrite.models.base import Entry
 
         import dataclasses
+
         field_names = {f.name for f in dataclasses.fields(Entry)}
         assert "importance" in field_names
 

@@ -43,9 +43,7 @@ class TestEdgeEndpointValidation:
                 "author_id": "person-alice",
             },
         )
-        endpoint_errors = [
-            e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"
-        ]
+        endpoint_errors = [e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"]
         assert endpoint_errors == []
 
     def test_edge_type_missing_endpoint_produces_error(self):
@@ -59,9 +57,7 @@ class TestEdgeEndpointValidation:
                 # author_id is missing
             },
         )
-        endpoint_errors = [
-            e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"
-        ]
+        endpoint_errors = [e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"]
         assert len(endpoint_errors) == 1
         assert endpoint_errors[0]["field"] == "author_id"
         assert endpoint_errors[0]["got"] is None
@@ -76,9 +72,7 @@ class TestEdgeEndpointValidation:
                 # both document_id and author_id are missing
             },
         )
-        endpoint_errors = [
-            e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"
-        ]
+        endpoint_errors = [e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"]
         assert len(endpoint_errors) == 2
         error_fields = {e["field"] for e in endpoint_errors}
         assert error_fields == {"document_id", "author_id"}
@@ -101,9 +95,7 @@ class TestEdgeEndpointValidation:
             "note",
             {"title": "Just a note"},
         )
-        endpoint_errors = [
-            e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"
-        ]
+        endpoint_errors = [e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"]
         assert endpoint_errors == []
 
     def test_edge_type_empty_string_endpoint_produces_error(self):
@@ -117,9 +109,7 @@ class TestEdgeEndpointValidation:
                 "author_id": "",  # empty string
             },
         )
-        endpoint_errors = [
-            e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"
-        ]
+        endpoint_errors = [e for e in result["errors"] if e.get("rule") == "edge_endpoint_required"]
         assert len(endpoint_errors) == 1
         assert endpoint_errors[0]["field"] == "author_id"
         assert endpoint_errors[0]["got"] == ""

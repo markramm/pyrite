@@ -64,11 +64,15 @@ def fix_setup():
         repo = KBRepository(kb_config)
 
         # Entry with valid date (for contrast)
-        good = _make_note("Good Entry", body="A perfectly valid entry.", date="2025-06-15", tags=["test"])
+        good = _make_note(
+            "Good Entry", body="A perfectly valid entry.", date="2025-06-15", tags=["test"]
+        )
         repo.save(good)
 
         # Entry with invalid date (just a year) — use EventEntry since it has Temporal mixin
-        bad_date = EventEntry.create(date="2006", title="Bad Date Entry", body="Entry with a year-only date.")
+        bad_date = EventEntry.create(
+            date="2006", title="Bad Date Entry", body="Entry with a year-only date."
+        )
         bad_date.tags = ["test"]
         repo.save(bad_date)
 
@@ -257,9 +261,7 @@ class TestFixRuleFiltering:
 
     def test_filter_to_date_only(self, fix_setup):
         """Only invalid_date fixes should be applied when filtered."""
-        result = fix_setup["qa"].fix_kb(
-            "test-kb", dry_run=True, fix_rules=["invalid_date"]
-        )
+        result = fix_setup["qa"].fix_kb("test-kb", dry_run=True, fix_rules=["invalid_date"])
 
         fixed_rules = {f["rule"] for f in result["fixed"]}
         assert "invalid_date" in fixed_rules or result["fixed_count"] >= 0
@@ -268,9 +270,7 @@ class TestFixRuleFiltering:
 
     def test_filter_to_broken_link(self, fix_setup):
         """Only broken_link fixes when filtered to that rule."""
-        result = fix_setup["qa"].fix_kb(
-            "test-kb", dry_run=True, fix_rules=["broken_link"]
-        )
+        result = fix_setup["qa"].fix_kb("test-kb", dry_run=True, fix_rules=["broken_link"])
 
         # Date fixes should be skipped
         assert not any(f["rule"] == "invalid_date" for f in result["fixed"])
@@ -294,13 +294,10 @@ class TestTagNormalisation:
         )
         db.session.commit()
         # Get the tag_id
-        tag_rows = db.execute_sql(
-            "SELECT id FROM tag WHERE name = :name", {"name": "MixedCase"}
-        )
+        tag_rows = db.execute_sql("SELECT id FROM tag WHERE name = :name", {"name": "MixedCase"})
         tag_id = tag_rows[0]["id"]
         db.execute_sql(
-            "INSERT OR IGNORE INTO entry_tag (entry_id, kb_name, tag_id) "
-            "VALUES (:eid, :kb, :tid)",
+            "INSERT OR IGNORE INTO entry_tag (entry_id, kb_name, tag_id) VALUES (:eid, :kb, :tid)",
             {"eid": fix_setup["good_id"], "kb": "test-kb", "tid": tag_id},
         )
         db.session.commit()

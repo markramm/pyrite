@@ -52,9 +52,7 @@ class LLMRubricEvaluator:
         user_prompt = self._build_user_prompt(entry, rubric_items, guidelines)
 
         try:
-            response = await self._llm.complete(
-                user_prompt, system=system_prompt, max_tokens=1024
-            )
+            response = await self._llm.complete(user_prompt, system=system_prompt, max_tokens=1024)
         except Exception:
             logger.warning("LLM rubric evaluation failed", exc_info=True)
             return []
@@ -166,16 +164,18 @@ class LLMRubricEvaluator:
             if item_text not in valid_items:
                 continue
 
-            issues.append({
-                "entry_id": entry.get("id", ""),
-                "kb_name": entry.get("kb_name", ""),
-                "rule": "llm_rubric_violation",
-                "severity": "info",
-                "field": "body",
-                "message": reasoning or f"Failed rubric: {item_text}",
-                "rubric_item": item_text,
-                "confidence": float(confidence),
-                "evaluator": evaluator,
-            })
+            issues.append(
+                {
+                    "entry_id": entry.get("id", ""),
+                    "kb_name": entry.get("kb_name", ""),
+                    "rule": "llm_rubric_violation",
+                    "severity": "info",
+                    "field": "body",
+                    "message": reasoning or f"Failed rubric: {item_text}",
+                    "rubric_item": item_text,
+                    "confidence": float(confidence),
+                    "evaluator": evaluator,
+                }
+            )
 
         return issues

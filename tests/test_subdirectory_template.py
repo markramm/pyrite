@@ -68,10 +68,7 @@ class TestExpandSubdirectoryTemplate:
         """Multiple placeholders expand independently."""
         entry = MockEntry(status="active")
         entry.priority = "high"
-        assert (
-            expand_subdirectory_template("{entry_type}/{status}", entry)
-            == "note/active"
-        )
+        assert expand_subdirectory_template("{entry_type}/{status}", entry) == "note/active"
 
     def test_enum_field_expansion(self):
         """Enum fields use .value for expansion."""
@@ -81,17 +78,12 @@ class TestExpandSubdirectoryTemplate:
     def test_metadata_field_resolution(self):
         """Fields not found as attributes fall back to metadata."""
         entry = MockMetadataEntry(metadata={"category": "reference"})
-        assert (
-            expand_subdirectory_template("docs/{category}", entry) == "docs/reference"
-        )
+        assert expand_subdirectory_template("docs/{category}", entry) == "docs/reference"
 
     def test_missing_field_fallback(self):
         """Missing fields resolve to '_unknown'."""
         entry = MockEntry()
-        assert (
-            expand_subdirectory_template("items/{nonexistent}", entry)
-            == "items/_unknown"
-        )
+        assert expand_subdirectory_template("items/{nonexistent}", entry) == "items/_unknown"
 
     def test_path_traversal_sanitized(self):
         """Path traversal attempts are neutralized."""
@@ -103,10 +95,7 @@ class TestExpandSubdirectoryTemplate:
     def test_spaces_and_case_normalized(self):
         """Spaces become hyphens, values lowercased."""
         entry = MockEntry(status="In Progress")
-        assert (
-            expand_subdirectory_template("items/{status}", entry)
-            == "items/in-progress"
-        )
+        assert expand_subdirectory_template("items/{status}", entry) == "items/in-progress"
 
     def test_empty_template(self):
         """Empty string returns empty string."""
@@ -161,19 +150,18 @@ class TestInferSubdirWithTemplates:
 
     def test_infer_subdir_expands_template(self, kb_dir):
         """_infer_subdir() expands template placeholders from TypeSchema."""
-        repo = self._make_repo_with_schema(kb_dir, {
-            "backlog_item": TypeSchema(
-                name="backlog_item", subdirectory="backlog/{status}"
-            )
-        })
+        repo = self._make_repo_with_schema(
+            kb_dir,
+            {"backlog_item": TypeSchema(name="backlog_item", subdirectory="backlog/{status}")},
+        )
         entry = MockEntry(entry_type="backlog_item", status="done")
         assert repo._infer_subdir(entry) == "backlog/done"
 
     def test_infer_subdir_static_backward_compat(self, kb_dir):
         """Static subdirectory (no template) still works unchanged."""
-        repo = self._make_repo_with_schema(kb_dir, {
-            "adr": TypeSchema(name="adr", subdirectory="adrs")
-        })
+        repo = self._make_repo_with_schema(
+            kb_dir, {"adr": TypeSchema(name="adr", subdirectory="adrs")}
+        )
         entry = MockEntry(entry_type="adr")
         assert repo._infer_subdir(entry) == "adrs"
 

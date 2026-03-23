@@ -77,8 +77,11 @@ def _insert_entry(db, entry_id, kb_name, entry_type, title, status="", metadata=
                     frontmatter[k] = v
 
         import yaml
+
         md_path = kb_dir / f"{entry_id}.md"
-        md_path.write_text("---\n" + yaml.dump(frontmatter, default_flow_style=False) + "---\n\nContent.\n")
+        md_path.write_text(
+            "---\n" + yaml.dump(frontmatter, default_flow_style=False) + "---\n\nContent.\n"
+        )
 
 
 # -- Board config helpers --
@@ -138,7 +141,9 @@ def test_gate_evaluation_dor_all_pass(gate_setup):
     db = gate_setup["db"]
 
     meta = {"effort": "M", "kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-1", "test-sw", "backlog_item", "Fix it", status="accepted", metadata=meta)
+    _insert_entry(
+        db, "item-1", "test-sw", "backlog_item", "Fix it", status="accepted", metadata=meta
+    )
     row = db._raw_conn.execute("SELECT * FROM entry WHERE id = 'item-1'").fetchone()
 
     result = plugin._evaluate_gate(db, BOARD_WITH_WARN_GATE, "in_progress", row, meta)
@@ -154,7 +159,9 @@ def test_gate_evaluation_dor_missing_effort(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-2", "test-sw", "backlog_item", "Fix it", status="accepted", metadata=meta)
+    _insert_entry(
+        db, "item-2", "test-sw", "backlog_item", "Fix it", status="accepted", metadata=meta
+    )
     row = db._raw_conn.execute("SELECT * FROM entry WHERE id = 'item-2'").fetchone()
 
     result = plugin._evaluate_gate(db, BOARD_WITH_WARN_GATE, "in_progress", row, meta)
@@ -172,7 +179,9 @@ def test_gate_evaluation_dor_oversized(gate_setup):
     db = gate_setup["db"]
 
     meta = {"effort": "XL", "kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-3", "test-sw", "backlog_item", "Big task", status="accepted", metadata=meta)
+    _insert_entry(
+        db, "item-3", "test-sw", "backlog_item", "Big task", status="accepted", metadata=meta
+    )
     row = db._raw_conn.execute("SELECT * FROM entry WHERE id = 'item-3'").fetchone()
 
     result = plugin._evaluate_gate(db, BOARD_WITH_WARN_GATE, "in_progress", row, meta)
@@ -192,7 +201,9 @@ def test_gate_evaluation_dor_blocked(gate_setup):
 
     # Create item with blocked_by link
     meta = {"effort": "M", "kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-4", "test-sw", "backlog_item", "Blocked item", status="accepted", metadata=meta)
+    _insert_entry(
+        db, "item-4", "test-sw", "backlog_item", "Blocked item", status="accepted", metadata=meta
+    )
 
     # Add blocked_by link
     conn = db._raw_conn
@@ -245,8 +256,16 @@ def test_gate_warn_policy_allows_transition(gate_setup):
 
     # Item missing effort → gate fails, but warn policy allows transition
     meta = {"kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-6", "test-sw", "backlog_item", "No effort", status="accepted",
-                  metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-6",
+        "test-sw",
+        "backlog_item",
+        "No effort",
+        status="accepted",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
     # Write board.yaml with warn policy
     board_yaml = gate_setup["kb_dir"] / "board.yaml"
@@ -254,11 +273,13 @@ def test_gate_warn_policy_allows_transition(gate_setup):
 
     yaml.dump(BOARD_WITH_WARN_GATE, board_yaml.open("w"))
 
-    result = plugin._mcp_transition({
-        "item_id": "item-6",
-        "kb_name": "test-sw",
-        "to_status": "in_progress",
-    })
+    result = plugin._mcp_transition(
+        {
+            "item_id": "item-6",
+            "kb_name": "test-sw",
+            "to_status": "in_progress",
+        }
+    )
     assert result["transitioned"] is True
     assert "gate" in result
     assert result["gate"]["passed"] is False
@@ -270,19 +291,29 @@ def test_gate_enforce_policy_blocks_transition(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-7", "test-sw", "backlog_item", "No effort", status="accepted",
-                  metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-7",
+        "test-sw",
+        "backlog_item",
+        "No effort",
+        status="accepted",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
     board_yaml = gate_setup["kb_dir"] / "board.yaml"
     import yaml
 
     yaml.dump(BOARD_WITH_ENFORCE_GATE, board_yaml.open("w"))
 
-    result = plugin._mcp_transition({
-        "item_id": "item-7",
-        "kb_name": "test-sw",
-        "to_status": "in_progress",
-    })
+    result = plugin._mcp_transition(
+        {
+            "item_id": "item-7",
+            "kb_name": "test-sw",
+            "to_status": "in_progress",
+        }
+    )
     assert result["transitioned"] is False
     assert "gate" in result
     assert result["gate"]["passed"] is False
@@ -295,19 +326,29 @@ def test_gate_no_gate_defined(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "accepted"}
-    _insert_entry(db, "item-8", "test-sw", "backlog_item", "Task", status="accepted",
-                  metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-8",
+        "test-sw",
+        "backlog_item",
+        "Task",
+        status="accepted",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
     board_yaml = gate_setup["kb_dir"] / "board.yaml"
     import yaml
 
     yaml.dump(BOARD_NO_GATES, board_yaml.open("w"))
 
-    result = plugin._mcp_transition({
-        "item_id": "item-8",
-        "kb_name": "test-sw",
-        "to_status": "in_progress",
-    })
+    result = plugin._mcp_transition(
+        {
+            "item_id": "item-8",
+            "kb_name": "test-sw",
+            "to_status": "in_progress",
+        }
+    )
     assert result["transitioned"] is True
     assert "gate" not in result
 
@@ -318,19 +359,29 @@ def test_gate_dod_on_done_transition(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "in_progress", "effort": "S"}
-    _insert_entry(db, "item-9", "test-sw", "backlog_item", "Done task", status="in_progress",
-                  metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-9",
+        "test-sw",
+        "backlog_item",
+        "Done task",
+        status="in_progress",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
     board_yaml = gate_setup["kb_dir"] / "board.yaml"
     import yaml
 
     yaml.dump(BOARD_WITH_WARN_GATE, board_yaml.open("w"))
 
-    result = plugin._mcp_transition({
-        "item_id": "item-9",
-        "kb_name": "test-sw",
-        "to_status": "done",
-    })
+    result = plugin._mcp_transition(
+        {
+            "item_id": "item-9",
+            "kb_name": "test-sw",
+            "to_status": "done",
+        }
+    )
     assert result["transitioned"] is True
     assert "gate" in result
     assert result["gate"]["gate_name"] == "Definition of Done"
@@ -344,19 +395,29 @@ def test_claim_evaluates_dor(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "accepted", "effort": "M"}
-    _insert_entry(db, "item-10", "test-sw", "backlog_item", "Claimable", status="accepted",
-                  metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-10",
+        "test-sw",
+        "backlog_item",
+        "Claimable",
+        status="accepted",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
     board_yaml = gate_setup["kb_dir"] / "board.yaml"
     import yaml
 
     yaml.dump(BOARD_WITH_WARN_GATE, board_yaml.open("w"))
 
-    result = plugin._mcp_claim({
-        "item_id": "item-10",
-        "kb_name": "test-sw",
-        "assignee": "agent-1",
-    })
+    result = plugin._mcp_claim(
+        {
+            "item_id": "item-10",
+            "kb_name": "test-sw",
+            "assignee": "agent-1",
+        }
+    )
     assert result.get("claimed") is True
     assert "gate" in result
     assert result["gate"]["gate_name"] == "Definition of Ready"
@@ -371,21 +432,31 @@ def test_review_approved_evaluates_dod(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "review", "effort": "S"}
-    _insert_entry(db, "item-review-dod", "test-sw", "backlog_item", "Review me",
-                  status="review", metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-review-dod",
+        "test-sw",
+        "backlog_item",
+        "Review me",
+        status="review",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
     board_yaml = gate_setup["kb_dir"] / "board.yaml"
     import yaml
 
     yaml.dump(BOARD_WITH_WARN_GATE, board_yaml.open("w"))
 
-    result = plugin._mcp_review({
-        "item_id": "item-review-dod",
-        "kb_name": "test-sw",
-        "outcome": "approved",
-        "reviewer": "reviewer-1",
-        "feedback": "LGTM",
-    })
+    result = plugin._mcp_review(
+        {
+            "item_id": "item-review-dod",
+            "kb_name": "test-sw",
+            "outcome": "approved",
+            "reviewer": "reviewer-1",
+            "feedback": "LGTM",
+        }
+    )
     assert result["reviewed"] is True
     assert result["new_status"] == "done"
     assert "gate" in result
@@ -399,16 +470,26 @@ def test_review_changes_requested_no_dod(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "review", "effort": "S"}
-    _insert_entry(db, "item-review-cr", "test-sw", "backlog_item", "Needs work",
-                  status="review", metadata=meta, kb_dir=gate_setup["kb_dir"])
+    _insert_entry(
+        db,
+        "item-review-cr",
+        "test-sw",
+        "backlog_item",
+        "Needs work",
+        status="review",
+        metadata=meta,
+        kb_dir=gate_setup["kb_dir"],
+    )
 
-    result = plugin._mcp_review({
-        "item_id": "item-review-cr",
-        "kb_name": "test-sw",
-        "outcome": "changes_requested",
-        "reviewer": "reviewer-1",
-        "feedback": "Fix the tests",
-    })
+    result = plugin._mcp_review(
+        {
+            "item_id": "item-review-cr",
+            "kb_name": "test-sw",
+            "outcome": "changes_requested",
+            "reviewer": "reviewer-1",
+            "feedback": "Fix the tests",
+        }
+    )
     assert result["reviewed"] is True
     assert result["new_status"] == "in_progress"
     assert "gate" not in result
@@ -449,7 +530,9 @@ def test_check_ready_passes_when_dor_met(gate_setup):
     db = gate_setup["db"]
 
     meta = {"effort": "M", "kind": "feature", "status": "accepted"}
-    _insert_entry(db, "ready-1", "test-sw", "backlog_item", "Ready item", status="accepted", metadata=meta)
+    _insert_entry(
+        db, "ready-1", "test-sw", "backlog_item", "Ready item", status="accepted", metadata=meta
+    )
 
     result = plugin._mcp_check_ready({"item_id": "ready-1", "kb_name": "test-sw"})
     assert result["ready"] is True
@@ -465,7 +548,9 @@ def test_check_ready_fails_missing_effort(gate_setup):
     db = gate_setup["db"]
 
     meta = {"kind": "feature", "status": "accepted"}
-    _insert_entry(db, "unready-1", "test-sw", "backlog_item", "Unready item", status="accepted", metadata=meta)
+    _insert_entry(
+        db, "unready-1", "test-sw", "backlog_item", "Unready item", status="accepted", metadata=meta
+    )
 
     result = plugin._mcp_check_ready({"item_id": "unready-1", "kb_name": "test-sw"})
     assert result["ready"] is False
@@ -498,10 +583,24 @@ def test_refine_sorts_by_priority(gate_setup):
     plugin = gate_setup["plugin"]
     db = gate_setup["db"]
 
-    _insert_entry(db, "low-1", "test-sw", "backlog_item", "Low item",
-                  status="accepted", metadata={"effort": "S", "kind": "feature", "status": "accepted", "priority": "low"})
-    _insert_entry(db, "crit-1", "test-sw", "backlog_item", "Critical item",
-                  status="accepted", metadata={"effort": "M", "kind": "bug", "status": "accepted", "priority": "critical"})
+    _insert_entry(
+        db,
+        "low-1",
+        "test-sw",
+        "backlog_item",
+        "Low item",
+        status="accepted",
+        metadata={"effort": "S", "kind": "feature", "status": "accepted", "priority": "low"},
+    )
+    _insert_entry(
+        db,
+        "crit-1",
+        "test-sw",
+        "backlog_item",
+        "Critical item",
+        status="accepted",
+        metadata={"effort": "M", "kind": "bug", "status": "accepted", "priority": "critical"},
+    )
 
     result = plugin._mcp_refine({"kb_name": "test-sw"})
     ids = [item["id"] for item in result["items"]]
@@ -513,10 +612,24 @@ def test_refine_filters_by_status(gate_setup):
     plugin = gate_setup["plugin"]
     db = gate_setup["db"]
 
-    _insert_entry(db, "prop-1", "test-sw", "backlog_item", "Proposed",
-                  status="proposed", metadata={"effort": "S", "kind": "feature", "status": "proposed"})
-    _insert_entry(db, "acc-1", "test-sw", "backlog_item", "Accepted",
-                  status="accepted", metadata={"effort": "S", "kind": "feature", "status": "accepted"})
+    _insert_entry(
+        db,
+        "prop-1",
+        "test-sw",
+        "backlog_item",
+        "Proposed",
+        status="proposed",
+        metadata={"effort": "S", "kind": "feature", "status": "proposed"},
+    )
+    _insert_entry(
+        db,
+        "acc-1",
+        "test-sw",
+        "backlog_item",
+        "Accepted",
+        status="accepted",
+        metadata={"effort": "S", "kind": "feature", "status": "accepted"},
+    )
 
     result = plugin._mcp_refine({"kb_name": "test-sw", "status": "proposed"})
     statuses = {item["status"] for item in result["items"]}
@@ -528,10 +641,24 @@ def test_refine_summary_counts(gate_setup):
     plugin = gate_setup["plugin"]
     db = gate_setup["db"]
 
-    _insert_entry(db, "r-1", "test-sw", "backlog_item", "Ready",
-                  status="accepted", metadata={"effort": "M", "kind": "feature", "status": "accepted"})
-    _insert_entry(db, "nr-1", "test-sw", "backlog_item", "Not ready",
-                  status="accepted", metadata={"kind": "feature", "status": "accepted"})
+    _insert_entry(
+        db,
+        "r-1",
+        "test-sw",
+        "backlog_item",
+        "Ready",
+        status="accepted",
+        metadata={"effort": "M", "kind": "feature", "status": "accepted"},
+    )
+    _insert_entry(
+        db,
+        "nr-1",
+        "test-sw",
+        "backlog_item",
+        "Not ready",
+        status="accepted",
+        metadata={"kind": "feature", "status": "accepted"},
+    )
 
     result = plugin._mcp_refine({"kb_name": "test-sw"})
     s = result["summary"]
@@ -545,8 +672,15 @@ def test_refine_excludes_in_progress(gate_setup):
     plugin = gate_setup["plugin"]
     db = gate_setup["db"]
 
-    _insert_entry(db, "wip-1", "test-sw", "backlog_item", "In progress item",
-                  status="in_progress", metadata={"effort": "M", "kind": "feature", "status": "in_progress"})
+    _insert_entry(
+        db,
+        "wip-1",
+        "test-sw",
+        "backlog_item",
+        "In progress item",
+        status="in_progress",
+        metadata={"effort": "M", "kind": "feature", "status": "in_progress"},
+    )
 
     result = plugin._mcp_refine({"kb_name": "test-sw"})
     ids = [item["id"] for item in result["items"]]

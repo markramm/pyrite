@@ -506,9 +506,7 @@ class MigrationManager:
             return
         existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
         if "usage_tier" not in existing:
-            self.conn.execute(
-                "ALTER TABLE local_user ADD COLUMN usage_tier TEXT DEFAULT 'default'"
-            )
+            self.conn.execute("ALTER TABLE local_user ADD COLUMN usage_tier TEXT DEFAULT 'default'")
         self.conn.commit()
 
     def _apply_v11(self) -> None:
@@ -520,12 +518,8 @@ class MigrationManager:
             return
         existing = {row[1] for row in self.conn.execute("PRAGMA table_info(entry)").fetchall()}
         if "lifecycle" not in existing:
-            self.conn.execute(
-                "ALTER TABLE entry ADD COLUMN lifecycle TEXT DEFAULT 'active'"
-            )
-        self.conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_entry_lifecycle ON entry(lifecycle)"
-        )
+            self.conn.execute("ALTER TABLE entry ADD COLUMN lifecycle TEXT DEFAULT 'active'")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_lifecycle ON entry(lifecycle)")
         self.conn.commit()
 
     def _apply_v12(self) -> None:

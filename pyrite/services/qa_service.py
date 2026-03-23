@@ -756,7 +756,11 @@ class QAService:
         result = schema.validate_entry(
             entry_type,
             fields,
-            context={"kb_type": kb_config.kb_type, "_schema_version": schema_version, "kb_path": str(kb_config.path)},
+            context={
+                "kb_type": kb_config.kb_type,
+                "_schema_version": schema_version,
+                "kb_path": str(kb_config.path),
+            },
         )
 
         for err in result.get("errors", []):
@@ -933,9 +937,7 @@ class QAService:
 
         return items
 
-    def _check_rubric_evaluation(
-        self, entry: dict[str, Any], issues: list[dict[str, Any]]
-    ) -> None:
+    def _check_rubric_evaluation(self, entry: dict[str, Any], issues: list[dict[str, Any]]) -> None:
         """Run rubric checks on a single entry."""
         entry_id = entry["id"]
         kb_name = entry["kb_name"]
@@ -977,21 +979,21 @@ class QAService:
             checker_name = item.get("checker")
             if not checker_name:
                 # Judgment-only dict (has text but no checker)
-                logger.debug(
-                    "Rubric item has no checker (judgment_only): %s", item.get("text", "")
-                )
+                logger.debug("Rubric item has no checker (judgment_only): %s", item.get("text", ""))
                 continue
 
             fn = named_checkers.get(checker_name)
             if fn is None:
-                issues.append({
-                    "entry_id": entry_id,
-                    "kb_name": kb_name,
-                    "rule": "config_error",
-                    "severity": "warning",
-                    "field": "evaluation_rubric",
-                    "message": f"Unknown checker '{checker_name}' in rubric for type '{entry_type}'",
-                })
+                issues.append(
+                    {
+                        "entry_id": entry_id,
+                        "kb_name": kb_name,
+                        "rule": "config_error",
+                        "severity": "warning",
+                        "field": "evaluation_rubric",
+                        "message": f"Unknown checker '{checker_name}' in rubric for type '{entry_type}'",
+                    }
+                )
                 continue
 
             params = dict(item.get("params", {}) or {})
@@ -1001,9 +1003,7 @@ class QAService:
                 if issue is not None:
                     issues.append(issue)
             except Exception:
-                logger.warning(
-                    "Named rubric checker '%s' failed", checker_name, exc_info=True
-                )
+                logger.warning("Named rubric checker '%s' failed", checker_name, exc_info=True)
 
     def _collect_judgment_items(self, entry_type: str, kb_name: str) -> list[str]:
         """Filter rubric items to judgment-only (no deterministic checker, not schema-covered)."""
@@ -1065,13 +1065,9 @@ class QAService:
                     self.llm_evaluator.evaluate(dict(entry), judgment_items, guidelines)
                 )
         except RuntimeError:
-            return asyncio.run(
-                self.llm_evaluator.evaluate(dict(entry), judgment_items, guidelines)
-            )
+            return asyncio.run(self.llm_evaluator.evaluate(dict(entry), judgment_items, guidelines))
 
-    def _check_rubric_all(
-        self, issues: list[dict[str, Any]], kb_name: str
-    ) -> None:
+    def _check_rubric_all(self, issues: list[dict[str, Any]], kb_name: str) -> None:
         """Bulk SQL rubric checks across all entries in a KB."""
         # 1. Missing tags
         no_tag_rows = self.db.execute_sql(
@@ -1143,9 +1139,7 @@ class QAService:
         # 4. Type-specific metadata checks (person/role, document/url|author, document/document_type)
         self._check_rubric_type_metadata(issues, kb_name)
 
-    def _check_rubric_type_metadata(
-        self, issues: list[dict[str, Any]], kb_name: str
-    ) -> None:
+    def _check_rubric_type_metadata(self, issues: list[dict[str, Any]], kb_name: str) -> None:
         """Bulk check type-specific metadata fields from rubric."""
         # Person: role
         person_rows = self.db.execute_sql(
@@ -1217,9 +1211,15 @@ class QAService:
     # =========================================================================
 
     # Types that are historical by design — never flag as stale.
-    _STALENESS_EXEMPT_TYPES = frozenset({
-        "adr", "event", "timeline", "qa_assessment", "relationship",
-    })
+    _STALENESS_EXEMPT_TYPES = frozenset(
+        {
+            "adr",
+            "event",
+            "timeline",
+            "qa_assessment",
+            "relationship",
+        }
+    )
 
     def _check_staleness(
         self, issues: list[dict[str, Any]], kb_name: str, max_age_days: int = 90
@@ -1240,9 +1240,7 @@ class QAService:
                 }
             )
 
-    def find_stale(
-        self, kb_name: str, max_age_days: int = 90
-    ) -> list[dict[str, Any]]:
+    def find_stale(self, kb_name: str, max_age_days: int = 90) -> list[dict[str, Any]]:
         """Find active entries not updated within *max_age_days*.
 
         Type-aware: historical types (adr, event, timeline, qa_assessment,
@@ -1397,9 +1395,7 @@ class QAService:
             "WHERE kb_name = :kb_name GROUP BY entry_type",
             {"kb_name": kb_name},
         )
-        type_counts: dict[str, int] = {
-            row["entry_type"]: row["cnt"] for row in type_count_rows
-        }
+        type_counts: dict[str, int] = {row["entry_type"]: row["cnt"] for row in type_count_rows}
 
         # Types with 0 entries
         empty_types = sorted(declared_types - set(type_counts.keys()))
@@ -1430,8 +1426,7 @@ class QAService:
             {"kb_name": kb_name},
         )
         no_outlinks = [
-            {"id": r["id"], "type": r["entry_type"], "title": r["title"]}
-            for r in no_outlink_rows
+            {"id": r["id"], "type": r["entry_type"], "title": r["title"]} for r in no_outlink_rows
         ]
 
         # -- 5. No-inlink entries (unreferenced) -----------------------------
@@ -1445,8 +1440,7 @@ class QAService:
             {"kb_name": kb_name},
         )
         no_inlinks = [
-            {"id": r["id"], "type": r["entry_type"], "title": r["title"]}
-            for r in no_inlink_rows
+            {"id": r["id"], "type": r["entry_type"], "title": r["title"]} for r in no_inlink_rows
         ]
 
         # -- 6. Distribution stats -------------------------------------------
@@ -1464,14 +1458,11 @@ class QAService:
             "GROUP BY importance ORDER BY importance",
             {"kb_name": kb_name},
         )
-        importance_distribution = {
-            str(row["importance"]): row["cnt"] for row in importance_rows
-        }
+        importance_distribution = {str(row["importance"]): row["cnt"] for row in importance_rows}
 
         # Count entries with NULL importance
         null_importance_rows = self.db.execute_sql(
-            "SELECT COUNT(*) as cnt FROM entry "
-            "WHERE kb_name = :kb_name AND importance IS NULL",
+            "SELECT COUNT(*) as cnt FROM entry WHERE kb_name = :kb_name AND importance IS NULL",
             {"kb_name": kb_name},
         )
         null_importance = null_importance_rows[0]["cnt"] if null_importance_rows else 0
@@ -1517,13 +1508,9 @@ class QAService:
         # Scan guidelines and goals (dict[str, str])
         text_sources: list[str] = []
         if kb_schema.guidelines:
-            text_sources.extend(
-                v for v in kb_schema.guidelines.values() if isinstance(v, str)
-            )
+            text_sources.extend(v for v in kb_schema.guidelines.values() if isinstance(v, str))
         if kb_schema.goals:
-            text_sources.extend(
-                v for v in kb_schema.goals.values() if isinstance(v, str)
-            )
+            text_sources.extend(v for v in kb_schema.goals.values() if isinstance(v, str))
 
         # Also scan type-level guidelines/goals
         if kb_schema.types:
@@ -1555,11 +1542,13 @@ class QAService:
     # =========================================================================
 
     # Rules that can be safely auto-fixed.
-    FIXABLE_RULES = frozenset({
-        "invalid_date",
-        "schema_violation",  # only missing-field sub-cases
-        "broken_link",
-    })
+    FIXABLE_RULES = frozenset(
+        {
+            "invalid_date",
+            "schema_violation",  # only missing-field sub-cases
+            "broken_link",
+        }
+    )
 
     # Tag normalisation is not a validation rule per se — it's a normalisation
     # pass that lowercases mixed-case tags.
@@ -1704,7 +1693,10 @@ class QAService:
             fixed.append(tag_fix)
             if not dry_run:
                 self._apply_tag_normalisation(
-                    tag_fix["entry_id"], kb_name, tag_fix["old_value"], tag_fix["new_value"],
+                    tag_fix["entry_id"],
+                    kb_name,
+                    tag_fix["old_value"],
+                    tag_fix["new_value"],
                     kb_svc,
                 )
 
@@ -1940,15 +1932,17 @@ class QAService:
         fixes = []
         for row in rows:
             tag_name = row["tag_name"]
-            fixes.append({
-                "entry_id": row["entry_id"],
-                "kb_name": kb_name,
-                "rule": "tag_case",
-                "field": "tags",
-                "old_value": tag_name,
-                "new_value": tag_name.lower(),
-                "message": f"Normalised tag '{tag_name}' → '{tag_name.lower()}'",
-            })
+            fixes.append(
+                {
+                    "entry_id": row["entry_id"],
+                    "kb_name": kb_name,
+                    "rule": "tag_case",
+                    "field": "tags",
+                    "old_value": tag_name,
+                    "new_value": tag_name.lower(),
+                    "message": f"Normalised tag '{tag_name}' → '{tag_name.lower()}'",
+                }
+            )
 
         return fixes
 

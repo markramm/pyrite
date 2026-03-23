@@ -53,9 +53,7 @@ def _project_fields(entry: dict, fields: list[str] | None) -> dict:
     return {k: entry[k] for k in fields if k in entry}
 
 
-def _chunk_body(
-    entry: dict, offset: int = 0, limit: int = DEFAULT_BODY_CHUNK
-) -> dict:
+def _chunk_body(entry: dict, offset: int = 0, limit: int = DEFAULT_BODY_CHUNK) -> dict:
     """Apply body chunking to an entry dict.
 
     If the body fits within the offset+limit window, return unchanged.
@@ -661,13 +659,15 @@ class PyriteMCPServer:
                     entry_type=type_name,
                 )
 
-                edge_types.append({
-                    "type": type_name,
-                    "kb_name": kb_config.name,
-                    "description": type_schema.description,
-                    "endpoints": endpoints,
-                    "count": count,
-                })
+                edge_types.append(
+                    {
+                        "type": type_name,
+                        "kb_name": kb_config.name,
+                        "description": type_schema.description,
+                        "endpoints": endpoints,
+                        "count": count,
+                    }
+                )
 
         return {
             "edge_types": edge_types,
@@ -902,8 +902,7 @@ class PyriteMCPServer:
 
         children_list = self.task_svc.list_tasks(kb_name=kb_name, parent=task_id)
         children = [
-            {"id": c["id"], "title": c["title"], "status": c["status"]}
-            for c in children_list
+            {"id": c["id"], "title": c["title"], "status": c["status"]} for c in children_list
         ]
 
         return {

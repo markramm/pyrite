@@ -217,18 +217,10 @@ class TestCheckLinks:
 
         svc = KBService(wikilink_env["config"], wikilink_env["db"])
         # Two entries link to popular-missing, one to rare-missing
-        svc.create_entry(
-            "test-events", "a1", "A1", "note", body="See [[popular-missing]]."
-        )
-        svc.create_entry(
-            "test-events", "a2", "A2", "note", body="See [[popular-missing]]."
-        )
-        svc.create_entry(
-            "test-events", "a3", "A3", "note", body="See [[rare-missing]]."
-        )
-        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental(
-            "test-events"
-        )
+        svc.create_entry("test-events", "a1", "A1", "note", body="See [[popular-missing]].")
+        svc.create_entry("test-events", "a2", "A2", "note", body="See [[popular-missing]].")
+        svc.create_entry("test-events", "a3", "A3", "note", body="See [[rare-missing]].")
+        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental("test-events")
 
         results = wikilink_env["svc"].check_links()
         popular = next(r for r in results if r["target_id"] == "popular-missing")
@@ -250,9 +242,7 @@ class TestCheckLinks:
             "note",
             body="See [[missing-from-events]].",
         )
-        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental(
-            "test-events"
-        )
+        IndexManager(wikilink_env["db"], wikilink_env["config"]).sync_incremental("test-events")
 
         results = wikilink_env["svc"].check_links(kb_name="test-events")
         assert len(results) >= 1

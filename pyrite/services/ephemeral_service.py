@@ -57,14 +57,16 @@ class EphemeralKBService:
             if not kb.ephemeral:
                 continue
             expires_at = (kb.created_at_ts + kb.ttl) if kb.created_at_ts and kb.ttl else None
-            result.append({
-                "name": kb.name,
-                "path": str(kb.path),
-                "created_at": kb.created_at_ts,
-                "ttl": kb.ttl,
-                "expires_at": expires_at,
-                "expired": expires_at is not None and now > expires_at,
-            })
+            result.append(
+                {
+                    "name": kb.name,
+                    "path": str(kb.path),
+                    "created_at": kb.created_at_ts,
+                    "ttl": kb.ttl,
+                    "expires_at": expires_at,
+                    "expired": expires_at is not None and now > expires_at,
+                }
+            )
         return result
 
     def force_expire_kb(self, name: str) -> bool:

@@ -57,8 +57,7 @@ class KBSchema:
                 collisions = set(fields.keys()) & RESERVED_FIELD_NAMES
                 if collisions:
                     logger.warning(
-                        "Type '%s': field names %s collide with reserved names"
-                        " and will be ignored",
+                        "Type '%s': field names %s collide with reserved names and will be ignored",
                         type_name,
                         collisions,
                     )
@@ -311,9 +310,7 @@ class KBSchema:
                         warnings.append(item)
 
             # Edge-type endpoint validation
-            if getattr(type_schema, "edge_type", False) and getattr(
-                type_schema, "endpoints", {}
-            ):
+            if getattr(type_schema, "edge_type", False) and getattr(type_schema, "endpoints", {}):
                 for _role, endpoint_spec in type_schema.endpoints.items():
                     ep_field = endpoint_spec.field
                     ep_value = fields.get(ep_field)

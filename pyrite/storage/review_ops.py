@@ -39,9 +39,7 @@ class ReviewOpsMixin:
         self.session.refresh(review)
         return self._review_to_dict(review)
 
-    def get_reviews(
-        self, entry_id: str, kb_name: str, limit: int = 50
-    ) -> list[dict[str, Any]]:
+    def get_reviews(self, entry_id: str, kb_name: str, limit: int = 50) -> list[dict[str, Any]]:
         """Get reviews for an entry, newest first."""
         reviews = (
             self.session.query(Review)
@@ -52,9 +50,7 @@ class ReviewOpsMixin:
         )
         return [self._review_to_dict(r) for r in reviews]
 
-    def get_latest_review(
-        self, entry_id: str, kb_name: str
-    ) -> dict[str, Any] | None:
+    def get_latest_review(self, entry_id: str, kb_name: str) -> dict[str, Any] | None:
         """Get the most recent review for an entry."""
         review = (
             self.session.query(Review)

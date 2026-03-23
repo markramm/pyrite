@@ -67,8 +67,7 @@ def links_check(
         return
 
     console.print(
-        f"\n[bold]Link Check:[/bold] {len(targets)} missing target(s),"
-        f" {total_refs} reference(s)\n"
+        f"\n[bold]Link Check:[/bold] {len(targets)} missing target(s), {total_refs} reference(s)\n"
     )
 
     if detail:
@@ -106,9 +105,7 @@ def links_check(
 
         console.print(table)
         if not detail:
-            console.print(
-                "\nRun with [bold]--detail[/bold] for per-link breakdown."
-            )
+            console.print("\nRun with [bold]--detail[/bold] for per-link breakdown.")
 
 
 def _parse_link_specs(raw: str) -> list[dict]:
@@ -140,10 +137,10 @@ def links_bulk_create(
         help="YAML file with link specs, or '-' for stdin",
     ),
     kb_name: str = typer.Option(..., "--kb", "-k", help="Source KB name"),
-    file_option: str | None = typer.Option(
-        None, "--file", "-f", help="YAML file with link specs"
+    file_option: str | None = typer.Option(None, "--file", "-f", help="YAML file with link specs"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be created without writing"
     ),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be created without writing"),
 ):
     """Bulk-create links from a YAML file or stdin.
 
@@ -284,9 +281,7 @@ def _build_suggest_query(entry: dict) -> str:
     title = entry.get("title", "")
     if title:
         # Split title into words, keep only alphanumeric tokens
-        tokens.extend(
-            w for w in re.split(r"\W+", title) if w and len(w) > 2
-        )
+        tokens.extend(w for w in re.split(r"\W+", title) if w and len(w) > 2)
     tags = entry.get("tags", [])
     if tags:
         tokens.extend(t for t in tags if t)

@@ -140,9 +140,7 @@ class TestReadmeCommand:
     def test_readme_output_file(self, readme_env):
         output_path = readme_env["tmpdir"] / "custom-readme.md"
         with _patch_config(readme_env):
-            result = runner.invoke(
-                app, ["readme", "--kb", "test-kb", "--output", str(output_path)]
-            )
+            result = runner.invoke(app, ["readme", "--kb", "test-kb", "--output", str(output_path)])
             assert result.exit_code == 0
             assert output_path.exists()
             content = output_path.read_text()

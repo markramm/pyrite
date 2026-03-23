@@ -175,11 +175,7 @@ class SQLiteBackend:
             }
 
         # Load existing links from DB
-        existing = (
-            self._session.query(Link)
-            .filter_by(source_id=entry_id, source_kb=kb_name)
-            .all()
-        )
+        existing = self._session.query(Link).filter_by(source_id=entry_id, source_kb=kb_name).all()
 
         existing_keys: dict[tuple[str, str, str], Link] = {}
         for row in existing:
@@ -408,9 +404,7 @@ class SQLiteBackend:
 
         query = self._session.query(Entry)
         if not include_archived:
-            query = query.filter(
-                sa_func.coalesce(Entry.lifecycle, "active") != "archived"
-            )
+            query = query.filter(sa_func.coalesce(Entry.lifecycle, "active") != "archived")
         if tag:
             query = (
                 query.join(

@@ -290,9 +290,7 @@ def index_health(
     health = index_mgr.check_health()
 
     broken_links = health.get("broken_links", 0)
-    is_unhealthy = (
-        health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
-    )
+    is_unhealthy = health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
     status = "unhealthy" if is_unhealthy else ("warning" if broken_links else "healthy")
 
     formatted = _format_output(

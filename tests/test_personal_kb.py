@@ -327,7 +327,9 @@ class TestMigrationV10:
         conn.execute(
             "INSERT INTO local_user (username, password_hash) VALUES ('testuser', 'hash123')"
         )
-        row = conn.execute("SELECT usage_tier FROM local_user WHERE username = 'testuser'").fetchone()
+        row = conn.execute(
+            "SELECT usage_tier FROM local_user WHERE username = 'testuser'"
+        ).fetchone()
         assert row[0] == "default"
 
         conn.close()

@@ -58,9 +58,7 @@ class TestExportKBToRepo:
             "message": "Exported 1 entries",
         }
         service, _, _, _ = export_env
-        result = service.export_kb_to_repo(
-            "test-kb", "https://github.com/test/repo", branch="main"
-        )
+        result = service.export_kb_to_repo("test-kb", "https://github.com/test/repo", branch="main")
         assert result["success"] is True
         assert result["entries_exported"] == 1
 
@@ -105,7 +103,10 @@ class TestExportKBToRepo:
 
         mock_clone.side_effect = fake_clone
         mock_is_git.return_value = True
-        mock_commit.return_value = (True, {"commit_hash": "abc", "files_changed": 1, "files": [], "message": "test"})
+        mock_commit.return_value = (
+            True,
+            {"commit_hash": "abc", "files_changed": 1, "files": [], "message": "test"},
+        )
         mock_push.return_value = (True, "Pushed")
 
         result = service.export_kb_to_repo("test-kb", "https://github.com/test/repo")

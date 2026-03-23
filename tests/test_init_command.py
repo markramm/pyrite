@@ -199,9 +199,7 @@ class TestInitCommand:
             patch("pyrite.config.load_config", return_value=config),
             patch("pyrite.config.save_config"),
         ):
-            result = runner.invoke(
-                test_app, ["--template", "movement", "--path", str(kb_path)]
-            )
+            result = runner.invoke(test_app, ["--template", "movement", "--path", str(kb_path)])
 
         assert result.exit_code == 0, result.output
         assert (kb_path / "kb.yaml").exists()

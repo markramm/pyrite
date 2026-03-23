@@ -47,7 +47,9 @@ def list_templates(request: Request, kb_name: str, svc=Depends(get_template_svc)
     response_model=TemplateDetail,
 )
 @limiter.limit("100/minute")
-def get_template_detail(request: Request, kb_name: str, template_name: str, svc=Depends(get_template_svc)):
+def get_template_detail(
+    request: Request, kb_name: str, template_name: str, svc=Depends(get_template_svc)
+):
     """Get a template by name."""
     try:
         tpl = svc.get_template(kb_name, template_name)

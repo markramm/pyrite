@@ -481,9 +481,7 @@ class AuthService:
     # GitHub Token Management
     # =====================================================================
 
-    def store_github_token(
-        self, user_id: int, token: str, scopes: str = "public_repo"
-    ) -> None:
+    def store_github_token(self, user_id: int, token: str, scopes: str = "public_repo") -> None:
         """Store a GitHub access token for a user."""
         conn = self.db._raw_conn
         conn.execute(
