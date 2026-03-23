@@ -15,6 +15,11 @@
 	let title = $state('');
 	let entryType = $state('note');
 	let body = $state('');
+	let tags = $state('');
+	let date = $state('');
+	let importance = $state(5);
+	let status = $state('');
+	let showMoreFields = $state(false);
 	let saving = $state(false);
 
 	const kb = $derived(kbStore.activeKB ?? '');
@@ -67,12 +72,17 @@
 		}
 		saving = true;
 		try {
-			const res = await api.createEntry({
+			const req: Record<string, unknown> = {
 				kb,
 				entry_type: entryType,
 				title: title.trim(),
-				body
-			});
+				body,
+			};
+			if (tags.trim()) req.tags = tags.split(',').map((t: string) => t.trim()).filter(Boolean);
+			if (date) req.date = date;
+			if (importance !== 5) req.importance = importance;
+			if (status.trim()) req.metadata = { status: status.trim() };
+			const res = await api.createEntry(req as any);
 			uiStore.toast('Entry created', 'success');
 			goto(`/entries/${res.id}`);
 		} catch {
@@ -144,6 +154,60 @@
 					</button>
 				</div>
 			</div>
+			<!-- Extra fields -->
+			<div class="mb-4">
+				<button
+					onclick={() => (showMoreFields = !showMoreFields)}
+					class="text-xs text-zinc-500 hover:text-zinc-300"
+				>
+					{showMoreFields ? 'Hide' : 'Show'} additional fields (tags, date, importance, status)
+				</button>
+				{#if showMoreFields}
+					<div class="mt-2 grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
+						<div>
+							<label for="entry-tags" class="mb-1 block text-xs font-medium text-zinc-500">Tags (comma-separated)</label>
+							<input
+								id="entry-tags"
+								type="text"
+								bind:value={tags}
+								placeholder="tag1, tag2, tag3"
+								class="w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+							/>
+						</div>
+						<div>
+							<label for="entry-date" class="mb-1 block text-xs font-medium text-zinc-500">Date</label>
+							<input
+								id="entry-date"
+								type="date"
+								bind:value={date}
+								class="w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+							/>
+						</div>
+						<div>
+							<label for="entry-importance" class="mb-1 block text-xs font-medium text-zinc-500">Importance: {importance}</label>
+							<input
+								id="entry-importance"
+								type="range"
+								min="1"
+								max="10"
+								bind:value={importance}
+								class="w-full"
+							/>
+						</div>
+						<div>
+							<label for="entry-status" class="mb-1 block text-xs font-medium text-zinc-500">Status</label>
+							<input
+								id="entry-status"
+								type="text"
+								bind:value={status}
+								placeholder="draft, proposed, etc."
+								class="w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+							/>
+						</div>
+					</div>
+				{/if}
+			</div>
+
 			<div class="h-[calc(100vh-14rem)]">
 				<Editor content={body} onchange={onEditorChange} onsave={save} />
 			</div>

@@ -12,6 +12,18 @@
 
 	const borderColor = $derived(typeColor(entry.entry_type));
 
+	function stripWikilinks(text: string): string {
+		return text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1');
+	}
+
+	const preview = $derived(
+		entry.summary
+			? stripWikilinks(entry.summary)
+			: entry.body
+				? stripWikilinks(entry.body.slice(0, 200))
+				: ''
+	);
+
 	function onTagClick(tag: string) {
 		return (e: MouseEvent) => {
 			e.preventDefault();
@@ -27,16 +39,28 @@
 	style="border-left: 3px solid {borderColor}"
 >
 	<div class="mb-1 flex items-center justify-between">
-		<h3 class="font-medium">{entry.title}</h3>
-		<span class="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">
-			{entry.entry_type}
-		</span>
+		<div class="flex items-center gap-2">
+			<h3 class="font-medium">{entry.title}</h3>
+			{#if entry.status}
+				<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+					{entry.status}
+				</span>
+			{/if}
+		</div>
+		<div class="flex items-center gap-2">
+			{#if entry.importance && entry.importance >= 8}
+				<span class="text-[10px] font-semibold text-amber-500" title="Importance: {entry.importance}/10">
+					{entry.importance}
+				</span>
+			{/if}
+			<span class="rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800">
+				{entry.entry_type}
+			</span>
+		</div>
 	</div>
 
-	{#if entry.summary}
-		<p class="mb-2 line-clamp-2 text-sm text-zinc-400 dark:text-zinc-400">{entry.summary}</p>
-	{:else if entry.body}
-		<p class="mb-2 line-clamp-2 text-sm text-zinc-400 dark:text-zinc-400">{entry.body.slice(0, 150)}</p>
+	{#if preview}
+		<p class="mb-2 line-clamp-2 text-sm text-zinc-400 dark:text-zinc-400">{preview}</p>
 	{/if}
 
 	<div class="flex items-center justify-between">

@@ -24,10 +24,18 @@
 			<span class="ml-2">{entry.date}</span>
 		</div>
 	{/if}
+	{#if entry.status}
+		<div>
+			<span class="text-zinc-500">Status:</span>
+			<span class="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+				{entry.status}
+			</span>
+		</div>
+	{/if}
 	{#if entry.importance}
 		<div>
 			<span class="text-zinc-500">Importance:</span>
-			<span class="ml-2">{entry.importance}/10</span>
+			<span class="ml-2 font-medium {entry.importance >= 8 ? 'text-amber-500' : ''}">{entry.importance}/10</span>
 		</div>
 	{/if}
 	{#if entry.tags.length > 0}
@@ -46,6 +54,44 @@
 			<div class="mt-1 space-y-0.5">
 				{#each entry.participants as p}
 					<div class="text-xs">{p}</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+	{#if entry.sources && entry.sources.length > 0}
+		<div>
+			<span class="text-zinc-500">Sources:</span>
+			<div class="mt-1 space-y-1">
+				{#each entry.sources as source}
+					<div class="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700">
+						<div class="font-medium">{source.title || 'Untitled'}</div>
+						{#if source.url}
+							<a href={String(source.url)} target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">
+								{String(source.url).slice(0, 50)}{String(source.url).length > 50 ? '...' : ''}
+							</a>
+						{/if}
+						{#if source.outlet}
+							<span class="text-zinc-400"> — {source.outlet}</span>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/if}
+	{#if entry.outlinks && entry.outlinks.length > 0}
+		<div>
+			<span class="text-zinc-500">Links to:</span>
+			<div class="mt-1 space-y-0.5">
+				{#each entry.outlinks as link}
+					<a
+						href="/entries/{link.id || link.target_id}"
+						class="block rounded px-2 py-0.5 text-xs text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+					>
+						{link.title || link.id || link.target_id}
+						{#if link.relation}
+							<span class="text-zinc-400">({link.relation})</span>
+						{/if}
+					</a>
 				{/each}
 			</div>
 		</div>
