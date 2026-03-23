@@ -73,7 +73,6 @@
 
 <svelte:head><title>Graph — Pyrite</title></svelte:head>
 
-<div class="flex h-full flex-col">
 <Topbar title="Knowledge Graph" />
 
 <div class="flex flex-1 flex-col gap-3 overflow-hidden p-4">
@@ -123,5 +122,4 @@
 			{/each}
 		</div>
 	{/if}
-</div>
 </div>
