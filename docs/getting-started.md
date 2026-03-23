@@ -133,15 +133,15 @@ Your AI can now search, read, and create entries in your knowledge base. It gets
 
 See also: [Gemini MCP integration](gemini-mcp-integration.md) | [OpenAI MCP integration](openai-mcp-integration.md)
 
-## Use Presets for Domain-Specific KBs
+## Use Templates for Domain-Specific KBs
 
-Presets install extensions with specialized entry types and tools tailored to a domain:
+Templates install extensions with specialized entry types and tools tailored to a domain:
 
 ```bash
-pyrite init --name my-project --preset software
+pyrite init --template software --path my-project
 ```
 
-The **software** preset adds ADRs, components, backlog items, standards, and runbooks — everything you need to manage a software project's knowledge. Other presets include:
+The **software** template adds ADRs, components, backlog items, standards, and runbooks — everything you need to manage a software project's knowledge. Other templates include:
 
 - **`zettelkasten`** — note maturity workflows (capture, elaborate, question, refine, connect)
 - **`encyclopedia`** — articles with review and voting workflows

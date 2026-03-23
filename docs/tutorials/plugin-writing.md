@@ -210,7 +210,7 @@ def validate_reading_item(
 
 ### 5. Add a preset
 
-Presets let users scaffold a new KB with `pyrite init --preset reading-list`.
+Presets let users scaffold a new KB with `pyrite init --template reading-list --path my-reading-list`.
 
 ```python
 # extensions/reading-list/src/pyrite_reading_list/preset.py
@@ -382,7 +382,7 @@ print(get_registry().list_plugins())
 "
 
 # Create a KB using the preset
-cd /tmp && pyrite init --name reading --preset reading-list
+cd /tmp && pyrite init --template reading-list --path reading
 
 # Add an entry
 pyrite create --type reading_item \
