@@ -11,38 +11,79 @@ fi
 
 echo "Seeding demo KBs..."
 
-# --- Pyrite project KB ---
+# --- Copy Pyrite project KB ---
 cp -r /seed/pyrite-kb "$DATA_DIR/pyrite-kb"
-pyrite kb add "$DATA_DIR/pyrite-kb" --name pyrite
-pyrite index build pyrite --force
-echo "  Indexed: pyrite"
+echo "  Copied: pyrite"
 
-# --- Demo KBs (intellectual biographies, movements, etc.) ---
+# --- Copy Demo KBs ---
 if [ -d /seed/demo-kbs ]; then
     for kb_dir in /seed/demo-kbs/*/; do
         kb_name=$(basename "$kb_dir")
-
-        # Skip non-KB directories (no kb.yaml = not a KB)
         if [ ! -f "$kb_dir/kb.yaml" ]; then
             echo "  Skipping $kb_name (no kb.yaml)"
             continue
         fi
-
         cp -r "$kb_dir" "$DATA_DIR/$kb_name"
-        pyrite kb add "$DATA_DIR/$kb_name" --name "$kb_name"
-        pyrite index build "$kb_name" --force
-        echo "  Indexed: $kb_name"
+        echo "  Copied: $kb_name"
     done
 fi
 
-# --- Embed all KBs for semantic search ---
+# --- Build config.yaml with all discovered KBs ---
+echo "Building config.yaml..."
+CONFIG="$DATA_DIR/config.yaml"
+cat > "$CONFIG" << 'HEADER'
+knowledge_bases: []
+settings:
+  index_path: /data/index.db
+HEADER
+
+# Register each KB that has a kb.yaml
+python3 -c "
+import os, sys
+sys.path.insert(0, '/app')
+from pathlib import Path
+from pyrite.utils.yaml import load_yaml_file, dump_yaml_file
+
+data_dir = Path('$DATA_DIR')
+config_path = data_dir / 'config.yaml'
+
+kbs = []
+for d in sorted(data_dir.iterdir()):
+    kb_yaml = d / 'kb.yaml'
+    if d.is_dir() and kb_yaml.exists():
+        meta = load_yaml_file(kb_yaml)
+        name = meta.get('name', d.name)
+        kb_type = meta.get('kb_type', 'generic')
+        desc = meta.get('description', '')
+        if isinstance(desc, str):
+            desc = desc.strip()[:200]
+        else:
+            desc = ''
+        kbs.append({
+            'name': name,
+            'path': str(d),
+            'kb_type': kb_type,
+            'description': desc,
+        })
+        print(f'  Registered: {name} ({kb_type}) at {d}')
+
+config = {
+    'knowledge_bases': kbs,
+    'settings': {
+        'index_path': str(data_dir / 'index.db'),
+    },
+}
+dump_yaml_file(config, config_path)
+print(f'Config written with {len(kbs)} KBs')
+"
+
+# --- Index all KBs ---
+echo "Indexing all KBs..."
+pyrite index build --force --no-embed
+
+# --- Build embeddings ---
 echo "Building semantic embeddings (this may take a few minutes)..."
-for kb_dir in "$DATA_DIR"/*/; do
-    kb_name=$(basename "$kb_dir")
-    if [ -f "$kb_dir/kb.yaml" ]; then
-        pyrite index embed "$kb_name" 2>/dev/null || echo "  Embed skipped for $kb_name"
-    fi
-done
+pyrite index embed 2>/dev/null || echo "  Embedding failed (non-fatal)"
 
 touch "$DATA_DIR/.seeded"
 echo "Demo seeded successfully."
