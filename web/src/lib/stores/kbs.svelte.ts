@@ -19,9 +19,10 @@ class KBStore {
 		try {
 			const res = await api.listKBs();
 			this.kbs = res.kbs;
-			// Default to first KB if none selected
+			// Default to guide KB if available, otherwise first KB
 			if (!this.activeKB && res.kbs.length > 0) {
-				this.activeKB = res.kbs[0].name;
+				const guide = res.kbs.find((kb) => kb.name === 'guide');
+				this.activeKB = guide ? guide.name : res.kbs[0].name;
 			}
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Failed to load KBs';
