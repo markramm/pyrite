@@ -4,6 +4,7 @@ services:
     volumes:
       - pyrite-data:/data
       - ../../kb:/seed/pyrite-kb:ro
+      - ${HOME}/pyrite-kb-demo:/seed/demo-kbs:ro
     environment:
       - PYRITE_HOST=0.0.0.0
       - PYRITE_AUTH_ENABLED=true
