@@ -22,19 +22,18 @@ Your AI agents have no memory. Your knowledge is trapped in platform silos. Ever
 pip install pyrite
 
 # Initialize a knowledge base
-mkdir my-kb && cd my-kb
-pyrite init --name my-brain
+pyrite init --template research --path my-kb
 
 # Create some entries
-pyrite create --type person --title "Sarah Chen" \
+pyrite create -k my-kb --type person --title "Sarah Chen" \
   --body "Engineering lead. Considering move to consulting." --tags "team,engineering"
 
-pyrite create --type decision --title "Switch to async standups" \
+pyrite create -k my-kb --type note --title "Switch to async standups" \
   --body "Decided 2026-03-01. Reduces meeting load by 3hrs/week." --tags "process"
 
 # Search (keyword, semantic, or hybrid)
-pyrite search "career transition"
-pyrite search "team decisions" --mode=semantic
+pyrite search "career transition" -k my-kb
+pyrite search "team decisions" -k my-kb --mode=semantic
 
 # Connect to Claude Desktop / Claude Code
 # Add to your MCP config:

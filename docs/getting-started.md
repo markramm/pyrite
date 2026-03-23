@@ -17,8 +17,8 @@ pip install "pyrite[all]"
 ## Create Your First Knowledge Base
 
 ```bash
-mkdir my-research && cd my-research
-pyrite init --name my-research
+pyrite init --template research --path my-research
+cd my-research
 ```
 
 This creates:
@@ -26,6 +26,8 @@ This creates:
 - **`kb.yaml`** — your KB configuration: name, entry types, field schemas
 - **`.pyrite/`** — SQLite index and internal state (derived from your files, rebuildable anytime)
 - A **git repo** initialized automatically, so every change is versioned from the start
+
+Templates available: `research`, `software`, `zettelkasten`, `intellectual-biography`, `movement`, `empty`.
 
 Your knowledge base is just a directory of markdown files. You can open them in any editor.
 
@@ -36,7 +38,7 @@ Let's add a few entries to build up some content.
 **A person:**
 
 ```bash
-pyrite create --type person --title "Ada Lovelace" \
+pyrite create -k my-research --type person --title "Ada Lovelace" \
   --body "Mathematician and writer. Wrote the first algorithm intended for a machine." \
   --tags "mathematics,computing"
 ```
@@ -44,22 +46,22 @@ pyrite create --type person --title "Ada Lovelace" \
 **A note:**
 
 ```bash
-pyrite create --type note --title "Knowledge management principles" \
+pyrite create -k my-research --type note --title "Knowledge management principles" \
   --body "Atomic notes. Link liberally. Let structure emerge from connections, not folders."
 ```
 
 **An event:**
 
 ```bash
-pyrite create --type event --title "Analytical Engine demonstration" \
+pyrite create -k my-research --type event --title "Analytical Engine demonstration" \
   --body "Charles Babbage presented the design of the Analytical Engine." \
   --date "1837-01-01"
 ```
 
-**A decision:**
+**A note with tags:**
 
 ```bash
-pyrite create --type decision --title "Use markdown for all entries" \
+pyrite create -k my-research --type note --title "Use markdown for all entries" \
   --body "Plain text is portable, diffable, and future-proof. Markdown adds just enough structure." \
   --tags "process"
 ```
@@ -85,20 +87,20 @@ The `id` is auto-generated from the title. Pyrite validates fields against the t
 **Keyword search** works out of the box:
 
 ```bash
-pyrite search "algorithm"
-pyrite search "mathematics" --type person
+pyrite search "algorithm" -k my-research
+pyrite search "mathematics" -k my-research --type person
 ```
 
 **Semantic search** finds conceptually related content, not just keyword matches (requires an OpenAI API key or local embeddings):
 
 ```bash
-pyrite search "early computer science pioneers" --mode semantic
+pyrite search "early computer science pioneers" -k my-research --mode semantic
 ```
 
 **Hybrid mode** combines both:
 
 ```bash
-pyrite search "computing history" --mode hybrid
+pyrite search "computing history" -k my-research --mode hybrid
 ```
 
 ## Connect an AI via MCP

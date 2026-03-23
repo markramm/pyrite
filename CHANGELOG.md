@@ -7,6 +7,134 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-03-23
+
+First public beta release. This release consolidates 8 milestones of development (0.10–0.18) into a single distributable package with comprehensive documentation, deployment options, and a hardened web UI.
+
+### Highlights
+
+- **GitHub OAuth & per-KB permissions** — multi-user access control with read/write/admin tiers
+- **Docker & one-click deploy** — Dockerfile, Docker Compose, Railway, Render, and Fly.io deploy buttons
+- **Web UI hardening** — 14 UX fixes, accessibility audit, Playwright E2E tests, mobile responsive
+- **Agent DX overhaul** — 8 MCP tool improvements, structured error responses, batch operations
+- **Architecture refactors** — KBService decomposed into 4 focused services, schema module split into 6 submodules
+- **Two domain plugins** — software-kb and journalism-investigation prove the platform is general-purpose
+- **Edge entities** — typed relationships as first-class entities with endpoint schemas
+- **Export system** — NotebookLM and Quartz static site renderers
+
+### Added
+
+- **Authentication & Access Control**
+  - GitHub OAuth sign-in (`oauth-providers` Phase 1)
+  - Per-KB read/write/admin permissions with ephemeral KB sandboxes
+  - MCP per-client per-tier rate limiting
+
+- **Deployment**
+  - Multi-stage Dockerfile and Docker Compose configuration
+  - One-click deploy buttons for Railway, Render, and Fly.io
+  - Self-hosted deployment scripts with Caddy reverse proxy
+  - Demo site deployment tooling
+
+- **Web UI**
+  - Logout button, version history fix, type color consolidation
+  - Browser tab page titles, loading state standardization
+  - Accessibility fixes (aria-labels, keyboard navigation, screen reader support)
+  - Mobile responsive viewport fixes
+  - Collection view persistence, first-run onboarding experience
+  - Starred entries restoration, dead code cleanup
+  - Alpha banner with feedback button and error reporting links
+  - Comprehensive Playwright E2E test suite (search, collections, QA, settings, daily, entry CRUD, auth)
+
+- **Agent Developer Experience (MCP + CLI)**
+  - `kb_batch_read` — multi-entry retrieval in one call
+  - `kb_list_entries` — lightweight KB index browsing
+  - `kb_recent` — orientation queries for what changed recently
+  - Search `fields` parameter for token-efficient results across CLI, MCP, and REST
+  - Smart field routing: top-level vs metadata field mapping clarified
+  - Structured JSON error responses with `suggestion` field across all surfaces
+  - MCP body chunking with auto-truncation and `kb_read_body` for large entries
+
+- **Architecture**
+  - `SearchBackend` protocol — 13-method structural protocol for pluggable storage
+  - `SQLiteBackend` — wraps PyriteDB + FTS5 + sqlite-vec (default)
+  - `PostgresBackend` — tsvector FTS + pgvector embeddings for server deployments
+  - KBService decomposed into `GraphService`, `EphemeralKBService`, `QuotaService`, `ExportService`
+  - Schema module split into 6 focused submodules (`enums`, `validators`, `provenance`, `field_schema`, `kb_schema`, `core_types`)
+  - `DocumentManager` for write-path coordination
+  - Entry protocol mixins for composable field patterns (ADR-0017)
+  - Edge entities — typed relationships as first-class entries with endpoint schemas (ADR-0022)
+  - Dynamic subdirectory paths with template variables (`{status}`, `{type}`)
+
+- **Export System**
+  - `pyrite export collection` — export entries for NotebookLM with bundling and source redaction
+  - `pyrite export site` — export KB as Quartz static site for GitHub Pages
+  - Quartz renderer with wikilink normalization, frontmatter mapping, project scaffolding
+
+- **KB Quality & Lifecycle**
+  - `pyrite schema validate` — frontmatter validation with ID collision detection
+  - `pyrite ci` — CI/CD schema and link validation command
+  - `pyrite qa fix` — auto-fix safe structural issues
+  - `pyrite qa gaps` — structural coverage analysis
+  - `pyrite links check` — cross-KB broken link validation
+  - `pyrite links suggest` — FTS5-based link suggestions
+  - `pyrite links bulk-create` — batch link creation
+  - `pyrite db backup` / `pyrite db restore` — database backup and restore
+  - `pyrite kb compact` — detect archival candidates with type-aware staleness
+  - Entry `lifecycle` field with archive-aware search filtering
+  - Intent layer: guidelines, goals, rubrics, deterministic and LLM-assisted evaluation
+  - Named rubric checkers with explicit binding and CLI discoverability
+  - Source URL liveness checking for QA
+
+- **Agent Workflow (Kanban for Agent Teams)**
+  - Milestone entry type with board configuration (`board.yaml`)
+  - Review workflow with DoR/DoD quality gates
+  - `sw_pull_next`, `sw_claim`, `sw_submit`, `sw_review`, `sw_log` MCP tools
+  - `sw_context_for_item` for pulling work context
+  - Work session logging with `WorkLogEntry`
+
+- **Plugins**
+  - `software-kb` plugin: ADRs, components, backlog items, standards, runbooks, kanban workflow
+  - `journalism-investigation` plugin: persons, organizations, events, claims, evidence, sources with reliability tiers, ownership chains, money flow tracking, FtM interop, cross-KB entity correlation
+  - `cascade` plugin: timeline events, actors, capture lanes, static JSON export for viewer consumption
+  - Plugin preset registration for `pyrite init --template`
+  - Init templates: `research`, `software`, `zettelkasten`, `intellectual-biography`, `movement`, `empty`
+
+- **Documentation**
+  - Getting Started tutorial
+  - Plugin writing tutorial
+  - OpenAI / Codex MCP integration guide
+  - Gemini CLI / Antigravity MCP integration guide
+  - Awesome plugins directory page
+
+- **Infrastructure**
+  - Async/queue-based index rebuild with background thread worker
+  - Embedding service pre-warming to reduce cold-start latency
+  - Import cycle detection guard
+  - Plugin discovery strict mode (surfaces load failures during development)
+  - Plugin hook atomicity (transactional wrapping for before_save hooks)
+  - Bulk import CLI with `--body-file` and `--stdin` support
+
+### Changed
+- Default CLI output format changed to JSON for agent-friendly consumption
+- Priority field changed from Integer to String across storage and protocols
+- API module-level singletons replaced with `app.state` for test isolation
+- Plugin registry deduplication on reload
+- Factory pattern refactored to open/closed principle
+- Incremental link sync (diff-based instead of delete-all/insert-all)
+- LanceDB backend evaluated and rejected (49-66x slower indexing — see ADR-0016)
+
+### Fixed
+- Entry ID collisions across types (explicit `id` fields added)
+- MCP `kb_create` placing entries at KB root instead of type directory
+- MCP `kb_update` returning PosixPath serialization errors
+- `sw adrs` reading date from metadata instead of DB column
+- `sw_*` MCP tools reading status from metadata JSON instead of DB column
+- Template filename filter dropping legitimate KB entries
+- Duplicate tags and duplicate entry IDs during index sync
+- Test suite clobbering `~/.pyrite/config.yaml`
+- Collection type safety and endpoint hardening
+- `str(None)` safety across enum validation
+
 ## [0.12.0] - 2026-03-01
 
 ### Added

@@ -31,11 +31,12 @@ from ..storage.database import PyriteDB
 from .collection_commands import collections_app
 from .context import cli_context
 from .db_commands import db_app
-from .link_commands import links_app
+from .export_commands import export_app
 from .extension_commands import extension_app
 from .index_commands import index_app
 from .init_command import init_kb
 from .kb_commands import kb_app
+from .link_commands import links_app
 from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
 from .schema_commands import schema_app
@@ -69,6 +70,7 @@ app.add_typer(collections_app, name="collections")
 app.add_typer(qa_app, name="qa")
 app.add_typer(db_app, name="db")
 app.add_typer(links_app, name="links")
+app.add_typer(export_app, name="export")
 
 # Repository management — collaboration app with subscribe/fork/sync/unsubscribe/status/list
 # Plus legacy add/remove commands added below

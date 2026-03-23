@@ -76,132 +76,61 @@ Remaining loose ends (no version bump needed):
 
 ---
 
-## 0.13 — Human & Agent UX Hardening
+## 0.13 — Human & Agent UX Hardening (done)
 
-**Theme:** Fix every bug and gap in both the web UI and the agent-facing surfaces (CLI, MCP, REST). Both humans and agents must have a solid experience before the platform goes public.
-
-**Web UI:**
-
-| Item | Effort |
-|------|--------|
-| [[web-ui-logout-button]] | XS |
-| [[web-ui-version-history-fix]] | XS |
-| [[web-ui-type-colors-consolidation]] | XS |
-| [[web-ui-page-titles]] | XS |
-| [[web-ui-dead-code-cleanup]] | XS |
-| [[web-ui-loading-states]] | S |
-| [[web-ui-accessibility-fixes]] | S |
-| [[web-ui-mobile-responsive]] | S |
-| [[web-ui-collections-save]] | S |
-| [[web-ui-first-run-experience]] | S |
-| [[web-ui-starred-entries]] | S |
-| [[ux-accessibility-fixes]] | M |
-| [[playwright-integration-tests]] | M |
-
-**Agent DX (CLI + MCP + REST):** Done — PosixPath fix, batch-read, list-entries, kb_recent, search fields, smart field routing, structured errors, file placement fix.
-
-### Definition of done
-
-All Playwright tests pass. No runtime errors on any route. Every page has a loading, empty, and error state. MCP `kb_update` works without serialization errors. `kb_batch_read`, `kb_list_entries`, `kb_recent` tools functional. Search `fields` parameter works across CLI, MCP, and REST. Agent errors return structured JSON with `suggestion` field.
+Web UI hardening (14 items: logout, version history, type colors, page titles, dead code, loading states, accessibility, mobile responsive, collections save, first-run experience, starred entries, full accessibility audit, Playwright tests, review hardening). Agent DX (8 items: PosixPath fix, batch-read, list-entries, kb_recent, search fields, smart field routing, structured errors, file placement fix).
 
 ---
 
-## 0.14 — Auth & Rate Limiting
+## 0.14 — Auth & Rate Limiting (done)
 
-**Theme:** Multi-user access control for public-facing deployments.
-
-| Item | Effort |
-|------|--------|
-| [[mcp-rate-limiting]] | S |
-| [[oauth-providers]] Phase 1 (GitHub) | L |
-| [[per-kb-permissions]] | L |
-
-### Definition of done
-
-GitHub OAuth login works. Per-KB read/write/admin tiers enforced. Rate limiting active on all public endpoints.
+GitHub OAuth login, per-KB read/write/admin permissions, MCP rate limiting.
 
 ---
 
-## 0.15 — Deployment & Demo
+## 0.15 — Deployment & Demo (done)
 
-**Theme:** Docker, website, live demo site.
-
-| Item | Effort |
-|------|--------|
-| [[container-deployment]] Phase 1 (Dockerfile + compose) | M |
-| [[container-deployment]] Phase 2 (deploy buttons) | S |
-| [[pyrite-website]] (pyrite.dev) | M |
-| [[demo-site-deployment]] | M |
-| [[byok-ai-gap-analysis]] | M |
-| [[web-ui-review-hardening]] (final gate) | S |
-
-### Definition of done
-
-`docker compose up` works. Demo site live at demo.pyrite.dev. Website live at pyrite.dev. Final UI review passed.
+Docker/Compose, deploy buttons (Railway/Render/Fly.io), pyrite.wiki website, demo site deployment, BYOK AI gap analysis, final UI review.
 
 ---
 
-## 0.16 — Ecosystem & Onboarding
+## 0.16 — Ecosystem & Onboarding (done)
 
-**Theme:** Plugin extraction, tutorials, community readiness. This is the launch release.
-
-| Item | Effort |
-|------|--------|
-| [[plugin-repo-extraction]] | M |
-| [[personal-kb-repo-backing]] | M |
-| Getting Started tutorial | S |
-| [[plugin-writing-tutorial]] | S |
-| [[awesome-plugins-page]] | XS |
-| [[pyrite-ci-command]] | S |
-
-### Definition of done
-
-All 5 plugins on PyPI. Tutorials published. Awesome page live. `pyrite ci` works in CI pipelines.
-
-### Launch Day (after 0.16.0 ships)
-
-Wave 1 content push: HN Show HN, Reddit, blog post. Everything is live, tested, documented.
+Getting Started tutorial, plugin writing tutorial, awesome plugins page, `pyrite ci` command, personal-kb-repo-backing, one-click deploy configs, alpha banner, OpenAI/Gemini MCP integration docs.
 
 ---
 
-## 0.17 — Ecosystem
+## 0.17 — Cleanup & Hardening (done)
 
-**Theme:** Prove Pyrite is general-purpose. Ship plugins for different audiences, let others build and share extensions.
-
-| Item | Description | Effort |
-|------|-------------|--------|
-| [[software-project-plugin]] | Evolves from `extensions/software-kb/` (Wave 2) | L |
-| [[investigative-journalism-plugin]] | Proves general-purpose with different audience (Wave 3) | XL |
-| [[extension-registry]] | Public extension directory | M |
-| [[extension-type-protocols]] Phase 1 | Protocol definitions for extension types (ADR-0014) | L |
-| [[obsidian-migration]] | Import from Obsidian vaults | M |
-| [[pkm-capture-plugin]] | Personal knowledge management capture (Wave 4) | L |
-
-### Definition of done
-
-- At least 2 domain-specific plugins shipped and installable via registry
-- `pyrite extension install <name>` pulls from public registry
-- Obsidian users can migrate with `pyrite import --from obsidian`
-- Extension type protocols defined, at least one plugin implements them
+Bug fixes (entry ID collisions, priority type mismatch, date field reads, status field reads). Reliability (API singletons, plugin hook atomicity, plugin discovery strict mode). Developer experience (MCP body truncation docs, embedding prewarm, import cycle detection, KB compaction, schema validation CLI, plugin registry dedup, factory open/closed, component documentation gaps).
 
 ---
 
-## Post-launch — KB Quality & Lifecycle
+## 0.18 — Architecture & Ecosystem (done)
 
-**Theme:** As KBs grow, search noise increases. Entry lifecycle management and type-aware freshness keep the active search surface clean without losing history.
+KBService decomposition (extracted GraphService, EphemeralKBService, QuotaService, ExportService). Schema module decomposition. SearchService/KBService overlap resolution. Dynamic subdirectory paths. Reserved field validation. Software-kb plugin. Journalism-investigation plugin. Edge entities (typed relationships as first-class entities). Entry lifecycle and search filtering. DB backup/restore. Kanban workflow for agent teams. Export system (NotebookLM + Quartz renderers).
 
-| Item | Effort |
-|------|--------|
-| [[entry-lifecycle-field-and-search-filtering]] | S |
-| [[kb-compaction-command-and-freshness-qa-rules]] | S |
+---
 
-### Definition of done
+## 0.20.0 — First Public Release
 
-`lifecycle` field filters archived entries from default search. `pyrite kb compact --dry-run` identifies reasonable archival candidates. Type-aware freshness rules warn on stale component docs but not on ADRs.
+**Theme:** Release readiness. Version bump, CHANGELOG, documentation accuracy, lint cleanup. No new features — polish and ship.
 
 ---
 
 ## Future (1.0+)
+
+### Ecosystem (open from 0.18)
+
+| Item | Effort | Status |
+|------|--------|--------|
+| [[extension-registry]] | M | planned |
+| [[extension-type-protocols]] Phase 1 | L | planned |
+| [[obsidian-migration]] | M | planned |
+| [[pkm-capture-plugin]] | L | planned |
+| [[plugin-repo-extraction]] | M | deferred |
+
+### Agent Swarm Infrastructure
 
 ### Agent Swarm Infrastructure
 

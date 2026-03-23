@@ -314,7 +314,7 @@ class KBSchema:
             if getattr(type_schema, "edge_type", False) and getattr(
                 type_schema, "endpoints", {}
             ):
-                for role, endpoint_spec in type_schema.endpoints.items():
+                for _role, endpoint_spec in type_schema.endpoints.items():
                     ep_field = endpoint_spec.field
                     ep_value = fields.get(ep_field)
                     if not ep_value:

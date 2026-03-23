@@ -287,9 +287,9 @@ Recommended execution order. Grouped by milestone.
 
 | # | Item | Kind | Effort | Milestone | Status |
 |---|------|------|--------|-----------|--------|
-| — | [[kb-service-decomposition]] | improvement | L | 0.18 | |
-| — | [[schema-module-decomposition]] | improvement | M | 0.18 | |
-| — | [[search-service-kb-service-overlap]] | improvement | S | 0.18 | |
+| — | [[kb-service-decomposition]] | improvement | L | 0.18 | **done** |
+| — | [[schema-module-decomposition]] | improvement | M | 0.18 | **done** |
+| — | [[search-service-kb-service-overlap]] | improvement | S | 0.18 | **done** |
 
 ### Planned — 0.18 (Ecosystem)
 

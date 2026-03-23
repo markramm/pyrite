@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import KBConfig, PyriteConfig, load_config
-from ..models import Entry, EventEntry
+from ..models import Entry
 from ..models.protocols import (
     PROTOCOL_COLUMN_KEYS,
     Assignable,

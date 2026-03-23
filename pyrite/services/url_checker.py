@@ -7,8 +7,8 @@ to avoid rechecking unchanged URLs.
 import json
 import logging
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -103,8 +103,8 @@ class URLChecker:
 
     def check_url(self, url: str) -> URLCheckResult:
         """Check a single URL for liveness."""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         try:
             req = urllib.request.Request(url, method="HEAD")
@@ -114,7 +114,7 @@ class URLChecker:
                     url=url,
                     status_code=resp.status,
                     ok=200 <= resp.status < 400,
-                    checked_at=datetime.now(timezone.utc).isoformat(),
+                    checked_at=datetime.now(UTC).isoformat(),
                     redirect_url=resp.url if resp.url != url else "",
                 )
         except urllib.error.HTTPError as e:
@@ -122,7 +122,7 @@ class URLChecker:
                 url=url,
                 status_code=e.code,
                 ok=False,
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
         except Exception as e:
             return URLCheckResult(
@@ -130,7 +130,7 @@ class URLChecker:
                 status_code=0,
                 ok=False,
                 error=str(e)[:200],
-                checked_at=datetime.now(timezone.utc).isoformat(),
+                checked_at=datetime.now(UTC).isoformat(),
             )
 
     def check_urls(

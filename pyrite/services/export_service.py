@@ -207,6 +207,59 @@ class ExportService:
             return {"success": True, **result}
         return {"success": False, "error": result.get("error", "Unknown error")}
 
+    @staticmethod
+    def export_collection_entries(
+        entries: list,
+        output_dir: Path,
+        bundle_strategy=None,
+        source_mode=None,
+        title: str = "Exported Knowledge Base",
+    ) -> dict:
+        """Export a list of Entry objects as NotebookLM-ready markdown.
+
+        Args:
+            entries: List of Entry objects to export
+            output_dir: Directory to write output files
+            bundle_strategy: How to group entries into files (default: AUTO)
+            source_mode: How to handle source visibility (default: PUBLIC)
+            title: Title for the manifest document
+
+        Returns:
+            Summary dict with entries_exported, files_created
+        """
+        from ..renderers.notebooklm import (
+            BundleStrategy,
+            SourceMode,
+            bundle_entries,
+            generate_manifest,
+        )
+
+        if bundle_strategy is None:
+            bundle_strategy = BundleStrategy.AUTO
+        if source_mode is None:
+            source_mode = SourceMode.PUBLIC
+
+        if not entries:
+            return {"entries_exported": 0, "files_created": 0}
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Bundle entries into files
+        files = bundle_entries(entries, strategy=bundle_strategy, source_mode=source_mode)
+
+        # Write bundled files
+        for filename, content in files.items():
+            (output_dir / filename).write_text(content, encoding="utf-8")
+
+        # Generate and write manifest
+        manifest = generate_manifest(entries, title=title)
+        (output_dir / "_manifest.md").write_text(manifest, encoding="utf-8")
+
+        return {
+            "entries_exported": len(entries),
+            "files_created": len(files),
+        }
+
     def push_kb(
         self,
         kb_name: str,
