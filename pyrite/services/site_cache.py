@@ -493,10 +493,10 @@ class SiteCacheService:
         entry_id = entry["id"]
         title = entry.get("title", entry_id)
         entry_type = entry.get("entry_type", "note")
-        body_md = entry.get("body", "")
-        summary = entry.get("summary", "")
-        tags = entry.get("tags", []) or []
-        date = entry.get("date", "")
+        body_md = entry.get("body") or ""
+        summary = entry.get("summary") or ""
+        tags = entry.get("tags") or []
+        date = entry.get("date") or ""
         description = summary or (body_md[:160].replace("\n", " ") + "..." if len(body_md) > 160 else body_md.replace("\n", " "))
 
         # JSON-LD
