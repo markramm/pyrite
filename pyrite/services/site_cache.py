@@ -466,16 +466,8 @@ class SiteCacheService:
         # Check for a custom homepage entry
         homepage = self.db.get_entry("_homepage", kb_name)
         if homepage and homepage.get("body"):
-            # Custom homepage — render its markdown body
             title = homepage.get("title", kb_name)
-            body_html = _md_to_html(homepage["body"], kb_name)
-            body = (
-                f'<div id="site-search" style="margin-bottom:1.5rem">'
-                f'<input type="text" placeholder="Search {_esc(kb_name)}...">'
-                f'<div class="search-results entry-list" style="margin-top:0.5rem"></div>'
-                f'</div>'
-                f'{body_html}'
-            )
+            body = _render_designed_homepage(homepage, kb_name, total)
             page_desc = homepage.get("summary") or desc or f"{total} entries in the {kb_name} knowledge base."
         else:
             # Auto-generated KB index
@@ -601,6 +593,166 @@ class SiteCacheService:
         kb_dir = self.cache_dir / kb_name
         kb_dir.mkdir(parents=True, exist_ok=True)
         (kb_dir / f"{entry_id}.html").write_text(html, encoding="utf-8")
+
+
+def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:
+    """Render a designed homepage from a _homepage entry's structured markdown."""
+    body_md = homepage.get("body") or ""
+    title = homepage.get("title", kb_name)
+
+    # Parse sections from the markdown
+    sections: dict[str, str] = {}
+    current_section = "_intro"
+    current_lines: list[str] = []
+
+    for line in body_md.split("\n"):
+        if line.startswith("## "):
+            if current_lines:
+                sections[current_section] = "\n".join(current_lines).strip()
+            current_section = line[3:].strip()
+            current_lines = []
+        else:
+            current_lines.append(line)
+    if current_lines:
+        sections[current_section] = "\n".join(current_lines).strip()
+
+    # --- Hero ---
+    intro = sections.get("_intro", "")
+    # Find first section that looks like a subtitle
+    subtitle = ""
+    for key in sections:
+        if "documenting" in key.lower() or "systematic" in key.lower():
+            subtitle = key
+            intro = sections[key]
+            break
+
+    hero = f'''
+    <div style="text-align:center;padding:3rem 0 2.5rem 0;border-bottom:1px solid var(--border);margin-bottom:3rem">
+        <h1 style="font-size:2.75rem;letter-spacing:-0.03em;margin-bottom:0.75rem;line-height:1.1">{_esc(title)}</h1>
+        {f'<p style="font-size:1.125rem;color:var(--ink-soft);max-width:38rem;margin:0 auto 1.5rem auto;line-height:1.6">{_md_inline(intro)}</p>' if intro else ''}
+        <div style="display:flex;justify-content:center;gap:2.5rem;margin:2rem 0">
+            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">{total:,}</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Verified Events</div></div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">15,500+</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Source Citations</div></div>
+            <div style="width:1px;background:var(--border)"></div>
+            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">7,800+</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Actors Tracked</div></div>
+        </div>
+        <div style="display:flex;justify-content:center;gap:0.75rem;margin-top:1.5rem">
+            <a href="/viewer/" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;background:var(--gold);color:var(--surface);border-radius:0.5rem;font-weight:600;font-size:0.875rem;text-decoration:none">Explore the Timeline</a>
+            <a href="/site/{_esc(kb_name)}/_about" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;border:1px solid var(--border-light);color:var(--ink-soft);border-radius:0.5rem;font-weight:500;font-size:0.875rem;text-decoration:none">About &amp; Methodology</a>
+        </div>
+    </div>'''
+
+    # --- Search ---
+    search = f'''
+    <div id="site-search" style="margin-bottom:3rem">
+        <input type="text" placeholder="Search {total:,} events..." style="text-align:center">
+        <div class="search-results entry-list" style="margin-top:0.5rem"></div>
+    </div>'''
+
+    # --- Cascade Pattern ---
+    cascade_html = ""
+    cascade_text = sections.get("The Cascade Pattern", "")
+    if cascade_text:
+        import re
+        steps = re.findall(r'\d+\.\s+\*\*(.+?)\*\*\s*[—–-]\s*(.+)', cascade_text)
+        if steps:
+            step_cards = []
+            step_icons = ["!", "⚡", "🔧", "🔇", "💥"]
+            for i, (name, desc) in enumerate(steps):
+                icon = step_icons[i] if i < len(step_icons) else str(i + 1)
+                step_cards.append(
+                    f'<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:0.625rem;padding:1.25rem;position:relative">'
+                    f'<div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem">'
+                    f'<span style="display:inline-flex;align-items:center;justify-content:center;width:1.75rem;height:1.75rem;border-radius:50%;background:var(--gold-glow);border:1px solid var(--gold-border);color:var(--gold);font-size:0.75rem;font-weight:700;flex-shrink:0">{i+1}</span>'
+                    f'<strong style="font-size:0.9375rem">{_esc(name)}</strong>'
+                    f'</div>'
+                    f'<p style="font-size:0.8125rem;color:var(--ink-muted);margin:0;line-height:1.5">{_esc(desc)}</p>'
+                    f'</div>'
+                )
+            # Intro text before the numbered list
+            cascade_intro = cascade_text.split("1.")[0].strip()
+            cascade_html = f'''
+            <section style="margin-bottom:3rem">
+                <h2 style="text-align:center;margin-bottom:0.5rem">The Cascade Pattern</h2>
+                {f'<p style="text-align:center;color:var(--ink-muted);margin-bottom:1.5rem;font-size:0.9375rem">{_md_inline(cascade_intro)}</p>' if cascade_intro else ''}
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:0.75rem">{"".join(step_cards)}</div>
+            </section>'''
+
+    # --- Key Findings ---
+    findings_html = ""
+    findings_text = sections.get("Key Findings", "")
+    if findings_text:
+        import re
+        items = re.findall(r'-\s+\*\*(.+?)\*\*:\s*(.+)', findings_text)
+        if items:
+            finding_cards = []
+            for label, detail in items:
+                finding_cards.append(
+                    f'<div style="border-left:3px solid var(--gold-border);padding:0.75rem 1rem;background:var(--surface-raised);border-radius:0 0.375rem 0.375rem 0">'
+                    f'<strong style="color:var(--gold);font-size:0.8125rem;display:block;margin-bottom:0.25rem">{_esc(label)}</strong>'
+                    f'<span style="font-size:0.875rem;color:var(--ink-soft);line-height:1.5">{_esc(detail)}</span>'
+                    f'</div>'
+                )
+            findings_html = f'''
+            <section style="margin-bottom:3rem">
+                <h2 style="margin-bottom:1rem">Key Findings</h2>
+                <div style="display:grid;gap:0.75rem">{"".join(finding_cards)}</div>
+            </section>'''
+
+    # --- Data Standards ---
+    standards_html = ""
+    standards_text = sections.get("Data Standards", "")
+    if standards_text:
+        standards_html = f'''
+        <section style="margin-bottom:3rem;padding:1.5rem;background:var(--surface-raised);border:1px solid var(--border);border-radius:0.625rem">
+            <h2 style="font-size:1rem;margin-bottom:0.75rem">Data Standards</h2>
+            <div style="font-size:0.875rem;color:var(--ink-soft);line-height:1.6">{_md_to_html(standards_text, kb_name)}</div>
+        </section>'''
+
+    # --- Explore links ---
+    explore_html = ""
+    explore_text = sections.get("Explore", "")
+    if explore_text:
+        import re
+        links = re.findall(r'\[(.+?)\]\((.+?)\)\s*[—–-]\s*(.+)', explore_text)
+        if links:
+            link_cards = []
+            for label, href, desc in links:
+                link_cards.append(
+                    f'<a href="{_esc(href)}" style="display:block;padding:1rem 1.25rem;border:1px solid var(--border);border-radius:0.625rem;text-decoration:none;transition:all 0.15s;background:var(--surface-raised)"'
+                    f' onmouseover="this.style.borderColor=\'var(--gold-border)\';this.style.boxShadow=\'0 2px 12px rgba(201,168,76,0.1)\'"'
+                    f' onmouseout="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'">'
+                    f'<strong style="color:var(--ink);display:block;margin-bottom:0.25rem">{_esc(label)}</strong>'
+                    f'<span style="font-size:0.8125rem;color:var(--ink-muted)">{_esc(desc)}</span>'
+                    f'</a>'
+                )
+            explore_html = f'''
+            <section style="margin-bottom:3rem">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:0.75rem">{"".join(link_cards)}</div>
+            </section>'''
+
+    # --- Contribute ---
+    contrib_html = ""
+    contrib_text = sections.get("Contribute", "")
+    if contrib_text:
+        contrib_html = f'''
+        <section style="text-align:center;padding:2rem 0;border-top:1px solid var(--border);margin-top:2rem">
+            <h2 style="font-size:1rem;margin-bottom:0.5rem">Open Source</h2>
+            <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1rem">Data: CC BY-SA 4.0 · Code: MIT</p>
+            <a href="https://github.com/markramm/cascade-kb" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.5rem 1rem;border:1px solid var(--border-light);border-radius:0.375rem;font-size:0.8125rem;color:var(--ink-soft);text-decoration:none">View on GitHub</a>
+        </section>'''
+
+    return hero + search + cascade_html + findings_html + explore_html + standards_html + contrib_html
+
+
+def _md_inline(text: str) -> str:
+    """Convert inline markdown (bold, italic, links) without wrapping in paragraphs."""
+    import re
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
+    return text
 
 
 def _esc(text: str) -> str:
