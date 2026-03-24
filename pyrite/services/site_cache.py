@@ -15,6 +15,8 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
 <meta name="description" content="{description}">
+<meta name="robots" content="index, follow">
+{canonical}
 <meta property="og:title" content="{og_title}">
 <meta property="og:description" content="{description}">
 <meta property="og:type" content="{og_type}">
@@ -203,12 +205,53 @@ footer {{
 footer a {{ color: var(--ink-muted); }}
 
 /* Responsive */
+/* Reading time + heading anchors */
+.reading-time {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.8125rem;
+  color: var(--ink-faint); font-style: italic;
+}}
+h2[id], h3[id] {{ position: relative; }}
+h2[id]:hover .anchor, h3[id]:hover .anchor {{ opacity: 1; }}
+.anchor {{
+  position: absolute; left: -1.25rem; top: 50%; transform: translateY(-50%);
+  color: var(--ink-faint); text-decoration: none; opacity: 0;
+  transition: opacity 0.15s; font-size: 0.875rem;
+}}
+.anchor:hover {{ color: var(--gold); text-decoration: none; }}
+
+/* Table of contents */
+.toc {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.8125rem;
+  border: 1px solid var(--border); border-radius: 0.5rem;
+  padding: 1rem 1.25rem; margin-bottom: 2rem; background: white;
+}}
+.toc-title {{
+  font-weight: 600; font-size: 0.6875rem; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ink-muted); margin-bottom: 0.5rem;
+}}
+.toc ol {{ padding-left: 1.25rem; margin: 0; }}
+.toc li {{ margin-bottom: 0.25rem; line-height: 1.4; }}
+.toc a {{ color: var(--ink-soft); }} .toc a:hover {{ color: var(--gold); }}
+
+/* Back to top */
+.back-to-top {{
+  display: none; position: fixed; bottom: 2rem; right: 2rem;
+  width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  background: white; border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  cursor: pointer; align-items: center; justify-content: center;
+  transition: all 0.2s; z-index: 100; font-size: 1rem; color: var(--ink-muted);
+}}
+.back-to-top:hover {{ border-color: var(--gold-border); color: var(--gold); transform: translateY(-2px); }}
+.back-to-top.visible {{ display: flex; }}
+
 @media (max-width: 640px) {{
   body {{ font-size: 1rem; padding: 0 1rem; }}
   h1 {{ font-size: 1.75rem; }}
   .kb-grid {{ grid-template-columns: 1fr; }}
   nav.site-header {{ flex-direction: column; gap: 0.75rem; align-items: flex-start; }}
   nav.site-header nav a {{ margin-left: 0; margin-right: 1rem; }}
+  .toc {{ display: none; }}
 }}
 </style>
 </head>
@@ -219,29 +262,73 @@ footer a {{ color: var(--ink-muted); }}
 </nav>
 {body}
 <footer>Powered by <a href="https://pyrite.wiki">Pyrite</a> &mdash; Knowledge&#8209;as&#8209;Code</footer>
+<button class="back-to-top" id="btt" aria-label="Back to top">&uarr;</button>
 <script>
 (function() {{
+  /* Search widget */
   var s = document.getElementById('site-search');
-  if (!s) return;
-  var i = s.querySelector('input'), r = s.querySelector('.search-results');
-  if (!i || !r) return;
-  var t;
-  i.addEventListener('input', function() {{
-    clearTimeout(t);
-    var q = i.value.trim();
-    if (!q) {{ r.innerHTML = ''; return; }}
-    t = setTimeout(function() {{
-      fetch('/api/search?q=' + encodeURIComponent(q) + '&mode=hybrid&limit=20')
-        .then(function(x) {{ return x.json(); }})
-        .then(function(d) {{
-          r.innerHTML = (d.results || []).map(function(e) {{
-            return '<a href="/site/' + e.kb_name + '/' + encodeURIComponent(e.id) + '">'
-              + '<strong>' + e.title + '</strong>'
-              + '<span class="badge">' + e.entry_type + '</span>'
-              + '</a>';
-          }}).join('');
-        }});
-    }}, 300);
+  if (s) {{
+    var i = s.querySelector('input'), r = s.querySelector('.search-results'), t;
+    if (i && r) i.addEventListener('input', function() {{
+      clearTimeout(t); var q = i.value.trim();
+      if (!q) {{ r.innerHTML = ''; return; }}
+      t = setTimeout(function() {{
+        fetch('/api/search?q=' + encodeURIComponent(q) + '&mode=hybrid&limit=20')
+          .then(function(x) {{ return x.json(); }})
+          .then(function(d) {{
+            r.innerHTML = (d.results || []).map(function(e) {{
+              return '<a href="/site/' + e.kb_name + '/' + encodeURIComponent(e.id) + '">'
+                + '<strong>' + e.title + '</strong><span class="badge">' + e.entry_type + '</span></a>';
+            }}).join('');
+          }});
+      }}, 300);
+    }});
+  }}
+
+  /* Heading anchors + TOC generation */
+  var article = document.querySelector('article');
+  if (article) {{
+    var headings = article.querySelectorAll('h2, h3');
+    var tocItems = [];
+    headings.forEach(function(h, idx) {{
+      var id = h.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section-' + idx;
+      h.id = id;
+      var a = document.createElement('a'); a.className = 'anchor'; a.href = '#' + id; a.textContent = '#';
+      a.setAttribute('aria-label', 'Link to this section');
+      h.insertBefore(a, h.firstChild);
+      tocItems.push({{ id: id, text: h.textContent.replace(/^#\\s*/, ''), level: h.tagName }});
+    }});
+    /* Insert TOC if 3+ headings */
+    if (tocItems.length >= 3) {{
+      var toc = document.createElement('div'); toc.className = 'toc';
+      var title = document.createElement('div'); title.className = 'toc-title'; title.textContent = 'Contents';
+      var ol = document.createElement('ol');
+      tocItems.forEach(function(item) {{
+        var li = document.createElement('li');
+        if (item.level === 'H3') li.style.marginLeft = '1rem';
+        li.innerHTML = '<a href="#' + item.id + '">' + item.text + '</a>';
+        ol.appendChild(li);
+      }});
+      toc.appendChild(title); toc.appendChild(ol);
+      article.insertBefore(toc, article.firstChild);
+    }}
+  }}
+
+  /* Back to top */
+  var btt = document.getElementById('btt');
+  if (btt) {{
+    window.addEventListener('scroll', function() {{
+      btt.classList.toggle('visible', window.scrollY > 400);
+    }});
+    btt.addEventListener('click', function() {{ window.scrollTo({{ top: 0, behavior: 'smooth' }}); }});
+  }}
+
+  /* Smooth scroll for anchor links */
+  document.querySelectorAll('a[href^="#"]').forEach(function(a) {{
+    a.addEventListener('click', function(e) {{
+      var target = document.querySelector(a.getAttribute('href'));
+      if (target) {{ e.preventDefault(); target.scrollIntoView({{ behavior: 'smooth', block: 'start' }}); }}
+    }});
   }});
 }})();
 </script>
@@ -362,6 +449,7 @@ class SiteCacheService:
             og_title="Pyrite Knowledge Base",
             og_type="website",
             extra_head="",
+            canonical='<link rel="canonical" href="/site">',
             body=body,
         )
         (self.cache_dir / "index.html").write_text(html, encoding="utf-8")
@@ -395,6 +483,7 @@ class SiteCacheService:
             og_title=f"{kb_name} — Pyrite Knowledge Base",
             og_type="website",
             extra_head="",
+            canonical=f'<link rel="canonical" href="/site/{_esc(kb_name)}">',
             body=body,
         )
         (self.cache_dir / kb_name / "index.html").write_text(html, encoding="utf-8")
@@ -425,6 +514,11 @@ class SiteCacheService:
 
         import json
         extra_head = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>'
+        canonical = f'<link rel="canonical" href="/site/{_esc(kb_name)}/{_esc(entry_id)}">'
+
+        # Reading time estimate
+        word_count = len(body_md.split())
+        reading_mins = max(1, round(word_count / 230))
 
         # Render body markdown to HTML (basic)
         body_html = _md_to_html(body_md, kb_name)
@@ -454,6 +548,7 @@ class SiteCacheService:
         meta_parts = []
         if date:
             meta_parts.append(date)
+        meta_parts.append(f'<span class="reading-time">{reading_mins} min read</span>')
         meta_parts.append(
             f'<a href="/entries/{_esc(entry_id)}?kb={_esc(kb_name)}">Edit on Pyrite</a>'
         )
@@ -475,6 +570,7 @@ class SiteCacheService:
             og_title=f"{title} — {kb_name}",
             og_type="article",
             extra_head=extra_head,
+            canonical=canonical,
             body=body,
         )
 

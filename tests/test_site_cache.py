@@ -99,6 +99,24 @@ class TestSiteCacheRenderAll:
         assert "Hello World" in html
 
 
+    def test_entry_has_canonical_url(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'rel="canonical"' in html
+        assert '/site/test-kb/hello-world' in html
+
+    def test_entry_has_reading_time(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert "min read" in html
+
+    def test_entry_has_robots_meta(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'name="robots"' in html
+        assert "index, follow" in html
+
+
 class TestSiteCacheInvalidation:
     def test_invalidate_entry(self, cache_env):
         cache_env["svc"].render_all()

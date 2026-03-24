@@ -3,6 +3,8 @@ Static file serving for the Pyrite web application.
 
 Serves the built SvelteKit app from web/dist/ with SPA fallback:
 - /site/* → pre-rendered static HTML from site-cache/ (SEO-friendly)
+- /site/sitemap.xml → dynamic sitemap from index
+- /site/robots.txt → crawler directives
 - /assets/* → static files (JS, CSS, images)
 - /api/* → handled by API router (not intercepted here)
 - Everything else → index.html (SPA client-side routing)
@@ -12,7 +14,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 
@@ -47,6 +49,19 @@ def mount_static(app: FastAPI, dist_dir: Path) -> None:
             return FileResponse(str(favicon_path))
         return HTMLResponse(status_code=404)
 
+    # Sitemap — generated dynamically from the site cache directory
+    @app.get("/site/sitemap.xml", include_in_schema=False)
+    async def sitemap(request: Request):
+        return _generate_sitemap(site_cache_dir, str(request.base_url).rstrip("/"))
+
+    # Robots.txt
+    @app.get("/site/robots.txt", include_in_schema=False)
+    @app.get("/robots.txt", include_in_schema=False)
+    async def robots(request: Request):
+        base = str(request.base_url).rstrip("/")
+        body = f"User-agent: *\nAllow: /site/\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: {base}/site/sitemap.xml\n"
+        return Response(content=body, media_type="text/plain")
+
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
@@ -70,6 +85,48 @@ def mount_static(app: FastAPI, dist_dir: Path) -> None:
 
         # SPA fallback: serve index.html for client-side routing
         return HTMLResponse(content=index_content)
+
+
+def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
+    """Generate sitemap.xml from cached HTML files."""
+    urls = []
+
+    if not cache_dir.is_dir():
+        xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>'
+        return Response(content=xml, media_type="application/xml")
+
+    # Landing page
+    if (cache_dir / "index.html").exists():
+        urls.append(f"  <url>\n    <loc>{base_url}/site</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>")
+
+    # Walk KB directories
+    for kb_dir in sorted(cache_dir.iterdir()):
+        if not kb_dir.is_dir():
+            continue
+        kb_name = kb_dir.name
+
+        # KB index
+        if (kb_dir / "index.html").exists():
+            urls.append(f"  <url>\n    <loc>{base_url}/site/{kb_name}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>")
+
+        # Entry pages
+        for html_file in sorted(kb_dir.glob("*.html")):
+            if html_file.name == "index.html":
+                continue
+            entry_id = html_file.stem
+            stat = html_file.stat()
+            from datetime import datetime, timezone
+            lastmod = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).strftime("%Y-%m-%d")
+            urls.append(
+                f"  <url>\n    <loc>{base_url}/site/{kb_name}/{entry_id}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>"
+            )
+
+    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{"".join(urls)}\n</urlset>'
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 def _serve_site_cached(cache_dir: Path, path: str, fallback_html: str) -> HTMLResponse:
