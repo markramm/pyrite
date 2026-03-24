@@ -1,3 +1,4 @@
-// Disable SSR — this is a static SPA served from FastAPI
-export const ssr = false;
+// SSR is enabled globally (adapter-node).
+// App routes load data client-side via onMount.
+// Site routes use +page.server.ts for SSR data loading.
 export const prerender = false;
