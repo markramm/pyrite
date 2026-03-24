@@ -2,6 +2,10 @@ demo.pyrite.wiki {
 	reverse_proxy demo-pyrite-1:8088
 }
 
+www.capturecascade.org {
+	redir https://capturecascade.org{uri} permanent
+}
+
 capturecascade.org {
 	# Root redirects to the timeline
 	redir / /site/cascade-timeline/ permanent
