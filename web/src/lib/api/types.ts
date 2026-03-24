@@ -582,6 +582,37 @@ export interface ClipResponse {
 	source_url: string;
 }
 
+// Pending Changes (Review & Publish)
+
+export interface PendingChange {
+	change_type: 'created' | 'modified' | 'deleted';
+	file_path: string;
+	title: string;
+	entry_type: string;
+	entry_id: string | null;
+	current_body: string | null;
+	previous_body: string | null;
+}
+
+export interface PendingChangesResponse {
+	changes: PendingChange[];
+	summary: {
+		total: number;
+		created: number;
+		modified: number;
+		deleted: number;
+	};
+}
+
+export interface PublishResponse {
+	success: boolean;
+	commit_hash: string | null;
+	entries_published: number;
+	message: string;
+	push_error?: string | null;
+	error?: string;
+}
+
 // Index Management
 
 export interface EmbedStatusResponse {

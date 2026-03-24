@@ -1,4 +1,4 @@
-"""Git operations endpoints: commit and push for KBs."""
+"""Git operations endpoints: commit, push, pending changes, and publish for KBs."""
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
@@ -6,10 +6,45 @@ from ...exceptions import KBNotFoundError, PyriteError
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter, requires_tier
 
-router = APIRouter(tags=["Git Operations"], dependencies=[Depends(requires_tier("admin"))])
+router = APIRouter(tags=["Git Operations"])
 
 
-@router.post("/kbs/{kb_name}/commit")
+@router.get("/kbs/{kb_name}/changes", dependencies=[Depends(requires_tier("read"))])
+@limiter.limit("60/minute")
+def get_pending_changes(
+    request: Request,
+    kb_name: str,
+    svc: KBService = Depends(get_kb_service),
+):
+    """Get uncommitted changes in a KB as entry-level diffs."""
+    try:
+        return svc.get_pending_changes(kb_name)
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"}
+        )
+
+
+@router.post("/kbs/{kb_name}/publish", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("30/minute")
+def publish_changes(
+    request: Request,
+    kb_name: str,
+    summary: str | None = Body(None, embed=True),
+    svc: KBService = Depends(get_kb_service),
+):
+    """Commit and push all pending changes in a KB."""
+    try:
+        return svc.publish_changes(kb_name, summary=summary)
+    except KBNotFoundError:
+        raise HTTPException(
+            status_code=404, detail={"code": "NOT_FOUND", "message": f"KB '{kb_name}' not found"}
+        )
+    except PyriteError as e:
+        raise HTTPException(status_code=400, detail={"code": "PUBLISH_FAILED", "message": str(e)})
+
+
+@router.post("/kbs/{kb_name}/commit", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def commit_kb(
     request: Request,
@@ -31,7 +66,7 @@ def commit_kb(
         raise HTTPException(status_code=400, detail={"code": "COMMIT_FAILED", "message": str(e)})
 
 
-@router.post("/kbs/{kb_name}/push")
+@router.post("/kbs/{kb_name}/push", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("30/minute")
 def push_kb(
     request: Request,

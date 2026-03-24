@@ -1382,6 +1382,180 @@ class KBService:
         """
         return self._export_svc.push_kb(kb_name, remote=remote, branch=branch)
 
+    def get_pending_changes(self, kb_name: str) -> dict:
+        """
+        Get uncommitted changes in a KB, presented as entry-level changes.
+
+        Returns dict with:
+            changes: list of {change_type, file_path, title, entry_type,
+                              entry_id, current_body, previous_body}
+            summary: {total, created, modified, deleted}
+        """
+        from ..services.git_service import GitService
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(kb_name)
+
+        kb_path = kb_config.path
+        if not GitService.is_git_repo(kb_path):
+            return {"changes": [], "summary": {"total": 0, "created": 0, "modified": 0, "deleted": 0}}
+
+        status = GitService.get_status(kb_path)
+        if status["clean"]:
+            return {"changes": [], "summary": {"total": 0, "created": 0, "modified": 0, "deleted": 0}}
+
+        changes = []
+        counts = {"created": 0, "modified": 0, "deleted": 0}
+
+        # Combine all changed files
+        all_files: dict[str, str] = {}  # filename -> change_type
+        for f in status.get("untracked", []):
+            if f.endswith(".md"):
+                all_files[f] = "created"
+        for f in status.get("unstaged", []):
+            if f.endswith(".md"):
+                if not (kb_path / f).exists():
+                    all_files[f] = "deleted"
+                elif f not in all_files:
+                    all_files[f] = "modified"
+        for f in status.get("staged", []):
+            if f.endswith(".md") and f not in all_files:
+                if not (kb_path / f).exists():
+                    all_files[f] = "deleted"
+                else:
+                    all_files[f] = "modified"
+
+        for file_path, change_type in all_files.items():
+            entry_info = self._parse_change_entry(kb_path, file_path, change_type)
+            changes.append(entry_info)
+            counts[change_type] = counts.get(change_type, 0) + 1
+
+        counts["total"] = len(changes)
+        return {"changes": changes, "summary": counts}
+
+    def _parse_change_entry(self, kb_path: Path, file_path: str, change_type: str) -> dict:
+        """Parse an entry file to extract metadata for a change record."""
+        import subprocess
+
+        result = {
+            "change_type": change_type,
+            "file_path": file_path,
+            "title": file_path,
+            "entry_type": "unknown",
+            "entry_id": None,
+            "current_body": None,
+            "previous_body": None,
+        }
+
+        # Get current content (for created/modified)
+        full_path = kb_path / file_path
+        if full_path.exists():
+            content = full_path.read_text(encoding="utf-8")
+            result["current_body"] = content
+            # Parse frontmatter for title/type/id
+            meta = self._extract_frontmatter(content)
+            if meta:
+                result["title"] = meta.get("title", file_path)
+                result["entry_type"] = meta.get("type", "unknown")
+                result["entry_id"] = meta.get("id")
+
+        # Get previous content (for modified/deleted)
+        if change_type in ("modified", "deleted"):
+            try:
+                proc = subprocess.run(
+                    ["git", "show", f"HEAD:{file_path}"],
+                    cwd=str(kb_path),
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if proc.returncode == 0:
+                    result["previous_body"] = proc.stdout
+                    if change_type == "deleted":
+                        meta = self._extract_frontmatter(proc.stdout)
+                        if meta:
+                            result["title"] = meta.get("title", file_path)
+                            result["entry_type"] = meta.get("type", "unknown")
+                            result["entry_id"] = meta.get("id")
+            except Exception:
+                pass
+
+        return result
+
+    @staticmethod
+    def _extract_frontmatter(content: str) -> dict | None:
+        """Extract YAML frontmatter from markdown content."""
+        if not content.startswith("---"):
+            return None
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            return None
+        try:
+            from ..utils.yaml import load_yaml
+
+            return load_yaml(parts[1])
+        except Exception:
+            return None
+
+    def publish_changes(self, kb_name: str, summary: str | None = None) -> dict:
+        """
+        Commit and push all pending changes in a KB.
+
+        Auto-generates a commit message from the change summary.
+        Returns dict with success, commit_hash, entries_published.
+        """
+        from ..services.git_service import GitService
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(kb_name)
+
+        kb_path = kb_config.path
+        if not GitService.is_git_repo(kb_path):
+            return {"success": False, "error": "Not a git repository"}
+
+        # Check what's pending
+        pending = self.get_pending_changes(kb_name)
+        if pending["summary"]["total"] == 0:
+            return {"success": True, "entries_published": 0, "commit_hash": None, "message": "Nothing to publish"}
+
+        # Build commit message
+        if summary:
+            message = summary
+        else:
+            parts = []
+            s = pending["summary"]
+            if s["created"]:
+                parts.append(f"Created {s['created']} entr{'y' if s['created'] == 1 else 'ies'}")
+            if s["modified"]:
+                parts.append(f"Updated {s['modified']} entr{'y' if s['modified'] == 1 else 'ies'}")
+            if s["deleted"]:
+                parts.append(f"Removed {s['deleted']} entr{'y' if s['deleted'] == 1 else 'ies'}")
+            message = "Published: " + ", ".join(parts)
+
+        # Commit
+        commit_result = self._export_svc.commit_kb(kb_name, message)
+        if not commit_result.get("success"):
+            return {"success": False, "error": commit_result.get("error", "Commit failed")}
+
+        # Try to push (non-fatal if no remote)
+        push_error = None
+        try:
+            push_result = self._export_svc.push_kb(kb_name)
+            if not push_result.get("success"):
+                push_error = push_result.get("message", "Push failed")
+        except Exception:
+            push_error = "No remote configured"
+
+        return {
+            "success": True,
+            "commit_hash": commit_result.get("commit_hash"),
+            "entries_published": pending["summary"]["total"],
+            "message": message,
+            "push_error": push_error,
+        }
+
 
 # =============================================================================
 # Core hooks — platform-level lifecycle hooks (run before plugin hooks)

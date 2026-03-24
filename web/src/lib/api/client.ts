@@ -64,7 +64,9 @@ import type {
 	UserListResponse,
 	VersionListResponse,
 	EmbedStatusResponse,
-	IndexJobsResponse
+	IndexJobsResponse,
+	PendingChangesResponse,
+	PublishResponse
 } from './types';
 
 class ApiClient {
@@ -373,6 +375,18 @@ class ApiClient {
 	// Index sync
 	async syncIndex(): Promise<{ synced: boolean; added: number; updated: number; removed: number }> {
 		return this.request('/api/index/sync', { method: 'POST' });
+	}
+
+	// Pending Changes & Publish
+	async getPendingChanges(kb: string): Promise<PendingChangesResponse> {
+		return this.request(`/api/kbs/${encodeURIComponent(kb)}/changes`);
+	}
+
+	async publishChanges(kb: string, summary?: string): Promise<PublishResponse> {
+		return this.request(`/api/kbs/${encodeURIComponent(kb)}/publish`, {
+			method: 'POST',
+			body: JSON.stringify({ summary: summary || null })
+		});
 	}
 
 	async getEmbedStatus(): Promise<EmbedStatusResponse> {
