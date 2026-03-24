@@ -7,5 +7,5 @@ capturecascade.org {
 	redir / /site/cascade-timeline/ permanent
 
 	# Everything to cascade Pyrite instance
-	reverse_proxy cascade-kb-pyrite-1:8088
+	reverse_proxy deploy-pyrite-1:8088
 }
