@@ -26,18 +26,19 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
 :root {{
-  --gold: #996b1f;
-  --gold-light: #c4951a;
-  --gold-bg: #fdf8ef;
-  --gold-border: #e8d5a8;
-  --ink: #1a1a1a;
-  --ink-soft: #4a4a4a;
-  --ink-muted: #8a8a8a;
-  --ink-faint: #b5b5b5;
-  --surface: #fafaf8;
-  --border: #e5e2db;
-  --border-light: #f0ede6;
-  --card-hover: #f5f3ee;
+  --gold: #C9A84C;
+  --gold-dim: #B8942F;
+  --gold-glow: rgba(201,168,76,0.12);
+  --gold-border: rgba(201,168,76,0.25);
+  --surface: #18181b;
+  --surface-raised: #1f1f23;
+  --surface-overlay: #27272a;
+  --ink: #e4e4e7;
+  --ink-soft: #a1a1aa;
+  --ink-muted: #71717a;
+  --ink-faint: #52525b;
+  --border: #2e2e33;
+  --border-light: #3f3f46;
 }}
 *,*::before,*::after {{ box-sizing: border-box; }}
 body {{
@@ -48,15 +49,15 @@ body {{
   -webkit-font-smoothing: antialiased;
 }}
 a {{ color: var(--gold); text-decoration: none; transition: color 0.15s; }}
-a:hover {{ color: var(--gold-light); text-decoration: underline; text-underline-offset: 2px; }}
+a:hover {{ color: var(--gold-dim); text-decoration: underline; text-underline-offset: 2px; }}
 h1,h2,h3 {{ font-family: 'DM Sans', 'Helvetica Neue', sans-serif; color: var(--ink); line-height: 1.25; }}
 h1 {{ font-size: 2.25rem; font-weight: 700; margin: 0 0 0.75rem 0; letter-spacing: -0.02em; }}
 h2 {{ font-size: 1.375rem; font-weight: 600; margin: 2.5rem 0 0.75rem 0; }}
 h3 {{ font-size: 1.125rem; font-weight: 600; margin: 2rem 0 0.5rem 0; }}
 p {{ margin: 0 0 1.25rem 0; }}
 strong {{ font-weight: 600; }}
-code {{ font-family: 'JetBrains Mono', monospace; font-size: 0.875em; background: var(--border-light); padding: 0.15em 0.35em; border-radius: 3px; }}
-blockquote {{ margin: 1.5rem 0; padding: 0.75rem 1.25rem; border-left: 3px solid var(--gold-border); background: var(--gold-bg); font-style: italic; color: var(--ink-soft); }}
+code {{ font-family: 'JetBrains Mono', monospace; font-size: 0.875em; background: var(--surface-overlay); padding: 0.15em 0.35em; border-radius: 3px; color: var(--ink); }}
+blockquote {{ margin: 1.5rem 0; padding: 0.75rem 1.25rem; border-left: 3px solid var(--gold-border); background: var(--surface-raised); font-style: italic; color: var(--ink-soft); }}
 li {{ margin-bottom: 0.35rem; }}
 ul {{ padding-left: 1.5rem; }}
 
@@ -74,8 +75,8 @@ nav.site-header .logo:hover {{ color: var(--ink); text-decoration: none; }}
 nav.site-header .logo-mark {{
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
-  background: linear-gradient(135deg, var(--gold-light), var(--gold));
-  color: white; font-size: 0.75rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--gold), var(--gold-dim));
+  color: var(--surface); font-size: 0.75rem; font-weight: 700;
 }}
 nav.site-header .logo-sub {{ font-weight: 400; color: var(--ink-muted); margin-left: 0.25rem; }}
 nav.site-header nav a {{
@@ -98,7 +99,7 @@ nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
   display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.25rem;
   font-family: 'DM Sans', sans-serif; font-size: 0.6875rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em;
-  background: var(--border-light); color: var(--ink-muted);
+  background: var(--surface-overlay); color: var(--ink-muted);
   vertical-align: middle; margin-left: 0.5rem; position: relative; top: -2px;
 }}
 
@@ -106,7 +107,7 @@ nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
 .tags {{ margin: 0.75rem 0 0 0; display: flex; flex-wrap: wrap; gap: 0.375rem; }}
 .tag {{
   display: inline-block; font-family: 'DM Sans', sans-serif;
-  background: var(--gold-bg); border: 1px solid var(--gold-border);
+  background: var(--gold-glow); border: 1px solid var(--gold-border);
   padding: 0.15rem 0.65rem; border-radius: 1rem;
   font-size: 0.75rem; font-weight: 500; color: var(--gold);
 }}
@@ -123,9 +124,11 @@ nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
 /* Article body */
 article {{ margin-top: 2.5rem; }}
 article p {{ color: var(--ink-soft); }}
-article h2 {{ border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; }}
+article h2 {{ border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }}
 article a {{ text-decoration: underline; text-decoration-color: var(--gold-border); text-underline-offset: 2px; }}
 article a:hover {{ text-decoration-color: var(--gold); }}
+article ul {{ color: var(--ink-soft); }}
+article li {{ color: var(--ink-soft); }}
 
 /* Link sections (backlinks, outlinks) */
 .links-section {{
@@ -148,12 +151,12 @@ article a:hover {{ text-decoration-color: var(--gold); }}
   display: flex; align-items: baseline; gap: 0.625rem;
   padding: 0.75rem 1rem; border: 1px solid var(--border);
   border-radius: 0.5rem; margin-bottom: 0.5rem;
-  background: white; transition: all 0.15s;
+  background: var(--surface-raised); transition: all 0.15s;
   text-decoration: none;
 }}
 .entry-list a:hover {{
-  border-color: var(--gold-border); background: var(--gold-bg);
-  text-decoration: none; box-shadow: 0 1px 3px rgba(153,107,31,0.06);
+  border-color: var(--gold-border); background: var(--gold-glow);
+  text-decoration: none; box-shadow: 0 1px 6px rgba(201,168,76,0.08);
 }}
 .entry-list a strong {{ font-family: 'DM Sans', sans-serif; font-weight: 500; color: var(--ink); }}
 .entry-list a .badge {{ margin-left: auto; flex-shrink: 0; }}
@@ -162,11 +165,11 @@ article a:hover {{ text-decoration-color: var(--gold); }}
 .kb-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 1rem; }}
 .kb-card {{
   border: 1px solid var(--border); border-radius: 0.625rem;
-  padding: 1.5rem; background: white;
+  padding: 1.5rem; background: var(--surface-raised);
   transition: all 0.2s; text-decoration: none; display: block;
 }}
 .kb-card:hover {{
-  border-color: var(--gold-border); box-shadow: 0 2px 8px rgba(153,107,31,0.08);
+  border-color: var(--gold-border); box-shadow: 0 2px 12px rgba(201,168,76,0.1);
   text-decoration: none; transform: translateY(-1px);
 }}
 .kb-card h2 {{
@@ -186,12 +189,12 @@ article a:hover {{ text-decoration-color: var(--gold); }}
   width: 100%; padding: 0.875rem 1.125rem;
   border: 1px solid var(--border); border-radius: 0.5rem;
   font-family: 'DM Sans', sans-serif; font-size: 0.9375rem;
-  background: white; color: var(--ink); outline: none;
+  background: var(--surface-raised); color: var(--ink); outline: none;
   transition: border-color 0.15s, box-shadow 0.15s;
 }}
 #site-search input:focus {{
   border-color: var(--gold-border);
-  box-shadow: 0 0 0 3px rgba(153,107,31,0.08);
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.1);
 }}
 #site-search input::placeholder {{ color: var(--ink-faint); }}
 
@@ -223,7 +226,7 @@ h2[id]:hover .anchor, h3[id]:hover .anchor {{ opacity: 1; }}
 .toc {{
   font-family: 'DM Sans', sans-serif; font-size: 0.8125rem;
   border: 1px solid var(--border); border-radius: 0.5rem;
-  padding: 1rem 1.25rem; margin-bottom: 2rem; background: white;
+  padding: 1rem 1.25rem; margin-bottom: 2rem; background: var(--surface-raised);
 }}
 .toc-title {{
   font-weight: 600; font-size: 0.6875rem; text-transform: uppercase;
@@ -237,8 +240,8 @@ h2[id]:hover .anchor, h3[id]:hover .anchor {{ opacity: 1; }}
 .back-to-top {{
   display: none; position: fixed; bottom: 2rem; right: 2rem;
   width: 2.5rem; height: 2.5rem; border-radius: 50%;
-  background: white; border: 1px solid var(--border);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  background: var(--surface-raised); border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
   cursor: pointer; align-items: center; justify-content: center;
   transition: all 0.2s; z-index: 100; font-size: 1rem; color: var(--ink-muted);
 }}
@@ -435,7 +438,7 @@ class SiteCacheService:
 
         body = (
             '<h1>Knowledge Bases</h1>'
-            '<p style="color:var(--ink-muted);margin-bottom:0.5rem">Curated knowledge bases on systems thinking, lean, agile, and more.</p>'
+            '<p style="color:var(--ink-soft);margin-bottom:0.5rem">Curated knowledge bases on systems thinking, lean, agile, and more.</p>'
             '<div id="site-search">'
             '<input type="text" placeholder="Search across all knowledge bases...">'
             '<div class="search-results entry-list" style="margin-top:0.5rem"></div>'
@@ -465,7 +468,7 @@ class SiteCacheService:
             entry_html.append(
                 f'<a href="/site/{_esc(kb_name)}/{_esc(e["id"])}">'
                 f'<strong>{_esc(e.get("title", e["id"]))}</strong> '
-                f'<span class="badge" style="background:#f4f4f5;color:#71717a">{_esc(e.get("entry_type", "note"))}</span>'
+                f'<span class="badge">{_esc(e.get("entry_type", "note"))}</span>'
                 f'</a>'
             )
 
@@ -473,7 +476,7 @@ class SiteCacheService:
             f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span><strong>{_esc(kb_name)}</strong></div>'
             f'<h1>{_esc(kb_name)}</h1>'
             f'<p class="meta">{total} entries</p>'
-            + (f'<p style="color:var(--ink-soft);margin-bottom:2rem">{_esc(desc)}</p>' if desc else '')
+            + (f'<p style="color:var(--ink-soft);margin:1rem 0 2rem 0">{_esc(desc)}</p>' if desc else '')
             + f'<div class="entry-list">{"".join(entry_html)}</div>'
         )
 
