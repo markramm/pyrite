@@ -107,10 +107,7 @@
 	});
 </script>
 
-{#if $page.url.pathname.startsWith('/site')}
-	<!-- Public site routes: no app chrome, no auth -->
-	{@render children()}
-{:else if authStore.loading}
+{#if authStore.loading}
 	<div class="flex h-screen items-center justify-center bg-zinc-900">
 		<p class="text-zinc-400">Loading...</p>
 	</div>
@@ -136,10 +133,8 @@
 	</div>
 {/if}
 
-{#if !$page.url.pathname.startsWith('/site')}
-	<Toast />
-	<FeedbackButton />
-	<QuickSwitcher />
-	<CommandPalette />
-	<KeyboardShortcutsModal open={shortcutsOpen} onclose={() => (shortcutsOpen = false)} />
-{/if}
+<Toast />
+<FeedbackButton />
+<QuickSwitcher />
+<CommandPalette />
+<KeyboardShortcutsModal open={shortcutsOpen} onclose={() => (shortcutsOpen = false)} />

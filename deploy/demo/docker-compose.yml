@@ -11,7 +11,6 @@ services:
       - PYRITE_AUTH_ANONYMOUS_TIER=read
       - PYRITE_AUTH_ALLOW_REGISTRATION=true
       - PYRITE_CORS_ORIGINS=https://demo.pyrite.wiki
-      - PYRITE_ORIGIN=https://demo.pyrite.wiki
       - PYRITE_SEARCH_MODE=hybrid
     restart: unless-stopped
     healthcheck:

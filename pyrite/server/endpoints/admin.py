@@ -61,6 +61,22 @@ def sync_index(
     """
     if wait:
         result = index_mgr.sync_incremental()
+
+        # Re-render site cache if entries changed
+        if result.get("added", 0) + result.get("updated", 0) + result.get("removed", 0) > 0:
+            try:
+                from ...services.site_cache import SiteCacheService
+
+                cache_svc = SiteCacheService(
+                    config=request.app.state.config if hasattr(request.app.state, "config") else None,
+                    db=index_mgr.db,
+                )
+                if cache_svc.config:
+                    cache_svc.render_all()
+                    logger.info("Site cache rendered after sync")
+            except Exception:
+                logger.debug("Site cache render skipped", exc_info=True)
+
         # Broadcast WebSocket event
         import asyncio
 
@@ -110,6 +126,21 @@ def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
     """Return AI/LLM configuration status."""
     status = llm.status()
     return AIStatusResponse(**status)
+
+
+@router.post("/site/render", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("10/minute")
+def render_site_cache(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+):
+    """Render all /site pages to the filesystem cache for fast serving."""
+    from ...services.site_cache import SiteCacheService
+
+    svc = SiteCacheService(config, db)
+    stats = svc.render_all()
+    return {"rendered": True, **stats}
 
 
 @router.get("/index/embed-status")
