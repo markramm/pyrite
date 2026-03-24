@@ -1,3 +1,19 @@
 demo.pyrite.wiki {
-	reverse_proxy pyrite:8088
+	# API and auth go to Python backend
+	handle /api/* {
+		reverse_proxy pyrite:8088
+	}
+	handle /auth/* {
+		reverse_proxy pyrite:8088
+	}
+	handle /health {
+		reverse_proxy pyrite:8088
+	}
+	handle /ws {
+		reverse_proxy pyrite:8088
+	}
+	# Everything else goes to Node SSR server
+	handle {
+		reverse_proxy pyrite:3000
+	}
 }
