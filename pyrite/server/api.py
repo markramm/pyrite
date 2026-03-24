@@ -614,6 +614,12 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     )
     if dist_dir is None:
         dist_dir = Path(__file__).parent.parent.parent / "web" / "dist"
+    # Always mount /site and /viewer routes (independent of SPA dist)
+    from .static import mount_site_routes
+
+    mount_site_routes(application)
+
+    # Mount SPA static files if dist directory exists
     if dist_dir.is_dir():
         from .static import mount_static
 
