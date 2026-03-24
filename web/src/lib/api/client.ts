@@ -183,6 +183,17 @@ class ApiClient {
 		return this.request('/auth/users');
 	}
 
+	async setUserRole(userId: number, role: string): Promise<{ updated: boolean; user_id: number; role: string }> {
+		return this.request(`/auth/users/${userId}/role`, {
+			method: 'PUT',
+			body: JSON.stringify({ role })
+		});
+	}
+
+	async getUserPermissions(userId: number): Promise<{ user_id: number; permissions: Record<string, string> }> {
+		return this.request(`/auth/users/${userId}/permissions`);
+	}
+
 	async listEphemeralKBs(): Promise<{
 		ephemeral_kbs: Array<{
 			name: string;

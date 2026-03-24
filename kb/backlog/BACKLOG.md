@@ -166,15 +166,15 @@ Recommended execution order. Grouped by milestone.
 | **7** | [[web-ui-graph-centrality]] | S | **done** |
 | **8** | [[web-ui-editor-blank-content-bug]] | S | **done** |
 | **9** | [[web-ui-editor-theme-mismatch]] | S | **done** |
-| **10** | [[web-ui-saved-searches]] | S | proposed |
+| **10** | [[web-ui-saved-searches]] | S | **done** |
 | **11** | [[web-ui-index-management]] | S | **done** |
 | **12** | [[web-ui-git-operations]] | L | proposed |
 | **13** | [[web-ui-bulk-operations]] | L | proposed |
 | **14** | [[web-ui-review-system]] | M | proposed |
 | **15** | [[web-ui-qa-enhancements]] | M | proposed |
-| **16** | [[web-ui-daily-notes-calendar]] | S | proposed |
+| **16** | [[web-ui-daily-notes-calendar]] | S | **done** |
 | **17** | [[web-ui-collection-editing]] | M | proposed |
-| **18** | [[web-ui-user-management]] | M | proposed |
+| **18** | [[web-ui-user-management]] | M | **done** |
 | **19** | [[web-ui-webhook-config]] | M | proposed |
 
 **Pre-1.0 — Extension Extraction:**
@@ -555,8 +555,8 @@ All items below are done. Detail lives in the individual backlog item files in [
 ### JI Plugin Batch — Journalism Investigation Features
 [[ji-claim-to-edge-promotion]] (claim→edge-entity promotion), [[ji-known-entities-kb-pattern]] (cross-KB entity lookup + preset), [[ji-mcp-conversational-optimization]] (conversational descriptions, default KB, summaries), [[ji-investigation-guided-setup]] (investigation start/status CLI + MCP tools)
 
-### Wave 20 — Web UI Feature Parity Phases 1-3
-[[web-ui-entry-metadata-display]] (status badge, importance score, sources, outlinks), [[web-ui-entry-creation-fields]] (tags, date picker, importance slider, status), [[web-ui-orient-in-sidebar]] (orient link in sidebar), [[web-ui-wikilink-rendering-in-lists]] (strip wikilinks in card previews), [[web-ui-kb-orientation-page]] (orient page with type breakdown, tags, recent changes), [[web-ui-advanced-search-filters]] (date range, tags, collapsible filters), [[web-ui-graph-centrality]] (betweenness centrality toggle), [[web-ui-editor-blank-content-bug]] (ViewPlugin fix + Svelte 5 $effect init), [[web-ui-editor-theme-mismatch]] (Compartment dynamic reconfigure), [[web-ui-index-management]] (stats, embed status, per-KB health/reindex, active jobs)
+### Wave 20 — Web UI Feature Parity Phases 1-5
+[[web-ui-entry-metadata-display]] (status badge, importance score, sources, outlinks), [[web-ui-entry-creation-fields]] (tags, date picker, importance slider, status), [[web-ui-orient-in-sidebar]] (orient link in sidebar), [[web-ui-wikilink-rendering-in-lists]] (strip wikilinks in card previews), [[web-ui-kb-orientation-page]] (orient page with type breakdown, tags, recent changes), [[web-ui-advanced-search-filters]] (date range, tags, collapsible filters), [[web-ui-graph-centrality]] (betweenness centrality toggle), [[web-ui-editor-blank-content-bug]] (ViewPlugin fix + Svelte 5 $effect init), [[web-ui-editor-theme-mismatch]] (Compartment dynamic reconfigure), [[web-ui-index-management]] (stats, embed status, per-KB health/reindex, active jobs), [[web-ui-saved-searches]] (localStorage persistence, quick-access pills), [[web-ui-daily-notes-calendar]] (already implemented — Calendar.svelte with month nav + dot indicators), [[web-ui-user-management]] (user list, role editing, per-KB permission grants/revokes)
 
 ### Also Completed
 [[web-server-implementation]], [[cli-entry-point-consolidation]], [[extension-builder-skill]], [[entry-aliases]], [[web-clipper]], [[postgres-storage-backend]], [[silent-error-logging]], [[test-coverage-gaps]]

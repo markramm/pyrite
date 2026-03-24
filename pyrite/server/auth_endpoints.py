@@ -156,6 +156,47 @@ async def list_users(
     return {"users": auth_service.list_users()}
 
 
+@auth_router.put("/users/{user_id}/role")
+async def set_user_role(
+    request: Request,
+    user_id: int,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Update a user's global role. Requires admin."""
+    auth_user = getattr(request.state, "auth_user", None)
+    global_role = getattr(request.state, "api_role", None)
+    is_admin = global_role == "admin" or (auth_user and auth_user.get("role") == "admin")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    body = await request.json()
+    role = body.get("role", "")
+    if role not in ("read", "write", "admin"):
+        raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
+
+    found = auth_service.set_role(user_id, role)
+    if not found:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"updated": True, "user_id": user_id, "role": role}
+
+
+@auth_router.get("/users/{user_id}/permissions")
+async def get_user_permissions(
+    request: Request,
+    user_id: int,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Get a user's per-KB permissions. Requires admin."""
+    auth_user = getattr(request.state, "auth_user", None)
+    global_role = getattr(request.state, "api_role", None)
+    is_admin = global_role == "admin" or (auth_user and auth_user.get("role") == "admin")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    perms = auth_service.get_user_kb_permissions(user_id)
+    return {"user_id": user_id, "permissions": perms}
+
+
 @auth_router.get("/config")
 async def get_auth_config(
     config: PyriteConfig = Depends(get_config),

@@ -263,6 +263,31 @@ class TestListUsers:
         assert "display_name" in alice
         assert "role" in alice
 
+    def test_set_role_changes_user_role(self, setup):
+        """set_role updates a user's global role."""
+        auth, _ = setup
+        user = auth.register("alice", "password123", "Alice")
+        user_id = user["id"]
+        assert auth.set_role(user_id, "admin") is True
+        users = auth.list_users()
+        alice = next(u for u in users if u["id"] == user_id)
+        assert alice["role"] == "admin"
+
+    def test_set_role_rejects_invalid_role(self, setup):
+        """set_role raises ValueError for invalid roles."""
+        auth, _ = setup
+        user = auth.register("alice", "password123", "Alice")
+        with pytest.raises(ValueError, match="Invalid role"):
+            auth.set_role(user["id"], "superadmin")
+
+    def test_get_user_kb_permissions(self, setup):
+        """get_user_kb_permissions returns explicit grants."""
+        auth, _ = setup
+        user = auth.register("alice", "password123", "Alice")
+        auth.grant_kb_permission(user["id"], "test", "write", user["id"])
+        perms = auth.get_user_kb_permissions(user["id"])
+        assert perms == {"test": "write"}
+
 
 # =========================================================================
 # Ephemeral KB Tests

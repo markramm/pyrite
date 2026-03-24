@@ -481,6 +481,13 @@
 						<span class="text-zinc-400">&rarr;</span>
 					</a>
 					<a
+						href="/settings/users"
+						class="flex items-center justify-between rounded-md border border-zinc-300 px-4 py-3 text-sm hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
+					>
+						<span>Users & Permissions</span>
+						<span class="text-zinc-400">&rarr;</span>
+					</a>
+					<a
 						href="/settings/index"
 						class="flex items-center justify-between rounded-md border border-zinc-300 px-4 py-3 text-sm hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-700"
 					>

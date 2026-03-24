@@ -7,6 +7,7 @@
 	import { typeColor } from '$lib/constants';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
+	import { savedSearches, type SavedSearch } from '$lib/stores/saved-searches.svelte';
 
 	let searchInput = $state<HTMLInputElement | null>(null);
 	let selectedKb = $state('');
@@ -16,6 +17,8 @@
 	let tagFilter = $state('');
 	let showAdvanced = $state(false);
 	let entryTypes = $state<string[]>([]);
+	let showSaveDialog = $state(false);
+	let saveName = $state('');
 
 	function highlightSnippet(snippet: string, query: string): string {
 		if (!query.trim()) return snippet;
@@ -66,6 +69,34 @@
 
 	function onKbChange() {
 		if (searchStore.query.trim()) runSearch();
+	}
+
+	function handleSaveSearch() {
+		if (!saveName.trim() || !searchStore.query.trim()) return;
+		savedSearches.save({
+			name: saveName.trim(),
+			query: searchStore.query,
+			mode: searchStore.mode,
+			kb: selectedKb,
+			type: selectedType,
+			dateFrom,
+			dateTo,
+			tags: tagFilter,
+		});
+		saveName = '';
+		showSaveDialog = false;
+	}
+
+	function loadSavedSearch(s: SavedSearch) {
+		searchStore.query = s.query;
+		searchStore.mode = s.mode;
+		selectedKb = s.kb ?? '';
+		selectedType = s.type ?? '';
+		dateFrom = s.dateFrom ?? '';
+		dateTo = s.dateTo ?? '';
+		tagFilter = s.tags ?? '';
+		if (s.dateFrom || s.dateTo || s.tags) showAdvanced = true;
+		runSearch();
 	}
 
 	function onTypeChange() {
@@ -172,6 +203,17 @@
 				{showAdvanced ? 'Less' : 'More'} filters
 			</button>
 
+			<!-- Save search button -->
+			{#if searchStore.query.trim()}
+				<button
+					onclick={() => { showSaveDialog = !showSaveDialog; saveName = ''; }}
+					class="text-xs text-zinc-500 hover:text-zinc-300"
+					title="Save this search"
+				>
+					Save
+				</button>
+			{/if}
+
 			<!-- Result count -->
 			{#if !searchStore.loading && searchStore.query.trim() && searchStore.results.length > 0}
 				<span class="ml-auto text-sm text-zinc-500">
@@ -179,6 +221,54 @@
 				</span>
 			{/if}
 		</div>
+
+		<!-- Save search dialog -->
+		{#if showSaveDialog}
+			<div class="mt-2 flex items-center gap-2">
+				<input
+					type="text"
+					bind:value={saveName}
+					placeholder="Name this search..."
+					onkeydown={(e) => { if (e.key === 'Enter') handleSaveSearch(); if (e.key === 'Escape') showSaveDialog = false; }}
+					class="flex-1 rounded border border-zinc-300 bg-white px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+				/>
+				<button
+					onclick={handleSaveSearch}
+					disabled={!saveName.trim()}
+					class="rounded bg-gold-500 px-3 py-1 text-xs font-medium text-zinc-900 hover:bg-gold-400 disabled:opacity-50"
+				>
+					Save
+				</button>
+				<button
+					onclick={() => (showSaveDialog = false)}
+					class="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 dark:border-zinc-700"
+				>
+					Cancel
+				</button>
+			</div>
+		{/if}
+
+		<!-- Saved searches pills -->
+		{#if savedSearches.items.length > 0}
+			<div class="mt-2 flex flex-wrap items-center gap-2">
+				<span class="text-xs text-zinc-500">Saved:</span>
+				{#each savedSearches.items as s}
+					<button
+						onclick={() => loadSavedSearch(s)}
+						class="group flex items-center gap-1 rounded-full border border-zinc-300 bg-white px-2.5 py-0.5 text-xs text-zinc-600 transition-colors hover:border-gold-500/50 hover:text-gold-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400"
+					>
+						{s.name}
+						<span
+							role="button"
+							tabindex="0"
+							onclick={(e) => { e.stopPropagation(); savedSearches.remove(s.name); }}
+							onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); savedSearches.remove(s.name); } }}
+							class="ml-0.5 hidden text-zinc-400 hover:text-red-400 group-hover:inline"
+						>&times;</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
 
 		<!-- Advanced filters -->
 		{#if showAdvanced}
