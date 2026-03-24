@@ -355,6 +355,24 @@ class TestGraph:
         assert len(graph["nodes"]) >= 2
         assert len(graph["edges"]) >= 1
 
+    def test_get_graph_data_filters_by_kb(self, backend):
+        """Graph with kb_name filter should only return nodes from that KB."""
+        # Setup: entries in default 'test' KB
+        self._setup_linked_entries(backend)  # a->b->c all in 'test'
+
+        # Filter to 'test' — should get a, b, c (all linked)
+        graph = backend.get_graph_data(kb_name="test")
+        node_kbs = {n["kb_name"] for n in graph["nodes"]}
+        assert node_kbs == {"test"}, f"Expected only test nodes, got {node_kbs}"
+
+        # Filter to nonexistent KB — should get nothing
+        graph2 = backend.get_graph_data(kb_name="nonexistent")
+        assert len(graph2["nodes"]) == 0
+
+        # Without filter — should get all linked entries
+        graph3 = backend.get_graph_data()
+        assert len(graph3["nodes"]) >= 2
+
     def test_get_most_linked(self, backend):
         self._setup_linked_entries(backend)
         most = backend.get_most_linked(kb_name="test", limit=5)

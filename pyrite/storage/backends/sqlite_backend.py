@@ -896,8 +896,8 @@ class SQLiteBackend:
             sql = """
                 SELECT e.id, e.kb_name, e.title, e.entry_type
                 FROM entry e
-                WHERE e.id IN (SELECT source_id FROM link)
-                   OR e.id IN (SELECT target_id FROM link)
+                WHERE (e.id IN (SELECT source_id FROM link)
+                   OR e.id IN (SELECT target_id FROM link))
             """
             params: list[Any] = []
             if kb_name:
