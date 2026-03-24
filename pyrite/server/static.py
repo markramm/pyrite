@@ -62,6 +62,17 @@ def mount_static(app: FastAPI, dist_dir: Path) -> None:
         body = f"User-agent: *\nAllow: /site/\nDisallow: /api/\nDisallow: /auth/\n\nSitemap: {base}/site/sitemap.xml\n"
         return Response(content=body, media_type="text/plain")
 
+    # Serve /viewer/* from data/viewer/ directory (e.g., cascade viewer)
+    viewer_dir = data_dir / "viewer"
+
+    @app.get("/viewer/{path:path}", include_in_schema=False)
+    async def viewer_page(request: Request, path: str):
+        return _serve_static_dir(viewer_dir, path, fallback_spa=True)
+
+    @app.get("/viewer", include_in_schema=False)
+    async def viewer_index(request: Request):
+        return _serve_static_dir(viewer_dir, "index.html")
+
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
@@ -85,6 +96,33 @@ def mount_static(app: FastAPI, dist_dir: Path) -> None:
 
         # SPA fallback: serve index.html for client-side routing
         return HTMLResponse(content=index_content)
+
+
+def _serve_static_dir(
+    directory: Path, path: str, fallback_spa: bool = False
+) -> HTMLResponse | FileResponse:
+    """Serve a file from a static directory, with optional SPA fallback."""
+    if not directory.is_dir():
+        return HTMLResponse(status_code=404)
+
+    file_path = directory / path
+    try:
+        resolved = file_path.resolve()
+        if not resolved.is_relative_to(directory.resolve()):
+            return HTMLResponse(status_code=404)
+    except (ValueError, OSError):
+        return HTMLResponse(status_code=404)
+
+    if file_path.is_file():
+        return FileResponse(str(file_path))
+
+    # SPA fallback — serve index.html for client-side routing
+    if fallback_spa:
+        index = directory / "index.html"
+        if index.is_file():
+            return FileResponse(str(index))
+
+    return HTMLResponse(status_code=404)
 
 
 def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
