@@ -12,6 +12,8 @@ services:
       - PYRITE_AUTH_ALLOW_REGISTRATION=true
       - PYRITE_CORS_ORIGINS=https://demo.pyrite.wiki
       - PYRITE_SEARCH_MODE=hybrid
+    networks:
+      - shared
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')"]
@@ -29,6 +31,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    networks:
+      - shared
     depends_on:
       pyrite:
         condition: service_healthy
@@ -38,3 +42,7 @@ volumes:
   pyrite-data:
   caddy-data:
   caddy-config:
+
+networks:
+  shared:
+    name: pyrite-shared

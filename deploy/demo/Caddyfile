@@ -1,3 +1,11 @@
 demo.pyrite.wiki {
-	reverse_proxy pyrite:8088
+	reverse_proxy demo-pyrite-1:8088
+}
+
+capturecascade.org {
+	# Root redirects to the timeline
+	redir / /site/cascade-timeline/ permanent
+
+	# Everything to cascade Pyrite instance
+	reverse_proxy cascade-kb-pyrite-1:8088
 }
