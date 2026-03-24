@@ -8,7 +8,6 @@ from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
 
-# Minimal HTML template — matches the site layout structure
 _PAGE_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -20,56 +19,225 @@ _PAGE_TEMPLATE = """<!DOCTYPE html>
 <meta property="og:description" content="{description}">
 <meta property="og:type" content="{og_type}">
 {extra_head}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
 <style>
-body {{ font-family: system-ui, -apple-system, sans-serif; max-width: 48rem; margin: 0 auto; padding: 2rem 1.5rem; color: #18181b; line-height: 1.6; }}
-a {{ color: #b8860b; text-decoration: none; }} a:hover {{ text-decoration: underline; }}
-h1 {{ font-size: 2rem; margin-bottom: 0.5rem; }} h2 {{ font-size: 1.5rem; margin-top: 2rem; }} h3 {{ font-size: 1.25rem; margin-top: 1.5rem; }}
-.badge {{ display: inline-block; padding: 0.1rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 500; }}
-.tag {{ display: inline-block; background: #f4f4f5; padding: 0.1rem 0.6rem; border-radius: 1rem; font-size: 0.75rem; color: #71717a; margin: 0.1rem; }}
-.entry-list a {{ display: block; padding: 0.75rem; border: 1px solid #e4e4e7; border-radius: 0.5rem; margin-bottom: 0.5rem; }}
-.entry-list a:hover {{ border-color: #a1a1aa; text-decoration: none; }}
-.breadcrumb {{ font-size: 0.875rem; color: #71717a; margin-bottom: 1rem; }}
-.breadcrumb a {{ color: #71717a; }} .breadcrumb a:hover {{ color: #18181b; }}
-.meta {{ font-size: 0.875rem; color: #71717a; margin-top: 0.5rem; }}
-.links-section {{ margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e4e4e7; }}
-.links-section h2 {{ font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #71717a; font-weight: 600; }}
-footer {{ margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e4e4e7; text-align: center; font-size: 0.75rem; color: #a1a1aa; }}
-nav.site-header {{ display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; margin-bottom: 2rem; border-bottom: 1px solid #e4e4e7; }}
-nav.site-header a {{ color: #71717a; font-size: 0.875rem; margin-left: 1rem; }}
-.kb-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: 1rem; }}
-.kb-card {{ border: 1px solid #e4e4e7; border-radius: 0.5rem; padding: 1.25rem; }} .kb-card:hover {{ border-color: #a1a1aa; }}
-.kb-card h2 {{ font-size: 1.125rem; margin: 0 0 0.25rem 0; }}
-.kb-card p {{ font-size: 0.875rem; color: #71717a; margin: 0 0 0.5rem 0; }}
+:root {{
+  --gold: #996b1f;
+  --gold-light: #c4951a;
+  --gold-bg: #fdf8ef;
+  --gold-border: #e8d5a8;
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-muted: #8a8a8a;
+  --ink-faint: #b5b5b5;
+  --surface: #fafaf8;
+  --border: #e5e2db;
+  --border-light: #f0ede6;
+  --card-hover: #f5f3ee;
+}}
+*,*::before,*::after {{ box-sizing: border-box; }}
+body {{
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  max-width: 52rem; margin: 0 auto; padding: 0 1.5rem;
+  color: var(--ink); line-height: 1.72; font-size: 1.0625rem;
+  background: var(--surface);
+  -webkit-font-smoothing: antialiased;
+}}
+a {{ color: var(--gold); text-decoration: none; transition: color 0.15s; }}
+a:hover {{ color: var(--gold-light); text-decoration: underline; text-underline-offset: 2px; }}
+h1,h2,h3 {{ font-family: 'DM Sans', 'Helvetica Neue', sans-serif; color: var(--ink); line-height: 1.25; }}
+h1 {{ font-size: 2.25rem; font-weight: 700; margin: 0 0 0.75rem 0; letter-spacing: -0.02em; }}
+h2 {{ font-size: 1.375rem; font-weight: 600; margin: 2.5rem 0 0.75rem 0; }}
+h3 {{ font-size: 1.125rem; font-weight: 600; margin: 2rem 0 0.5rem 0; }}
+p {{ margin: 0 0 1.25rem 0; }}
+strong {{ font-weight: 600; }}
+code {{ font-family: 'JetBrains Mono', monospace; font-size: 0.875em; background: var(--border-light); padding: 0.15em 0.35em; border-radius: 3px; }}
+blockquote {{ margin: 1.5rem 0; padding: 0.75rem 1.25rem; border-left: 3px solid var(--gold-border); background: var(--gold-bg); font-style: italic; color: var(--ink-soft); }}
+li {{ margin-bottom: 0.35rem; }}
+ul {{ padding-left: 1.5rem; }}
+
+/* Header */
+nav.site-header {{
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 1.25rem 0; margin-bottom: 2.5rem;
+  border-bottom: 1px solid var(--border);
+}}
+nav.site-header .logo {{
+  font-family: 'DM Sans', sans-serif; font-size: 1.125rem; font-weight: 600;
+  color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 0.5rem;
+}}
+nav.site-header .logo:hover {{ color: var(--ink); text-decoration: none; }}
+nav.site-header .logo-mark {{
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  color: white; font-size: 0.75rem; font-weight: 700;
+}}
+nav.site-header .logo-sub {{ font-weight: 400; color: var(--ink-muted); margin-left: 0.25rem; }}
+nav.site-header nav a {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.8125rem; font-weight: 500;
+  color: var(--ink-muted); margin-left: 1.5rem; text-transform: uppercase; letter-spacing: 0.06em;
+  transition: color 0.15s;
+}}
+nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
+
+/* Breadcrumbs */
+.breadcrumb {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.8125rem; color: var(--ink-muted);
+  margin-bottom: 1.5rem; letter-spacing: 0.01em;
+}}
+.breadcrumb a {{ color: var(--ink-muted); }} .breadcrumb a:hover {{ color: var(--gold); }}
+.breadcrumb .sep {{ margin: 0 0.4rem; opacity: 0.4; }}
+
+/* Entry type badge */
+.badge {{
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.25rem;
+  font-family: 'DM Sans', sans-serif; font-size: 0.6875rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  background: var(--border-light); color: var(--ink-muted);
+  vertical-align: middle; margin-left: 0.5rem; position: relative; top: -2px;
+}}
+
+/* Tags */
+.tags {{ margin: 0.75rem 0 0 0; display: flex; flex-wrap: wrap; gap: 0.375rem; }}
+.tag {{
+  display: inline-block; font-family: 'DM Sans', sans-serif;
+  background: var(--gold-bg); border: 1px solid var(--gold-border);
+  padding: 0.15rem 0.65rem; border-radius: 1rem;
+  font-size: 0.75rem; font-weight: 500; color: var(--gold);
+}}
+
+/* Meta line */
+.meta {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.8125rem;
+  color: var(--ink-muted); margin-top: 0.5rem;
+  display: flex; align-items: center; gap: 0.75rem;
+}}
+.meta a {{ color: var(--ink-faint); font-size: 0.75rem; }}
+.meta a:hover {{ color: var(--gold); }}
+
+/* Article body */
+article {{ margin-top: 2.5rem; }}
+article p {{ color: var(--ink-soft); }}
+article h2 {{ border-bottom: 1px solid var(--border-light); padding-bottom: 0.5rem; }}
+article a {{ text-decoration: underline; text-decoration-color: var(--gold-border); text-underline-offset: 2px; }}
+article a:hover {{ text-decoration-color: var(--gold); }}
+
+/* Link sections (backlinks, outlinks) */
+.links-section {{
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+}}
+.links-section h2 {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.6875rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted);
+  font-weight: 600; margin: 0 0 0.75rem 0; border: none; padding: 0;
+}}
+.links-section a {{
+  display: inline-block; font-size: 0.9375rem; margin-bottom: 0.375rem;
+  text-decoration: none; margin-right: 0.25rem;
+}}
+.links-section a::before {{ content: '\2192\00a0'; color: var(--ink-faint); font-size: 0.8125rem; }}
+
+/* Entry list (KB index, search results) */
+.entry-list {{ margin-top: 1rem; }}
+.entry-list a {{
+  display: flex; align-items: baseline; gap: 0.625rem;
+  padding: 0.75rem 1rem; border: 1px solid var(--border);
+  border-radius: 0.5rem; margin-bottom: 0.5rem;
+  background: white; transition: all 0.15s;
+  text-decoration: none;
+}}
+.entry-list a:hover {{
+  border-color: var(--gold-border); background: var(--gold-bg);
+  text-decoration: none; box-shadow: 0 1px 3px rgba(153,107,31,0.06);
+}}
+.entry-list a strong {{ font-family: 'DM Sans', sans-serif; font-weight: 500; color: var(--ink); }}
+.entry-list a .badge {{ margin-left: auto; flex-shrink: 0; }}
+
+/* KB grid (landing page) */
+.kb-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 1rem; }}
+.kb-card {{
+  border: 1px solid var(--border); border-radius: 0.625rem;
+  padding: 1.5rem; background: white;
+  transition: all 0.2s; text-decoration: none; display: block;
+}}
+.kb-card:hover {{
+  border-color: var(--gold-border); box-shadow: 0 2px 8px rgba(153,107,31,0.08);
+  text-decoration: none; transform: translateY(-1px);
+}}
+.kb-card h2 {{
+  font-family: 'DM Sans', sans-serif; font-size: 1.0625rem;
+  font-weight: 600; margin: 0 0 0.375rem 0; color: var(--ink);
+}}
+.kb-card p {{ font-size: 0.875rem; color: var(--ink-muted); margin: 0 0 0.75rem 0; line-height: 1.5; }}
+.kb-card .count {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.75rem; font-weight: 500;
+  color: var(--ink-faint); display: flex; align-items: center; gap: 0.375rem;
+}}
+.kb-card .count::before {{ content: ''; display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: var(--gold); }}
+
+/* Search */
+#site-search {{ margin-bottom: 2.5rem; }}
+#site-search input {{
+  width: 100%; padding: 0.875rem 1.125rem;
+  border: 1px solid var(--border); border-radius: 0.5rem;
+  font-family: 'DM Sans', sans-serif; font-size: 0.9375rem;
+  background: white; color: var(--ink); outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}}
+#site-search input:focus {{
+  border-color: var(--gold-border);
+  box-shadow: 0 0 0 3px rgba(153,107,31,0.08);
+}}
+#site-search input::placeholder {{ color: var(--ink-faint); }}
+
+/* Footer */
+footer {{
+  margin-top: 4rem; padding: 1.5rem 0;
+  border-top: 1px solid var(--border);
+  text-align: center; font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem; color: var(--ink-faint); letter-spacing: 0.01em;
+}}
+footer a {{ color: var(--ink-muted); }}
+
+/* Responsive */
+@media (max-width: 640px) {{
+  body {{ font-size: 1rem; padding: 0 1rem; }}
+  h1 {{ font-size: 1.75rem; }}
+  .kb-grid {{ grid-template-columns: 1fr; }}
+  nav.site-header {{ flex-direction: column; gap: 0.75rem; align-items: flex-start; }}
+  nav.site-header nav a {{ margin-left: 0; margin-right: 1rem; }}
+}}
 </style>
 </head>
 <body>
 <nav class="site-header">
-<a href="/site" style="font-size:1.125rem;font-weight:bold;color:#18181b">Pyrite <span style="font-size:0.875rem;font-weight:normal;color:#71717a">Knowledge Base</span></a>
-<div><a href="/site">Home</a><a href="/site/search">Search</a></div>
+<a href="/site" class="logo"><span class="logo-mark">Py</span> Pyrite<span class="logo-sub">Knowledge Base</span></a>
+<nav><a href="/site">Home</a><a href="/site/search">Search</a></nav>
 </nav>
 {body}
-<footer>Powered by <a href="https://pyrite.wiki">Pyrite</a> — Knowledge-as-Code</footer>
+<footer>Powered by <a href="https://pyrite.wiki">Pyrite</a> &mdash; Knowledge&#8209;as&#8209;Code</footer>
 <script>
-// Progressive enhancement: search widget
 (function() {{
-  var searchEl = document.getElementById('site-search');
-  if (!searchEl) return;
-  var input = searchEl.querySelector('input');
-  var results = searchEl.querySelector('.search-results');
-  if (!input || !results) return;
-  var timer;
-  input.addEventListener('input', function() {{
-    clearTimeout(timer);
-    var q = input.value.trim();
-    if (!q) {{ results.innerHTML = ''; return; }}
-    timer = setTimeout(function() {{
+  var s = document.getElementById('site-search');
+  if (!s) return;
+  var i = s.querySelector('input'), r = s.querySelector('.search-results');
+  if (!i || !r) return;
+  var t;
+  i.addEventListener('input', function() {{
+    clearTimeout(t);
+    var q = i.value.trim();
+    if (!q) {{ r.innerHTML = ''; return; }}
+    t = setTimeout(function() {{
       fetch('/api/search?q=' + encodeURIComponent(q) + '&mode=hybrid&limit=20')
-        .then(function(r) {{ return r.json(); }})
-        .then(function(data) {{
-          results.innerHTML = (data.results || []).map(function(r) {{
-            return '<a href="/site/' + r.kb_name + '/' + encodeURIComponent(r.id) + '">'
-              + '<strong>' + r.title + '</strong> <small style="color:#71717a">' + r.entry_type + ' · ' + r.kb_name + '</small>'
-              + (r.snippet ? '<br><small style="color:#71717a">' + r.snippet + '</small>' : '')
+        .then(function(x) {{ return x.json(); }})
+        .then(function(d) {{
+          r.innerHTML = (d.results || []).map(function(e) {{
+            return '<a href="/site/' + e.kb_name + '/' + encodeURIComponent(e.id) + '">'
+              + '<strong>' + e.title + '</strong>'
+              + '<span class="badge">' + e.entry_type + '</span>'
               + '</a>';
           }}).join('');
         }});
@@ -175,15 +343,14 @@ class SiteCacheService:
             cards.append(
                 f'<a href="/site/{_esc(kb["name"])}" class="kb-card">'
                 f'<h2>{_esc(kb["name"])}</h2>{desc}'
-                f'<span style="font-size:0.75rem;color:#a1a1aa">{entries} entries</span></a>'
+                f'<span class="count">{entries} entries</span></a>'
             )
 
         body = (
             '<h1>Knowledge Bases</h1>'
-            '<p style="color:#71717a;margin-bottom:2rem">Browse curated knowledge bases on systems thinking, lean, agile, and more.</p>'
-            '<div id="site-search" style="margin-bottom:2rem">'
-            '<input type="text" placeholder="Search across all knowledge bases..." '
-            'style="width:100%;padding:0.75rem 1rem;border:1px solid #e4e4e7;border-radius:0.5rem;font-size:1rem;outline:none">'
+            '<p style="color:var(--ink-muted);margin-bottom:0.5rem">Curated knowledge bases on systems thinking, lean, agile, and more.</p>'
+            '<div id="site-search">'
+            '<input type="text" placeholder="Search across all knowledge bases...">'
             '<div class="search-results entry-list" style="margin-top:0.5rem"></div>'
             '</div>'
             f'<div class="kb-grid">{"".join(cards)}</div>'
@@ -215,10 +382,10 @@ class SiteCacheService:
             )
 
         body = (
-            f'<div class="breadcrumb"><a href="/site">Home</a> / <strong>{_esc(kb_name)}</strong></div>'
+            f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span><strong>{_esc(kb_name)}</strong></div>'
             f'<h1>{_esc(kb_name)}</h1>'
-            f'<p style="color:#71717a">{total} entries</p>'
-            + (f'<p style="color:#52525b;margin-bottom:2rem">{_esc(desc)}</p>' if desc else '')
+            f'<p class="meta">{total} entries</p>'
+            + (f'<p style="color:var(--ink-soft);margin-bottom:2rem">{_esc(desc)}</p>' if desc else '')
             + f'<div class="entry-list">{"".join(entry_html)}</div>'
         )
 
@@ -264,13 +431,13 @@ class SiteCacheService:
 
         # Tags
         tags_html = "".join(f'<span class="tag">{_esc(t)}</span>' for t in tags)
-        tags_section = f'<div style="margin-top:0.75rem">{tags_html}</div>' if tags else ""
+        tags_section = f'<div class="tags">{tags_html}</div>' if tags else ""
 
         # Backlinks
         bl_html = ""
         if backlinks:
             links = "".join(
-                f'<a href="/site/{_esc(bl.get("kb_name", kb_name))}/{_esc(bl["id"])}">{_esc(bl.get("title", bl["id"]))}</a><br>'
+                f'<a href="/site/{_esc(bl.get("kb_name", kb_name))}/{_esc(bl["id"])}">{_esc(bl.get("title", bl["id"]))}</a> '
                 for bl in backlinks
             )
             bl_html = f'<div class="links-section"><h2>Linked from</h2>{links}</div>'
@@ -279,7 +446,7 @@ class SiteCacheService:
         ol_html = ""
         if outlinks:
             links = "".join(
-                f'<a href="/site/{_esc(ol.get("kb_name", kb_name))}/{_esc(ol["id"])}">{_esc(ol.get("title", ol["id"]))}</a><br>'
+                f'<a href="/site/{_esc(ol.get("kb_name", kb_name))}/{_esc(ol["id"])}">{_esc(ol.get("title", ol["id"]))}</a> '
                 for ol in outlinks
             )
             ol_html = f'<div class="links-section"><h2>Links to</h2>{links}</div>'
@@ -288,17 +455,17 @@ class SiteCacheService:
         if date:
             meta_parts.append(date)
         meta_parts.append(
-            f'<a href="/entries/{_esc(entry_id)}?kb={_esc(kb_name)}" style="font-size:0.75rem;color:#a1a1aa">Edit on Pyrite</a>'
+            f'<a href="/entries/{_esc(entry_id)}?kb={_esc(kb_name)}">Edit on Pyrite</a>'
         )
-        meta_html = f'<div class="meta">{" · ".join(meta_parts)}</div>'
+        meta_html = f'<div class="meta">{" &middot; ".join(meta_parts)}</div>'
 
         body = (
-            f'<div class="breadcrumb"><a href="/site">Home</a> / '
-            f'<a href="/site/{_esc(kb_name)}">{_esc(kb_name)}</a> / '
+            f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span>'
+            f'<a href="/site/{_esc(kb_name)}">{_esc(kb_name)}</a><span class="sep">/</span>'
             f'<strong>{_esc(title)}</strong></div>'
-            f'<h1>{_esc(title)} <span class="badge" style="background:#f4f4f5;color:#71717a">{_esc(entry_type)}</span></h1>'
+            f'<h1>{_esc(title)}<span class="badge">{_esc(entry_type)}</span></h1>'
             f'{tags_section}{meta_html}'
-            f'<article style="margin-top:2rem">{body_html}</article>'
+            f'<article>{body_html}</article>'
             f'{bl_html}{ol_html}'
         )
 
