@@ -16,9 +16,8 @@ for i in $(seq 1 30); do
 done
 
 # Start the Node SSR server
-# It proxies /api requests to the Python backend
 cd /app/web
-ORIGIN=http://localhost:3000 PORT=3000 BODY_SIZE_LIMIT=10M node build &
+ORIGIN=${PYRITE_ORIGIN:-http://localhost:3000} PORT=3000 BODY_SIZE_LIMIT=10M node build &
 NODE_PID=$!
 
 echo "Node SSR server started on port 3000"
