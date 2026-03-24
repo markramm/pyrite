@@ -458,32 +458,53 @@ class SiteCacheService:
         (self.cache_dir / "index.html").write_text(html, encoding="utf-8")
 
     def _render_kb_index(self, kb: dict, entries: list[dict]):
-        """Render a KB index page."""
+        """Render a KB index page. Uses _homepage entry content if available."""
         kb_name = kb["name"]
         desc = kb.get("description", "")
         total = len(entries)
 
-        entry_html = []
-        for e in entries:
-            entry_html.append(
-                f'<a href="/site/{_esc(kb_name)}/{_esc(e["id"])}">'
-                f'<strong>{_esc(e.get("title", e["id"]))}</strong> '
-                f'<span class="badge">{_esc(e.get("entry_type", "note"))}</span>'
-                f'</a>'
+        # Check for a custom homepage entry
+        homepage = self.db.get_entry("_homepage", kb_name)
+        if homepage and homepage.get("body"):
+            # Custom homepage — render its markdown body
+            title = homepage.get("title", kb_name)
+            body_html = _md_to_html(homepage["body"], kb_name)
+            body = (
+                f'<div id="site-search" style="margin-bottom:1.5rem">'
+                f'<input type="text" placeholder="Search {_esc(kb_name)}...">'
+                f'<div class="search-results entry-list" style="margin-top:0.5rem"></div>'
+                f'</div>'
+                f'{body_html}'
             )
+            page_desc = homepage.get("summary") or desc or f"{total} entries in the {kb_name} knowledge base."
+        else:
+            # Auto-generated KB index
+            title = kb_name
+            entry_html = []
+            for e in entries:
+                entry_html.append(
+                    f'<a href="/site/{_esc(kb_name)}/{_esc(e["id"])}">'
+                    f'<strong>{_esc(e.get("title", e["id"]))}</strong> '
+                    f'<span class="badge">{_esc(e.get("entry_type", "note"))}</span>'
+                    f'</a>'
+                )
 
-        body = (
-            f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span><strong>{_esc(kb_name)}</strong></div>'
-            f'<h1>{_esc(kb_name)}</h1>'
-            f'<p class="meta">{total} entries</p>'
-            + (f'<p style="color:var(--ink-soft);margin:1rem 0 2rem 0">{_esc(desc)}</p>' if desc else '')
-            + f'<div class="entry-list">{"".join(entry_html)}</div>'
-        )
+            body = (
+                f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span><strong>{_esc(kb_name)}</strong></div>'
+                f'<h1>{_esc(kb_name)}</h1>'
+                f'<p class="meta">{total} entries</p>'
+                + (f'<p style="color:var(--ink-soft);margin:1rem 0 2rem 0">{_esc(desc)}</p>' if desc else '')
+                + f'<div id="site-search" style="margin-bottom:1.5rem">'
+                + f'<input type="text" placeholder="Search {_esc(kb_name)}...">'
+                + f'<div class="search-results entry-list" style="margin-top:0.5rem"></div></div>'
+                + f'<div class="entry-list">{"".join(entry_html)}</div>'
+            )
+            page_desc = desc or f"Browse {total} entries in the {kb_name} knowledge base."
 
         html = _PAGE_TEMPLATE.format(
-            title=f"{kb_name} — Pyrite Knowledge Base",
-            description=desc or f"Browse {total} entries in the {kb_name} knowledge base.",
-            og_title=f"{kb_name} — Pyrite Knowledge Base",
+            title=f"{title} — Pyrite Knowledge Base",
+            description=_esc(page_desc),
+            og_title=f"{title} — Pyrite Knowledge Base",
             og_type="website",
             extra_head="",
             canonical=f'<link rel="canonical" href="/site/{_esc(kb_name)}">',
