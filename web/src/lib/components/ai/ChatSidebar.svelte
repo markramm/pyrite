@@ -40,9 +40,16 @@
 		}
 	}
 
+	function escapeHtml(text: string): string {
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
+	}
+
 	function renderCitations(text: string): string {
-		// Convert [[entry-id]] to clickable links
-		return text.replace(
+		// Escape HTML first to prevent XSS, then convert [[entry-id]] to links
+		const escaped = escapeHtml(text);
+		return escaped.replace(
 			/\[\[([^\]]+)\]\]/g,
 			'<a href="/entries/$1" class="text-blue-600 hover:underline dark:text-blue-400">$1</a>'
 		);

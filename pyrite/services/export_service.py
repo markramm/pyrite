@@ -5,8 +5,30 @@ KB export and git operations, including export-to-repo (clone, export, commit, p
 """
 
 import logging
+import re
 import tempfile
 from pathlib import Path
+
+
+def _yaml_quote(value: str) -> str:
+    """Quote a YAML scalar value if it contains special characters."""
+    if not value:
+        return '""'
+    # Values that need quoting: contains :, #, newline, leading/trailing spaces,
+    # looks like a boolean/null, or starts with special chars
+    needs_quoting = (
+        ":" in value
+        or "#" in value
+        or "\n" in value
+        or value != value.strip()
+        or value.startswith(("{", "[", "'", '"', "&", "*", "!", "|", ">", "%", "@", "`"))
+        or value.lower() in ("true", "false", "yes", "no", "null", "~", "on", "off")
+        or re.match(r"^[\d.]+$", value)  # looks like a number
+    )
+    if needs_quoting:
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+        return f'"{escaped}"'
+    return value
 
 from ..config import PyriteConfig
 from ..exceptions import KBNotFoundError, PyriteError
@@ -71,15 +93,15 @@ class ExportService:
             if entry.get("tags"):
                 frontmatter_fields["tags"] = entry["tags"]
 
-            # Format as markdown with frontmatter
+            # Format as markdown with frontmatter using proper YAML quoting
             fm_lines = ["---"]
             for key, val in frontmatter_fields.items():
                 if isinstance(val, list):
                     fm_lines.append(f"{key}:")
                     for item in val:
-                        fm_lines.append(f"  - {item}")
+                        fm_lines.append(f"  - {_yaml_quote(str(item))}")
                 else:
-                    fm_lines.append(f"{key}: {val}")
+                    fm_lines.append(f"{key}: {_yaml_quote(str(val))}")
             fm_lines.append("---")
             fm_lines.append("")
 

@@ -268,6 +268,8 @@ h2[id]:hover .anchor, h3[id]:hover .anchor {{ opacity: 1; }}
 <button class="back-to-top" id="btt" aria-label="Back to top">&uarr;</button>
 <script>
 (function() {{
+  function esc(s) {{ var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }}
+
   /* Search widget */
   var s = document.getElementById('site-search');
   if (s) {{
@@ -280,8 +282,8 @@ h2[id]:hover .anchor, h3[id]:hover .anchor {{ opacity: 1; }}
           .then(function(x) {{ return x.json(); }})
           .then(function(d) {{
             r.innerHTML = (d.results || []).map(function(e) {{
-              return '<a href="/site/' + e.kb_name + '/' + encodeURIComponent(e.id) + '">'
-                + '<strong>' + e.title + '</strong><span class="badge">' + e.entry_type + '</span></a>';
+              return '<a href="/site/' + esc(e.kb_name) + '/' + encodeURIComponent(e.id) + '">'
+                + '<strong>' + esc(e.title) + '</strong><span class="badge">' + esc(e.entry_type) + '</span></a>';
             }}).join('');
           }});
       }}, 300);
@@ -494,9 +496,9 @@ class SiteCacheService:
             page_desc = desc or f"Browse {total} entries in the {kb_name} knowledge base."
 
         html = _PAGE_TEMPLATE.format(
-            title=f"{title} — Pyrite Knowledge Base",
+            title=f"{_esc(title)} — Pyrite Knowledge Base",
             description=_esc(page_desc),
-            og_title=f"{title} — Pyrite Knowledge Base",
+            og_title=f"{_esc(title)} — Pyrite Knowledge Base",
             og_type="website",
             extra_head="",
             canonical=f'<link rel="canonical" href="/site/{_esc(kb_name)}">',
@@ -581,9 +583,9 @@ class SiteCacheService:
         )
 
         html = _PAGE_TEMPLATE.format(
-            title=f"{title} — {kb_name} | Pyrite",
+            title=f"{_esc(title)} — {_esc(kb_name)} | Pyrite",
             description=_esc(description),
-            og_title=f"{title} — {kb_name}",
+            og_title=f"{_esc(title)} — {_esc(kb_name)}",
             og_type="article",
             extra_head=extra_head,
             canonical=canonical,
@@ -751,17 +753,26 @@ def _md_inline(text: str) -> str:
     import re
     text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
     text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', text)
+
+    def _safe_inline_link(m: re.Match) -> str:
+        link_text = _esc(m.group(1))
+        url = m.group(2).strip()
+        if url.lower().startswith(("javascript:", "data:", "vbscript:")):
+            return link_text
+        return f'<a href="{_esc(url)}">{link_text}</a>'
+
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _safe_inline_link, text)
     return text
 
 
 def _esc(text: str) -> str:
-    """HTML-escape text."""
+    """HTML-escape text for safe insertion into HTML content and attributes."""
     return (
         text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
+        .replace("'", "&#39;")
     )
 
 
@@ -789,8 +800,15 @@ def _md_to_html(md: str, kb_name: str) -> str:
 
     html = re.sub(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]", _wikilink, html)
 
-    # Markdown links [text](url)
-    html = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', html)
+    # Markdown links [text](url) — escape text and block dangerous URLs
+    def _safe_link(m: re.Match) -> str:
+        text = _esc(m.group(1))
+        url = m.group(2).strip()
+        if url.lower().startswith(("javascript:", "data:", "vbscript:")):
+            return text
+        return f'<a href="{_esc(url)}">{text}</a>'
+
+    html = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_link, html)
 
     # List items
     html = re.sub(r"^- (.+)$", r"<li>\1</li>", html, flags=re.MULTILINE)

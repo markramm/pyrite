@@ -59,6 +59,61 @@ class TestExportKBToDirectory:
         with pytest.raises(KBNotFoundError):
             export_svc.export_kb_to_directory("nonexistent", tmp_path / "out")
 
+    def test_yaml_special_chars_in_title_are_quoted(self, export_svc, mock_config, mock_db, tmp_path):
+        """Titles with YAML-special characters must be properly quoted."""
+        kb_cfg = MagicMock()
+        kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
+        kb_cfg.kb_yaml_path.write_text("name: test")
+        mock_config.get_kb.return_value = kb_cfg
+
+        mock_db.list_entries.return_value = [
+            {
+                "id": "tricky",
+                "entry_type": "note",
+                "title": 'Value with: colon and "quotes"',
+                "body": "Body text",
+                "tags": [],
+            }
+        ]
+
+        target = tmp_path / "export"
+        export_svc.export_kb_to_directory("test", target)
+
+        content = (target / "note" / "tricky.md").read_text()
+        # The frontmatter should be parseable YAML
+        import yaml
+        parts = content.split("---")
+        fm = yaml.safe_load(parts[1])
+        assert fm["title"] == 'Value with: colon and "quotes"'
+
+    def test_title_with_newline_does_not_inject_fields(self, export_svc, mock_config, mock_db, tmp_path):
+        """Newlines in title must not inject additional YAML fields."""
+        kb_cfg = MagicMock()
+        kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
+        kb_cfg.kb_yaml_path.write_text("name: test")
+        mock_config.get_kb.return_value = kb_cfg
+
+        mock_db.list_entries.return_value = [
+            {
+                "id": "inject",
+                "entry_type": "note",
+                "title": "Normal\nevil_field: injected",
+                "body": "Body",
+                "tags": [],
+            }
+        ]
+
+        target = tmp_path / "export"
+        export_svc.export_kb_to_directory("test", target)
+
+        content = (target / "note" / "inject.md").read_text()
+        import yaml
+        parts = content.split("---")
+        fm = yaml.safe_load(parts[1])
+        # The evil_field should NOT appear as a separate key
+        assert "evil_field" not in fm
+        assert "injected" in fm["title"]
+
 
 class TestCommitKB:
     @patch("pyrite.services.git_service.GitService")

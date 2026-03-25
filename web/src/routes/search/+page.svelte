@@ -20,14 +20,24 @@
 	let showSaveDialog = $state(false);
 	let saveName = $state('');
 
+	function escapeHtml(text: string): string {
+		return text
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+	}
+
 	function highlightSnippet(snippet: string, query: string): string {
-		if (!query.trim()) return snippet;
+		// Escape HTML first to prevent XSS from snippet content
+		const safe = escapeHtml(snippet);
+		if (!query.trim()) return safe;
 		// Escape regex special characters
 		const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 		const words = escaped.split(/\s+/).filter(Boolean);
-		if (words.length === 0) return snippet;
+		if (words.length === 0) return safe;
 		const pattern = new RegExp(`(${words.join('|')})`, 'gi');
-		return snippet.replace(pattern, '<mark class="bg-gold-500/30 text-gold-300 rounded px-0.5">$1</mark>');
+		return safe.replace(pattern, '<mark class="bg-gold-500/30 text-gold-300 rounded px-0.5">$1</mark>');
 	}
 
 	function formatRelativeDate(dateStr: string): string {

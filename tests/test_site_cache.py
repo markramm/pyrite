@@ -117,6 +117,106 @@ class TestSiteCacheRenderAll:
         assert "index, follow" in html
 
 
+class TestXSSPrevention:
+    """Verify that malicious content is properly escaped in rendered HTML."""
+
+    def test_title_escaped_in_page_title(self, cache_env):
+        """XSS via entry title injecting into <title> tag."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-title",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": '</title><script>alert("xss")</script>',
+            "body": "Safe body.",
+            "summary": "Safe summary",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-title.html").read_text()
+        # The <title> tag should contain escaped content, not raw script tags
+        import re
+        title_match = re.search(r'<title>(.*?)</title>', html)
+        assert title_match, "No <title> tag found"
+        title_content = title_match.group(1)
+        assert "<script>" not in title_content
+        assert "&lt;script&gt;" in title_content
+
+    def test_title_escaped_in_og_meta(self, cache_env):
+        """XSS via entry title breaking out of og:title content attribute."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-og",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": 'Evil" onload="alert(1)',
+            "body": "Safe body.",
+            "summary": "Safe summary",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-og.html").read_text()
+        # The raw quote should be escaped in the og:title attribute
+        assert 'content="Evil" onload' not in html
+        assert "&quot;" in html
+
+    def test_markdown_link_javascript_url_blocked(self, cache_env):
+        """XSS via javascript: URL in markdown link."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-jslink",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "JS Link Test",
+            "body": 'Click [here](javascript:alert(1)) for evil.',
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-jslink.html").read_text()
+        # The article body should not contain a javascript: link
+        import re
+        article = re.search(r'<article>(.*?)</article>', html, re.DOTALL)
+        assert article, "No <article> tag found"
+        assert 'href="javascript:' not in article.group(1)
+
+    def test_markdown_link_text_escaped(self, cache_env):
+        """XSS via HTML in markdown link text."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-linktext",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Link Text XSS",
+            "body": 'See [<img src=x onerror=alert(1)>](https://example.com) here.',
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-linktext.html").read_text()
+        import re
+        article = re.search(r'<article>(.*?)</article>', html, re.DOTALL)
+        assert article, "No <article> tag found"
+        body = article.group(1)
+        # The raw <img> tag should be escaped, not rendered as an element
+        assert "<img " not in body
+        assert "&lt;img" in body  # Should be escaped
+
+    def test_esc_handles_single_quotes(self, cache_env):
+        """_esc should also escape single quotes for attribute safety."""
+        from pyrite.services.site_cache import _esc
+        result = _esc("it's a test")
+        assert "'" not in result or "&#39;" in result or "&apos;" in result
+
+
 class TestSiteCacheInvalidation:
     def test_invalidate_entry(self, cache_env):
         cache_env["svc"].render_all()
