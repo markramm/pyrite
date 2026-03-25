@@ -213,6 +213,50 @@ Recommended execution order. Grouped by milestone.
 
 ---
 
+## Epic: Release Readiness Review (2025-03-25)
+
+Findings from 5 parallel review agents. See [[epic-release-readiness-review]] for details.
+
+**Critical — Security (XSS):**
+
+| Item | Kind | Effort |
+|------|------|--------|
+| [[fix-xss-site-cache-title]] | bug | S |
+| [[fix-xss-site-cache-search-widget]] | bug | S |
+| [[fix-xss-site-cache-markdown-links]] | bug | S |
+| [[fix-xss-chat-sidebar]] | bug | S |
+| [[fix-xss-search-highlight]] | bug | S |
+| [[fix-yaml-injection-export]] | bug | S |
+
+**High — Code Quality & Docs:**
+
+| Item | Kind | Effort |
+|------|------|--------|
+| [[fix-n-plus-one-site-cache]] | bug | M |
+| [[fix-blocking-io-site-cache-render]] | bug | S |
+| [[fix-entry-id-path-traversal]] | bug | S |
+| [[extract-site-cache-templates]] | enhancement | L |
+| [[fix-readme-for-release]] | bug | S |
+| [[fix-backlog-stale-statuses]] | bug | S |
+| [[update-changelog-post-020]] | enhancement | M |
+
+**Medium — Architecture & Frontend:**
+
+| Item | Kind | Effort |
+|------|------|--------|
+| [[decompose-kb-service]] | enhancement | XL |
+| [[add-adr-site-cache]] | enhancement | S |
+| [[document-undocumented-services]] | enhancement | M |
+| [[harmonize-app-site-fonts]] | enhancement | M |
+| [[add-accessibility-labels]] | bug | S |
+| [[fix-sidebar-derived-bug]] | bug | XS |
+| [[fix-quickswitcher-navigation]] | bug | XS |
+| [[update-adr-0002-plugin-points]] | enhancement | XS |
+| [[add-offline-indicator]] | enhancement | S |
+| [[commit-export-renderers]] | bug | XS |
+
+---
+
 ## Open Items
 
 ### In Progress

@@ -1,0 +1,22 @@
+---
+id: web-ui-index-management
+title: "Web UI: Index rebuild, sync, and embedding management"
+type: backlog_item
+tags: [web, ux]
+links:
+- target: epic-web-ui-feature-parity
+  relation: subtask_of
+  kb: pyrite
+kind: feature
+status: completed
+priority: high
+effort: S
+---
+
+## Problem
+
+Index rebuild, sync, and embedding generation are only available via the CLI. Users cannot check index health, trigger a re-index, or generate embeddings from the web UI, making it impossible to manage the search index without terminal access.
+
+## Solution
+
+Add an index management section to the KB settings page with a rebuild/sync button, index statistics (total entries indexed, last indexed timestamp, embedding coverage), and an embedding generation trigger. Display progress feedback during long-running operations and surface any indexing errors.
