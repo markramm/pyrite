@@ -96,7 +96,12 @@ def mount_static(app: FastAPI, dist_dir: Path) -> None:
         if file_path.is_file() and file_path.resolve().is_relative_to(dist_dir.resolve()):
             return FileResponse(str(file_path))
 
-        return HTMLResponse(content=index_content)
+        # SPA index.html must not be cached — it references hashed JS chunks
+        # that change on each build. Stale index.html = mismatched chunk errors.
+        return HTMLResponse(
+            content=index_content,
+            headers={"Cache-Control": "no-cache"},
+        )
 
 
 def _serve_static_dir(
