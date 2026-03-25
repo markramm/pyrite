@@ -46,6 +46,11 @@ def mount_site_routes(app: FastAPI) -> None:
     async def viewer_index(request: Request):
         return _serve_static_dir(viewer_dir, "index.html")
 
+    # Search page
+    @app.get("/site/search", include_in_schema=False)
+    async def site_search(request: Request):
+        return _serve_search_page(site_cache_dir)
+
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
@@ -159,6 +164,17 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
     return Response(
         content=xml,
         media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+def _serve_search_page(cache_dir: Path) -> HTMLResponse:
+    """Serve a dedicated search page for the /site/search route."""
+    # Read the template from any cached page to get consistent styling,
+    # or fall back to a self-contained page
+    from .static_search_page import SEARCH_PAGE_HTML
+    return HTMLResponse(
+        content=SEARCH_PAGE_HTML,
         headers={"Cache-Control": "public, max-age=3600"},
     )
 
