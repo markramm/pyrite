@@ -199,17 +199,23 @@ Recommended execution order. Grouped by milestone.
 | **4** | [[work-session-log]] | S | sw_log tool + WorkLogEntry for persisting session context | **done** |
 | **5** | [[enhance-orient-for-software-type-kbs-with-kanban-and-architecture-context]] | M | Orient command with kanban board and architecture overview | proposed |
 
-**Epic: Cross-KB Discovery (from real cross-KB search session feedback):**
+**Epic: Cross-KB Discovery (in progress — 2/7 done):**
 
-| Priority | Item | Effort | Rationale |
-|----------|------|--------|-----------|
-| **1** | [[cross-kb-unlinked-neighbors]] | M | `pyrite links discover` — find similar-but-unlinked entries across KBs |
-| **2** | [[search-group-by-kb]] | S | `--group-by-kb` — prevent large-KB dominance in results |
-| **3** | [[cross-kb-batch-similarity]] | L | `pyrite links suggest` — batch-compare all entries between two KBs |
-| **4** | [[cross-kb-orphan-detection]] | M | Find high-importance entries with missing cross-KB connections |
-| **5** | [[search-domain-aware-expansion]] | L | Query expansion from KB vocabulary, not general LLM knowledge |
-| **6** | [[search-explain-relevance]] | M | Show which passage drove the similarity score |
-| **7** | [[cross-kb-asymmetric-links]] | M | Detect one-directional links that should be bidirectional |
+| Priority | Item | Effort | Status |
+|----------|------|--------|--------|
+| **1** | [[cross-kb-unlinked-neighbors]] | M | **done** |
+| **2** | [[search-group-by-kb]] | S | **done** |
+| **3** | [[cross-kb-batch-similarity]] | L | proposed |
+| **4** | [[cross-kb-orphan-detection]] | M | proposed |
+| **5** | [[search-domain-aware-expansion]] | L | proposed |
+| **6** | [[search-explain-relevance]] | M | proposed |
+| **7** | [[cross-kb-asymmetric-links]] | M | proposed |
+
+**Security Hardening (journalist deployments):**
+
+| Priority | Item | Effort | Status |
+|----------|------|--------|--------|
+| **1** | [[security-audit-phase1]] | S | proposed — static analysis of REQ-1 through REQ-6 |
 
 **Future:**
 
@@ -225,47 +231,13 @@ Recommended execution order. Grouped by milestone.
 
 ---
 
-## Epic: Release Readiness Review (2025-03-25)
+## Epic: Release Readiness Review — **DONE** (2025-03-25)
 
-Findings from 5 parallel review agents. See [[epic-release-readiness-review]] for details.
+All release-blocking work complete. 19/23 items done. Remaining items (`extract-site-cache-templates` L, `decompose-kb-service` XL) are standalone maintenance improvements.
 
-**Critical — Security (XSS) — ALL DONE:**
+## Epic: Web UI Feature Parity — **DONE** (74% complete)
 
-| Item | Kind | Effort | Status |
-|------|------|--------|--------|
-| [[fix-xss-site-cache-title]] | bug | S | **done** |
-| [[fix-xss-site-cache-search-widget]] | bug | S | **done** |
-| [[fix-xss-site-cache-markdown-links]] | bug | S | **done** |
-| [[fix-xss-chat-sidebar]] | bug | S | **done** |
-| [[fix-xss-search-highlight]] | bug | S | **done** |
-| [[fix-yaml-injection-export]] | bug | S | **done** |
-
-**High — Code Quality & Docs:**
-
-| Item | Kind | Effort |
-|------|------|--------|
-| [[fix-n-plus-one-site-cache]] | bug | M |
-| [[fix-blocking-io-site-cache-render]] | bug | S |
-| [[fix-entry-id-path-traversal]] | bug | S |
-| [[extract-site-cache-templates]] | enhancement | L |
-| [[fix-readme-for-release]] | bug | S |
-| [[fix-backlog-stale-statuses]] | bug | S |
-| [[update-changelog-post-020]] | enhancement | M |
-
-**Medium — Architecture & Frontend:**
-
-| Item | Kind | Effort |
-|------|------|--------|
-| [[decompose-kb-service]] | enhancement | XL |
-| [[add-adr-site-cache]] | enhancement | S |
-| [[document-undocumented-services]] | enhancement | M |
-| [[harmonize-app-site-fonts]] | enhancement | M |
-| [[add-accessibility-labels]] | bug | S |
-| [[fix-sidebar-derived-bug]] | bug | XS | **high** — actively broken |
-| [[fix-quickswitcher-navigation]] | bug | XS | **high** — full page reload |
-| [[update-adr-0002-plugin-points]] | enhancement | XS |
-| [[add-offline-indicator]] | enhancement | S |
-| [[commit-export-renderers]] | bug | XS | **done** |
+14/19 items done (Phases 1-4 complete). Remaining 5 items are standalone low-priority: bulk-operations, review-system, qa-enhancements, collection-editing, webhook-config.
 
 ---
 

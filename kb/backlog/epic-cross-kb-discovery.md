@@ -63,3 +63,14 @@ pyrite links orphans --kb ramm --min-importance 8
 # Stage 4: Review and formalize
 pyrite links create --from ramm/trust --to senge/learning-org --relation structural_parallel
 ```
+
+## Completed
+
+- `cross-kb-unlinked-neighbors` — **done** (CLI + MCP tool, keyword/semantic/hybrid)
+- `search-group-by-kb` — **done** (API query param, round-robin interleaving)
+
+## Future (merged from epic-cross-kb-investigation-search)
+
+- Entity deduplication across KBs (same person/org appearing in multiple investigations)
+- "Known entities" reference KB pattern
+- External MCP source correlation (search external data sources alongside local KBs)

@@ -1,12 +1,12 @@
 ---
 id: epic-release-readiness-review
-type: backlog_item
 title: "Epic: Release Readiness Review Findings"
+type: backlog_item
+tags: [epic, security, quality, docs, release]
 kind: epic
-status: proposed
+status: done
 priority: high
 effort: XL
-tags: [epic, security, quality, docs, release]
 ---
 
 ## Summary

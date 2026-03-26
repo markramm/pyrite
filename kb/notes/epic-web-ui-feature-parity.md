@@ -1,12 +1,12 @@
 ---
 id: epic-web-ui-feature-parity
-type: backlog_item
 title: "Epic: Web UI Feature Parity with Backend API"
+type: backlog_item
+tags: [web, ux, epic]
 kind: epic
-status: proposed
+status: done
 priority: high
 effort: XL
-tags: [web, ux, epic]
 ---
 
 ## Problem
