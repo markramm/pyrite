@@ -118,7 +118,7 @@ Pyrite includes a built-in MCP server. Add this to your Claude Desktop or Claude
 }
 ```
 
-Your AI can now search, read, and create entries in your knowledge base. It gets 14 read tools, 6 write tools, and 4 admin tools across three permission tiers. For read-only access:
+Your AI can now search, read, and create entries in your knowledge base. It gets 23 read tools, 11 write tools, and 8 admin tools across three permission tiers. For read-only access:
 
 ```json
 {

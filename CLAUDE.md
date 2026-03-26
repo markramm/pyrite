@@ -70,14 +70,14 @@ Use correct `type` frontmatter so plugin tools can find entries:
 - **Core code**: `pyrite/` — CLI, server, storage, services, plugins, models
 - **REST API**: `pyrite/server/api.py` (factory + deps) + `pyrite/server/endpoints/` (per-feature modules)
 - **MCP server**: `pyrite/server/mcp_server.py` (3-tier tools)
-- **Extensions**: `extensions/` — zettelkasten, social, encyclopedia, software-kb
+- **Extensions**: `extensions/` — zettelkasten, social, encyclopedia, software-kb, journalism-investigation, cascade
 - **Web frontend**: `web/` — SvelteKit + Svelte 5
 - **Knowledge base**: `kb/` — ADRs, backlog, components, designs, standards, runbooks
 
 ## Testing
 
 ```bash
-# Backend tests (1468 tests)
+# Backend tests (~2500 tests)
 .venv/bin/pytest tests/ -v
 
 # Frontend

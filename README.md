@@ -12,7 +12,7 @@ Your AI agents have no memory. Your knowledge is trapped in platform silos. Ever
 - **Git-native** — every change is a versioned commit, not a database mutation. Branch, diff, review, rollback. Your knowledge has a full audit trail.
 - **MCP server with three-tier access control** — read/write/admin tiers. Give untrusted agents read-only access. Give your own agents write access. Keep admin for yourself.
 - **Semantic + structured search** — find by meaning (vector embeddings) AND by type, tag, date range, or relationship. Both at once in hybrid mode.
-- **Plugin system with 15 extension points** — custom entry types, MCP tools, CLI commands, validators, lifecycle hooks, relationship semantics, schema migrations.
+- **Plugin system with 19 extension points** — custom entry types, MCP tools, CLI commands, validators, lifecycle hooks, relationship semantics, schema migrations.
 - **Zero running cost locally** — markdown files + SQLite index on your disk. No cloud dependency, no subscription, no vendor lock-in. Your data is plain text files you can read in any editor.
 
 ## Quick Start
@@ -70,9 +70,9 @@ Three permission tiers. Each tier includes the tools from lower tiers.
 
 | Tier | Tools |
 |------|-------|
-| **read** (14) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_orient`, `kb_batch_read`, `kb_list_entries`, `kb_recent`, `kb_qa_validate`, `kb_qa_status` |
-| **write** (+6) | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link`, `kb_qa_assess` |
-| **admin** (+4) | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push` |
+| **read** (23) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_orient`, `kb_batch_read`, `kb_list_entries`, `kb_recent`, `kb_qa_validate`, `kb_qa_status`, `kb_read_body`, `kb_find_by_status`, `kb_find_by_assignee`, `kb_find_by_location`, `kb_find_overdue`, `kb_index_job_status`, `list_edge_types`, `task_list`, `task_status` |
+| **write** (+11) | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link`, `kb_qa_assess`, `task_create`, `task_update`, `task_claim`, `task_checkpoint`, `task_decompose` |
+| **admin** (+8) | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push`, `kb_registry_add`, `kb_registry_remove`, `kb_registry_reindex`, `kb_registry_health` |
 
 All paginated tools (`kb_search`, `kb_timeline`, `kb_backlinks`, `kb_tags`) support `limit`/`offset` params and return a `has_more` flag. `kb_bulk_create` handles up to 50 entries per call with best-effort per-entry semantics. `kb_orient` provides a one-shot KB summary for agent onboarding. `kb_batch_read` fetches multiple entries in one call. Search results return snippets by default (use `include_body` for full text, `fields` for projection).
 
@@ -157,7 +157,7 @@ Ten built-in entry types: `note`, `person`, `organization`, `event`, `document`,
 
 ## Plugin Protocol
 
-Extensions implement a Python protocol class with up to 16 methods:
+Extensions implement a Python protocol class with up to 19 methods:
 
 - `get_entry_classes()` — custom entry types with serialization
 - `get_type_metadata()` — field definitions, AI instructions, presets
@@ -177,8 +177,8 @@ Six extensions ship:
 | **zettelkasten** | CEQRC maturity workflow | Notes with maturity progression |
 | **encyclopedia** | Articles with review workflow | Articles, reviews, voting |
 | **social** | Engagement tracking | Social interactions |
+| **journalism-investigation** | Investigative research | Sources, claims, actors, evidence chains |
 | **cascade** | Timeline research | Timeline events, actors, capture lanes |
-| **task** | Work coordination | 7-state task workflow with atomic claim and decomposition |
 
 ## Web UI
 
@@ -312,7 +312,7 @@ pip install -e ".[all]"
 for ext in extensions/*/; do pip install -e "$ext"; done
 pre-commit install
 
-# Tests (1468 tests)
+# Tests (~2500 tests)
 pytest tests/ -v
 
 # Frontend
@@ -326,7 +326,7 @@ Pyrite's own backlog and architecture docs live in `kb/`:
 
 ```bash
 pyrite sw backlog        # Prioritized backlog
-pyrite sw adrs           # Architecture Decision Records (16 ADRs)
+pyrite sw adrs           # Architecture Decision Records (22 ADRs)
 pyrite sw components     # Module documentation
 pyrite sw standards      # Coding conventions
 ```
