@@ -8,7 +8,7 @@ links:
   relation: subtask_of
   kb: pyrite
 kind: bug
-status: completed
+status: done
 priority: high
 effort: S
 ---

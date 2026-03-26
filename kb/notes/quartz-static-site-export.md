@@ -12,8 +12,7 @@ links:
   relation: related
   kb: pyrite
 kind: feature
-status: proposed
-priority: medium
+status: done
 effort: M
 ---
 

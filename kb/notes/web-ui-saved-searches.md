@@ -8,7 +8,7 @@ links:
   relation: subtask_of
   kb: pyrite
 kind: feature
-status: completed
+status: done
 priority: low
 effort: S
 ---

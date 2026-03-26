@@ -1,13 +1,11 @@
 ---
 id: fix-sidebar-derived-bug
-type: backlog_item
 title: "Bug: Sidebar calls userInitials() as function but it's a $derived value"
-kind: bug
-status: proposed
-priority: medium
-effort: XS
+type: backlog_item
 tags: [frontend, bug, svelte]
-epic: epic-release-readiness-review
+kind: bug
+priority: high
+effort: XS
 ---
 
 ## Problem

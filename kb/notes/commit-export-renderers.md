@@ -1,13 +1,11 @@
 ---
 id: commit-export-renderers
-type: backlog_item
 title: "Commit untracked export renderers package and commands"
-kind: bug
-status: proposed
-priority: medium
-effort: XS
+type: backlog_item
 tags: [hygiene, export]
-epic: epic-release-readiness-review
+kind: bug
+status: done
+effort: XS
 ---
 
 ## Problem

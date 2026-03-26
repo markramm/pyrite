@@ -1,13 +1,11 @@
 ---
 id: fix-entry-id-path-traversal
-type: backlog_item
 title: "Validate entry IDs used as filenames to prevent path traversal"
-kind: bug
-status: proposed
-priority: high
-effort: S
+type: backlog_item
 tags: [security, export, site-cache]
-epic: epic-release-readiness-review
+kind: bug
+priority: critical
+effort: S
 ---
 
 ## Problem

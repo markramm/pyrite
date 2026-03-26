@@ -4,7 +4,7 @@ title: "Web UI KB orientation page"
 type: backlog_item
 tags: [web, ux, onboarding]
 kind: feature
-status: completed
+status: done
 priority: high
 effort: M
 ---

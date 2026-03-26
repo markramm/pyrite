@@ -1,13 +1,12 @@
 ---
 id: fix-xss-search-highlight
-type: backlog_item
 title: "Fix XSS: Escape snippet text before highlight markup"
+type: backlog_item
+tags: [security, xss, frontend]
 kind: bug
-status: proposed
+status: done
 priority: critical
 effort: S
-tags: [security, xss, frontend]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

@@ -1,13 +1,12 @@
 ---
 id: fix-xss-site-cache-markdown-links
-type: backlog_item
 title: "Fix XSS: Sanitize URLs in markdown link rendering"
+type: backlog_item
+tags: [security, xss, site-cache]
 kind: bug
-status: proposed
+status: done
 priority: critical
 effort: S
-tags: [security, xss, site-cache]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

@@ -1,13 +1,12 @@
 ---
 id: fix-backlog-stale-statuses
-type: backlog_item
 title: "Update 14 stale backlog item statuses and commit untracked notes"
+type: backlog_item
+tags: [kb, backlog, hygiene]
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [kb, backlog, hygiene]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

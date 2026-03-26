@@ -1,13 +1,12 @@
 ---
 id: fix-xss-site-cache-title
-type: backlog_item
 title: "Fix XSS: HTML-escape title in site cache page template"
+type: backlog_item
+tags: [security, xss, site-cache]
 kind: bug
-status: proposed
+status: done
 priority: critical
 effort: S
-tags: [security, xss, site-cache]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

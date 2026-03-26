@@ -1,13 +1,12 @@
 ---
 id: fix-xss-site-cache-search-widget
-type: backlog_item
 title: "Fix XSS: Escape HTML in site cache inline search widget"
+type: backlog_item
+tags: [security, xss, site-cache]
 kind: bug
-status: proposed
+status: done
 priority: critical
 effort: S
-tags: [security, xss, site-cache]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

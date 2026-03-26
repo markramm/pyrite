@@ -1,13 +1,12 @@
 ---
 id: fix-yaml-injection-export
-type: backlog_item
 title: "Fix YAML injection in export service frontmatter generation"
+type: backlog_item
+tags: [security, export]
 kind: bug
-status: proposed
+status: done
 priority: critical
 effort: S
-tags: [security, export]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

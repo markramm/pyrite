@@ -229,16 +229,16 @@ Recommended execution order. Grouped by milestone.
 
 Findings from 5 parallel review agents. See [[epic-release-readiness-review]] for details.
 
-**Critical — Security (XSS):**
+**Critical — Security (XSS) — ALL DONE:**
 
-| Item | Kind | Effort |
-|------|------|--------|
-| [[fix-xss-site-cache-title]] | bug | S |
-| [[fix-xss-site-cache-search-widget]] | bug | S |
-| [[fix-xss-site-cache-markdown-links]] | bug | S |
-| [[fix-xss-chat-sidebar]] | bug | S |
-| [[fix-xss-search-highlight]] | bug | S |
-| [[fix-yaml-injection-export]] | bug | S |
+| Item | Kind | Effort | Status |
+|------|------|--------|--------|
+| [[fix-xss-site-cache-title]] | bug | S | **done** |
+| [[fix-xss-site-cache-search-widget]] | bug | S | **done** |
+| [[fix-xss-site-cache-markdown-links]] | bug | S | **done** |
+| [[fix-xss-chat-sidebar]] | bug | S | **done** |
+| [[fix-xss-search-highlight]] | bug | S | **done** |
+| [[fix-yaml-injection-export]] | bug | S | **done** |
 
 **High — Code Quality & Docs:**
 
@@ -261,11 +261,11 @@ Findings from 5 parallel review agents. See [[epic-release-readiness-review]] fo
 | [[document-undocumented-services]] | enhancement | M |
 | [[harmonize-app-site-fonts]] | enhancement | M |
 | [[add-accessibility-labels]] | bug | S |
-| [[fix-sidebar-derived-bug]] | bug | XS |
-| [[fix-quickswitcher-navigation]] | bug | XS |
+| [[fix-sidebar-derived-bug]] | bug | XS | **high** — actively broken |
+| [[fix-quickswitcher-navigation]] | bug | XS | **high** — full page reload |
 | [[update-adr-0002-plugin-points]] | enhancement | XS |
 | [[add-offline-indicator]] | enhancement | S |
-| [[commit-export-renderers]] | bug | XS |
+| [[commit-export-renderers]] | bug | XS | **done** |
 
 ---
 
@@ -275,7 +275,7 @@ Findings from 5 parallel review agents. See [[epic-release-readiness-review]] fo
 
 | # | Item | Kind | Effort | Status | Notes |
 |---|------|------|--------|--------|-------|
-| 79 | [[coordination-task-plugin]] | feature | XL | in progress | Phases 1-2 done. Remaining: Phase 3 (DAG queries), Phase 4 (QA integration) |
+| 79 | [[coordination-task-plugin]] | feature | XL | **done** | Phases 1-2 done. Remaining phases tracked as separate epics: [[epic-task-dag-queries-and-orchestrator-support]], [[epic-task-system-integration-with-qa-agent]] |
 
 ### Planned — 0.12 (done)
 

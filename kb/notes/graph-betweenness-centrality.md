@@ -1,12 +1,12 @@
 ---
 id: graph-betweenness-centrality
-type: backlog_item
 title: "Graph Betweenness Centrality Sizing"
+type: backlog_item
+tags: [web, graph, visualization]
 kind: enhancement
-status: proposed
+status: retired
 priority: low
 effort: M
-tags: [web, graph, visualization]
 ---
 
 Size graph nodes by betweenness centrality instead of (or in addition to) link count. BC highlights entries that *bridge* different topic areas — conceptual connectors — rather than just the most-linked entries.
