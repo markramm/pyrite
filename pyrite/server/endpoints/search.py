@@ -29,6 +29,8 @@ def search(
         False, description="Include full body text in results (default: snippet only)"
     ),
     fields: str | None = Query(None, description="Comma-separated fields to return per result"),
+    group_by_kb: bool = Query(False, description="Return top results per KB instead of global ranking"),
+    limit_per_kb: int = Query(3, ge=1, le=20, description="Max results per KB when group_by_kb=true"),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
 ):
@@ -46,6 +48,9 @@ def search(
     tag_list = tags.split(",") if tags else None
 
     try:
+        # When grouping by KB, fetch more results to ensure coverage across KBs
+        fetch_limit = limit * 5 if group_by_kb else limit
+
         results = search_svc.search(
             query=q,
             kb_name=kb,
@@ -53,10 +58,33 @@ def search(
             tags=tag_list,
             date_from=date_from,
             date_to=date_to,
-            limit=limit,
+            limit=fetch_limit,
             mode=mode,
             expand=expand,
         )
+
+        # Group by KB: take top N per KB, interleave by best score
+        if group_by_kb:
+            from collections import defaultdict
+
+            by_kb: dict[str, list] = defaultdict(list)
+            for r in results:
+                kb_name_val = r.get("kb_name", "")
+                if len(by_kb[kb_name_val]) < limit_per_kb:
+                    by_kb[kb_name_val].append(r)
+            # Interleave: round-robin by best score in each group
+            grouped: list = []
+            remaining = dict(by_kb)
+            while remaining:
+                exhausted = []
+                for k in sorted(remaining, key=lambda k: remaining[k][0].get("score", 0) if remaining[k] else 0, reverse=True):
+                    if remaining[k]:
+                        grouped.append(remaining[k].pop(0))
+                    if not remaining[k]:
+                        exhausted.append(k)
+                for k in exhausted:
+                    del remaining[k]
+            results = grouped[:limit]
 
         # Apply field projection or strip body
         if fields:

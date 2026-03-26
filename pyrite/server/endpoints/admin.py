@@ -65,6 +65,8 @@ def sync_index(
         # Re-render site cache if entries changed
         if result.get("added", 0) + result.get("updated", 0) + result.get("removed", 0) > 0:
             try:
+                import asyncio
+
                 from ...services.site_cache import SiteCacheService
 
                 cache_svc = SiteCacheService(
@@ -72,10 +74,11 @@ def sync_index(
                     db=index_mgr.db,
                 )
                 if cache_svc.config:
-                    cache_svc.render_all()
-                    logger.info("Site cache rendered after sync")
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(asyncio.to_thread(cache_svc.render_all))
+                    logger.info("Site cache render started in background")
             except Exception:
-                logger.debug("Site cache render skipped", exc_info=True)
+                logger.warning("Site cache render failed", exc_info=True)
 
         # Broadcast WebSocket event
         import asyncio
@@ -130,16 +133,18 @@ def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
 
 @router.post("/site/render", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("10/minute")
-def render_site_cache(
+async def render_site_cache(
     request: Request,
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
 ):
     """Render all /site pages to the filesystem cache for fast serving."""
+    import asyncio
+
     from ...services.site_cache import SiteCacheService
 
     svc = SiteCacheService(config, db)
-    stats = svc.render_all()
+    stats = await asyncio.to_thread(svc.render_all)
     return {"rendered": True, **stats}
 
 

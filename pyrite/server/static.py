@@ -11,6 +11,7 @@ Serves the built SvelteKit app from web/dist/ with SPA fallback:
 """
 
 import os
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -159,8 +160,7 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
                 continue
             entry_id = html_file.stem
             stat = html_file.stat()
-            from datetime import datetime, timezone
-            lastmod = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).strftime("%Y-%m-%d")
+            lastmod = datetime.fromtimestamp(stat.st_mtime, tz=UTC).strftime("%Y-%m-%d")
             urls.append(
                 f"  <url>\n    <loc>{base_url}/site/{kb_name}/{entry_id}</loc>\n    <lastmod>{lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.6</priority>\n  </url>"
             )
