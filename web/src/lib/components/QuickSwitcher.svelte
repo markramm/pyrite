@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/api/client';
 	import type { SearchResult } from '$lib/api/types';
 	import { registerShortcut } from '$lib/utils/keyboard';
@@ -55,7 +56,7 @@
 
 	function navigate(id: string) {
 		hide();
-		window.location.href = `/entries/${encodeURIComponent(id)}`;
+		goto(`/entries/${encodeURIComponent(id)}`);
 	}
 
 	function onKeydown(e: KeyboardEvent) {

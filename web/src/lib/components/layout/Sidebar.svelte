@@ -183,7 +183,7 @@
 			<div class="flex items-center gap-2.5">
 				<!-- Avatar -->
 				<span class="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-zinc-300 text-xs font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-300">
-					{userInitials()}
+					{userInitials}
 				</span>
 				<!-- Name -->
 				<span class="flex-1 truncate text-xs text-zinc-600 dark:text-zinc-400" title={displayName}>
