@@ -1,13 +1,11 @@
 ---
 id: harmonize-app-site-fonts
-type: backlog_item
 title: "Harmonize font stacks between SvelteKit app and static site pages"
-kind: enhancement
-status: proposed
-priority: medium
-effort: M
+type: backlog_item
 tags: [frontend, design, consistency]
-epic: epic-release-readiness-review
+kind: enhancement
+status: done
+effort: M
 ---
 
 ## Problem
