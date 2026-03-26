@@ -1,12 +1,12 @@
 ---
 id: user-guide-kb-for-demo
-type: backlog_item
 title: "User guide KB and demo site landing experience"
+type: backlog_item
+tags: [onboarding, demo, documentation, mcp]
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
-tags: [onboarding, demo, documentation, mcp]
 ---
 
 ## Problem
