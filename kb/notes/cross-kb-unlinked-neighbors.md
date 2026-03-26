@@ -1,13 +1,12 @@
 ---
 id: cross-kb-unlinked-neighbors
-type: backlog_item
 title: "Cross-KB: Find unlinked semantic neighbors for an entry"
+type: backlog_item
+tags: [search, cross-kb, discovery, graph]
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
-tags: [search, cross-kb, discovery, graph]
-epic: epic-cross-kb-discovery
 ---
 
 ## Problem

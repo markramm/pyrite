@@ -920,6 +920,33 @@ class PyriteMCPServer:
             "kb_name": task.get("kb_name", kb_name or ""),
         }
 
+    def _kb_discover_neighbors(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Find semantically similar but unlinked entries across KBs."""
+        entry_id = args.get("entry_id")
+        kb_name = args.get("kb_name")
+        if not entry_id or not kb_name:
+            return {"error": "entry_id and kb_name are required"}
+
+        from ..cli.link_commands import _discover_neighbors
+
+        candidates = _discover_neighbors(
+            entry_id=entry_id,
+            kb_name=kb_name,
+            target_kb=args.get("target_kb"),
+            limit=args.get("limit", 10),
+            mode=args.get("mode", "hybrid"),
+            exclude_linked=args.get("exclude_linked", True),
+            config=self.config,
+            db=self.db,
+        )
+
+        return {
+            "entry_id": entry_id,
+            "kb_name": kb_name,
+            "count": len(candidates),
+            "discoveries": candidates,
+        }
+
     def _task_create(self, args: dict[str, Any]) -> dict[str, Any]:
         """Create a new task."""
         return self.task_svc.create_task(

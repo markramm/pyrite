@@ -539,6 +539,40 @@ READ_TOOLS = {
             "required": ["task_id"],
         },
     },
+    "kb_discover_neighbors": {
+        "description": "Find entries in other KBs that are semantically similar to a source entry but not yet linked. Useful for cross-KB knowledge discovery and gap-finding.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "entry_id": {
+                    "type": "string",
+                    "description": "Source entry ID to find neighbors for",
+                },
+                "kb_name": {
+                    "type": "string",
+                    "description": "KB containing the source entry",
+                },
+                "target_kb": {
+                    "type": "string",
+                    "description": "KB to search in (omit to search all KBs)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default 10)",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["keyword", "semantic", "hybrid"],
+                    "description": "Search mode (default: hybrid, falls back to keyword if no embeddings)",
+                },
+                "exclude_linked": {
+                    "type": "boolean",
+                    "description": "Exclude entries that already have a link to the source (default: true)",
+                },
+            },
+            "required": ["entry_id", "kb_name"],
+        },
+    },
 }
 
 WRITE_TOOLS = {
