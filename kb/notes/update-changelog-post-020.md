@@ -1,13 +1,12 @@
 ---
 id: update-changelog-post-020
-type: backlog_item
 title: "Document 43 post-0.20.0 commits in CHANGELOG"
+type: backlog_item
+tags: [docs, release, changelog]
 kind: enhancement
-status: proposed
+status: done
 priority: high
 effort: M
-tags: [docs, release, changelog]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

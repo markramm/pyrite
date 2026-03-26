@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Static Site Rendering (`/site/`)**
+  - Python-served static HTML cache for SEO-friendly KB pages (replaces earlier Node SSR approach)
+  - Sitemap.xml generation from cached pages with per-entry lastmod dates
+  - robots.txt with crawler directives
+  - JSON-LD structured data, Open Graph meta tags, canonical URLs on every page
+  - Custom homepage support via `_homepage` KB entries with designed template rendering
+  - Progressive JS enhancements: live search widget, auto-generated TOC, heading anchors, back-to-top
+  - Editorial dark theme with Source Serif 4 body + DM Sans headings
+  - `/site/search` page with live API-backed hybrid search and URL state sync
+  - Cache invalidation per-entry and per-KB, auto-render on index sync
+
+- **Web UI Feature Parity (Phase 4-5)**
+  - KB orientation page with type breakdown, recent changes, and tag cloud
+  - Advanced search filters: date range, tag filter, saved searches with localStorage
+  - Daily notes calendar widget
+  - User management: list users, role editing, per-KB permission grants/revokes
+  - Index management: sync, rebuild, health check, embedding status in settings
+  - Entry creation with full metadata fields (type, tags, date, importance, status)
+  - Graph centrality sizing (betweenness centrality from API)
+  - Review & Publish workflow: pending changes view with entry-level diffs and commit dialog
+  - KB landing page at `/` with directory of knowledge bases
+  - Dashboard moved to `/overview`
+
+- **Search Improvements**
+  - `group_by_kb` and `limit_per_kb` query params for cross-KB result diversity
+  - Prevents large-KB dominance by returning top N results per KB with round-robin interleaving
+
+- **Multi-Site Deployment**
+  - Shared Docker network (`pyrite-shared`) for multiple Pyrite instances on one VPS
+  - Caddy routing for multiple domains (demo.pyrite.wiki + capturecascade.org)
+  - Independent container lifecycle per site
+
+- **Export System**
+  - NotebookLM renderer with source bundling and manifest generation
+  - Quartz static site renderer for KB publishing
+  - CLI `export` command group with collection and site subcommands
+
+### Fixed
+
+- **Security**
+  - Fix 6 XSS vulnerabilities in site cache (title escaping, search widget, markdown links, ChatSidebar, search highlight)
+  - Fix YAML frontmatter injection in export service (string interpolation → proper quoting)
+  - Fix path traversal via entry IDs used as filenames (new `sanitize_filename()` utility)
+  - Block javascript:/data:/vbscript: URLs in markdown link rendering
+  - Add single-quote escaping to HTML `_esc()` function
+  - Set `no-cache` on SPA index.html to prevent stale chunk hash errors after deploy
+
+- **Bugs**
+  - Fix graph KB filter SQL precedence: `WHERE (A OR B) AND C` not `WHERE A OR (B AND C)`
+  - Fix Sidebar.svelte `$derived` value called as function (`{userInitials()}` → `{userInitials}`)
+  - Fix QuickSwitcher full page reload (window.location.href → goto())
+  - Fix anonymous access when auth not configured (anonymous_tier None handling)
+  - Fix editor blank content when switching to edit mode
+  - Fix layout clipping issues (flex-col, min-h-0, overflow)
+  - Fix graph page zero-height container
+
+- **Performance**
+  - Site cache render_all() runs in background thread (asyncio.to_thread) instead of blocking event loop
+  - Reduce N+1 queries in site cache: eliminate redundant list_entries and get_entry calls
+
+### Changed
+
+- Decouple `/site` and `/viewer` routes from SPA dist (work without SvelteKit build)
+- Update README: MCP tools 14/6/4 → 23/11/8, extension points 15 → 19, tests 1468 → ~2500, ADRs 16 → 22
+- Replace `task` with `journalism-investigation` in extensions table
+
 ## [0.20.0] - 2026-03-23
 
 First public beta release. This release consolidates 8 milestones of development (0.10–0.18) into a single distributable package with comprehensive documentation, deployment options, and a hardened web UI.
