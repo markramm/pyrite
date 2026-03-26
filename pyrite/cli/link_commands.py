@@ -804,3 +804,147 @@ def links_batch_suggest(
             break
 
     console.print(table)
+
+
+def _find_orphans(
+    kb_name: str,
+    min_importance: int = 5,
+    limit: int = 20,
+    config=None,
+    db=None,
+) -> list[dict]:
+    """Find high-importance entries with few cross-KB links relative to their potential.
+
+    Orphan score = potential_matches - cross_kb_links. High score means
+    "should be connected but isn't."
+    """
+    from ..services.kb_service import KBService
+
+    close_db = False
+    if config is None or db is None:
+        config, db = get_config_and_db()
+        close_db = True
+
+    try:
+        svc = KBService(config, db)
+        entries = svc.list_entries(kb_name=kb_name, limit=10000)
+
+        candidates = []
+        for entry in entries:
+            importance = entry.get("importance", 5)
+            if importance is None:
+                importance = 5
+            if importance < min_importance:
+                continue
+
+            eid = entry.get("id", "")
+
+            # Count existing cross-KB links
+            outlinks = db.get_outlinks(eid, kb_name)
+            backlinks = db.get_backlinks(eid, kb_name)
+            cross_kb_links = len([
+                l for l in (outlinks + backlinks)
+                if l.get("kb_name", kb_name) != kb_name
+            ])
+
+            # Count potential cross-KB matches (excluding own KB)
+            neighbors = _discover_neighbors(
+                entry_id=eid,
+                kb_name=kb_name,
+                target_kb=None,  # Search all KBs
+                limit=5,
+                mode="keyword",
+                exclude_linked=True,
+                config=config,
+                db=db,
+            )
+            # Only count matches from OTHER KBs
+            potential = len([n for n in neighbors if n.get("kb_name") != kb_name])
+
+            orphan_score = potential - cross_kb_links
+            if orphan_score <= 0 and potential == 0:
+                continue
+
+            candidates.append({
+                "id": eid,
+                "title": entry.get("title", ""),
+                "entry_type": entry.get("entry_type", ""),
+                "importance": importance,
+                "cross_kb_links": cross_kb_links,
+                "potential_matches": potential,
+                "orphan_score": orphan_score,
+            })
+
+        # Sort by orphan score descending, then by importance descending
+        candidates.sort(key=lambda x: (x["orphan_score"], x["importance"]), reverse=True)
+        return candidates[:limit]
+    finally:
+        if close_db:
+            db.close()
+
+
+@links_app.command("orphans")
+def links_orphans(
+    kb_name: str = typer.Option(..., "--kb", "-k", help="KB to check for orphans"),
+    min_importance: int = typer.Option(5, "--min-importance", help="Minimum importance threshold"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Max results"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Find high-importance entries that lack cross-KB connections.
+
+    Identifies entries that have high importance but few or no links to
+    entries in other KBs, despite having potential semantic matches.
+    These represent gaps in the knowledge graph.
+
+    \\b
+    Examples:
+        pyrite links orphans --kb ramm
+        pyrite links orphans --kb ramm --min-importance 8
+        pyrite links orphans --kb ramm --format json
+    """
+    orphans = _find_orphans(kb_name=kb_name, min_importance=min_importance, limit=limit)
+
+    data = {
+        "kb_name": kb_name,
+        "min_importance": min_importance,
+        "count": len(orphans),
+        "orphans": orphans,
+    }
+
+    formatted = _format_output(data, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    if not orphans:
+        console.print("[dim]No orphaned entries found.[/dim]")
+        return
+
+    console.print(
+        f"\n[bold]Orphaned entries in[/bold] {kb_name}"
+        f" [dim](importance >= {min_importance})[/dim]\n"
+    )
+
+    table = Table(show_lines=False)
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Entry ID")
+    table.add_column("Title")
+    table.add_column("Imp", justify="right")
+    table.add_column("Links", justify="right", style="dim")
+    table.add_column("Potential", justify="right", style="cyan")
+    table.add_column("Gap", justify="right", style="yellow")
+
+    for i, o in enumerate(orphans, 1):
+        table.add_row(
+            str(i),
+            o["id"],
+            o["title"][:40],
+            str(o["importance"]),
+            str(o["cross_kb_links"]),
+            str(o["potential_matches"]),
+            str(o["orphan_score"]),
+        )
+
+    console.print(table)

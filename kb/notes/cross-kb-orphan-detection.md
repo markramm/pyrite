@@ -1,13 +1,11 @@
 ---
 id: cross-kb-orphan-detection
-type: backlog_item
 title: "Cross-KB: Detect orphaned high-value concepts"
-kind: feature
-status: proposed
-priority: medium
-effort: M
+type: backlog_item
 tags: [search, cross-kb, discovery, graph]
-epic: epic-cross-kb-discovery
+kind: feature
+status: done
+effort: M
 ---
 
 ## Problem
