@@ -1,13 +1,12 @@
 ---
 id: cross-kb-batch-similarity
-type: backlog_item
 title: "Cross-KB: Batch similarity search between two KBs"
+type: backlog_item
+tags: [search, cross-kb, discovery]
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: L
-tags: [search, cross-kb, discovery]
-epic: epic-cross-kb-discovery
 ---
 
 ## Problem

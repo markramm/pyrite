@@ -920,6 +920,32 @@ class PyriteMCPServer:
             "kb_name": task.get("kb_name", kb_name or ""),
         }
 
+    def _kb_batch_suggest(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Batch-compare two KBs to find potential cross-KB links."""
+        source_kb = args.get("source_kb")
+        target_kb = args.get("target_kb")
+        if not source_kb or not target_kb:
+            return {"error": "source_kb and target_kb are required"}
+
+        from ..cli.link_commands import _batch_suggest
+
+        pairs = _batch_suggest(
+            source_kb=source_kb,
+            target_kb=target_kb,
+            limit_per_entry=args.get("limit_per_entry", 3),
+            mode=args.get("mode", "keyword"),
+            exclude_linked=args.get("exclude_linked", True),
+            config=self.config,
+            db=self.db,
+        )
+
+        return {
+            "source_kb": source_kb,
+            "target_kb": target_kb,
+            "count": len(pairs),
+            "pairs": pairs,
+        }
+
     def _kb_discover_neighbors(self, args: dict[str, Any]) -> dict[str, Any]:
         """Find semantically similar but unlinked entries across KBs."""
         entry_id = args.get("entry_id")

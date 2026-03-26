@@ -1,7 +1,7 @@
 """
 Link management commands for pyrite CLI.
 
-Commands: check, bulk-create, suggest, discover
+Commands: check, bulk-create, suggest, discover, batch-suggest
 """
 
 from __future__ import annotations
@@ -657,5 +657,150 @@ def links_discover(
             c["entry_type"],
             str(c["score"]),
         )
+
+    console.print(table)
+
+
+def _batch_suggest(
+    source_kb: str,
+    target_kb: str,
+    limit_per_entry: int = 3,
+    mode: str = "keyword",
+    exclude_linked: bool = True,
+    config=None,
+    db=None,
+) -> list[dict]:
+    """Find all potential cross-KB links between two KBs.
+
+    For each entry in source_kb, runs _discover_neighbors against target_kb,
+    then deduplicates bidirectional matches and sorts by score.
+    """
+    from ..services.kb_service import KBService
+
+    close_db = False
+    if config is None or db is None:
+        config, db = get_config_and_db()
+        close_db = True
+
+    try:
+        svc = KBService(config, db)
+        source_entries = svc.list_entries(kb_name=source_kb, limit=10000)
+
+        all_pairs: list[dict] = []
+        seen_pairs: set[tuple] = set()
+
+        for entry in source_entries:
+            eid = entry.get("id", "")
+            candidates = _discover_neighbors(
+                entry_id=eid,
+                kb_name=source_kb,
+                target_kb=target_kb,
+                limit=limit_per_entry,
+                mode=mode,
+                exclude_linked=exclude_linked,
+                config=config,
+                db=db,
+            )
+
+            for c in candidates:
+                # Deduplicate bidirectional: (A,B) and (B,A) are the same pair
+                pair_key = tuple(sorted([eid, c["id"]]))
+                if pair_key in seen_pairs:
+                    continue
+                seen_pairs.add(pair_key)
+
+                all_pairs.append({
+                    "source_id": eid,
+                    "source_title": entry.get("title", ""),
+                    "source_type": entry.get("entry_type", ""),
+                    "target_id": c["id"],
+                    "target_title": c["title"],
+                    "target_type": c["entry_type"],
+                    "score": c["score"],
+                    "snippet": c.get("snippet", ""),
+                })
+
+        # Sort by score descending
+        all_pairs.sort(key=lambda x: x["score"], reverse=True)
+        return all_pairs
+    finally:
+        if close_db:
+            db.close()
+
+
+@links_app.command("batch-suggest")
+def links_batch_suggest(
+    source_kb: str = typer.Option(..., "--source-kb", help="KB to find connections FROM"),
+    target_kb: str = typer.Option(..., "--target-kb", help="KB to find connections TO"),
+    limit_per_entry: int = typer.Option(3, "--limit-per-entry", "-n", help="Max matches per source entry"),
+    mode: str = typer.Option("keyword", "--mode", "-m", help="Search mode: keyword, semantic, hybrid"),
+    exclude_linked: bool = typer.Option(
+        True, "--exclude-linked/--include-linked",
+        help="Exclude already-linked pairs",
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Batch-compare all entries between two KBs to find potential links.
+
+    For each entry in source-kb, finds the most similar entries in target-kb.
+    Deduplicates bidirectional matches and sorts by similarity score.
+
+    \\b
+    Examples:
+        pyrite links batch-suggest --source-kb ramm --target-kb senge
+        pyrite links batch-suggest --source-kb ramm --target-kb senge --mode semantic
+        pyrite links batch-suggest --source-kb ramm --target-kb senge --limit-per-entry 5 --format json
+    """
+    pairs = _batch_suggest(
+        source_kb=source_kb,
+        target_kb=target_kb,
+        limit_per_entry=limit_per_entry,
+        mode=mode,
+        exclude_linked=exclude_linked,
+    )
+
+    data = {
+        "source_kb": source_kb,
+        "target_kb": target_kb,
+        "mode": mode,
+        "exclude_linked": exclude_linked,
+        "count": len(pairs),
+        "pairs": pairs,
+    }
+
+    formatted = _format_output(data, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    if not pairs:
+        console.print("[dim]No cross-KB matches found.[/dim]")
+        return
+
+    console.print(
+        f"\n[bold]Cross-KB matches:[/bold] {source_kb} → {target_kb}"
+        f" [dim]({len(pairs)} pairs, mode={mode})[/dim]\n"
+    )
+
+    table = Table(show_lines=False)
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Source Entry")
+    table.add_column("", style="dim")
+    table.add_column("Target Entry")
+    table.add_column("Score", justify="right", style="green")
+
+    for i, p in enumerate(pairs, 1):
+        table.add_row(
+            str(i),
+            f"{p['source_title'][:35]}",
+            "→",
+            f"{p['target_title'][:35]}",
+            str(p["score"]),
+        )
+        if i >= 50:
+            table.add_row("", f"... and {len(pairs) - 50} more", "", "", "")
+            break
 
     console.print(table)

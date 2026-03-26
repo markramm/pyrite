@@ -539,6 +539,36 @@ READ_TOOLS = {
             "required": ["task_id"],
         },
     },
+    "kb_batch_suggest": {
+        "description": "Batch-compare all entries between two KBs to find potential cross-KB links. For each entry in source_kb, finds similar entries in target_kb. Deduplicates bidirectional matches.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "source_kb": {
+                    "type": "string",
+                    "description": "KB to find connections FROM",
+                },
+                "target_kb": {
+                    "type": "string",
+                    "description": "KB to find connections TO",
+                },
+                "limit_per_entry": {
+                    "type": "integer",
+                    "description": "Max matches per source entry (default 3)",
+                },
+                "mode": {
+                    "type": "string",
+                    "enum": ["keyword", "semantic", "hybrid"],
+                    "description": "Search mode (default: keyword)",
+                },
+                "exclude_linked": {
+                    "type": "boolean",
+                    "description": "Exclude already-linked pairs (default: true)",
+                },
+            },
+            "required": ["source_kb", "target_kb"],
+        },
+    },
     "kb_discover_neighbors": {
         "description": "Find entries in other KBs that are semantically similar to a source entry but not yet linked. Useful for cross-KB knowledge discovery and gap-finding.",
         "inputSchema": {

@@ -7,14 +7,14 @@ tags:
 - seo
 - ssr
 - web
-kind: feature
-effort: L
-status: proposed
-priority: high
 links:
 - target: ssr-public-site
   relation: designed_by
   kb: pyrite
+kind: feature
+status: done
+priority: high
+effort: L
 ---
 
 ## Problem
