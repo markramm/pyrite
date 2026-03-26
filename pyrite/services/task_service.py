@@ -288,6 +288,127 @@ class TaskService:
         return result
 
 
+    def unblock_dependents(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """When a task completes, auto-unblock tasks that depended on it.
+
+        Finds tasks with status='blocked' whose dependencies all resolve to done,
+        and transitions them to 'open'.
+        """
+        # Find tasks that have this task as a dependency
+        rows = self._query(
+            """SELECT id, metadata FROM entry
+               WHERE kb_name = :kb_name AND entry_type = 'task'
+               AND status = 'blocked'""",
+            {"kb_name": kb_name},
+        )
+
+        unblocked = []
+        for row in rows:
+            meta = _parse_metadata(row.get("metadata"))
+            deps = meta.get("dependencies", [])
+            if not deps or task_id not in deps:
+                continue
+
+            # Check if ALL dependencies are now done
+            all_done = True
+            for dep_id in deps:
+                dep_rows = self._query(
+                    "SELECT status FROM entry WHERE id = :id AND kb_name = :kb_name",
+                    {"id": dep_id, "kb_name": kb_name},
+                )
+                if not dep_rows or dep_rows[0].get("status") != "done":
+                    all_done = False
+                    break
+
+            if all_done:
+                self.kb_svc.update_entry(row["id"], kb_name, status="in_progress")
+                unblocked.append({"id": row["id"], "title": row.get("title", "")})
+
+        return unblocked
+
+    def aggregate_evidence_to_parent(self, task_id: str, kb_name: str) -> dict[str, Any] | None:
+        """Aggregate evidence from a child task up to its parent.
+
+        When a child task accumulates evidence links, copy them to the parent
+        so querying the parent shows all evidence from its subtree.
+        """
+        task = self.get_task(task_id, kb_name)
+        if not task:
+            return None
+
+        meta = _parse_metadata(task.get("metadata") or {})
+        parent_id = meta.get("parent") or task.get("parent", "")
+        if not parent_id:
+            return None
+
+        child_evidence = meta.get("evidence", []) or task.get("evidence", []) or []
+        if not child_evidence:
+            return None
+
+        parent = self.get_task(parent_id, kb_name)
+        if not parent:
+            return None
+
+        parent_meta = _parse_metadata(parent.get("metadata") or {})
+        parent_evidence = parent_meta.get("evidence", []) or parent.get("evidence", []) or []
+
+        # Merge without duplicates
+        new_evidence = list(set(parent_evidence) | set(child_evidence))
+        if len(new_evidence) == len(parent_evidence):
+            return None  # Nothing new to add
+
+        self.kb_svc.update_entry(parent_id, kb_name, evidence=new_evidence)
+        added = len(new_evidence) - len(parent_evidence)
+        return {"parent_id": parent_id, "evidence_added": added, "total_evidence": len(new_evidence)}
+
+    def list_entries_needing_qa(self, kb_name: str | None = None) -> list[dict[str, Any]]:
+        """Find entries that have open/unclaimed QA validation tasks.
+
+        Returns entries (not tasks) that need QA review.
+        """
+        query = """SELECT DISTINCT e.id, e.title, e.kb_name, e.entry_type
+                   FROM entry t
+                   JOIN entry e ON json_extract(t.metadata, '$.target_entry') = e.id
+                                AND t.kb_name = e.kb_name
+                   WHERE t.entry_type = 'task'
+                   AND t.status IN ('open', NULL)
+                   AND (t.assignee IS NULL OR t.assignee = '')
+                   AND json_extract(t.metadata, '$.task_type') = 'qa_validation'"""
+        params: dict[str, str] = {}
+        if kb_name:
+            query += " AND t.kb_name = :kb_name"
+            params["kb_name"] = kb_name
+        query += " ORDER BY e.updated_at DESC"
+
+        return self._query(query, params)
+
+    def link_qa_assessment(
+        self, task_id: str, assessment_id: str, kb_name: str
+    ) -> dict[str, Any]:
+        """Link a QA assessment entry as evidence on a QA task.
+
+        When a QA agent creates an assessment entry, this links it
+        to the corresponding task for traceability.
+        """
+        task = self.get_task(task_id, kb_name)
+        if not task:
+            return {"linked": False, "error": "Task not found"}
+
+        meta = _parse_metadata(task.get("metadata") or {})
+        evidence = meta.get("evidence", []) or task.get("evidence", []) or []
+
+        if assessment_id not in evidence:
+            evidence.append(assessment_id)
+            self.kb_svc.update_entry(task_id, kb_name, evidence=evidence)
+
+        return {
+            "linked": True,
+            "task_id": task_id,
+            "assessment_id": assessment_id,
+            "total_evidence": len(evidence),
+        }
+
+
 def _parse_metadata(raw) -> dict[str, Any]:
     """Parse metadata JSON from a DB row."""
     if not raw:

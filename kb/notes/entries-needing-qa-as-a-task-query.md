@@ -5,12 +5,13 @@ type: backlog_item
 tags:
 - task-system
 - qa
-kind: feature
-effort: S
 links:
 - target: epic-task-system-integration-with-qa-agent
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: S
 ---
 
 Add a query mode to task_list that returns all entries that need QA review, based on open/unclaimed QA validation tasks. This gives QA agents a single command to find their work queue.
@@ -24,4 +25,3 @@ Add a query mode to task_list that returns all entries that need QA review, base
 - task_list --qa-queue returns entries with open QA tasks
 - Sorted by priority and age
 - Available via MCP and CLI
-

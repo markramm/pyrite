@@ -5,12 +5,13 @@ type: backlog_item
 tags:
 - task-system
 - orchestration
-kind: feature
-effort: S
 links:
 - target: epic-task-dag-queries-and-orchestrator-support
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: S
 ---
 
 When a dependency task transitions to done, automatically check if any blocked tasks have all dependencies resolved and transition them from blocked to in_progress. Currently blocked tasks stay blocked until manually unblocked.
@@ -23,4 +24,3 @@ When a dependency task transitions to done, automatically check if any blocked t
 - Blocked task auto-transitions to in_progress when all deps are done
 - Only fires when the last blocking dependency completes
 - Logged as an automatic transition (not manual)
-
