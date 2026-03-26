@@ -217,6 +217,45 @@ class TestXSSPrevention:
         assert "'" not in result or "&#39;" in result or "&apos;" in result
 
 
+class TestPathTraversalPrevention:
+    """Entry IDs with path traversal must not write files outside the cache dir."""
+
+    def test_entry_id_with_path_traversal_stays_inside_cache(self, cache_env):
+        cache_env["db"].upsert_entry({
+            "id": "../../etc/evil",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Evil Entry",
+            "body": "pwned",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+
+        cache_dir = cache_env["cache_dir"]
+        kb_dir = cache_dir / "test-kb"
+
+        # Verify no file was written at the traversed path
+        traversed = (kb_dir / "../../etc/evil.html").resolve()
+        if traversed.exists():
+            assert traversed.is_relative_to(cache_dir.resolve()), \
+                f"Path traversal escape: {traversed} is outside {cache_dir}"
+
+        # All HTML files under the kb_dir must have resolved paths inside cache_dir
+        for f in kb_dir.iterdir():
+            assert f.resolve().is_relative_to(cache_dir.resolve()), \
+                f"File {f} escaped the cache directory"
+
+        # The sanitized file should exist with a safe name (no slashes/dots)
+        html_files = [f.name for f in kb_dir.iterdir() if f.suffix == ".html"]
+        for name in html_files:
+            assert ".." not in name, f"Filename contains '..': {name}"
+            assert "/" not in name, f"Filename contains '/': {name}"
+
+
 class TestSiteCacheInvalidation:
     def test_invalidate_entry(self, cache_env):
         cache_env["svc"].render_all()

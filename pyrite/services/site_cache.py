@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
+from ..utils.sanitize import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -594,7 +595,7 @@ class SiteCacheService:
 
         kb_dir = self.cache_dir / kb_name
         kb_dir.mkdir(parents=True, exist_ok=True)
-        (kb_dir / f"{entry_id}.html").write_text(html, encoding="utf-8")
+        (kb_dir / f"{sanitize_filename(entry_id)}.html").write_text(html, encoding="utf-8")
 
 
 def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:

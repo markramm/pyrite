@@ -33,6 +33,7 @@ def _yaml_quote(value: str) -> str:
 from ..config import PyriteConfig
 from ..exceptions import KBNotFoundError, PyriteError
 from ..storage.database import PyriteDB
+from ..utils.sanitize import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ class ExportService:
 
             content = "\n".join(fm_lines) + (body or "")
 
-            file_path = type_dir / f"{entry_id}.md"
+            file_path = type_dir / f"{sanitize_filename(entry_id)}.md"
             file_path.write_text(content, encoding="utf-8")
             files_created += 1
 

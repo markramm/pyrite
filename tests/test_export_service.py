@@ -149,6 +149,74 @@ class TestCommitKB:
             export_svc.commit_kb("test", "msg")
 
 
+class TestPathTraversalPrevention:
+    """Entry IDs with path traversal components must not write outside target dir."""
+
+    def test_entry_id_with_path_traversal_stays_inside_target(
+        self, export_svc, mock_config, mock_db, tmp_path
+    ):
+        kb_cfg = MagicMock()
+        kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
+        kb_cfg.kb_yaml_path.write_text("name: test")
+        mock_config.get_kb.return_value = kb_cfg
+
+        mock_db.list_entries.return_value = [
+            {
+                "id": "../../etc/evil",
+                "entry_type": "note",
+                "title": "Evil Entry",
+                "body": "pwned",
+                "tags": [],
+            }
+        ]
+
+        target = tmp_path / "export"
+        result = export_svc.export_kb_to_directory("test", target)
+
+        assert result["files_created"] == 1
+
+        # The file must NOT exist outside the target directory
+        evil_path = target / "note" / "../../etc/evil.md"
+        # Resolve to see if it actually landed outside
+        assert not (tmp_path / "etc" / "evil.md").exists()
+        assert not Path("/etc/evil.md").exists()
+
+        # The file MUST exist inside target/note/ with a sanitized name
+        note_dir = target / "note"
+        files = list(note_dir.iterdir())
+        assert len(files) == 1
+        # The file must be inside the note_dir (resolved path is under target)
+        assert files[0].resolve().is_relative_to(target.resolve())
+
+    def test_entry_id_with_backslash_traversal(
+        self, export_svc, mock_config, mock_db, tmp_path
+    ):
+        kb_cfg = MagicMock()
+        kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
+        kb_cfg.kb_yaml_path.write_text("name: test")
+        mock_config.get_kb.return_value = kb_cfg
+
+        mock_db.list_entries.return_value = [
+            {
+                "id": "..\\..\\etc\\evil",
+                "entry_type": "note",
+                "title": "Evil Entry",
+                "body": "pwned",
+                "tags": [],
+            }
+        ]
+
+        target = tmp_path / "export"
+        result = export_svc.export_kb_to_directory("test", target)
+
+        assert result["files_created"] == 1
+        # Must not escape the target directory
+        note_dir = target / "note"
+        files = list(note_dir.iterdir())
+        assert len(files) == 1
+        assert files[0].resolve().is_relative_to(target.resolve())
+
+
 class TestPushKB:
     @patch("pyrite.services.git_service.GitService")
     def test_delegates_to_git_service(self, mock_git_svc, export_svc, mock_config):
