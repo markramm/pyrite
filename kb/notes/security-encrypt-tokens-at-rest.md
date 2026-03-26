@@ -1,13 +1,12 @@
 ---
 id: security-encrypt-tokens-at-rest
-type: backlog_item
 title: "Security: Encrypt GitHub OAuth tokens at rest"
+type: backlog_item
+tags: [security, encryption, auth]
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [security, encryption, auth]
-epic: hosting-security-hardening
 ---
 
 ## Problem

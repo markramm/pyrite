@@ -481,25 +481,67 @@ class AuthService:
     # GitHub Token Management
     # =====================================================================
 
+    @staticmethod
+    def _get_encryption_key() -> bytes | None:
+        """Get encryption key from environment. Returns None if not configured."""
+        import base64
+        import hashlib
+        import os
+
+        raw_key = os.environ.get("PYRITE_ENCRYPTION_KEY")
+        if not raw_key:
+            return None
+        # Derive a 32-byte Fernet-compatible key from the raw secret
+        key_bytes = hashlib.sha256(raw_key.encode()).digest()
+        return base64.urlsafe_b64encode(key_bytes)
+
+    @staticmethod
+    def _encrypt_token(token: str, key: bytes) -> str:
+        """Encrypt a token string using Fernet symmetric encryption."""
+        from cryptography.fernet import Fernet
+
+        f = Fernet(key)
+        return f.encrypt(token.encode()).decode()
+
+    @staticmethod
+    def _decrypt_token(encrypted: str, key: bytes) -> str:
+        """Decrypt a Fernet-encrypted token string."""
+        from cryptography.fernet import Fernet
+
+        f = Fernet(key)
+        return f.decrypt(encrypted.encode()).decode()
+
     def store_github_token(self, user_id: int, token: str, scopes: str = "public_repo") -> None:
-        """Store a GitHub access token for a user."""
+        """Store a GitHub access token for a user. Encrypts if PYRITE_ENCRYPTION_KEY is set."""
+        key = self._get_encryption_key()
+        stored_value = self._encrypt_token(token, key) if key else token
+
         conn = self.db._raw_conn
         conn.execute(
             "UPDATE local_user SET github_access_token = ?, github_token_scopes = ?, updated_at = ? WHERE id = ?",
-            (token, scopes, datetime.now(UTC).isoformat(), user_id),
+            (stored_value, scopes, datetime.now(UTC).isoformat(), user_id),
         )
         conn.commit()
 
     def get_github_token_for_user(self, user_id: int) -> tuple[str | None, str | None]:
-        """Get GitHub token and scopes for a user. Returns (token, scopes)."""
+        """Get GitHub token and scopes for a user. Decrypts if encrypted. Returns (token, scopes)."""
         conn = self.db._raw_conn
         row = conn.execute(
             "SELECT github_access_token, github_token_scopes FROM local_user WHERE id = ?",
             (user_id,),
         ).fetchone()
-        if not row:
-            return None, None
-        return row[0], row[1]
+        if not row or not row[0]:
+            return None, row[1] if row else None
+
+        raw_token = row[0]
+        key = self._get_encryption_key()
+        if key:
+            try:
+                return self._decrypt_token(raw_token, key), row[1]
+            except Exception:
+                # Token may be stored as plaintext from before encryption was enabled
+                return raw_token, row[1]
+        return raw_token, row[1]
 
     def clear_github_token(self, user_id: int) -> bool:
         """Remove stored GitHub token. Returns True if user found."""
