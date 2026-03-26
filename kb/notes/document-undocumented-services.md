@@ -1,13 +1,11 @@
 ---
 id: document-undocumented-services
-type: backlog_item
 title: "Create component docs for 9 undocumented services"
-kind: enhancement
-status: proposed
-priority: medium
-effort: M
+type: backlog_item
 tags: [docs, kb, components]
-epic: epic-release-readiness-review
+kind: enhancement
+status: done
+effort: M
 ---
 
 ## Problem
