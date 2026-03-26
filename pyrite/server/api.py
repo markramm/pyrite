@@ -8,6 +8,7 @@ the ``endpoints/`` subpackage; this module provides shared dependencies, the rat
 limiter, and the application factory.
 """
 
+import hashlib
 import logging
 import os
 from datetime import UTC, datetime
@@ -31,6 +32,17 @@ from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
 logger = logging.getLogger(__name__)
+
+
+def _anonymized_key_func(request: Request) -> str:
+    """Hash the client IP for rate limiting without storing the raw address.
+
+    Uses SHA-256 truncated to 16 chars — sufficient for rate limiting,
+    not reversible to the original IP address.
+    """
+    raw_ip = get_remote_address(request)
+    return hashlib.sha256(raw_ip.encode()).hexdigest()[:16]
+
 
 # =============================================================================
 # Dependencies (imported by endpoint modules)
@@ -206,8 +218,12 @@ def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
                 return entry.get("role", "read")
 
     # Fall back to legacy single api_key (grants admin)
-    if has_single_key and key == config.settings.api_key:
-        return "admin"
+    # Compare via hash to avoid holding plaintext key in config memory
+    if has_single_key:
+        key_hash = hashlib.sha256(key.encode()).hexdigest()
+        stored_hash = hashlib.sha256(config.settings.api_key.encode()).hexdigest()
+        if key_hash == stored_hash:
+            return "admin"
 
     return None
 
@@ -430,7 +446,7 @@ def negotiate_response(request: Request, data: Any) -> Response | None:
 # Rate Limiter
 # =============================================================================
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=_anonymized_key_func)
 
 
 # =============================================================================
@@ -645,7 +661,12 @@ def main():
     import uvicorn
 
     config = load_config()
-    uvicorn.run("pyrite.server.api:app", host=config.settings.host, port=config.settings.port)
+    uvicorn.run(
+        "pyrite.server.api:app",
+        host=config.settings.host,
+        port=config.settings.port,
+        access_log=False,
+    )
 
 
 if __name__ == "__main__":

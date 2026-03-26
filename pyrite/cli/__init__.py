@@ -1232,7 +1232,7 @@ def serve(
     from ..server.api import create_app
 
     application = create_app()
-    uvicorn.run(application, host=host, port=port)
+    uvicorn.run(application, host=host, port=port, access_log=False)
 
 
 # =============================================================================

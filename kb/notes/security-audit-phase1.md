@@ -1,13 +1,12 @@
 ---
 id: security-audit-phase1
-type: backlog_item
 title: "Security audit Phase 1: Static analysis of journalist threat model gaps"
+type: backlog_item
+tags: [security, audit, journalism]
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [security, audit, journalism]
-epic: hosting-security-hardening
 ---
 
 ## Problem
