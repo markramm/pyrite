@@ -199,6 +199,18 @@ Recommended execution order. Grouped by milestone.
 | **4** | [[work-session-log]] | S | sw_log tool + WorkLogEntry for persisting session context | **done** |
 | **5** | [[enhance-orient-for-software-type-kbs-with-kanban-and-architecture-context]] | M | Orient command with kanban board and architecture overview | proposed |
 
+**Epic: Cross-KB Discovery (from real cross-KB search session feedback):**
+
+| Priority | Item | Effort | Rationale |
+|----------|------|--------|-----------|
+| **1** | [[cross-kb-unlinked-neighbors]] | M | `pyrite links discover` — find similar-but-unlinked entries across KBs |
+| **2** | [[search-group-by-kb]] | S | `--group-by-kb` — prevent large-KB dominance in results |
+| **3** | [[cross-kb-batch-similarity]] | L | `pyrite links suggest` — batch-compare all entries between two KBs |
+| **4** | [[cross-kb-orphan-detection]] | M | Find high-importance entries with missing cross-KB connections |
+| **5** | [[search-domain-aware-expansion]] | L | Query expansion from KB vocabulary, not general LLM knowledge |
+| **6** | [[search-explain-relevance]] | M | Show which passage drove the similarity score |
+| **7** | [[cross-kb-asymmetric-links]] | M | Detect one-directional links that should be bidirectional |
+
 **Future:**
 
 | Priority | Item | Effort | Rationale |
