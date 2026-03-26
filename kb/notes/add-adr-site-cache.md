@@ -1,13 +1,11 @@
 ---
 id: add-adr-site-cache
-type: backlog_item
 title: "Write ADR for site cache / static HTML rendering decision"
-kind: enhancement
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [docs, adr, site-cache]
-epic: epic-release-readiness-review
+kind: enhancement
+status: done
+effort: S
 ---
 
 ## Problem

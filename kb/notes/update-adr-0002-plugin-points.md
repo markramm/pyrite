@@ -1,13 +1,11 @@
 ---
 id: update-adr-0002-plugin-points
-type: backlog_item
 title: "Update ADR-0002 to reflect 18 plugin integration points"
-kind: enhancement
-status: proposed
-priority: medium
-effort: XS
+type: backlog_item
 tags: [docs, adr]
-epic: epic-release-readiness-review
+kind: enhancement
+status: done
+effort: XS
 ---
 
 ## Problem

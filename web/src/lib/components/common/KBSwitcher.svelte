@@ -3,6 +3,7 @@
 </script>
 
 <select
+	aria-label="Select knowledge base"
 	value={kbStore.activeKB ?? ''}
 	onchange={(e) => kbStore.setActive(e.currentTarget.value)}
 	class="w-full rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"

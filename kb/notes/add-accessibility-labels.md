@@ -1,13 +1,11 @@
 ---
 id: add-accessibility-labels
-type: backlog_item
 title: "Add missing ARIA labels to frontend components"
-kind: bug
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [frontend, accessibility]
-epic: epic-release-readiness-review
+kind: bug
+status: done
+effort: S
 ---
 
 ## Problem

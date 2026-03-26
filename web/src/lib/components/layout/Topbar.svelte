@@ -16,6 +16,8 @@
 		<button
 			onclick={() => uiStore.toggleSidebar()}
 			class="rounded-md p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 lg:hidden"
+			aria-label="Toggle sidebar"
+			aria-expanded={uiStore.sidebarOpen}
 		>
 			<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />

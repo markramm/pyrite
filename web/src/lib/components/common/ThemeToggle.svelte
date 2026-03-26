@@ -6,6 +6,7 @@
 	onclick={() => uiStore.toggleTheme()}
 	class="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
 	title="Toggle theme"
+	aria-label={uiStore.theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
 >
 	{#if uiStore.theme === 'dark'}
 		<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
