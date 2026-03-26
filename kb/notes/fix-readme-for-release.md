@@ -1,13 +1,12 @@
 ---
 id: fix-readme-for-release
-type: backlog_item
 title: "Fix stale counts and tables in README, CLAUDE.md, and getting-started"
+type: backlog_item
+tags: [docs, release]
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [docs, release]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

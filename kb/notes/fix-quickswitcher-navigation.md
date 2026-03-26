@@ -4,6 +4,7 @@ title: "Bug: QuickSwitcher uses window.location.href instead of goto()"
 type: backlog_item
 tags: [frontend, bug, svelte]
 kind: bug
+status: done
 priority: high
 effort: XS
 ---

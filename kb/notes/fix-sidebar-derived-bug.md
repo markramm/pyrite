@@ -4,6 +4,7 @@ title: "Bug: Sidebar calls userInitials() as function but it's a $derived value"
 type: backlog_item
 tags: [frontend, bug, svelte]
 kind: bug
+status: done
 priority: high
 effort: XS
 ---

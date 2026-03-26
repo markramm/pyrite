@@ -4,6 +4,7 @@ title: "Validate entry IDs used as filenames to prevent path traversal"
 type: backlog_item
 tags: [security, export, site-cache]
 kind: bug
+status: done
 priority: critical
 effort: S
 ---
