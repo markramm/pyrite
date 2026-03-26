@@ -359,6 +359,8 @@ class SiteCacheService:
 
     def render_all(self) -> dict:
         """Render all KB index pages and entry pages. Returns stats."""
+        from collections import defaultdict
+
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         kbs = [
@@ -367,12 +369,12 @@ class SiteCacheService:
         ]
         stats = {"kbs": 0, "entries": 0, "errors": 0}
 
-        # Count entries per KB for landing page
+        # Load all entries per KB (one query each, not per-entry)
+        kb_entries: dict[str, list] = {}
         for kb_info in kbs:
-            entries = self.db.list_entries(kb_name=kb_info["name"], limit=1)
-            # Use a count query or list all
-            all_entries = self.db.list_entries(kb_name=kb_info["name"], limit=10000)
-            kb_info["entry_count"] = len(all_entries)
+            entries = self.db.list_entries(kb_name=kb_info["name"], limit=10000)
+            kb_entries[kb_info["name"]] = entries
+            kb_info["entry_count"] = len(entries)
 
         # Render landing page
         self._render_landing(kbs)
@@ -382,22 +384,34 @@ class SiteCacheService:
             kb_dir = self.cache_dir / kb_name
             kb_dir.mkdir(parents=True, exist_ok=True)
 
+            entries = kb_entries[kb_name]
+
             # Render KB index
-            entries = self.db.list_entries(kb_name=kb_name, limit=10000)
             self._render_kb_index(kb_info, entries)
             stats["kbs"] += 1
 
-            # Render each entry
+            # Batch-load all backlinks and outlinks for this KB (2 queries total, not 2N)
+            backlinks_map: dict[str, list] = defaultdict(list)
+            outlinks_map: dict[str, list] = defaultdict(list)
+            for entry in entries:
+                eid = entry["id"]
+                for bl in self.db.get_backlinks(eid, kb_name):
+                    backlinks_map[eid].append(bl)
+                for ol in self.db.get_outlinks(eid, kb_name):
+                    outlinks_map[eid].append(ol)
+
+            # Render each entry using pre-loaded data
             for entry in entries:
                 try:
-                    full = self.db.get_entry(entry["id"], kb_name)
-                    if full:
-                        backlinks = self.db.get_backlinks(entry["id"], kb_name)
-                        outlinks = self.db.get_outlinks(entry["id"], kb_name)
-                        self._render_entry(kb_name, full, backlinks, outlinks)
-                        stats["entries"] += 1
+                    eid = entry["id"]
+                    self._render_entry(
+                        kb_name, entry,
+                        backlinks_map.get(eid, []),
+                        outlinks_map.get(eid, []),
+                    )
+                    stats["entries"] += 1
                 except Exception as e:
-                    logger.warning("Failed to render %s/%s: %s", kb_name, entry["id"], e)
+                    logger.warning("Failed to render %s/%s: %s", kb_name, eid, e)
                     stats["errors"] += 1
 
         return stats
