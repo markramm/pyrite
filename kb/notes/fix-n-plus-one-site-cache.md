@@ -1,13 +1,12 @@
 ---
 id: fix-n-plus-one-site-cache
-type: backlog_item
 title: "Fix N+1 query pattern in site cache render_all()"
+type: backlog_item
+tags: [performance, site-cache]
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
-tags: [performance, site-cache]
-epic: epic-release-readiness-review
 ---
 
 ## Problem
