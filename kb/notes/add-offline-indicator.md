@@ -1,13 +1,11 @@
 ---
 id: add-offline-indicator
-type: backlog_item
 title: "Add visual indicator when WebSocket connection is lost"
-kind: enhancement
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [frontend, ux]
-epic: epic-release-readiness-review
+kind: enhancement
+status: done
+effort: S
 ---
 
 ## Problem

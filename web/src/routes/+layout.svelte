@@ -7,6 +7,7 @@
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import ChatSidebar from '$lib/components/ai/ChatSidebar.svelte';
 	import KeyboardShortcutsModal from '$lib/components/common/KeyboardShortcutsModal.svelte';
+	import ConnectionStatus from '$lib/components/common/ConnectionStatus.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { wsClient } from '$lib/api/websocket';
@@ -138,3 +139,4 @@
 <QuickSwitcher />
 <CommandPalette />
 <KeyboardShortcutsModal open={shortcutsOpen} onclose={() => (shortcutsOpen = false)} />
+<ConnectionStatus />

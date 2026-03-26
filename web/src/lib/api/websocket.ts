@@ -20,11 +20,29 @@ class WebSocketClient {
 	private maxReconnectDelay = 30000;
 	private handlers: Set<WSEventHandler> = new Set();
 	private shouldConnect = false;
+	private _connected = false;
+	private statusListeners: Set<(connected: boolean) => void> = new Set();
 
 	constructor() {
 		const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 		const host = typeof window !== 'undefined' ? window.location.host : 'localhost:8088';
 		this.url = `${protocol}//${host}/ws`;
+	}
+
+	get connected(): boolean {
+		return this._connected;
+	}
+
+	private setConnected(value: boolean) {
+		if (this._connected !== value) {
+			this._connected = value;
+			this.statusListeners.forEach((fn) => fn(value));
+		}
+	}
+
+	onStatusChange(handler: (connected: boolean) => void): () => void {
+		this.statusListeners.add(handler);
+		return () => this.statusListeners.delete(handler);
 	}
 
 	connect() {
@@ -40,6 +58,7 @@ class WebSocketClient {
 
 			this.ws.onopen = () => {
 				this.reconnectDelay = 1000;
+				this.setConnected(true);
 			};
 
 			this.ws.onmessage = (event) => {
@@ -53,6 +72,7 @@ class WebSocketClient {
 
 			this.ws.onclose = () => {
 				this.ws = null;
+				this.setConnected(false);
 				if (this.shouldConnect) {
 					setTimeout(() => this.doConnect(), this.reconnectDelay);
 					this.reconnectDelay = Math.min(this.reconnectDelay * 2, this.maxReconnectDelay);
@@ -71,6 +91,7 @@ class WebSocketClient {
 		this.shouldConnect = false;
 		this.ws?.close();
 		this.ws = null;
+		this.setConnected(false);
 	}
 
 	onEvent(handler: WSEventHandler): () => void {
