@@ -1,13 +1,12 @@
 ---
 id: cross-kb-asymmetric-links
-type: backlog_item
 title: "Cross-KB: Detect asymmetric links between KBs"
+type: backlog_item
+tags: [graph, cross-kb, discovery]
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: M
-tags: [graph, cross-kb, discovery]
-epic: epic-cross-kb-discovery
 ---
 
 ## Problem

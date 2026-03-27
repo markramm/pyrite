@@ -948,3 +948,145 @@ def links_orphans(
         )
 
     console.print(table)
+
+
+def _find_asymmetric_links(
+    kb_a: str,
+    kb_b: str,
+    config=None,
+    db=None,
+) -> list[dict]:
+    """Find one-directional cross-KB links between two KBs.
+
+    Returns links that exist in one direction (A→B) but not the reverse (B→A).
+    """
+    close_db = False
+    if config is None or db is None:
+        config, db = get_config_and_db()
+        close_db = True
+
+    try:
+        # Get all entries in both KBs
+        entries_a = db.list_entries(kb_name=kb_a, limit=10000)
+        entries_b = db.list_entries(kb_name=kb_b, limit=10000)
+
+        ids_a = {e["id"] for e in entries_a}
+        ids_b = {e["id"] for e in entries_b}
+
+        # Build title lookups
+        titles_a = {e["id"]: e.get("title", e["id"]) for e in entries_a}
+        titles_b = {e["id"]: e.get("title", e["id"]) for e in entries_b}
+
+        # Collect all cross-KB links as directed pairs
+        forward_links: dict[tuple, str] = {}  # (source, target) -> relation
+        reverse_links: dict[tuple, str] = {}
+
+        # A→B links
+        for entry in entries_a:
+            eid = entry["id"]
+            outlinks = db.get_outlinks(eid, kb_a)
+            for ol in outlinks:
+                if ol.get("kb_name") == kb_b and ol["id"] in ids_b:
+                    forward_links[(eid, ol["id"])] = ol.get("relation", "related_to")
+
+        # B→A links
+        for entry in entries_b:
+            eid = entry["id"]
+            outlinks = db.get_outlinks(eid, kb_b)
+            for ol in outlinks:
+                if ol.get("kb_name") == kb_a and ol["id"] in ids_a:
+                    reverse_links[(eid, ol["id"])] = ol.get("relation", "related_to")
+
+        # Find asymmetric: exists in forward but not reverse, or vice versa
+        results = []
+
+        for (src, tgt), relation in forward_links.items():
+            if (tgt, src) not in reverse_links:
+                results.append({
+                    "source_id": src,
+                    "source_kb": kb_a,
+                    "source_title": titles_a.get(src, src),
+                    "target_id": tgt,
+                    "target_kb": kb_b,
+                    "target_title": titles_b.get(tgt, tgt),
+                    "direction": f"{kb_a} → {kb_b}",
+                    "relation": relation,
+                })
+
+        for (src, tgt), relation in reverse_links.items():
+            if (tgt, src) not in forward_links:
+                results.append({
+                    "source_id": src,
+                    "source_kb": kb_b,
+                    "source_title": titles_b.get(src, src),
+                    "target_id": tgt,
+                    "target_kb": kb_a,
+                    "target_title": titles_a.get(tgt, tgt),
+                    "direction": f"{kb_b} → {kb_a}",
+                    "relation": relation,
+                })
+
+        return results
+    finally:
+        if close_db:
+            db.close()
+
+
+@links_app.command("asymmetric")
+def links_asymmetric(
+    kb_a: str = typer.Option(..., "--kb-a", help="First KB"),
+    kb_b: str = typer.Option(..., "--kb-b", help="Second KB"),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
+    ),
+):
+    """Find one-directional links between two KBs.
+
+    Detects links that exist A→B but not B→A (or vice versa).
+    These asymmetries may represent missing reverse connections.
+
+    \\b
+    Examples:
+        pyrite links asymmetric --kb-a ramm --kb-b senge
+        pyrite links asymmetric --kb-a ramm --kb-b senge --format json
+    """
+    results = _find_asymmetric_links(kb_a=kb_a, kb_b=kb_b)
+
+    data = {
+        "kb_a": kb_a,
+        "kb_b": kb_b,
+        "count": len(results),
+        "asymmetric_links": results,
+    }
+
+    formatted = _format_output(data, output_format)
+    if formatted is not None:
+        typer.echo(formatted)
+        return
+
+    if not results:
+        console.print("[dim]No asymmetric links found — all cross-KB links are bidirectional.[/dim]")
+        return
+
+    console.print(
+        f"\n[bold]Asymmetric links between[/bold] {kb_a} and {kb_b}"
+        f" [dim]({len(results)} one-directional)[/dim]\n"
+    )
+
+    table = Table(show_lines=False)
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Source")
+    table.add_column("Direction", style="dim")
+    table.add_column("Target")
+    table.add_column("Relation", style="dim")
+
+    for i, r in enumerate(results, 1):
+        table.add_row(
+            str(i),
+            f"{r['source_title'][:30]}",
+            r["direction"],
+            f"{r['target_title'][:30]}",
+            r["relation"],
+        )
+
+    console.print(table)
