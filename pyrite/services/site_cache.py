@@ -3,13 +3,29 @@
 import logging
 from pathlib import Path
 
+from jinja2 import Environment, FileSystemLoader
+
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
 from ..utils.sanitize import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
-_PAGE_TEMPLATE = """<!DOCTYPE html>
+# Jinja2 template environment — loads from pyrite/server/templates/
+_TEMPLATE_DIR = Path(__file__).parent.parent / "server" / "templates"
+_jinja_env = Environment(
+    loader=FileSystemLoader(str(_TEMPLATE_DIR)),
+    autoescape=False,  # We handle escaping explicitly via _esc()
+)
+
+
+def _render_template(template_name: str, **kwargs: object) -> str:
+    """Render a Jinja2 template with the given context."""
+    tmpl = _jinja_env.get_template(template_name)
+    return tmpl.render(**kwargs)
+
+
+_PAGE_TEMPLATE_LEGACY = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -341,6 +357,16 @@ h2[id]:hover .anchor, h3[id]:hover .anchor {{ opacity: 1; }}
 </body>
 </html>"""
 
+
+def _render_page(**kwargs: object) -> str:
+    """Render a page using Jinja2 template, falling back to legacy format string."""
+    try:
+        return _render_template("base.html", **kwargs)
+    except Exception:
+        # Fall back to legacy template if Jinja2 fails
+        return _PAGE_TEMPLATE_LEGACY.format(**kwargs)
+
+
 # schema.org type mapping
 _SCHEMA_TYPES = {
     "note": "Article", "person": "Person", "organization": "Organization",
@@ -463,7 +489,7 @@ class SiteCacheService:
             f'<div class="kb-grid">{"".join(cards)}</div>'
         )
 
-        html = _PAGE_TEMPLATE.format(
+        html = _render_page(
             title="Pyrite Knowledge Base",
             description="Browse knowledge bases on systems thinking, lean, agile, and more.",
             og_title="Pyrite Knowledge Base",
@@ -503,14 +529,14 @@ class SiteCacheService:
                 f'<h1>{_esc(kb_name)}</h1>'
                 f'<p class="meta">{total} entries</p>'
                 + (f'<p style="color:var(--ink-soft);margin:1rem 0 2rem 0">{_esc(desc)}</p>' if desc else '')
-                + f'<div id="site-search" style="margin-bottom:1.5rem">'
+                + '<div id="site-search" style="margin-bottom:1.5rem">'
                 + f'<input type="text" placeholder="Search {_esc(kb_name)}...">'
-                + f'<div class="search-results entry-list" style="margin-top:0.5rem"></div></div>'
+                + '<div class="search-results entry-list" style="margin-top:0.5rem"></div></div>'
                 + f'<div class="entry-list">{"".join(entry_html)}</div>'
             )
             page_desc = desc or f"Browse {total} entries in the {kb_name} knowledge base."
 
-        html = _PAGE_TEMPLATE.format(
+        html = _render_page(
             title=f"{_esc(title)} — Pyrite Knowledge Base",
             description=_esc(page_desc),
             og_title=f"{_esc(title)} — Pyrite Knowledge Base",
@@ -597,7 +623,7 @@ class SiteCacheService:
             f'{bl_html}{ol_html}'
         )
 
-        html = _PAGE_TEMPLATE.format(
+        html = _render_page(
             title=f"{_esc(title)} — {_esc(kb_name)} | Pyrite",
             description=_esc(description),
             og_title=f"{_esc(title)} — {_esc(kb_name)}",
@@ -636,10 +662,8 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:
     # --- Hero ---
     intro = sections.get("_intro", "")
     # Find first section that looks like a subtitle
-    subtitle = ""
     for key in sections:
         if "documenting" in key.lower() or "systematic" in key.lower():
-            subtitle = key
             intro = sections[key]
             break
 
@@ -675,9 +699,7 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:
         steps = re.findall(r'\d+\.\s+\*\*(.+?)\*\*\s*[—–-]\s*(.+)', cascade_text)
         if steps:
             step_cards = []
-            step_icons = ["!", "⚡", "🔧", "🔇", "💥"]
             for i, (name, desc) in enumerate(steps):
-                icon = step_icons[i] if i < len(step_icons) else str(i + 1)
                 step_cards.append(
                     f'<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:0.625rem;padding:1.25rem;position:relative">'
                     f'<div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem">'
@@ -753,7 +775,7 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:
     contrib_html = ""
     contrib_text = sections.get("Contribute", "")
     if contrib_text:
-        contrib_html = f'''
+        contrib_html = '''
         <section style="text-align:center;padding:2rem 0;border-top:1px solid var(--border);margin-top:2rem">
             <h2 style="font-size:1rem;margin-bottom:0.5rem">Open Source</h2>
             <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1rem">Data: CC BY-SA 4.0 · Code: MIT</p>

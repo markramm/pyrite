@@ -1,13 +1,12 @@
 ---
 id: extract-site-cache-templates
-type: backlog_item
 title: "Extract site cache HTML/CSS/JS to Jinja2 templates"
+type: backlog_item
+tags: [architecture, site-cache, maintainability]
 kind: enhancement
-status: proposed
+status: done
 priority: high
 effort: L
-tags: [architecture, site-cache, maintainability]
-epic: epic-release-readiness-review
 ---
 
 ## Problem

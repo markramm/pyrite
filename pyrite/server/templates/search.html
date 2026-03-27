@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Search</h1>
+<input class="search-input" id="q" type="text" placeholder="Search across all knowledge bases..." autofocus>
+<div class="search-meta" id="meta"></div>
+<div class="results" id="results"></div>
+{% endblock %}
+{% block extra_js %}
+(function() {
+  var input = document.getElementById('q');
+  var results = document.getElementById('results');
+  var meta = document.getElementById('meta');
+  var timer;
+
+  var params = new URLSearchParams(window.location.search);
+  var initialQ = params.get('q');
+  if (initialQ) {
+    input.value = initialQ;
+    doSearch(initialQ);
+  }
+
+  input.addEventListener('input', function() {
+    clearTimeout(timer);
+    var q = input.value.trim();
+    if (!q) {
+      results.innerHTML = '';
+      meta.textContent = '';
+      history.replaceState(null, '', '/site/search');
+      return;
+    }
+    timer = setTimeout(function() { doSearch(q); }, 300);
+  });
+
+  function doSearch(q) {
+    history.replaceState(null, '', '/site/search?q=' + encodeURIComponent(q));
+    meta.textContent = 'Searching...';
+
+    fetch('/api/search?q=' + encodeURIComponent(q) + '&mode=hybrid&limit=50')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var items = data.results || [];
+        meta.textContent = items.length + ' result' + (items.length !== 1 ? 's' : '') + ' for "' + q + '"';
+
+        if (!items.length) {
+          results.innerHTML = '<div class="empty-state">No results found.</div>';
+          return;
+        }
+
+        results.innerHTML = items.map(function(e) {
+          var tags = (e.tags || []).slice(0, 3).map(function(t) {
+            return '<span class="tag">' + esc(t) + '</span>';
+          }).join(' ');
+
+          var snippet = '';
+          if (e.body) {
+            var plain = e.body.replace(/[#*_`\[\]]/g, '').substring(0, 150);
+            snippet = '<div class="result-snippet">' + esc(plain) + (e.body.length > 150 ? '...' : '') + '</div>';
+          }
+
+          return '<a class="result-item" href="/site/' + esc(e.kb_name) + '/' + encodeURIComponent(e.id) + '">'
+            + '<div class="result-title">' + esc(e.title) + '</div>'
+            + '<div class="result-meta">'
+            + '<span class="badge">' + esc(e.entry_type) + '</span>'
+            + '<span>' + esc(e.kb_name) + '</span>'
+            + (tags ? ' ' + tags : '')
+            + '</div>'
+            + snippet
+            + '</a>';
+        }).join('');
+      })
+      .catch(function(err) {
+        meta.textContent = 'Search failed: ' + err.message;
+        results.innerHTML = '';
+      });
+  }
+})();
+{% endblock %}

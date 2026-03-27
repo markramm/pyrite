@@ -175,11 +175,23 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
 
 def _serve_search_page(cache_dir: Path) -> HTMLResponse:
     """Serve a dedicated search page for the /site/search route."""
-    # Read the template from any cached page to get consistent styling,
-    # or fall back to a self-contained page
-    from .static_search_page import SEARCH_PAGE_HTML
+    from ..services.site_cache import _render_template
+    try:
+        html = _render_template(
+            "search.html",
+            title="Search — Pyrite Knowledge Base",
+            description="Search across all knowledge bases",
+            og_title="Search — Pyrite Knowledge Base",
+            og_type="website",
+            canonical='<link rel="canonical" href="/site/search">',
+            extra_head='<meta name="robots" content="noindex">',
+        )
+    except Exception:
+        # Fallback to legacy module
+        from .static_search_page import SEARCH_PAGE_HTML
+        html = SEARCH_PAGE_HTML
     return HTMLResponse(
-        content=SEARCH_PAGE_HTML,
+        content=html,
         headers={"Cache-Control": "public, max-age=3600"},
     )
 
