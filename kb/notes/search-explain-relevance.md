@@ -1,13 +1,11 @@
 ---
 id: search-explain-relevance
-type: backlog_item
 title: "Search: Show why an entry matched (relevance explanation)"
-kind: feature
-status: proposed
-priority: medium
-effort: M
+type: backlog_item
 tags: [search, ux]
-epic: epic-cross-kb-discovery
+kind: feature
+status: done
+effort: M
 ---
 
 ## Problem

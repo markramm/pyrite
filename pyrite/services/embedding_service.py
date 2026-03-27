@@ -50,14 +50,25 @@ def _blob_to_embedding(blob: bytes) -> list[float]:
     return list(struct.unpack(f"{n}f", blob))
 
 
-def _generate_snippet(entry: dict[str, Any], max_len: int = 200) -> str:
-    """Generate a text snippet from an entry for search results."""
+def _generate_snippet(entry: dict[str, Any], max_len: int = 200, query: str = "") -> str:
+    """Generate a text snippet from an entry for search results.
+
+    When a query is provided, finds the paragraph with the most keyword
+    overlap to explain why the entry matched (relevance-aware snippeting).
+    """
+    body = entry.get("body") or ""
+
+    # If we have a query, find the most relevant passage
+    if query and body:
+        best = _best_passage(body, query, max_len)
+        if best:
+            return best
+
     # Prefer summary if available
     if entry.get("summary"):
         text = entry["summary"]
         return text[:max_len] + "..." if len(text) > max_len else text
     # Fall back to body
-    body = entry.get("body") or ""
     if not body:
         return ""
     # Strip markdown formatting for cleaner snippet
@@ -69,6 +80,50 @@ def _generate_snippet(entry: dict[str, Any], max_len: int = 200) -> str:
             text = text[:idx]
             break
     return text[:max_len] + "..." if len(text) > max_len else text
+
+
+def _best_passage(body: str, query: str, max_len: int = 200) -> str:
+    """Find the paragraph in body most relevant to the query.
+
+    Uses keyword overlap scoring (fast, no embedding needed).
+    Returns the best-matching passage or empty string.
+    """
+    import re
+
+    # Tokenize query into lowercase words
+    query_terms = set(re.findall(r"\w{3,}", query.lower()))
+    if not query_terms:
+        return ""
+
+    # Split body into paragraphs
+    # Strip markdown headers, emphasis, etc.
+    clean = re.sub(r"^#{1,6}\s*", "", body, flags=re.MULTILINE)
+    clean = re.sub(r"\*\*(.+?)\*\*", r"\1", clean)
+    clean = re.sub(r"\*(.+?)\*", r"\1", clean)
+    paragraphs = [p.strip() for p in clean.split("\n\n") if p.strip() and len(p.strip()) > 20]
+
+    if not paragraphs:
+        return ""
+
+    # Score each paragraph by keyword overlap
+    best_score = 0
+    best_para = ""
+    for para in paragraphs:
+        para_terms = set(re.findall(r"\w{3,}", para.lower()))
+        overlap = len(query_terms & para_terms)
+        # Bonus for query term density
+        score = overlap + (overlap / max(len(para_terms), 1)) * 0.5
+        if score > best_score:
+            best_score = score
+            best_para = para
+
+    if best_score == 0:
+        return ""
+
+    # Trim to max length
+    if len(best_para) > max_len:
+        return best_para[:max_len] + "..."
+    return best_para
 
 
 class EmbeddingService:
@@ -241,10 +296,10 @@ class EmbeddingService:
             max_distance=max_distance,
         )
 
-        # Add snippets to results
+        # Add relevance-aware snippets to results
         for entry in results:
             if not entry.get("snippet"):
-                entry["snippet"] = _generate_snippet(entry)
+                entry["snippet"] = _generate_snippet(entry, query=query)
 
         return results
 
