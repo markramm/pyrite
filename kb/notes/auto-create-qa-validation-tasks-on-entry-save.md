@@ -5,12 +5,13 @@ type: backlog_item
 tags:
 - task-system
 - qa
-kind: feature
-effort: M
 links:
 - target: epic-task-system-integration-with-qa-agent
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: M
 ---
 
 When a new entry is saved to a KB with QA enabled, automatically create a QA validation task linked to that entry. The task should be in open status, ready for a QA agent to claim.
@@ -24,4 +25,3 @@ When a new entry is saved to a KB with QA enabled, automatically create a QA val
 - Task links to the entry via produces/produced_by relation
 - Task includes relevant validation rules in its body
 - Can be disabled per KB via kb.yaml config
-
