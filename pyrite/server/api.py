@@ -30,7 +30,9 @@ from ..services.graph_service import GraphService
 from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
+from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
+from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
@@ -194,6 +196,22 @@ def get_ephemeral_service(
 ) -> EphemeralKBService:
     """Get EphemeralKBService instance via DI."""
     return EphemeralKBService(config, db)
+
+
+def get_review_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> ReviewService:
+    """Get ReviewService instance via DI."""
+    return ReviewService(config, db)
+
+
+def get_version_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> VersionService:
+    """Get VersionService instance via DI."""
+    return VersionService(config, db)
 
 
 def get_search_service(

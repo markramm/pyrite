@@ -3,8 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
-from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter, requires_kb_tier
+from ...services.review_service import ReviewService
+from ..api import get_review_service, limiter, requires_kb_tier
 
 router = APIRouter(tags=["Reviews"])
 
@@ -55,7 +55,7 @@ class ReviewStatusResponse(BaseModel):
 def create_review(
     request: Request,
     body: CreateReviewRequest,
-    svc: KBService = Depends(get_kb_service),
+    review_svc: ReviewService = Depends(get_review_service),
 ):
     """Create a QA review for an entry."""
     if body.reviewer_type not in ("user", "agent"):
@@ -63,7 +63,7 @@ def create_review(
     if body.result not in ("pass", "fail", "partial"):
         raise HTTPException(status_code=422, detail="result must be 'pass', 'fail', or 'partial'")
     try:
-        review = svc.create_review(
+        review = review_svc.create_review(
             entry_id=body.entry_id,
             kb_name=body.kb_name,
             reviewer=body.reviewer,
@@ -83,10 +83,10 @@ def list_reviews(
     entry_id: str = Query(..., description="Entry ID"),
     kb: str = Query(..., alias="kb_name", description="KB name"),
     limit: int = Query(50, ge=1, le=200),
-    svc: KBService = Depends(get_kb_service),
+    review_svc: ReviewService = Depends(get_review_service),
 ):
     """List reviews for an entry."""
-    reviews = svc.get_reviews(entry_id, kb, limit=limit)
+    reviews = review_svc.get_reviews(entry_id, kb, limit=limit)
     return ReviewListResponse(
         count=len(reviews),
         reviews=[ReviewResponse(**r) for r in reviews],
@@ -99,10 +99,10 @@ def get_latest_review(
     request: Request,
     entry_id: str = Query(..., description="Entry ID"),
     kb: str = Query(..., alias="kb_name", description="KB name"),
-    svc: KBService = Depends(get_kb_service),
+    review_svc: ReviewService = Depends(get_review_service),
 ):
     """Get the latest review for an entry."""
-    review = svc.get_latest_review(entry_id, kb)
+    review = review_svc.get_latest_review(entry_id, kb)
     if not review:
         raise HTTPException(
             status_code=404,
@@ -117,10 +117,10 @@ def get_review_status(
     request: Request,
     entry_id: str = Query(..., description="Entry ID"),
     kb: str = Query(..., alias="kb_name", description="KB name"),
-    svc: KBService = Depends(get_kb_service),
+    review_svc: ReviewService = Depends(get_review_service),
 ):
     """Check if the latest review is still current (file unchanged since review)."""
-    status = svc.is_review_current(entry_id, kb)
+    status = review_svc.is_review_current(entry_id, kb)
     review = status["review"]
     return ReviewStatusResponse(
         current=status["current"],
@@ -136,10 +136,10 @@ def get_review_status(
 def delete_review(
     request: Request,
     review_id: int,
-    svc: KBService = Depends(get_kb_service),
+    review_svc: ReviewService = Depends(get_review_service),
 ):
     """Delete a review."""
-    deleted = svc.db.delete_review(review_id)
+    deleted = review_svc.db.delete_review(review_id)
     if not deleted:
         raise HTTPException(
             status_code=404,

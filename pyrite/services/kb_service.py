@@ -943,55 +943,6 @@ class KBService:
             self._doc_mgr.index_entry(entry, kb_name, file_path)
 
     # =========================================================================
-    # Version History
-    # =========================================================================
-
-    def get_entry_versions(self, entry_id: str, kb_name: str, limit: int = 50) -> list[dict]:
-        """Get version history for an entry."""
-        return self.db.get_entry_versions(entry_id, kb_name, limit=limit)
-
-    def get_entry_at_version(self, entry_id: str, kb_name: str, commit_hash: str) -> str | None:
-        """Get entry content at a specific git commit."""
-        import subprocess
-
-        from ..services.git_service import GitService
-
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            return None
-
-        kb_path = kb_config.path
-        if not GitService.is_git_repo(kb_path):
-            return None
-
-        # Find the file path for this entry
-        entry = self.db.get_entry(entry_id, kb_name)
-        if not entry or not entry.get("file_path"):
-            return None
-
-        file_path = entry["file_path"]
-        # Make relative to KB path
-        try:
-            rel_path = str(Path(file_path).relative_to(kb_path))
-        except ValueError:
-            rel_path = file_path
-
-        # Use git show to get content at commit
-        try:
-            result = subprocess.run(
-                ["git", "show", f"{commit_hash}:{rel_path}"],
-                cwd=str(kb_path),
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            if result.returncode == 0:
-                return result.stdout
-        except Exception:
-            logger.warning("Git diff failed for KB", exc_info=True)
-        return None
-
-    # =========================================================================
     # Protocol-level operations
     # =========================================================================
 
@@ -1115,80 +1066,6 @@ class KBService:
                 raise  # before_* hooks abort the operation on ANY exception
             logger.warning("Hook %s failed", hook_name, exc_info=True)
             return entry
-
-    # =========================================================================
-    # QA Reviews
-    # =========================================================================
-
-    def create_review(
-        self,
-        entry_id: str,
-        kb_name: str,
-        reviewer: str,
-        reviewer_type: str,
-        result: str,
-        details: str | None = None,
-    ) -> dict[str, Any]:
-        """Create a review, computing content_hash from the file on disk."""
-        from ..utils.hashing import git_blob_hash
-
-        kb_config = self.get_kb(kb_name)
-        if not kb_config:
-            raise KBNotFoundError(f"KB not found: {kb_name}")
-
-        repo = KBRepository(kb_config)
-        file_path = repo.find_file(entry_id)
-        if not file_path:
-            raise EntryNotFoundError(f"Entry not found on disk: {entry_id}")
-
-        content = Path(file_path).read_bytes()
-        content_hash = git_blob_hash(content)
-
-        return self.db.create_review(
-            entry_id=entry_id,
-            kb_name=kb_name,
-            content_hash=content_hash,
-            reviewer=reviewer,
-            reviewer_type=reviewer_type,
-            result=result,
-            details=details,
-        )
-
-    def get_reviews(self, entry_id: str, kb_name: str, limit: int = 50) -> list[dict[str, Any]]:
-        """Get reviews for an entry."""
-        return self.db.get_reviews(entry_id, kb_name, limit=limit)
-
-    def get_latest_review(self, entry_id: str, kb_name: str) -> dict[str, Any] | None:
-        """Get the latest review for an entry."""
-        return self.db.get_latest_review(entry_id, kb_name)
-
-    def is_review_current(self, entry_id: str, kb_name: str) -> dict[str, Any]:
-        """Check if the latest review is still current (file unchanged).
-
-        Returns dict with ``current`` bool and ``review`` (latest review or None).
-        """
-        from ..utils.hashing import git_blob_hash
-
-        review = self.db.get_latest_review(entry_id, kb_name)
-        if not review:
-            return {"current": False, "review": None}
-
-        kb_config = self.get_kb(kb_name)
-        if not kb_config:
-            return {"current": False, "review": review}
-
-        repo = KBRepository(kb_config)
-        file_path = repo.find_file(entry_id)
-        if not file_path:
-            return {"current": False, "review": review}
-
-        content = Path(file_path).read_bytes()
-        current_hash = git_blob_hash(content)
-
-        return {
-            "current": current_hash == review["content_hash"],
-            "review": review,
-        }
 
     # =========================================================================
     # Index Operations

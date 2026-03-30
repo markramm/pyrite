@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter
+from ...services.version_service import VersionService
+from ..api import get_version_service, limiter
 from ..schemas import EntryVersionResponse, VersionListResponse
 
 router = APIRouter(tags=["Versions"])
@@ -16,10 +16,10 @@ def get_entry_versions(
     entry_id: str,
     kb: str = Query(..., description="KB name"),
     limit: int = Query(50, ge=1, le=200),
-    svc: KBService = Depends(get_kb_service),
+    version_svc: VersionService = Depends(get_version_service),
 ):
     """Get version history for an entry."""
-    versions = svc.get_entry_versions(entry_id, kb, limit=limit)
+    versions = version_svc.get_entry_versions(entry_id, kb, limit=limit)
     version_models = [EntryVersionResponse(**v) for v in versions]
     return VersionListResponse(
         entry_id=entry_id,
@@ -36,10 +36,10 @@ def get_entry_at_version(
     entry_id: str,
     commit_hash: str,
     kb: str = Query(..., description="KB name"),
-    svc: KBService = Depends(get_kb_service),
+    version_svc: VersionService = Depends(get_version_service),
 ):
     """Get entry content at a specific git commit."""
-    content = svc.get_entry_at_version(entry_id, kb, commit_hash)
+    content = version_svc.get_entry_at_version(entry_id, kb, commit_hash)
     if content is None:
         raise HTTPException(
             status_code=404,
