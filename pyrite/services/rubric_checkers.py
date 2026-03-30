@@ -306,6 +306,41 @@ def check_not_oversized(
     return None
 
 
+def check_orphan_backlog_item(
+    entry: dict[str, Any],
+    schema: KBSchema | None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Warn if a non-epic open backlog item has no subtask_of link."""
+    meta = _parse_metadata(entry)
+    kind = meta.get("kind", "")
+    if kind == "epic":
+        return None  # epics don't need parents
+
+    status = entry.get("status") or meta.get("status", "proposed")
+    terminal = {"done", "retired", "wont_do", "deferred"}
+    if status in terminal:
+        return None  # closed items don't need structure
+
+    links = entry.get("_links", [])
+    has_parent = any(
+        isinstance(lnk, dict) and lnk.get("relation") == "subtask_of"
+        for lnk in links
+    )
+    if has_parent:
+        return None
+
+    return {
+        "entry_id": entry["id"],
+        "kb_name": entry["kb_name"],
+        "rule": "rubric_violation",
+        "severity": "warning",
+        "field": "links",
+        "message": f"Open backlog item '{entry['id']}' has no parent epic (subtask_of link)",
+        "rubric_item": (params or {}).get("rubric_text", "non-epic item belongs to an epic"),
+    }
+
+
 def check_body_has_code_block(
     entry: dict[str, Any],
     schema: KBSchema | None,
@@ -342,4 +377,5 @@ NAMED_CHECKERS: dict[str, RubricChecker] = {
     "body_has_pattern": check_body_has_pattern,
     "body_has_code_block": check_body_has_code_block,
     "not_oversized": check_not_oversized,
+    "orphan_backlog_item": check_orphan_backlog_item,
 }

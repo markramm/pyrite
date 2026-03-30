@@ -3498,3 +3498,546 @@ class TestContextForItemCLI:
                 assert "Error" in result.output or "not found" in result.output
             finally:
                 db.close()
+
+
+# =========================================================================
+# TestBacklogItemRank
+# =========================================================================
+
+
+class TestBacklogItemRank:
+    def test_default_rank_is_zero(self):
+        from pyrite_software_kb.entry_types import BacklogItemEntry
+
+        entry = BacklogItemEntry(id="test", title="Test")
+        assert entry.rank == 0
+
+    def test_to_frontmatter_omits_zero_rank(self):
+        from pyrite_software_kb.entry_types import BacklogItemEntry
+
+        entry = BacklogItemEntry(id="test", title="Test", rank=0)
+        fm = entry.to_frontmatter()
+        assert "rank" not in fm
+
+    def test_to_frontmatter_includes_nonzero_rank(self):
+        from pyrite_software_kb.entry_types import BacklogItemEntry
+
+        entry = BacklogItemEntry(id="test", title="Test", rank=100)
+        fm = entry.to_frontmatter()
+        assert fm["rank"] == 100
+
+    def test_from_frontmatter_parses_rank(self):
+        from pyrite_software_kb.entry_types import BacklogItemEntry
+
+        entry = BacklogItemEntry.from_frontmatter(
+            {"title": "Test", "type": "backlog_item", "rank": 200}, "body"
+        )
+        assert entry.rank == 200
+
+    def test_from_frontmatter_default_rank(self):
+        from pyrite_software_kb.entry_types import BacklogItemEntry
+
+        entry = BacklogItemEntry.from_frontmatter(
+            {"title": "Test", "type": "backlog_item"}, "body"
+        )
+        assert entry.rank == 0
+
+    def test_roundtrip_with_rank(self):
+        from pyrite_software_kb.entry_types import BacklogItemEntry
+
+        entry = BacklogItemEntry(id="ranked", title="Ranked Item", rank=300, kind="feature")
+        fm = entry.to_frontmatter()
+        restored = BacklogItemEntry.from_frontmatter(fm, entry.body)
+        assert restored.rank == 300
+        assert restored.kind == "feature"
+
+
+class TestBacklogItemRankValidator:
+    def test_rank_valid_positive(self):
+        from pyrite_software_kb.validators import validate_software_kb
+
+        errors = validate_software_kb("backlog_item", {"rank": 100}, {})
+        rank_errors = [e for e in errors if e["field"] == "rank"]
+        assert rank_errors == []
+
+    def test_rank_valid_zero(self):
+        from pyrite_software_kb.validators import validate_software_kb
+
+        errors = validate_software_kb("backlog_item", {"rank": 0}, {})
+        rank_errors = [e for e in errors if e["field"] == "rank"]
+        assert rank_errors == []
+
+    def test_rank_invalid_negative(self):
+        from pyrite_software_kb.validators import validate_software_kb
+
+        errors = validate_software_kb("backlog_item", {"rank": -5}, {})
+        rank_errors = [e for e in errors if e["field"] == "rank"]
+        assert len(rank_errors) == 1
+        assert rank_errors[0]["rule"] == "min_value"
+
+    def test_rank_invalid_string(self):
+        from pyrite_software_kb.validators import validate_software_kb
+
+        errors = validate_software_kb("backlog_item", {"rank": "abc"}, {})
+        rank_errors = [e for e in errors if e["field"] == "rank"]
+        assert len(rank_errors) == 1
+        assert rank_errors[0]["rule"] == "type"
+
+
+# =========================================================================
+# TestEpicRelationships
+# =========================================================================
+
+
+class TestEpicRelationships:
+    def test_has_subtask_registered(self):
+        plugin = SoftwareKBPlugin()
+        rels = plugin.get_relationship_types()
+        assert "has_subtask" in rels
+        assert rels["has_subtask"]["inverse"] == "subtask_of"
+
+    def test_subtask_of_registered(self):
+        plugin = SoftwareKBPlugin()
+        rels = plugin.get_relationship_types()
+        assert "subtask_of" in rels
+        assert rels["subtask_of"]["inverse"] == "has_subtask"
+
+
+# =========================================================================
+# TestEpicProgress
+# =========================================================================
+
+
+class TestEpicProgress:
+    def test_epic_progress_with_subtasks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-1",
+                        "title": "Test Epic",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "meta": {"kind": "epic", "status": "in_progress"},
+                    },
+                    {
+                        "id": "sub-1",
+                        "title": "Subtask 1",
+                        "entry_type": "backlog_item",
+                        "status": "done",
+                        "meta": {"kind": "feature", "status": "done"},
+                    },
+                    {
+                        "id": "sub-2",
+                        "title": "Subtask 2",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                    {
+                        "id": "sub-3",
+                        "title": "Subtask 3",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "meta": {"kind": "feature", "status": "in_progress"},
+                    },
+                ],
+                links=[
+                    {"source": "epic-1", "target": "sub-1", "relation": "has_subtask", "inverse": "subtask_of"},
+                    {"source": "epic-1", "target": "sub-2", "relation": "has_subtask", "inverse": "subtask_of"},
+                    {"source": "epic-1", "target": "sub-3", "relation": "has_subtask", "inverse": "subtask_of"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                progress = plugin._get_epic_progress(db, "epic-1", "test")
+                assert progress["total"] == 3
+                assert progress["done"] == 1
+                assert progress["in_progress"] == 1
+                assert progress["completion_pct"] == 33
+                assert len(progress["subtasks"]) == 3
+                assert "done" in progress["by_status"]
+                assert "proposed" in progress["by_status"]
+            finally:
+                db.close()
+
+    def test_epic_progress_empty(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-empty",
+                        "title": "Empty Epic",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "epic", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                progress = plugin._get_epic_progress(db, "epic-empty", "test")
+                assert progress["total"] == 0
+                assert progress["done"] == 0
+                assert progress["completion_pct"] == 0
+            finally:
+                db.close()
+
+    def test_epic_progress_via_subtask_of_backlinks(self):
+        """Items linking to epic via subtask_of should also be counted."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-2",
+                        "title": "Epic Two",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "meta": {"kind": "epic", "status": "in_progress"},
+                    },
+                    {
+                        "id": "child-1",
+                        "title": "Child via subtask_of",
+                        "entry_type": "backlog_item",
+                        "status": "done",
+                        "meta": {"kind": "feature", "status": "done"},
+                    },
+                ],
+                links=[
+                    {"source": "child-1", "target": "epic-2", "relation": "subtask_of", "inverse": "has_subtask"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                progress = plugin._get_epic_progress(db, "epic-2", "test")
+                assert progress["total"] == 1
+                assert progress["done"] == 1
+                assert progress["completion_pct"] == 100
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestEpicsMcpTool
+# =========================================================================
+
+
+class TestEpicsMcpTool:
+    def test_sw_epics_in_read_tools(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("read")
+        assert "sw_epics" in tools
+        assert "sw_epic_detail" in tools
+
+    def test_sw_prioritize_in_write_tools(self):
+        plugin = SoftwareKBPlugin()
+        tools = plugin.get_mcp_tools("write")
+        assert "sw_prioritize" in tools
+
+    def test_epics_lists_only_epics(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-a",
+                        "title": "Epic A",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "epic", "status": "proposed"},
+                    },
+                    {
+                        "id": "feature-1",
+                        "title": "Feature 1",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_epics({"kb_name": "test"})
+                assert result["count"] == 1
+                assert result["epics"][0]["id"] == "epic-a"
+            finally:
+                db.close()
+
+    def test_epic_detail_returns_subtasks(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-det",
+                        "title": "Detail Epic",
+                        "entry_type": "backlog_item",
+                        "status": "in_progress",
+                        "meta": {"kind": "epic", "status": "in_progress"},
+                    },
+                    {
+                        "id": "sub-det-1",
+                        "title": "Sub 1",
+                        "entry_type": "backlog_item",
+                        "status": "done",
+                        "meta": {"kind": "feature", "status": "done"},
+                    },
+                ],
+                links=[
+                    {"source": "epic-det", "target": "sub-det-1", "relation": "has_subtask", "inverse": "subtask_of"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_epic_detail({"epic_id": "epic-det", "kb_name": "test"})
+                assert result["total"] == 1
+                assert result["done"] == 1
+                assert result["completion_pct"] == 100
+                assert "done" in result["by_status"]
+            finally:
+                db.close()
+
+    def test_epic_detail_not_found(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_epic_detail({"epic_id": "nope", "kb_name": "test"})
+                assert "error" in result
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestBacklogSortAndFilter
+# =========================================================================
+
+
+class TestBacklogSortAndFilter:
+    def test_sort_by_rank(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "unranked",
+                        "title": "Unranked",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "priority": "medium",
+                        "meta": {"kind": "feature", "status": "proposed", "priority": "medium"},
+                        "created_at": "2026-01-01T00:00:00",
+                    },
+                    {
+                        "id": "rank-200",
+                        "title": "Rank 200",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "priority": "medium",
+                        "meta": {"kind": "feature", "status": "proposed", "priority": "medium", "rank": 200},
+                        "created_at": "2026-01-02T00:00:00",
+                    },
+                    {
+                        "id": "rank-100",
+                        "title": "Rank 100",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "priority": "medium",
+                        "meta": {"kind": "feature", "status": "proposed", "priority": "medium", "rank": 100},
+                        "created_at": "2026-01-03T00:00:00",
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test", "sort": "rank"})
+                ids = [i["id"] for i in result["items"]]
+                # Ranked items first (100, 200), then unranked
+                assert ids == ["rank-100", "rank-200", "unranked"]
+            finally:
+                db.close()
+
+    def test_filter_by_epic(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-f",
+                        "title": "Filter Epic",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "epic", "status": "proposed"},
+                    },
+                    {
+                        "id": "in-epic",
+                        "title": "In Epic",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                    {
+                        "id": "out-epic",
+                        "title": "Outside Epic",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+                links=[
+                    {"source": "epic-f", "target": "in-epic", "relation": "has_subtask", "inverse": "subtask_of"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test", "epic": "epic-f"})
+                ids = [i["id"] for i in result["items"]]
+                assert "in-epic" in ids
+                assert "out-epic" not in ids
+            finally:
+                db.close()
+
+    def test_group_by_epic(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "epic-g",
+                        "title": "Group Epic",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "epic", "status": "proposed"},
+                    },
+                    {
+                        "id": "grouped",
+                        "title": "Grouped Item",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                    {
+                        "id": "orphan",
+                        "title": "Orphan Item",
+                        "entry_type": "backlog_item",
+                        "status": "proposed",
+                        "meta": {"kind": "feature", "status": "proposed"},
+                    },
+                ],
+                links=[
+                    {"source": "grouped", "target": "epic-g", "relation": "subtask_of", "inverse": "has_subtask"},
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test", "group_by": "epic"})
+                assert "groups" in result
+                groups = result["groups"]
+                epic_group = [g for g in groups if g["epic_id"] == "epic-g"]
+                unassigned = [g for g in groups if g["epic_id"] is None]
+                assert len(epic_group) == 1
+                assert epic_group[0]["count"] >= 1
+                assert len(unassigned) == 1
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestPullNextRankAware
+# =========================================================================
+
+
+class TestPullNextRankAware:
+    def test_ranked_item_preferred_over_unranked(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "unranked-acc",
+                        "title": "Unranked Accepted",
+                        "status": "accepted",
+                        "priority": "medium",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "medium"},
+                        "created_at": "2026-01-01T00:00:00",
+                    },
+                    {
+                        "id": "ranked-acc",
+                        "title": "Ranked Accepted",
+                        "status": "accepted",
+                        "priority": "medium",
+                        "meta": {"kind": "feature", "status": "accepted", "priority": "medium", "rank": 100},
+                        "created_at": "2026-01-02T00:00:00",
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_pull_next({"kb_name": "test"})
+                assert result["recommendation"]["id"] == "ranked-acc"
+            finally:
+                db.close()
+
+
+# =========================================================================
+# TestOrphanBacklogItemChecker
+# =========================================================================
+
+
+class TestOrphanBacklogItemChecker:
+    def test_orphan_open_item_warns(self):
+        from pyrite.services.rubric_checkers import check_orphan_backlog_item
+
+        entry = {
+            "id": "orphan-1",
+            "kb_name": "test",
+            "status": "proposed",
+            "metadata": json.dumps({"kind": "feature", "status": "proposed"}),
+            "_links": [],
+        }
+        result = check_orphan_backlog_item(entry, None)
+        assert result is not None
+        assert result["severity"] == "warning"
+        assert "subtask_of" in result["message"]
+
+    def test_item_with_parent_passes(self):
+        from pyrite.services.rubric_checkers import check_orphan_backlog_item
+
+        entry = {
+            "id": "child-1",
+            "kb_name": "test",
+            "status": "proposed",
+            "metadata": json.dumps({"kind": "feature", "status": "proposed"}),
+            "_links": [{"relation": "subtask_of", "target": "epic-1"}],
+        }
+        result = check_orphan_backlog_item(entry, None)
+        assert result is None
+
+    def test_epic_item_passes(self):
+        from pyrite.services.rubric_checkers import check_orphan_backlog_item
+
+        entry = {
+            "id": "epic-1",
+            "kb_name": "test",
+            "status": "proposed",
+            "metadata": json.dumps({"kind": "epic", "status": "proposed"}),
+            "_links": [],
+        }
+        result = check_orphan_backlog_item(entry, None)
+        assert result is None
+
+    def test_done_item_passes(self):
+        from pyrite.services.rubric_checkers import check_orphan_backlog_item
+
+        entry = {
+            "id": "done-1",
+            "kb_name": "test",
+            "status": "done",
+            "metadata": json.dumps({"kind": "feature", "status": "done"}),
+            "_links": [],
+        }
+        result = check_orphan_backlog_item(entry, None)
+        assert result is None

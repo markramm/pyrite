@@ -304,6 +304,7 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
     status: str = "proposed"  # overrides Statusable default
     priority: str = "medium"  # string priority, not Prioritizable (domain-specific vocabulary)
     effort: str = ""
+    rank: int = 0  # explicit ordering within priority band, 0 = unranked
 
     @property
     def entry_type(self) -> str:
@@ -322,6 +323,8 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
             meta["assignee"] = self.assignee
         if self.effort:
             meta["effort"] = self.effort
+        if self.rank:
+            meta["rank"] = self.rank
         return meta
 
     @classmethod
@@ -334,6 +337,7 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
             priority=meta.get("priority", "medium"),
             assignee=meta.get("assignee", ""),
             effort=meta.get("effort", ""),
+            rank=int(meta.get("rank", 0)),
         )
 
 

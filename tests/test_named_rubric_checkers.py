@@ -62,6 +62,7 @@ class TestNamedCheckerRegistry:
             "body_has_pattern",
             "body_has_code_block",
             "not_oversized",
+            "orphan_backlog_item",
         }
         assert expected == set(NAMED_CHECKERS.keys())
 
