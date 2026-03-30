@@ -882,6 +882,42 @@ class PyriteMCPServer:
         )
         return {"count": len(tasks), "tasks": tasks}
 
+    def _task_subtree(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get all descendants of a task."""
+        task_id = args.get("task_id")
+        if not task_id:
+            return {"error": "task_id is required"}
+        kb_name = args.get("kb_name") or self._find_task_kb(task_id)
+        result = self._task_svc.get_subtree(task_id, kb_name)
+        return {"task_id": task_id, "count": len(result), "subtree": result}
+
+    def _task_ancestors(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get parent chain from task to root."""
+        task_id = args.get("task_id")
+        if not task_id:
+            return {"error": "task_id is required"}
+        kb_name = args.get("kb_name") or self._find_task_kb(task_id)
+        result = self._task_svc.get_ancestors(task_id, kb_name)
+        return {"task_id": task_id, "count": len(result), "ancestors": result}
+
+    def _task_blocked_by(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Get transitive dependency chain."""
+        task_id = args.get("task_id")
+        if not task_id:
+            return {"error": "task_id is required"}
+        kb_name = args.get("kb_name") or self._find_task_kb(task_id)
+        result = self._task_svc.get_blocked_by(task_id, kb_name)
+        return {"task_id": task_id, "count": len(result), "blocked_by": result}
+
+    def _task_critical_path(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Find the longest blocking dependency chain."""
+        task_id = args.get("task_id")
+        if not task_id:
+            return {"error": "task_id is required"}
+        kb_name = args.get("kb_name") or self._find_task_kb(task_id)
+        result = self._task_svc.critical_path(task_id, kb_name)
+        return {"task_id": task_id, "chain_length": len(result), "critical_path": result}
+
     def _task_status(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get task details with children, deps, evidence."""
         import json as _json

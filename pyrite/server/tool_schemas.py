@@ -528,6 +528,50 @@ READ_TOOLS = {
             "required": [],
         },
     },
+    "task_subtree": {
+        "description": "Get all descendants (children, grandchildren, etc.) of a task.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Root task ID"},
+                "kb_name": {"type": "string", "description": "KB name (optional)"},
+            },
+            "required": ["task_id"],
+        },
+    },
+    "task_ancestors": {
+        "description": "Get parent chain from task to root (immediate parent first).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID"},
+                "kb_name": {"type": "string", "description": "KB name (optional)"},
+            },
+            "required": ["task_id"],
+        },
+    },
+    "task_blocked_by": {
+        "description": "Get all tasks transitively blocking a given task (full dependency chain).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID"},
+                "kb_name": {"type": "string", "description": "KB name (optional)"},
+            },
+            "required": ["task_id"],
+        },
+    },
+    "task_critical_path": {
+        "description": "Find the longest chain of unresolved dependencies blocking a task. Useful for identifying what to unblock first.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "Task ID"},
+                "kb_name": {"type": "string", "description": "KB name (optional)"},
+            },
+            "required": ["task_id"],
+        },
+    },
     "task_status": {
         "description": "Get task details including children, dependencies, and evidence links.",
         "inputSchema": {

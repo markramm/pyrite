@@ -408,6 +408,144 @@ class TaskService:
             "total_evidence": len(evidence),
         }
 
+    # ── DAG traversal methods ──────────────────────────────────────
+
+    def get_subtree(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get all descendants of a task (children, grandchildren, etc.)."""
+        result: list[dict[str, Any]] = []
+        visited: set[str] = set()
+
+        def _collect(parent_id: str) -> None:
+            children = self._query(
+                """SELECT id, title, status, entry_type,
+                          json_extract(metadata, '$.parent') as parent,
+                          json_extract(metadata, '$.assignee') as assignee,
+                          importance as priority
+                   FROM entry
+                   WHERE kb_name = :kb_name AND entry_type = 'task'
+                   AND json_extract(metadata, '$.parent') = :parent_id""",
+                {"kb_name": kb_name, "parent_id": parent_id},
+            )
+            for child in children:
+                cid = child["id"]
+                if cid in visited:
+                    continue
+                visited.add(cid)
+                result.append(child)
+                _collect(cid)
+
+        _collect(task_id)
+        return result
+
+    def get_ancestors(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get parent chain from task to root. Returns [parent, grandparent, ...]."""
+        result: list[dict[str, Any]] = []
+        visited: set[str] = set()
+        current_id = task_id
+
+        while True:
+            if current_id in visited:
+                break
+            visited.add(current_id)
+
+            task = self.get_task(current_id, kb_name)
+            if not task:
+                break
+
+            meta = _parse_metadata(task.get("metadata") or {})
+            parent_id = meta.get("parent") or task.get("parent", "")
+            if not parent_id:
+                break
+
+            parent = self.get_task(parent_id, kb_name)
+            if not parent:
+                break
+
+            result.append({
+                "id": parent["id"],
+                "title": parent.get("title", ""),
+                "status": parent.get("status", ""),
+                "entry_type": parent.get("entry_type", "task"),
+            })
+            current_id = parent_id
+
+        return result
+
+    def get_blocked_by(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get transitive dependency chain — all tasks blocking this one."""
+        result: list[dict[str, Any]] = []
+        visited: set[str] = set()
+
+        def _collect_deps(tid: str) -> None:
+            if tid in visited:
+                return
+            visited.add(tid)
+
+            task = self.get_task(tid, kb_name)
+            if not task:
+                return
+
+            meta = _parse_metadata(task.get("metadata") or {})
+            deps = meta.get("dependencies", []) or task.get("dependencies", []) or []
+
+            for dep_id in deps:
+                if dep_id in visited:
+                    continue
+                dep = self.get_task(dep_id, kb_name)
+                if dep:
+                    result.append({
+                        "id": dep["id"],
+                        "title": dep.get("title", ""),
+                        "status": dep.get("status", ""),
+                        "entry_type": dep.get("entry_type", "task"),
+                    })
+                    _collect_deps(dep_id)
+
+        _collect_deps(task_id)
+        return result
+
+    def critical_path(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Find the longest chain of unresolved dependencies (critical path).
+
+        Returns the ordered list of tasks in the longest blocking chain.
+        Handles cycles gracefully via visited set.
+        """
+        visited: set[str] = set()
+
+        def _longest_chain(tid: str) -> list[dict[str, Any]]:
+            if tid in visited:
+                return []
+            visited.add(tid)
+
+            task = self.get_task(tid, kb_name)
+            if not task:
+                return []
+
+            meta = _parse_metadata(task.get("metadata") or {})
+            deps = meta.get("dependencies", []) or task.get("dependencies", []) or []
+
+            if not deps:
+                return []
+
+            best_chain: list[dict[str, Any]] = []
+            for dep_id in deps:
+                dep = self.get_task(dep_id, kb_name)
+                if not dep:
+                    continue
+                sub_chain = _longest_chain(dep_id)
+                candidate = [{
+                    "id": dep["id"],
+                    "title": dep.get("title", ""),
+                    "status": dep.get("status", ""),
+                    "entry_type": dep.get("entry_type", "task"),
+                }] + sub_chain
+                if len(candidate) > len(best_chain):
+                    best_chain = candidate
+
+            return best_chain
+
+        return _longest_chain(task_id)
+
 
 def _parse_metadata(raw) -> dict[str, Any]:
     """Parse metadata JSON from a DB row."""
