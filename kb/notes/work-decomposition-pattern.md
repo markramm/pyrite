@@ -14,6 +14,7 @@ links:
   note: "Extends kanban flow with decomposition rules"
 kind: feature
 effort: L
+status: deferred
 ---
 
 ## Problem

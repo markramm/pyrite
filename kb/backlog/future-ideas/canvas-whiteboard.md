@@ -3,7 +3,7 @@ id: canvas-whiteboard
 type: backlog_item
 title: "Canvas / Whiteboard View"
 kind: feature
-status: proposed
+status: retired
 priority: low
 effort: XL
 tags: [web, visualization]

@@ -25,7 +25,7 @@ links:
   relation: has_subtask
   kb: pyrite
 kind: epic
-status: proposed
+status: done
 priority: medium
 effort: L
 ---

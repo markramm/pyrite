@@ -3,7 +3,7 @@ id: offline-and-performance
 type: backlog_item
 title: "Offline Support and Large-KB Performance"
 kind: feature
-status: proposed
+status: deferred
 priority: medium
 effort: L
 tags: [web, performance, phase-5]

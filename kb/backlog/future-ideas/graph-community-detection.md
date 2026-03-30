@@ -3,7 +3,7 @@ id: graph-community-detection
 type: backlog_item
 title: "Graph Community Detection and Cluster Coloring"
 kind: enhancement
-status: proposed
+status: retired
 priority: low
 effort: M
 tags: [web, graph, visualization]

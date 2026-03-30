@@ -10,12 +10,12 @@ tags:
 - knowledge-infrastructure
 metadata:
   kind: feature
-  status: proposed
+  status: retired
   priority: medium
   effort: xl
   milestone: post-launch
 kind: feature
-status: proposed
+status: retired
 priority: medium
 effort: xl
 milestone: post-launch

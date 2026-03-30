@@ -7,6 +7,7 @@ tags:
 - qa
 - epic
 kind: epic
+status: done
 effort: M
 links:
 - target: auto-create-qa-validation-tasks-on-entry-save

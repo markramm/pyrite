@@ -3,10 +3,32 @@ id: epic-cross-kb-discovery
 type: backlog_item
 title: "Epic: Cross-KB Discovery and Link Suggestion"
 kind: epic
-status: in_progress
+status: done
 priority: high
 effort: XL
 tags: [epic, search, graph, cross-kb, discovery]
+links:
+- target: cross-kb-batch-similarity
+  relation: has_subtask
+  kb: pyrite
+- target: cross-kb-orphan-detection
+  relation: has_subtask
+  kb: pyrite
+- target: cross-kb-asymmetric-links
+  relation: has_subtask
+  kb: pyrite
+- target: search-group-by-kb
+  relation: has_subtask
+  kb: pyrite
+- target: search-domain-aware-expansion
+  relation: has_subtask
+  kb: pyrite
+- target: search-explain-relevance
+  relation: has_subtask
+  kb: pyrite
+- target: cross-kb-unlinked-neighbors
+  relation: has_subtask
+  kb: pyrite
 ---
 
 ## Problem

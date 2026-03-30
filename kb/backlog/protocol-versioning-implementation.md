@@ -3,7 +3,7 @@ id: protocol-versioning-implementation
 type: backlog_item
 title: "Implement protocol versioning and satisfaction checking (ADR-0014)"
 kind: feature
-status: proposed
+status: accepted
 priority: medium
 effort: M
 tags: [protocols, extensions, schema]
