@@ -3,7 +3,7 @@ id: web-ui-wikilink-rendering-in-lists
 type: backlog_item
 title: "Web UI: Render wikilinks in entry list card snippets"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [web, ux]

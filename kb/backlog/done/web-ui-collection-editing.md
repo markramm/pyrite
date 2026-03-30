@@ -3,7 +3,7 @@ id: web-ui-collection-editing
 type: backlog_item
 title: "Web UI: Collection CRUD and query builder"
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: M
 tags: [web, ux]

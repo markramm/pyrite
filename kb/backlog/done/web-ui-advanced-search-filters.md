@@ -3,7 +3,7 @@ id: web-ui-advanced-search-filters
 type: backlog_item
 title: "Web UI: Advanced search filters (date, tags, fields, expansion)"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, ux]

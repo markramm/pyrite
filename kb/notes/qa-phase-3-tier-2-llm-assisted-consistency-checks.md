@@ -7,6 +7,8 @@ tags:
 - quality
 - ai
 kind: feature
+status: done
+priority: medium
 effort: L
 ---
 

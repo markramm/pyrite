@@ -4,7 +4,7 @@ title: "Cross-KB: Batch similarity search between two KBs"
 type: backlog_item
 tags: [search, cross-kb, discovery]
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: L
 ---

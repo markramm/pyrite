@@ -3,7 +3,7 @@ id: web-ui-entry-creation-fields
 type: backlog_item
 title: "Web UI: Full metadata fields in entry creation and edit forms"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, ux]

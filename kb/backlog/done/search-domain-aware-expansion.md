@@ -3,7 +3,7 @@ id: search-domain-aware-expansion
 type: backlog_item
 title: "Search: Domain-aware query expansion from KB vocabulary"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [search, ai, discovery]

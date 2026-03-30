@@ -3,7 +3,7 @@ id: block-refs-phase3-transclusion
 type: backlog_item
 title: "Block References Phase 3: Transclusion Rendering"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: L
 tags: [web, editor, linking, block-refs]
