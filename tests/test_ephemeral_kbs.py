@@ -12,7 +12,7 @@ class TestEphemeralKBs:
 
     @pytest.fixture
     def config_and_svc(self, tmp_path, monkeypatch):
-        from pyrite.services.kb_service import KBService
+        from pyrite.services.ephemeral_service import EphemeralKBService
         from pyrite.storage.database import PyriteDB
 
         # Redirect save_config to tmp_path so tests don't clobber ~/.pyrite/config.yaml
@@ -25,7 +25,7 @@ class TestEphemeralKBs:
             ),
         )
         db = PyriteDB(config.settings.index_path)
-        svc = KBService(config, db)
+        svc = EphemeralKBService(config, db)
         return config, svc, db
 
     def test_create_ephemeral_kb(self, config_and_svc):

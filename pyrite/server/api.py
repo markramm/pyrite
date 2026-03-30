@@ -24,6 +24,9 @@ from slowapi.util import get_remote_address
 
 from ..config import PyriteConfig, Settings, load_config
 from ..services.index_worker import IndexWorker
+from ..services.ephemeral_service import EphemeralKBService
+from ..services.export_service import ExportService
+from ..services.graph_service import GraphService
 from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
@@ -168,6 +171,29 @@ def get_repo_service(
         svc._github_token = None
 
     return svc
+
+
+def get_graph_service(
+    db: PyriteDB = Depends(get_db),
+) -> GraphService:
+    """Get GraphService instance via DI."""
+    return GraphService(db)
+
+
+def get_export_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> ExportService:
+    """Get ExportService instance via DI."""
+    return ExportService(config, db)
+
+
+def get_ephemeral_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> EphemeralKBService:
+    """Get EphemeralKBService instance via DI."""
+    return EphemeralKBService(config, db)
 
 
 def get_search_service(

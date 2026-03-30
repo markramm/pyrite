@@ -17,7 +17,9 @@ import pytest
 
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings, UsageTierConfig
 from pyrite.exceptions import PyriteError
+from pyrite.services.export_service import ExportService
 from pyrite.services.kb_service import KBService
+from pyrite.services.quota_service import QuotaService
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.migrations import CURRENT_VERSION, MigrationManager
 
@@ -75,20 +77,11 @@ class TestUsageTierEnforcement:
     """Tests for usage tier limit checking."""
 
     @pytest.fixture()
-    def kb_service(self, tmp_path):
-        """Create a KBService with a real DB for tier testing."""
-        db_path = tmp_path / "test.db"
-        db = PyriteDB(str(db_path))
-
-        kb_dir = tmp_path / "test-kb"
-        kb_dir.mkdir()
-
+    def quota_service(self, tmp_path):
+        """Create a QuotaService for tier testing."""
         config = PyriteConfig(
-            knowledge_bases=[
-                KBConfig(name="test-kb", path=kb_dir, kb_type="generic"),
-            ],
             settings=Settings(
-                index_path=db_path,
+                index_path=tmp_path / "test.db",
                 auth=AuthConfig(
                     usage_tiers={
                         "default": UsageTierConfig(
@@ -99,31 +92,29 @@ class TestUsageTierEnforcement:
                 ),
             ),
         )
+        return QuotaService(config)
 
-        svc = KBService(config, db)
-        return svc
-
-    def test_kb_creation_within_limits(self, kb_service):
+    def test_kb_creation_within_limits(self, quota_service):
         """Creating KB when under limit succeeds."""
         # User has 0 KBs, limit is 2 — should succeed
-        allowed, msg = kb_service.check_kb_creation_allowed(
+        allowed, msg = quota_service.check_kb_creation_allowed(
             user_id=1, user_tier="default", current_kb_count=0
         )
         assert allowed is True
 
-    def test_kb_creation_exceeds_limit(self, kb_service):
+    def test_kb_creation_exceeds_limit(self, quota_service):
         """Creating KB when at limit raises error."""
         # User already has 2 KBs, limit is 2 — should fail
-        allowed, msg = kb_service.check_kb_creation_allowed(
+        allowed, msg = quota_service.check_kb_creation_allowed(
             user_id=1, user_tier="default", current_kb_count=2
         )
         assert allowed is False
         assert "limit" in msg.lower()
 
-    def test_entry_count_limit_enforced(self, kb_service):
+    def test_entry_count_limit_enforced(self, quota_service):
         """Adding entry past limit raises error."""
         # KB already has 3 entries, limit is 3 — should fail
-        allowed, msg = kb_service.check_entry_creation_allowed(
+        allowed, msg = quota_service.check_entry_creation_allowed(
             kb_name="test-kb", user_tier="default", current_entry_count=3
         )
         assert allowed is False
@@ -131,17 +122,13 @@ class TestUsageTierEnforcement:
 
     def test_no_limits_when_unconfigured(self, tmp_path):
         """No usage_tiers config = unlimited."""
-        db_path = tmp_path / "test.db"
-        db = PyriteDB(str(db_path))
-
         config = PyriteConfig(
             settings=Settings(
-                index_path=db_path,
+                index_path=tmp_path / "test.db",
                 auth=AuthConfig(),  # No usage_tiers
             ),
         )
-
-        svc = KBService(config, db)
+        svc = QuotaService(config)
         # No tiers configured — should always allow
         allowed, msg = svc.check_kb_creation_allowed(
             user_id=1, user_tier="default", current_kb_count=999
@@ -183,6 +170,7 @@ class TestKBExport:
         )
 
         svc = KBService(config, db)
+        export_svc = ExportService(config, db)
 
         # Create a few entries using the service
         svc.create_entry(
@@ -202,15 +190,15 @@ class TestKBExport:
             tags=["api"],
         )
 
-        return svc, tmp_path
+        return svc, export_svc, tmp_path
 
     def test_export_kb_creates_markdown_files(self, kb_with_entries):
         """Entries exported as markdown with frontmatter."""
-        svc, tmp_path = kb_with_entries
+        svc, export_svc, tmp_path = kb_with_entries
         export_dir = tmp_path / "export"
         export_dir.mkdir()
 
-        result = svc.export_kb_to_directory("myproject", export_dir)
+        result = export_svc.export_kb_to_directory("myproject", export_dir)
 
         assert result["entries_exported"] >= 2
         assert result["files_created"] >= 2
@@ -234,11 +222,11 @@ class TestKBExport:
 
     def test_export_kb_includes_kb_yaml(self, kb_with_entries):
         """kb.yaml included in export."""
-        svc, tmp_path = kb_with_entries
+        svc, export_svc, tmp_path = kb_with_entries
         export_dir = tmp_path / "export"
         export_dir.mkdir()
 
-        svc.export_kb_to_directory("myproject", export_dir)
+        export_svc.export_kb_to_directory("myproject", export_dir)
 
         kb_yaml = export_dir / "kb.yaml"
         assert kb_yaml.exists()
@@ -264,11 +252,11 @@ class TestKBExport:
             settings=Settings(index_path=db_path),
         )
 
-        svc = KBService(config, db)
+        export_svc = ExportService(config, db)
         export_dir = tmp_path / "export"
         export_dir.mkdir()
 
-        result = svc.export_kb_to_directory("empty-kb", export_dir)
+        result = export_svc.export_kb_to_directory("empty-kb", export_dir)
 
         assert result["entries_exported"] == 0
         assert result["files_created"] == 0

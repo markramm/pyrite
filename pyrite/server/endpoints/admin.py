@@ -7,19 +7,19 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from ...config import PyriteConfig
 from ...exceptions import KBNotFoundError, KBProtectedError
 from ...services.auth_service import AuthService
+from ...services.ephemeral_service import EphemeralKBService
 from ...services.index_worker import IndexWorker
 from ...services.kb_registry_service import KBRegistryService
-from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...storage.database import PyriteDB
 from ...storage.index import IndexManager
 from ..api import (
     get_config,
     get_db,
+    get_ephemeral_service,
     get_index_mgr,
     get_index_worker,
     get_kb_registry,
-    get_kb_service,
     get_llm_service,
     limiter,
     requires_tier,
@@ -173,12 +173,12 @@ def create_kb(
     description: str = Body(""),
     ephemeral: bool = Body(False),
     ttl: int | None = Body(None),
-    svc: KBService = Depends(get_kb_service),
+    eph_svc: EphemeralKBService = Depends(get_ephemeral_service),
     registry: KBRegistryService = Depends(get_kb_registry),
 ):
     """Create a new knowledge base."""
     if ephemeral:
-        kb = svc.create_ephemeral_kb(name, ttl=ttl or 3600, description=description)
+        kb = eph_svc.create_ephemeral_kb(name, ttl=ttl or 3600, description=description)
         return {"created": True, "name": kb.name, "path": str(kb.path), "ephemeral": True}
 
     try:
@@ -247,10 +247,10 @@ def reindex_kb(
 @limiter.limit("30/minute")
 def gc_ephemeral_kbs(
     request: Request,
-    svc: KBService = Depends(get_kb_service),
+    eph_svc: EphemeralKBService = Depends(get_ephemeral_service),
 ):
     """Garbage-collect expired ephemeral KBs."""
-    removed = svc.gc_ephemeral_kbs()
+    removed = eph_svc.gc_ephemeral_kbs()
     return {"removed": removed, "count": len(removed)}
 
 
@@ -263,10 +263,10 @@ def gc_ephemeral_kbs(
 @limiter.limit("30/minute")
 def list_ephemeral_kbs(
     request: Request,
-    svc: KBService = Depends(get_kb_service),
+    eph_svc: EphemeralKBService = Depends(get_ephemeral_service),
 ):
     """List all active ephemeral KBs. Requires admin."""
-    kbs = svc.list_ephemeral_kbs()
+    kbs = eph_svc.list_ephemeral_kbs()
     return {"ephemeral_kbs": kbs, "count": len(kbs)}
 
 
@@ -275,10 +275,10 @@ def list_ephemeral_kbs(
 def force_expire_ephemeral_kb(
     request: Request,
     name: str,
-    svc: KBService = Depends(get_kb_service),
+    eph_svc: EphemeralKBService = Depends(get_ephemeral_service),
 ):
     """Force-expire a specific ephemeral KB. Requires admin."""
-    ok = svc.force_expire_kb(name)
+    ok = eph_svc.force_expire_kb(name)
     if not ok:
         raise HTTPException(status_code=404, detail=f"Ephemeral KB '{name}' not found")
     return {"expired": True, "name": name}
@@ -296,7 +296,7 @@ def create_ephemeral_kb(
     name: str | None = Body(None, embed=True),
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
-    svc: KBService = Depends(get_kb_service),
+    eph_svc: EphemeralKBService = Depends(get_ephemeral_service),
 ):
     """Create an ephemeral KB for the current user."""
     auth_user = getattr(request.state, "auth_user", None)
@@ -305,7 +305,7 @@ def create_ephemeral_kb(
 
     auth_service = AuthService(db, config.settings.auth)
     try:
-        result = auth_service.create_user_ephemeral_kb(auth_user["id"], svc, name=name)
+        result = auth_service.create_user_ephemeral_kb(auth_user["id"], eph_svc, name=name)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
 

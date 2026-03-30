@@ -553,7 +553,7 @@ class AuthService:
         conn.commit()
         return cursor.rowcount > 0
 
-    def create_user_ephemeral_kb(self, user_id: int, kb_service, name: str | None = None) -> dict:
+    def create_user_ephemeral_kb(self, user_id: int, ephemeral_service, name: str | None = None) -> dict:
         """Create an ephemeral KB for a user with per-KB admin grant.
 
         Checks ephemeral_min_tier, ephemeral_max_per_user limits.
@@ -587,7 +587,7 @@ class AuthService:
             name = f"ephemeral-{user_id}-{secrets.token_hex(4)}"
 
         ttl = self.config.ephemeral_default_ttl
-        kb = kb_service.create_ephemeral_kb(
+        kb = ephemeral_service.create_ephemeral_kb(
             name, ttl=ttl, description=f"Ephemeral KB for user {user_id}"
         )
 

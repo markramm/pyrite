@@ -279,7 +279,10 @@ def kb_create(
     """Create a new knowledge base."""
     with cli_registry_context() as (config, db, svc, registry):
         if ephemeral:
-            kb = svc.create_ephemeral_kb(name, ttl=ttl, description=description)
+            from ..services.ephemeral_service import EphemeralKBService
+
+            eph_svc = EphemeralKBService(config, db)
+            kb = eph_svc.create_ephemeral_kb(name, ttl=ttl, description=description)
             console.print(f"[green]Created ephemeral KB:[/green] {name} (TTL: {ttl}s) at {kb.path}")
             return
 
@@ -375,8 +378,11 @@ def kb_commit(
 ):
     """Commit changes in a KB's git repository."""
     with cli_context() as (config, db, svc):
+        from ..services.export_service import ExportService
+
+        export_svc = ExportService(config, db)
         try:
-            result = svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
+            result = export_svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
             if result["success"]:
                 console.print(f"[green]Committed:[/green] {result['commit_hash'][:8]}")
                 console.print(f"  {result['files_changed']} file(s) changed")
@@ -398,8 +404,11 @@ def kb_push(
 ):
     """Push KB commits to a remote repository."""
     with cli_context() as (config, db, svc):
+        from ..services.export_service import ExportService
+
+        export_svc = ExportService(config, db)
         try:
-            result = svc.push_kb(kb_name, remote=remote, branch=branch)
+            result = export_svc.push_kb(kb_name, remote=remote, branch=branch)
             if result["success"]:
                 console.print(f"[green]Pushed:[/green] {result['message']}")
             else:
@@ -414,7 +423,10 @@ def kb_push(
 def kb_gc():
     """Garbage-collect expired ephemeral KBs."""
     with cli_context() as (config, db, svc):
-        removed = svc.gc_ephemeral_kbs()
+        from ..services.ephemeral_service import EphemeralKBService
+
+        eph_svc = EphemeralKBService(config, db)
+        removed = eph_svc.gc_ephemeral_kbs()
 
         if removed:
             for name in removed:

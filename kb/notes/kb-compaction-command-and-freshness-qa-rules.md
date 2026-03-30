@@ -5,7 +5,7 @@ type: backlog_item
 tags: [qa, cli, compaction, staleness]
 kind: feature
 status: done
-priority: 11
+priority: medium
 effort: S
 ---
 

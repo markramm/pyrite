@@ -3,7 +3,7 @@ id: web-ui-editor-theme-mismatch
 type: backlog_item
 title: "Bug: Editor does not respect light/dark mode toggle"
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [web, bug, editor, theme]

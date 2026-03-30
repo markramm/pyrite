@@ -5,8 +5,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 
-from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter
+from ...services.graph_service import GraphService
+from ..api import get_graph_service, limiter
 from ..schemas import GraphEdge, GraphNode, GraphResponse
 
 router = APIRouter(tags=["Graph"])
@@ -93,10 +93,10 @@ def get_graph(
     depth: int = Query(2, ge=1, le=3, description="Max hops from center"),
     limit: int = Query(500, ge=1, le=2000, description="Max nodes"),
     include_centrality: bool = Query(False, description="Compute betweenness centrality"),
-    svc: KBService = Depends(get_kb_service),
+    graph_svc: GraphService = Depends(get_graph_service),
 ):
     """Get graph data for knowledge graph visualization."""
-    data = svc.get_graph(
+    data = graph_svc.get_graph(
         center=center,
         center_kb=center_kb,
         kb_name=kb,

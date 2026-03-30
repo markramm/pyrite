@@ -19,6 +19,8 @@ from pydantic import AnyUrl
 from ..config import PyriteConfig, load_config
 from ..exceptions import ConfigError, KBNotFoundError, KBProtectedError, PyriteError
 from ..schema import generate_entry_id
+from ..services.export_service import ExportService
+from ..services.graph_service import GraphService
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
@@ -114,6 +116,8 @@ class PyriteMCPServer:
         self.db = PyriteDB(self.config.settings.index_path)
         self.index_mgr = IndexManager(self.db, self.config)
         self.svc = KBService(self.config, self.db)
+        self.graph_svc = GraphService(self.db)
+        self.export_svc = ExportService(self.config, self.db)
         self._index_worker = None  # Lazy-init
 
         # KB registry (seeded from config on init)
@@ -343,7 +347,7 @@ class PyriteMCPServer:
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         limit = args.get("limit", 100)
-        backlinks = self.svc.get_backlinks(
+        backlinks = self.graph_svc.get_backlinks(
             entry_id, kb_name, limit=limit, offset=args.get("offset", 0)
         )
         return {
@@ -1190,7 +1194,7 @@ class PyriteMCPServer:
             return {"error": "Both 'kb' and 'message' are required"}
 
         try:
-            return self.svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
+            return self.export_svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
         except PyriteError as e:
             return {"error": str(e)}
 
@@ -1204,7 +1208,7 @@ class PyriteMCPServer:
             return {"error": "'kb' is required"}
 
         try:
-            return self.svc.push_kb(kb_name, remote=remote, branch=branch)
+            return self.export_svc.push_kb(kb_name, remote=remote, branch=branch)
         except PyriteError as e:
             return {"error": str(e)}
 

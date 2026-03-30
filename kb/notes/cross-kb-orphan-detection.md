@@ -4,7 +4,8 @@ title: "Cross-KB: Detect orphaned high-value concepts"
 type: backlog_item
 tags: [search, cross-kb, discovery, graph]
 kind: feature
-status: done
+status: proposed
+priority: medium
 effort: M
 ---
 

@@ -12,6 +12,7 @@ import pytest
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.exceptions import KBNotFoundError, PyriteError
+from pyrite.services.export_service import ExportService
 from pyrite.services.git_service import GitService
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
@@ -53,8 +54,9 @@ def git_kb(tmp_path):
     )
     db = PyriteDB(tmp_path / "index.db")
     svc = KBService(config, db)
+    export_svc = ExportService(config, db)
 
-    yield {"kb_path": kb_path, "kb": kb, "config": config, "db": db, "svc": svc}
+    yield {"kb_path": kb_path, "kb": kb, "config": config, "db": db, "svc": svc, "export_svc": export_svc}
     db.close()
 
 
@@ -71,8 +73,9 @@ def non_git_kb(tmp_path):
     )
     db = PyriteDB(tmp_path / "index.db")
     svc = KBService(config, db)
+    export_svc = ExportService(config, db)
 
-    yield {"kb_path": kb_path, "kb": kb, "config": config, "db": db, "svc": svc}
+    yield {"kb_path": kb_path, "kb": kb, "config": config, "db": db, "svc": svc, "export_svc": export_svc}
     db.close()
 
 
@@ -193,37 +196,37 @@ class TestGitServiceStatus:
 # =============================================================================
 
 
-class TestKBServiceCommit:
-    """Test KBService.commit_kb method."""
+class TestExportServiceCommit:
+    """Test ExportService.commit_kb method."""
 
     def test_commit_kb(self, git_kb):
-        svc = git_kb["svc"]
+        export_svc = git_kb["export_svc"]
         kb_path = git_kb["kb_path"]
         (kb_path / "entry.md").write_text("---\ntitle: Entry\n---\n\nContent")
 
-        result = svc.commit_kb("test-kb", message="Add entry")
+        result = export_svc.commit_kb("test-kb", message="Add entry")
         assert result["success"]
         assert result["commit_hash"]
         assert result["files_changed"] >= 1
 
     def test_commit_kb_not_found(self, git_kb):
-        svc = git_kb["svc"]
+        export_svc = git_kb["export_svc"]
         with pytest.raises(KBNotFoundError):
-            svc.commit_kb("nonexistent-kb", message="Fail")
+            export_svc.commit_kb("nonexistent-kb", message="Fail")
 
     def test_commit_kb_not_git_repo(self, non_git_kb):
-        svc = non_git_kb["svc"]
+        export_svc = non_git_kb["export_svc"]
         (non_git_kb["kb_path"] / "test.md").write_text("test")
         with pytest.raises(PyriteError):
-            svc.commit_kb("no-git", message="Fail")
+            export_svc.commit_kb("no-git", message="Fail")
 
     def test_commit_kb_specific_paths(self, git_kb):
-        svc = git_kb["svc"]
+        export_svc = git_kb["export_svc"]
         kb_path = git_kb["kb_path"]
         (kb_path / "keep.md").write_text("keep")
         (kb_path / "skip.md").write_text("skip")
 
-        result = svc.commit_kb("test-kb", message="Partial", paths=["keep.md"])
+        result = export_svc.commit_kb("test-kb", message="Partial", paths=["keep.md"])
         assert result["success"]
 
         # skip.md should still be uncommitted
@@ -236,7 +239,7 @@ class TestKBServiceCommit:
         assert "skip.md" in status.stdout
 
     def test_push_kb(self, git_kb, tmp_path):
-        svc = git_kb["svc"]
+        export_svc = git_kb["export_svc"]
         kb_path = git_kb["kb_path"]
 
         # Create a bare remote
@@ -248,12 +251,12 @@ class TestKBServiceCommit:
             capture_output=True,
         )
 
-        result = svc.push_kb("test-kb")
+        result = export_svc.push_kb("test-kb")
         assert result["success"]
 
     def test_push_kb_no_remote(self, git_kb):
-        svc = git_kb["svc"]
-        result = svc.push_kb("test-kb")
+        export_svc = git_kb["export_svc"]
+        result = export_svc.push_kb("test-kb")
         assert not result["success"]
 
 

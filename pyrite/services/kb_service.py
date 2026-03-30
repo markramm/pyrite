@@ -28,10 +28,7 @@ from ..storage.database import PyriteDB
 from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
-from .ephemeral_service import EphemeralKBService
 from .export_service import ExportService
-from .graph_service import GraphService
-from .quota_service import QuotaService
 from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
@@ -58,10 +55,7 @@ class KBService:
         self.db = db
         self._index_mgr = IndexManager(db, config)
         self._doc_mgr = doc_mgr or DocumentManager(db, self._index_mgr)
-        self._graph_svc = GraphService(db)
         self._export_svc = ExportService(config, db)
-        self._ephemeral_svc = EphemeralKBService(config, db)
-        self._quota_svc = QuotaService(config)
         self._registry: KBRegistryService | None = registry
         self._embedding_svc = None
         self._embedding_checked = False
@@ -751,41 +745,6 @@ class KBService:
         """Search entries by tag prefix (includes child tags)."""
         return self.db.search_by_tag_prefix(prefix, kb_name=kb_name, limit=limit)
 
-    # =========================================================================
-    # Graph
-    # =========================================================================
-
-    def get_graph(
-        self,
-        center: str | None = None,
-        center_kb: str | None = None,
-        kb_name: str | None = None,
-        entry_type: str | None = None,
-        depth: int = 2,
-        limit: int = 500,
-    ) -> dict[str, Any]:
-        """Get graph data for visualization."""
-        return self._graph_svc.get_graph(
-            center=center,
-            center_kb=center_kb,
-            kb_name=kb_name,
-            entry_type=entry_type,
-            depth=depth,
-            limit=limit,
-        )
-
-    # =========================================================================
-    # Object References
-    # =========================================================================
-
-    def get_refs_to(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
-        """Get entries that reference this entry via object-ref fields."""
-        return self._graph_svc.get_refs_to(entry_id, kb_name)
-
-    def get_refs_from(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
-        """Get entries this entry references via object-ref fields."""
-        return self._graph_svc.get_refs_from(entry_id, kb_name)
-
     def orient(self, kb_name: str, recent_limit: int = 5) -> dict[str, Any]:
         """One-shot KB orientation summary for agents entering a new KB."""
         kb_config = self.config.get_kb(kb_name)
@@ -916,20 +875,6 @@ class KBService:
 
     # Settings: use db.get_setting / db.set_setting / db.get_all_settings /
     # db.delete_setting directly — thin wrappers removed in 0.9.
-
-    def get_backlinks(
-        self,
-        entry_id: str,
-        kb_name: str,
-        limit: int = 0,
-        offset: int = 0,
-    ) -> list[dict[str, Any]]:
-        """Get entries that link TO this entry."""
-        return self._graph_svc.get_backlinks(entry_id, kb_name, limit=limit, offset=offset)
-
-    def get_outlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
-        """Get entries that this entry links TO."""
-        return self._graph_svc.get_outlinks(entry_id, kb_name)
 
     # =========================================================================
     # Wikilink delegation (implementation in WikilinkService)
@@ -1264,123 +1209,6 @@ class KBService:
     def get_index_stats(self) -> dict[str, Any]:
         """Get index statistics."""
         return self._index_mgr.get_index_stats()
-
-    # =========================================================================
-    # Ephemeral KBs
-    # =========================================================================
-
-    def create_ephemeral_kb(self, name: str, ttl: int = 3600, description: str = "") -> KBConfig:
-        """Create an ephemeral KB with TTL."""
-        return self._ephemeral_svc.create_ephemeral_kb(name, ttl=ttl, description=description)
-
-    def gc_ephemeral_kbs(self) -> list[str]:
-        """Garbage-collect expired ephemeral KBs. Returns list of removed KB names."""
-        return self._ephemeral_svc.gc_ephemeral_kbs()
-
-    def list_ephemeral_kbs(self) -> list[dict]:
-        """List all active ephemeral KBs."""
-        return self._ephemeral_svc.list_ephemeral_kbs()
-
-    def force_expire_kb(self, name: str) -> bool:
-        """Force-expire a specific ephemeral KB."""
-        return self._ephemeral_svc.force_expire_kb(name)
-
-    def check_kb_creation_allowed(
-        self, user_id: int, user_tier: str, current_kb_count: int
-    ) -> tuple[bool, str]:
-        """Check if user is allowed to create another KB based on tier limits."""
-        return self._quota_svc.check_kb_creation_allowed(user_id, user_tier, current_kb_count)
-
-    def check_entry_creation_allowed(
-        self, kb_name: str, user_tier: str, current_entry_count: int
-    ) -> tuple[bool, str]:
-        """Check if adding another entry is within tier limits."""
-        return self._quota_svc.check_entry_creation_allowed(kb_name, user_tier, current_entry_count)
-
-    # =========================================================================
-    # KB Export
-    # =========================================================================
-
-    def export_kb_to_repo(
-        self,
-        kb_name: str,
-        repo_url: str,
-        github_token: str | None = None,
-        branch: str = "main",
-        commit_message: str | None = None,
-    ) -> dict:
-        """Export KB entries to a remote repo (clone, export, commit, push)."""
-        return self._export_svc.export_kb_to_repo(
-            kb_name,
-            repo_url,
-            github_token=github_token,
-            branch=branch,
-            commit_message=commit_message,
-        )
-
-    def export_kb_to_directory(self, kb_name: str, target_dir: Path) -> dict:
-        """Export all entries in a KB as markdown files to a directory.
-
-        Args:
-            kb_name: Name of the KB to export
-            target_dir: Target directory for exported files
-
-        Returns:
-            Summary dict with entries_exported and files_created
-        """
-        return self._export_svc.export_kb_to_directory(kb_name, target_dir)
-
-    # =========================================================================
-    # Git operations
-    # =========================================================================
-
-    def commit_kb(
-        self,
-        kb_name: str,
-        message: str,
-        paths: list[str] | None = None,
-        sign_off: bool = False,
-    ) -> dict:
-        """
-        Commit changes in a KB's git repository.
-
-        Args:
-            kb_name: Knowledge base name
-            message: Commit message
-            paths: Specific file paths to stage (all changes if None)
-            sign_off: Add Signed-off-by line
-
-        Returns:
-            dict with success, commit_hash, files_changed, etc.
-
-        Raises:
-            KBNotFoundError: KB doesn't exist
-            PyriteError: KB is not in a git repository
-        """
-        return self._export_svc.commit_kb(kb_name, message, paths=paths, sign_off=sign_off)
-
-    def push_kb(
-        self,
-        kb_name: str,
-        remote: str = "origin",
-        branch: str | None = None,
-    ) -> dict:
-        """
-        Push KB commits to a remote repository.
-
-        Args:
-            kb_name: Knowledge base name
-            remote: Remote name (default: origin)
-            branch: Branch to push (default: current branch)
-
-        Returns:
-            dict with success and message
-
-        Raises:
-            KBNotFoundError: KB doesn't exist
-            PyriteError: KB is not in a git repository
-        """
-        return self._export_svc.push_kb(kb_name, remote=remote, branch=branch)
 
     def get_pending_changes(self, kb_name: str) -> dict:
         """

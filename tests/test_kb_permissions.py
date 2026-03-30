@@ -153,10 +153,10 @@ class TestEphemeralKBCreation:
         # Give alice write role so she can create ephemeral KBs
         auth.set_role(user["id"], "write")
 
-        from pyrite.services.kb_service import KBService
+        from pyrite.services.ephemeral_service import EphemeralKBService
 
-        svc = KBService(config, db)
-        result = auth.create_user_ephemeral_kb(user["id"], svc)
+        eph_svc = EphemeralKBService(config, db)
+        result = auth.create_user_ephemeral_kb(user["id"], eph_svc)
         assert result["ephemeral"] is True
         assert "name" in result
 
@@ -170,33 +170,33 @@ class TestEphemeralKBCreation:
         auth, db, config, admin, user = setup
         auth.set_role(user["id"], "write")
 
-        from pyrite.services.kb_service import KBService
+        from pyrite.services.ephemeral_service import EphemeralKBService
 
-        svc = KBService(config, db)
+        eph_svc = EphemeralKBService(config, db)
 
         # Create first (allowed)
-        auth.create_user_ephemeral_kb(user["id"], svc)
+        auth.create_user_ephemeral_kb(user["id"], eph_svc)
 
         # Second should fail (limit=1)
         with pytest.raises(ValueError, match="limit reached"):
-            auth.create_user_ephemeral_kb(user["id"], svc)
+            auth.create_user_ephemeral_kb(user["id"], eph_svc)
 
     def test_ephemeral_kb_insufficient_tier(self, setup, tmpdir):
         auth, db, config, admin, user = setup
         # alice has 'read' role, needs 'write' for ephemeral
 
-        from pyrite.services.kb_service import KBService
+        from pyrite.services.ephemeral_service import EphemeralKBService
 
-        svc = KBService(config, db)
+        eph_svc = EphemeralKBService(config, db)
 
         with pytest.raises(ValueError, match="Insufficient tier"):
-            auth.create_user_ephemeral_kb(user["id"], svc)
+            auth.create_user_ephemeral_kb(user["id"], eph_svc)
 
     def test_admin_can_create_ephemeral(self, setup, tmpdir):
         auth, db, config, admin, user = setup
 
-        from pyrite.services.kb_service import KBService
+        from pyrite.services.ephemeral_service import EphemeralKBService
 
-        svc = KBService(config, db)
-        result = auth.create_user_ephemeral_kb(admin["id"], svc)
+        eph_svc = EphemeralKBService(config, db)
+        result = auth.create_user_ephemeral_kb(admin["id"], eph_svc)
         assert result["ephemeral"] is True

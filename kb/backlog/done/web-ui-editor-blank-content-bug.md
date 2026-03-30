@@ -3,7 +3,7 @@ id: web-ui-editor-blank-content-bug
 type: backlog_item
 title: "Bug: Editor shows blank content when switching to edit mode"
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
 tags: [web, bug, editor]

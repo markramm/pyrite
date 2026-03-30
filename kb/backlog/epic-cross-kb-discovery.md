@@ -3,7 +3,7 @@ id: epic-cross-kb-discovery
 type: backlog_item
 title: "Epic: Cross-KB Discovery and Link Suggestion"
 kind: epic
-status: proposed
+status: in_progress
 priority: high
 effort: XL
 tags: [epic, search, graph, cross-kb, discovery]

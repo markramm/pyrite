@@ -5,9 +5,17 @@ from pydantic import BaseModel
 
 from ...config import PyriteConfig
 from ...exceptions import KBNotFoundError
+from ...services.export_service import ExportService
 from ...services.kb_registry_service import KBRegistryService
 from ...services.kb_service import KBService
-from ..api import get_config, get_kb_registry, get_kb_service, limiter, negotiate_response
+from ..api import (
+    get_config,
+    get_export_service,
+    get_kb_registry,
+    get_kb_service,
+    limiter,
+    negotiate_response,
+)
 from ..schemas import KBHealthResponse, KBInfo, KBListResponse
 
 router = APIRouter(tags=["Knowledge Bases"])
@@ -134,7 +142,7 @@ def export_kb_to_repo(
     kb_name: str,
     body: ExportRequest,
     request: Request,
-    svc: KBService = Depends(get_kb_service),
+    export_svc: ExportService = Depends(get_export_service),
 ):
     """Export a KB's entries to a GitHub repo (clone, export, commit, push)."""
     # Get GitHub token from authenticated user if available
@@ -150,7 +158,7 @@ def export_kb_to_repo(
             github_token, _ = auth_service.get_github_token_for_user(auth_user["id"])
 
     try:
-        result = svc.export_kb_to_repo(
+        result = export_svc.export_kb_to_repo(
             kb_name,
             body.repo_url,
             github_token=github_token,

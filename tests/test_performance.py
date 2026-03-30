@@ -240,10 +240,12 @@ class TestPerformance:
         """Graph retrieval for 1000+ nodes completes within 5 seconds."""
         config = large_kb["config"]
         db = large_kb["db"]
-        svc = KBService(config, db)
+        from pyrite.services.graph_service import GraphService
+
+        graph_svc = GraphService(db)
 
         start = time.perf_counter()
-        graph = svc.get_graph(kb_name="perf-test", limit=1500)
+        graph = graph_svc.get_graph(kb_name="perf-test", limit=1500)
         elapsed = time.perf_counter() - start
 
         assert elapsed < 5, f"get_graph() took {elapsed:.2f}s (limit: 5s)"

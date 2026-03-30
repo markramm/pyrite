@@ -255,7 +255,10 @@ def backlinks_cmd(
     """Find entries that link to a given entry."""
     svc, db = _get_svc()
     try:
-        links = svc.get_backlinks(entry_id, kb_name)
+        from .services.graph_service import GraphService
+
+        graph_svc = GraphService(db)
+        links = graph_svc.get_backlinks(entry_id, kb_name)
 
         if not links:
             console.print(f"[yellow]No backlinks found for '{entry_id}'.[/yellow]")
