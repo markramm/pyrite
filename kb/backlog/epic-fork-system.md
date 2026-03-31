@@ -3,7 +3,7 @@ id: epic-fork-system
 type: backlog_item
 title: "Epic: Multi-User Git Collaboration System"
 kind: epic
-status: accepted
+status: in_progress
 priority: high
 effort: L
 tags: [web, collaboration, git]

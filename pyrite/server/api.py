@@ -23,10 +23,10 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ..config import PyriteConfig, Settings, load_config
-from ..services.index_worker import IndexWorker
 from ..services.ephemeral_service import EphemeralKBService
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
+from ..services.index_worker import IndexWorker
 from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
@@ -67,6 +67,7 @@ def _init_app_state(application: FastAPI, config: PyriteConfig) -> None:
     application.state.pyrite_kb_service = None
     application.state.pyrite_kb_registry = None
     application.state.pyrite_llm_service = None
+    application.state.pyrite_diff_db_cache = {}  # (user_id, kb_name) → PyriteDB
 
 
 def get_config() -> PyriteConfig:
@@ -116,6 +117,19 @@ def get_kb_service(
 ) -> KBService:
     """Get or create KB service via DI."""
     return KBService(config, db)
+
+
+def get_worktree_resolver(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+):
+    """Get a WorktreeResolver for per-user read/write routing."""
+    from .worktree_resolver import WorktreeResolver
+
+    # Cache diff DBs on app state to avoid heavyweight re-init per request
+    cache = getattr(request.app.state, "pyrite_diff_db_cache", {})
+    return WorktreeResolver(config, db, cache)
 
 
 def get_llm_service(

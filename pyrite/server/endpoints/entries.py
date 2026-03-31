@@ -14,7 +14,13 @@ from ...exceptions import (
     ValidationError,
 )
 from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter, negotiate_response, requires_kb_tier
+from ..api import (
+    get_kb_service,
+    get_worktree_resolver,
+    limiter,
+    negotiate_response,
+    requires_kb_tier,
+)
 from ..schemas import (
     CreateEntryRequest,
     CreateResponse,
@@ -51,8 +57,17 @@ def list_entries(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """List entries with pagination."""
+    # Use overlay so user sees their own edits in lists
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and kb:
+        try:
+            svc = resolver.get_read_service(kb, auth_user)
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
+
     results = svc.list_entries(
         kb_name=kb,
         entry_type=entry_type,
@@ -418,8 +433,17 @@ def get_entry(
     with_links: bool = Query(False, description="Include links"),
     fields: str | None = Query(None, description="Comma-separated fields to return"),
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """Get entry by ID."""
+    # Use overlay so user sees their own edits
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and kb:
+        try:
+            svc = resolver.get_read_service(kb, auth_user)
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
+
     if with_links:
         # get_entry already includes outlinks/backlinks
         result = svc.get_entry(entry_id, kb_name=kb)
@@ -466,8 +490,17 @@ def create_entry(
     request: Request,
     req: CreateEntryRequest,
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """Create a new entry."""
+    # Route writes through worktree for authenticated users
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and auth_user.get("role") != "admin":
+        try:
+            svc = resolver.get_write_service(req.kb, auth_user)
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
+
     if not svc.get_kb(req.kb):
         raise HTTPException(
             status_code=404,
@@ -536,8 +569,17 @@ def update_entry(
     entry_id: str,
     req: UpdateEntryRequest,
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """Update an existing entry."""
+    # Route writes through worktree for authenticated users
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and auth_user.get("role") != "admin":
+        try:
+            svc = resolver.get_write_service(req.kb, auth_user)
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
+
     updates = {}
     if req.title is not None:
         updates["title"] = req.title
@@ -584,8 +626,16 @@ def patch_entry_field(
     entry_id: str,
     body: PatchEntryRequest,
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """Update a single field on an entry (used by kanban drag-drop)."""
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and auth_user.get("role") != "admin":
+        try:
+            svc = resolver.get_write_service(body.kb, auth_user)
+        except (ValueError, Exception):
+            logger.warning("Worktree routing failed for PATCH, falling back to main")
+
     try:
         svc.update_entry(entry_id, body.kb, **{body.field: body.value})
     except (KBNotFoundError, EntryNotFoundError) as e:
@@ -609,8 +659,17 @@ def delete_entry(
     entry_id: str,
     kb: str = Query(..., description="KB name"),
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """Delete an entry."""
+    # Route deletes through worktree for authenticated users
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and auth_user.get("role") != "admin":
+        try:
+            svc = resolver.get_write_service(kb, auth_user)
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
+
     try:
         deleted = svc.delete_entry(entry_id, kb)
     except (KBNotFoundError, EntryNotFoundError) as e:

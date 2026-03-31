@@ -3,7 +3,7 @@ id: worktree-service
 type: backlog_item
 title: "WorktreeService: per-user git worktree management"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [core, git, collaboration]

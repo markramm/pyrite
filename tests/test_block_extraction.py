@@ -178,7 +178,7 @@ class TestBlockMigration:
 
     def test_current_version_is_14(self):
         """CURRENT_VERSION is 14."""
-        assert CURRENT_VERSION == 16
+        assert CURRENT_VERSION == 17
 
     def test_migration_v5_creates_block_table(self, temp_db):
         """Migration v5 creates the block table."""

@@ -25,6 +25,7 @@ from .tags import router as tags_router
 from .templates import router as templates_router
 from .timeline import router as timeline_router
 from .versions import router as versions_router
+from .worktree import router as worktree_router
 
 all_routers = [
     kbs_router,
@@ -47,6 +48,7 @@ all_routers = [
     qa_router,
     repos_router,
     reviews_router,
+    worktree_router,
 ]
 
 __all__ = ["all_routers"]

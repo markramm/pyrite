@@ -3,7 +3,7 @@ id: worktree-merge-queue
 type: backlog_item
 title: "Admin merge queue: review and integrate user submissions"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, git, collaboration, admin]
