@@ -3,7 +3,7 @@ id: fix-create-file-naming-convention
 type: backlog_item
 title: "pyrite create should respect KB file naming conventions"
 kind: feature
-status: todo
+status: done
 priority: high
 effort: M
 tags: [cli, create, ux]

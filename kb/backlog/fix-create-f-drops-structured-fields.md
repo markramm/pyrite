@@ -3,7 +3,7 @@ id: fix-create-f-drops-structured-fields
 type: backlog_item
 title: "Bug: pyrite create -f silently drops structured fields"
 kind: bug
-status: todo
+status: done
 priority: critical
 effort: S
 tags: [cli, create, bug]

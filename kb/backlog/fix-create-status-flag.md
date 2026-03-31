@@ -3,7 +3,7 @@ id: fix-create-status-flag
 type: backlog_item
 title: "pyrite create should support --status flag"
 kind: feature
-status: todo
+status: done
 priority: medium
 effort: S
 tags: [cli, create, ux]
