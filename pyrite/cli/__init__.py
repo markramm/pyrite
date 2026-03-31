@@ -64,6 +64,52 @@ def _get_svc():
     return KBService(config, db), db
 
 
+def _parse_field_value(value: str) -> Any:
+    """Parse a --field value, supporting JSON, integers, floats, and comma-separated lists.
+
+    Parsing order:
+      1. JSON (arrays/objects): ``[1,2]`` or ``{"k": "v"}``
+      2. Integer: ``42``
+      3. Float: ``3.14``
+      4. Boolean: ``true``/``false``
+      5. Comma-separated list (if commas present): ``a,b,c`` → ``["a","b","c"]``
+      6. Plain string (fallback)
+    """
+    stripped = value.strip()
+
+    # 1. JSON arrays or objects
+    if stripped.startswith(("[", "{")):
+        try:
+            return _json.loads(stripped)
+        except _json.JSONDecodeError:
+            pass  # fall through to other parsers
+
+    # 2. Integer
+    try:
+        return int(stripped)
+    except ValueError:
+        pass
+
+    # 3. Float
+    try:
+        return float(stripped)
+    except ValueError:
+        pass
+
+    # 4. Boolean
+    if stripped.lower() == "true":
+        return True
+    if stripped.lower() == "false":
+        return False
+
+    # 5. Comma-separated list (must contain comma, items are stripped)
+    if "," in stripped:
+        return [item.strip() for item in stripped.split(",") if item.strip()]
+
+    # 6. Plain string
+    return value
+
+
 # Register sub-apps
 app.add_typer(kb_app, name="kb")
 app.add_typer(index_app, name="index")
@@ -460,11 +506,7 @@ def create_entry(
                 console.print(f"[red]Error:[/red] --field must be key=value, got '{fv}'")
                 raise typer.Exit(1)
             k, v = fv.split("=", 1)
-            try:
-                v = int(v)
-            except ValueError:
-                logger.debug("Could not coerce field value to int: %s", v)
-            extra[k] = v
+            extra[k] = _parse_field_value(v)
 
     with cli_context() as (config, db, svc):
         try:
