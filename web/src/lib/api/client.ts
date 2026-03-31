@@ -747,6 +747,97 @@ class ApiClient {
 		}
 		return res.blob();
 	}
+
+	// ── Worktree collaboration ──────────────────────────────────────
+
+	async getWorktreeStatus(kb: string): Promise<{
+		has_worktree: boolean;
+		status: string;
+		changes_count: number;
+		submitted_at: string | null;
+		feedback: string | null;
+		branch: string | null;
+	}> {
+		return this.request(`/api/worktree/status?kb=${encodeURIComponent(kb)}`);
+	}
+
+	async submitWorktree(kb: string): Promise<{
+		submitted: boolean;
+		kb_name: string;
+		branch: string;
+		submitted_at: string | null;
+	}> {
+		return this.request('/api/worktree/submit', {
+			method: 'POST',
+			body: JSON.stringify({ kb })
+		});
+	}
+
+	async getWorktreeChanges(kb: string): Promise<{
+		changes: string[];
+		count: number;
+		diff: string;
+		branch: string;
+	}> {
+		return this.request(`/api/worktree/changes?kb=${encodeURIComponent(kb)}`);
+	}
+
+	async resetWorktree(kb: string): Promise<{ reset: boolean; status: string }> {
+		return this.request('/api/worktree/reset', {
+			method: 'POST',
+			body: JSON.stringify({ kb })
+		});
+	}
+
+	async getMergeQueue(kb?: string): Promise<{
+		submissions: Array<{
+			username: string;
+			kb_name: string;
+			branch: string;
+			status: string;
+			submitted_at: string | null;
+			changes_count: number;
+		}>;
+		total: number;
+	}> {
+		const params = kb ? `?kb=${encodeURIComponent(kb)}` : '';
+		return this.request(`/api/admin/merge-queue${params}`);
+	}
+
+	async getMergeQueueDiff(username: string, kb: string): Promise<{
+		username: string;
+		kb_name: string;
+		branch: string;
+		status: string;
+		diff: string;
+		stat: string;
+		submitted_at: string | null;
+	}> {
+		return this.request(
+			`/api/admin/merge-queue/${encodeURIComponent(username)}/diff?kb=${encodeURIComponent(kb)}`
+		);
+	}
+
+	async mergeWorktree(
+		username: string,
+		kb: string
+	): Promise<{ merged: boolean; message: string }> {
+		return this.request(`/api/admin/merge-queue/${encodeURIComponent(username)}/merge`, {
+			method: 'POST',
+			body: JSON.stringify({ kb })
+		});
+	}
+
+	async rejectWorktree(
+		username: string,
+		kb: string,
+		feedback: string
+	): Promise<{ rejected: boolean; status: string; feedback: string }> {
+		return this.request(`/api/admin/merge-queue/${encodeURIComponent(username)}/reject`, {
+			method: 'POST',
+			body: JSON.stringify({ kb, feedback })
+		});
+	}
 }
 
 export class ApiError extends Error {
