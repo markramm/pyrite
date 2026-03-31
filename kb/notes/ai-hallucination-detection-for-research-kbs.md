@@ -19,7 +19,7 @@ links:
   relation: depends_on
   kb: pyrite
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: L
 ---
