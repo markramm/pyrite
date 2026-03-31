@@ -8,6 +8,10 @@ tags:
 - ai
 kind: feature
 effort: L
+links:
+- target: qa-agent-workflows
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Parent

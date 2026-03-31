@@ -10,7 +10,7 @@ tags:
 kind: epic
 priority: medium
 effort: XL
-status: proposed
+status: in_progress
 links:
 - target: qa-phase-1-tier-1-structural-validation
   relation: has_subtask

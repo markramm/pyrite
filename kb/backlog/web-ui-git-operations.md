@@ -7,10 +7,6 @@ status: proposed
 priority: high
 effort: L
 tags: [web, ux]
-links:
-- target: epic-web-ui-feature-parity
-  relation: subtask_of
-  kb: pyrite
 ---
 
 ## Problem
