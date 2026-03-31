@@ -4,7 +4,7 @@ title: "Fill KB component documentation gaps for undocumented modules"
 type: backlog_item
 tags: [documentation, kb, architecture]
 kind: improvement
-status: accepted
+status: done
 effort: M
 ---
 
