@@ -3,7 +3,7 @@ id: web-ui-git-operations
 type: backlog_item
 title: "Web UI: Git commit, push, pull, and diff operations"
 kind: feature
-status: proposed
+status: deferred
 priority: high
 effort: L
 tags: [web, ux, git]

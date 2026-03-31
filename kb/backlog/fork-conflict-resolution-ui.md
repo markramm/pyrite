@@ -10,7 +10,7 @@ tags:
 kind: feature
 priority: low
 effort: L
-status: proposed
+status: deferred
 links:
 - adr-0018
 - fork-divergence-indicators

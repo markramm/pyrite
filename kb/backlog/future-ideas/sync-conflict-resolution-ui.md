@@ -3,7 +3,7 @@ id: sync-conflict-resolution-ui
 type: backlog_item
 title: "Git Sync Conflict Resolution UI"
 kind: feature
-status: proposed
+status: deferred
 priority: medium
 effort: L
 tags: [web, git, ux]
