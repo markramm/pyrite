@@ -225,8 +225,13 @@
 								const provider = e.currentTarget.value;
 								setSetting('ai.provider', provider);
 								connectionResult = null;
-								if (providerBaseUrls[provider]) {
-									setSetting('ai.baseUrl', providerBaseUrls[provider]);
+								// Set or clear base URL based on provider defaults
+								const defaultUrl = providerBaseUrls[provider] ?? '';
+								const currentUrl = aiBaseUrl;
+								// Clear URL if it was a provider default, or set the new default
+								const isProviderDefault = Object.values(providerBaseUrls).includes(currentUrl);
+								if (defaultUrl || isProviderDefault) {
+									setSetting('ai.baseUrl', defaultUrl);
 								}
 							}}
 							class="w-48 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"

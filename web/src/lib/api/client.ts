@@ -89,7 +89,17 @@ class ApiClient {
 
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
-			throw new ApiError(res.status, error.detail ?? error.message ?? res.statusText);
+			// detail can be a string or structured {code, message, hint}
+			const detail = error.detail;
+			let message: string;
+			if (typeof detail === 'string') {
+				message = detail;
+			} else if (detail && typeof detail === 'object') {
+				message = detail.hint ?? detail.message ?? JSON.stringify(detail);
+			} else {
+				message = error.message ?? res.statusText;
+			}
+			throw new ApiError(res.status, message);
 		}
 
 		return res.json();
@@ -730,7 +740,17 @@ class ApiClient {
 		});
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
-			throw new ApiError(res.status, error.detail ?? error.message ?? res.statusText);
+			// detail can be a string or structured {code, message, hint}
+			const detail = error.detail;
+			let message: string;
+			if (typeof detail === 'string') {
+				message = detail;
+			} else if (detail && typeof detail === 'object') {
+				message = detail.hint ?? detail.message ?? JSON.stringify(detail);
+			} else {
+				message = error.message ?? res.statusText;
+			}
+			throw new ApiError(res.status, message);
 		}
 		return res.json();
 	}
@@ -747,7 +767,17 @@ class ApiClient {
 		const res = await fetch(url, { credentials: 'include' });
 		if (!res.ok) {
 			const error = await res.json().catch(() => ({ message: res.statusText }));
-			throw new ApiError(res.status, error.detail ?? error.message ?? res.statusText);
+			// detail can be a string or structured {code, message, hint}
+			const detail = error.detail;
+			let message: string;
+			if (typeof detail === 'string') {
+				message = detail;
+			} else if (detail && typeof detail === 'object') {
+				message = detail.hint ?? detail.message ?? JSON.stringify(detail);
+			} else {
+				message = error.message ?? res.statusText;
+			}
+			throw new ApiError(res.status, message);
 		}
 		return res.blob();
 	}
