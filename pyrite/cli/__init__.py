@@ -37,6 +37,7 @@ from .index_commands import index_app
 from .init_command import init_kb
 from .kb_commands import kb_app
 from .link_commands import links_app
+from .protocol_commands import protocol_app
 from .qa_commands import qa_app
 from .repo_commands import repo_collab_app
 from .schema_commands import schema_app
@@ -79,6 +80,7 @@ app.add_typer(repo_collab_app, name="repo")
 # Extension management
 app.add_typer(extension_app, name="extension")
 app.add_typer(schema_app, name="schema")
+app.add_typer(protocol_app, name="protocol")
 
 # Init command (headless KB init)
 app.command("init")(init_kb)

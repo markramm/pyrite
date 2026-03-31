@@ -499,6 +499,38 @@ def schema_validate(
     collision_errors = detect_id_collisions(parsed_entries)
     all_errors.extend(collision_errors)
 
+    # Phase 3: Protocol satisfaction checking
+    if schema:
+        from ..models.core_types import get_entry_class
+        from ..models.protocols import check_protocol_satisfaction
+        from ..schema.core_types import resolve_type_metadata
+
+        types_seen = {fm.get("type", "") for _, fm in parsed_entries}
+        types_seen.discard("")
+
+        for entry_type_name in types_seen:
+            metadata = resolve_type_metadata(entry_type_name, schema)
+            protocols = metadata.get("protocols", [])
+            if not protocols:
+                continue
+            cls = get_entry_class(entry_type_name)
+            ts = schema.get_type_schema(entry_type_name)
+            results = check_protocol_satisfaction(cls, protocols, ts)
+            for r in results:
+                if not r.satisfied:
+                    all_errors.append(
+                        {
+                            "file": f"<type:{entry_type_name}>",
+                            "check": "protocol_satisfaction",
+                            "message": (
+                                f"Type '{entry_type_name}' declares protocol "
+                                f"'{r.protocol_name}' but is missing fields: "
+                                f"{r.missing_fields}"
+                            ),
+                            "severity": "warning",
+                        }
+                    )
+
     # Output
     error_count = sum(1 for e in all_errors if e["severity"] == "error")
     warning_count = sum(1 for e in all_errors if e["severity"] == "warning")
