@@ -420,6 +420,7 @@ def create_entry(
     tags: str = typer.Option("", "--tags", help="Comma-separated tags"),
     date: str = typer.Option("", "--date", "-d", help="Date (YYYY-MM-DD, for events)"),
     importance: int = typer.Option(5, "--importance", "-i", help="Importance (1-10)"),
+    status: str = typer.Option("", "--status", help="Entry status (e.g., draft, confirmed)"),
     field: list[str] | None = typer.Option(None, "--field", "-f", help="Extra field as key=value"),
     link: list[str] | None = typer.Option(
         None, "--link", "-l", help="Link to target entry (format: target-id or target-id:relation)"
@@ -496,6 +497,8 @@ def create_entry(
         extra["date"] = date
     if importance != 5:
         extra["importance"] = importance
+    if status:
+        extra["status"] = status
     if tags:
         extra["tags"] = [t.strip() for t in tags.split(",")]
 
