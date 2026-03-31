@@ -324,4 +324,4 @@ class TestMigrationV10:
 
     def test_current_version_is_14(self):
         """CURRENT_VERSION is 14 after migration."""
-        assert CURRENT_VERSION == 16
+        assert CURRENT_VERSION == 17

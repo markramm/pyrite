@@ -70,16 +70,16 @@ class TestMigrationV16:
         assert len(v16) == 1
         assert "edge_endpoint" in v16[0].description.lower()
 
-    def test_current_version_is_16(self):
-        """CURRENT_VERSION is 16."""
-        assert CURRENT_VERSION == 16
+    def test_current_version_is_17(self):
+        """CURRENT_VERSION is 17."""
+        assert CURRENT_VERSION == 17
 
     def test_migration_applies_cleanly(self, temp_db):
-        """Migration v16 applies cleanly on a fresh database."""
+        """Migration v17 applies cleanly on a fresh database."""
         mgr = MigrationManager(temp_db)
         applied = mgr.migrate()
-        assert mgr.get_current_version() == 16
-        assert any(m.version == 16 for m in applied)
+        assert mgr.get_current_version() == 17
+        assert any(m.version == 17 for m in applied)
 
     def test_creates_edge_endpoint_table(self, migrated_db):
         """Migration v16 creates the edge_endpoint table."""
