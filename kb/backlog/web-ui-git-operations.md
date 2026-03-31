@@ -6,7 +6,11 @@ kind: feature
 status: proposed
 priority: high
 effort: L
-tags: [web, ux]
+tags: [web, ux, git]
+links:
+- target: epic-fork-system
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem
