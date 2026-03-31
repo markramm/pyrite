@@ -3,7 +3,7 @@ id: collections-phase4-embedding
 type: backlog_item
 title: "Collections Phase 4: Embedding and Composition"
 kind: feature
-status: proposed
+status: deferred
 priority: low
 effort: M
 tags: [ui, editor, collections]

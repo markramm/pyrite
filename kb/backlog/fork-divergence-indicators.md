@@ -10,10 +10,13 @@ tags:
 kind: feature
 priority: medium
 effort: M
-status: proposed
+status: deferred
 links:
 - adr-0018
 - web-kb-management
+- target: epic-fork-system
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem

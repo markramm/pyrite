@@ -193,6 +193,28 @@ def _validate_backlog_item(data: dict[str, Any], errors: list[dict]) -> None:
             }
         )
 
+    rank = data.get("rank", 0)
+    if rank is not None and rank != 0:
+        try:
+            if int(rank) < 0:
+                errors.append(
+                    {
+                        "field": "rank",
+                        "rule": "min_value",
+                        "expected": ">= 0",
+                        "got": rank,
+                    }
+                )
+        except (TypeError, ValueError):
+            errors.append(
+                {
+                    "field": "rank",
+                    "rule": "type",
+                    "expected": "integer",
+                    "got": rank,
+                }
+            )
+
 
 def _validate_milestone(data: dict[str, Any], errors: list[dict]) -> None:
     _validate_enum(data, "status", MILESTONE_STATUSES, errors, "open")

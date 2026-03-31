@@ -3,7 +3,7 @@ id: web-ai-writing-assist
 type: backlog_item
 title: "Web UI AI: Writing Assistant in Editor"
 kind: feature
-status: proposed
+status: deferred
 priority: low
 effort: L
 tags: [ai, web, editor]

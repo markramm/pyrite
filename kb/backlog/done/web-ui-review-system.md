@@ -3,7 +3,7 @@ id: web-ui-review-system
 type: backlog_item
 title: "Web UI: Surface QA review system"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [web, ux]

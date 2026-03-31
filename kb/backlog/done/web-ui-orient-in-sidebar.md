@@ -3,7 +3,7 @@ id: web-ui-orient-in-sidebar
 type: backlog_item
 title: "Web UI: Add Orient link to sidebar navigation"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: XS
 tags: [web, ux]

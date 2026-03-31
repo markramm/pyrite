@@ -7,6 +7,8 @@ tags:
 - orchestration
 - epic
 kind: epic
+status: done
+priority: medium
 effort: L
 links:
 - target: task-critical-path-analysis-via-dependency-graph-traversal

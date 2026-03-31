@@ -9,7 +9,7 @@ tags:
 kind: feature
 priority: low
 effort: M
-status: proposed
+status: deferred
 ---
 
 ## Problem

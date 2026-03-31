@@ -3,7 +3,7 @@ id: web-ui-saved-searches
 type: backlog_item
 title: "Web UI: Saved searches with localStorage persistence"
 kind: feature
-status: proposed
+status: done
 priority: low
 effort: S
 tags: [web, ux]

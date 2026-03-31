@@ -10,11 +10,14 @@ tags:
 kind: feature
 priority: low
 effort: L
-status: proposed
+status: deferred
 links:
 - adr-0018
 - fork-divergence-indicators
 - per-user-fork-directories
+- target: epic-fork-system
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem

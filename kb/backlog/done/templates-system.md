@@ -3,7 +3,7 @@ id: templates-system
 type: backlog_item
 title: "Templates System"
 kind: feature
-status: completed
+status: done
 priority: high
 effort: M
 tags: [web, editor, workflow]

@@ -10,11 +10,11 @@ metadata:
   kind: feature
   priority: low
   effort: M
-  status: proposed
+  status: deferred
 kind: feature
 priority: low
 effort: M
-status: proposed
+status: deferred
 ---
 
 ## Problem

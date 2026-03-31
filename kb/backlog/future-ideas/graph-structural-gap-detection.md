@@ -3,7 +3,7 @@ id: graph-structural-gap-detection
 type: backlog_item
 title: "Graph Structural Gap Detection"
 kind: feature
-status: proposed
+status: retired
 priority: low
 effort: L
 tags: [web, graph, visualization, ai]

@@ -12,7 +12,7 @@ links:
 - target: named-rubric-checkers
   relation: depends_on
 kind: feature
-status: accepted
+status: done
 effort: M
 ---
 

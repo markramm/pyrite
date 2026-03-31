@@ -3,7 +3,7 @@ id: hosting-security-hardening
 type: backlog_item
 title: "Hosting security hardening for journalist deployments"
 kind: epic
-status: proposed
+status: accepted
 priority: high
 effort: XL
 tags: [security, privacy, deployment, journalism]

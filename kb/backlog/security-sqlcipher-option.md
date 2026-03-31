@@ -8,6 +8,10 @@ priority: medium
 effort: L
 tags: [security, encryption, storage]
 epic: hosting-security-hardening
+links:
+- target: hosting-security-hardening
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem

@@ -3,7 +3,7 @@ id: web-ui-index-management
 type: backlog_item
 title: "Web UI: Index rebuild, sync, and embedding management"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: S
 tags: [web, ux]

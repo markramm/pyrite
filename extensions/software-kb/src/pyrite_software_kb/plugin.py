@@ -236,7 +236,7 @@ class SoftwareKBPlugin:
                 "handler": self._mcp_pull_next,
             }
             tools["sw_backlog"] = {
-                "description": "List backlog items (features, bugs, tech debt), filter by status/priority/kind",
+                "description": "List backlog items (features, bugs, tech debt), filter by status/priority/kind/epic, sort by rank/priority/created",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -263,10 +263,58 @@ class SoftwareKBPlugin:
                             "enum": ["feature", "bug", "tech_debt", "improvement", "spike", "epic"],
                             "description": "Filter by kind",
                         },
+                        "epic": {
+                            "type": "string",
+                            "description": "Filter to subtasks of this epic ID",
+                        },
+                        "sort": {
+                            "type": "string",
+                            "enum": ["priority", "rank", "created"],
+                            "description": "Sort order (default: priority)",
+                        },
+                        "group_by": {
+                            "type": "string",
+                            "enum": ["epic"],
+                            "description": "Group results by epic",
+                        },
                     },
                     "required": [],
                 },
                 "handler": self._mcp_backlog,
+            }
+            tools["sw_epics"] = {
+                "description": "List epics with subtask progress rollup (done/total/pct)",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name (optional)"},
+                        "status": {
+                            "type": "string",
+                            "enum": [
+                                "proposed",
+                                "planned",
+                                "accepted",
+                                "in_progress",
+                                "done",
+                            ],
+                            "description": "Filter by epic status",
+                        },
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_epics,
+            }
+            tools["sw_epic_detail"] = {
+                "description": "Show an epic's subtasks grouped by status with progress",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "epic_id": {"type": "string", "description": "Epic ID"},
+                        "kb_name": {"type": "string", "description": "KB name"},
+                    },
+                    "required": ["epic_id", "kb_name"],
+                },
+                "handler": self._mcp_epic_detail,
             }
             tools["sw_check_ready"] = {
                 "description": "Check Definition of Ready for a backlog item without claiming it. Returns gate criteria with pass/fail status.",
@@ -298,6 +346,34 @@ class SoftwareKBPlugin:
             }
 
         if tier in ("write", "admin"):
+            tools["sw_prioritize"] = {
+                "description": "Set explicit rank ordering for backlog items within their priority band",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {"type": "string", "description": "KB name"},
+                        "item_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Ordered list of item IDs (highest priority first), assigned ranks 100, 200, 300, ...",
+                        },
+                        "item_id": {
+                            "type": "string",
+                            "description": "Single item to reposition (use with after/before)",
+                        },
+                        "after": {
+                            "type": "string",
+                            "description": "Place item after this item ID",
+                        },
+                        "before": {
+                            "type": "string",
+                            "description": "Place item before this item ID",
+                        },
+                    },
+                    "required": ["kb_name"],
+                },
+                "handler": self._mcp_prioritize,
+            }
             tools["sw_create_adr"] = {
                 "description": "Create a new ADR with auto-numbered ID and structured body",
                 "inputSchema": {
@@ -508,6 +584,14 @@ class SoftwareKBPlugin:
             "has_session": {
                 "inverse": "session_for",
                 "description": "Backlog item has a work session log",
+            },
+            "has_subtask": {
+                "inverse": "subtask_of",
+                "description": "Epic or large item decomposed into subtasks",
+            },
+            "subtask_of": {
+                "inverse": "has_subtask",
+                "description": "Subtask belonging to a parent epic or large item",
             },
         }
 
@@ -755,7 +839,7 @@ class SoftwareKBPlugin:
                 db.close()
 
     def _mcp_backlog(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List backlog items."""
+        """List backlog items with optional sort, epic filter, and grouping."""
         import json
 
         db, should_close = self._get_db()
@@ -763,8 +847,22 @@ class SoftwareKBPlugin:
         status_filter = args.get("status")
         priority_filter = args.get("priority")
         kind_filter = args.get("kind")
+        epic_filter = args.get("epic")
+        sort_by = args.get("sort", "priority")
+        group_by = args.get("group_by")
 
         try:
+            # If filtering by epic, get the set of subtask IDs
+            epic_subtask_ids: set[str] | None = None
+            if epic_filter:
+                epic_subtask_ids = set()
+                for link in db.get_outlinks(epic_filter, kb_name or ""):
+                    if link.get("relation") == "has_subtask":
+                        epic_subtask_ids.add(link["id"])
+                for link in db.get_backlinks(epic_filter, kb_name or ""):
+                    if link.get("relation") == "subtask_of":
+                        epic_subtask_ids.add(link["id"])
+
             query = "SELECT * FROM entry WHERE entry_type = 'backlog_item'"
             params: list = []
             if kb_name:
@@ -785,11 +883,14 @@ class SoftwareKBPlugin:
                 priority = row["priority"] or meta.get("priority", "medium")
                 kind = meta.get("kind", "")
                 assignee = row["assignee"] or meta.get("assignee", "")
+                rank = int(meta.get("rank", 0))
                 if status_filter and status != status_filter:
                     continue
                 if priority_filter and priority != priority_filter:
                     continue
                 if kind_filter and kind != kind_filter:
+                    continue
+                if epic_subtask_ids is not None and row["id"] not in epic_subtask_ids:
                     continue
                 items.append(
                     {
@@ -799,12 +900,251 @@ class SoftwareKBPlugin:
                         "status": status,
                         "priority": priority,
                         "effort": meta.get("effort", ""),
+                        "rank": rank,
                         "assignee": assignee,
+                        "kb_name": row["kb_name"],
+                        "_created": row["created_at"] or "",
+                    }
+                )
+
+            # Sort
+            priority_rank = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+            if sort_by == "rank":
+                items.sort(
+                    key=lambda c: (
+                        priority_rank.get(c["priority"], 2),
+                        0 if c["rank"] else 1,
+                        c["rank"],
+                        c["_created"],
+                    )
+                )
+            elif sort_by == "created":
+                items.sort(key=lambda c: c["_created"])
+            else:  # "priority" default
+                items.sort(
+                    key=lambda c: (priority_rank.get(c["priority"], 2), c["_created"])
+                )
+
+            # Clean internal fields
+            for item in items:
+                del item["_created"]
+
+            # Group by epic if requested
+            if group_by == "epic":
+                grouped = self._group_items_by_epic(db, items, kb_name or "")
+                return {"count": len(items), "groups": grouped}
+
+            return {"count": len(items), "items": items}
+        finally:
+            if should_close:
+                db.close()
+
+    def _group_items_by_epic(
+        self, db, items: list[dict[str, Any]], kb_name: str
+    ) -> list[dict[str, Any]]:
+        """Group backlog items by their parent epic."""
+        # Build item_id → epic_id mapping via subtask_of links
+        item_to_epic: dict[str, str] = {}
+        epic_titles: dict[str, str] = {}
+        for item in items:
+            for link in db.get_outlinks(item["id"], item.get("kb_name", kb_name)):
+                if link.get("relation") == "subtask_of":
+                    item_to_epic[item["id"]] = link["id"]
+                    if link["id"] not in epic_titles:
+                        epic_titles[link["id"]] = link.get("title", link["id"])
+                    break
+
+        # Group items
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for item in items:
+            epic_id = item_to_epic.get(item["id"], "")
+            groups.setdefault(epic_id, []).append(item)
+
+        result = []
+        # Named epics first, sorted by title
+        for epic_id in sorted(
+            (eid for eid in groups if eid), key=lambda eid: epic_titles.get(eid, "")
+        ):
+            result.append(
+                {
+                    "epic_id": epic_id,
+                    "epic_title": epic_titles.get(epic_id, epic_id),
+                    "count": len(groups[epic_id]),
+                    "items": groups[epic_id],
+                }
+            )
+        # Unassigned last
+        if "" in groups:
+            result.append(
+                {
+                    "epic_id": None,
+                    "epic_title": "Unassigned",
+                    "count": len(groups[""]),
+                    "items": groups[""],
+                }
+            )
+        return result
+
+    def _mcp_epics(self, args: dict[str, Any]) -> dict[str, Any]:
+        """List epics with subtask progress rollup."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args.get("kb_name")
+        status_filter = args.get("status")
+
+        try:
+            query = "SELECT * FROM entry WHERE entry_type = 'backlog_item'"
+            params: list = []
+            if kb_name:
+                query += " AND kb_name = ?"
+                params.append(kb_name)
+            query += " ORDER BY created_at DESC"
+
+            rows = db._raw_conn.execute(query, params).fetchall()
+            epics = []
+            for row in rows:
+                meta = {}
+                if row["metadata"]:
+                    try:
+                        meta = json.loads(row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                kind = meta.get("kind", "")
+                if kind != "epic":
+                    continue
+                status = row["status"] or meta.get("status", "proposed")
+                if status_filter and status != status_filter:
+                    continue
+
+                progress = self._get_epic_progress(
+                    db, row["id"], row["kb_name"]
+                )
+                epics.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "status": status,
+                        "priority": row["priority"] or meta.get("priority", "medium"),
+                        "total": progress["total"],
+                        "done": progress["done"],
+                        "in_progress": progress["in_progress"],
+                        "completion_pct": progress["completion_pct"],
                         "kb_name": row["kb_name"],
                     }
                 )
 
-            return {"count": len(items), "items": items}
+            return {"count": len(epics), "epics": epics}
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_epic_detail(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Show an epic's subtasks grouped by status with progress."""
+        import json
+
+        db, should_close = self._get_db()
+        epic_id = args["epic_id"]
+        kb_name = args["kb_name"]
+
+        try:
+            query = (
+                "SELECT * FROM entry WHERE id = ? AND kb_name = ? AND entry_type = 'backlog_item'"
+            )
+            row = db._raw_conn.execute(query, (epic_id, kb_name)).fetchone()
+            if not row:
+                return {"error": f"Epic '{epic_id}' not found in KB '{kb_name}'"}
+
+            meta = {}
+            if row["metadata"]:
+                try:
+                    meta = json.loads(row["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            if meta.get("kind") != "epic":
+                return {"error": f"Item '{epic_id}' is not an epic (kind: {meta.get('kind', '')})"}
+
+            progress = self._get_epic_progress(db, epic_id, kb_name)
+
+            return {
+                "id": epic_id,
+                "title": row["title"],
+                "status": row["status"] or meta.get("status", "proposed"),
+                "priority": row["priority"] or meta.get("priority", "medium"),
+                "total": progress["total"],
+                "done": progress["done"],
+                "in_progress": progress["in_progress"],
+                "completion_pct": progress["completion_pct"],
+                "by_status": progress["by_status"],
+            }
+        finally:
+            if should_close:
+                db.close()
+
+    def _mcp_prioritize(self, args: dict[str, Any]) -> dict[str, Any]:
+        """Set explicit rank ordering for backlog items."""
+        import json
+
+        db, should_close = self._get_db()
+        kb_name = args["kb_name"]
+        item_ids = args.get("item_ids")
+        item_id = args.get("item_id")
+        after_id = args.get("after")
+        before_id = args.get("before")
+
+        try:
+            from pyrite.config import load_config
+            from pyrite.services.kb_service import KBService
+
+            config = load_config()
+            svc = KBService(config, db)
+
+            if item_ids:
+                # Batch mode: assign gap-numbered ranks
+                updated = []
+                for i, iid in enumerate(item_ids):
+                    rank = (i + 1) * 100
+                    try:
+                        svc.update_entry(iid, kb_name, rank=rank)
+                        updated.append({"id": iid, "rank": rank})
+                    except Exception as e:
+                        updated.append({"id": iid, "error": str(e)})
+                return {"updated": updated, "count": len(updated)}
+
+            elif item_id and (after_id or before_id):
+                # Relative positioning mode
+                anchor_id = after_id or before_id
+
+                # Get anchor rank
+                anchor_row = db._raw_conn.execute(
+                    "SELECT metadata FROM entry WHERE id = ? AND kb_name = ?",
+                    (anchor_id, kb_name),
+                ).fetchone()
+                if not anchor_row:
+                    return {"error": f"Anchor item '{anchor_id}' not found"}
+                anchor_meta = {}
+                if anchor_row["metadata"]:
+                    try:
+                        anchor_meta = json.loads(anchor_row["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                anchor_rank = int(anchor_meta.get("rank", 0))
+
+                if after_id:
+                    # Place after: new_rank = anchor_rank + 50 (midpoint to next)
+                    new_rank = anchor_rank + 50 if anchor_rank else 100
+                else:
+                    # Place before: new_rank = anchor_rank - 50 (midpoint to prev)
+                    new_rank = max(1, anchor_rank - 50) if anchor_rank else 50
+
+                svc.update_entry(item_id, kb_name, rank=new_rank)
+                return {
+                    "updated": [{"id": item_id, "rank": new_rank}],
+                    "count": 1,
+                }
+
+            return {"error": "Provide either item_ids (batch) or item_id with after/before"}
         finally:
             if should_close:
                 db.close()
@@ -1013,11 +1353,29 @@ class SoftwareKBPlugin:
             except Exception:
                 recommended_next = None
 
+            # Active epics with progress
+            active_epics = []
+            try:
+                epics_result = self._mcp_epics({"kb_name": kb_name})
+                for epic in epics_result.get("epics", []):
+                    if epic["status"] not in self._RESOLVED_STATUSES:
+                        active_epics.append(
+                            {
+                                "id": epic["id"],
+                                "title": epic["title"],
+                                "status": epic["status"],
+                                "progress": f"{epic['done']}/{epic['total']} ({epic['completion_pct']}%)",
+                            }
+                        )
+            except Exception:
+                pass
+
             return {
                 "software": {
                     "board_summary": board_summary,
                     "in_progress": in_progress_items,
                     "review_queue": review_items,
+                    "active_epics": active_epics,
                     "recent_adrs": recent_adrs,
                     "top_components": top_components,
                     "recommended_next": recommended_next,
@@ -1325,6 +1683,105 @@ class SoftwareKBPlugin:
             "blocked_by": blocked_by,
             "blocks": blocks,
             "is_blocked": any(not dep["resolved"] for dep in blocked_by),
+        }
+
+    def _get_epic_progress(self, db, epic_id: str, kb_name: str) -> dict[str, Any]:
+        """Compute progress for an epic from its has_subtask links.
+
+        Returns dict with subtasks list, total, done, in_progress, completion_pct,
+        and by_status grouping.
+        """
+        import json
+
+        subtasks: list[dict[str, Any]] = []
+
+        for link in db.get_outlinks(epic_id, kb_name):
+            if link.get("relation") != "has_subtask":
+                continue
+            target_id = link.get("id", "")
+            target_kb = link.get("kb_name", kb_name)
+            dep_entry = db.get_entry(target_id, target_kb)
+            if not dep_entry:
+                continue
+            if dep_entry.get("entry_type") != "backlog_item":
+                continue
+            meta = {}
+            if dep_entry.get("metadata"):
+                try:
+                    meta = (
+                        json.loads(dep_entry["metadata"])
+                        if isinstance(dep_entry["metadata"], str)
+                        else dep_entry["metadata"]
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            status = dep_entry.get("status") or meta.get("status", "proposed")
+            subtasks.append(
+                {
+                    "id": target_id,
+                    "title": dep_entry.get("title", ""),
+                    "status": status,
+                    "priority": meta.get("priority", "medium"),
+                    "kind": meta.get("kind", ""),
+                    "effort": meta.get("effort", ""),
+                    "rank": meta.get("rank", 0),
+                }
+            )
+
+        # Also check backlinks: items that link to this epic via subtask_of
+        # get_backlinks returns the inverse_relation, so we look for "has_subtask"
+        for link in db.get_backlinks(epic_id, kb_name):
+            if link.get("relation") != "has_subtask":
+                continue
+            target_id = link.get("id", "")
+            # Skip if already found via outlinks
+            if any(s["id"] == target_id for s in subtasks):
+                continue
+            target_kb = link.get("kb_name", kb_name)
+            dep_entry = db.get_entry(target_id, target_kb)
+            if not dep_entry:
+                continue
+            if dep_entry.get("entry_type") != "backlog_item":
+                continue
+            meta = {}
+            if dep_entry.get("metadata"):
+                try:
+                    meta = (
+                        json.loads(dep_entry["metadata"])
+                        if isinstance(dep_entry["metadata"], str)
+                        else dep_entry["metadata"]
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            status = dep_entry.get("status") or meta.get("status", "proposed")
+            subtasks.append(
+                {
+                    "id": target_id,
+                    "title": dep_entry.get("title", ""),
+                    "status": status,
+                    "priority": meta.get("priority", "medium"),
+                    "kind": meta.get("kind", ""),
+                    "effort": meta.get("effort", ""),
+                    "rank": meta.get("rank", 0),
+                }
+            )
+
+        total = len(subtasks)
+        done = sum(1 for s in subtasks if s["status"] in self._RESOLVED_STATUSES)
+        in_progress = sum(1 for s in subtasks if s["status"] == "in_progress")
+        pct = round(done / total * 100) if total > 0 else 0
+
+        by_status: dict[str, list[dict[str, Any]]] = {}
+        for s in subtasks:
+            by_status.setdefault(s["status"], []).append(s)
+
+        return {
+            "subtasks": subtasks,
+            "total": total,
+            "done": done,
+            "in_progress": in_progress,
+            "completion_pct": pct,
+            "by_status": by_status,
         }
 
     def _check_no_open_blockers(
@@ -1761,6 +2218,7 @@ class SoftwareKBPlugin:
                 if status != "accepted":
                     continue
                 priority = row["priority"] or meta.get("priority", "medium")
+                item_rank = int(meta.get("rank", 0))
                 candidates.append(
                     {
                         "id": row["id"],
@@ -1768,13 +2226,21 @@ class SoftwareKBPlugin:
                         "kind": meta.get("kind", ""),
                         "priority": priority,
                         "effort": meta.get("effort", ""),
+                        "rank": item_rank,
                         "_rank": priority_rank.get(priority, 2),
                         "_created": row["created_at"] or "",
                     }
                 )
 
-            # Sort by priority rank (ascending), then created_at (ascending)
-            candidates.sort(key=lambda c: (c["_rank"], c["_created"]))
+            # Sort by priority band, then ranked before unranked, then rank, then created_at
+            candidates.sort(
+                key=lambda c: (
+                    c["_rank"],
+                    0 if c["rank"] else 1,
+                    c["rank"],
+                    c["_created"],
+                )
+            )
 
             if not candidates:
                 return {

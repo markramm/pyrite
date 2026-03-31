@@ -3,7 +3,7 @@ id: web-ui-user-management
 type: backlog_item
 title: "Web UI: User list, roles, and per-KB permissions"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: M
 tags: [web, ux]

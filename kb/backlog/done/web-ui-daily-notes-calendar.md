@@ -3,7 +3,7 @@ id: web-ui-daily-notes-calendar
 type: backlog_item
 title: "Web UI: Calendar widget for daily notes"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [web, ux]

@@ -3,12 +3,12 @@ id: web-ui-git-operations
 type: backlog_item
 title: "Web UI: Git commit, push, pull, and diff operations"
 kind: feature
-status: proposed
+status: deferred
 priority: high
 effort: L
-tags: [web, ux]
+tags: [web, ux, git]
 links:
-- target: epic-web-ui-feature-parity
+- target: epic-fork-system
   relation: subtask_of
   kb: pyrite
 ---

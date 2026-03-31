@@ -17,6 +17,7 @@ links:
   relation: related
 kind: feature
 effort: M
+status: retired
 ---
 
 ## Problem

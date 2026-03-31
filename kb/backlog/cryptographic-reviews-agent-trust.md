@@ -3,7 +3,7 @@ id: cryptographic-reviews-agent-trust
 type: backlog_item
 title: "Spike: Cryptographic reviews and agent web of trust"
 kind: feature
-status: proposed
+status: deferred
 priority: low
 effort: L
 tags: [agents, trust, reviews, federation, spike]

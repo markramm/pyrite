@@ -3,10 +3,14 @@ id: sync-conflict-resolution-ui
 type: backlog_item
 title: "Git Sync Conflict Resolution UI"
 kind: feature
-status: proposed
-priority: low
+status: deferred
+priority: medium
 effort: L
 tags: [web, git, ux]
+links:
+- target: epic-fork-system
+  relation: subtask_of
+  kb: pyrite
 ---
 
 Visual conflict resolution when git sync encounters merge conflicts:

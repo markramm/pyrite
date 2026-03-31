@@ -3,7 +3,7 @@ id: web-ui-entry-metadata-display
 type: backlog_item
 title: "Web UI: Entry metadata display on detail pages"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 tags: [web, ux]

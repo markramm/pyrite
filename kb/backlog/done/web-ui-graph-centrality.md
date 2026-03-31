@@ -3,7 +3,7 @@ id: web-ui-graph-centrality
 type: backlog_item
 title: "Web UI: Wire up graph node sizing by betweenness centrality"
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
 tags: [web, ux]

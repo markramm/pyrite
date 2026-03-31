@@ -1,6 +1,7 @@
 """Software KB CLI commands."""
 
 import json
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -184,76 +185,218 @@ def sw_backlog(
     status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
     priority: str | None = typer.Option(None, "--priority", "-p", help="Filter by priority"),
     kind: str | None = typer.Option(None, "--kind", "-t", help="Filter by kind"),
+    epic: str | None = typer.Option(None, "--epic", "-e", help="Filter to subtasks of this epic"),
+    sort: str = typer.Option("priority", "--sort", help="Sort: priority (default), rank, created"),
+    group_by: str | None = typer.Option(None, "--group-by", "-g", help="Group by: epic"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
     fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
 ):
-    """List backlog items."""
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    """List backlog items with sorting, filtering, and grouping."""
+    from .plugin import SoftwareKBPlugin
 
-    try:
-        rows = _query_entries(db, "backlog_item", kb_name)
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_backlog(
+        {
+            "kb_name": kb_name,
+            "status": status,
+            "priority": priority,
+            "kind": kind,
+            "epic": epic,
+            "sort": sort,
+            "group_by": group_by,
+        }
+    )
 
-        if status:
-            rows = [
-                r
-                for r in rows
-                if (r.get("status") or r["_meta"].get("status", "proposed")) == status
-            ]
-        if priority:
-            rows = [
-                r
-                for r in rows
-                if (r.get("priority") or r["_meta"].get("priority", "medium")) == priority
-            ]
-        if kind:
-            rows = [r for r in rows if r["_meta"].get("kind", "") == kind]
-
-        if not rows:
-            if fmt == "json":
-                _json_output([])
-            else:
-                console.print("[dim]No backlog items found.[/dim]")
-            return
-
+    if group_by == "epic" and "groups" in result:
+        groups = result["groups"]
         if fmt == "json":
-            _json_output(
-                [
-                    {
-                        "id": r["id"],
-                        "title": r["title"],
-                        "kind": r["_meta"].get("kind", ""),
-                        "status": r.get("status") or r["_meta"].get("status", "proposed"),
-                        "priority": r.get("priority") or r["_meta"].get("priority", "medium"),
-                        "effort": r["_meta"].get("effort", ""),
-                    }
-                    for r in rows
-                ]
-            )
+            _json_output(groups)
             return
+        for group in groups:
+            table = Table(title=f"Epic: {group['epic_title']} ({group['count']} items)")
+            table.add_column("ID", style="cyan")
+            table.add_column("Title")
+            table.add_column("Kind", style="blue")
+            table.add_column("Status", style="yellow")
+            table.add_column("Priority", style="red")
+            table.add_column("Effort", style="dim")
+            if sort == "rank":
+                table.add_column("Rank", style="magenta")
+            for item in group["items"]:
+                row_data = [
+                    item["id"][:12],
+                    item["title"],
+                    item.get("kind", ""),
+                    item["status"],
+                    item["priority"],
+                    item.get("effort", ""),
+                ]
+                if sort == "rank":
+                    row_data.append(str(item.get("rank", 0)) if item.get("rank") else "")
+                table.add_row(*row_data)
+            console.print(table)
+            console.print()
+        return
 
-        table = Table(title="Backlog")
-        table.add_column("ID", style="cyan")
-        table.add_column("Title")
-        table.add_column("Kind", style="blue")
-        table.add_column("Status", style="yellow")
-        table.add_column("Priority", style="red")
-        table.add_column("Effort", style="dim")
+    items = result.get("items", [])
+    if not items:
+        if fmt == "json":
+            _json_output([])
+        else:
+            console.print("[dim]No backlog items found.[/dim]")
+        return
 
-        for row in rows:
-            meta = row["_meta"]
-            table.add_row(
-                row["id"][:12],
-                row["title"],
-                meta.get("kind", ""),
-                row.get("status") or meta.get("status", "proposed"),
-                row.get("priority") or meta.get("priority", "medium"),
-                meta.get("effort", ""),
-            )
+    if fmt == "json":
+        _json_output(items)
+        return
 
-        console.print(table)
-    finally:
-        db.close()
+    table = Table(title="Backlog")
+    table.add_column("ID", style="cyan")
+    table.add_column("Title")
+    table.add_column("Kind", style="blue")
+    table.add_column("Status", style="yellow")
+    table.add_column("Priority", style="red")
+    table.add_column("Effort", style="dim")
+    if sort == "rank":
+        table.add_column("Rank", style="magenta")
+
+    for item in items:
+        row_data = [
+            item["id"][:12],
+            item["title"],
+            item.get("kind", ""),
+            item["status"],
+            item["priority"],
+            item.get("effort", ""),
+        ]
+        if sort == "rank":
+            row_data.append(str(item.get("rank", 0)) if item.get("rank") else "")
+        table.add_row(*row_data)
+
+    console.print(table)
+
+
+@sw_app.command("epics")
+def sw_epics(
+    status: str | None = typer.Option(None, "--status", "-s", help="Filter by status"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """List epics with subtask progress."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_epics({"kb_name": kb_name, "status": status})
+    epics = result.get("epics", [])
+
+    if not epics:
+        if fmt == "json":
+            _json_output([])
+        else:
+            console.print("[dim]No epics found.[/dim]")
+        return
+
+    if fmt == "json":
+        _json_output(epics)
+        return
+
+    table = Table(title="Epics")
+    table.add_column("ID", style="cyan")
+    table.add_column("Title")
+    table.add_column("Status", style="yellow")
+    table.add_column("Priority", style="red")
+    table.add_column("Progress", style="green")
+
+    for ep in epics:
+        pct = ep["completion_pct"]
+        bar = f"{ep['done']}/{ep['total']} ({pct}%)"
+        table.add_row(
+            ep["id"][:20],
+            ep["title"],
+            ep["status"],
+            ep["priority"],
+            bar,
+        )
+
+    console.print(table)
+
+
+@sw_app.command("epic")
+def sw_epic_detail(
+    epic_id: str = typer.Argument(..., help="Epic ID"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+    fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
+):
+    """Show an epic's subtasks grouped by status."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+    result = plugin._mcp_epic_detail({"epic_id": epic_id, "kb_name": kb_name or ""})
+
+    if "error" in result:
+        console.print(f"[red]Error: {result['error']}[/red]")
+        raise typer.Exit(1)
+
+    if fmt == "json":
+        print(json.dumps(result, separators=(",", ":"), default=str))
+        return
+
+    console.print(f"[bold]{result['title']}[/bold]")
+    console.print(
+        f"Status: {result['status']}  Priority: {result['priority']}  "
+        f"Progress: {result['done']}/{result['total']} ({result['completion_pct']}%)"
+    )
+    console.print()
+
+    status_order = ["in_progress", "review", "accepted", "proposed", "planned", "done", "retired"]
+    for status in status_order:
+        items = result.get("by_status", {}).get(status, [])
+        if not items:
+            continue
+        console.print(f"[bold yellow]{status}[/bold yellow] ({len(items)})")
+        for item in items:
+            console.print(f"  {item['id'][:20]}  {item['title']}")
+    console.print()
+
+
+@sw_app.command("prioritize")
+def sw_prioritize(
+    item_ids: list[str] = typer.Argument(None, help="Ordered list of item IDs (highest first)"),
+    after: str | None = typer.Option(None, "--after", help="Place item after this ID"),
+    before: str | None = typer.Option(None, "--before", help="Place item before this ID"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
+):
+    """Set explicit rank ordering for backlog items."""
+    from .plugin import SoftwareKBPlugin
+
+    plugin = SoftwareKBPlugin()
+
+    args: dict[str, Any] = {"kb_name": kb_name or ""}
+    if item_ids and len(item_ids) > 1:
+        args["item_ids"] = item_ids
+    elif item_ids and len(item_ids) == 1 and (after or before):
+        args["item_id"] = item_ids[0]
+        if after:
+            args["after"] = after
+        if before:
+            args["before"] = before
+    elif item_ids:
+        args["item_ids"] = item_ids
+    else:
+        console.print("[red]Provide item IDs to prioritize[/red]")
+        raise typer.Exit(1)
+
+    result = plugin._mcp_prioritize(args)
+
+    if "error" in result:
+        console.print(f"[red]Error: {result['error']}[/red]")
+        raise typer.Exit(1)
+
+    for item in result.get("updated", []):
+        if "error" in item:
+            console.print(f"  [red]{item['id']}: {item['error']}[/red]")
+        else:
+            console.print(f"  {item['id']} → rank {item['rank']}")
 
 
 @sw_app.command("standards")
