@@ -15,7 +15,7 @@ links:
 - target: demo-site-deployment
   relation: related
 kind: feature
-status: accepted
+status: done
 priority: high
 effort: M
 ---
