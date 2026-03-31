@@ -333,6 +333,11 @@ def merge_queue_merge(
             status_code=404,
             detail=f"No worktree found for user '{username}' in KB '{req.kb}'",
         )
+    if wt.status != "submitted":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Worktree is '{wt.status}', not 'submitted'. Submit first.",
+        )
 
     success, msg = wt_svc.merge(req.kb, wt.user_id)
     return MergeResponse(merged=success, message=msg)

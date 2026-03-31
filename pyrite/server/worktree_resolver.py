@@ -117,6 +117,16 @@ class WorktreeResolver:
         read_db = self.get_read_db(kb_name, auth_user)
         return KBService(self._config, read_db)
 
+    def invalidate_diff_cache(self, user_id: int, kb_name: str) -> None:
+        """Remove a cached diff DB after merge/reset/delete."""
+        key = (user_id, kb_name)
+        cached = self._diff_cache.pop(key, None)
+        if cached:
+            try:
+                cached.close()
+            except Exception:
+                pass
+
     @property
     def worktree_service(self) -> WorktreeService:
         """Access the underlying WorktreeService for submit/merge/reject."""

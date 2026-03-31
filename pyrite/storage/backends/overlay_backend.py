@@ -379,7 +379,7 @@ class OverlaySearchBackend:
                 merged.append(e)
 
         # Re-sort if requested
-        if sort_by and any(sort_by in e for e in merged[:1]):
+        if sort_by:
             reverse = sort_order == "desc"
             merged.sort(key=lambda e: e.get(sort_by, ""), reverse=reverse)
 

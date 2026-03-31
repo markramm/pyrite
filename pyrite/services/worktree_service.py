@@ -57,6 +57,18 @@ class WorktreeService:
         self.config = config
         self.db = db
 
+    @staticmethod
+    def _sanitize_username(username: str) -> str:
+        """Sanitize username for use in filesystem paths and git branch names."""
+        import re
+
+        # Strip path traversal, null bytes, control chars
+        safe = re.sub(r"[/\\.\x00-\x1f~^:?*\[\]@{} ]", "-", username)
+        safe = safe.strip("-")
+        if not safe:
+            raise ValueError("Username produces empty sanitized string")
+        return safe[:64]  # cap length
+
     def _find_repo_root(self, kb_config: KBConfig) -> Path | None:
         """Find the git repo root for a KB."""
         from pyrite.services.git_service import GitService
@@ -141,10 +153,25 @@ class WorktreeService:
         Raises:
             ValueError: If KB not found or not in a git repo.
         """
-        # Check if already exists
+        # Check if already exists and still active
         row = self._get_worktree_row(kb_name, user_id)
-        if row:
+        if row and row["status"] in ("active", "submitted"):
             return self._row_to_info(row)
+        elif row and row["status"] in ("merged", "rejected"):
+            # Reset a closed worktree back to active for reuse
+            now = datetime.now(UTC).isoformat()
+            self.db._raw_conn.execute(
+                "UPDATE worktree SET status = 'active', submitted_at = NULL, "
+                "merged_at = NULL, rejected_at = NULL, feedback = NULL, updated_at = ? "
+                "WHERE id = ?",
+                (now, row["id"]),
+            )
+            self.db._raw_conn.commit()
+            row = self._get_worktree_row(kb_name, user_id)
+            return self._row_to_info(row)
+
+        # Sanitize username for paths and branch names
+        safe_username = self._sanitize_username(username)
 
         # Resolve KB and repo
         kb_config = self.config.get_kb(kb_name)
@@ -156,8 +183,8 @@ class WorktreeService:
             raise ValueError(f"KB '{kb_name}' is not in a git repository")
 
         # Compute paths
-        branch = f"user/{username}"
-        worktree_path, diff_db_path = self._compute_paths(repo_root, username)
+        branch = f"user/{safe_username}"
+        worktree_path, diff_db_path = self._compute_paths(repo_root, safe_username)
 
         # Create git worktree
         from pyrite.services.git_service import GitService
@@ -166,8 +193,11 @@ class WorktreeService:
         if not success:
             raise ValueError(f"Failed to create worktree: {msg}")
 
-        # Ensure diff DB directory exists
+        # Ensure diff DB directory exists and initialize the diff index
         diff_db_path.parent.mkdir(parents=True, exist_ok=True)
+        # Pre-create the diff DB so it's ready for immediate use
+        _diff_db = PyriteDB(diff_db_path)
+        _diff_db.close()
 
         # Insert DB record
         now = datetime.now(UTC).isoformat()
@@ -178,7 +208,7 @@ class WorktreeService:
             VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)""",
             (
                 user_id,
-                username,
+                safe_username,
                 kb_name,
                 str(repo_root),
                 branch,
@@ -247,7 +277,7 @@ class WorktreeService:
         from pyrite.services.git_service import GitService
 
         status = GitService.get_status(worktree_path)
-        if status.get("has_changes"):
+        if not status.get("clean", True):
             GitService.commit(
                 worktree_path,
                 message=f"Submit changes from {wt.username}",

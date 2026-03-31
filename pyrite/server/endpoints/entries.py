@@ -65,8 +65,8 @@ def list_entries(
     if auth_user and kb:
         try:
             svc = resolver.get_read_service(kb, auth_user)
-        except (ValueError, Exception):
-            pass
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
 
     results = svc.list_entries(
         kb_name=kb,
@@ -441,8 +441,8 @@ def get_entry(
     if auth_user and kb:
         try:
             svc = resolver.get_read_service(kb, auth_user)
-        except (ValueError, Exception):
-            pass
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
 
     if with_links:
         # get_entry already includes outlinks/backlinks
@@ -498,8 +498,8 @@ def create_entry(
     if auth_user and auth_user.get("role") != "admin":
         try:
             svc = resolver.get_write_service(req.kb, auth_user)
-        except (ValueError, Exception):
-            pass  # Fall back to main if worktree creation fails
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
 
     if not svc.get_kb(req.kb):
         raise HTTPException(
@@ -577,8 +577,8 @@ def update_entry(
     if auth_user and auth_user.get("role") != "admin":
         try:
             svc = resolver.get_write_service(req.kb, auth_user)
-        except (ValueError, Exception):
-            pass
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
 
     updates = {}
     if req.title is not None:
@@ -626,8 +626,16 @@ def patch_entry_field(
     entry_id: str,
     body: PatchEntryRequest,
     svc: KBService = Depends(get_kb_service),
+    resolver=Depends(get_worktree_resolver),
 ):
     """Update a single field on an entry (used by kanban drag-drop)."""
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user and auth_user.get("role") != "admin":
+        try:
+            svc = resolver.get_write_service(body.kb, auth_user)
+        except (ValueError, Exception):
+            logger.warning("Worktree routing failed for PATCH, falling back to main")
+
     try:
         svc.update_entry(entry_id, body.kb, **{body.field: body.value})
     except (KBNotFoundError, EntryNotFoundError) as e:
@@ -659,8 +667,8 @@ def delete_entry(
     if auth_user and auth_user.get("role") != "admin":
         try:
             svc = resolver.get_write_service(kb, auth_user)
-        except (ValueError, Exception):
-            pass
+        except ValueError:
+            pass  # KB not in a git repo — fall back to main
 
     try:
         deleted = svc.delete_entry(entry_id, kb)

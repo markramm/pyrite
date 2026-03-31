@@ -730,9 +730,12 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                timeout=30,
             )
             if result.returncode == 0:
                 return True, result.stdout
             return False, result.stderr.strip()
+        except subprocess.TimeoutExpired:
+            return False, "Diff timed out"
         except Exception as e:
             return False, str(e)
