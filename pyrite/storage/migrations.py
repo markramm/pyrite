@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 16
+CURRENT_VERSION = 17
 
 
 @dataclass
@@ -345,6 +345,36 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS edge_endpoint;
+        """,
+    ),
+    Migration(
+        version=17,
+        description="Add worktree table for multi-user collaboration",
+        up="""
+        CREATE TABLE IF NOT EXISTS worktree (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            kb_name TEXT NOT NULL,
+            repo_path TEXT NOT NULL,
+            branch TEXT NOT NULL,
+            worktree_path TEXT NOT NULL,
+            diff_db_path TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            submitted_at TEXT,
+            merged_at TEXT,
+            rejected_at TEXT,
+            feedback TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, kb_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_worktree_user ON worktree(user_id);
+        CREATE INDEX IF NOT EXISTS idx_worktree_kb ON worktree(kb_name);
+        CREATE INDEX IF NOT EXISTS idx_worktree_status ON worktree(status);
+        """,
+        down="""
+        DROP TABLE IF EXISTS worktree;
         """,
     ),
 ]

@@ -563,3 +563,176 @@ class GitService:
         if token and token in output:
             return output.replace(token, "***")
         return output
+
+    # =========================================================================
+    # Git worktree operations
+    # =========================================================================
+
+    @staticmethod
+    def worktree_add(
+        repo_path: Path, worktree_path: Path, branch: str
+    ) -> tuple[bool, str]:
+        """Create a git worktree with a new branch.
+
+        Args:
+            repo_path: Path to the main git repository.
+            worktree_path: Path where the worktree will be created.
+            branch: Branch name for the worktree (created if not exists).
+
+        Returns:
+            (success, message) tuple.
+        """
+        worktree_path = Path(worktree_path)
+        worktree_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            # Try creating with new branch first
+            result = subprocess.run(
+                ["git", "worktree", "add", str(worktree_path), "-b", branch],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return True, f"Created worktree at {worktree_path} on branch {branch}"
+            # Branch may already exist — try without -b
+            result = subprocess.run(
+                ["git", "worktree", "add", str(worktree_path), branch],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return True, f"Created worktree at {worktree_path} on existing branch {branch}"
+            return False, result.stderr.strip()
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def worktree_list(repo_path: Path) -> list[dict[str, str]]:
+        """List all git worktrees for a repository.
+
+        Returns list of dicts with 'worktree', 'HEAD', 'branch' keys.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "worktree", "list", "--porcelain"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return []
+            worktrees = []
+            current: dict[str, str] = {}
+            for line in result.stdout.splitlines():
+                if line.startswith("worktree "):
+                    if current:
+                        worktrees.append(current)
+                    current = {"worktree": line[9:]}
+                elif line.startswith("HEAD "):
+                    current["HEAD"] = line[5:]
+                elif line.startswith("branch "):
+                    current["branch"] = line[7:]
+                elif line == "bare":
+                    current["bare"] = "true"
+                elif line == "detached":
+                    current["detached"] = "true"
+            if current:
+                worktrees.append(current)
+            return worktrees
+        except Exception:
+            return []
+
+    @staticmethod
+    def worktree_remove(
+        repo_path: Path, worktree_path: Path, force: bool = False
+    ) -> tuple[bool, str]:
+        """Remove a git worktree."""
+        cmd = ["git", "worktree", "remove", str(worktree_path)]
+        if force:
+            cmd.append("--force")
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return True, f"Removed worktree at {worktree_path}"
+            return False, result.stderr.strip()
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def merge_branch(
+        repo_path: Path, branch: str, into: str = "main"
+    ) -> tuple[bool, str]:
+        """Merge a branch into another (typically main).
+
+        Performs checkout + merge in the repo_path working directory.
+        Returns (success, message). On conflict, returns (False, conflict_info).
+        """
+        try:
+            # Checkout target branch
+            result = subprocess.run(
+                ["git", "checkout", into],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode != 0:
+                return False, f"Failed to checkout {into}: {result.stderr.strip()}"
+
+            # Merge
+            result = subprocess.run(
+                ["git", "merge", branch, "--no-edit"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return True, f"Merged {branch} into {into}"
+
+            # Merge conflict — abort and report
+            conflict_info = result.stdout.strip()
+            subprocess.run(
+                ["git", "merge", "--abort"],
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            return False, f"Merge conflict: {conflict_info}"
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def diff_branches(
+        repo_path: Path, base: str, head: str, stat_only: bool = False
+    ) -> tuple[bool, str]:
+        """Get diff between two branches.
+
+        Args:
+            repo_path: Path to the git repository.
+            base: Base branch (e.g., "main").
+            head: Head branch (e.g., "user/alice").
+            stat_only: If True, return --stat summary only.
+
+        Returns:
+            (success, diff_output) tuple.
+        """
+        cmd = ["git", "diff", f"{base}...{head}"]
+        if stat_only:
+            cmd.append("--stat")
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(repo_path),
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                return True, result.stdout
+            return False, result.stderr.strip()
+        except Exception as e:
+            return False, str(e)

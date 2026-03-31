@@ -479,3 +479,23 @@ class Setting(Base):
     key = Column(String, unique=True, nullable=False, index=True)
     value = Column(Text)
     updated_at = Column(String, server_default="CURRENT_TIMESTAMP")
+
+
+class Worktree(Base):
+    __tablename__ = "worktree"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False)
+    username = Column(String, nullable=False)
+    kb_name = Column(String, nullable=False)
+    repo_path = Column(String, nullable=False)
+    branch = Column(String, nullable=False)
+    worktree_path = Column(String, nullable=False)
+    diff_db_path = Column(String, nullable=False)
+    status = Column(String, nullable=False, server_default="active")
+    submitted_at = Column(String)
+    merged_at = Column(String)
+    rejected_at = Column(String)
+    feedback = Column(Text)
+    created_at = Column(String, server_default="CURRENT_TIMESTAMP")
+    updated_at = Column(String, server_default="CURRENT_TIMESTAMP")
