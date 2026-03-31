@@ -3,7 +3,7 @@ id: worktree-write-routing
 type: backlog_item
 title: "Route entry writes to user worktree, reads from main"
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: L
 tags: [core, git, collaboration, api]
