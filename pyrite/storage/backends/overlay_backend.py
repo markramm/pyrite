@@ -270,6 +270,7 @@ class OverlaySearchBackend:
         kb_name: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort_order: str = "asc",
     ) -> list[dict[str, Any]]:
         return self._main.get_timeline(
             date_from=date_from,
@@ -278,6 +279,7 @@ class OverlaySearchBackend:
             kb_name=kb_name,
             limit=limit,
             offset=offset,
+            sort_order=sort_order,
         )
 
     # ── embeddings → delegate to main ───────────────────────────────

@@ -987,6 +987,7 @@ class PostgresBackend:
         kb_name: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort_order: str = "asc",
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT id, kb_name, title, date, importance, location, summary
@@ -1003,7 +1004,8 @@ class PostgresBackend:
         if date_to:
             sql += " AND date <= :date_to"
             params["date_to"] = date_to
-        sql += " ORDER BY date ASC LIMIT :limit OFFSET :offset"
+        order = "DESC" if sort_order.lower() == "desc" else "ASC"
+        sql += f" ORDER BY date {order} LIMIT :limit OFFSET :offset"
         params["limit"] = limit
         params["offset"] = offset
         return self._exec(sql, params)

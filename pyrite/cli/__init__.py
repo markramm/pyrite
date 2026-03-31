@@ -1073,10 +1073,12 @@ def recent_entries(
 
 @app.command("timeline")
 def timeline(
+    kb_name: str = typer.Option(None, "--kb", "-k", help="Filter to a specific knowledge base"),
     date_from: str = typer.Option(None, "--from", help="Start date (YYYY-MM-DD)"),
     date_to: str = typer.Option(None, "--to", help="End date (YYYY-MM-DD)"),
     min_importance: int = typer.Option(1, "--min-importance", help="Minimum importance (1-10)"),
     limit: int = typer.Option(50, "--limit", "-n", help="Max results"),
+    sort: str = typer.Option("desc", "--sort", "-s", help="Sort order: asc or desc (default: desc)"),
     output_format: str = typer.Option(
         "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
@@ -1087,8 +1089,10 @@ def timeline(
             date_from=date_from,
             date_to=date_to,
             min_importance=min_importance,
+            kb_name=kb_name,
+            limit=limit,
+            sort_order=sort,
         )
-        results = results[:limit]
 
         if not results:
             console.print("[yellow]No timeline events found.[/yellow]")

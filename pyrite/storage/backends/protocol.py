@@ -208,6 +208,7 @@ class SearchBackend(Protocol):
         kb_name: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort_order: str = "asc",
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         ...

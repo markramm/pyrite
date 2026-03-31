@@ -1026,6 +1026,7 @@ class SQLiteBackend:
         kb_name: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort_order: str = "asc",
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT id, kb_name, title, date, importance, location, summary
@@ -1042,7 +1043,8 @@ class SQLiteBackend:
         if date_to:
             sql += " AND date <= ?"
             params.append(date_to)
-        sql += " ORDER BY date ASC LIMIT ? OFFSET ?"
+        order = "DESC" if sort_order.lower() == "desc" else "ASC"
+        sql += f" ORDER BY date {order} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = self._raw_conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]

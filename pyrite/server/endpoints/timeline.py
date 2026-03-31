@@ -16,15 +16,20 @@ def get_timeline(
     date_from: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     date_to: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     min_importance: int | None = Query(None, ge=1, le=10),
+    kb: str | None = Query(None),
+    sort: str = Query("asc", pattern=r"^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=500),
     svc: KBService = Depends(get_kb_service),
 ):
     """Get timeline events."""
     results = svc.get_timeline(
-        date_from=date_from, date_to=date_to, min_importance=min_importance or 1
+        date_from=date_from,
+        date_to=date_to,
+        min_importance=min_importance or 1,
+        kb_name=kb,
+        limit=limit,
+        sort_order=sort,
     )
-
-    results = results[:limit]
 
     events = [
         TimelineEvent(

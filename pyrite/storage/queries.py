@@ -157,6 +157,7 @@ class QueryMixin:
         kb_name: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        sort_order: str = "asc",
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         return self._backend.get_timeline(
@@ -166,6 +167,7 @@ class QueryMixin:
             kb_name=kb_name,
             limit=limit,
             offset=offset,
+            sort_order=sort_order,
         )
 
     def get_global_counts(self) -> dict[str, int]:
