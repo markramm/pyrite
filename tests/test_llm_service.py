@@ -37,11 +37,18 @@ class TestSettingsAIFields:
 
     def test_ollama_provider(self):
         s = Settings(
-            ai_provider="openai",
+            ai_provider="ollama",
             ai_model="llama3",
-            ai_api_base="http://localhost:11434/v1",
         )
-        assert s.ai_api_base == "http://localhost:11434/v1"
+        assert s.ai_provider == "ollama"
+
+    def test_openrouter_native_provider(self):
+        s = Settings(
+            ai_provider="openrouter",
+            ai_model="anthropic/claude-sonnet-4",
+            ai_api_key="sk-or-test",
+        )
+        assert s.ai_provider == "openrouter"
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +195,109 @@ class TestLLMServiceGemini:
         assert s.ai_model == "gemini-2.0-flash"
 
 
+class TestLLMServiceOllama:
+    """Test Ollama provider routes through OpenAI backend."""
+
+    def test_ollama_selected(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="ollama", ai_model="llama3.2")
+        svc = LLMService(settings)
+        assert svc.provider_name == "ollama"
+
+    def test_ollama_configured_without_api_key(self):
+        """Ollama should be configured even without an API key."""
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="ollama", ai_model="llama3.2")
+        svc = LLMService(settings)
+        status = svc.status()
+        assert status["configured"] is True
+        assert status["provider"] == "ollama"
+
+    def test_ollama_does_not_require_api_key(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="ollama", ai_model="llama3.2")
+        svc = LLMService(settings)
+        assert svc._requires_api_key() is False
+
+    def test_ollama_complete_uses_openai_backend(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="ollama", ai_model="llama3.2")
+        svc = LLMService(settings)
+
+        mock_client = MagicMock()
+        mock_choice = MagicMock()
+        mock_choice.message.content = "Ollama says hi!"
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+        mock_client.chat.completions.create = MagicMock(return_value=mock_response)
+
+        mock_module = MagicMock()
+        mock_module.OpenAI.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_openai", return_value=mock_module):
+            result = asyncio.run(svc.complete("Hello"))
+
+        assert result == "Ollama says hi!"
+        mock_module.OpenAI.assert_called_once()
+        call_kwargs = mock_module.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://localhost:11434/v1"
+
+    def test_ollama_default_base_url(self):
+        """Ollama should auto-resolve to localhost:11434/v1."""
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="ollama", ai_model="llama3.2")
+        svc = LLMService(settings)
+        assert svc._resolve_base_url() == "http://localhost:11434/v1"
+
+    def test_ollama_custom_base_url(self):
+        """User can override the Ollama base URL."""
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="ollama",
+            ai_model="llama3.2",
+            ai_api_base="http://my-server:11434/v1",
+        )
+        svc = LLMService(settings)
+        assert svc._resolve_base_url() == "http://my-server:11434/v1"
+
+
+class TestLLMServiceOpenRouter:
+    """Test OpenRouter as a first-class provider."""
+
+    def test_openrouter_selected(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="openrouter",
+            ai_api_key="sk-or-test",
+            ai_model="anthropic/claude-sonnet-4",
+        )
+        svc = LLMService(settings)
+        assert svc.provider_name == "openrouter"
+
+    def test_openrouter_configured_with_key(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="openrouter", ai_api_key="sk-or-test")
+        svc = LLMService(settings)
+        status = svc.status()
+        assert status["configured"] is True
+
+    def test_openrouter_not_configured_without_key(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="openrouter")
+        svc = LLMService(settings)
+        status = svc.status()
+        assert status["configured"] is False
+
+
 class TestLLMServiceMissingSDK:
     """Test that missing SDK raises helpful error."""
 
@@ -327,6 +437,54 @@ class TestLLMServiceOpenAIMocked:
 # ---------------------------------------------------------------------------
 
 
+class TestLLMServiceTestConnection:
+    """Test the test_connection method."""
+
+    def test_stub_not_configured(self):
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="stub")
+        svc = LLMService(settings)
+        result = svc.test_connection()
+        assert result["ok"] is False
+        assert "not configured" in result["message"].lower()
+
+    def test_ollama_unreachable(self):
+        """When Ollama server is not running, test_connection should fail gracefully."""
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="ollama",
+            ai_model="llama3.2",
+            ai_api_base="http://localhost:99999/v1",  # unlikely to be running
+        )
+        svc = LLMService(settings)
+        result = svc.test_connection()
+        assert result["ok"] is False
+        assert "Cannot reach Ollama" in result["message"] or "Connection failed" in result["message"]
+
+    def test_openai_bad_key(self):
+        """OpenAI with invalid key should fail."""
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="openai",
+            ai_api_key="sk-fake",
+            ai_model="gpt-4o",
+        )
+        svc = LLMService(settings)
+
+        mock_module = MagicMock()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = Exception("Invalid API key")
+        mock_module.OpenAI.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_openai", return_value=mock_module):
+            result = svc.test_connection()
+        assert result["ok"] is False
+        assert "Invalid API key" in result["message"]
+
+
 class TestAIStatusEndpoint:
     """Test /api/ai/status endpoint."""
 
@@ -346,3 +504,16 @@ class TestAIStatusEndpoint:
             assert isinstance(data["configured"], bool)
             assert isinstance(data["provider"], str)
             assert isinstance(data["model"], str)
+
+    def test_ai_test_endpoint_exists(self):
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        app = create_app()
+        with TestClient(app) as client:
+            response = client.post("/api/ai/test")
+            assert response.status_code == 200
+            data = response.json()
+            assert "ok" in data
+            assert "message" in data

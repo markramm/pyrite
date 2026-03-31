@@ -131,6 +131,13 @@ def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
     return AIStatusResponse(**status)
 
 
+@router.post("/ai/test")
+@limiter.limit("10/minute")
+def ai_test_connection(request: Request, llm: LLMService = Depends(get_llm_service)):
+    """Actually test the AI connection by pinging the provider."""
+    return llm.test_connection()
+
+
 @router.post("/site/render", dependencies=[Depends(requires_tier("admin"))])
 @limiter.limit("10/minute")
 async def render_site_cache(

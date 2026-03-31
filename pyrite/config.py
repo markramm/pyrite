@@ -305,7 +305,7 @@ class Settings:
     """Global application settings."""
 
     default_editor: str = field(default_factory=lambda: os.environ.get("EDITOR", "vim"))
-    ai_provider: Literal["anthropic", "openai", "gemini", "local", "stub", "none"] = "stub"
+    ai_provider: Literal["anthropic", "openai", "gemini", "openrouter", "ollama", "local", "stub", "none"] = "stub"
     ai_model: str = "claude-sonnet-4-20250514"
     ai_api_key: str = ""
     ai_api_base: str = ""

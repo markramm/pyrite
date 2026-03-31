@@ -37,18 +37,8 @@
 		testingConnection = true;
 		connectionResult = null;
 		try {
-			const status = await api.getAIStatus();
-			if (status.configured) {
-				connectionResult = {
-					ok: true,
-					message: `Connected: ${status.provider} (${status.model ?? 'default model'})`
-				};
-			} else {
-				connectionResult = {
-					ok: false,
-					message: 'Not configured — set a provider and API key'
-				};
-			}
+			const result = await api.testAIConnection();
+			connectionResult = { ok: result.ok, message: result.message };
 		} catch (e) {
 			connectionResult = {
 				ok: false,
@@ -96,7 +86,8 @@
 	};
 
 	const providerBaseUrls: Record<string, string> = {
-		gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/'
+		gemini: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+		ollama: 'http://localhost:11434/v1'
 	};
 
 	function openExportDialog() {
@@ -266,7 +257,9 @@
 							<label class="text-sm font-medium text-zinc-700 dark:text-zinc-300"
 								>API Key</label
 							>
-							<p class="text-xs text-zinc-500">Authentication key for the provider</p>
+							<p class="text-xs text-zinc-500">
+								{aiProvider === 'ollama' ? 'Not required for local Ollama' : 'Authentication key for the provider'}
+							</p>
 						</div>
 						<input
 							type="password"
@@ -275,7 +268,7 @@
 								setSetting('ai.apiKey', e.currentTarget.value);
 								connectionResult = null;
 							}}
-							placeholder="sk-..."
+							placeholder={aiProvider === 'ollama' ? 'Not required' : 'sk-...'}
 							class="w-48 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
 						/>
 					</div>
@@ -292,7 +285,7 @@
 							type="text"
 							value={aiBaseUrl}
 							onchange={(e) => setSetting('ai.baseUrl', e.currentTarget.value)}
-							placeholder={providerBaseUrls[aiProvider] ?? (aiProvider === 'ollama' ? 'http://localhost:11434/v1' : 'Optional')}
+							placeholder={providerBaseUrls[aiProvider] ?? 'Optional'}
 							class="w-48 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
 						/>
 					</div>

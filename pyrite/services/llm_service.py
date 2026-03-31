@@ -52,11 +52,15 @@ class LLMService:
 
     Providers:
         - ``"anthropic"`` — uses the ``anthropic`` SDK directly
-        - ``"openai"`` — uses the ``openai`` SDK (also works for OpenRouter / Ollama
-          via ``ai_api_base``)
+        - ``"openai"`` — uses the ``openai`` SDK
+        - ``"openrouter"`` — OpenRouter via OpenAI-compatible API
+        - ``"ollama"`` — Ollama local models via OpenAI-compatible API
         - ``"gemini"`` — Google Gemini via OpenAI-compatible API
         - ``"stub"`` / ``"none"`` / ``""`` — no-op that returns empty strings / vectors
     """
+
+    # Providers that use the OpenAI SDK under the hood
+    _OPENAI_COMPAT_PROVIDERS = ("openai", "gemini", "openrouter", "ollama", "local")
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
@@ -70,9 +74,19 @@ class LLMService:
     def provider_name(self) -> str:
         return self._provider
 
+    def _requires_api_key(self) -> bool:
+        """Whether the current provider requires an API key."""
+        return self._provider not in ("stub", "none", "", "ollama")
+
     def status(self) -> dict[str, Any]:
         """Return a JSON-safe status dict for the /api/ai/status endpoint."""
-        configured = self._provider not in ("stub", "none", "") and bool(self._settings.ai_api_key)
+        if self._provider in ("stub", "none", ""):
+            configured = False
+        elif self._provider == "ollama":
+            # Ollama doesn't require an API key — just needs provider + model
+            configured = True
+        else:
+            configured = bool(self._settings.ai_api_key)
         return {
             "configured": configured,
             "provider": self._provider,
@@ -92,7 +106,7 @@ class LLMService:
             return ""
         if self._provider == "anthropic":
             return self._anthropic_complete(prompt, system, max_tokens)
-        if self._provider in ("openai", "gemini", "local"):
+        if self._provider in self._OPENAI_COMPAT_PROVIDERS:
             return self._openai_complete(prompt, system, max_tokens)
         return ""
 
@@ -108,7 +122,7 @@ class LLMService:
             for chunk in self._anthropic_stream(prompt, system):
                 yield chunk
             return
-        if self._provider in ("openai", "gemini", "local"):
+        if self._provider in self._OPENAI_COMPAT_PROVIDERS:
             for chunk in self._openai_stream(prompt, system):
                 yield chunk
             return
@@ -120,7 +134,7 @@ class LLMService:
         if self._provider == "anthropic":
             # Anthropic does not have an embeddings API — fall back to empty
             return [[] for _ in texts]
-        if self._provider in ("openai", "gemini", "local"):
+        if self._provider in self._OPENAI_COMPAT_PROVIDERS:
             return self._openai_embed(texts)
         return [[] for _ in texts]
 
@@ -163,6 +177,87 @@ class LLMService:
         with client.messages.stream(**kwargs) as stream:
             yield from stream.text_stream
 
+    def _resolve_base_url(self) -> str | None:
+        """Resolve the effective base URL for the current provider."""
+        if self._settings.ai_api_base:
+            return self._settings.ai_api_base
+        # Default base URLs for providers that need them
+        if self._provider == "ollama":
+            return "http://localhost:11434/v1"
+        return None
+
+    def test_connection(self) -> dict[str, Any]:
+        """Actually test the connection to the configured provider.
+
+        Returns a dict with ``ok`` (bool) and ``message`` (str).
+        For Ollama, validates the model exists on the server.
+        """
+        status = self.status()
+        if not status["configured"]:
+            return {"ok": False, "message": "AI provider is not configured"}
+
+        try:
+            if self._provider == "anthropic":
+                # Send a minimal request to verify credentials
+                client = self._get_anthropic_client()
+                client.messages.create(
+                    model=self._settings.ai_model,
+                    max_tokens=1,
+                    messages=[{"role": "user", "content": "hi"}],
+                )
+                return {"ok": True, "message": f"Connected: {self._provider} ({self._settings.ai_model})"}
+
+            if self._provider in self._OPENAI_COMPAT_PROVIDERS:
+                client = self._get_openai_client()
+                if self._provider == "ollama":
+                    # Ollama supports model listing — verify the model exists
+                    base = self._resolve_base_url() or "http://localhost:11434/v1"
+                    # Strip /v1 to get the Ollama API root
+                    ollama_root = base.rstrip("/")
+                    if ollama_root.endswith("/v1"):
+                        ollama_root = ollama_root[:-3]
+                    import urllib.request
+                    import json as _json
+
+                    req = urllib.request.Request(f"{ollama_root}/api/tags", method="GET")
+                    try:
+                        with urllib.request.urlopen(req, timeout=5) as resp:
+                            data = _json.loads(resp.read())
+                    except (urllib.error.URLError, OSError) as exc:
+                        return {"ok": False, "message": f"Cannot reach Ollama at {ollama_root}: {exc}"}
+                    available = [m["name"] for m in data.get("models", [])]
+                    model = self._settings.ai_model
+                    # Ollama model names can be "llama3.2" or "llama3.2:latest"
+                    matched = any(
+                        model == name or model == name.split(":")[0]
+                        for name in available
+                    )
+                    if not matched:
+                        short_list = ", ".join(available[:8])
+                        suffix = f" (and {len(available) - 8} more)" if len(available) > 8 else ""
+                        return {
+                            "ok": False,
+                            "message": f"Ollama is running but model '{model}' not found. Available: {short_list}{suffix}",
+                        }
+                    return {"ok": True, "message": f"Connected: Ollama ({model})"}
+                else:
+                    # For other OpenAI-compat providers, do a minimal completion
+                    client.chat.completions.create(
+                        model=self._settings.ai_model,
+                        messages=[{"role": "user", "content": "hi"}],
+                        max_tokens=1,
+                    )
+                    return {"ok": True, "message": f"Connected: {self._provider} ({self._settings.ai_model})"}
+
+        except Exception as exc:
+            msg = str(exc)
+            # Truncate long error messages
+            if len(msg) > 200:
+                msg = msg[:200] + "..."
+            return {"ok": False, "message": f"Connection failed: {msg}"}
+
+        return {"ok": False, "message": f"Unknown provider: {self._provider}"}
+
     # -- OpenAI backend (also OpenRouter, Ollama) ---------------------------
 
     def _get_openai_client(self):
@@ -173,8 +268,9 @@ class LLMService:
                 "Install it with: pip install 'pyrite[ai]'"
             )
         kwargs: dict[str, Any] = {"api_key": self._settings.ai_api_key or "no-key"}
-        if self._settings.ai_api_base:
-            kwargs["base_url"] = self._settings.ai_api_base
+        base_url = self._resolve_base_url()
+        if base_url:
+            kwargs["base_url"] = base_url
         return mod.OpenAI(**kwargs)
 
     def _openai_complete(self, prompt: str, system: str | None, max_tokens: int) -> str:

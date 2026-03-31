@@ -488,6 +488,10 @@ class ApiClient {
 		return this.request('/api/ai/status');
 	}
 
+	async testAIConnection(): Promise<{ ok: boolean; message: string }> {
+		return this.request('/api/ai/test', { method: 'POST' });
+	}
+
 	async aiSummarize(entryId: string, kbName: string): Promise<AISummarizeResponse> {
 		return this.request('/api/ai/summarize', {
 			method: 'POST',
