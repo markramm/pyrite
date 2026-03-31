@@ -143,6 +143,7 @@ class TypeSchema:
     required: list[str] = field(default_factory=lambda: ["title"])
     optional: list[str] = field(default_factory=list)
     subdirectory: str = ""
+    file_pattern: str = ""  # e.g. "{date}--{slug}.md" for custom filenames
     fields: dict[str, FieldSchema] = field(default_factory=dict)
     protocols: list[str] = field(default_factory=list)  # ADR-0017: e.g. ["temporal", "assignable"]
     layout: str = ""  # "document" or "record"
@@ -164,6 +165,34 @@ class TypeSchema:
             return ""
         return expand_subdirectory_template(self.subdirectory, entry)
 
+    def resolve_filename(self, entry: Entry) -> str | None:
+        """Return a custom filename for the entry, or None to use default.
+
+        Supported placeholders:
+          - ``{id}`` — entry ID
+          - ``{slug}`` — entry ID (alias)
+          - ``{date}`` — entry date field (YYYY-MM-DD)
+          - ``{title}`` — slugified title
+          - ``{type}`` — entry type
+
+        Example: ``file_pattern: "{date}--{slug}.md"``
+        """
+        if not self.file_pattern:
+            return None
+        from ..schema import generate_entry_id
+
+        replacements = {
+            "id": entry.id,
+            "slug": entry.id,
+            "date": getattr(entry, "date", "") or "",
+            "title": generate_entry_id(entry.title),
+            "type": entry.entry_type,
+        }
+        try:
+            return self.file_pattern.format(**replacements)
+        except (KeyError, IndexError):
+            return None
+
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"description": self.description}
         if self.required != ["title"]:
@@ -172,6 +201,8 @@ class TypeSchema:
             result["optional"] = self.optional
         if self.subdirectory:
             result["subdirectory"] = self.subdirectory
+        if self.file_pattern:
+            result["file_pattern"] = self.file_pattern
         if self.fields:
             result["fields"] = {name: fs.to_dict() for name, fs in self.fields.items()}
         if self.protocols:

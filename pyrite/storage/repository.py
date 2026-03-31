@@ -113,6 +113,19 @@ class KBRepository:
             return self.path / subdir / f"{entry_id}.md"
         return self.path / f"{entry_id}.md"
 
+    def _resolve_file_path(self, entry: Entry, subdir: str | None) -> Path:
+        """Resolve the file path for an entry, respecting file_pattern if set."""
+        schema = self.config.kb_schema
+        type_schema = schema.get_type_schema(entry.entry_type)
+        if type_schema:
+            custom_name = type_schema.resolve_filename(entry)
+            if custom_name:
+                # file_pattern provides the full filename (with .md)
+                if subdir:
+                    return self.path / subdir / custom_name
+                return self.path / custom_name
+        return self._get_file_path(entry.id, subdir)
+
     def _infer_subdir(self, entry: Entry) -> str | None:
         """Infer subdirectory for entries based on type.
 
@@ -205,7 +218,8 @@ class KBRepository:
         if subdir is None:
             subdir = self._infer_subdir(entry)
 
-        file_path = self._get_file_path(entry.id, subdir)
+        # Check for custom file_pattern in the type schema
+        file_path = self._resolve_file_path(entry, subdir)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Stamp current schema version on save
