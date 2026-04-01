@@ -8,7 +8,7 @@ tags:
 - cascade
 importance: 5
 kind: bug
-status: in_progress
+status: completed
 priority: critical
 effort: S
 rank: 0

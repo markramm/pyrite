@@ -15,16 +15,23 @@ effort: M
 rank: 0
 ---
 
-## Problem
+## Refined Design
 
-When a timeline event corresponds to a RAMM Substack article (e.g. Bovino events to 'Border Patrol: A Criminal Organization', detention events to 'After the Arrest' series), the event page should link to it. This is described as a major Cascade feature but currently doesn't exist.
+Cross-KB wikilinks + backlinks, not a new data model.
 
-## Solution
+### How it works
+1. Substack articles already exist as KB entries (ramm KB)
+2. Add wikilinks from article entries to timeline event IDs: [[2025-01-20--executive-orders-blitz]]
+3. Backlink indexing already picks these up as cross-KB links
+4. Site cache renderer shows backlinks from whitelisted KBs as a 'Related Articles' section with distinct styling
 
-1. Add a related_articles field to event entries (list of URLs or entry refs)
-2. Render 'Read the investigation' links on event pages
-3. Could use the existing links/outlinks system with a 'written_about_in' relationship type
+### Implementation
+1. Add trusted_backlink_kbs config (whitelist of KBs whose backlinks get promoted to 'Related Articles')
+2. In site cache _render_entry(): filter backlinks by source KB, render whitelisted ones as 'Read the investigation' links with article title and outlet
+3. Add the actual wikilinks from ramm KB article entries to cascade-timeline event IDs (content task)
 
-## Scope
+### Why DB-only backlinks
+Same pattern as social plugin likes — the link relationship is DB-indexed, not stored in the target entry's frontmatter. The source entry (article) contains the wikilink; the target (event) discovers it via backlink query. No changes needed to event files.
 
-Cascade-specific feature, but the underlying 'related external content' pattern could be Pyrite-general (any KB might want to link entries to external articles).
+## Status
+Design refined. Ready for implementation.

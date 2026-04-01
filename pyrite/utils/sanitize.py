@@ -27,8 +27,8 @@ def sanitize_filename(entry_id: str) -> str:
     safe = safe.lstrip(".")
     # Collapse runs of underscores
     safe = re.sub(r"_+", "_", safe)
-    # Strip leading/trailing underscores
-    safe = safe.strip("_")
+    # Strip trailing underscores (preserve leading _ for special entries like _about, _homepage)
+    safe = safe.rstrip("_")
     # Fallback for empty result
     if not safe:
         safe = "_unnamed"
