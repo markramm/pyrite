@@ -59,6 +59,13 @@ class KBRepository:
                     fm = load_yaml(text[3:end])
                     if fm and isinstance(fm, dict):
                         body = text[end + 3 :].strip()
+                        # Defensive: strip duplicated frontmatter fields from body start
+                        # (e.g., "type: timeline_event" leaked into body by migration error)
+                        if body and ":" in body.split("\n", 1)[0]:
+                            first_line = body.split("\n", 1)[0].strip()
+                            key = first_line.split(":", 1)[0].strip()
+                            if key in fm:
+                                body = body.split("\n", 1)[1].strip() if "\n" in body else ""
                         fm = self._maybe_migrate(fm)
                         fm["body"] = body
                         fm["file_path"] = str(file_path)

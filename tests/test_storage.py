@@ -295,6 +295,50 @@ class TestKBRepository:
         assert loaded is not None
         assert loaded.title == "John Smith"
 
+    def test_load_strips_duplicated_frontmatter_from_body(self, events_kb):
+        """Frontmatter field duplicated in body should be stripped on load."""
+        # Write a file with 'type: event' leaked into body (migration error pattern)
+        md = """---
+type: event
+id: 2025-01-20--test-leak
+date: '2025-01-20'
+title: Test Leak
+importance: 5
+status: confirmed
+---
+type: event
+
+The actual body content starts here.
+"""
+        (events_kb.config.path / "events").mkdir(exist_ok=True)
+        (events_kb.config.path / "events" / "2025-01-20--test-leak.md").write_text(md)
+
+        loaded = events_kb.load("2025-01-20--test-leak")
+        assert loaded is not None
+        assert not loaded.body.startswith("type:")
+        assert "actual body content" in loaded.body
+
+    def test_load_preserves_body_with_colon_that_is_not_frontmatter_key(self, events_kb):
+        """Body lines with colons that aren't frontmatter keys should be preserved."""
+        md = """---
+type: event
+id: 2025-01-20--colon-body
+date: '2025-01-20'
+title: Colon Body
+importance: 5
+status: confirmed
+---
+Note: this line has a colon but is not a frontmatter key.
+
+More body text.
+"""
+        (events_kb.config.path / "events").mkdir(exist_ok=True)
+        (events_kb.config.path / "events" / "2025-01-20--colon-body.md").write_text(md)
+
+        loaded = events_kb.load("2025-01-20--colon-body")
+        assert loaded is not None
+        assert loaded.body.startswith("Note:")
+
     def test_save_plugin_type_uses_schema_subdirectory(self):
         """Test that plugin types use subdirectory from kb.yaml schema."""
         from pyrite.utils.yaml import dump_yaml_file
