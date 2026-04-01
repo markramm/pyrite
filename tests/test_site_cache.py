@@ -117,6 +117,109 @@ class TestSiteCacheRenderAll:
         assert "index, follow" in html
 
 
+class TestEditLinkVisibility:
+    """Edit on Pyrite links should be hidden for read-only KBs."""
+
+    def test_edit_link_present_for_writable_kb(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert "Edit on Pyrite" in html
+
+    def test_edit_link_hidden_for_read_only_kb(self, tmp_path):
+        kb = KBConfig(name="public-kb", path=tmp_path / "kb", kb_type="generic", read_only=True)
+        config = PyriteConfig(
+            knowledge_bases=[kb],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+        db.register_kb("public-kb", "generic", str(tmp_path / "kb"), "A public KB")
+        db.upsert_entry({
+            "id": "test-entry",
+            "kb_name": "public-kb",
+            "entry_type": "note",
+            "title": "Public Entry",
+            "body": "Read-only content.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        svc = SiteCacheService(config, db)
+        svc.render_all()
+        html = (svc.cache_dir / "public-kb" / "test-entry.html").read_text()
+        assert "Edit on Pyrite" not in html
+        db.close()
+
+
+class TestAboutPageLink:
+    """About link in homepage should only appear when _about entry exists."""
+
+    def test_about_link_hidden_when_no_about_entry(self, tmp_path):
+        kb = KBConfig(name="my-kb", path=tmp_path / "kb", kb_type="generic")
+        config = PyriteConfig(
+            knowledge_bases=[kb],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+        db.register_kb("my-kb", "generic", str(tmp_path / "kb"), "A KB")
+        db.upsert_entry({
+            "id": "_homepage",
+            "kb_name": "my-kb",
+            "entry_type": "note",
+            "title": "My Site",
+            "body": "## The Pattern\n1. **Step** — Do things",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        svc = SiteCacheService(config, db)
+        svc.render_all()
+        html = (svc.cache_dir / "my-kb" / "index.html").read_text()
+        assert "About" not in html or "_about" not in html
+        db.close()
+
+    def test_about_link_shown_when_about_entry_exists(self, tmp_path):
+        kb = KBConfig(name="my-kb", path=tmp_path / "kb", kb_type="generic")
+        config = PyriteConfig(
+            knowledge_bases=[kb],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+        db.register_kb("my-kb", "generic", str(tmp_path / "kb"), "A KB")
+        db.upsert_entry({
+            "id": "_homepage",
+            "kb_name": "my-kb",
+            "entry_type": "note",
+            "title": "My Site",
+            "body": "## The Pattern\n1. **Step** — Do things",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        db.upsert_entry({
+            "id": "_about",
+            "kb_name": "my-kb",
+            "entry_type": "note",
+            "title": "About & Methodology",
+            "body": "Our methodology...",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        svc = SiteCacheService(config, db)
+        svc.render_all()
+        html = (svc.cache_dir / "my-kb" / "index.html").read_text()
+        assert "_about" in html
+        db.close()
+
+
 class TestXSSPrevention:
     """Verify that malicious content is properly escaped in rendered HTML."""
 

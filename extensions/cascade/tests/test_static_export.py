@@ -123,6 +123,26 @@ class TestStaticExport:
         assert len(result["timeline"]) == 1
         assert result["timeline"][0]["id"] == "event-2"
 
+    def test_sources_included_in_export(self, setup):
+        """Sources stored in the source table should appear in export."""
+        from pyrite_cascade.static_export import export_timeline
+
+        # Create an event with sources via the service layer (which writes to source table)
+        setup["svc"].create_entry(
+            "test", "event-sourced", "Sourced Event", "timeline_event",
+            date="2025-04-01", importance=7,
+            sources=[
+                {"title": "Washington Post", "url": "https://wapo.com/article", "outlet": "WaPo"},
+                {"title": "NPR Report", "url": "https://npr.org/report", "outlet": "NPR"},
+            ],
+        )
+
+        result = export_timeline(setup["db"], "test")
+        event = next(e for e in result["timeline"] if e["id"] == "event-sourced")
+        assert len(event["sources"]) == 2
+        assert event["sources"][0]["title"] == "Washington Post"
+        assert result["stats"]["total_sources"] >= 2
+
     def test_min_importance_filter(self, setup):
         from pyrite_cascade.static_export import export_timeline
 

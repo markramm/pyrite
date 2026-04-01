@@ -35,6 +35,27 @@ def export_timeline(
     tag_counter: Counter = Counter()
     total_sources = 0
 
+    # Pre-fetch all sources for this KB in one query (avoids N+1)
+    _sources_by_entry: dict[str, list[dict]] = {}
+    try:
+        _backend = getattr(db, "_backend", None)
+        if _backend:
+            from sqlalchemy import text
+            rows = _backend._session.execute(
+                text("SELECT entry_id, title, url, outlet, date, verified FROM source WHERE kb_name = :kb"),
+                {"kb": kb_name},
+            ).fetchall()
+            for row in rows:
+                eid = row[0]
+                src = {"title": row[1] or "", "url": row[2] or "", "outlet": row[3] or ""}
+                if row[4]:
+                    src["date"] = row[4]
+                if row[5]:
+                    src["verified"] = True
+                _sources_by_entry.setdefault(eid, []).append(src)
+    except Exception:
+        logger.warning("Could not batch-load sources for export", exc_info=True)
+
     for etype in event_types:
         results = db.list_entries(kb_name=kb_name, entry_type=etype, limit=10000)
         for r in results:
@@ -60,7 +81,8 @@ def export_timeline(
             if isinstance(tags, str):
                 tags = [t.strip() for t in tags.split(",") if t.strip()]
 
-            sources = r.get("sources") or meta.get("sources") or []
+            entry_id = r.get("id", "")
+            sources = r.get("sources") or _sources_by_entry.get(entry_id) or meta.get("sources") or []
 
             event = {
                 "id": r.get("id", ""),

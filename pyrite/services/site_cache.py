@@ -426,6 +426,10 @@ class SiteCacheService:
                 for ol in self.db.get_outlinks(eid, kb_name):
                     outlinks_map[eid].append(ol)
 
+            # Check if KB is read-only (hide edit links on public sites)
+            kb_config = self.config.get_kb(kb_name)
+            is_read_only = kb_config.read_only if kb_config else False
+
             # Render each entry using pre-loaded data
             for entry in entries:
                 try:
@@ -434,6 +438,7 @@ class SiteCacheService:
                         kb_name, entry,
                         backlinks_map.get(eid, []),
                         outlinks_map.get(eid, []),
+                        read_only=is_read_only,
                     )
                     stats["entries"] += 1
                 except Exception as e:
@@ -510,7 +515,8 @@ class SiteCacheService:
         homepage = self.db.get_entry("_homepage", kb_name)
         if homepage and homepage.get("body"):
             title = homepage.get("title", kb_name)
-            body = _render_designed_homepage(homepage, kb_name, total)
+            has_about = self.db.get_entry("_about", kb_name) is not None
+            body = _render_designed_homepage(homepage, kb_name, total, has_about=has_about)
             page_desc = homepage.get("summary") or desc or f"{total} entries in the {kb_name} knowledge base."
         else:
             # Auto-generated KB index
@@ -547,7 +553,7 @@ class SiteCacheService:
         )
         (self.cache_dir / kb_name / "index.html").write_text(html, encoding="utf-8")
 
-    def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list):
+    def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list, *, read_only: bool = False):
         """Render a single entry page."""
         entry_id = entry["id"]
         title = entry.get("title", entry_id)
@@ -608,9 +614,10 @@ class SiteCacheService:
         if date:
             meta_parts.append(date)
         meta_parts.append(f'<span class="reading-time">{reading_mins} min read</span>')
-        meta_parts.append(
-            f'<a href="/entries/{_esc(entry_id)}?kb={_esc(kb_name)}">Edit on Pyrite</a>'
-        )
+        if not read_only:
+            meta_parts.append(
+                f'<a href="/entries/{_esc(entry_id)}?kb={_esc(kb_name)}">Edit on Pyrite</a>'
+            )
         meta_html = f'<div class="meta">{" &middot; ".join(meta_parts)}</div>'
 
         body = (
@@ -638,7 +645,7 @@ class SiteCacheService:
         (kb_dir / f"{sanitize_filename(entry_id)}.html").write_text(html, encoding="utf-8")
 
 
-def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:
+def _render_designed_homepage(homepage: dict, kb_name: str, total: int, *, has_about: bool = False) -> str:
     """Render a designed homepage from a _homepage entry's structured markdown."""
     body_md = homepage.get("body") or ""
     title = homepage.get("title", kb_name)
@@ -672,15 +679,11 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int) -> str:
         <h1 style="font-size:2.75rem;letter-spacing:-0.03em;margin-bottom:0.75rem;line-height:1.1">{_esc(title)}</h1>
         {f'<p style="font-size:1.125rem;color:var(--ink-soft);max-width:38rem;margin:0 auto 1.5rem auto;line-height:1.6">{_md_inline(intro)}</p>' if intro else ''}
         <div style="display:flex;justify-content:center;gap:2.5rem;margin:2rem 0">
-            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">{total:,}</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Verified Events</div></div>
-            <div style="width:1px;background:var(--border)"></div>
-            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">15,500+</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Source Citations</div></div>
-            <div style="width:1px;background:var(--border)"></div>
-            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">7,800+</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Actors Tracked</div></div>
+            <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">{total:,}</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Events</div></div>
         </div>
         <div style="display:flex;justify-content:center;gap:0.75rem;margin-top:1.5rem">
             <a href="/viewer/" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;background:var(--gold);color:var(--surface);border-radius:0.5rem;font-weight:600;font-size:0.875rem;text-decoration:none">Explore the Timeline</a>
-            <a href="/site/{_esc(kb_name)}/_about" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;border:1px solid var(--border-light);color:var(--ink-soft);border-radius:0.5rem;font-weight:500;font-size:0.875rem;text-decoration:none">About &amp; Methodology</a>
+            {'<a href="/site/' + _esc(kb_name) + '/_about" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;border:1px solid var(--border-light);color:var(--ink-soft);border-radius:0.5rem;font-weight:500;font-size:0.875rem;text-decoration:none">About &amp; Methodology</a>' if has_about else ''}
         </div>
     </div>'''
 
