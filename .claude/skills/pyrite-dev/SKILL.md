@@ -24,6 +24,59 @@ Thinking "skip this just once"? That's rationalization. These exist because skip
 
 ---
 
+## Git Workflow (ADR-0025)
+
+### Branches
+
+| Branch | Purpose | Deploys to |
+|--------|---------|------------|
+| **`dev`** | Daily development (default) | demo.pyrite.wiki (auto on CI pass) |
+| **`main`** | Stable releases only | capturecascade.org, early adopters, PyPI |
+| **`feature/*`** | Large multi-day changes (optional) | Nothing — merge to `dev` when ready |
+
+**All work happens on `dev`.** You should be on the `dev` branch. Check with `git branch --show-current` if unsure.
+
+### Committing
+
+Commit early and often to `dev`. The pre-commit hooks (ruff, tests) run automatically. Small, focused commits are better than large batches.
+
+### Releasing (dev → main)
+
+Only merge `dev` → `main` when the user explicitly asks to release. The process:
+
+```bash
+# 1. Ensure CI is green on dev
+# 2. Merge to main
+git checkout main
+git merge dev
+# 3. Update version in pyproject.toml (remove .dev0 suffix)
+# 4. Commit version bump
+# 5. Tag
+git tag -a v0.X.0 -m "v0.X.0: summary"
+git push && git push --tags
+# 6. Create GitHub release (triggers PyPI publish)
+# 7. Switch back to dev and bump to next dev version
+git checkout dev
+# Edit pyproject.toml to 0.X+1.0.dev0
+git commit -am "Bump version to 0.X+1.0.dev0"
+git push
+```
+
+### Deploying
+
+- **Demo** (dev): auto-deploys on CI pass, or manually: `bash ~/pyrite/deploy/demo/update.sh`
+- **Cascade** (main): update `PYRITE_VERSION` in `cascade-kb/deploy/Dockerfile`, rebuild
+- **PyPI**: triggered automatically by GitHub release
+
+### Hotfixes
+
+For urgent fixes to a release:
+1. Cherry-pick the fix from `dev` to `main`
+2. Bump patch version, tag (e.g., `v0.21.1`)
+3. Deploy
+
+---
+
 ## Development Process
 
 ### Before Writing Code
@@ -291,7 +344,7 @@ See `kb/adrs/` for full details:
 
 For wave planning, agent launch checklists, and the merge protocol, see [parallel-agents.md](parallel-agents.md).
 
-**Critical: Do NOT use `isolation: "worktree"`.** Agents work directly on main. Edit tool retries on conflict are cheaper than worktree merge ceremonies. See CLAUDE.md and parallel-agents.md.
+**Critical: Do NOT use `isolation: "worktree"`.** Agents work directly on the current branch (usually `dev`). Edit tool retries on conflict are cheaper than worktree merge ceremonies. See CLAUDE.md and parallel-agents.md.
 
 **Quick rules:**
 - **No worktrees** — agents write directly to the working tree, no isolation parameter
