@@ -9,7 +9,7 @@ tags:
 - ux
 importance: 5
 kind: feature
-status: todo
+status: completed
 priority: high
 effort: M
 rank: 0

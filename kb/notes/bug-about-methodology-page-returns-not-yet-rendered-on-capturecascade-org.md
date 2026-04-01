@@ -8,20 +8,27 @@ tags:
 - cascade
 importance: 5
 kind: bug
-status: todo
+status: in_progress
 priority: critical
 effort: S
 rank: 0
 ---
 
+## Status
+
+Link fix shipped: the homepage now only shows the About link when an _about entry exists in the KB.
+
+Remaining work: create the _about entry in cascade-timeline KB with methodology content, then re-render the site cache.
+
 ## Problem
 
-/site/cascade-timeline/_about displays 'Page not yet rendered. Run site cache render.' on a blank white page with no site chrome. This is linked from the homepage twice. It's the credibility page a journalist evaluating sourcing standards would check first.
+/site/cascade-timeline/_about displays 'Page not yet rendered.' This is linked from the homepage twice. It's the credibility page a journalist evaluating sourcing standards would check first.
 
-## Fix
+## Root Cause
 
-Either the about page entry doesn't exist in the KB, or the site cache render didn't include it. Need to create the entry and re-render, or fix the render pipeline to include special pages.
+The _about entry does not exist in the cascade-timeline KB. The link was hardcoded unconditionally in _render_designed_homepage(). Fixed: link is now conditional on entry existence.
 
-## Scope
+## Remaining
 
-Cascade-specific content, but the site cache render gap is Pyrite-general.
+1. Create _about entry in cascade-timeline KB with methodology content
+2. Re-render site cache

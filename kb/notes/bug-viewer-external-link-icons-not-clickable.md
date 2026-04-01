@@ -8,7 +8,7 @@ tags:
 - cascade
 importance: 5
 kind: bug
-status: todo
+status: completed
 priority: medium
 effort: XS
 rank: 0

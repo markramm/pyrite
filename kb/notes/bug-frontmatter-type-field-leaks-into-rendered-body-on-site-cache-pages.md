@@ -9,32 +9,24 @@ tags:
 - critical
 importance: 5
 kind: bug
-status: todo
+status: completed
 priority: critical
 effort: S
 rank: 0
 ---
 
-## Problem
+## Status
 
-Every event page on capturecascade.org starts with 'type: timeline_event' rendered as visible text. This pollutes:
-- Every event page body
-- Every og:description meta tag
-- Every JSON-LD structured data description
-- Global search API snippets
+Investigation complete. The DB body content is clean (0 of 4,596 entries have type: in body). The bug exists only on the deployed site from a stale render. A fresh re-render with the current code will fix it.
 
 ## Root Cause
 
-The site cache export/render step is including the frontmatter type field in the body output. The body content starts with the raw YAML field instead of the actual event description.
+The live site at capturecascade.org was rendered with an older version of the code that included frontmatter fields in the body output. The current site_cache.py reads body from the DB (which is clean). No code fix needed — just a re-deploy.
 
 ## Fix
 
-Trace the site cache render pipeline. The body should be stripped of any frontmatter fields before rendering. Check the export service, site cache builder, and/or the markdown-to-HTML renderer.
+Re-render the site cache: POST /api/admin/site/render (no CLI command exists for this yet).
 
-## Impact
+## Related
 
-Affects all 4,529 event pages. Fixing this single issue improves appearance of every page and every social share.
-
-## Scope
-
-Pyrite-general: affects any site cache deployment, not just Cascade.
+Consider adding a pyrite site-cache render CLI command for easier deployment.
