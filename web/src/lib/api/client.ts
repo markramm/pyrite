@@ -59,6 +59,7 @@ import type {
 	RepoInfo,
 	RepoListResponse,
 	SyncResult,
+	TypeSchemasResponse,
 	UpdateEntryRequest,
 	UpdateResponse,
 	UserListResponse,
@@ -285,6 +286,11 @@ class ApiClient {
 	async getEntryTypes(kb?: string): Promise<EntryTypesResponse> {
 		const params = kb ? `?kb=${encodeURIComponent(kb)}` : '';
 		return this.request(`/api/entries/types${params}`);
+	}
+
+	async getTypeSchemas(kb?: string): Promise<TypeSchemasResponse> {
+		const params = kb ? `?kb=${encodeURIComponent(kb)}` : '';
+		return this.request(`/api/entries/type-schemas${params}`);
 	}
 
 	async getEntry(id: string, options: { kb?: string; with_links?: boolean } = {}): Promise<EntryResponse> {

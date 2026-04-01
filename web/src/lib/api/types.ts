@@ -129,6 +129,25 @@ export interface EntryTypesResponse {
 	types: string[];
 }
 
+export interface TypeFieldSchema {
+	type: string;
+	description?: string;
+	required?: boolean;
+	default?: unknown;
+	options?: string[];
+}
+
+export interface TypeSchemaInfo {
+	description: string;
+	fields: Record<string, TypeFieldSchema>;
+	subdirectory?: string;
+	file_pattern?: string;
+}
+
+export interface TypeSchemasResponse {
+	types: Record<string, TypeSchemaInfo>;
+}
+
 export interface CreateEntryRequest {
 	kb: string;
 	entry_type?: string;
