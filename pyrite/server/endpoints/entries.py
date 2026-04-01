@@ -14,7 +14,9 @@ from ...exceptions import (
     ValidationError,
 )
 from ...services.kb_service import KBService
+from ...config import PyriteConfig
 from ..api import (
+    get_config,
     get_kb_service,
     get_worktree_resolver,
     limiter,
@@ -109,6 +111,128 @@ def list_entry_types(
     """Get distinct entry types."""
     types = svc.get_distinct_types(kb_name=kb)
     return EntryTypesResponse(types=types)
+
+
+@router.get("/entries/type-schemas")
+@limiter.limit("100/minute")
+def list_type_schemas(
+    request: Request,
+    kb: str | None = Query(None, description="KB name to get type schemas for"),
+    config: "PyriteConfig" = Depends(get_config),
+):
+    """Return available entry types with field schemas for a KB.
+
+    Merges type information from three sources:
+    1. KB-level kb.yaml type definitions (highest priority)
+    2. Plugin-registered entry types and presets
+    3. Core built-in types (fallback)
+    """
+    from ...schema.core_types import CORE_TYPES, CORE_TYPE_METADATA
+
+    result: dict[str, dict] = {}
+
+    # Layer 1: Core types as baseline
+    for type_name, type_info in CORE_TYPES.items():
+        if type_name == "collection":
+            continue  # internal type, skip
+        fields = {}
+        meta = CORE_TYPE_METADATA.get(type_name, {})
+        field_descs = meta.get("field_descriptions", {})
+        for fname, ftype in type_info.get("fields", {}).items():
+            if fname in ("tags", "links"):
+                continue
+            fields[fname] = {
+                "type": _python_type_to_field_type(ftype),
+                "description": field_descs.get(fname, ""),
+            }
+        result[type_name] = {
+            "description": type_info.get("description", ""),
+            "fields": fields,
+            "subdirectory": type_info.get("subdirectory", ""),
+        }
+
+    # Layer 2: Plugin entry types and presets
+    try:
+        from ...plugins import get_registry
+
+        registry = get_registry()
+
+        # Plugin presets — rich type definitions
+        for _preset_name, preset_data in registry.get_all_kb_presets().items():
+            for type_name, type_info in preset_data.get("types", {}).items():
+                if type_name not in result:
+                    result[type_name] = {"description": "", "fields": {}, "subdirectory": ""}
+                result[type_name]["description"] = type_info.get("description", result[type_name]["description"])
+                result[type_name]["subdirectory"] = type_info.get("subdirectory", result[type_name]["subdirectory"])
+                # Add optional fields as field definitions
+                for fname in type_info.get("optional", []):
+                    if fname not in result[type_name]["fields"] and fname not in ("importance", "tags", "links"):
+                        result[type_name]["fields"][fname] = {
+                            "type": _guess_field_type(fname),
+                            "description": "",
+                        }
+
+        # Plugin type metadata (field_descriptions, ai_instructions)
+        for type_name, meta in registry.get_all_type_metadata().items():
+            if type_name in result:
+                for fname, desc in meta.get("field_descriptions", {}).items():
+                    if fname in result[type_name]["fields"]:
+                        result[type_name]["fields"][fname]["description"] = desc
+    except Exception:
+        logger.debug("Failed to load plugin type metadata", exc_info=True)
+
+    # Layer 3: KB-level schema overrides (highest priority)
+    if kb:
+        kb_config = config.get_kb(kb)
+        if kb_config:
+            schema = kb_config.kb_schema
+            for type_name, ts in schema.types.items():
+                if type_name not in result:
+                    result[type_name] = {"description": "", "fields": {}, "subdirectory": ""}
+                if ts.description:
+                    result[type_name]["description"] = ts.description
+                if ts.subdirectory:
+                    result[type_name]["subdirectory"] = ts.subdirectory
+                if ts.file_pattern:
+                    result[type_name]["file_pattern"] = ts.file_pattern
+                # Rich field schemas from kb.yaml
+                for fname, fs in ts.fields.items():
+                    result[type_name]["fields"][fname] = fs.to_dict()
+                    if fs.description:
+                        result[type_name]["fields"][fname]["description"] = fs.description
+                # Optional fields listed in kb.yaml
+                for fname in ts.optional:
+                    if fname not in result[type_name]["fields"] and fname not in ("importance", "tags", "links"):
+                        result[type_name]["fields"][fname] = {
+                            "type": _guess_field_type(fname),
+                            "description": ts.field_descriptions.get(fname, ""),
+                        }
+
+    return {"types": result}
+
+
+def _python_type_to_field_type(type_str: str) -> str:
+    """Map Python type annotations to field schema types."""
+    if "list" in type_str:
+        return "list"
+    if type_str in ("int", "float"):
+        return "number"
+    if type_str == "bool":
+        return "checkbox"
+    return "text"
+
+
+def _guess_field_type(field_name: str) -> str:
+    """Guess field type from the field name convention."""
+    if field_name in ("date", "opened_date", "closed_date", "acquisition_date", "obtained_date", "founded"):
+        return "date"
+    if field_name in ("amount", "value", "importance"):
+        return "number"
+    if field_name in ("actors", "parties", "affiliations", "source_refs", "participants"):
+        return "list"
+    if field_name in ("url",):
+        return "text"
+    return "text"
 
 
 @router.get("/entries/titles", response_model=EntryTitlesResponse)
