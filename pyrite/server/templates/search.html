@@ -2,21 +2,36 @@
 {% block body %}
 <h1>Search</h1>
 <input class="search-input" id="q" type="text" placeholder="Search across all knowledge bases..." autofocus>
+<div class="search-controls" style="display:flex;gap:0.75rem;align-items:center;margin:0.75rem 0">
+  <select id="sort" style="padding:0.375rem 0.625rem;background:var(--surface-raised);border:1px solid var(--border);border-radius:0.375rem;color:var(--ink-soft);font-size:0.8125rem;font-family:inherit">
+    <option value="relevance">Sort: Relevance</option>
+    <option value="date_desc">Sort: Newest first</option>
+    <option value="date_asc">Sort: Oldest first</option>
+  </select>
+</div>
 <div class="search-meta" id="meta"></div>
 <div class="results" id="results"></div>
+<div id="pagination" style="display:flex;justify-content:center;gap:1rem;margin-top:1.5rem"></div>
 {% endblock %}
 {% block extra_js %}
 (function() {
   var input = document.getElementById('q');
   var results = document.getElementById('results');
   var meta = document.getElementById('meta');
+  var sortSelect = document.getElementById('sort');
+  var pagination = document.getElementById('pagination');
   var timer;
+  var currentPage = 1;
+  var pageSize = 50;
 
   var params = new URLSearchParams(window.location.search);
   var initialQ = params.get('q');
+  var initialSort = params.get('sort') || 'relevance';
+  sortSelect.value = initialSort;
   if (initialQ) {
     input.value = initialQ;
-    doSearch(initialQ);
+    currentPage = parseInt(params.get('page')) || 1;
+    doSearch(initialQ, currentPage);
   }
 
   input.addEventListener('input', function() {
@@ -25,34 +40,60 @@
     if (!q) {
       results.innerHTML = '';
       meta.textContent = '';
+      pagination.innerHTML = '';
       history.replaceState(null, '', '/site/search');
       return;
     }
-    timer = setTimeout(function() { doSearch(q); }, 300);
+    currentPage = 1;
+    timer = setTimeout(function() { doSearch(q, 1); }, 300);
   });
 
-  function doSearch(q) {
-    history.replaceState(null, '', '/site/search?q=' + encodeURIComponent(q));
-    meta.textContent = 'Searching...';
+  sortSelect.addEventListener('change', function() {
+    var q = input.value.trim();
+    if (q) { currentPage = 1; doSearch(q, 1); }
+  });
 
-    fetch('/api/search?q=' + encodeURIComponent(q) + '&mode=hybrid&limit=50')
+  function updateUrl(q, page) {
+    var p = new URLSearchParams();
+    p.set('q', q);
+    if (sortSelect.value !== 'relevance') p.set('sort', sortSelect.value);
+    if (page > 1) p.set('page', String(page));
+    history.replaceState(null, '', '/site/search?' + p.toString());
+  }
+
+  function doSearch(q, page) {
+    updateUrl(q, page);
+    meta.textContent = 'Searching...';
+    var offset = (page - 1) * pageSize;
+    var sortParam = '';
+    if (sortSelect.value === 'date_desc') sortParam = '&sort_by=date&sort_order=desc';
+    else if (sortSelect.value === 'date_asc') sortParam = '&sort_by=date&sort_order=asc';
+
+    fetch('/api/search?q=' + encodeURIComponent(q) + '&mode=hybrid&limit=' + pageSize + '&offset=' + offset + sortParam)
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var items = data.results || [];
-        meta.textContent = items.length + ' result' + (items.length !== 1 ? 's' : '') + ' for "' + q + '"';
+        var total = data.count || items.length;
+        var showing = offset + items.length;
+        meta.textContent = (total > pageSize ? 'Showing ' + (offset+1) + '-' + showing + ' of ' : '') + total + ' result' + (total !== 1 ? 's' : '') + ' for \u201c' + q + '\u201d';
 
         if (!items.length) {
           results.innerHTML = '<div class="empty-state">No results found.</div>';
+          pagination.innerHTML = '';
           return;
         }
 
         results.innerHTML = items.map(function(e) {
           var tags = (e.tags || []).slice(0, 3).map(function(t) {
-            return '<span class="tag">' + esc(t) + '</span>';
+            return '<span class="tag" style="cursor:pointer" onclick="event.preventDefault();event.stopPropagation();document.getElementById(\'q\').value=\'' + esc(t).replace(/'/g, "\\'") + '\';document.getElementById(\'q\').dispatchEvent(new Event(\'input\'))">' + esc(t) + '</span>';
           }).join(' ');
 
+          var datePart = e.date ? '<span style="color:var(--ink-faint);font-family:\'JetBrains Mono\',monospace;font-size:0.75rem">' + esc(e.date) + '</span>' : '';
+
           var snippet = '';
-          if (e.body) {
+          if (e.snippet) {
+            snippet = '<div class="result-snippet">' + e.snippet + '</div>';
+          } else if (e.body) {
             var plain = e.body.replace(/[#*_`\[\]]/g, '').substring(0, 150);
             snippet = '<div class="result-snippet">' + esc(plain) + (e.body.length > 150 ? '...' : '') + '</div>';
           }
@@ -62,16 +103,36 @@
             + '<div class="result-meta">'
             + '<span class="badge">' + esc(e.entry_type) + '</span>'
             + '<span>' + esc(e.kb_name) + '</span>'
+            + datePart
             + (tags ? ' ' + tags : '')
             + '</div>'
             + snippet
             + '</a>';
         }).join('');
+
+        /* Pagination */
+        var totalPages = Math.ceil(total / pageSize);
+        if (totalPages > 1) {
+          var btns = '';
+          if (page > 1) btns += '<button class="page-btn" onclick="window._searchPage(' + (page-1) + ')">\u2190 Previous</button>';
+          btns += '<span style="color:var(--ink-muted);font-size:0.8125rem">Page ' + page + ' of ' + totalPages + '</span>';
+          if (page < totalPages) btns += '<button class="page-btn" onclick="window._searchPage(' + (page+1) + ')">Next \u2192</button>';
+          pagination.innerHTML = btns;
+        } else {
+          pagination.innerHTML = '';
+        }
       })
       .catch(function(err) {
         meta.textContent = 'Search failed: ' + err.message;
         results.innerHTML = '';
+        pagination.innerHTML = '';
       });
   }
+
+  window._searchPage = function(p) {
+    currentPage = p;
+    doSearch(input.value.trim(), p);
+    window.scrollTo(0, 0);
+  };
 })();
 {% endblock %}
