@@ -28,6 +28,7 @@ class Source:
     key_facts_confirmed: list[str] = field(default_factory=list)
     confidence: str = "unverified"  # high, medium, low, unverified
     access: str = "public"  # public, paywalled, restricted, offline
+    extra: dict[str, Any] = field(default_factory=dict)  # Preserve unknown fields (publisher, tier, etc.)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -54,11 +55,23 @@ class Source:
             result["confidence"] = self.confidence
         if self.access != "public":
             result["access"] = self.access
+        # Preserve unknown fields round-trip
+        for k, v in self.extra.items():
+            if k not in result:
+                result[k] = v
         return result
+
+    # Known fields consumed by from_dict — everything else goes to extra
+    _KNOWN_KEYS = frozenset({
+        "title", "url", "outlet", "date", "author", "type",
+        "verified", "verified_date", "verified_by", "archive_url",
+        "key_facts_confirmed", "confidence", "access",
+    })
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Source":
-        """Create from dictionary."""
+        """Create from dictionary, preserving unknown fields in extra."""
+        extra = {k: v for k, v in data.items() if k not in cls._KNOWN_KEYS}
         return cls(
             title=data.get("title", ""),
             url=data.get("url", ""),
@@ -73,6 +86,7 @@ class Source:
             key_facts_confirmed=data.get("key_facts_confirmed", []),
             confidence=data.get("confidence", "unverified"),
             access=data.get("access", "public"),
+            extra=extra,
         )
 
 

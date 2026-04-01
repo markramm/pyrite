@@ -224,8 +224,7 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
         meta = self._base_frontmatter()
         if self.date:
             meta["date"] = self.date
-        if self.status != EventStatus.CONFIRMED:
-            meta["status"] = self.status.value
+        meta["status"] = self.status.value
         if self.location:
             meta["location"] = self.location
         if self.participants:
@@ -242,6 +241,13 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
         try:
             status = EventStatus(status_str)
         except ValueError:
+            logger.warning(
+                "Unknown event status '%s' for entry '%s', defaulting to 'confirmed'. "
+                "Valid values: %s",
+                status_str,
+                meta.get("id", "?"),
+                ", ".join(e.value for e in EventStatus),
+            )
             status = EventStatus.CONFIRMED
 
         prov_data = meta.get("provenance")

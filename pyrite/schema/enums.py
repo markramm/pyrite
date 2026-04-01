@@ -16,10 +16,14 @@ class VerificationStatus(StrEnum):
 class EventStatus(StrEnum):
     """Status for timeline events."""
 
+    DRAFT = "draft"
     CONFIRMED = "confirmed"
+    REPORTED = "reported"
+    DEVELOPING = "developing"
     DISPUTED = "disputed"
     ALLEGED = "alleged"
     RUMORED = "rumored"
+    PROVEN = "proven"
 
 
 class ResearchStatus(StrEnum):

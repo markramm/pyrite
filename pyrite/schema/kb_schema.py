@@ -77,7 +77,7 @@ class KBSchema:
                     description=type_data.get("description", ""),
                     required=type_data.get("required", ["title"]),
                     optional=type_data.get("optional", []),
-                    subdirectory=type_data.get("subdirectory", ""),
+                    subdirectory=type_data.get("subdirectory"),
                     file_pattern=type_data.get("file_pattern", ""),
                     fields=fields,
                     protocols=type_data.get("protocols", []),

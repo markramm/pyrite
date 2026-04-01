@@ -94,8 +94,7 @@ class Entry(ABC):
             prov = self.provenance.to_dict()
             if prov:
                 meta["provenance"] = prov
-        if self.importance != 5:
-            meta["importance"] = self.importance
+        meta["importance"] = self.importance
         if self.lifecycle != "active":
             meta["lifecycle"] = self.lifecycle
         if self.metadata:

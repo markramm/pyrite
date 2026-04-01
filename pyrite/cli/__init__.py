@@ -495,8 +495,7 @@ def create_entry(
     extra: dict = {**_file_meta}
     if date:
         extra["date"] = date
-    if importance != 5:
-        extra["importance"] = importance
+    extra["importance"] = importance
     if status:
         extra["status"] = status
     if tags:

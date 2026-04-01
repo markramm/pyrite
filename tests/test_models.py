@@ -93,6 +93,40 @@ This is the event body.
         assert any("importance" in e.lower() for e in errors)
 
 
+    def test_event_status_always_written_to_frontmatter(self):
+        """Status should always appear in frontmatter, even when 'confirmed' (the default)."""
+        event = EventEntry(
+            id="2025-01-20--test", title="Test", date="2025-01-20",
+            status=EventStatus.CONFIRMED,
+        )
+        fm = event.to_frontmatter()
+        assert "status" in fm, "status=confirmed should still be written to frontmatter"
+        assert fm["status"] == "confirmed"
+
+    def test_event_draft_status_round_trip(self):
+        """An event created with status='draft' should round-trip through frontmatter."""
+        event = EventEntry.from_frontmatter(
+            {"id": "2025-01-20--draft", "title": "Draft Event", "date": "2025-01-20",
+             "status": "draft"},
+            body="",
+        )
+        assert event.status == EventStatus.DRAFT
+        fm = event.to_frontmatter()
+        assert fm["status"] == "draft"
+
+    def test_event_status_all_values_round_trip(self):
+        """Every EventStatus value should survive from_frontmatter -> to_frontmatter."""
+        for es in EventStatus:
+            event = EventEntry.from_frontmatter(
+                {"id": f"2025-01-20--{es.value}", "title": es.value,
+                 "date": "2025-01-20", "status": es.value},
+                body="",
+            )
+            assert event.status == es
+            fm = event.to_frontmatter()
+            assert fm["status"] == es.value
+
+
 class TestPersonEntry:
     """Tests for PersonEntry model."""
 

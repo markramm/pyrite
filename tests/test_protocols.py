@@ -273,13 +273,13 @@ class TestImportancePromotion:
         fm = note.to_frontmatter()
         assert fm["importance"] == 8
 
-    def test_note_entry_default_importance_omitted(self):
+    def test_note_entry_default_importance_included(self):
         from pyrite.models.core_types import NoteEntry
 
         note = NoteEntry(id="test", title="Test")
         assert note.importance == 5
         fm = note.to_frontmatter()
-        assert "importance" not in fm
+        assert fm["importance"] == 5
 
     def test_event_entry_importance(self):
         from pyrite.models.core_types import EventEntry

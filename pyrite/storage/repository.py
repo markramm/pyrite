@@ -137,9 +137,13 @@ class KBRepository:
         entry_type = entry.entry_type
 
         # Check KB schema first — covers kb.yaml-defined types with subdirectory
+        # Note: subdirectory="" means "KB root" (override core type default),
+        # while no subdirectory key at all means "use default"
         schema = self.config.kb_schema
         type_schema = schema.get_type_schema(entry_type)
-        if type_schema and type_schema.subdirectory:
+        if type_schema and type_schema.subdirectory is not None:
+            if type_schema.subdirectory == "":
+                return None  # Explicit override: place in KB root
             return type_schema.resolve_subdirectory(entry)
 
         # Check core types for subdirectory mapping

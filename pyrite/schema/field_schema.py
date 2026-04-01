@@ -142,7 +142,7 @@ class TypeSchema:
     description: str = ""
     required: list[str] = field(default_factory=lambda: ["title"])
     optional: list[str] = field(default_factory=list)
-    subdirectory: str = ""
+    subdirectory: str | None = None  # None = use default; "" = explicit KB root
     file_pattern: str = ""  # e.g. "{date}--{slug}.md" for custom filenames
     fields: dict[str, FieldSchema] = field(default_factory=dict)
     protocols: list[str] = field(default_factory=list)  # ADR-0017: e.g. ["temporal", "assignable"]
@@ -161,7 +161,7 @@ class TypeSchema:
 
     def resolve_subdirectory(self, entry: Entry) -> str:
         """Return the resolved subdirectory, expanding template placeholders."""
-        if not self.subdirectory:
+        if not self.subdirectory:  # None or ""
             return ""
         return expand_subdirectory_template(self.subdirectory, entry)
 
@@ -199,7 +199,7 @@ class TypeSchema:
             result["required"] = self.required
         if self.optional:
             result["optional"] = self.optional
-        if self.subdirectory:
+        if self.subdirectory is not None:
             result["subdirectory"] = self.subdirectory
         if self.file_pattern:
             result["file_pattern"] = self.file_pattern
