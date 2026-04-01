@@ -328,7 +328,19 @@
 						</div>
 					</div>
 
-					<!-- Metadata sidebar — hidden on mobile -->
+					<!-- Metadata: collapsible section on mobile, sidebar on desktop -->
+					{#if entryStore.current}
+						<div class="border-t border-zinc-200 p-4 dark:border-zinc-800 lg:hidden">
+							<details>
+								<summary class="cursor-pointer text-sm font-medium text-zinc-500 dark:text-zinc-400">
+									Metadata & Links
+								</summary>
+								<div class="mt-3">
+									<EntryMeta entry={entryStore.current} />
+								</div>
+							</details>
+						</div>
+					{/if}
 					<aside class="hidden w-64 shrink-0 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800 lg:block">
 						{#if entryStore.current}
 							<EntryMeta entry={entryStore.current} />

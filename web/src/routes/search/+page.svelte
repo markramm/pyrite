@@ -1,11 +1,13 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import ErrorState from '$lib/components/common/ErrorState.svelte';
+	import TagBadge from '$lib/components/common/TagBadge.svelte';
 	import { searchStore } from '$lib/stores/search.svelte';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { api } from '$lib/api/client';
 	import { typeColor } from '$lib/constants';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { savedSearches, type SavedSearch } from '$lib/stores/saved-searches.svelte';
 
@@ -63,6 +65,21 @@
 			date_to: dateTo || undefined,
 			tags: tagFilter || undefined,
 		});
+		syncUrlState();
+	}
+
+	function syncUrlState() {
+		const params = new URLSearchParams();
+		if (searchStore.query) params.set('q', searchStore.query);
+		if (searchStore.mode !== 'keyword') params.set('mode', searchStore.mode);
+		if (selectedKb) params.set('kb', selectedKb);
+		if (selectedType) params.set('type', selectedType);
+		if (dateFrom) params.set('from', dateFrom);
+		if (dateTo) params.set('to', dateTo);
+		if (tagFilter) params.set('tags', tagFilter);
+		const qs = params.toString();
+		const newUrl = qs ? `/search?${qs}` : '/search';
+		history.replaceState(history.state, '', newUrl);
 	}
 
 	function onSearchInput(e: Event) {
@@ -114,13 +131,24 @@
 	}
 
 	onMount(async () => {
-		// Read initial query and mode from URL params
-		const initialQ = $page.url.searchParams.get('q') ?? '';
-		const initialMode = $page.url.searchParams.get('mode') as 'keyword' | 'semantic' | 'hybrid' | null;
+		// Read all search state from URL params (makes search results shareable)
+		const params = $page.url.searchParams;
+		const initialQ = params.get('q') ?? '';
+		const initialMode = params.get('mode') as 'keyword' | 'semantic' | 'hybrid' | null;
+		const initialKb = params.get('kb') ?? '';
+		const initialType = params.get('type') ?? '';
+		const initialFrom = params.get('from') ?? '';
+		const initialTo = params.get('to') ?? '';
+		const initialTags = params.get('tags') ?? '';
 
 		if (initialMode && ['keyword', 'semantic', 'hybrid'].includes(initialMode)) {
 			searchStore.mode = initialMode;
 		}
+		if (initialKb) selectedKb = initialKb;
+		if (initialType) selectedType = initialType;
+		if (initialFrom) { dateFrom = initialFrom; showAdvanced = true; }
+		if (initialTo) { dateTo = initialTo; showAdvanced = true; }
+		if (initialTags) { tagFilter = initialTags; showAdvanced = true; }
 
 		// Focus the input
 		searchInput?.focus();
@@ -400,9 +428,7 @@
 						{#if result.tags.length > 0}
 							<div class="flex flex-wrap gap-1">
 								{#each result.tags as tag}
-									<span class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-700/60 dark:text-zinc-400">
-										{tag}
-									</span>
+									<TagBadge {tag} onclick={(e) => { e.preventDefault(); e.stopPropagation(); goto(`/entries?tag=${encodeURIComponent(tag)}`); }} />
 								{/each}
 							</div>
 						{/if}

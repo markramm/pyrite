@@ -51,9 +51,12 @@
 	{#if entry.participants.length > 0}
 		<div>
 			<span class="text-zinc-500">Participants:</span>
-			<div class="mt-1 space-y-0.5">
+			<div class="mt-1 flex flex-wrap gap-1">
 				{#each entry.participants as p}
-					<div class="text-xs">{p}</div>
+					<a
+						href="/search?q={encodeURIComponent(p)}"
+						class="inline-flex items-center rounded-md bg-zinc-100 px-1.5 py-0.5 text-xs font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+					>{p}</a>
 				{/each}
 			</div>
 		</div>
@@ -70,8 +73,11 @@
 								{String(source.url).slice(0, 50)}{String(source.url).length > 50 ? '...' : ''}
 							</a>
 						{/if}
-						{#if source.outlet}
-							<span class="text-zinc-400"> — {source.outlet}</span>
+						{#if source.outlet || source.date}
+							<span class="text-zinc-400">
+								{#if source.outlet}— {source.outlet}{/if}
+								{#if source.date} ({source.date}){/if}
+							</span>
 						{/if}
 					</div>
 				{/each}
