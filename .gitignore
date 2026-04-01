@@ -56,3 +56,6 @@ site-cache/
 
 # Node SSR build output
 web/build/
+
+# Private deployment automation (not shipped to users)
+pyrite_deployments/

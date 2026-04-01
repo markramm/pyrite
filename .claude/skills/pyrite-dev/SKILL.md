@@ -64,9 +64,28 @@ git push
 
 ### Deploying
 
-- **Demo** (dev): auto-deploys on CI pass, or manually: `bash ~/pyrite/deploy/demo/update.sh`
-- **Cascade** (main): update `PYRITE_VERSION` in `cascade-kb/deploy/Dockerfile`, rebuild
-- **PyPI**: triggered automatically by GitHub release
+Use the deployment script at `pyrite_deployments/deploy.sh` (gitignored, local only):
+
+```bash
+# Check all sites
+./pyrite_deployments/deploy.sh status
+
+# Deploy latest dev to demo.pyrite.wiki
+./pyrite_deployments/deploy.sh demo
+
+# Deploy cascade (code only — fast, no re-index)
+./pyrite_deployments/deploy.sh cascade
+
+# Deploy cascade with full re-seed (re-copy KB data, rebuild index, re-export, re-render)
+./pyrite_deployments/deploy.sh cascade --reseed
+
+# Deploy specific tag to pyrite.ink
+./pyrite_deployments/deploy.sh ink v0.21.0
+```
+
+**When to use `--reseed`:** when KB content changed (new events, fixed bodies), or when the export/render code changed (new fields in site cache, new source data in timeline.json).
+
+**PyPI**: triggered automatically by creating a GitHub release from a tag.
 
 ### Hotfixes
 
