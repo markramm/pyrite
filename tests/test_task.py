@@ -102,12 +102,12 @@ class TestTaskEntry:
     def test_to_frontmatter_omits_defaults(self):
         entry = TaskEntry(id="test", title="Test")
         fm = entry.to_frontmatter()
-        assert "status" not in fm  # open is default
+        assert fm["status"] == "open"  # always written to prevent round-trip data loss
         assert "assignee" not in fm
         assert "parent" not in fm
         assert "dependencies" not in fm
         assert "evidence" not in fm
-        assert "priority" not in fm  # 5 is default
+        assert fm["priority"] == 5  # always written to prevent round-trip data loss
         assert "due_date" not in fm
         assert "agent_context" not in fm
 

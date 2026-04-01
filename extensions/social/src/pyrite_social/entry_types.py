@@ -30,8 +30,7 @@ class WriteupEntry(NoteEntry):
         meta["type"] = "writeup"
         if self.author_id:
             meta["author_id"] = self.author_id
-        if self.writeup_type != "essay":
-            meta["writeup_type"] = self.writeup_type
+        meta["writeup_type"] = self.writeup_type
         if not self.allow_voting:
             meta["allow_voting"] = self.allow_voting
         return meta
@@ -81,12 +80,10 @@ class UserProfileEntry(PersonEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "user_profile"
-        if self.reputation:
-            meta["reputation"] = self.reputation
+        meta["reputation"] = self.reputation
         if self.join_date:
             meta["join_date"] = self.join_date
-        if self.writeup_count:
-            meta["writeup_count"] = self.writeup_count
+        meta["writeup_count"] = self.writeup_count
         return meta
 
     @classmethod

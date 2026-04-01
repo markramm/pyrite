@@ -206,8 +206,7 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "task"
-        if self.status != "open":
-            meta["status"] = self.status
+        meta["status"] = self.status
         if self.assignee:
             meta["assignee"] = self.assignee
         if self.parent:
@@ -216,8 +215,7 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
             meta["dependencies"] = self.dependencies
         if self.evidence:
             meta["evidence"] = self.evidence
-        if self.priority != 5:
-            meta["priority"] = self.priority
+        meta["priority"] = self.priority
         if self.due_date:
             meta["due_date"] = self.due_date
         if self.agent_context:

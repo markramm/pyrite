@@ -32,10 +32,8 @@ class ZettelEntry(NoteEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "zettel"
-        if self.zettel_type != "fleeting":
-            meta["zettel_type"] = self.zettel_type
-        if self.maturity != "seed":
-            meta["maturity"] = self.maturity
+        meta["zettel_type"] = self.zettel_type
+        meta["maturity"] = self.maturity
         if self.source_ref:
             meta["source_ref"] = self.source_ref
         if self.processing_stage:

@@ -85,8 +85,7 @@ class PersonEntry(Locatable, Entry):
             meta["role"] = self.role
         if self.affiliations:
             meta["affiliations"] = self.affiliations
-        if self.research_status != ResearchStatus.STUB:
-            meta["research_status"] = self.research_status.value
+        meta["research_status"] = self.research_status.value
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -159,8 +158,7 @@ class OrganizationEntry(Locatable, Entry):
             meta["jurisdiction"] = self.jurisdiction
         if self.founded:
             meta["founded"] = self.founded
-        if self.research_status != ResearchStatus.STUB:
-            meta["research_status"] = self.research_status.value
+        meta["research_status"] = self.research_status.value
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -421,10 +419,8 @@ class RelationshipEntry(Entry):
 
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
-        if self.source_entity:
-            meta["source_entity"] = self.source_entity
-        if self.target_entity:
-            meta["target_entity"] = self.target_entity
+        meta["source_entity"] = self.source_entity
+        meta["target_entity"] = self.target_entity
         if self.relationship_type:
             meta["relationship_type"] = self.relationship_type
         if self.summary:
@@ -483,16 +479,12 @@ class QAAssessmentEntry(Entry):
             meta["target_entry"] = self.target_entry
         if self.target_kb:
             meta["target_kb"] = self.target_kb
-        if self.tier != 1:
-            meta["tier"] = self.tier
-        if self.qa_status != "pass":
-            meta["qa_status"] = self.qa_status
+        meta["tier"] = self.tier
+        meta["qa_status"] = self.qa_status
         if self.issues:
             meta["issues"] = self.issues
-        if self.issues_found:
-            meta["issues_found"] = self.issues_found
-        if self.issues_resolved:
-            meta["issues_resolved"] = self.issues_resolved
+        meta["issues_found"] = self.issues_found
+        meta["issues_resolved"] = self.issues_resolved
         if self.assessed_at:
             meta["assessed_at"] = self.assessed_at
         if self.summary:

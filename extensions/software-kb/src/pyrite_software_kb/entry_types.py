@@ -94,10 +94,8 @@ class ADREntry(Statusable, Temporal, NoteEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "adr"
-        if self.adr_number:
-            meta["adr_number"] = self.adr_number
-        if self.status != "proposed":
-            meta["status"] = self.status
+        meta["adr_number"] = self.adr_number
+        meta["status"] = self.status
         if self.deciders:
             meta["deciders"] = self.deciders
         if self.date:
@@ -315,16 +313,13 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
         meta["type"] = "backlog_item"
         if self.kind:
             meta["kind"] = self.kind
-        if self.status != "proposed":
-            meta["status"] = self.status
-        if self.priority != "medium":
-            meta["priority"] = self.priority
+        meta["status"] = self.status
+        meta["priority"] = self.priority
         if self.assignee:
             meta["assignee"] = self.assignee
         if self.effort:
             meta["effort"] = self.effort
-        if self.rank:
-            meta["rank"] = self.rank
+        meta["rank"] = self.rank
         return meta
 
     @classmethod
@@ -425,8 +420,7 @@ class MilestoneEntry(Statusable, NoteEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "milestone"
-        if self.status != "open":
-            meta["status"] = self.status
+        meta["status"] = self.status
         return meta
 
     @classmethod

@@ -58,8 +58,7 @@ class ActorEntry(PersonEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "actor"
-        if self.tier:
-            meta["tier"] = self.tier
+        meta["tier"] = self.tier
         if self.era:
             meta["era"] = self.era
         if self.capture_lanes:
@@ -345,8 +344,7 @@ class ThemeEntry(TopicEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "theme"
-        if self.research_status != "stub":
-            meta["research_status"] = self.research_status
+        meta["research_status"] = self.research_status
         return meta
 
     @classmethod
@@ -381,8 +379,7 @@ class VictimEntry(Locatable, Entry):
             meta["era"] = self.era
         if self.location:
             meta["location"] = self.location
-        if self.research_status != "stub":
-            meta["research_status"] = self.research_status
+        meta["research_status"] = self.research_status
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -423,10 +420,8 @@ class StatisticEntry(Entry):
             meta["era"] = self.era
         if self.data_type:
             meta["data_type"] = self.data_type
-        if self.research_status != "stub":
-            meta["research_status"] = self.research_status
-        if self.verified:
-            meta["verified"] = self.verified
+        meta["research_status"] = self.research_status
+        meta["verified"] = self.verified
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -473,8 +468,7 @@ class MechanismEntry(Entry):
             meta["related_actors"] = self.related_actors
         if self.chapters:
             meta["chapters"] = self.chapters
-        if self.word_count:
-            meta["word_count"] = self.word_count
+        meta["word_count"] = self.word_count
         if self.summary:
             meta["summary"] = self.summary
         return meta

@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 
 from pyrite.models import EventEntry
-from pyrite.models.core_types import OrganizationEntry, PersonEntry
+from pyrite.models.core_types import (
+    OrganizationEntry,
+    PersonEntry,
+    QAAssessmentEntry,
+    RelationshipEntry,
+)
 from pyrite.schema import EventStatus, ResearchStatus
 
 
@@ -245,6 +250,147 @@ The Heritage Foundation is a conservative think tank...
         assert entry.founded == "1973"
         assert entry.research_status == ResearchStatus.COMPLETE
         assert "conservative think tank" in entry.body
+
+
+class TestPersonResearchStatus:
+    """Tests that PersonEntry always writes research_status to frontmatter."""
+
+    def test_person_research_status_stub_always_written(self):
+        """research_status=stub (the default) should still appear in frontmatter."""
+        person = PersonEntry(
+            id="test-person", title="Test Person",
+            research_status=ResearchStatus.STUB,
+        )
+        fm = person.to_frontmatter()
+        assert "research_status" in fm, "research_status=stub should still be written"
+        assert fm["research_status"] == "stub"
+
+    def test_person_research_status_all_values_round_trip(self):
+        """Every ResearchStatus value should survive from_frontmatter -> to_frontmatter."""
+        for rs in ResearchStatus:
+            person = PersonEntry.from_frontmatter(
+                {"id": f"test-{rs.value}", "title": rs.value,
+                 "research_status": rs.value},
+                body="",
+            )
+            assert person.research_status == rs
+            fm = person.to_frontmatter()
+            assert fm["research_status"] == rs.value
+
+
+class TestOrganizationResearchStatus:
+    """Tests that OrganizationEntry always writes research_status to frontmatter."""
+
+    def test_org_research_status_stub_always_written(self):
+        """research_status=stub (the default) should still appear in frontmatter."""
+        org = OrganizationEntry(
+            id="test-org", title="Test Org",
+            research_status=ResearchStatus.STUB,
+        )
+        fm = org.to_frontmatter()
+        assert "research_status" in fm, "research_status=stub should still be written"
+        assert fm["research_status"] == "stub"
+
+    def test_org_research_status_all_values_round_trip(self):
+        """Every ResearchStatus value should survive from_frontmatter -> to_frontmatter."""
+        for rs in ResearchStatus:
+            org = OrganizationEntry.from_frontmatter(
+                {"id": f"test-{rs.value}", "title": rs.value,
+                 "research_status": rs.value},
+                body="",
+            )
+            assert org.research_status == rs
+            fm = org.to_frontmatter()
+            assert fm["research_status"] == rs.value
+
+
+class TestRelationshipEntry:
+    """Tests that RelationshipEntry always writes identity fields."""
+
+    def test_source_target_always_written_even_when_empty(self):
+        """source_entity and target_entity should always appear in frontmatter."""
+        rel = RelationshipEntry(
+            id="test-rel", title="Test Relationship",
+            source_entity="", target_entity="",
+        )
+        fm = rel.to_frontmatter()
+        assert "source_entity" in fm, "source_entity='' should still be written"
+        assert "target_entity" in fm, "target_entity='' should still be written"
+
+    def test_source_target_round_trip(self):
+        """source_entity and target_entity should survive round-trip."""
+        rel = RelationshipEntry.from_frontmatter(
+            {"id": "test-rel", "title": "Test",
+             "source_entity": "person-a", "target_entity": "person-b"},
+            body="",
+        )
+        fm = rel.to_frontmatter()
+        assert fm["source_entity"] == "person-a"
+        assert fm["target_entity"] == "person-b"
+
+    def test_empty_source_target_round_trip(self):
+        """Empty source_entity/target_entity should round-trip without being dropped."""
+        rel = RelationshipEntry.from_frontmatter(
+            {"id": "test-rel", "title": "Test",
+             "source_entity": "", "target_entity": ""},
+            body="",
+        )
+        fm = rel.to_frontmatter()
+        assert "source_entity" in fm
+        assert "target_entity" in fm
+
+
+class TestQAAssessmentEntry:
+    """Tests that QAAssessmentEntry always writes tier, qa_status, issues_found, issues_resolved."""
+
+    def test_defaults_always_written(self):
+        """Default values (tier=1, qa_status=pass, issues_found=0, issues_resolved=0) should appear."""
+        qa = QAAssessmentEntry(
+            id="test-qa", title="Test QA",
+        )
+        fm = qa.to_frontmatter()
+        assert "tier" in fm, "tier=1 (default) should still be written"
+        assert fm["tier"] == 1
+        assert "qa_status" in fm, "qa_status=pass (default) should still be written"
+        assert fm["qa_status"] == "pass"
+        assert "issues_found" in fm, "issues_found=0 should still be written"
+        assert fm["issues_found"] == 0
+        assert "issues_resolved" in fm, "issues_resolved=0 should still be written"
+        assert fm["issues_resolved"] == 0
+
+    def test_tier_zero_written(self):
+        """tier=0 should not be suppressed by a falsy guard."""
+        qa = QAAssessmentEntry(id="test-qa", title="Test QA", tier=0)
+        fm = qa.to_frontmatter()
+        assert fm["tier"] == 0
+
+    def test_qa_status_pass_round_trip(self):
+        """qa_status=pass should survive from_frontmatter -> to_frontmatter."""
+        qa = QAAssessmentEntry.from_frontmatter(
+            {"id": "test-qa", "title": "Test QA",
+             "qa_status": "pass", "tier": 1,
+             "issues_found": 0, "issues_resolved": 0},
+            body="",
+        )
+        fm = qa.to_frontmatter()
+        assert fm["qa_status"] == "pass"
+        assert fm["tier"] == 1
+        assert fm["issues_found"] == 0
+        assert fm["issues_resolved"] == 0
+
+    def test_nondefault_values_round_trip(self):
+        """Non-default values should also round-trip correctly."""
+        qa = QAAssessmentEntry.from_frontmatter(
+            {"id": "test-qa", "title": "Test QA",
+             "qa_status": "fail", "tier": 3,
+             "issues_found": 5, "issues_resolved": 2},
+            body="",
+        )
+        fm = qa.to_frontmatter()
+        assert fm["qa_status"] == "fail"
+        assert fm["tier"] == 3
+        assert fm["issues_found"] == 5
+        assert fm["issues_resolved"] == 2
 
 
 class TestEntryRoundtrip:

@@ -26,20 +26,17 @@ class CollectionEntry(Entry):
 
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
-        if self.source_type != "folder":
-            meta["source_type"] = self.source_type
+        meta["source_type"] = self.source_type
         if self.source_type == "query" and self.query:
             meta["query"] = self.query
         if self.description:
             meta["description"] = self.description
         if self.icon:
             meta["icon"] = self.icon
-        if self.view_config and self.view_config != {"default_view": "list"}:
-            meta["view_config"] = self.view_config
+        meta["view_config"] = self.view_config
         if self.entry_filter:
             meta["entry_filter"] = self.entry_filter
-        if self.folder_path:
-            meta["folder_path"] = self.folder_path
+        meta["folder_path"] = self.folder_path
         if self.collection_type and self.collection_type != "generic":
             meta["collection_type"] = self.collection_type
         if self.summary:

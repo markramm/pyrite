@@ -32,12 +32,9 @@ class ArticleEntry(NoteEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "article"
-        if self.quality != "stub":
-            meta["quality"] = self.quality
-        if self.review_status != "draft":
-            meta["review_status"] = self.review_status
-        if self.protection_level != "none":
-            meta["protection_level"] = self.protection_level
+        meta["quality"] = self.quality
+        meta["review_status"] = self.review_status
+        meta["protection_level"] = self.protection_level
         if self.categories:
             meta["categories"] = self.categories
         return meta

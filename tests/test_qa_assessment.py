@@ -184,14 +184,15 @@ class TestQAAssessmentEntryType:
         assert entry.qa_status == "warn"
         assert entry.issues_found == 1
 
-    def test_frontmatter_omits_defaults(self):
-        """to_frontmatter omits fields at default values."""
+    def test_frontmatter_always_writes_meaningful_defaults(self):
+        """to_frontmatter always writes fields that carry semantic meaning."""
         entry = QAAssessmentEntry(id="qa-x", title="QA", body="body")
         fm = entry.to_frontmatter()
-        assert "tier" not in fm  # default is 1
-        assert "qa_status" not in fm  # default is "pass"
-        assert "issues" not in fm  # default is []
-        assert "issues_found" not in fm  # default is 0
+        assert fm["tier"] == 1  # always written to prevent round-trip data loss
+        assert fm["qa_status"] == "pass"  # always written
+        assert "issues" not in fm  # empty list is fine to omit
+        assert fm["issues_found"] == 0  # always written (0 is meaningful)
+        assert fm["issues_resolved"] == 0  # always written
 
 
 # =========================================================================

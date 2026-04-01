@@ -57,8 +57,8 @@ class TestCollectionEntryModel:
         assert fm["icon"] == "file"
         assert fm["view_config"]["default_view"] == "table"
         assert fm["folder_path"] == "documents"
-        # source_type should NOT be in frontmatter when it's the default
-        assert "source_type" not in fm
+        # source_type is always written to prevent round-trip data loss
+        assert fm["source_type"] == "folder"
 
     def test_collection_from_collection_yaml(self):
         yaml_data = {

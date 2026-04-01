@@ -184,8 +184,8 @@ class TestADREntry:
     def test_to_frontmatter_omits_defaults(self):
         entry = ADREntry(id="test", title="Test")
         fm = entry.to_frontmatter()
-        assert "adr_number" not in fm  # 0 is falsy
-        assert "status" not in fm  # proposed is default
+        assert fm["adr_number"] == 0  # always written (0 is valid)
+        assert fm["status"] == "proposed"  # always written (enum field)
         assert "deciders" not in fm
         assert "date" not in fm
         assert "superseded_by" not in fm
@@ -649,8 +649,9 @@ class TestBacklogItemEntry:
         entry = BacklogItemEntry(id="test", title="Test")
         fm = entry.to_frontmatter()
         assert "kind" not in fm
-        assert "status" not in fm  # proposed is default
-        assert "priority" not in fm  # medium is default
+        assert fm["status"] == "proposed"  # always written (enum field)
+        assert fm["priority"] == "medium"  # always written (enum field)
+        assert fm["rank"] == 0  # always written (0 is valid)
         assert "assignee" not in fm
         assert "effort" not in fm
 
@@ -1250,7 +1251,7 @@ class TestMilestoneEntry:
         entry = MilestoneEntry(id="m1", title="v1.0")
         fm = entry.to_frontmatter()
         assert fm["type"] == "milestone"
-        assert "status" not in fm  # default "open" omitted
+        assert fm["status"] == "open"  # always written (enum field)
 
     def test_to_frontmatter_with_status(self):
         entry = MilestoneEntry(id="m1", title="v1.0", status="closed")
@@ -3512,12 +3513,12 @@ class TestBacklogItemRank:
         entry = BacklogItemEntry(id="test", title="Test")
         assert entry.rank == 0
 
-    def test_to_frontmatter_omits_zero_rank(self):
+    def test_to_frontmatter_includes_zero_rank(self):
         from pyrite_software_kb.entry_types import BacklogItemEntry
 
         entry = BacklogItemEntry(id="test", title="Test", rank=0)
         fm = entry.to_frontmatter()
-        assert "rank" not in fm
+        assert fm["rank"] == 0  # always written (0 is valid)
 
     def test_to_frontmatter_includes_nonzero_rank(self):
         from pyrite_software_kb.entry_types import BacklogItemEntry

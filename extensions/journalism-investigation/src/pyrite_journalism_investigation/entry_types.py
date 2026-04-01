@@ -223,8 +223,7 @@ class DocumentSourceEntry(DocumentEntry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = super().to_frontmatter()
         meta["type"] = "document_source"
-        if self.reliability != "unknown":
-            meta["reliability"] = self.reliability
+        meta["reliability"] = self.reliability
         if self.classification:
             meta["classification"] = self.classification
         if self.obtained_date:
@@ -274,8 +273,7 @@ class InvestigationEventEntry(EventEntry):
             meta["actors"] = self.actors
         if self.source_refs:
             meta["source_refs"] = self.source_refs
-        if self.verification_status != "unverified":
-            meta["verification_status"] = self.verification_status
+        meta["verification_status"] = self.verification_status
         return meta
 
     @classmethod
@@ -319,10 +317,8 @@ class TransactionEntry(EventEntry):
             meta["amount"] = self.amount
         if self.currency:
             meta["currency"] = self.currency
-        if self.sender:
-            meta["sender"] = self.sender
-        if self.receiver:
-            meta["receiver"] = self.receiver
+        meta["sender"] = self.sender
+        meta["receiver"] = self.receiver
         if self.method:
             meta["method"] = self.method
         if self.purpose:
@@ -432,8 +428,7 @@ class EvidenceEntry(Entry):
             meta["evidence_type"] = self.evidence_type
         if self.source_document:
             meta["source_document"] = self.source_document
-        if self.reliability != "unknown":
-            meta["reliability"] = self.reliability
+        meta["reliability"] = self.reliability
         if self.obtained_date:
             meta["obtained_date"] = self.obtained_date
         if self.chain_of_custody:
@@ -518,10 +513,8 @@ class ClaimEntry(Entry):
         meta["type"] = "claim"
         if self.assertion:
             meta["assertion"] = self.assertion
-        if self.confidence != "low":
-            meta["confidence"] = self.confidence
-        if self.claim_status != "unverified":
-            meta["claim_status"] = self.claim_status
+        meta["confidence"] = self.confidence
+        meta["claim_status"] = self.claim_status
         if self.evidence_refs:
             meta["evidence_refs"] = self.evidence_refs
         if self.disputed_by:
@@ -568,10 +561,8 @@ class OwnershipEntry(Entry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
         meta["type"] = "ownership"
-        if self.owner:
-            meta["owner"] = self.owner
-        if self.asset:
-            meta["asset"] = self.asset
+        meta["owner"] = self.owner
+        meta["asset"] = self.asset
         if self.percentage:
             meta["percentage"] = self.percentage
         if self.start_date:
@@ -580,8 +571,7 @@ class OwnershipEntry(Entry):
             meta["end_date"] = self.end_date
         if self.legal_basis:
             meta["legal_basis"] = self.legal_basis
-        if self.beneficial:
-            meta["beneficial"] = self.beneficial
+        meta["beneficial"] = self.beneficial
         if self.summary:
             meta["summary"] = self.summary
         return meta
@@ -619,10 +609,8 @@ class MembershipEntry(Entry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
         meta["type"] = "membership"
-        if self.person:
-            meta["person"] = self.person
-        if self.organization:
-            meta["organization"] = self.organization
+        meta["person"] = self.person
+        meta["organization"] = self.organization
         if self.role:
             meta["role"] = self.role
         if self.start_date:
@@ -666,10 +654,8 @@ class FundingEntry(Entry):
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
         meta["type"] = "funding"
-        if self.funder:
-            meta["funder"] = self.funder
-        if self.recipient:
-            meta["recipient"] = self.recipient
+        meta["funder"] = self.funder
+        meta["recipient"] = self.recipient
         if self.amount:
             meta["amount"] = self.amount
         if self.currency:
