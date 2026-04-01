@@ -146,9 +146,9 @@ def task_status(
         result = {
             "id": task["id"],
             "title": task["title"],
-            "status": meta.get("status", "open"),
-            "assignee": meta.get("assignee", ""),
-            "priority": meta.get("priority", 5),
+            "status": task.get("status") or meta.get("status", "open"),
+            "assignee": task.get("assignee") or meta.get("assignee", ""),
+            "priority": task.get("priority") or meta.get("priority", 5),
             "parent": meta.get("parent", ""),
             "dependencies": meta.get("dependencies", []),
             "evidence": meta.get("evidence", []),

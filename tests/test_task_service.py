@@ -362,6 +362,16 @@ class TestListTasks:
         titles = [t["title"] for t in open_tasks]
         assert "Open task" in titles
 
+    def test_list_preserves_priority(self, task_env):
+        """Priority set at creation should be readable via list_tasks."""
+        svc = task_env["svc"]
+        result = svc.create_task(kb_name="test-tasks", title="High Pri Task", priority=9)
+        assert result["priority"] == 9
+
+        tasks = svc.list_tasks(kb_name="test-tasks")
+        task = next(t for t in tasks if t["id"] == result["entry_id"])
+        assert task["priority"] == 9, f"Expected priority 9, got {task['priority']}"
+
     def test_list_filter_assignee(self, task_env):
         svc = task_env["svc"]
         t1 = svc.create_task(kb_name="test-tasks", title="Assigned")

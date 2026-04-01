@@ -118,7 +118,7 @@ class TaskService:
         parent: str | None = None,
     ) -> list[dict[str, Any]]:
         """List tasks with optional filters."""
-        query = "SELECT id, title, kb_name, status, assignee, metadata FROM entry WHERE entry_type = 'task'"
+        query = "SELECT id, title, kb_name, status, assignee, priority, metadata FROM entry WHERE entry_type = 'task'"
         params: dict[str, str] = {}
         if kb_name:
             query += " AND kb_name = :kb_name"
@@ -145,9 +145,9 @@ class TaskService:
                 {
                     "id": row["id"],
                     "title": row["title"],
-                    "status": meta.get("status", "open"),
-                    "assignee": meta.get("assignee", ""),
-                    "priority": meta.get("priority", 5),
+                    "status": row.get("status") or meta.get("status", "open"),
+                    "assignee": row.get("assignee") or meta.get("assignee", ""),
+                    "priority": int(row.get("priority") or meta.get("priority", 5)),
                     "parent": meta.get("parent", ""),
                     "kb_name": row["kb_name"],
                 }
