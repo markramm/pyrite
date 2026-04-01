@@ -129,11 +129,67 @@ nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
   font-size: 0.75rem; font-weight: 500; color: var(--gold);
 }}
 
+/* Status badge color variants */
+.badge-status {{
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.25rem;
+  font-family: 'DM Sans', sans-serif; font-size: 0.6875rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  vertical-align: middle; margin-left: 0.5rem; position: relative; top: -2px;
+}}
+.badge-status.status-confirmed {{ background: rgba(34,197,94,0.15); color: #4ade80; }}
+.badge-status.status-reported,
+.badge-status.status-alleged,
+.badge-status.status-rumored {{ background: rgba(245,158,11,0.15); color: #fbbf24; }}
+.badge-status.status-disputed {{ background: rgba(239,68,68,0.15); color: #f87171; }}
+.badge-status.status-draft {{ background: var(--surface-overlay); color: var(--ink-muted); }}
+
+/* Actors section */
+.actors {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.875rem;
+  margin-top: 0.75rem; color: var(--ink-soft);
+}}
+.actors .label {{
+  font-weight: 600; color: var(--ink-muted); font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.5rem;
+}}
+.actors a {{ color: var(--gold); font-size: 0.875rem; }}
+.actors a:hover {{ color: var(--gold-dim); }}
+
+/* Capture lane badges */
+.capture-lanes {{ margin-top: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.375rem; }}
+.lane-badge {{
+  display: inline-block; font-family: 'DM Sans', sans-serif;
+  background: var(--surface-overlay); border: 1px solid var(--border);
+  padding: 0.1rem 0.55rem; border-radius: 0.25rem;
+  font-size: 0.6875rem; font-weight: 500; color: var(--ink-muted);
+  text-transform: lowercase;
+}}
+
+/* Sources section */
+.sources-section {{
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+}}
+.sources-section h2 {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.6875rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted);
+  font-weight: 600; margin: 0 0 0.75rem 0; border: none; padding: 0;
+}}
+.sources-section ol {{
+  padding-left: 1.5rem; margin: 0;
+}}
+.sources-section li {{
+  font-size: 0.875rem; color: var(--ink-soft); margin-bottom: 0.5rem; line-height: 1.5;
+}}
+.sources-section a {{ color: var(--gold); }}
+.sources-section a:hover {{ color: var(--gold-dim); }}
+.sources-section .outlet {{ color: var(--ink-muted); }}
+.sources-section .source-date {{ color: var(--ink-faint); }}
+
 /* Meta line */
 .meta {{
   font-family: 'DM Sans', sans-serif; font-size: 0.8125rem;
   color: var(--ink-muted); margin-top: 0.5rem;
-  display: flex; align-items: center; gap: 0.75rem;
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
 }}
 .meta a {{ color: var(--ink-faint); font-size: 0.75rem; }}
 .meta a:hover {{ color: var(--gold); }}
@@ -555,6 +611,8 @@ class SiteCacheService:
 
     def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list, *, read_only: bool = False):
         """Render a single entry page."""
+        import json
+
         entry_id = entry["id"]
         title = entry.get("title", entry_id)
         entry_type = entry.get("entry_type", "note")
@@ -562,7 +620,25 @@ class SiteCacheService:
         summary = entry.get("summary") or ""
         tags = entry.get("tags") or []
         date = entry.get("date") or ""
+        status = entry.get("status") or ""
+        location = entry.get("location") or ""
         description = summary or (body_md[:160].replace("\n", " ") + "..." if len(body_md) > 160 else body_md.replace("\n", " "))
+
+        # Parse metadata (may be a JSON string or already a dict)
+        metadata = entry.get("metadata") or {}
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+                if not isinstance(metadata, dict):
+                    metadata = {}
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+
+        # Fetch sources — list_entries doesn't include them, so fetch via get_entry
+        sources = entry.get("sources")
+        if sources is None:
+            full_entry = self.db.get_entry(entry_id, kb_name)
+            sources = full_entry.get("sources", []) if full_entry else []
 
         # JSON-LD
         schema_type = _SCHEMA_TYPES.get(entry_type, "Article")
@@ -577,7 +653,6 @@ class SiteCacheService:
         if tags:
             jsonld["keywords"] = ", ".join(tags)
 
-        import json
         extra_head = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>'
         canonical = f'<link rel="canonical" href="/site/{_esc(kb_name)}/{_esc(entry_id)}">'
 
@@ -591,6 +666,77 @@ class SiteCacheService:
         # Tags
         tags_html = "".join(f'<span class="tag">{_esc(t)}</span>' for t in tags)
         tags_section = f'<div class="tags">{tags_html}</div>' if tags else ""
+
+        # Status badge (displayed next to type badge in h1)
+        status_html = ""
+        if status:
+            status_lower = status.lower()
+            if status_lower == "confirmed":
+                css_class = "status-confirmed"
+            elif status_lower in ("reported", "alleged", "rumored"):
+                css_class = f"status-{status_lower}"
+            elif status_lower == "disputed":
+                css_class = "status-disputed"
+            elif status_lower == "draft":
+                css_class = "status-draft"
+            else:
+                css_class = "status-draft"
+            status_html = f'<span class="badge-status {css_class}">{_esc(status)}</span>'
+
+        # Actors / Participants
+        actors = metadata.get("actors") or metadata.get("participants") or []
+        actors_html = ""
+        if actors and isinstance(actors, list):
+            actor_links = ", ".join(
+                f'<a href="/site/{_esc(kb_name)}?search={_esc(str(a))}">{_esc(str(a))}</a>'
+                for a in actors
+                if a
+            )
+            if actor_links:
+                actors_html = f'<div class="actors"><span class="label">Actors:</span>{actor_links}</div>'
+
+        # Capture lanes
+        capture_lanes = metadata.get("capture_lanes") or []
+        lanes_html = ""
+        if capture_lanes and isinstance(capture_lanes, list):
+            lane_badges = "".join(
+                f'<span class="lane-badge">{_esc(str(lane))}</span>'
+                for lane in capture_lanes
+                if lane
+            )
+            if lane_badges:
+                lanes_html = f'<div class="capture-lanes">{lane_badges}</div>'
+
+        # Sources section (rendered before backlinks)
+        sources_html = ""
+        if sources:
+            source_items = []
+            for src in sources:
+                if not isinstance(src, dict):
+                    continue
+                src_title = _esc(str(src.get("title") or "Untitled"))
+                src_url = src.get("url") or ""
+                src_outlet = _esc(str(src.get("outlet") or ""))
+                src_date = _esc(str(src.get("date") or ""))
+
+                # Only render href for http/https URLs
+                if src_url and isinstance(src_url, str) and src_url.lower().startswith(("http://", "https://")):
+                    title_part = f'<a href="{_esc(src_url)}" target="_blank" rel="noopener">{src_title}</a>'
+                else:
+                    title_part = src_title
+
+                parts = [title_part]
+                if src_outlet:
+                    parts.append(f'<span class="outlet">{src_outlet}</span>')
+                if src_date:
+                    parts.append(f'<span class="source-date">({src_date})</span>')
+                source_items.append(f'<li>{" &mdash; ".join(parts)}</li>')
+
+            if source_items:
+                sources_html = (
+                    f'<div class="sources-section"><h2>Sources</h2>'
+                    f'<ol>{"".join(source_items)}</ol></div>'
+                )
 
         # Backlinks
         bl_html = ""
@@ -612,7 +758,9 @@ class SiteCacheService:
 
         meta_parts = []
         if date:
-            meta_parts.append(date)
+            meta_parts.append(_esc(date))
+        if location:
+            meta_parts.append(f'<span>{_esc(location)}</span>')
         meta_parts.append(f'<span class="reading-time">{reading_mins} min read</span>')
         if not read_only:
             meta_parts.append(
@@ -624,10 +772,10 @@ class SiteCacheService:
             f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span>'
             f'<a href="/site/{_esc(kb_name)}">{_esc(kb_name)}</a><span class="sep">/</span>'
             f'<strong>{_esc(title)}</strong></div>'
-            f'<h1>{_esc(title)}<span class="badge">{_esc(entry_type)}</span></h1>'
-            f'{tags_section}{meta_html}'
+            f'<h1>{_esc(title)}<span class="badge">{_esc(entry_type)}</span>{status_html}</h1>'
+            f'{tags_section}{lanes_html}{actors_html}{meta_html}'
             f'<article>{body_html}</article>'
-            f'{bl_html}{ol_html}'
+            f'{sources_html}{bl_html}{ol_html}'
         )
 
         html = _render_page(

@@ -379,3 +379,304 @@ class TestSiteCacheInvalidation:
         assert result is True
         path = cache_env["cache_dir"] / "test-kb" / "hello-world.html"
         assert path.exists()
+
+
+class TestFrontmatterMetadataDisplay:
+    """Verify that rich frontmatter fields appear in rendered entry pages."""
+
+    def test_status_badge_rendered(self, cache_env):
+        """Status field should render as a colored badge next to the type badge."""
+        cache_env["db"].upsert_entry({
+            "id": "status-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Confirmed Event",
+            "body": "Something happened.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+            "status": "confirmed",
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "status-entry.html").read_text()
+        assert "badge-status" in html
+        assert "status-confirmed" in html
+        assert "confirmed" in html.lower()
+
+    def test_status_disputed_badge(self, cache_env):
+        """Disputed status should get the red badge class."""
+        cache_env["db"].upsert_entry({
+            "id": "disputed-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Disputed Event",
+            "body": "Claims are contested.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+            "status": "disputed",
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "disputed-entry.html").read_text()
+        assert "status-disputed" in html
+
+    def test_actors_rendered_with_search_links(self, cache_env):
+        """Actors from metadata should appear as search-linked names."""
+        cache_env["db"].upsert_entry({
+            "id": "actor-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Event With Actors",
+            "body": "Multiple actors involved.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Alice Smith", "Bob Jones"]},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "actor-entry.html").read_text()
+        assert "Actors:" in html
+        assert "Alice Smith" in html
+        assert "Bob Jones" in html
+        assert "?search=Alice" in html
+        assert "?search=Bob" in html
+
+    def test_sources_rendered_as_list(self, cache_env):
+        """Sources should appear in a numbered list with links."""
+        cache_env["db"].upsert_entry({
+            "id": "sourced-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Well-Sourced Event",
+            "body": "Documented occurrence.",
+            "summary": "",
+            "tags": [],
+            "sources": [
+                {
+                    "id": "src-1",
+                    "entry_id": "sourced-entry",
+                    "kb_name": "test-kb",
+                    "title": "Reuters Report",
+                    "url": "https://reuters.com/article/123",
+                    "outlet": "Reuters",
+                    "date": "2025-06-15",
+                    "verified": True,
+                },
+                {
+                    "id": "src-2",
+                    "entry_id": "sourced-entry",
+                    "kb_name": "test-kb",
+                    "title": "AP Investigation",
+                    "url": "https://apnews.com/456",
+                    "outlet": "AP News",
+                    "date": "2025-06-16",
+                    "verified": False,
+                },
+            ],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "sourced-entry.html").read_text()
+        assert "sources-section" in html
+        assert "Sources" in html
+        assert "Reuters Report" in html
+        assert "https://reuters.com/article/123" in html
+        assert "Reuters" in html
+        assert "AP Investigation" in html
+        assert "2025-06-15" in html
+        # Verify the ordered list
+        assert "<ol>" in html
+
+    def test_sources_fetched_for_list_entries(self, cache_env):
+        """When sources are not in the entry dict (list_entries), they should be fetched."""
+        # Insert entry with sources via the DB (list_entries won't include them)
+        cache_env["db"].upsert_entry({
+            "id": "fetch-sources-entry",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Entry With DB Sources",
+            "body": "Has sources in DB.",
+            "summary": "",
+            "tags": [],
+            "sources": [
+                {
+                    "id": "src-db-1",
+                    "entry_id": "fetch-sources-entry",
+                    "kb_name": "test-kb",
+                    "title": "Database Source",
+                    "url": "https://example.com/source",
+                    "outlet": "Example",
+                    "date": "2025-01-01",
+                    "verified": True,
+                },
+            ],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "fetch-sources-entry.html").read_text()
+        assert "Database Source" in html
+        assert "https://example.com/source" in html
+
+    def test_source_javascript_url_blocked(self, cache_env):
+        """Sources with javascript: URLs should not render as clickable links."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-source-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "XSS Source Test",
+            "body": "Bad source URL.",
+            "summary": "",
+            "tags": [],
+            "sources": [
+                {
+                    "id": "src-xss",
+                    "entry_id": "xss-source-entry",
+                    "kb_name": "test-kb",
+                    "title": "Evil Source",
+                    "url": "javascript:alert(1)",
+                    "outlet": "Evil Corp",
+                    "date": "2025-01-01",
+                    "verified": False,
+                },
+            ],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-source-entry.html").read_text()
+        assert "Evil Source" in html
+        assert 'href="javascript:' not in html
+
+    def test_location_in_meta_bar(self, cache_env):
+        """Location field should appear in the meta bar."""
+        cache_env["db"].upsert_entry({
+            "id": "location-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Localized Event",
+            "body": "Happened somewhere.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+            "location": "Nairobi, Kenya",
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "location-entry.html").read_text()
+        assert "Nairobi, Kenya" in html
+        # Should be inside the meta div
+        import re
+        meta = re.search(r'<div class="meta">(.*?)</div>', html)
+        assert meta, "No meta div found"
+        assert "Nairobi" in meta.group(1)
+
+    def test_capture_lanes_rendered(self, cache_env):
+        """Capture lanes from metadata should render as small badges."""
+        cache_env["db"].upsert_entry({
+            "id": "lanes-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Multi-Lane Event",
+            "body": "Tracked across lanes.",
+            "summary": "",
+            "tags": ["conflict"],
+            "sources": [],
+            "links": [],
+            "metadata": {"capture_lanes": ["media", "legal", "financial"]},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "lanes-entry.html").read_text()
+        assert "capture-lanes" in html
+        assert "lane-badge" in html
+        assert "media" in html
+        assert "legal" in html
+        assert "financial" in html
+
+    def test_empty_status_not_rendered(self, cache_env):
+        """No status badge should appear when status is empty."""
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert "badge-status" not in html
+
+    def test_actors_escaped(self, cache_env):
+        """Actor names with HTML should be escaped."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-actor-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "XSS Actor Test",
+            "body": "Bad actor name.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ['<script>alert("xss")</script>']},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-actor-entry.html").read_text()
+        # The actors section should contain escaped HTML, not raw script tags
+        import re
+        actors_section = re.search(r'<div class="actors">(.*?)</div>', html)
+        assert actors_section, "No actors section found"
+        actors_content = actors_section.group(1)
+        assert "<script>" not in actors_content
+        assert "&lt;script&gt;" in actors_content
+
+    def test_full_entry_with_all_metadata(self, cache_env):
+        """Integration test: an entry with all metadata fields renders correctly."""
+        cache_env["db"].upsert_entry({
+            "id": "full-entry",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Complete Event",
+            "body": "A fully documented event.",
+            "summary": "Full metadata event",
+            "tags": ["conflict", "verified"],
+            "sources": [
+                {
+                    "id": "src-full",
+                    "entry_id": "full-entry",
+                    "kb_name": "test-kb",
+                    "title": "Primary Source",
+                    "url": "https://example.com/full",
+                    "outlet": "Example News",
+                    "date": "2025-07-01",
+                    "verified": True,
+                },
+            ],
+            "links": [],
+            "metadata": {
+                "actors": ["Jane Doe", "ACME Corp"],
+                "capture_lanes": ["media", "legal"],
+            },
+            "status": "confirmed",
+            "location": "Lagos, Nigeria",
+            "date": "2025-07-01",
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "full-entry.html").read_text()
+
+        # Status badge
+        assert "status-confirmed" in html
+        # Actors
+        assert "Jane Doe" in html
+        assert "ACME Corp" in html
+        # Sources
+        assert "Primary Source" in html
+        assert "Example News" in html
+        # Location
+        assert "Lagos, Nigeria" in html
+        # Capture lanes
+        assert "media" in html
+        assert "legal" in html
+        # Tags still present
+        assert "conflict" in html
+        assert "verified" in html

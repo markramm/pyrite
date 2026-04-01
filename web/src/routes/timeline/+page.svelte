@@ -2,7 +2,9 @@
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import LoadingState from '$lib/components/common/LoadingState.svelte';
 	import EmptyState from '$lib/components/common/EmptyState.svelte';
+	import TagBadge from '$lib/components/common/TagBadge.svelte';
 	import { api } from '$lib/api/client';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import type { TimelineEvent } from '$lib/api/types';
 
@@ -181,10 +183,13 @@
 							{#if event.tags.length > 0}
 								<div class="mt-1 flex flex-wrap gap-1">
 									{#each event.tags.slice(0, 5) as tag}
-										<span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-											{tag}
-										</span>
+										<TagBadge {tag} onclick={(e) => { e.preventDefault(); e.stopPropagation(); goto(`/entries?tag=${encodeURIComponent(tag)}`); }} />
 									{/each}
+									{#if event.tags.length > 5}
+										<span class="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400">
+											+{event.tags.length - 5}
+										</span>
+									{/if}
 								</div>
 							{/if}
 						</a>
