@@ -104,6 +104,9 @@ class KBRegistryService:
     ) -> dict[str, Any]:
         """Register a new user KB in the DB (not config.yaml).
 
+        If ``kb_type`` matches a registered plugin preset, the preset is
+        materialized into the KB directory (kb.yaml, subdirectories, templates).
+
         Raises ValueError if a KB with the same name already exists.
         """
         from ..storage.models import KB
@@ -115,6 +118,9 @@ class KBRegistryService:
         resolved = Path(path).expanduser().resolve()
         resolved.mkdir(parents=True, exist_ok=True)
 
+        # Apply plugin preset if kb_type matches one
+        self._apply_preset(resolved, name, kb_type, description)
+
         self.db.register_kb(
             name=name,
             kb_type=kb_type,
@@ -123,6 +129,109 @@ class KBRegistryService:
             source="user",
         )
         return self.get_kb(name)  # type: ignore[return-value]
+
+    def _apply_preset(
+        self, kb_path: Path, name: str, kb_type: str, description: str
+    ) -> None:
+        """Materialize a plugin preset into the KB directory.
+
+        Writes kb.yaml with type definitions, creates subdirectories,
+        and generates entry templates for each type.
+        """
+        from ..utils.yaml import dump_yaml_file
+
+        try:
+            from ..plugins import get_registry
+
+            presets = get_registry().get_all_kb_presets()
+        except Exception:
+            logger.debug("No plugin registry available, skipping preset", exc_info=True)
+            return
+
+        preset = presets.get(kb_type)
+        if not preset:
+            return
+
+        logger.info("Applying preset '%s' to KB '%s'", kb_type, name)
+
+        # Build kb.yaml content
+        kb_yaml: dict[str, Any] = {
+            "name": name,
+            "kb_type": kb_type,
+            "description": description or preset.get("description", ""),
+        }
+        if preset.get("guidelines"):
+            kb_yaml["guidelines"] = preset["guidelines"]
+        if preset.get("policies"):
+            kb_yaml["policies"] = preset["policies"]
+
+        # Types section
+        types_section: dict[str, Any] = {}
+        for type_name, type_info in preset.get("types", {}).items():
+            td: dict[str, Any] = {}
+            if type_info.get("description"):
+                td["description"] = type_info["description"]
+            if type_info.get("required"):
+                td["required"] = type_info["required"]
+            if type_info.get("optional"):
+                td["optional"] = type_info["optional"]
+            if type_info.get("subdirectory"):
+                td["subdirectory"] = type_info["subdirectory"]
+            if type_info.get("edge_type"):
+                td["edge_type"] = True
+            if type_info.get("endpoints"):
+                td["endpoints"] = type_info["endpoints"]
+            types_section[type_name] = td
+        if types_section:
+            kb_yaml["types"] = types_section
+
+        # Write kb.yaml
+        kb_yaml_path = kb_path / "kb.yaml"
+        if not kb_yaml_path.exists():
+            dump_yaml_file(kb_yaml, kb_yaml_path)
+            logger.info("Wrote kb.yaml for KB '%s'", name)
+
+        # Create subdirectories
+        for dirname in preset.get("directories", []):
+            (kb_path / dirname).mkdir(parents=True, exist_ok=True)
+
+        # Generate entry templates
+        templates_dir = kb_path / "_templates"
+        templates_dir.mkdir(exist_ok=True)
+        for type_name, type_info in preset.get("types", {}).items():
+            template_path = templates_dir / f"{type_name}.md"
+            if template_path.exists():
+                continue
+            template_content = self._generate_template(type_name, type_info)
+            template_path.write_text(template_content, encoding="utf-8")
+
+        logger.info(
+            "Preset '%s' applied: %d types, %d directories, %d templates",
+            kb_type,
+            len(types_section),
+            len(preset.get("directories", [])),
+            len(preset.get("types", {})),
+        )
+
+    @staticmethod
+    def _generate_template(type_name: str, type_info: dict[str, Any]) -> str:
+        """Generate an entry template markdown file for a type."""
+        lines = ["---"]
+        lines.append(f"template_name: {type_name}")
+        lines.append(f"template_description: Create a new {type_info.get('description', type_name)}")
+        lines.append(f"entry_type: {type_name}")
+        # Add optional fields as empty frontmatter values
+        for field_name in type_info.get("optional", []):
+            if field_name in ("importance", "tags"):
+                continue
+            lines.append(f"{field_name}: ")
+        lines.append("---")
+        lines.append("")
+        # Body with guidance
+        desc = type_info.get("description", type_name)
+        lines.append(f"<!-- {desc} -->")
+        lines.append("")
+        return "\n".join(lines)
 
     def remove_kb(self, name: str) -> bool:
         """Remove a user-added KB. Raises KBProtectedError for config KBs."""

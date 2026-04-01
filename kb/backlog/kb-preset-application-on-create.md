@@ -3,7 +3,7 @@ id: kb-preset-application-on-create
 type: backlog_item
 title: "Apply plugin KB presets (kb.yaml + templates) when creating a new KB"
 kind: bug
-status: todo
+status: done
 priority: high
 effort: M
 tags: [plugins, kb-creation, presets]

@@ -3,7 +3,7 @@ id: web-ui-type-aware-entry-form
 type: backlog_item
 title: "Web UI: type-aware entry creation form with dynamic fields"
 kind: bug
-status: todo
+status: done
 priority: critical
 effort: L
 tags: [web, ux, entry-creation, schema]
