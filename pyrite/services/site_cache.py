@@ -132,6 +132,10 @@ nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
   background: var(--gold-glow); border: 1px solid var(--gold-border);
   padding: 0.15rem 0.65rem; border-radius: 1rem;
   font-size: 0.75rem; font-weight: 500; color: var(--gold);
+  text-decoration: none; cursor: pointer; transition: background 0.15s;
+}}
+a.tag:hover {{
+  background: var(--gold-border); text-decoration: none;
 }}
 
 /* Status badge color variants */
@@ -252,14 +256,16 @@ article li {{ color: var(--ink-soft); }}
   font-weight: 600; margin: 0 0 0.75rem 0; border: none; padding: 0;
 }}
 .related-list {{
-  display: flex; flex-direction: column; gap: 0.375rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
 }}
-.related-list a {{
-  display: inline-block; font-size: 0.9375rem;
-  text-decoration: none; margin-right: 0.25rem;
+.related-item {{
+  line-height: 1.4;
 }}
-.related-list a::before {{ content: '\2192\00a0'; color: var(--ink-faint); font-size: 0.8125rem; }}
-.related-list .date {{ font-family: 'DM Sans', sans-serif; font-size: 0.75rem; color: var(--ink-faint); margin-left: 0.5rem; }}
+.related-item a {{
+  font-size: 0.9375rem; text-decoration: none;
+}}
+.related-item a::before {{ content: '\2192\00a0'; color: var(--ink-faint); font-size: 0.8125rem; }}
+.related-item .date {{ font-family: 'DM Sans', sans-serif; font-size: 0.75rem; color: var(--ink-faint); margin-left: 0.5rem; }}
 
 /* Entry list (KB index, search results) */
 .entry-list {{ margin-top: 1rem; }}
@@ -789,8 +795,10 @@ class SiteCacheService:
         # Render body markdown to HTML (basic)
         body_html = _md_to_html(body_md, kb_name)
 
-        # Tags
-        tags_html = "".join(f'<span class="tag">{_esc(t)}</span>' for t in tags)
+        # Tags (clickable — link to search)
+        tags_html = "".join(
+            f'<a class="tag" href="/site/search?q={_esc(t)}">{_esc(t)}</a>' for t in tags
+        )
         tags_section = f'<div class="tags">{tags_html}</div>' if tags else ""
 
         # Status badge (displayed next to type badge in h1)
@@ -874,7 +882,7 @@ class SiteCacheService:
                 rel_date = rel_entry.get("date") or ""
                 date_span = f' <span class="date">{_esc(rel_date)}</span>' if rel_date else ""
                 related_items.append(
-                    f'<a href="/site/{_esc(kb_name)}/{_esc(rel_id)}">{_esc(rel_title)}</a>{date_span}'
+                    f'<div class="related-item"><a href="/site/{_esc(kb_name)}/{_esc(rel_id)}">{_esc(rel_title)}</a>{date_span}</div>'
                 )
             if related_items:
                 related_html = (
