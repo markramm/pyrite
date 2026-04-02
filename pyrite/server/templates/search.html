@@ -104,7 +104,7 @@
           return '<a class="result-item" href="/site/' + esc(e.kb_name) + '/' + encodeURIComponent(e.id) + '">'
             + '<div class="result-title">' + esc(e.title) + '</div>'
             + '<div class="result-meta">'
-            + '<span class="badge">' + esc(e.entry_type) + '</span>'
+            + '<span class="badge">' + esc((e.entry_type || '').replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); })) + '</span>'
             + '<span>' + esc(e.kb_name) + '</span>'
             + datePart
             + (tags ? ' ' + tags : '')
