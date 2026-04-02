@@ -9,7 +9,7 @@ dependencies: ["pyrite.plugins"]
 tags: [core, validation]
 ---
 
-`pyrite/schema/` is a package of 6 focused submodules (split from the original monolithic `schema.py`). `KBSchema` defines per-KB validation rules loaded from `kb.yaml`. The package also houses core data classes (`Source`, `Link`, `Provenance`), enums (`VerificationStatus`, `EventStatus`, `ResearchStatus`), and the `CORE_TYPES` / `CORE_TYPE_METADATA` registries.
+`pyrite/schema/` is a package of 7 focused submodules (split from the original monolithic `schema.py`). `KBSchema` defines per-KB validation rules loaded from `kb.yaml`. The package also houses core data classes (`Source`, `Link`, `Provenance`), enums (`VerificationStatus`, `EventStatus`, `ResearchStatus`), and the `CORE_TYPES` / `CORE_TYPE_METADATA` registries.
 
 ## Package Structure
 
@@ -21,6 +21,7 @@ tags: [core, validation]
 | `core_types.py` | `CORE_TYPES`, `CORE_TYPE_METADATA`, `resolve_type_metadata` |
 | `field_schema.py` | `FieldSchema`, `TypeSchema`, `_validate_field_value` |
 | `kb_schema.py` | `KBSchema` class |
+| `reserved.py` | Reserved field name validation |
 | `__init__.py` | Re-exports all public symbols for backward compatibility |
 
 All existing `from pyrite.schema import X` imports continue working via `__init__.py`.

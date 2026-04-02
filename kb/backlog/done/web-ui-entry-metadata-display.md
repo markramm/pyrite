@@ -1,16 +1,16 @@
 ---
 id: web-ui-entry-metadata-display
-type: backlog_item
 title: "Web UI: Entry metadata display on detail pages"
-kind: feature
-status: done
-priority: high
-effort: M
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+priority: high
+effort: M
 ---
 
 ## Problem

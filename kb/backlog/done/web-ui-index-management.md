@@ -1,16 +1,16 @@
 ---
 id: web-ui-index-management
-type: backlog_item
 title: "Web UI: Index rebuild, sync, and embedding management"
-kind: feature
-status: done
-priority: high
-effort: S
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+priority: high
+effort: S
 ---
 
 ## Problem

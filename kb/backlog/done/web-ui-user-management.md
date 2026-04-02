@@ -1,16 +1,15 @@
 ---
 id: web-ui-user-management
-type: backlog_item
 title: "Web UI: User list, roles, and per-KB permissions"
-kind: feature
-status: done
-priority: medium
-effort: M
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: M
 ---
 
 ## Problem

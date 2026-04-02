@@ -1,7 +1,7 @@
 ---
 id: migrate-rubric-items-to-named-format
 title: Migrate Rubric Items to Named Format
-type: standard
+type: runbook
 tags:
 - qa
 - migration

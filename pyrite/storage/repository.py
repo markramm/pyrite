@@ -65,6 +65,10 @@ class KBRepository:
                             first_line = body.split("\n", 1)[0].strip()
                             key = first_line.split(":", 1)[0].strip()
                             if key in fm:
+                                logger.debug(
+                                    "Stripped duplicated frontmatter field '%s' from body of %s",
+                                    key, file_path,
+                                )
                                 body = body.split("\n", 1)[1].strip() if "\n" in body else ""
                         fm = self._maybe_migrate(fm)
                         fm["body"] = body

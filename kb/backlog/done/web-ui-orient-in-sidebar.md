@@ -1,16 +1,15 @@
 ---
 id: web-ui-orient-in-sidebar
-type: backlog_item
 title: "Web UI: Add Orient link to sidebar navigation"
-kind: feature
-status: done
-priority: medium
-effort: XS
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: XS
 ---
 
 ## Problem

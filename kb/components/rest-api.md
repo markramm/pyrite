@@ -14,7 +14,7 @@ FastAPI HTTP + WebSocket server structured as a factory (`create_app()`) with fu
 ## Architecture
 
 - Factory pattern: `create_app()` in `api.py` creates isolated FastAPI instances
-- 17 endpoint modules under `endpoints/`, each an `APIRouter` under `/api` prefix
+- 21 endpoint modules under `endpoints/`, each an `APIRouter` under `/api` prefix
 - Auth endpoints mounted outside `/api` for OAuth login/logout/callback
 - Rate limiting via `slowapi` with SHA-256-anonymized client IPs
 - WebSocket at `/ws` for real-time index progress and multi-tab updates

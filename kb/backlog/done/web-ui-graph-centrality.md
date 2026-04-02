@@ -1,16 +1,15 @@
 ---
 id: web-ui-graph-centrality
-type: backlog_item
 title: "Web UI: Wire up graph node sizing by betweenness centrality"
-kind: feature
-status: done
-priority: medium
-effort: S
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: S
 ---
 
 ## Problem

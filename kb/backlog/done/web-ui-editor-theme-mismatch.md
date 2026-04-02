@@ -1,16 +1,15 @@
 ---
 id: web-ui-editor-theme-mismatch
-type: backlog_item
 title: "Bug: Editor does not respect light/dark mode toggle"
-kind: bug
-status: done
-priority: medium
-effort: S
+type: backlog_item
 tags: [web, bug, editor, theme]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: bug
+status: done
+effort: S
 ---
 
 ## Problem

@@ -1,16 +1,16 @@
 ---
 id: web-ui-saved-searches
-type: backlog_item
 title: "Web UI: Saved searches with localStorage persistence"
-kind: feature
-status: done
-priority: low
-effort: S
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+priority: low
+effort: S
 ---
 
 ## Problem

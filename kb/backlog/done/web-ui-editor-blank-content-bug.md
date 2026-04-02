@@ -1,16 +1,16 @@
 ---
 id: web-ui-editor-blank-content-bug
-type: backlog_item
 title: "Bug: Editor shows blank content when switching to edit mode"
-kind: bug
-status: done
-priority: high
-effort: S
+type: backlog_item
 tags: [web, bug, editor]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: bug
+status: done
+priority: high
+effort: S
 ---
 
 ## Problem

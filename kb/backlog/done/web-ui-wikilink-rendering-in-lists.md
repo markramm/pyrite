@@ -1,16 +1,15 @@
 ---
 id: web-ui-wikilink-rendering-in-lists
-type: backlog_item
 title: "Web UI: Render wikilinks in entry list card snippets"
-kind: feature
-status: done
-priority: medium
-effort: S
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: S
 ---
 
 ## Problem

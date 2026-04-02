@@ -1,16 +1,15 @@
 ---
 id: web-ui-daily-notes-calendar
-type: backlog_item
 title: "Web UI: Calendar widget for daily notes"
-kind: feature
-status: done
-priority: medium
-effort: S
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+effort: S
 ---
 
 ## Problem

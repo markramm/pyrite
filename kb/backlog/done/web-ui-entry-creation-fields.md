@@ -1,16 +1,16 @@
 ---
 id: web-ui-entry-creation-fields
-type: backlog_item
 title: "Web UI: Full metadata fields in entry creation and edit forms"
-kind: feature
-status: done
-priority: high
-effort: M
+type: backlog_item
 tags: [web, ux]
 links:
 - target: epic-web-ui-feature-parity
   relation: subtask_of
   kb: pyrite
+kind: feature
+status: done
+priority: high
+effort: M
 ---
 
 ## Problem

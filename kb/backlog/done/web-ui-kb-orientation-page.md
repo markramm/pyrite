@@ -1,12 +1,12 @@
 ---
 id: web-ui-kb-orientation-page
-type: backlog_item
 title: "Web UI KB orientation page"
+type: backlog_item
+tags: [web, ux, onboarding]
 kind: feature
 status: done
 priority: high
 effort: M
-tags: [web, ux, onboarding]
 ---
 
 ## Problem
