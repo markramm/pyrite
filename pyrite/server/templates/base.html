@@ -308,8 +308,9 @@ h2[id]:hover .anchor, h3[id]:hover .anchor { opacity: 1; }
           .then(function(x) { return x.json(); })
           .then(function(d) {
             r.innerHTML = (d.results || []).map(function(e) {
+              var humanType = (e.entry_type || '').replace(/_/g, ' ').replace(/-/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
               return '<a href="/site/' + esc(e.kb_name) + '/' + encodeURIComponent(e.id) + '">'
-                + '<strong>' + esc(e.title) + '</strong><span class="badge">' + esc(e.entry_type) + '</span></a>';
+                + '<strong>' + esc(e.title) + '</strong><span class="badge">' + esc(humanType) + '</span></a>';
             }).join('');
           });
       }, 300);

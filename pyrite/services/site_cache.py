@@ -116,13 +116,16 @@ nav.site-header nav a:hover {{ color: var(--ink); text-decoration: none; }}
 .breadcrumb a {{ color: var(--ink-muted); }} .breadcrumb a:hover {{ color: var(--gold); }}
 .breadcrumb .sep {{ margin: 0 0.4rem; opacity: 0.4; }}
 
+/* Entry badges row (below title) */
+.entry-badges {{
+  display: flex; align-items: center; gap: 0.5rem; margin: 0.5rem 0 0.75rem 0;
+}}
 /* Entry type badge */
 .badge {{
   display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.25rem;
   font-family: 'DM Sans', sans-serif; font-size: 0.6875rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em;
   background: var(--surface-overlay); color: var(--ink-muted);
-  vertical-align: middle; margin-left: 0.5rem; position: relative; top: -2px;
 }}
 
 /* Tags */
@@ -143,7 +146,6 @@ a.tag:hover {{
   display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.25rem;
   font-family: 'DM Sans', sans-serif; font-size: 0.6875rem; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.06em;
-  vertical-align: middle; margin-left: 0.5rem; position: relative; top: -2px;
 }}
 .badge-status.status-confirmed {{ background: rgba(34,197,94,0.15); color: #4ade80; }}
 .badge-status.status-reported,
@@ -944,10 +946,10 @@ class SiteCacheService:
         meta_html = f'<div class="meta">{" &middot; ".join(meta_parts)}</div>'
 
         body = (
-            f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span>'
-            f'<a href="/site/{_esc(kb_name)}">{_esc(kb_name)}</a><span class="sep">/</span>'
+            f'<div class="breadcrumb"><a href="/site/{_esc(kb_name)}">Home</a><span class="sep">/</span>'
             f'<strong>{_esc(title)}</strong></div>'
-            f'<h1>{_esc(title)}<span class="badge">{_esc(entry_type)}</span>{status_html}</h1>'
+            f'<h1>{_esc(title)}</h1>'
+            f'<div class="entry-badges"><span class="badge">{_esc(_humanize_type(entry_type))}</span>{status_html}</div>'
             f'{tags_section}{lanes_html}{actors_html}{meta_html}'
             f'<article>{body_html}</article>'
             f'{coverage_html}{related_html}{sources_html}{bl_html}{ol_html}'
@@ -1129,6 +1131,11 @@ def _md_inline(text: str) -> str:
 
     text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _safe_inline_link, text)
     return text
+
+
+def _humanize_type(entry_type: str) -> str:
+    """Convert raw entry types to human-friendly display names."""
+    return entry_type.replace("_", " ").replace("-", " ").title()
 
 
 def _esc(text: str) -> str:
