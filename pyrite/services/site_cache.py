@@ -222,6 +222,24 @@ article li {{ color: var(--ink-soft); }}
 }}
 .links-section a::before {{ content: '\2192\00a0'; color: var(--ink-faint); font-size: 0.8125rem; }}
 
+/* Coverage section (cross-KB backlinks with external URLs) */
+.coverage-section {{
+  margin-top: 2.5rem; padding: 1.25rem; border-radius: 0.5rem;
+  background: var(--gold-glow); border: 1px solid var(--gold-border);
+}}
+.coverage-section h2 {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.75rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold);
+  margin: 0 0 0.75rem 0;
+}}
+.coverage-list {{
+  display: flex; flex-direction: column; gap: 0.375rem;
+}}
+.coverage-list a {{
+  font-size: 0.9375rem; font-weight: 500; color: var(--gold);
+}}
+.coverage-list a:hover {{ color: var(--gold-dim); }}
+
 /* Related events section */
 .related-section {{
   margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
@@ -884,14 +902,51 @@ class SiteCacheService:
                     f'<div class="related-list">{"".join(related_items)}</div></div>'
                 )
 
-        # Backlinks
+        # Backlinks — split into cross-KB coverage (with external URLs) and internal
+        coverage_html = ""
         bl_html = ""
         if backlinks:
-            links = "".join(
-                f'<a href="/site/{_esc(bl.get("kb_name", kb_name))}/{_esc(bl["id"])}">{_esc(bl.get("title", bl["id"]))}</a> '
-                for bl in backlinks
-            )
-            bl_html = f'<div class="links-section"><h2>Linked from</h2>{links}</div>'
+            cross_kb = [bl for bl in backlinks if bl.get("kb_name") and bl["kb_name"] != kb_name]
+            same_kb = [bl for bl in backlinks if not bl.get("kb_name") or bl["kb_name"] == kb_name]
+
+            if cross_kb:
+                coverage_items = []
+                for bl in cross_kb:
+                    bl_title = _esc(bl.get("title", bl["id"]))
+                    # Try to get the external URL from the source entry's metadata
+                    ext_url = ""
+                    try:
+                        source_entry = self.db.get_entry(bl["id"], bl["kb_name"])
+                        if source_entry:
+                            meta_raw = source_entry.get("metadata") or {}
+                            if isinstance(meta_raw, str):
+                                import json as _json
+                                try:
+                                    meta_raw = _json.loads(meta_raw)
+                                except Exception:
+                                    meta_raw = {}
+                            ext_url = meta_raw.get("url", "")
+                    except Exception:
+                        pass
+                    if ext_url and isinstance(ext_url, str) and ext_url.startswith("http"):
+                        coverage_items.append(
+                            f'<a href="{_esc(ext_url)}" target="_blank" rel="noopener noreferrer">{bl_title}</a>'
+                        )
+                    else:
+                        coverage_items.append(
+                            f'<a href="/site/{_esc(bl["kb_name"])}/{_esc(bl["id"])}">{bl_title}</a>'
+                        )
+                coverage_html = (
+                    f'<div class="coverage-section"><h2>Coverage</h2>'
+                    f'<div class="coverage-list">{" ".join(coverage_items)}</div></div>'
+                )
+
+            if same_kb:
+                links = "".join(
+                    f'<a href="/site/{_esc(bl.get("kb_name", kb_name))}/{_esc(bl["id"])}">{_esc(bl.get("title", bl["id"]))}</a> '
+                    for bl in same_kb
+                )
+                bl_html = f'<div class="links-section"><h2>Linked from</h2>{links}</div>'
 
         # Outlinks
         ol_html = ""
@@ -921,7 +976,7 @@ class SiteCacheService:
             f'<h1>{_esc(title)}<span class="badge">{_esc(entry_type)}</span>{status_html}</h1>'
             f'{tags_section}{lanes_html}{actors_html}{meta_html}'
             f'<article>{body_html}</article>'
-            f'{related_html}{sources_html}{bl_html}{ol_html}'
+            f'{coverage_html}{related_html}{sources_html}{bl_html}{ol_html}'
         )
 
         html = _render_page(

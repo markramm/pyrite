@@ -69,7 +69,15 @@ class KBRepository:
                         fm = self._maybe_migrate(fm)
                         fm["body"] = body
                         fm["file_path"] = str(file_path)
-                        return entry_from_frontmatter(fm, body)
+                        entry = entry_from_frontmatter(fm, body)
+                        # Preserve references in metadata if present in frontmatter
+                        # (typed entries drop unknown fields during from_frontmatter)
+                        if "references" in fm and fm["references"]:
+                            if not hasattr(entry, "metadata") or not entry.metadata:
+                                entry.metadata = {}
+                            if "references" not in entry.metadata:
+                                entry.metadata["references"] = fm["references"]
+                        return entry
 
             # Fallback: try EventEntry.load for backward compat
             return EventEntry.load(file_path)

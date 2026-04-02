@@ -149,7 +149,10 @@ class IndexManager:
         if hasattr(entry, "metadata") and entry.metadata:
             for key in PROTOCOL_COLUMN_KEYS:
                 if key not in data and key in entry.metadata:
-                    data[key] = entry.metadata[key]
+                    value = entry.metadata[key]
+                    if key == "location" and isinstance(value, list):
+                        value = ", ".join(str(v) for v in value)
+                    data[key] = value
 
         # Store extension-specific fields in metadata column
         # Use to_frontmatter() to capture all fields, then strip keys
@@ -212,6 +215,42 @@ class IndexManager:
                         }
                     )
                     existing_targets.add(target)
+
+        # Extract references from frontmatter (cross-KB structured links)
+        # Format: references: ["kb_name:entry_id", "entry_id", ...]
+        refs = getattr(entry, "metadata", {})
+        if isinstance(refs, dict):
+            refs = refs.get("references", [])
+        else:
+            refs = []
+        fm_refs = getattr(entry, "_raw_frontmatter", {}) or {}
+        if not refs and isinstance(fm_refs, dict):
+            refs = fm_refs.get("references", [])
+        # Also check to_frontmatter output
+        if not refs:
+            try:
+                fm = entry.to_frontmatter()
+                refs = fm.get("references", [])
+            except Exception:
+                pass
+        if isinstance(refs, list):
+            existing_targets = {l.get("target") for l in data["links"]}
+            for ref in refs:
+                ref_str = str(ref).strip()
+                if not ref_str:
+                    continue
+                if ":" in ref_str and not ref_str.startswith("http"):
+                    ref_kb, ref_id = ref_str.split(":", 1)
+                else:
+                    ref_kb, ref_id = kb_name, ref_str
+                if ref_id and ref_id != entry.id and ref_id not in existing_targets:
+                    data["links"].append({
+                        "target": ref_id,
+                        "kb": ref_kb,
+                        "relation": "references",
+                        "note": "",
+                    })
+                    existing_targets.add(ref_id)
 
         # Extract transclusions as links with relation="transclusion"
         if body:

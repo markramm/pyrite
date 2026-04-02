@@ -486,6 +486,38 @@ class TestIndexManager:
         assert results["updated"] == 0
         assert results["removed"] == 0
 
+    def test_references_field_creates_cross_kb_links(self, setup):
+        """References in frontmatter should create cross-KB links during indexing."""
+        # Create an entry with references to another KB
+        kb_path = setup["kb_path"]
+        md = """---
+type: note
+id: article-1
+title: My Article
+references:
+  - other-kb:target-event-1
+  - other-kb:target-event-2
+  - same-kb-target
+---
+
+Article body referencing events.
+"""
+        (kb_path / "article-1.md").write_text(md)
+
+        setup["index_mgr"].index_kb("test-kb")
+
+        # Check that links were created
+        entry = setup["db"].get_entry("article-1", "test-kb")
+        assert entry is not None
+
+        # Get outlinks for this entry
+        outlinks = setup["db"].get_outlinks("article-1", "test-kb")
+        target_ids = {ol["id"] for ol in outlinks}
+
+        assert "target-event-1" in target_ids, f"Expected target-event-1 in outlinks, got {target_ids}"
+        assert "target-event-2" in target_ids, f"Expected target-event-2 in outlinks, got {target_ids}"
+        assert "same-kb-target" in target_ids, f"Expected same-kb-target in outlinks, got {target_ids}"
+
     def test_check_health_no_false_stale(self, setup):
         """Health check should not report entries as stale immediately after indexing.
 
