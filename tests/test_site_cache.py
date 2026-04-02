@@ -887,68 +887,72 @@ class TestRelatedEvents:
         assert "Dated Related" in html
 
 
-class TestCrossKBCoverage:
-    """Cross-KB backlinks should render with external URLs as a Coverage section."""
+class TestCoverageField:
+    """Coverage frontmatter field should render as a Coverage section."""
 
-    def test_cross_kb_backlink_uses_external_url(self, tmp_path):
-        """When a backlink source from another KB has a url field, render it as an external link."""
-        # Set up two KBs
-        kb1 = KBConfig(name="timeline", path=tmp_path / "timeline", kb_type="generic")
-        kb2 = KBConfig(name="articles", path=tmp_path / "articles", kb_type="generic")
-        config = PyriteConfig(
-            knowledge_bases=[kb1, kb2],
-            settings=Settings(index_path=tmp_path / "index.db"),
-        )
-        db = PyriteDB(tmp_path / "index.db")
-        db.register_kb("timeline", "generic", str(tmp_path / "timeline"), "Timeline")
-        db.register_kb("articles", "generic", str(tmp_path / "articles"), "Articles")
-
-        # Create a timeline event
-        db.upsert_entry({
-            "id": "event-1",
-            "kb_name": "timeline",
+    def test_coverage_renders_external_links(self, cache_env):
+        """Entries with a coverage field should show a Coverage section with external links."""
+        cache_env["db"].upsert_entry({
+            "id": "covered-event",
+            "kb_name": "test-kb",
             "entry_type": "event",
-            "title": "IRS Violations",
-            "body": "Something happened.",
+            "title": "Well-Covered Event",
+            "body": "Something important happened.",
             "summary": "",
             "tags": [],
             "sources": [],
             "links": [],
-            "metadata": {},
+            "metadata": {
+                "coverage": [
+                    {
+                        "title": "Every Database Is an Immigration Database",
+                        "url": "https://theramm.substack.com/p/every-database",
+                        "publication": "RAMM on Substack",
+                    },
+                    {
+                        "title": "ProPublica Investigation",
+                        "url": "https://propublica.org/article/investigation",
+                        "publication": "ProPublica",
+                    },
+                ]
+            },
         })
-        # Create an article in another KB with a url field and a link to the event
-        db.upsert_entry({
-            "id": "article-1",
-            "kb_name": "articles",
-            "entry_type": "writing",
-            "title": "Every Database Is an Immigration Database",
-            "body": "Article text.",
-            "summary": "",
-            "tags": [],
-            "sources": [],
-            "links": [{"target": "event-1", "kb": "timeline", "relation": "references"}],
-            "metadata": {"url": "https://theramm.substack.com/p/every-database"},
-        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "covered-event.html").read_text()
 
-        svc = SiteCacheService(config, db)
-        svc.render_all()
-        html = (svc.cache_dir / "timeline" / "event-1.html").read_text()
-
-        # Should have a Coverage section with the Substack URL
         assert "Coverage" in html
         assert "https://theramm.substack.com/p/every-database" in html
         assert "Every Database Is an Immigration Database" in html
-        db.close()
+        assert "RAMM on Substack" in html
+        assert "ProPublica" in html
 
-    def test_same_kb_backlink_remains_internal(self, cache_env):
-        """Backlinks from the same KB should still use internal paths."""
+    def test_no_coverage_when_field_absent(self, cache_env):
+        """Entries without coverage field should not show Coverage section."""
         cache_env["svc"].render_all()
-        html = (cache_env["cache_dir"] / "test-kb" / "wikilink.html").read_text()
-        # hello-world links to wikilink, so wikilink should show an internal backlink
-        assert "Hello World" in html
-        assert "/site/test-kb/hello-world" in html
-        # Should NOT have a Coverage section (same KB)
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
         assert "Coverage" not in html
+
+    def test_coverage_javascript_url_blocked(self, cache_env):
+        """Coverage entries with javascript: URLs should not render as links."""
+        cache_env["db"].upsert_entry({
+            "id": "xss-coverage",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "XSS Coverage Test",
+            "body": "Test.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {
+                "coverage": [
+                    {"title": "Evil", "url": "javascript:alert(1)", "publication": "Hacker"},
+                ]
+            },
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "xss-coverage.html").read_text()
+        assert 'href="javascript:' not in html
 
 
 class TestSEOAndSocialMetadata:
