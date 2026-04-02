@@ -10,7 +10,6 @@ Validates KB integrity without LLM involvement:
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from datetime import UTC, datetime, timedelta
@@ -18,6 +17,7 @@ from typing import Any
 
 from ..config import PyriteConfig
 from ..plugins.registry import get_registry
+from ..utils.metadata import parse_metadata
 from ..schema import validate_date, validate_importance
 from ..schema.core_types import SYSTEM_INTENT, resolve_type_metadata
 from ..storage.database import PyriteDB
@@ -382,7 +382,7 @@ class QAService:
         rows = self.db.execute_sql(sql, params)
         results = []
         for row in rows:
-            meta = json.loads(row["metadata"]) if row["metadata"] else {}
+            meta = parse_metadata(row["metadata"])
             results.append(
                 {
                     "id": row["id"],
@@ -730,23 +730,9 @@ class QAService:
         # Custom type-specific fields (e.g. writing_type, source_type, date_range)
         # are stored in the metadata JSON blob, not as top-level entry attributes.
         # The validator needs them in the fields dict to check required fields.
-        metadata = entry.get("metadata")
-        schema_version = 0
-        if metadata:
-            if isinstance(metadata, str):
-                import json
-
-                try:
-                    meta_dict = json.loads(metadata)
-                    schema_version = int(meta_dict.get("_schema_version", 0))
-                except (json.JSONDecodeError, ValueError):
-                    meta_dict = {}
-                    logger.debug("Could not parse metadata schema version")
-            elif isinstance(metadata, dict):
-                meta_dict = metadata
-                schema_version = int(metadata.get("_schema_version", 0))
-            else:
-                meta_dict = {}
+        meta_dict = parse_metadata(entry.get("metadata"))
+        schema_version = int(meta_dict.get("_schema_version", 0))
+        if meta_dict:
             # Merge metadata fields into fields dict so custom type fields
             # are visible to the schema validator
             for k, v in meta_dict.items():
@@ -824,28 +810,13 @@ class QAService:
             }
 
             # Extract _schema_version and merge custom fields from metadata
-            metadata = entry.get("metadata")
-            schema_version = 0
-            if metadata:
-                if isinstance(metadata, str):
-                    import json
-
-                    try:
-                        meta_dict = json.loads(metadata)
-                        schema_version = int(meta_dict.get("_schema_version", 0))
-                    except (json.JSONDecodeError, ValueError):
-                        meta_dict = {}
-                        logger.debug("Could not parse metadata schema version")
-                elif isinstance(metadata, dict):
-                    meta_dict = metadata
-                    schema_version = int(metadata.get("_schema_version", 0))
-                else:
-                    meta_dict = {}
-                # Merge metadata fields into fields dict so custom type fields
-                # are visible to the schema validator
-                for k, v in meta_dict.items():
-                    if k not in fields and k != "_schema_version" and v is not None:
-                        fields[k] = v
+            meta_dict = parse_metadata(entry.get("metadata"))
+            schema_version = int(meta_dict.get("_schema_version", 0))
+            # Merge metadata fields into fields dict so custom type fields
+            # are visible to the schema validator
+            for k, v in meta_dict.items():
+                if k not in fields and k != "_schema_version" and v is not None:
+                    fields[k] = v
 
             result = schema.validate_entry(
                 entry_type,
@@ -1667,12 +1638,9 @@ class QAService:
                             "SELECT metadata FROM entry WHERE id = :eid AND kb_name = :kb",
                             {"eid": entry_id, "kb": kb_name},
                         )
-                        current_meta = {}
-                        if rows and rows[0]["metadata"]:
-                            if isinstance(rows[0]["metadata"], str):
-                                current_meta = json.loads(rows[0]["metadata"])
-                            else:
-                                current_meta = rows[0]["metadata"]
+                        current_meta = parse_metadata(
+                            rows[0]["metadata"] if rows else None
+                        )
                         current_meta.update(meta_extra)
                         updates["metadata"] = current_meta
 

@@ -7,6 +7,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
+from ..utils.metadata import parse_metadata
 from ..utils.sanitize import sanitize_filename
 
 logger = logging.getLogger(__name__)
@@ -497,7 +498,6 @@ class SiteCacheService:
 
     def render_all(self) -> dict:
         """Render all KB index pages and entry pages. Returns stats."""
-        import json
         from collections import defaultdict
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -547,14 +547,7 @@ class SiteCacheService:
                 eid = entry["id"]
                 entry_by_id[eid] = entry
                 # Parse metadata
-                meta = entry.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                        if not isinstance(meta, dict):
-                            meta = {}
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_metadata(entry.get("metadata"))
                 actors = meta.get("actors") or meta.get("participants") or []
                 if isinstance(actors, list):
                     for actor in actors:
@@ -568,14 +561,7 @@ class SiteCacheService:
             related_map: dict[str, list[tuple[dict, int]]] = {}
             for entry in entries:
                 eid = entry["id"]
-                meta = entry.get("metadata") or {}
-                if isinstance(meta, str):
-                    try:
-                        meta = json.loads(meta)
-                        if not isinstance(meta, dict):
-                            meta = {}
-                    except (json.JSONDecodeError, TypeError):
-                        meta = {}
+                meta = parse_metadata(entry.get("metadata"))
                 actors = meta.get("actors") or meta.get("participants") or []
                 if not isinstance(actors, list):
                     actors = []
@@ -759,14 +745,7 @@ class SiteCacheService:
         description = summary or (body_md[:160].replace("\n", " ") + "..." if len(body_md) > 160 else body_md.replace("\n", " "))
 
         # Parse metadata (may be a JSON string or already a dict)
-        metadata = entry.get("metadata") or {}
-        if isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata)
-                if not isinstance(metadata, dict):
-                    metadata = {}
-            except (json.JSONDecodeError, TypeError):
-                metadata = {}
+        metadata = parse_metadata(entry.get("metadata"))
 
         # Fetch sources — list_entries doesn't include them, so fetch via get_entry
         sources = entry.get("sources")

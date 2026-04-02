@@ -28,6 +28,7 @@ from ..storage.database import PyriteDB
 from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
+from ..utils.metadata import parse_metadata
 from .export_service import ExportService
 from .wikilink_service import WikilinkService
 
@@ -215,6 +216,11 @@ class KBService:
 
         # Create appropriate entry type via factory
         entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **kwargs)
+
+        # Validate entry (e.g. events require a date, importance range, etc.)
+        errors = entry.validate()
+        if errors:
+            raise ValidationError("; ".join(errors))
 
         # Run before_save hooks
         hook_ctx = PluginContext(
@@ -618,18 +624,9 @@ class KBService:
         entry = self.get_entry(collection_id, kb_name)
         if not entry or entry.get("entry_type") != "collection":
             raise EntryNotFoundError(f"Collection not found: {collection_id}")
-        metadata = entry.get("metadata", {})
-        if isinstance(metadata, str):
-            import json
+        metadata = parse_metadata(entry.get("metadata", {}))
 
-            try:
-                metadata = json.loads(metadata)
-            except (json.JSONDecodeError, TypeError):
-                metadata = {}
-
-        source_type = (
-            metadata.get("source_type", "folder") if isinstance(metadata, dict) else "folder"
-        )
+        source_type = metadata.get("source_type", "folder")
 
         # Virtual collection (query-based)
         if source_type == "query":

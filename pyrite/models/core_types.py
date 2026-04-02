@@ -288,10 +288,6 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
         if not validate_importance(self.importance):
             errors.append(f"Importance must be 1-10, got: {self.importance}")
 
-        if self.id and self.date:
-            if not self.id.startswith(self.date):
-                errors.append(f"Event ID should start with date: {self.date}")
-
         return errors
 
     @classmethod

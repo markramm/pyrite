@@ -493,6 +493,7 @@ class TestFTS5EdgeCases:
             title="Dated Event",
             entry_type="event",
             body="An event that happened.",
+            date="2025-06-15",
         )
 
         results = env["search_service"].search(

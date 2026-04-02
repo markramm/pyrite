@@ -638,12 +638,6 @@ def create_entry(
             detail={"code": "KB_NOT_FOUND", "message": f"KB '{req.kb}' not found"},
         )
 
-    if req.entry_type == "event" and not req.date:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "MISSING_DATE", "message": "Events require a date"},
-        )
-
     # Filter out None values so factory defaults apply
     extra = {
         k: v

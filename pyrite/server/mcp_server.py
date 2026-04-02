@@ -733,13 +733,6 @@ class PyriteMCPServer:
         validation = schema.validate_entry(entry_type, args, context={"kb_type": kb_config.kb_type})
         warnings = validation.get("warnings", [])
 
-        if entry_type == "event" and not args.get("date"):
-            return _error(
-                "VALIDATION_FAILED",
-                "Date is required for events",
-                suggestion="Add a 'date' field in YYYY-MM-DD format",
-            )
-
         entry_id = generate_entry_id(title)
 
         # Filter out keys already passed as explicit arguments

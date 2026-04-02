@@ -20,12 +20,9 @@ console = Console()
 
 
 def _format_output(data: dict, fmt: str) -> str | None:
-    if fmt == "rich":
-        return None
-    from ..formats import format_response
+    from .output import format_output
 
-    content, _ = format_response(data, fmt)
-    return content
+    return format_output(data, fmt)
 
 
 def _normalize_name(name: str) -> dict:

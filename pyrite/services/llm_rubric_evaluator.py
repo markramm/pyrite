@@ -9,9 +9,12 @@ Gracefully degrades when no LLM is configured — returns empty results.
 from __future__ import annotations
 
 import json
+
 import logging
 import re
 from typing import TYPE_CHECKING, Any
+
+from ..utils.metadata import parse_metadata
 
 if TYPE_CHECKING:
     from .llm_service import LLMService
@@ -85,16 +88,7 @@ class LLMRubricEvaluator:
         entry_type = entry.get("entry_type", "") or ""
 
         # Parse metadata
-        metadata = entry.get("metadata")
-        meta_dict: dict[str, Any] = {}
-        if metadata:
-            if isinstance(metadata, str):
-                try:
-                    meta_dict = json.loads(metadata)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-            elif isinstance(metadata, dict):
-                meta_dict = metadata
+        meta_dict = parse_metadata(entry.get("metadata"))
 
         # Truncate body
         if len(body) > MAX_BODY_LENGTH:

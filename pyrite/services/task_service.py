@@ -1,12 +1,12 @@
 """Task service — operative task operations wrapping KBService."""
 
-import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
+from ..utils.metadata import parse_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -549,11 +549,4 @@ class TaskService:
 
 def _parse_metadata(raw) -> dict[str, Any]:
     """Parse metadata JSON from a DB row."""
-    if not raw:
-        return {}
-    if isinstance(raw, dict):
-        return raw
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return {}
+    return parse_metadata(raw)

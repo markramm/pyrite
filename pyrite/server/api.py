@@ -11,6 +11,7 @@ limiter, and the application factory.
 import hashlib
 import logging
 import os
+import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -272,7 +273,7 @@ def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
     if has_key_list:
         key_hash = hashlib.sha256(key.encode()).hexdigest()
         for entry in config.settings.api_keys:
-            if entry.get("key_hash") == key_hash:
+            if secrets.compare_digest(key_hash, entry.get("key_hash", "")):
                 return entry.get("role", "read")
 
     # Fall back to legacy single api_key (grants admin)
@@ -280,7 +281,7 @@ def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
     if has_single_key:
         key_hash = hashlib.sha256(key.encode()).hexdigest()
         stored_hash = hashlib.sha256(config.settings.api_key.encode()).hexdigest()
-        if key_hash == stored_hash:
+        if secrets.compare_digest(key_hash, stored_hash):
             return "admin"
 
     return None

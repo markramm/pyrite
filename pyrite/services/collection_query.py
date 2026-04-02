@@ -12,6 +12,7 @@ import time
 from dataclasses import asdict, dataclass
 
 from ..storage.database import PyriteDB
+from ..utils.metadata import parse_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -273,16 +274,9 @@ def _get_metadata_field(entry: dict, field_name: str) -> str | None:
         return str(entry[field_name])
 
     # Check metadata dict
-    metadata = entry.get("metadata", {})
-    if isinstance(metadata, str):
-        import json
+    metadata = parse_metadata(entry.get("metadata", {}))
 
-        try:
-            metadata = json.loads(metadata)
-        except (json.JSONDecodeError, TypeError):
-            metadata = {}
-
-    if isinstance(metadata, dict) and field_name in metadata:
+    if field_name in metadata:
         val = metadata[field_name]
         return str(val) if val is not None else None
 

@@ -47,7 +47,8 @@ class TestEntryEndpointErrors:
         )
         assert resp.status_code == 400
         data = resp.json()
-        assert data["detail"]["code"] == "MISSING_DATE"
+        assert data["detail"]["code"] == "CREATE_FAILED"
+        assert "date" in data["detail"]["message"].lower()
 
     def test_update_entry_not_found(self, rest_api_env):
         client = rest_api_env["client"]

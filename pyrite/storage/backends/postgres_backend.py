@@ -14,27 +14,16 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, date, datetime
-from pathlib import PurePath
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from ..models import Block, Entry, EntryRef, EntryTag, Link, Source, Tag
+from ...utils.json_utils import SafeEncoder as _SafeEncoder
 
 logger = logging.getLogger(__name__)
-
-
-class _SafeEncoder(json.JSONEncoder):
-    """JSON encoder that serializes date/datetime/Path objects safely."""
-
-    def default(self, o):
-        if isinstance(o, (date, datetime)):
-            return o.isoformat()
-        if isinstance(o, PurePath):
-            return str(o)
-        return super().default(o)
 
 
 def ensure_schema(engine) -> None:

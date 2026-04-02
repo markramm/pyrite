@@ -6,11 +6,12 @@ Checkers are matched by name via the NAMED_CHECKERS registry.
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
+
+from ..utils.metadata import parse_metadata
 
 if TYPE_CHECKING:
     from ..schema import KBSchema
@@ -50,17 +51,7 @@ GENERIC_TITLES = frozenset(
 
 def _parse_metadata(entry: dict[str, Any]) -> dict[str, Any]:
     """Extract metadata dict from entry, handling JSON string or dict."""
-    metadata = entry.get("metadata")
-    if not metadata:
-        return {}
-    if isinstance(metadata, str):
-        try:
-            return json.loads(metadata)
-        except (json.JSONDecodeError, ValueError):
-            return {}
-    if isinstance(metadata, dict):
-        return metadata
-    return {}
+    return parse_metadata(entry.get("metadata"))
 
 
 # =========================================================================

@@ -1,6 +1,5 @@
 """Collection endpoints — list and browse folder-backed and query-based collections."""
 
-import json
 import re
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -8,6 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from ...exceptions import EntryNotFoundError
 from ...plugins.registry import get_registry
 from ...services.kb_service import KBService
+from ...utils.metadata import parse_metadata
 from ..api import get_kb_service, limiter, negotiate_response
 from ..schemas import (
     CollectionEntriesResponse,
@@ -24,14 +24,7 @@ router = APIRouter(tags=["Collections"])
 
 def _parse_metadata(raw) -> dict:
     """Parse metadata which may be a JSON string or dict."""
-    if isinstance(raw, dict):
-        return raw
-    if isinstance(raw, str):
-        try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-    return {}
+    return parse_metadata(raw)
 
 
 @router.get("/collections/types")
