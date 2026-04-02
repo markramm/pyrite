@@ -1125,8 +1125,10 @@ def _md_inline(text: str) -> str:
 
 def _esc(text: str) -> str:
     """HTML-escape text for safe insertion into HTML content and attributes."""
+    if text is None:
+        return ""
     return (
-        text.replace("&", "&amp;")
+        str(text).replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
