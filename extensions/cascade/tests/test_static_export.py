@@ -107,6 +107,7 @@ class TestStaticExport:
         write_export(result, out_dir)
 
         assert (out_dir / "timeline.json").exists()
+        assert (out_dir / "timeline-index.json").exists()
         assert (out_dir / "actors.json").exists()
         assert (out_dir / "tags.json").exists()
         assert (out_dir / "stats.json").exists()
@@ -114,6 +115,12 @@ class TestStaticExport:
         # Verify JSON is valid
         timeline = json.loads((out_dir / "timeline.json").read_text())
         assert len(timeline) == 3
+
+        # Index should have same events but no body
+        index = json.loads((out_dir / "timeline-index.json").read_text())
+        assert len(index) == 3
+        assert "body" not in index[0]
+        assert index[0]["title"] == timeline[0]["title"]
 
     def test_date_filter(self, setup):
         from pyrite_cascade.static_export import export_timeline

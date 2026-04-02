@@ -154,9 +154,20 @@ def write_export(result: dict[str, Any], output_dir: Path) -> None:
     """Write export results to JSON files in the output directory."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Full timeline with body text (for backward compatibility)
     (output_dir / "timeline.json").write_text(
         json.dumps(result["timeline"], indent=2, ensure_ascii=False)
     )
+
+    # Lightweight index without body or sources (faster initial load)
+    index_events = []
+    for e in result["timeline"]:
+        light = {k: v for k, v in e.items() if k not in ("body", "sources")}
+        index_events.append(light)
+    (output_dir / "timeline-index.json").write_text(
+        json.dumps(index_events, ensure_ascii=False)
+    )
+
     (output_dir / "actors.json").write_text(
         json.dumps(result["actors"], indent=2, ensure_ascii=False)
     )
