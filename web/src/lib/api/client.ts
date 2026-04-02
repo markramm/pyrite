@@ -266,6 +266,8 @@ class ApiClient {
 		kb?: string;
 		entry_type?: string;
 		tag?: string;
+		status?: string;
+		min_importance?: number;
 		sort_by?: string;
 		sort_order?: string;
 		limit?: number;
@@ -275,6 +277,8 @@ class ApiClient {
 		if (options.kb) params.set('kb', options.kb);
 		if (options.entry_type) params.set('entry_type', options.entry_type);
 		if (options.tag) params.set('tag', options.tag);
+		if (options.status) params.set('status', options.status);
+		if (options.min_importance) params.set('min_importance', String(options.min_importance));
 		if (options.sort_by) params.set('sort_by', options.sort_by);
 		if (options.sort_order) params.set('sort_order', options.sort_order);
 		if (options.limit) params.set('limit', String(options.limit));

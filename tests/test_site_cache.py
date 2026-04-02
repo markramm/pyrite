@@ -682,6 +682,211 @@ class TestFrontmatterMetadataDisplay:
         assert "verified" in html
 
 
+class TestRelatedEvents:
+    """Related Events section should appear for entries sharing actors or tags."""
+
+    def test_related_events_via_shared_actor(self, cache_env):
+        """Two entries sharing an actor should show Related Events on each other's page."""
+        cache_env["db"].upsert_entry({
+            "id": "event-a",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Event Alpha",
+            "body": "First event.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Shared Actor"]},
+        })
+        cache_env["db"].upsert_entry({
+            "id": "event-b",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Event Beta",
+            "body": "Second event.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Shared Actor"]},
+        })
+        cache_env["svc"].render_all()
+        html_a = (cache_env["cache_dir"] / "test-kb" / "event-a.html").read_text()
+        html_b = (cache_env["cache_dir"] / "test-kb" / "event-b.html").read_text()
+        # Event A should show Event Beta as related
+        assert "Related Events" in html_a
+        assert "Event Beta" in html_a
+        assert "related-section" in html_a
+        # Event B should show Event Alpha as related
+        assert "Related Events" in html_b
+        assert "Event Alpha" in html_b
+
+    def test_related_events_via_shared_tag(self, cache_env):
+        """Entries sharing a tag (but not linked) should appear in Related Events."""
+        cache_env["db"].upsert_entry({
+            "id": "tag-entry-1",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Tag Entry One",
+            "body": "First tag entry.",
+            "summary": "",
+            "tags": ["shared-tag"],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["db"].upsert_entry({
+            "id": "tag-entry-2",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Tag Entry Two",
+            "body": "Second tag entry.",
+            "summary": "",
+            "tags": ["shared-tag"],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html_1 = (cache_env["cache_dir"] / "test-kb" / "tag-entry-1.html").read_text()
+        assert "Related Events" in html_1
+        assert "Tag Entry Two" in html_1
+
+    def test_related_events_excludes_backlinks(self, cache_env):
+        """Entries already linked via backlinks should NOT appear in Related Events."""
+        # hello-world links to wikilink (from cache_env fixture)
+        # Add shared tag to both so they would otherwise be related
+        cache_env["db"].upsert_entry({
+            "id": "hello-world",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Hello World",
+            "body": "This is a test entry with a [[wikilink]].",
+            "summary": "A test entry",
+            "tags": ["shared-tag"],
+            "sources": [],
+            "links": [{"target": "wikilink", "relation": "related_to"}],
+            "metadata": {},
+        })
+        cache_env["db"].upsert_entry({
+            "id": "wikilink",
+            "kb_name": "test-kb",
+            "entry_type": "concept",
+            "title": "Wikilink Target",
+            "body": "This is the target of a wikilink.",
+            "summary": "",
+            "tags": ["shared-tag"],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        # wikilink should appear in outlinks, not in related events
+        # Related Events section should either not exist or not contain "Wikilink Target"
+        import re
+        related = re.search(r'<div class="related-section">(.*?)</div>\s*</div>', html, re.DOTALL)
+        if related:
+            assert "Wikilink Target" not in related.group(1)
+
+    def test_related_events_not_shown_when_no_overlap(self, cache_env):
+        """Entries with no shared actors or tags should not have Related Events."""
+        cache_env["db"].upsert_entry({
+            "id": "isolated-entry",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Isolated Entry",
+            "body": "No overlap with anything.",
+            "summary": "",
+            "tags": ["unique-tag-xyz"],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "isolated-entry.html").read_text()
+        assert "related-section" not in html
+
+    def test_related_events_actor_scores_higher_than_tag(self, cache_env):
+        """An entry sharing an actor should rank higher than one sharing only a tag."""
+        cache_env["db"].upsert_entry({
+            "id": "scoring-main",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Scoring Main",
+            "body": "Main event for scoring test.",
+            "summary": "",
+            "tags": ["common-tag"],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Key Actor"]},
+        })
+        cache_env["db"].upsert_entry({
+            "id": "scoring-actor",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Actor Match",
+            "body": "Shares an actor.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Key Actor"]},
+        })
+        cache_env["db"].upsert_entry({
+            "id": "scoring-tag",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Tag Match",
+            "body": "Shares a tag.",
+            "summary": "",
+            "tags": ["common-tag"],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "scoring-main.html").read_text()
+        assert "Related Events" in html
+        # Actor Match (score=2) should appear before Tag Match (score=1)
+        actor_pos = html.index("Actor Match")
+        tag_pos = html.index("Tag Match")
+        assert actor_pos < tag_pos, "Actor match should appear before tag match"
+
+    def test_related_events_date_shown(self, cache_env):
+        """Related events with a date should display it."""
+        cache_env["db"].upsert_entry({
+            "id": "dated-main",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Dated Main",
+            "body": "Main.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Dated Actor"]},
+        })
+        cache_env["db"].upsert_entry({
+            "id": "dated-related",
+            "kb_name": "test-kb",
+            "entry_type": "event",
+            "title": "Dated Related",
+            "body": "Related.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {"actors": ["Dated Actor"]},
+            "date": "2025-03-15",
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "dated-main.html").read_text()
+        assert "2025-03-15" in html
+        assert "Dated Related" in html
+
+
 class TestSEOAndSocialMetadata:
     """Verify SEO meta tags, Twitter cards, og:url, og:image, and JSON-LD enhancements."""
 

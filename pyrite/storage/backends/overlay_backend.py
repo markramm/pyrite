@@ -71,6 +71,8 @@ class OverlaySearchBackend:
         limit: int = 50,
         offset: int = 0,
         include_archived: bool = False,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> list[dict[str, Any]]:
         # Get all from main (without limit — we need to merge before paginating)
         main_results = self._main.list_entries(
@@ -82,6 +84,8 @@ class OverlaySearchBackend:
             limit=10000,  # fetch all for merge
             offset=0,
             include_archived=include_archived,
+            status=status,
+            min_importance=min_importance,
         )
         diff_results = self._diff.list_entries(
             kb_name=kb_name,
@@ -92,6 +96,8 @@ class OverlaySearchBackend:
             limit=10000,
             offset=0,
             include_archived=include_archived,
+            status=status,
+            min_importance=min_importance,
         )
         merged = self._merge_entry_lists(main_results, diff_results, sort_by, sort_order)
         return merged[offset : offset + limit] if limit else merged
@@ -101,10 +107,16 @@ class OverlaySearchBackend:
         kb_name: str | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> int:
-        main_count = self._main.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag)
+        main_count = self._main.count_entries(
+            kb_name=kb_name, entry_type=entry_type, tag=tag,
+            status=status, min_importance=min_importance,
+        )
         diff_entries = self._diff.list_entries(
-            kb_name=kb_name, entry_type=entry_type, tag=tag, limit=10000
+            kb_name=kb_name, entry_type=entry_type, tag=tag, limit=10000,
+            status=status, min_importance=min_importance,
         )
         # New entries in diff (not in main) add to count
         # Modified entries in diff don't change count

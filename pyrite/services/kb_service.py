@@ -578,6 +578,8 @@ class KBService:
         sort_order: str = "desc",
         limit: int = 50,
         offset: int = 0,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> list[dict[str, Any]]:
         """List entries with pagination."""
         return self.db.list_entries(
@@ -588,6 +590,8 @@ class KBService:
             sort_order=sort_order,
             limit=limit,
             offset=offset,
+            status=status,
+            min_importance=min_importance,
         )
 
     def list_collections(self, kb_name: str | None = None) -> list[dict[str, Any]]:
@@ -690,9 +694,14 @@ class KBService:
         kb_name: str | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> int:
         """Count entries, optionally filtered."""
-        return self.db.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag)
+        return self.db.count_entries(
+            kb_name=kb_name, entry_type=entry_type, tag=tag,
+            status=status, min_importance=min_importance,
+        )
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
         """Get distinct entry types from the database."""

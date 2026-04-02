@@ -428,6 +428,8 @@ class PostgresBackend:
         limit: int = 50,
         offset: int = 0,
         include_archived: bool = False,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> list[dict[str, Any]]:
         from sqlalchemy import func as sa_func
 
@@ -446,6 +448,10 @@ class PostgresBackend:
             query = query.filter(Entry.kb_name == kb_name)
         if entry_type:
             query = query.filter(Entry.entry_type == entry_type)
+        if status:
+            query = query.filter(Entry.status == status)
+        if min_importance is not None:
+            query = query.filter(Entry.importance >= min_importance)
         query = query.distinct()
 
         col = sort_by if sort_by in self._SORT_COLUMNS else "updated_at"
@@ -471,6 +477,8 @@ class PostgresBackend:
         kb_name: str | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> int:
         from sqlalchemy import func
 
@@ -487,6 +495,10 @@ class PostgresBackend:
             query = query.filter(Entry.kb_name == kb_name)
         if entry_type:
             query = query.filter(Entry.entry_type == entry_type)
+        if status:
+            query = query.filter(Entry.status == status)
+        if min_importance is not None:
+            query = query.filter(Entry.importance >= min_importance)
         return query.scalar() or 0
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:

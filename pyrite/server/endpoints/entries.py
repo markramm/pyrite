@@ -54,6 +54,8 @@ def list_entries(
     kb: str | None = Query(None, description="Filter by KB name"),
     entry_type: str | None = Query(None, description="Filter by entry type"),
     tag: str | None = Query(None, description="Filter by tag"),
+    status: str | None = Query(None, description="Filter by status"),
+    min_importance: int | None = Query(None, ge=1, le=10, description="Minimum importance (1-10)"),
     sort_by: str = Query("updated_at", description="Sort column"),
     sort_order: str = Query("desc", description="Sort direction: asc or desc"),
     limit: int = Query(50, ge=1, le=200),
@@ -78,8 +80,13 @@ def list_entries(
         sort_order=sort_order,
         limit=limit,
         offset=offset,
+        status=status,
+        min_importance=min_importance,
     )
-    total = svc.count_entries(kb_name=kb, entry_type=entry_type, tag=tag)
+    total = svc.count_entries(
+        kb_name=kb, entry_type=entry_type, tag=tag,
+        status=status, min_importance=min_importance,
+    )
 
     entries = []
     for r in results:

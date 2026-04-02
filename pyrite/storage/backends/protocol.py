@@ -49,6 +49,8 @@ class SearchBackend(Protocol):
         limit: int = 50,
         offset: int = 0,
         include_archived: bool = False,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> list[dict[str, Any]]:
         """List entries with pagination and optional filters."""
         ...
@@ -58,6 +60,8 @@ class SearchBackend(Protocol):
         kb_name: str | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> int:
         """Count entries matching filters."""
         ...

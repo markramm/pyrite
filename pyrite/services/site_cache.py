@@ -222,6 +222,25 @@ article li {{ color: var(--ink-soft); }}
 }}
 .links-section a::before {{ content: '\2192\00a0'; color: var(--ink-faint); font-size: 0.8125rem; }}
 
+/* Related events section */
+.related-section {{
+  margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+}}
+.related-section h2 {{
+  font-family: 'DM Sans', sans-serif; font-size: 0.6875rem;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted);
+  font-weight: 600; margin: 0 0 0.75rem 0; border: none; padding: 0;
+}}
+.related-list {{
+  display: flex; flex-direction: column; gap: 0.375rem;
+}}
+.related-list a {{
+  display: inline-block; font-size: 0.9375rem;
+  text-decoration: none; margin-right: 0.25rem;
+}}
+.related-list a::before {{ content: '\2192\00a0'; color: var(--ink-faint); font-size: 0.8125rem; }}
+.related-list .date {{ font-family: 'DM Sans', sans-serif; font-size: 0.75rem; color: var(--ink-faint); margin-left: 0.5rem; }}
+
 /* Entry list (KB index, search results) */
 .entry-list {{ margin-top: 1rem; }}
 .entry-list a {{
@@ -459,6 +478,7 @@ class SiteCacheService:
 
     def render_all(self) -> dict:
         """Render all KB index pages and entry pages. Returns stats."""
+        import json
         from collections import defaultdict
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -500,6 +520,76 @@ class SiteCacheService:
                 for ol in self.db.get_outlinks(eid, kb_name):
                     outlinks_map[eid].append(ol)
 
+            # Pre-compute actor->entry_ids and tag->entry_ids for related events
+            actor_to_entries: dict[str, set[str]] = defaultdict(set)
+            tag_to_entries: dict[str, set[str]] = defaultdict(set)
+            entry_by_id: dict[str, dict] = {}
+            for entry in entries:
+                eid = entry["id"]
+                entry_by_id[eid] = entry
+                # Parse metadata
+                meta = entry.get("metadata") or {}
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                        if not isinstance(meta, dict):
+                            meta = {}
+                    except (json.JSONDecodeError, TypeError):
+                        meta = {}
+                actors = meta.get("actors") or meta.get("participants") or []
+                if isinstance(actors, list):
+                    for actor in actors:
+                        if actor:
+                            actor_to_entries[str(actor)].add(eid)
+                for tag in entry.get("tags") or []:
+                    if tag:
+                        tag_to_entries[str(tag)].add(eid)
+
+            # Compute related entries map: entry_id -> [(entry_dict, score), ...]
+            related_map: dict[str, list[tuple[dict, int]]] = {}
+            for entry in entries:
+                eid = entry["id"]
+                meta = entry.get("metadata") or {}
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                        if not isinstance(meta, dict):
+                            meta = {}
+                    except (json.JSONDecodeError, TypeError):
+                        meta = {}
+                actors = meta.get("actors") or meta.get("participants") or []
+                if not isinstance(actors, list):
+                    actors = []
+                tags = entry.get("tags") or []
+
+                # IDs to exclude: self, backlinks, outlinks
+                exclude = {eid}
+                for bl in backlinks_map.get(eid, []):
+                    exclude.add(bl["id"])
+                for ol in outlinks_map.get(eid, []):
+                    exclude.add(ol["id"])
+
+                # Score candidates
+                scores: dict[str, int] = defaultdict(int)
+                for actor in actors:
+                    if actor:
+                        for candidate_id in actor_to_entries.get(str(actor), set()):
+                            if candidate_id not in exclude:
+                                scores[candidate_id] += 2
+                for tag in tags:
+                    if tag:
+                        for candidate_id in tag_to_entries.get(str(tag), set()):
+                            if candidate_id not in exclude:
+                                scores[candidate_id] += 1
+
+                if scores:
+                    top = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
+                    related_map[eid] = [
+                        (entry_by_id[cid], score)
+                        for cid, score in top
+                        if cid in entry_by_id
+                    ]
+
             # Check if KB is read-only (hide edit links on public sites)
             kb_config = self.config.get_kb(kb_name)
             is_read_only = kb_config.read_only if kb_config else False
@@ -513,6 +603,7 @@ class SiteCacheService:
                         backlinks_map.get(eid, []),
                         outlinks_map.get(eid, []),
                         read_only=is_read_only,
+                        related=related_map.get(eid, []),
                     )
                     stats["entries"] += 1
                 except Exception as e:
@@ -633,7 +724,7 @@ class SiteCacheService:
         )
         (self.cache_dir / kb_name / "index.html").write_text(html, encoding="utf-8")
 
-    def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list, *, read_only: bool = False):
+    def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list, *, read_only: bool = False, related: list[tuple[dict, int]] | None = None):
         """Render a single entry page."""
         import json
 
@@ -775,6 +866,24 @@ class SiteCacheService:
                     f'<ol>{"".join(source_items)}</ol></div>'
                 )
 
+        # Related events (entries sharing actors/tags, excluding self/backlinks/outlinks)
+        related_html = ""
+        if related:
+            related_items = []
+            for rel_entry, _score in related:
+                rel_id = rel_entry["id"]
+                rel_title = rel_entry.get("title", rel_id)
+                rel_date = rel_entry.get("date") or ""
+                date_span = f' <span class="date">{_esc(rel_date)}</span>' if rel_date else ""
+                related_items.append(
+                    f'<a href="/site/{_esc(kb_name)}/{_esc(rel_id)}">{_esc(rel_title)}</a>{date_span}'
+                )
+            if related_items:
+                related_html = (
+                    f'<div class="related-section"><h2>Related Events</h2>'
+                    f'<div class="related-list">{"".join(related_items)}</div></div>'
+                )
+
         # Backlinks
         bl_html = ""
         if backlinks:
@@ -812,7 +921,7 @@ class SiteCacheService:
             f'<h1>{_esc(title)}<span class="badge">{_esc(entry_type)}</span>{status_html}</h1>'
             f'{tags_section}{lanes_html}{actors_html}{meta_html}'
             f'<article>{body_html}</article>'
-            f'{sources_html}{bl_html}{ol_html}'
+            f'{related_html}{sources_html}{bl_html}{ol_html}'
         )
 
         html = _render_page(

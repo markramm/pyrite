@@ -22,6 +22,8 @@ class EntryStore {
 		kb?: string;
 		entry_type?: string;
 		tag?: string;
+		status?: string;
+		min_importance?: number;
 		offset?: number;
 	} = {}) {
 		this.loading = true;
@@ -31,6 +33,8 @@ class EntryStore {
 				kb: options.kb,
 				entry_type: options.entry_type,
 				tag: options.tag,
+				status: options.status,
+				min_importance: options.min_importance,
 				sort_by: this.sortBy,
 				sort_order: this.sortOrder,
 				limit: this.limit,

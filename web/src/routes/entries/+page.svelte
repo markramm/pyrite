@@ -10,7 +10,24 @@
 	import { goto } from '$app/navigation';
 
 	let filterType = $state('');
+	let filterStatus = $state('');
+	let filterMinImportance = $state('');
+	let filterParticipant = $state('');
 	let entryTypes = $state<string[]>([]);
+
+	const statusOptions = [
+		'draft',
+		'confirmed',
+		'reported',
+		'disputed',
+		'unverified',
+		'verified',
+		'rumor',
+		'retracted',
+		'active',
+		'resolved',
+		'closed'
+	];
 
 	// Get params from URL
 	const urlKB = $derived($page.url.searchParams.get('kb') ?? undefined);
@@ -18,17 +35,53 @@
 	const activeKB = $derived(urlKB ?? kbStore.activeKB ?? undefined);
 
 	onMount(() => {
-		// Read initial filter from URL
+		// Read initial filters from URL
 		filterType = $page.url.searchParams.get('type') ?? '';
+		filterStatus = $page.url.searchParams.get('status') ?? '';
+		filterMinImportance = $page.url.searchParams.get('min_importance') ?? '';
+		filterParticipant = $page.url.searchParams.get('participant') ?? '';
 	});
 
-	// Load entries when KB, type filter, or tag changes
+	// Sync filter state to URL params
+	function updateUrlParams() {
+		const url = new URL($page.url);
+		if (filterType) {
+			url.searchParams.set('type', filterType);
+		} else {
+			url.searchParams.delete('type');
+		}
+		if (filterStatus) {
+			url.searchParams.set('status', filterStatus);
+		} else {
+			url.searchParams.delete('status');
+		}
+		if (filterMinImportance) {
+			url.searchParams.set('min_importance', filterMinImportance);
+		} else {
+			url.searchParams.delete('min_importance');
+		}
+		if (filterParticipant) {
+			url.searchParams.set('participant', filterParticipant);
+		} else {
+			url.searchParams.delete('participant');
+		}
+		goto(url.toString(), { replaceState: true, keepFocus: true });
+	}
+
+	// Determine if participant filtering is active (client-side filter)
+	const hasParticipantFilter = $derived(filterParticipant.trim().length > 0);
+
+	// Load entries when KB, type filter, status, importance, or tag changes
 	$effect(() => {
 		const kb = activeKB;
 		const type = filterType || undefined;
 		const tag = urlTag;
+		const status = filterStatus || undefined;
+		const minImp = filterMinImportance ? parseInt(filterMinImportance, 10) : undefined;
+		// Read filterParticipant to ensure this effect re-runs when it changes
+		const _participant = filterParticipant;
 		if (kb) {
-			entryStore.loadList({ kb, entry_type: type, tag });
+			entryStore.loadList({ kb, entry_type: type, tag, status, min_importance: minImp });
 		}
 	});
 
@@ -36,32 +89,72 @@
 	$effect(() => {
 		const kb = activeKB;
 		if (kb) {
-			api.getEntryTypes(kb).then((res) => {
-				entryTypes = res.types;
-			}).catch(() => {
-				entryTypes = [];
-			});
+			api.getEntryTypes(kb)
+				.then((res) => {
+					entryTypes = res.types;
+				})
+				.catch(() => {
+					entryTypes = [];
+				});
 		}
 	});
 
 	function onFilterChange() {
-		// filterType is $state — the $effect above will re-run automatically
+		updateUrlParams();
+	}
+
+	let participantDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+	function onParticipantInput() {
+		clearTimeout(participantDebounceTimer);
+		participantDebounceTimer = setTimeout(() => {
+			updateUrlParams();
+		}, 300);
 	}
 
 	function onSortChange(e: Event) {
 		const value = (e.target as HTMLSelectElement).value;
 		entryStore.sortBy = value;
-		loadEntries();
+		// Trigger reload via effect by updating URL
+		updateUrlParams();
 	}
 
 	function toggleSortOrder() {
 		entryStore.sortOrder = entryStore.sortOrder === 'desc' ? 'asc' : 'desc';
-		loadEntries();
+		updateUrlParams();
 	}
 
 	function clearTag() {
+		const url = new URL($page.url);
+		url.searchParams.delete('tag');
+		goto(url.toString());
+	}
+
+	function clearStatus() {
+		filterStatus = '';
+		updateUrlParams();
+	}
+
+	function clearImportance() {
+		filterMinImportance = '';
+		updateUrlParams();
+	}
+
+	function clearParticipant() {
+		filterParticipant = '';
+		updateUrlParams();
+	}
+
+	function clearAllFilters() {
+		filterType = '';
+		filterStatus = '';
+		filterMinImportance = '';
+		filterParticipant = '';
 		goto('/entries');
 	}
+
+	const hasActiveFilters = $derived(
+		!!filterType || !!filterStatus || !!filterMinImportance || !!filterParticipant || !!urlTag
+	);
 </script>
 
 <svelte:head><title>Entries — Pyrite</title></svelte:head>
@@ -104,6 +197,39 @@
 				{/each}
 			</select>
 
+			<!-- Status filter -->
+			<select
+				bind:value={filterStatus}
+				onchange={onFilterChange}
+				class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+			>
+				<option value="">All statuses</option>
+				{#each statusOptions as s}
+					<option value={s}>{s}</option>
+				{/each}
+			</select>
+
+			<!-- Importance filter -->
+			<select
+				bind:value={filterMinImportance}
+				onchange={onFilterChange}
+				class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+			>
+				<option value="">Any importance</option>
+				{#each [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as n}
+					<option value={String(n)}>{n}+</option>
+				{/each}
+			</select>
+
+			<!-- Participant filter -->
+			<input
+				type="text"
+				placeholder="Participant..."
+				bind:value={filterParticipant}
+				oninput={onParticipantInput}
+				class="w-36 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+			/>
+
 			<!-- Search -->
 			<input
 				type="search"
@@ -123,14 +249,74 @@
 		</div>
 	</div>
 
-	<!-- Active tag filter -->
-	{#if urlTag}
-		<div class="mb-3 flex items-center gap-2">
-			<span class="text-sm text-zinc-500">Filtered by tag:</span>
-			<span class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-				{urlTag}
-				<button onclick={clearTag} class="ml-0.5 hover:text-blue-600 dark:hover:text-blue-100">&times;</button>
-			</span>
+	<!-- Active filter chips -->
+	{#if hasActiveFilters}
+		<div class="mb-3 flex flex-wrap items-center gap-2">
+			<span class="text-sm text-zinc-500">Filters:</span>
+			{#if urlTag}
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+				>
+					tag: {urlTag}
+					<button
+						onclick={clearTag}
+						class="ml-0.5 hover:text-blue-600 dark:hover:text-blue-100">&times;</button
+					>
+				</span>
+			{/if}
+			{#if filterType}
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+				>
+					type: {filterType}
+					<button
+						onclick={() => {
+							filterType = '';
+							onFilterChange();
+						}}
+						class="ml-0.5 hover:text-purple-600 dark:hover:text-purple-100">&times;</button
+					>
+				</span>
+			{/if}
+			{#if filterStatus}
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"
+				>
+					status: {filterStatus}
+					<button
+						onclick={clearStatus}
+						class="ml-0.5 hover:text-amber-600 dark:hover:text-amber-100">&times;</button
+					>
+				</span>
+			{/if}
+			{#if filterMinImportance}
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800 dark:bg-red-900/30 dark:text-red-300"
+				>
+					importance: {filterMinImportance}+
+					<button
+						onclick={clearImportance}
+						class="ml-0.5 hover:text-red-600 dark:hover:text-red-100">&times;</button
+					>
+				</span>
+			{/if}
+			{#if filterParticipant}
+				<span
+					class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300"
+				>
+					participant: {filterParticipant}
+					<button
+						onclick={clearParticipant}
+						class="ml-0.5 hover:text-green-600 dark:hover:text-green-100">&times;</button
+					>
+				</span>
+			{/if}
+			<button
+				onclick={clearAllFilters}
+				class="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+			>
+				Clear all
+			</button>
 		</div>
 	{/if}
 
@@ -156,6 +342,9 @@
 			{/each}
 		</div>
 	{:else}
-		<EntryList kb={urlKB ?? kbStore.activeKB ?? undefined} />
+		<EntryList
+			kb={urlKB ?? kbStore.activeKB ?? undefined}
+			participantFilter={hasParticipantFilter ? filterParticipant.trim().toLowerCase() : ''}
+		/>
 	{/if}
 </div>

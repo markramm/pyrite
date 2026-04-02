@@ -17,6 +17,7 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { parseWikilinks } from '$lib/editor/wikilink-utils';
+	import SkeletonLoader from '$lib/components/common/SkeletonLoader.svelte';
 
 	const canEdit = $derived(
 		!authStore.authConfig.enabled || authStore.isAuthenticated
@@ -184,8 +185,13 @@
 
 <div class="flex flex-1 overflow-hidden">
 	{#if entryStore.loading}
-		<div class="flex flex-1 items-center justify-center">
-			<span class="text-zinc-400">Loading...</span>
+		<div class="flex flex-1 overflow-hidden">
+			<div class="flex-1">
+				<SkeletonLoader variant="detail" lines={6} />
+			</div>
+			<aside class="hidden w-64 shrink-0 border-l border-zinc-200 p-4 dark:border-zinc-800 lg:block">
+				<SkeletonLoader lines={4} header />
+			</aside>
 		</div>
 	{:else if entryStore.error}
 		<div class="flex flex-1 items-center justify-center text-red-500">{entryStore.error}</div>
@@ -323,6 +329,19 @@
 									<div class="prose dark:prose-invert max-w-4xl">
 										{@html renderMarkdownWithLinks(entryStore.current?.body ?? '', resolvedIds)}
 									</div>
+									{#if entryStore.current?.participants && entryStore.current.participants.length > 0}
+										<div class="mt-8 border-t border-zinc-200 pt-6 dark:border-zinc-700">
+											<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Related</h2>
+											<div class="flex flex-wrap gap-2">
+												{#each entryStore.current.participants as participant}
+													<a
+														href="/search?q={encodeURIComponent(participant)}"
+														class="inline-flex items-center rounded-md border border-zinc-200 px-2.5 py-1 text-sm text-zinc-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-blue-600 dark:hover:bg-blue-900/30 dark:hover:text-blue-300"
+													>{participant}</a>
+												{/each}
+											</div>
+										</div>
+									{/if}
 								{/if}
 							</div>
 						</div>

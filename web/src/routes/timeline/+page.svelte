@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
-	import LoadingState from '$lib/components/common/LoadingState.svelte';
+	import SkeletonLoader from '$lib/components/common/SkeletonLoader.svelte';
 	import EmptyState from '$lib/components/common/EmptyState.svelte';
 	import TagBadge from '$lib/components/common/TagBadge.svelte';
 	import { api } from '$lib/api/client';
@@ -132,7 +132,7 @@
 	</div>
 
 	{#if loading}
-		<LoadingState message="Loading timeline..." />
+		<SkeletonLoader variant="timeline" lines={6} />
 	{:else if filteredEvents.length === 0}
 		<EmptyState
 			icon="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
