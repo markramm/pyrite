@@ -10,7 +10,12 @@
 <meta property="og:title" content="{{ og_title }}">
 <meta property="og:description" content="{{ description }}">
 <meta property="og:type" content="{{ og_type }}">
-{{ extra_head|safe }}
+{% if og_url %}<meta property="og:url" content="{{ og_url }}">
+{% endif %}{% if og_image %}<meta property="og:image" content="{{ og_image }}">
+{% endif %}{% if twitter_card %}<meta name="twitter:card" content="{{ twitter_card }}">
+<meta name="twitter:title" content="{{ og_title }}">
+<meta name="twitter:description" content="{{ description }}">
+{% endif %}{{ extra_head|safe }}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">

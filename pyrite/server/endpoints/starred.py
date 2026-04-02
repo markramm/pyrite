@@ -5,9 +5,10 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 
+from ...services.kb_service import KBService
 from ...storage.database import PyriteDB
 from ...storage.models import StarredEntry
-from ..api import get_db, limiter, requires_tier
+from ..api import get_db, get_kb_service, limiter, requires_tier
 from ..schemas import (
     ReorderStarredRequest,
     ReorderStarredResponse,
@@ -27,6 +28,7 @@ def list_starred(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     db: PyriteDB = Depends(get_db),
+    svc: KBService = Depends(get_kb_service),
 ):
     """List all starred entries, optionally filtered by KB."""
     query = db.session.query(StarredEntry)
@@ -35,12 +37,25 @@ def list_starred(
     query = query.order_by(StarredEntry.sort_order, StarredEntry.created_at.desc())
     results = query.all()
 
+    # Batch-resolve titles from the storage backend
+    ids_to_fetch = [(r.entry_id, r.kb_name) for r in results]
+    title_map: dict[str, str] = {}
+    if ids_to_fetch:
+        try:
+            entries = svc.get_entries(ids_to_fetch)
+            for e in entries:
+                key = f"{e['id']}:{e.get('kb_name', '')}"
+                title_map[key] = e.get("title", "")
+        except Exception:
+            pass  # Graceful degradation — titles will be None
+
     return StarredEntryListResponse(
         count=len(results),
         starred=[
             StarredEntryItem(
                 entry_id=r.entry_id,
                 kb_name=r.kb_name,
+                title=title_map.get(f"{r.entry_id}:{r.kb_name}"),
                 sort_order=r.sort_order,
                 created_at=r.created_at,
             )

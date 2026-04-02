@@ -30,6 +30,7 @@ _PAGE_TEMPLATE_LEGACY = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <title>{title}</title>
 <meta name="description" content="{description}">
 <meta name="robots" content="index, follow">
@@ -37,6 +38,9 @@ _PAGE_TEMPLATE_LEGACY = """<!DOCTYPE html>
 <meta property="og:title" content="{og_title}">
 <meta property="og:description" content="{description}">
 <meta property="og:type" content="{og_type}">
+{og_url_meta}
+{og_image_meta}
+{twitter_meta}
 {extra_head}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -419,6 +423,20 @@ def _render_page(**kwargs: object) -> str:
     try:
         return _render_template("base.html", **kwargs)
     except Exception:
+        # Build legacy meta tag strings from structured params
+        og_url = kwargs.pop("og_url", "") if "og_url" in kwargs else ""
+        og_image = kwargs.pop("og_image", "") if "og_image" in kwargs else ""
+        twitter_card = kwargs.pop("twitter_card", "") if "twitter_card" in kwargs else ""
+        kwargs["og_url_meta"] = f'<meta property="og:url" content="{og_url}">' if og_url else ""
+        kwargs["og_image_meta"] = f'<meta property="og:image" content="{og_image}">' if og_image else ""
+        if twitter_card:
+            kwargs["twitter_meta"] = (
+                f'<meta name="twitter:card" content="{twitter_card}">\n'
+                f'<meta name="twitter:title" content="{kwargs.get("og_title", "")}">\n'
+                f'<meta name="twitter:description" content="{kwargs.get("description", "")}">'
+            )
+        else:
+            kwargs["twitter_meta"] = ""
         # Fall back to legacy template if Jinja2 fails
         return _PAGE_TEMPLATE_LEGACY.format(**kwargs)
 
@@ -555,6 +573,9 @@ class SiteCacheService:
             description="Browse knowledge bases on systems thinking, lean, agile, and more.",
             og_title="Pyrite Knowledge Base",
             og_type="website",
+            og_url="/site",
+            og_image="/static/favicon.svg",
+            twitter_card="summary",
             extra_head="",
             canonical='<link rel="canonical" href="/site">',
             body=body,
@@ -603,6 +624,9 @@ class SiteCacheService:
             description=_esc(page_desc),
             og_title=f"{_esc(title)} — Pyrite Knowledge Base",
             og_type="website",
+            og_url=f"/site/{_esc(kb_name)}",
+            og_image="/static/favicon.svg",
+            twitter_card="summary",
             extra_head="",
             canonical=f'<link rel="canonical" href="/site/{_esc(kb_name)}">',
             body=body,
@@ -640,21 +664,34 @@ class SiteCacheService:
             full_entry = self.db.get_entry(entry_id, kb_name)
             sources = full_entry.get("sources", []) if full_entry else []
 
-        # JSON-LD
+        # Canonical URL
+        canonical_path = f"/site/{_esc(kb_name)}/{_esc(entry_id)}"
+        canonical = f'<link rel="canonical" href="{canonical_path}">'
+
+        # JSON-LD (enhanced with url, publisher, author)
         schema_type = _SCHEMA_TYPES.get(entry_type, "Article")
         jsonld = {
             "@context": "https://schema.org",
             "@type": schema_type,
             "name": title,
             "description": description,
+            "url": canonical_path,
+            "publisher": {"@type": "Organization", "name": "Pyrite"},
         }
         if date:
             jsonld["datePublished"] = date
         if tags:
             jsonld["keywords"] = ", ".join(tags)
+        # Author from created_by or provenance in metadata
+        author_name = entry.get("created_by") or ""
+        if not author_name:
+            prov = metadata.get("provenance") or {}
+            if isinstance(prov, dict):
+                author_name = prov.get("created_by") or ""
+        if author_name:
+            jsonld["author"] = {"@type": "Person", "name": author_name}
 
         extra_head = f'<script type="application/ld+json">{json.dumps(jsonld)}</script>'
-        canonical = f'<link rel="canonical" href="/site/{_esc(kb_name)}/{_esc(entry_id)}">'
 
         # Reading time estimate
         word_count = len(body_md.split())
@@ -783,6 +820,9 @@ class SiteCacheService:
             description=_esc(description),
             og_title=f"{_esc(title)} — {_esc(kb_name)}",
             og_type="article",
+            og_url=canonical_path,
+            og_image="/static/favicon.svg",
+            twitter_card="summary",
             extra_head=extra_head,
             canonical=canonical,
             body=body,

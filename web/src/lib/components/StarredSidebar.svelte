@@ -25,8 +25,9 @@
 					<a
 						href="/entries/{item.entry_id}?kb={item.kb_name}"
 						class="block truncate rounded px-2 py-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+						title={item.entry_id}
 					>
-						{item.entry_id}
+						{item.title || item.entry_id}
 					</a>
 				</li>
 			{/each}

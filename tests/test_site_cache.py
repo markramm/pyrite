@@ -680,3 +680,106 @@ class TestFrontmatterMetadataDisplay:
         # Tags still present
         assert "conflict" in html
         assert "verified" in html
+
+
+class TestSEOAndSocialMetadata:
+    """Verify SEO meta tags, Twitter cards, og:url, og:image, and JSON-LD enhancements."""
+
+    def test_entry_has_og_url(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'property="og:url"' in html
+        assert '/site/test-kb/hello-world' in html
+
+    def test_entry_has_og_image(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'property="og:image"' in html
+        assert '/static/favicon.svg' in html
+
+    def test_entry_has_twitter_card(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'name="twitter:card"' in html
+        assert 'content="summary"' in html
+
+    def test_entry_has_twitter_title(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'name="twitter:title"' in html
+        assert "Hello World" in html
+
+    def test_entry_has_twitter_description(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        assert 'name="twitter:description"' in html
+
+    def test_jsonld_has_url(self, cache_env):
+        import json
+        import re
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        match = re.search(r'<script type="application/ld\+json">(.*?)</script>', html)
+        assert match, "No JSON-LD found"
+        ld = json.loads(match.group(1))
+        assert "url" in ld
+        assert "/site/test-kb/hello-world" in ld["url"]
+
+    def test_jsonld_has_publisher(self, cache_env):
+        import json
+        import re
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        match = re.search(r'<script type="application/ld\+json">(.*?)</script>', html)
+        assert match, "No JSON-LD found"
+        ld = json.loads(match.group(1))
+        assert "publisher" in ld
+        assert ld["publisher"]["@type"] == "Organization"
+        assert ld["publisher"]["name"] == "Pyrite"
+
+    def test_jsonld_has_author_when_created_by_set(self, cache_env):
+        import json
+        import re
+        cache_env["db"].upsert_entry({
+            "id": "authored-entry",
+            "kb_name": "test-kb",
+            "entry_type": "note",
+            "title": "Authored Entry",
+            "body": "Written by someone.",
+            "summary": "",
+            "tags": [],
+            "sources": [],
+            "links": [],
+            "metadata": {},
+            "created_by": "Jane Author",
+        })
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "authored-entry.html").read_text()
+        match = re.search(r'<script type="application/ld\+json">(.*?)</script>', html)
+        assert match, "No JSON-LD found"
+        ld = json.loads(match.group(1))
+        assert "author" in ld
+        assert ld["author"]["@type"] == "Person"
+        assert ld["author"]["name"] == "Jane Author"
+
+    def test_jsonld_no_author_when_not_set(self, cache_env):
+        import json
+        import re
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "hello-world.html").read_text()
+        match = re.search(r'<script type="application/ld\+json">(.*?)</script>', html)
+        assert match, "No JSON-LD found"
+        ld = json.loads(match.group(1))
+        assert "author" not in ld
+
+    def test_landing_page_has_twitter_card(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "index.html").read_text()
+        assert 'name="twitter:card"' in html
+        assert 'property="og:url"' in html
+
+    def test_kb_index_has_twitter_card(self, cache_env):
+        cache_env["svc"].render_all()
+        html = (cache_env["cache_dir"] / "test-kb" / "index.html").read_text()
+        assert 'name="twitter:card"' in html
+        assert 'property="og:url"' in html

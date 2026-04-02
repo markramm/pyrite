@@ -277,6 +277,7 @@ export interface WantedPagesResponse {
 export interface StarredEntryItem {
 	entry_id: string;
 	kb_name: string;
+	title?: string | null;
 	sort_order: number;
 	created_at: string;
 }

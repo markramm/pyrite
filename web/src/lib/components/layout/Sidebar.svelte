@@ -77,6 +77,16 @@
 		return currentPath.startsWith(href);
 	}
 
+	let searchQuery = $state('');
+
+	function handleSearch(e: KeyboardEvent) {
+		if (e.key === 'Enter' && searchQuery.trim()) {
+			goto(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+			searchQuery = '';
+			handleNavClick();
+		}
+	}
+
 	function handleNavClick() {
 		if (typeof window !== 'undefined' && window.innerWidth < 1024) {
 			uiStore.sidebarOpen = false;
@@ -112,6 +122,22 @@
 	<!-- KB Switcher -->
 	<div class="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
 		<KBSwitcher />
+	</div>
+
+	<!-- Quick Search -->
+	<div class="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+		<div class="relative">
+			<svg class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+			</svg>
+			<input
+				type="text"
+				bind:value={searchQuery}
+				onkeydown={handleSearch}
+				placeholder="Search..."
+				class="w-full rounded-md border border-zinc-200 bg-zinc-100 py-1.5 pl-8 pr-3 text-xs text-zinc-300 placeholder-zinc-500 outline-none transition-colors focus:border-amber-500/50 focus:bg-zinc-100 focus:ring-1 focus:ring-amber-500/30 dark:border-zinc-700 dark:bg-zinc-800/80 dark:focus:bg-zinc-800"
+			/>
+		</div>
 	</div>
 
 	<!-- Navigation -->

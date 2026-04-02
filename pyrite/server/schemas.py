@@ -473,6 +473,7 @@ class StarredEntryItem(BaseModel):
 
     entry_id: str
     kb_name: str
+    title: str | None = None
     sort_order: int = 0
     created_at: str
 
