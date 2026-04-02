@@ -1,12 +1,14 @@
 ---
 id: fix-timeline-kb-filter-and-sort
-type: backlog_item
 title: "pyrite timeline should filter by KB and sort by date"
+type: backlog_item
+tags: [cli, timeline, ux]
+importance: 5
 kind: bug
-status: done
+status: completed
 priority: high
 effort: S
-tags: [cli, timeline, ux]
+rank: 0
 ---
 
 ## Problem
