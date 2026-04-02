@@ -24,6 +24,7 @@ class EventStatus(StrEnum):
     ALLEGED = "alleged"
     RUMORED = "rumored"
     PROVEN = "proven"
+    APPROXIMATE = "approximate"
 
 
 class ResearchStatus(StrEnum):

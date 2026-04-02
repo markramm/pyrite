@@ -10,7 +10,7 @@ tags:
 - decision-needed
 importance: 5
 kind: feature
-status: todo
+status: completed
 priority: low
 effort: M
 rank: 0
