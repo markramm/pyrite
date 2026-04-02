@@ -51,10 +51,11 @@ const sampleEntry = {
 };
 
 describe('EntryList', () => {
-	it('shows "Loading entries..." when loading is true', () => {
+	it('shows skeleton loader when loading is true', () => {
 		mockEntryStore.loading = true;
-		render(EntryList);
-		expect(screen.getByText('Loading entries...')).toBeInTheDocument();
+		const { container } = render(EntryList);
+		// SkeletonLoader renders animated placeholder divs instead of text
+		expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
 	});
 
 	it('shows error message when error is set', () => {
