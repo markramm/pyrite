@@ -28,7 +28,12 @@ def mount_site_routes(app: FastAPI) -> None:
     # Sitemap
     @app.get("/site/sitemap.xml", include_in_schema=False)
     async def sitemap(request: Request):
-        return _generate_sitemap(site_cache_dir, str(request.base_url).rstrip("/"))
+        base = str(request.base_url).rstrip("/")
+        # Prefer X-Forwarded-Proto for correct scheme behind reverse proxy
+        proto = request.headers.get("x-forwarded-proto", "")
+        if proto == "https" and base.startswith("http://"):
+            base = "https://" + base[7:]
+        return _generate_sitemap(site_cache_dir, base)
 
     # Robots.txt
     @app.get("/site/robots.txt", include_in_schema=False)

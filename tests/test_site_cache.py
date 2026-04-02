@@ -443,8 +443,8 @@ class TestFrontmatterMetadataDisplay:
         assert "Actors:" in html
         assert "Alice Smith" in html
         assert "Bob Jones" in html
-        assert "?search=Alice" in html
-        assert "?search=Bob" in html
+        assert "search?q=Alice" in html
+        assert "search?q=Bob" in html
 
     def test_sources_rendered_as_list(self, cache_env):
         """Sources should appear in a numbered list with links."""

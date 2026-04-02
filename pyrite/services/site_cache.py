@@ -173,7 +173,11 @@ a.tag:hover {{
   background: var(--surface-overlay); border: 1px solid var(--border);
   padding: 0.1rem 0.55rem; border-radius: 0.25rem;
   font-size: 0.6875rem; font-weight: 500; color: var(--ink-muted);
-  text-transform: lowercase;
+  text-transform: lowercase; text-decoration: none; cursor: pointer;
+  transition: background 0.15s;
+}}
+a.lane-badge:hover {{
+  background: var(--border); color: var(--ink-soft); text-decoration: none;
 }}
 
 /* Sources section */
@@ -284,6 +288,19 @@ article li {{ color: var(--ink-soft); }}
 }}
 .entry-list a strong {{ font-family: 'DM Sans', sans-serif; font-weight: 500; color: var(--ink); }}
 .entry-list a .badge {{ margin-left: auto; flex-shrink: 0; }}
+
+/* Paginated browse index */
+.index-list {{ display: flex; flex-direction: column; gap: 0.25rem; }}
+.index-entry {{
+  display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.5rem 0; border-bottom: 1px solid var(--border);
+}}
+.index-entry a {{
+  font-size: 0.9375rem; font-weight: 500; color: var(--ink);
+  text-decoration: none; flex: 1; min-width: 0;
+}}
+.index-entry a:hover {{ color: var(--gold); }}
+.index-tags {{ display: flex; gap: 0.25rem; flex-wrap: wrap; flex-shrink: 0; }}
 
 /* KB grid (landing page) */
 .kb-grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); gap: 1rem; }}
@@ -533,8 +550,9 @@ class SiteCacheService:
 
             entries = kb_entries[kb_name]
 
-            # Render KB index
+            # Render KB index and paginated browse pages
             self._render_kb_index(kb_info, entries)
+            self._render_paginated_index(kb_name, entries)
             stats["kbs"] += 1
 
             # Batch-load all backlinks and outlinks for this KB (2 queries total, not 2N)
@@ -737,6 +755,73 @@ class SiteCacheService:
         )
         (self.cache_dir / kb_name / "index.html").write_text(html, encoding="utf-8")
 
+    def _render_paginated_index(self, kb_name: str, entries: list[dict], page_size: int = 100):
+        """Render paginated HTML index pages for crawlers and AI agents."""
+        # Sort by date descending (newest first)
+        sorted_entries = sorted(entries, key=lambda e: e.get("date") or "", reverse=True)
+        total = len(sorted_entries)
+        total_pages = max(1, (total + page_size - 1) // page_size)
+
+        page_dir = self.cache_dir / kb_name / "page"
+        page_dir.mkdir(parents=True, exist_ok=True)
+
+        for page_num in range(1, total_pages + 1):
+            start = (page_num - 1) * page_size
+            page_entries = sorted_entries[start:start + page_size]
+
+            rows = []
+            for e in page_entries:
+                eid = e["id"]
+                title = _esc(e.get("title", eid))
+                date = _esc(e.get("date") or "")
+                tags = e.get("tags") or []
+                tag_html = " ".join(
+                    f'<a class="tag" href="/site/search?q={_esc(t)}">{_esc(t)}</a>'
+                    for t in tags[:3]
+                )
+                if len(tags) > 3:
+                    tag_html += f' <span class="tag" style="background:var(--surface-overlay);border-color:var(--border);color:var(--ink-muted)">+{len(tags) - 3}</span>'
+                date_span = f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.8125rem;color:var(--ink-muted);min-width:6.5rem;display:inline-block">{date}</span>' if date else ''
+                rows.append(
+                    f'<div class="index-entry">'
+                    f'{date_span}'
+                    f'<a href="/site/{_esc(kb_name)}/{_esc(eid)}">{title}</a>'
+                    f'<div class="index-tags">{tag_html}</div>'
+                    f'</div>'
+                )
+
+            # Pagination nav
+            nav_parts = []
+            if page_num > 1:
+                nav_parts.append(f'<a href="/site/{_esc(kb_name)}/page/{page_num - 1}">&larr; Newer</a>')
+            nav_parts.append(f'<span style="color:var(--ink-muted);font-size:0.875rem">Page {page_num} of {total_pages}</span>')
+            if page_num < total_pages:
+                nav_parts.append(f'<a href="/site/{_esc(kb_name)}/page/{page_num + 1}">Older &rarr;</a>')
+            nav_html = f'<nav style="display:flex;justify-content:center;align-items:center;gap:1.5rem;margin:2rem 0">{" ".join(nav_parts)}</nav>'
+
+            body = (
+                f'<div class="breadcrumb"><a href="/site/{_esc(kb_name)}">Home</a><span class="sep">/</span><strong>Browse</strong></div>'
+                f'<h1>All Events</h1>'
+                f'<p style="color:var(--ink-muted);margin-bottom:1.5rem">{total} events &middot; Page {page_num} of {total_pages} &middot; Sorted by date (newest first)</p>'
+                f'{nav_html}'
+                f'<div class="index-list">{"".join(rows)}</div>'
+                f'{nav_html}'
+            )
+
+            html = _render_page(
+                title=f"Browse Events (Page {page_num}) — {_esc(kb_name)} | Pyrite",
+                description=f"Browse {total} events in {kb_name}, page {page_num} of {total_pages}",
+                og_title=f"Browse Events — {_esc(kb_name)}",
+                og_type="website",
+                og_url=f"/site/{_esc(kb_name)}/page/{page_num}",
+                og_image="/static/favicon.svg",
+                twitter_card="summary",
+                extra_head='<meta name="robots" content="index, follow">',
+                canonical=f'<link rel="canonical" href="/site/{_esc(kb_name)}/page/{page_num}">',
+                body=body,
+            )
+            (page_dir / f"{page_num}.html").write_text(html, encoding="utf-8")
+
     def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list, *, read_only: bool = False, related: list[tuple[dict, int]] | None = None):
         """Render a single entry page."""
         import json
@@ -824,7 +909,7 @@ class SiteCacheService:
         actors_html = ""
         if actors and isinstance(actors, list):
             actor_links = ", ".join(
-                f'<a href="/site/{_esc(kb_name)}?search={_esc(str(a))}">{_esc(str(a))}</a>'
+                f'<a href="/site/search?q={_esc(str(a))}">{_esc(str(a))}</a>'
                 for a in actors
                 if a
             )
@@ -836,7 +921,7 @@ class SiteCacheService:
         lanes_html = ""
         if capture_lanes and isinstance(capture_lanes, list):
             lane_badges = "".join(
-                f'<span class="lane-badge">{_esc(str(lane))}</span>'
+                f'<a class="lane-badge" href="/site/search?q={_esc(str(lane))}">{_esc(str(lane))}</a>'
                 for lane in capture_lanes
                 if lane
             )
@@ -1113,7 +1198,13 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int, *, has_a
             <a href="https://github.com/markramm/cascade-kb" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.5rem 1rem;border:1px solid var(--border-light);border-radius:0.375rem;font-size:0.8125rem;color:var(--ink-soft);text-decoration:none">View on GitHub</a>
         </section>'''
 
-    return hero + search + cascade_html + findings_html + explore_html + standards_html + contrib_html
+    # --- Browse index link (for crawlers/AI agents) ---
+    browse_html = f'''
+    <section style="text-align:center;padding:1.5rem 0;margin-bottom:1rem">
+        <a href="/site/{_esc(kb_name)}/page/1" style="font-size:0.875rem;color:var(--ink-muted)">Browse all {total:,} events by date &rarr;</a>
+    </section>'''
+
+    return hero + search + cascade_html + findings_html + explore_html + standards_html + browse_html + contrib_html
 
 
 def _md_inline(text: str) -> str:
