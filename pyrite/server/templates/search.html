@@ -15,6 +15,7 @@
 {% endblock %}
 {% block extra_js %}
 (function() {
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   var input = document.getElementById('q');
   var results = document.getElementById('results');
   var meta = document.getElementById('meta');
