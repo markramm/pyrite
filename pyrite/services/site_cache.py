@@ -915,7 +915,7 @@ class SiteCacheService:
                 cov_title = _esc(cov.get("title", ""))
                 cov_url = cov.get("url", "")
                 cov_pub = _esc(cov.get("publication", ""))
-                if cov_url and isinstance(cov_url, str) and cov_url.startswith("http"):
+                if cov_url and isinstance(cov_url, str) and cov_url.startswith(("http://", "https://")):
                     pub_span = f' <span class="coverage-pub">— {cov_pub}</span>' if cov_pub else ""
                     coverage_items.append(
                         f'<a href="{_esc(cov_url)}" target="_blank" rel="noopener noreferrer">{cov_title or _esc(cov_url)}</a>{pub_span}'

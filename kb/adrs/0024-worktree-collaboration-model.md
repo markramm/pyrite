@@ -3,7 +3,7 @@ id: adr-0024
 title: "ADR-0024: Git Worktree Collaboration Model"
 type: adr
 adr_number: 24
-status: proposed
+status: accepted
 date: 2026-03-30
 tags: [architecture, collaboration, git, multi-user]
 links:

@@ -92,7 +92,9 @@
 
           var snippet = '';
           if (e.snippet) {
-            snippet = '<div class="result-snippet">' + e.snippet + '</div>';
+            /* Sanitize FTS snippet: escape HTML, then restore <mark> tags */
+            var safeSnippet = esc(e.snippet).replace(/&lt;mark&gt;/g, '<mark>').replace(/&lt;\/mark&gt;/g, '</mark>');
+            snippet = '<div class="result-snippet">' + safeSnippet + '</div>';
           } else if (e.body) {
             var plain = e.body.replace(/[#*_`\[\]]/g, '').substring(0, 150);
             snippet = '<div class="result-snippet">' + esc(plain) + (e.body.length > 150 ? '...' : '') + '</div>';

@@ -40,9 +40,10 @@ class CRUDMixin:
         limit: int = 50,
         offset: int = 0,
         include_archived: bool = False,
-        **kwargs,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> list[dict[str, Any]]:
-        """List entries with pagination, optionally filtered by KB, type, and/or tag."""
+        """List entries with pagination, optionally filtered by KB, type, tag, status, importance."""
         return self._backend.list_entries(
             kb_name=kb_name,
             entry_type=entry_type,
@@ -52,7 +53,8 @@ class CRUDMixin:
             limit=limit,
             offset=offset,
             include_archived=include_archived,
-            **kwargs,
+            status=status,
+            min_importance=min_importance,
         )
 
     def count_entries(
@@ -60,10 +62,14 @@ class CRUDMixin:
         kb_name: str | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
-        **kwargs,
+        status: str | None = None,
+        min_importance: int | None = None,
     ) -> int:
-        """Count entries, optionally filtered by KB, type, and/or tag."""
-        return self._backend.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag, **kwargs)
+        """Count entries, optionally filtered by KB, type, tag, status, importance."""
+        return self._backend.count_entries(
+            kb_name=kb_name, entry_type=entry_type, tag=tag,
+            status=status, min_importance=min_importance,
+        )
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
         """Get distinct entry types, optionally filtered by KB."""

@@ -74,10 +74,17 @@ Use correct `type` frontmatter so plugin tools can find entries:
 - **Web frontend**: `web/` — SvelteKit + Svelte 5
 - **Knowledge base**: `kb/` — ADRs, backlog, components, designs, standards, runbooks
 
+## Git Workflow (ADR-0025)
+
+- **`dev`** — daily development (default branch). All work happens here.
+- **`main`** — stable releases only. Merge from dev requires passing CI.
+- Deploy demo.pyrite.wiki from `dev`, capturecascade.org from `main` tags.
+- See `.claude/skills/pyrite-dev/SKILL.md` for release and deploy commands.
+
 ## Testing
 
 ```bash
-# Backend tests (~2500 tests)
+# Backend tests (~2700 tests)
 .venv/bin/pytest tests/ -v
 
 # Frontend
@@ -91,7 +98,7 @@ ruff check pyrite/
 
 **Do NOT use `isolation: "worktree"` for parallel agents.** Worktree merges are fragile and expensive — conflict markers, regex group mismatches, and stray artifacts cost more tokens than Edit retries.
 
-Instead, launch agents without isolation. They work directly on main. Use **file footprint planning** to minimize collisions. When agents share a file, the Edit tool's exact-match replacement fails gracefully on conflict — the agent retries with the updated content. This is cheaper and self-correcting.
+Instead, launch agents without isolation. They work directly on the current branch (`dev`). Use **file footprint planning** to minimize collisions. When agents share a file, the Edit tool's exact-match replacement fails gracefully on conflict — the agent retries with the updated content. This is cheaper and self-correcting.
 
 **Read `.claude/skills/pyrite-dev/parallel-agents.md` before launching parallel agents.** It has the full protocol: wave planning, file footprint validation, agent prompt templates, and merge steps.
 
