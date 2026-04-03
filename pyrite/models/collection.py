@@ -3,8 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..schema import Provenance, generate_entry_id
-from ..utils.parse import safe_int
+from ..schema import generate_entry_id
 from .base import Entry, parse_datetime, parse_links, parse_sources
 
 
@@ -46,37 +45,18 @@ class CollectionEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "CollectionEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            source_type=meta.get("source_type", "folder"),
-            query=meta.get("query", ""),
-            description=meta.get("description", ""),
-            icon=meta.get("icon", ""),
-            view_config=meta.get("view_config", {"default_view": "list"})
-            or {"default_view": "list"},
-            entry_filter=meta.get("entry_filter", {}) or {},
-            folder_path=meta.get("folder_path", ""),
-            collection_type=meta.get("collection_type", "generic"),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["source_type"] = meta.get("source_type", "folder")
+        kw["query"] = meta.get("query", "")
+        kw["description"] = meta.get("description", "")
+        kw["icon"] = meta.get("icon", "")
+        kw["view_config"] = meta.get("view_config", {"default_view": "list"}) or {
+            "default_view": "list"
+        }
+        kw["entry_filter"] = meta.get("entry_filter", {}) or {}
+        kw["folder_path"] = meta.get("folder_path", "")
+        kw["collection_type"] = meta.get("collection_type", "generic")
+        return cls(**kw)
 
     @classmethod
     def from_collection_yaml(cls, yaml_data: dict[str, Any], folder_path: str) -> "CollectionEntry":

@@ -12,7 +12,6 @@ from typing import Any
 
 from ..schema import (
     EventStatus,
-    Provenance,
     ResearchStatus,
     generate_entry_id,
     generate_event_id,
@@ -20,7 +19,7 @@ from ..schema import (
     validate_importance,
 )
 from ..utils.parse import safe_int
-from .base import Entry, parse_datetime, parse_links, parse_sources
+from .base import Entry
 from .collection import CollectionEntry
 from .protocols import Locatable, Statusable, Temporal
 
@@ -43,29 +42,7 @@ class NoteEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "NoteEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            importance=safe_int(meta.get("importance"), 5),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        return cls(**cls._base_kwargs(meta, body))
 
 
 @dataclass
@@ -93,38 +70,15 @@ class PersonEntry(Locatable, Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "PersonEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
+        kw = cls._base_kwargs(meta, body)
         status_str = meta.get("research_status", "stub")
         try:
-            research_status = ResearchStatus(status_str)
+            kw["research_status"] = ResearchStatus(status_str)
         except ValueError:
-            research_status = ResearchStatus.STUB
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            role=meta.get("role", ""),
-            affiliations=meta.get("affiliations", []) or [],
-            importance=safe_int(meta.get("importance"), 5),
-            research_status=research_status,
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+            kw["research_status"] = ResearchStatus.STUB
+        kw["role"] = meta.get("role", "")
+        kw["affiliations"] = meta.get("affiliations", []) or []
+        return cls(**kw)
 
     @classmethod
     def create(cls, name: str, **kwargs) -> "PersonEntry":
@@ -166,39 +120,16 @@ class OrganizationEntry(Locatable, Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "OrganizationEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
+        kw = cls._base_kwargs(meta, body)
+        kw["org_type"] = meta.get("org_type", "")
+        kw["jurisdiction"] = meta.get("jurisdiction", "")
+        kw["founded"] = meta.get("founded", "")
         status_str = meta.get("research_status", "stub")
         try:
-            research_status = ResearchStatus(status_str)
+            kw["research_status"] = ResearchStatus(status_str)
         except ValueError:
-            research_status = ResearchStatus.STUB
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            org_type=meta.get("org_type", ""),
-            jurisdiction=meta.get("jurisdiction", ""),
-            founded=meta.get("founded", ""),
-            importance=safe_int(meta.get("importance"), 5),
-            research_status=research_status,
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+            kw["research_status"] = ResearchStatus.STUB
+        return cls(**kw)
 
     @classmethod
     def create(cls, name: str, **kwargs) -> "OrganizationEntry":
@@ -236,9 +167,15 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "EventEntry":
+        kw = cls._base_kwargs(meta, body)
+        kw["date"] = meta.get("date", "")
+        kw["location"] = meta.get("location", "")
+        # Support both "participants" and legacy "actors"
+        kw["participants"] = meta.get("participants", meta.get("actors", [])) or []
+        kw["notes"] = meta.get("notes", "")
         status_str = meta.get("status", "confirmed")
         try:
-            status = EventStatus(status_str)
+            kw["status"] = EventStatus(status_str)
         except ValueError:
             logger.warning(
                 "Unknown event status '%s' for entry '%s', defaulting to 'confirmed'. "
@@ -247,35 +184,8 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
                 meta.get("id", "?"),
                 ", ".join(e.value for e in EventStatus),
             )
-            status = EventStatus.CONFIRMED
-
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        # Support both "participants" and legacy "actors"
-        participants = meta.get("participants", meta.get("actors", [])) or []
-
-        return cls(
-            id=str(meta.get("id", "")),
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            date=meta.get("date", ""),
-            importance=safe_int(meta.get("importance"), 5),
-            status=status,
-            location=meta.get("location", ""),
-            participants=participants,
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            notes=meta.get("notes", ""),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+            kw["status"] = EventStatus.CONFIRMED
+        return cls(**kw)
 
     def validate(self) -> list[str]:
         """Validate event entry."""
@@ -326,33 +236,12 @@ class DocumentEntry(Temporal, Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "DocumentEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            date=meta.get("date", ""),
-            author=meta.get("author", ""),
-            document_type=meta.get("document_type", ""),
-            url=meta.get("url", ""),
-            importance=safe_int(meta.get("importance"), 5),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["date"] = meta.get("date", "")
+        kw["author"] = meta.get("author", "")
+        kw["document_type"] = meta.get("document_type", "")
+        kw["url"] = meta.get("url", "")
+        return cls(**kw)
 
     @classmethod
     def create(cls, title: str, **kwargs) -> "DocumentEntry":
@@ -377,29 +266,7 @@ class TopicEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TopicEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            importance=safe_int(meta.get("importance"), 5),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        return cls(**cls._base_kwargs(meta, body))
 
 
 @dataclass
@@ -426,31 +293,11 @@ class RelationshipEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "RelationshipEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            source_entity=meta.get("source_entity", meta.get("source", "")),
-            target_entity=meta.get("target_entity", meta.get("target", "")),
-            relationship_type=meta.get("relationship_type", ""),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["source_entity"] = meta.get("source_entity", meta.get("source", ""))
+        kw["target_entity"] = meta.get("target_entity", meta.get("target", ""))
+        kw["relationship_type"] = meta.get("relationship_type", "")
+        return cls(**kw)
 
 
 @dataclass
@@ -490,36 +337,16 @@ class QAAssessmentEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "QAAssessmentEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            target_entry=meta.get("target_entry", ""),
-            target_kb=meta.get("target_kb", ""),
-            tier=safe_int(meta.get("tier"), 1),
-            qa_status=meta.get("qa_status", "pass"),
-            issues=meta.get("issues", []) or [],
-            issues_found=safe_int(meta.get("issues_found"), 0),
-            issues_resolved=safe_int(meta.get("issues_resolved"), 0),
-            assessed_at=meta.get("assessed_at", ""),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["target_entry"] = meta.get("target_entry", "")
+        kw["target_kb"] = meta.get("target_kb", "")
+        kw["tier"] = safe_int(meta.get("tier"), 1)
+        kw["qa_status"] = meta.get("qa_status", "pass")
+        kw["issues"] = meta.get("issues", []) or []
+        kw["issues_found"] = safe_int(meta.get("issues_found"), 0)
+        kw["issues_resolved"] = safe_int(meta.get("issues_resolved"), 0)
+        kw["assessed_at"] = meta.get("assessed_at", "")
+        return cls(**kw)
 
 
 @dataclass
@@ -542,29 +369,9 @@ class TimelineEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TimelineEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            date_range=meta.get("date_range", ""),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["date_range"] = meta.get("date_range", "")
+        return cls(**kw)
 
 
 # Type registry: maps type name string to entry class

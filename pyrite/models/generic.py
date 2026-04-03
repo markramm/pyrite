@@ -8,9 +8,7 @@ Custom fields live in self.metadata and round-trip through frontmatter.
 from dataclasses import dataclass
 from typing import Any
 
-from ..schema import Provenance, generate_entry_id
-from ..utils.parse import safe_int
-from .base import Entry, parse_datetime, parse_links, parse_sources
+from .base import Entry
 
 # Fields that are handled by Entry base or known frontmatter keys
 _KNOWN_KEYS = {
@@ -61,34 +59,14 @@ class GenericEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "GenericEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
+        kw = cls._base_kwargs(meta, body)
 
         # Collect unknown frontmatter keys into metadata
         explicit_metadata = meta.get("metadata", {})
         extra_metadata = {k: v for k, v in meta.items() if k not in _KNOWN_KEYS}
         # Merge: explicit metadata wins over inferred
-        merged_metadata = {**extra_metadata, **explicit_metadata}
+        kw["metadata"] = {**extra_metadata, **explicit_metadata}
 
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            aliases=meta.get("aliases", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            importance=safe_int(meta.get("importance"), 5),
-            lifecycle=meta.get("lifecycle", "active"),
-            metadata=merged_metadata,
-            _entry_type=meta.get("type", "note"),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=safe_int(meta.get("_schema_version"), 0),
-        )
+        kw["lifecycle"] = meta.get("lifecycle", "active")
+        kw["_entry_type"] = meta.get("type", "note")
+        return cls(**kw)

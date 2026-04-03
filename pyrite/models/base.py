@@ -74,6 +74,40 @@ class Entry(ABC):
         """Create from parsed frontmatter and body."""
         pass
 
+    @staticmethod
+    def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
+        """Extract common constructor kwargs from frontmatter.
+
+        Subclass from_frontmatter methods should call this and extend with
+        type-specific fields, eliminating boilerplate.
+        """
+        from ..schema import generate_entry_id
+        from ..utils.parse import safe_int
+
+        entry_id = meta.get("id", "")
+        if not entry_id:
+            entry_id = generate_entry_id(meta.get("title", ""))
+
+        prov_data = meta.get("provenance")
+        provenance = Provenance.from_dict(prov_data) if prov_data else None
+
+        return {
+            "id": entry_id,
+            "title": meta.get("title", ""),
+            "body": body,
+            "summary": meta.get("summary", ""),
+            "importance": safe_int(meta.get("importance"), 5),
+            "tags": meta.get("tags", []) or [],
+            "aliases": meta.get("aliases", []) or [],
+            "sources": parse_sources(meta.get("sources")),
+            "links": parse_links(meta.get("links")),
+            "provenance": provenance,
+            "metadata": meta.get("metadata", {}),
+            "created_at": parse_datetime(meta.get("created_at")),
+            "updated_at": parse_datetime(meta.get("updated_at")),
+            "_schema_version": safe_int(meta.get("_schema_version"), 0),
+        }
+
     def _base_frontmatter(self) -> dict[str, Any]:
         """Build common frontmatter fields."""
         meta: dict[str, Any] = {
