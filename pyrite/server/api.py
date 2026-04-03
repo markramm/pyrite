@@ -591,24 +591,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             # raise RuntimeError when no loop is active in the calling thread,
             # which is the expected case — we catch it silently.
             def _ws_progress(job_id: str, current: int, total: int):
-                import asyncio
+                from .websocket import broadcast_event
 
-                from .websocket import manager
-
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(
-                        manager.broadcast(
-                            {
-                                "type": "index_progress",
-                                "job_id": job_id,
-                                "current": current,
-                                "total": total,
-                            }
-                        )
-                    )
-                except RuntimeError:
-                    pass
+                broadcast_event(
+                    "index_progress", job_id=job_id, current=current, total=total
+                )
 
             worker.on_progress = _ws_progress
             application.state.pyrite_index_worker = worker

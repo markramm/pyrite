@@ -44,3 +44,17 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+def broadcast_event(event_type: str, **data):
+    """Broadcast a WebSocket event, swallowing errors if no event loop is running.
+
+    Safe to call from sync endpoints and CLI contexts where no event loop exists.
+    """
+    import asyncio
+
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(manager.broadcast({"type": event_type, **data}))
+    except RuntimeError:
+        pass  # No event loop (CLI context, sync test, etc.)

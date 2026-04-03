@@ -668,17 +668,9 @@ def create_entry(
         raise HTTPException(status_code=400, detail={"code": "CREATE_FAILED", "message": str(e)})
 
     # Broadcast WebSocket event
-    import asyncio
+    from ..websocket import broadcast_event
 
-    from ..websocket import manager
-
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(
-            manager.broadcast({"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb})
-        )
-    except RuntimeError:
-        logger.debug("WebSocket broadcast failed (client may have disconnected)")
+    broadcast_event("entry_created", entry_id=entry.id, kb_name=req.kb)
 
     return CreateResponse(created=True, id=entry.id, kb_name=req.kb, file_path="")
 
@@ -725,17 +717,9 @@ def update_entry(
         raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
     # Broadcast WebSocket event
-    import asyncio
+    from ..websocket import broadcast_event
 
-    from ..websocket import manager
-
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(
-            manager.broadcast({"type": "entry_updated", "entry_id": entry_id, "kb_name": req.kb})
-        )
-    except RuntimeError:
-        logger.debug("WebSocket broadcast failed (client may have disconnected)")
+    broadcast_event("entry_updated", entry_id=entry_id, kb_name=req.kb)
 
     return UpdateResponse(updated=True, id=entry_id)
 
@@ -811,16 +795,8 @@ def delete_entry(
         )
 
     # Broadcast WebSocket event
-    import asyncio
+    from ..websocket import broadcast_event
 
-    from ..websocket import manager
-
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(
-            manager.broadcast({"type": "entry_deleted", "entry_id": entry_id, "kb_name": kb})
-        )
-    except RuntimeError:
-        logger.debug("WebSocket broadcast failed (client may have disconnected)")
+    broadcast_event("entry_deleted", entry_id=entry_id, kb_name=kb)
 
     return DeleteResponse(deleted=True, id=entry_id)
