@@ -555,15 +555,10 @@ class SiteCacheService:
             self._render_paginated_index(kb_name, entries)
             stats["kbs"] += 1
 
-            # Batch-load all backlinks and outlinks for this KB (2 queries total, not 2N)
-            backlinks_map: dict[str, list] = defaultdict(list)
-            outlinks_map: dict[str, list] = defaultdict(list)
-            for entry in entries:
-                eid = entry["id"]
-                for bl in self.db.get_backlinks(eid, kb_name):
-                    backlinks_map[eid].append(bl)
-                for ol in self.db.get_outlinks(eid, kb_name):
-                    outlinks_map[eid].append(ol)
+            # Batch-load all backlinks, outlinks, and sources for this KB (3 queries total, not 3N)
+            backlinks_map = self.db.get_all_backlinks_for_kb(kb_name)
+            outlinks_map = self.db.get_all_outlinks_for_kb(kb_name)
+            sources_map = self.db.get_all_sources_for_kb(kb_name)
 
             # Pre-compute actor->entry_ids and tag->entry_ids for related events
             actor_to_entries: dict[str, set[str]] = defaultdict(set)
@@ -624,6 +619,12 @@ class SiteCacheService:
             # Check if KB is read-only (hide edit links on public sites)
             kb_config = self.config.get_kb(kb_name)
             is_read_only = kb_config.read_only if kb_config else False
+
+            # Inject pre-loaded sources into entries so _render_entry won't query per-entry
+            for entry in entries:
+                eid = entry["id"]
+                if entry.get("sources") is None:
+                    entry["sources"] = sources_map.get(eid, [])
 
             # Render each entry using pre-loaded data
             for entry in entries:

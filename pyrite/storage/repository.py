@@ -303,6 +303,28 @@ class KBRepository:
                 continue
             yield md_file
 
+    def list_all_files(self) -> Iterator[Path]:
+        """Iterate over all entry file paths (md + collection yaml) without parsing."""
+        yield from self.list_files()
+        for yaml_file in self.path.rglob("__collection.yaml"):
+            if any(part.startswith(".") for part in yaml_file.parts):
+                continue
+            yield yaml_file
+
+    def load_entry_from_file(self, file_path: Path) -> Entry:
+        """Load and parse a single entry from a file path.
+
+        Handles both markdown entries and __collection.yaml files.
+        Raises on parse failure.
+        """
+        if file_path.name == "__collection.yaml":
+            entry = self._load_collection(file_path)
+        else:
+            entry = self._load_entry(file_path)
+        entry.kb_name = self.name
+        entry.file_path = file_path
+        return entry
+
     def list_entries(self) -> Iterator[tuple[Entry, Path]]:
         """Iterate over all entries in the KB."""
         for file_path in self.list_files():
