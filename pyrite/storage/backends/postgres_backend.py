@@ -766,6 +766,70 @@ class PostgresBackend:
             {"entry_id": entry_id, "kb_name": kb_name},
         )
 
+    def get_all_backlinks_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL backlinks targeting entries in a KB in one query."""
+        from collections import defaultdict
+
+        rows = self._exec(
+            """
+            SELECT l.target_id, e.id, e.kb_name, e.title, e.entry_type,
+                   l.inverse_relation as relation, l.note
+            FROM link l
+            JOIN entry e ON l.source_id = e.id AND l.source_kb = e.kb_name
+            WHERE l.target_kb = :kb_name
+            """,
+            {"kb_name": kb_name},
+        )
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            d = dict(row)
+            target_id = d.pop("target_id")
+            result[target_id].append(d)
+        return result
+
+    def get_all_outlinks_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL outlinks from entries in a KB in one query."""
+        from collections import defaultdict
+
+        rows = self._exec(
+            """
+            SELECT l.source_id,
+                   l.target_id as id, l.target_kb as kb_name,
+                   e.title, e.entry_type, l.relation, l.note
+            FROM link l
+            LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
+            WHERE l.source_kb = :kb_name
+            """,
+            {"kb_name": kb_name},
+        )
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            d = dict(row)
+            source_id = d.pop("source_id")
+            result[source_id].append(d)
+        return result
+
+    def get_all_sources_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL sources for entries in a KB in one query."""
+        from collections import defaultdict
+
+        rows = self._exec(
+            """
+            SELECT s.entry_id, s.id, s.title, s.url, s.outlet, s.date, s.verified
+            FROM source s
+            WHERE s.kb_name = :kb_name
+            """,
+            {"kb_name": kb_name},
+        )
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            d = dict(row)
+            entry_id = d.pop("entry_id")
+            d["entry_id"] = entry_id
+            d["kb_name"] = kb_name
+            result[entry_id].append(d)
+        return result
+
     def get_graph_data(
         self,
         center: str | None = None,

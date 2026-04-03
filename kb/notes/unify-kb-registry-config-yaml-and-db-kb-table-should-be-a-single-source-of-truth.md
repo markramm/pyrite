@@ -9,7 +9,7 @@ tags:
 - kb-registry
 importance: 5
 kind: bug
-status: todo
+status: completed
 priority: high
 effort: M
 rank: 0

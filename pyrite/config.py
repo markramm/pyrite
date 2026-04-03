@@ -387,15 +387,21 @@ class PyriteConfig:
         self._kb_by_name = {kb.name: kb for kb in self.knowledge_bases}
         self._repo_by_name = {repo.name: repo for repo in self.repositories}
 
+    # Fallback lookup for DB-registered KBs not in config.yaml
+    _db_kb_cache: dict[str, KBConfig] = field(default_factory=dict, repr=False)
+
     def get_kb(self, name: str) -> KBConfig | None:
-        """Get a KB by name (config.yaml + DB-registered KBs)."""
-        return self._kb_by_name.get(name)
+        """Get a KB by name (config.yaml first, then DB-registered KBs)."""
+        kb = self._kb_by_name.get(name)
+        if kb:
+            return kb
+        return self._db_kb_cache.get(name)
 
-    def merge_db_kbs(self, db_kbs: list[dict]) -> int:
-        """Merge DB-registered KBs into the in-memory config.
+    def register_db_kbs(self, db_kbs: list[dict]) -> int:
+        """Register DB-added KBs as a fallback lookup (not added to knowledge_bases).
 
-        KBs already in config.yaml are skipped (config takes precedence).
-        Returns the number of KBs added.
+        Config.yaml KBs always take precedence. DB KBs are available via get_kb()
+        but don't appear in knowledge_bases (so seed_from_config won't re-register them).
 
         Args:
             db_kbs: List of dicts with keys: name, path, kb_type, description
@@ -408,14 +414,12 @@ class PyriteConfig:
             path = kb_data.get("path", "")
             if not path:
                 continue
-            kb = KBConfig(
+            self._db_kb_cache[name] = KBConfig(
                 name=name,
                 path=Path(path),
                 kb_type=kb_data.get("kb_type", "generic"),
                 description=kb_data.get("description", ""),
             )
-            self.knowledge_bases.append(kb)
-            self._kb_by_name[name] = kb
             added += 1
         return added
 

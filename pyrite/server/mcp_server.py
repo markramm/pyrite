@@ -151,7 +151,7 @@ class PyriteMCPServer:
             ).fetchall()
             if rows:
                 db_kbs = [{"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows]
-                self.config.merge_db_kbs(db_kbs)
+                self.config.register_db_kbs(db_kbs)
         except Exception:
             pass
         self.index_mgr = IndexManager(self.db, self.config)

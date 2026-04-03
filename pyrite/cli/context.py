@@ -13,7 +13,7 @@ from ..storage.index import IndexManager
 logger = logging.getLogger(__name__)
 
 
-def _merge_db_kbs(config: PyriteConfig, db: PyriteDB) -> None:
+def _register_db_kbs(config: PyriteConfig, db: PyriteDB) -> None:
     """Merge DB-registered KBs (from 'pyrite kb add') into config.
 
     This ensures all code paths see user-added KBs, not just the registry service.
@@ -30,7 +30,7 @@ def _merge_db_kbs(config: PyriteConfig, db: PyriteDB) -> None:
                 {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""}
                 for r in rows
             ]
-            added = config.merge_db_kbs(db_kbs)
+            added = config.register_db_kbs(db_kbs)
             if added:
                 logger.debug("Merged %d DB-registered KBs into config", added)
     except Exception:
@@ -41,7 +41,7 @@ def _init_base() -> tuple[PyriteConfig, PyriteDB, KBService]:
     """Shared construction for all CLI context managers."""
     config = load_config()
     db = PyriteDB(config.settings.index_path)
-    _merge_db_kbs(config, db)
+    _register_db_kbs(config, db)
     svc = KBService(config, db)
     return config, db, svc
 

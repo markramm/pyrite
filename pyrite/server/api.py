@@ -564,7 +564,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
                 ).fetchall()
                 if rows:
                     db_kbs = [{"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows]
-                    cfg.merge_db_kbs(db_kbs)
+                    cfg.register_db_kbs(db_kbs)
             except Exception:
                 pass  # Table may not exist yet on first startup
         return application.state.pyrite_db

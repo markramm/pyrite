@@ -8,7 +8,7 @@ tags:
 - layer-separation
 importance: 5
 kind: refactor
-status: todo
+status: completed
 priority: medium
 effort: S
 rank: 0
