@@ -295,6 +295,30 @@ class TestKBRepository:
         assert loaded is not None
         assert loaded.title == "John Smith"
 
+    def test_find_file_by_frontmatter_id_when_filename_differs(self, events_kb):
+        """find_file should locate entries where filename != frontmatter ID."""
+        # Write a file with a filename that doesn't match the ID
+        (events_kb.config.path / "adrs").mkdir(exist_ok=True)
+        md = """---
+type: note
+id: adr-0099
+title: Test ADR
+---
+
+Some content.
+"""
+        (events_kb.config.path / "adrs" / "0099-test-adr.md").write_text(md)
+
+        # find_file should locate it by scanning frontmatter
+        found = events_kb.find_file("adr-0099")
+        assert found is not None
+        assert "0099-test-adr.md" in str(found)
+
+        # load should work too
+        entry = events_kb.load("adr-0099")
+        assert entry is not None
+        assert entry.title == "Test ADR"
+
     def test_load_strips_duplicated_frontmatter_from_body(self, events_kb):
         """Frontmatter field duplicated in body should be stripped on load."""
         # Write a file with 'type: event' leaked into body (migration error pattern)

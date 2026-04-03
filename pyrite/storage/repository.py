@@ -184,15 +184,15 @@ class KBRepository:
     def find_file(self, entry_id: str) -> Path | None:
         """Find the file path for an entry.
 
-        Searches root, then all subdirectories recursively (to support
-        templated subdirectories like ``backlog/{status}``).
+        Searches by filename first (fast), then falls back to scanning
+        frontmatter IDs (handles cases where filename != entry ID).
         """
-        # Check root
+        # Check root by filename
         root_path = self.path / f"{entry_id}.md"
         if root_path.exists():
             return root_path
 
-        # Check all subdirectories recursively (supports nested template paths)
+        # Check all subdirectories recursively by filename
         filename = f"{entry_id}.md"
         for match in self.path.rglob(filename):
             if not any(part.startswith(".") for part in match.relative_to(self.path).parts):
@@ -206,6 +206,24 @@ class KBRepository:
                     yaml_path = subdir / "__collection.yaml"
                     if yaml_path.exists():
                         return yaml_path
+
+        # Fallback: scan frontmatter IDs (handles filename != entry ID)
+        # This is slower but catches entries like ADRs where the file is
+        # "0025-release-workflow.md" but the ID is "adr-0025"
+        from pyrite.utils.yaml import load_yaml
+        for md_file in self.path.rglob("*.md"):
+            if any(part.startswith(".") or part.startswith("_") for part in md_file.relative_to(self.path).parts):
+                continue
+            try:
+                text = md_file.read_text(encoding="utf-8")
+                if text.startswith("---"):
+                    end = text.find("---", 3)
+                    if end > 0:
+                        fm = load_yaml(text[3:end])
+                        if isinstance(fm, dict) and fm.get("id") == entry_id:
+                            return md_file
+            except Exception:
+                continue
 
         return None
 
