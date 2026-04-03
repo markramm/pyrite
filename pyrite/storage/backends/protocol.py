@@ -150,6 +150,20 @@ class SearchBackend(Protocol):
         """Delete embedding for an entry."""
         ...
 
+    # ── edge endpoints ──────────────────────────────────────────────
+
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge endpoints for an edge-type entry (what does this edge connect?)."""
+        ...
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries where this entity is an endpoint."""
+        ...
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries that connect two entities."""
+        ...
+
     # ── graph (links) ────────────────────────────────────────────────
 
     def get_backlinks(
@@ -164,6 +178,27 @@ class SearchBackend(Protocol):
 
     def get_outlinks(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
         """Get entries this entry links TO."""
+        ...
+
+    def get_all_backlinks_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL backlinks targeting entries in a KB, keyed by target entry_id.
+
+        Returns the same per-entry data as get_backlinks() but in a single query.
+        """
+        ...
+
+    def get_all_outlinks_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL outlinks from entries in a KB, keyed by source entry_id.
+
+        Returns the same per-entry data as get_outlinks() but in a single query.
+        """
+        ...
+
+    def get_all_sources_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL sources for entries in a KB, keyed by entry_id.
+
+        Returns the same per-entry data as _get_entry_sources() but in a single query.
+        """
         ...
 
     def get_graph_data(

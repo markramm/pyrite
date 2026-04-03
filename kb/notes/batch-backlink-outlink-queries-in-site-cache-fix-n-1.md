@@ -8,7 +8,7 @@ tags:
 - site-cache
 importance: 5
 kind: bug
-status: todo
+status: completed
 priority: medium
 effort: S
 rank: 0

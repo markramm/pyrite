@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from ..models import Block, Entry, EntryRef, EntryTag, Link, Source, Tag
+from ..models import Block, EdgeEndpoint, Entry, EntryRef, EntryTag, Link, Source, Tag
 from ...utils.json_utils import SafeEncoder as _SafeEncoder
 
 logger = logging.getLogger(__name__)
@@ -130,6 +130,7 @@ class PostgresBackend:
             self._sync_links(entry_id, kb_name, entry_data.get("links", []))
             self._sync_entry_refs(entry_id, kb_name, entry_data)
             self._sync_blocks(entry_id, kb_name, entry_data)
+            self._sync_edge_endpoints(entry_id, kb_name, entry_data)
             self._session.commit()
         except Exception:
             self._session.rollback()
@@ -271,6 +272,23 @@ class PostgresBackend:
                     content=blk["content"],
                     position=blk["position"],
                     block_type=blk["block_type"],
+                )
+            )
+
+    def _sync_edge_endpoints(self, entry_id: str, kb_name: str, entry_data: dict) -> None:
+        self._session.query(EdgeEndpoint).filter_by(
+            edge_entry_id=entry_id, edge_entry_kb=kb_name
+        ).delete()
+        for ep in entry_data.get("_edge_endpoints", []):
+            self._session.add(
+                EdgeEndpoint(
+                    edge_entry_id=entry_id,
+                    edge_entry_kb=kb_name,
+                    role=ep["role"],
+                    field_name=ep["field_name"],
+                    endpoint_id=ep["endpoint_id"],
+                    endpoint_kb=ep.get("endpoint_kb", kb_name),
+                    edge_type=ep["edge_type"],
                 )
             )
 
@@ -748,6 +766,70 @@ class PostgresBackend:
             {"entry_id": entry_id, "kb_name": kb_name},
         )
 
+    def get_all_backlinks_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL backlinks targeting entries in a KB in one query."""
+        from collections import defaultdict
+
+        rows = self._exec(
+            """
+            SELECT l.target_id, e.id, e.kb_name, e.title, e.entry_type,
+                   l.inverse_relation as relation, l.note
+            FROM link l
+            JOIN entry e ON l.source_id = e.id AND l.source_kb = e.kb_name
+            WHERE l.target_kb = :kb_name
+            """,
+            {"kb_name": kb_name},
+        )
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            d = dict(row)
+            target_id = d.pop("target_id")
+            result[target_id].append(d)
+        return result
+
+    def get_all_outlinks_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL outlinks from entries in a KB in one query."""
+        from collections import defaultdict
+
+        rows = self._exec(
+            """
+            SELECT l.source_id,
+                   l.target_id as id, l.target_kb as kb_name,
+                   e.title, e.entry_type, l.relation, l.note
+            FROM link l
+            LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
+            WHERE l.source_kb = :kb_name
+            """,
+            {"kb_name": kb_name},
+        )
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            d = dict(row)
+            source_id = d.pop("source_id")
+            result[source_id].append(d)
+        return result
+
+    def get_all_sources_for_kb(self, kb_name: str) -> dict[str, list[dict[str, Any]]]:
+        """Get ALL sources for entries in a KB in one query."""
+        from collections import defaultdict
+
+        rows = self._exec(
+            """
+            SELECT s.entry_id, s.id, s.title, s.url, s.outlet, s.date, s.verified
+            FROM source s
+            WHERE s.kb_name = :kb_name
+            """,
+            {"kb_name": kb_name},
+        )
+        result: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            d = dict(row)
+            entry_id = d.pop("entry_id")
+            d["entry_id"] = entry_id
+            d["kb_name"] = kb_name
+            result[entry_id].append(d)
+        return result
+
     def get_graph_data(
         self,
         center: str | None = None,
@@ -1094,3 +1176,50 @@ class PostgresBackend:
             "total_tags": tag_count,
             "total_links": link_count,
         }
+
+    # =====================================================================
+    # Edge endpoint queries — identical to SQLiteBackend (via _exec helper)
+    # =====================================================================
+
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge endpoints for an edge-type entry (what does this edge connect?)."""
+        return self._exec(
+            """
+            SELECT ep.role, ep.field_name, ep.endpoint_id, ep.endpoint_kb,
+                   ep.edge_type, e.title, e.entry_type
+            FROM edge_endpoint ep
+            LEFT JOIN entry e ON ep.endpoint_id = e.id AND ep.endpoint_kb = e.kb_name
+            WHERE ep.edge_entry_id = :entry_id AND ep.edge_entry_kb = :kb_name
+            """,
+            {"entry_id": entry_id, "kb_name": kb_name},
+        )
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries where this entity is an endpoint (what edges connect TO this entity?)."""
+        return self._exec(
+            """
+            SELECT ep.edge_entry_id as id, ep.edge_entry_kb as kb_name,
+                   ep.role, ep.field_name, ep.edge_type,
+                   e.title, e.entry_type
+            FROM edge_endpoint ep
+            JOIN entry e ON ep.edge_entry_id = e.id AND ep.edge_entry_kb = e.kb_name
+            WHERE ep.endpoint_id = :endpoint_id AND ep.endpoint_kb = :kb_name
+            """,
+            {"endpoint_id": endpoint_id, "kb_name": kb_name},
+        )
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries that connect two entities (both are endpoints of the same edge)."""
+        return self._exec(
+            """
+            SELECT DISTINCT e.id, e.kb_name, e.title, e.entry_type,
+                   ep1.edge_type, ep1.role as role_a, ep2.role as role_b
+            FROM edge_endpoint ep1
+            JOIN edge_endpoint ep2 ON ep1.edge_entry_id = ep2.edge_entry_id
+                                   AND ep1.edge_entry_kb = ep2.edge_entry_kb
+            JOIN entry e ON ep1.edge_entry_id = e.id AND ep1.edge_entry_kb = e.kb_name
+            WHERE ep1.endpoint_id = :id_a AND ep2.endpoint_id = :id_b
+                  AND ep1.edge_entry_kb = :kb_name
+            """,
+            {"id_a": id_a, "id_b": id_b, "kb_name": kb_name},
+        )

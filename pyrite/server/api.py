@@ -33,6 +33,7 @@ from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
 from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
+from ..services.starred_service import StarredService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
@@ -235,6 +236,14 @@ def get_search_service(
 ) -> SearchService:
     """Get SearchService instance via DI."""
     return SearchService(db, settings=config.settings)
+
+
+def get_starred_service(
+    db: PyriteDB = Depends(get_db),
+    kb_service: KBService = Depends(get_kb_service),
+) -> StarredService:
+    """Get StarredService instance via DI."""
+    return StarredService(db, kb_service)
 
 
 def invalidate_llm_service():
@@ -545,7 +554,19 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     def _app_get_db() -> PyriteDB:
         if application.state.pyrite_db is None:
             cfg = application.state.pyrite_config
-            application.state.pyrite_db = PyriteDB(cfg.settings.index_path)
+            db = PyriteDB(cfg.settings.index_path)
+            application.state.pyrite_db = db
+            # Merge DB-registered KBs into config so all code paths see them
+            try:
+                from sqlalchemy import text
+                rows = db.session.execute(
+                    text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
+                ).fetchall()
+                if rows:
+                    db_kbs = [{"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows]
+                    cfg.register_db_kbs(db_kbs)
+            except Exception:
+                pass  # Table may not exist yet on first startup
         return application.state.pyrite_db
 
     def _app_get_index_mgr() -> IndexManager:
@@ -570,24 +591,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             # raise RuntimeError when no loop is active in the calling thread,
             # which is the expected case — we catch it silently.
             def _ws_progress(job_id: str, current: int, total: int):
-                import asyncio
+                from .websocket import broadcast_event
 
-                from .websocket import manager
-
-                try:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(
-                        manager.broadcast(
-                            {
-                                "type": "index_progress",
-                                "job_id": job_id,
-                                "current": current,
-                                "total": total,
-                            }
-                        )
-                    )
-                except RuntimeError:
-                    pass
+                broadcast_event(
+                    "index_progress", job_id=job_id, current=current, total=total
+                )
 
             worker.on_progress = _ws_progress
             application.state.pyrite_index_worker = worker

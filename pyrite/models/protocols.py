@@ -130,7 +130,7 @@ class Prioritizable:
 
     PROTOCOL_VERSION: ClassVar[int] = 1
 
-    priority: int | str = ""
+    priority: int = 0
 
     def _prioritizable_to_frontmatter(self) -> dict[str, Any]:
         """Return non-default Prioritizable fields for frontmatter."""
@@ -142,9 +142,10 @@ class Prioritizable:
     @staticmethod
     def _prioritizable_from_frontmatter(meta: dict[str, Any]) -> dict[str, Any]:
         """Extract Prioritizable fields from frontmatter dict."""
-        raw = meta.get("priority", "")
+        from ..utils.parse import safe_int
+
         return {
-            "priority": raw if isinstance(raw, int) else str(raw),
+            "priority": safe_int(meta.get("priority"), 0),
         }
 
 

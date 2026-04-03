@@ -81,17 +81,9 @@ def sync_index(
                 logger.warning("Site cache render failed", exc_info=True)
 
         # Broadcast WebSocket event
-        import asyncio
+        from ..websocket import broadcast_event
 
-        from ..websocket import manager
-
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(
-                manager.broadcast({"type": "kb_synced", "entry_id": "", "kb_name": ""})
-            )
-        except RuntimeError:
-            pass
+        broadcast_event("kb_synced", entry_id="", kb_name="")
 
         return SyncResponse(
             synced=True,

@@ -1,14 +1,9 @@
 """Starred/bookmarked entries endpoints."""
 
-from datetime import UTC, datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func
 
-from ...services.kb_service import KBService
-from ...storage.database import PyriteDB
-from ...storage.models import StarredEntry
-from ..api import get_db, get_kb_service, limiter, requires_tier
+from ...services.starred_service import StarredService
+from ..api import get_starred_service, limiter, requires_tier
 from ..schemas import (
     ReorderStarredRequest,
     ReorderStarredResponse,
@@ -27,40 +22,13 @@ router = APIRouter(tags=["Starred"])
 def list_starred(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
-    db: PyriteDB = Depends(get_db),
-    svc: KBService = Depends(get_kb_service),
+    svc: StarredService = Depends(get_starred_service),
 ):
     """List all starred entries, optionally filtered by KB."""
-    query = db.session.query(StarredEntry)
-    if kb:
-        query = query.filter(StarredEntry.kb_name == kb)
-    query = query.order_by(StarredEntry.sort_order, StarredEntry.created_at.desc())
-    results = query.all()
-
-    # Batch-resolve titles from the storage backend
-    ids_to_fetch = [(r.entry_id, r.kb_name) for r in results]
-    title_map: dict[str, str] = {}
-    if ids_to_fetch:
-        try:
-            entries = svc.get_entries(ids_to_fetch)
-            for e in entries:
-                key = f"{e['id']}:{e.get('kb_name', '')}"
-                title_map[key] = e.get("title", "")
-        except Exception:
-            pass  # Graceful degradation — titles will be None
-
+    items = svc.list_starred(kb=kb)
     return StarredEntryListResponse(
-        count=len(results),
-        starred=[
-            StarredEntryItem(
-                entry_id=r.entry_id,
-                kb_name=r.kb_name,
-                title=title_map.get(f"{r.entry_id}:{r.kb_name}"),
-                sort_order=r.sort_order,
-                created_at=r.created_at,
-            )
-            for r in results
-        ],
+        count=len(items),
+        starred=[StarredEntryItem(**item) for item in items],
     )
 
 
@@ -71,32 +39,11 @@ def list_starred(
 def star_entry(
     request: Request,
     body: StarEntryRequest,
-    db: PyriteDB = Depends(get_db),
+    svc: StarredService = Depends(get_starred_service),
 ):
     """Star/bookmark an entry. Idempotent — starring an already-starred entry succeeds."""
-    existing = (
-        db.session.query(StarredEntry)
-        .filter(
-            StarredEntry.entry_id == body.entry_id,
-            StarredEntry.kb_name == body.kb_name,
-        )
-        .first()
-    )
-    if existing:
-        return StarEntryResponse(starred=True, entry_id=body.entry_id, kb_name=body.kb_name)
-
-    max_order = db.session.query(func.max(StarredEntry.sort_order)).scalar() or 0
-
-    starred = StarredEntry(
-        entry_id=body.entry_id,
-        kb_name=body.kb_name,
-        sort_order=max_order + 1,
-        created_at=datetime.now(UTC).isoformat(),
-    )
-    db.session.add(starred)
-    db.session.commit()
-
-    return StarEntryResponse(starred=True, entry_id=body.entry_id, kb_name=body.kb_name)
+    result = svc.star_entry(entry_id=body.entry_id, kb_name=body.kb_name)
+    return StarEntryResponse(**result)
 
 
 @router.delete(
@@ -109,17 +56,12 @@ def unstar_entry(
     request: Request,
     entry_id: str,
     kb: str | None = Query(None, description="KB name"),
-    db: PyriteDB = Depends(get_db),
+    svc: StarredService = Depends(get_starred_service),
 ):
     """Unstar/remove bookmark from an entry."""
-    query = db.session.query(StarredEntry).filter(StarredEntry.entry_id == entry_id)
-    if kb:
-        query = query.filter(StarredEntry.kb_name == kb)
-
-    deleted_count = query.delete()
-    db.session.commit()
-
-    if deleted_count == 0:
+    try:
+        svc.unstar_entry(entry_id=entry_id, kb_name=kb)
+    except ValueError:
         raise HTTPException(
             status_code=404,
             detail={
@@ -127,7 +69,6 @@ def unstar_entry(
                 "message": f"Starred entry '{entry_id}' not found",
             },
         )
-
     return UnstarEntryResponse(unstarred=True, entry_id=entry_id)
 
 
@@ -140,14 +81,9 @@ def unstar_entry(
 def reorder_starred(
     request: Request,
     body: ReorderStarredRequest,
-    db: PyriteDB = Depends(get_db),
+    svc: StarredService = Depends(get_starred_service),
 ):
     """Reorder starred entries by updating sort_order values."""
-    for item in body.entries:
-        db.session.query(StarredEntry).filter(
-            StarredEntry.entry_id == item.entry_id,
-            StarredEntry.kb_name == item.kb_name,
-        ).update({"sort_order": item.sort_order})
-    db.session.commit()
-
+    entries = [item.model_dump() for item in body.entries]
+    svc.reorder_starred(entries)
     return ReorderStarredResponse(reordered=True, count=len(body.entries))

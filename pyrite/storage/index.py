@@ -572,7 +572,10 @@ class IndexManager:
         progress_callback: Callable[[int, int], None] | None = None,
     ) -> dict[str, int]:
         """
-        Incremental sync: only update changed/new files.
+        Incremental sync: only parse changed/new files, skip unchanged ones.
+
+        Walks file paths first (no parsing), checks mtime-based staleness,
+        and only parses files that are new or modified since last index.
 
         Args:
             kb_name: Sync specific KB (all if None)
@@ -585,7 +588,7 @@ class IndexManager:
         kbs = [self.config.get_kb(kb_name)] if kb_name else self.config.knowledge_bases
         kbs = [kb for kb in kbs if kb and kb.path.exists()]
 
-        # Count total files across all KBs for progress
+        # Count total files across all KBs for progress (cheap: just path listing)
         total_files = 0
         if progress_callback:
             for kb in kbs:
@@ -606,26 +609,51 @@ class IndexManager:
             )
 
             indexed = self._load_indexed_state(kb.name)
-            seen_ids = set()
 
-            # Check each file
-            for entry, file_path in repo.list_entries():
-                seen_ids.add(entry.id)
+            # Build reverse map: file_path -> (entry_id, indexed_at)
+            path_to_indexed: dict[str, tuple[str, str | None]] = {}
+            for entry_id, info in indexed.items():
+                fp = info.get("file_path")
+                if fp:
+                    path_to_indexed[fp] = (entry_id, info.get("indexed_at"))
 
-                if entry.id not in indexed:
-                    # New entry
-                    self.index_entry(entry, kb.name, file_path)
-                    results["added"] += 1
-                else:
-                    # Check if updated
-                    indexed_at = indexed[entry.id]["indexed_at"]
+            seen_ids: set[str] = set()
+
+            # Walk all file paths without parsing
+            for file_path in repo.list_all_files():
+                fp_str = str(file_path)
+
+                if fp_str in path_to_indexed:
+                    # Known file — check staleness before parsing
+                    entry_id, indexed_at = path_to_indexed[fp_str]
+                    seen_ids.add(entry_id)
+
                     if indexed_at:
                         try:
                             if self._is_stale(file_path, indexed_at):
+                                # Stale — parse and re-index
+                                entry = repo.load_entry_from_file(file_path)
                                 self.index_entry(entry, kb.name, file_path)
                                 results["updated"] += 1
                         except Exception:
-                            logger.warning("Stale check failed for %s", entry.id, exc_info=True)
+                            logger.warning(
+                                "Stale check/re-index failed for %s", entry_id, exc_info=True
+                            )
+                else:
+                    # Unknown file — parse to discover entry
+                    try:
+                        entry = repo.load_entry_from_file(file_path)
+                        seen_ids.add(entry.id)
+                        if entry.id in indexed:
+                            # Entry exists but file path changed (rename)
+                            self.index_entry(entry, kb.name, file_path)
+                            results["updated"] += 1
+                        else:
+                            # Genuinely new entry
+                            self.index_entry(entry, kb.name, file_path)
+                            results["added"] += 1
+                    except Exception:
+                        logger.warning("Could not parse new file %s", file_path, exc_info=True)
 
                 processed += 1
                 if progress_callback and processed % 10 == 0:

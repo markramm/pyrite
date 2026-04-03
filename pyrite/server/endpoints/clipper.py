@@ -71,17 +71,9 @@ async def clip_url(
         )
 
     # Broadcast WebSocket event
-    import asyncio
+    from ..websocket import broadcast_event
 
-    from ..websocket import manager
-
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(
-            manager.broadcast({"type": "entry_created", "entry_id": entry.id, "kb_name": req.kb})
-        )
-    except RuntimeError:
-        logger.debug("WebSocket broadcast failed (client may have disconnected)")
+    broadcast_event("entry_created", entry_id=entry.id, kb_name=req.kb)
 
     return ClipResponse(
         created=True,
