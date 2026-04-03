@@ -388,8 +388,36 @@ class PyriteConfig:
         self._repo_by_name = {repo.name: repo for repo in self.repositories}
 
     def get_kb(self, name: str) -> KBConfig | None:
-        """Get a KB by name."""
+        """Get a KB by name (config.yaml + DB-registered KBs)."""
         return self._kb_by_name.get(name)
+
+    def merge_db_kbs(self, db_kbs: list[dict]) -> int:
+        """Merge DB-registered KBs into the in-memory config.
+
+        KBs already in config.yaml are skipped (config takes precedence).
+        Returns the number of KBs added.
+
+        Args:
+            db_kbs: List of dicts with keys: name, path, kb_type, description
+        """
+        added = 0
+        for kb_data in db_kbs:
+            name = kb_data.get("name", "")
+            if not name or name in self._kb_by_name:
+                continue
+            path = kb_data.get("path", "")
+            if not path:
+                continue
+            kb = KBConfig(
+                name=name,
+                path=Path(path),
+                kb_type=kb_data.get("kb_type", "generic"),
+                description=kb_data.get("description", ""),
+            )
+            self.knowledge_bases.append(kb)
+            self._kb_by_name[name] = kb
+            added += 1
+        return added
 
     def get_kb_by_shortname(self, shortname: str) -> KBConfig | None:
         """Get a KB by its shortname alias."""

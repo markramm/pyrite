@@ -545,7 +545,19 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     def _app_get_db() -> PyriteDB:
         if application.state.pyrite_db is None:
             cfg = application.state.pyrite_config
-            application.state.pyrite_db = PyriteDB(cfg.settings.index_path)
+            db = PyriteDB(cfg.settings.index_path)
+            application.state.pyrite_db = db
+            # Merge DB-registered KBs into config so all code paths see them
+            try:
+                from sqlalchemy import text
+                rows = db.session.execute(
+                    text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
+                ).fetchall()
+                if rows:
+                    db_kbs = [{"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows]
+                    cfg.merge_db_kbs(db_kbs)
+            except Exception:
+                pass  # Table may not exist yet on first startup
         return application.state.pyrite_db
 
     def _app_get_index_mgr() -> IndexManager:

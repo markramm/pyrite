@@ -143,6 +143,17 @@ class PyriteMCPServer:
         self.config = config or load_config()
         self.tier = tier
         self.db = PyriteDB(self.config.settings.index_path)
+        # Merge DB-registered KBs into config
+        try:
+            from sqlalchemy import text
+            rows = self.db.session.execute(
+                text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
+            ).fetchall()
+            if rows:
+                db_kbs = [{"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows]
+                self.config.merge_db_kbs(db_kbs)
+        except Exception:
+            pass
         self.index_mgr = IndexManager(self.db, self.config)
         self.svc = KBService(self.config, self.db)
         self.graph_svc = GraphService(self.db)
@@ -989,16 +1000,15 @@ class PyriteMCPServer:
         if not source_kb or not target_kb:
             return {"error": "source_kb and target_kb are required"}
 
-        from ..cli.link_commands import _batch_suggest
+        from ..services.link_discovery_service import LinkDiscoveryService
 
-        pairs = _batch_suggest(
+        svc = LinkDiscoveryService(self.config, self.db)
+        pairs = svc.batch_suggest(
             source_kb=source_kb,
             target_kb=target_kb,
             limit_per_entry=args.get("limit_per_entry", 3),
             mode=args.get("mode", "keyword"),
             exclude_linked=args.get("exclude_linked", True),
-            config=self.config,
-            db=self.db,
         )
 
         return {
@@ -1015,17 +1025,16 @@ class PyriteMCPServer:
         if not entry_id or not kb_name:
             return {"error": "entry_id and kb_name are required"}
 
-        from ..cli.link_commands import _discover_neighbors
+        from ..services.link_discovery_service import LinkDiscoveryService
 
-        candidates = _discover_neighbors(
+        svc = LinkDiscoveryService(self.config, self.db)
+        candidates = svc.discover_neighbors(
             entry_id=entry_id,
             kb_name=kb_name,
             target_kb=args.get("target_kb"),
             limit=args.get("limit", 10),
             mode=args.get("mode", "hybrid"),
             exclude_linked=args.get("exclude_linked", True),
-            config=self.config,
-            db=self.db,
         )
 
         return {

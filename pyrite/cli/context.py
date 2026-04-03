@@ -13,10 +13,35 @@ from ..storage.index import IndexManager
 logger = logging.getLogger(__name__)
 
 
+def _merge_db_kbs(config: PyriteConfig, db: PyriteDB) -> None:
+    """Merge DB-registered KBs (from 'pyrite kb add') into config.
+
+    This ensures all code paths see user-added KBs, not just the registry service.
+    Config.yaml KBs take precedence (skipped if name already exists).
+    """
+    try:
+        from sqlalchemy import text
+
+        rows = db.session.execute(
+            text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
+        ).fetchall()
+        if rows:
+            db_kbs = [
+                {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""}
+                for r in rows
+            ]
+            added = config.merge_db_kbs(db_kbs)
+            if added:
+                logger.debug("Merged %d DB-registered KBs into config", added)
+    except Exception:
+        logger.debug("Could not merge DB KBs (table may not exist yet)", exc_info=True)
+
+
 def _init_base() -> tuple[PyriteConfig, PyriteDB, KBService]:
     """Shared construction for all CLI context managers."""
     config = load_config()
     db = PyriteDB(config.settings.index_path)
+    _merge_db_kbs(config, db)
     svc = KBService(config, db)
     return config, db, svc
 
