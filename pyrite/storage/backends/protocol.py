@@ -150,6 +150,20 @@ class SearchBackend(Protocol):
         """Delete embedding for an entry."""
         ...
 
+    # ── edge endpoints ──────────────────────────────────────────────
+
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge endpoints for an edge-type entry (what does this edge connect?)."""
+        ...
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries where this entity is an endpoint."""
+        ...
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        """Get edge entries that connect two entities."""
+        ...
+
     # ── graph (links) ────────────────────────────────────────────────
 
     def get_backlinks(

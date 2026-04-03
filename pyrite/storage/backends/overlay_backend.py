@@ -206,6 +206,17 @@ class OverlaySearchBackend:
         diff = self._diff.search_by_tag_prefix(prefix, kb_name, limit=10000)
         return self._merge_entry_lists(main, diff)[:limit]
 
+    # ── edge endpoints → delegate to main ────────────────────────────
+
+    def get_edge_endpoints(self, entry_id: str, kb_name: str) -> list[dict[str, Any]]:
+        return self._main.get_edge_endpoints(entry_id, kb_name)
+
+    def get_edges_by_endpoint(self, endpoint_id: str, kb_name: str) -> list[dict[str, Any]]:
+        return self._main.get_edges_by_endpoint(endpoint_id, kb_name)
+
+    def get_edges_between(self, id_a: str, id_b: str, kb_name: str) -> list[dict[str, Any]]:
+        return self._main.get_edges_between(id_a, id_b, kb_name)
+
     # ── graph → merge ───────────────────────────────────────────────
 
     def get_backlinks(
