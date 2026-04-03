@@ -33,6 +33,7 @@ from ..services.kb_service import KBService
 from ..services.llm_service import LLMService
 from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
+from ..services.starred_service import StarredService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
@@ -235,6 +236,14 @@ def get_search_service(
 ) -> SearchService:
     """Get SearchService instance via DI."""
     return SearchService(db, settings=config.settings)
+
+
+def get_starred_service(
+    db: PyriteDB = Depends(get_db),
+    kb_service: KBService = Depends(get_kb_service),
+) -> StarredService:
+    """Get StarredService instance via DI."""
+    return StarredService(db, kb_service)
 
 
 def invalidate_llm_service():
