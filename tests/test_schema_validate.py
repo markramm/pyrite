@@ -248,7 +248,7 @@ class TestPriorityStringType:
             finally:
                 db.close()
 
-    def test_prioritizable_protocol_string(self):
+    def test_prioritizable_protocol_int(self):
         from dataclasses import dataclass
 
         from pyrite.models.protocols import Prioritizable
@@ -257,13 +257,19 @@ class TestPriorityStringType:
         class T(Prioritizable):
             pass
 
-        t = T(priority="critical")
-        assert t.priority == "critical"
+        t = T(priority=3)
+        assert t.priority == 3
         fm = t._prioritizable_to_frontmatter()
-        assert fm == {"priority": "critical"}
+        assert fm == {"priority": 3}
 
-        result = Prioritizable._prioritizable_from_frontmatter({"priority": "low"})
-        assert result == {"priority": "low"}
+        result = Prioritizable._prioritizable_from_frontmatter({"priority": 7})
+        assert result == {"priority": 7}
+
+    def test_prioritizable_protocol_non_numeric_fallback(self):
+        from pyrite.models.protocols import Prioritizable
+
+        result = Prioritizable._prioritizable_from_frontmatter({"priority": "critical"})
+        assert result == {"priority": 0}
 
 
 class TestSchemaValidateCLI:

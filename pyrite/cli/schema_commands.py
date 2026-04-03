@@ -22,7 +22,7 @@ console = Console()
 
 # Protocol fields and their expected Python types
 _PROTOCOL_FIELD_TYPES: dict[str, type] = {
-    "priority": str,
+    "priority": int,
     "date": str,
     "start_date": str,
     "end_date": str,

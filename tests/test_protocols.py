@@ -150,15 +150,15 @@ class TestPrioritizable:
             pass
 
         t = T()
-        assert t.priority == ""
+        assert t.priority == 0
 
     def test_to_frontmatter(self):
         @dataclass
         class T(Prioritizable):
             pass
 
-        t = T(priority="high")
-        assert t._prioritizable_to_frontmatter() == {"priority": "high"}
+        t = T(priority=5)
+        assert t._prioritizable_to_frontmatter() == {"priority": 5}
 
     def test_to_frontmatter_empty(self):
         @dataclass
@@ -169,8 +169,12 @@ class TestPrioritizable:
         assert t._prioritizable_to_frontmatter() == {}
 
     def test_from_frontmatter(self):
+        result = Prioritizable._prioritizable_from_frontmatter({"priority": 5})
+        assert result == {"priority": 5}
+
+    def test_from_frontmatter_non_numeric(self):
         result = Prioritizable._prioritizable_from_frontmatter({"priority": "high"})
-        assert result == {"priority": "high"}
+        assert result == {"priority": 0}
 
 
 class TestMixinComposition:

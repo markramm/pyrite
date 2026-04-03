@@ -19,6 +19,7 @@ from ..schema import (
     validate_date,
     validate_importance,
 )
+from ..utils.parse import safe_int
 from .base import Entry, parse_datetime, parse_links, parse_sources
 from .collection import CollectionEntry
 from .protocols import Locatable, Statusable, Temporal
@@ -54,7 +55,7 @@ class NoteEntry(Entry):
             title=meta.get("title", ""),
             body=body,
             summary=meta.get("summary", ""),
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
             sources=parse_sources(meta.get("sources")),
@@ -63,7 +64,7 @@ class NoteEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
 
@@ -112,7 +113,7 @@ class PersonEntry(Locatable, Entry):
             summary=meta.get("summary", ""),
             role=meta.get("role", ""),
             affiliations=meta.get("affiliations", []) or [],
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             research_status=research_status,
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
@@ -122,7 +123,7 @@ class PersonEntry(Locatable, Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
     @classmethod
@@ -186,7 +187,7 @@ class OrganizationEntry(Locatable, Entry):
             org_type=meta.get("org_type", ""),
             jurisdiction=meta.get("jurisdiction", ""),
             founded=meta.get("founded", ""),
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             research_status=research_status,
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
@@ -196,7 +197,7 @@ class OrganizationEntry(Locatable, Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
     @classmethod
@@ -260,7 +261,7 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
             body=body,
             summary=meta.get("summary", ""),
             date=meta.get("date", ""),
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             status=status,
             location=meta.get("location", ""),
             participants=participants,
@@ -273,7 +274,7 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
     def validate(self) -> list[str]:
@@ -341,7 +342,7 @@ class DocumentEntry(Temporal, Entry):
             author=meta.get("author", ""),
             document_type=meta.get("document_type", ""),
             url=meta.get("url", ""),
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
             sources=parse_sources(meta.get("sources")),
@@ -350,7 +351,7 @@ class DocumentEntry(Temporal, Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
     @classmethod
@@ -388,7 +389,7 @@ class TopicEntry(Entry):
             title=meta.get("title", ""),
             body=body,
             summary=meta.get("summary", ""),
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
             sources=parse_sources(meta.get("sources")),
@@ -397,7 +398,7 @@ class TopicEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
 
@@ -448,7 +449,7 @@ class RelationshipEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
 
@@ -503,11 +504,11 @@ class QAAssessmentEntry(Entry):
             summary=meta.get("summary", ""),
             target_entry=meta.get("target_entry", ""),
             target_kb=meta.get("target_kb", ""),
-            tier=int(meta.get("tier", 1)),
+            tier=safe_int(meta.get("tier"), 1),
             qa_status=meta.get("qa_status", "pass"),
             issues=meta.get("issues", []) or [],
-            issues_found=int(meta.get("issues_found", 0)),
-            issues_resolved=int(meta.get("issues_resolved", 0)),
+            issues_found=safe_int(meta.get("issues_found"), 0),
+            issues_resolved=safe_int(meta.get("issues_resolved"), 0),
             assessed_at=meta.get("assessed_at", ""),
             tags=meta.get("tags", []) or [],
             aliases=meta.get("aliases", []) or [],
@@ -517,7 +518,7 @@ class QAAssessmentEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
 
@@ -562,7 +563,7 @@ class TimelineEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
 

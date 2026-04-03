@@ -976,11 +976,10 @@ class KBService:
         session = self.db.session
 
         # CAS: only update if status matches from_status
-        status_clause = (
-            f"(status = '{from_status}' OR status IS NULL)"
-            if from_status == "open"
-            else f"status = '{from_status}'"
-        )
+        if from_status == "open":
+            status_clause = "(status = :from_status OR status IS NULL)"
+        else:
+            status_clause = "status = :from_status"
         result = session.execute(
             text(f"""UPDATE entry
                SET status = :to_status,
@@ -992,6 +991,7 @@ class KBService:
                 "entry_id": entry_id,
                 "kb_name": kb_name,
                 "to_status": to_status,
+                "from_status": from_status,
             },
         )
         session.commit()
@@ -1020,11 +1020,11 @@ class KBService:
             # Rollback index CAS on file error
             logger.warning("File update failed for claim on %s, rolling back: %s", entry_id, e)
             session.execute(
-                text(f"""UPDATE entry
-                   SET status = '{from_status}',
+                text("""UPDATE entry
+                   SET status = :from_status,
                        assignee = NULL
                    WHERE id = :entry_id AND kb_name = :kb_name"""),
-                {"entry_id": entry_id, "kb_name": kb_name},
+                {"entry_id": entry_id, "kb_name": kb_name, "from_status": from_status},
             )
             session.commit()
             return {"claimed": False, "error": f"File update failed: {e}"}

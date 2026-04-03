@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..schema import Provenance, generate_entry_id
+from ..utils.parse import safe_int
 from .base import parse_datetime, parse_links, parse_sources
 from .core_types import NoteEntry
 from .protocols import Assignable, Parentable, Prioritizable, Statusable, Temporal
@@ -179,12 +180,15 @@ def _note_base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
         "body": body,
         "summary": meta.get("summary", ""),
         "tags": meta.get("tags", []) or [],
+        "aliases": meta.get("aliases", []) or [],
         "sources": parse_sources(meta.get("sources")),
         "links": parse_links(meta.get("links")),
         "provenance": provenance,
+        "importance": safe_int(meta.get("importance"), 5),
         "metadata": meta.get("metadata", {}),
         "created_at": parse_datetime(meta.get("created_at")),
         "updated_at": parse_datetime(meta.get("updated_at")),
+        "_schema_version": safe_int(meta.get("_schema_version"), 0),
     }
 
 

@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..schema import Provenance, generate_entry_id
+from ..utils.parse import safe_int
 from .base import Entry, parse_datetime, parse_links, parse_sources
 
 
@@ -74,7 +75,7 @@ class CollectionEntry(Entry):
             metadata=meta.get("metadata", {}),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
 
     @classmethod

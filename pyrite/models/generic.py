@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..schema import Provenance, generate_entry_id
+from ..utils.parse import safe_int
 from .base import Entry, parse_datetime, parse_links, parse_sources
 
 # Fields that are handled by Entry base or known frontmatter keys
@@ -83,11 +84,11 @@ class GenericEntry(Entry):
             sources=parse_sources(meta.get("sources")),
             links=parse_links(meta.get("links")),
             provenance=provenance,
-            importance=int(meta.get("importance", 5)),
+            importance=safe_int(meta.get("importance"), 5),
             lifecycle=meta.get("lifecycle", "active"),
             metadata=merged_metadata,
             _entry_type=meta.get("type", "note"),
             created_at=parse_datetime(meta.get("created_at")),
             updated_at=parse_datetime(meta.get("updated_at")),
-            _schema_version=int(meta.get("_schema_version", 0)),
+            _schema_version=safe_int(meta.get("_schema_version"), 0),
         )
