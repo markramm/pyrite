@@ -1,18 +1,17 @@
 """
 QA Service — structural validation and assessment for knowledge bases.
 
-Validates KB integrity without LLM involvement:
-- Bulk SQL checks (missing titles, empty bodies, broken links, orphans)
-- Per-entry schema validation via KBSchema.validate_entry()
-- Aggregate health metrics
-- Assessment entries: first-class KB entries recording QA results
+Orchestrates QA operations by delegating to focused services:
+- Validation and assessment: handled directly (tightly coupled)
+- Auto-fix: delegated to QAFixService
+- Gap analysis / staleness: delegated to QAAnalyticsService
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
 from ..config import PyriteConfig
@@ -33,6 +32,30 @@ class QAService:
         self.db = db
         self._llm_service = llm_service
         self._llm_evaluator = None
+        self._fix_service = None
+        self._analytics_service = None
+
+    @property
+    def _fix_svc(self):
+        """Lazy-init QAFixService."""
+        if getattr(self, "_fix_service", None) is None:
+            from .qa_fix_service import QAFixService
+
+            self._fix_service = QAFixService(
+                getattr(self, "config", None), getattr(self, "db", None)
+            )
+        return self._fix_service
+
+    @property
+    def _analytics_svc(self):
+        """Lazy-init QAAnalyticsService."""
+        if getattr(self, "_analytics_service", None) is None:
+            from .qa_analytics_service import QAAnalyticsService
+
+            self._analytics_service = QAAnalyticsService(
+                getattr(self, "config", None), getattr(self, "db", None)
+            )
+        return self._analytics_service
 
     @property
     def llm_evaluator(self):
@@ -116,9 +139,9 @@ class QAService:
         # Rubric evaluation pass
         self._check_rubric_all(issues, kb_name)
 
-        # Optional staleness check
+        # Optional staleness check (delegated to analytics service)
         if check_staleness:
-            self._check_staleness(issues, kb_name, staleness_days)
+            self._analytics_svc._check_staleness(issues, kb_name, staleness_days)
 
         return {
             "kb_name": kb_name,
@@ -1178,351 +1201,14 @@ class QAService:
             )
 
     # =========================================================================
-    # Staleness & compaction
+    # Delegated: Auto-fix API (QAFixService)
     # =========================================================================
 
-    # Types that are historical by design — never flag as stale.
-    _STALENESS_EXEMPT_TYPES = frozenset(
-        {
-            "adr",
-            "event",
-            "timeline",
-            "qa_assessment",
-            "relationship",
-        }
-    )
-
-    def _check_staleness(
-        self, issues: list[dict[str, Any]], kb_name: str, max_age_days: int = 90
-    ) -> None:
-        """Add staleness info issues for entries not updated within *max_age_days*."""
-        for entry in self.find_stale(kb_name, max_age_days):
-            issues.append(
-                {
-                    "entry_id": entry["entry_id"],
-                    "kb_name": kb_name,
-                    "rule": "stale_entry",
-                    "severity": "info",
-                    "field": "updated_at",
-                    "message": (
-                        f"Entry '{entry['entry_id']}' ({entry['entry_type']}) "
-                        f"has not been updated in {entry['days_stale']} days"
-                    ),
-                }
-            )
-
-    def find_stale(self, kb_name: str, max_age_days: int = 90) -> list[dict[str, Any]]:
-        """Find active entries not updated within *max_age_days*.
-
-        Type-aware: historical types (adr, event, timeline, qa_assessment,
-        relationship) are exempt from staleness checks.
-
-        Returns list of dicts with entry_id, entry_type, title, days_stale.
-        """
-        cutoff = (datetime.now(UTC) - timedelta(days=max_age_days)).isoformat()
-
-        rows = self.db.execute_sql(
-            "SELECT id, entry_type, title, updated_at FROM entry "
-            "WHERE kb_name = :kb_name AND lifecycle = 'active' "
-            "AND updated_at < :cutoff "
-            "ORDER BY updated_at ASC",
-            {"kb_name": kb_name, "cutoff": cutoff},
-        )
-
-        now = datetime.now(UTC)
-        results = []
-        for row in rows:
-            entry_type = row.get("entry_type", "")
-            if entry_type in self._STALENESS_EXEMPT_TYPES:
-                continue
-
-            updated_str = row.get("updated_at", "")
-            try:
-                updated = datetime.fromisoformat(updated_str)
-                if updated.tzinfo is None:
-                    updated = updated.replace(tzinfo=UTC)
-                days_stale = (now - updated).days
-            except (ValueError, TypeError):
-                days_stale = max_age_days  # Treat unparseable as stale
-
-            results.append(
-                {
-                    "entry_id": row["id"],
-                    "entry_type": entry_type,
-                    "title": row.get("title", ""),
-                    "days_stale": days_stale,
-                    "updated_at": updated_str,
-                }
-            )
-
-        return results
-
-    def find_archival_candidates(
-        self, kb_name: str, min_age_days: int = 90
-    ) -> list[dict[str, Any]]:
-        """Find entries that are candidates for archival.
-
-        Candidates:
-        1. Completed backlog items older than *min_age_days*
-        2. Old orphan entries (no links) with low importance (≤3) older than *min_age_days*
-
-        Returns list of dicts with entry_id, entry_type, title, reason, days_old.
-        """
-        cutoff = (datetime.now(UTC) - timedelta(days=min_age_days)).isoformat()
-        now = datetime.now(UTC)
-        results: list[dict[str, Any]] = []
-
-        # 1. Completed backlog items
-        done_rows = self.db.execute_sql(
-            "SELECT id, entry_type, title, updated_at FROM entry "
-            "WHERE kb_name = :kb_name AND lifecycle = 'active' "
-            "AND entry_type = 'backlog_item' AND status = 'completed' "
-            "AND updated_at < :cutoff",
-            {"kb_name": kb_name, "cutoff": cutoff},
-        )
-        for row in done_rows:
-            days_old = self._days_since(row.get("updated_at", ""), now)
-            results.append(
-                {
-                    "entry_id": row["id"],
-                    "entry_type": row.get("entry_type", ""),
-                    "title": row.get("title", ""),
-                    "reason": "completed_backlog_item",
-                    "days_old": days_old,
-                }
-            )
-
-        # 2. Old orphan entries with low importance
-        orphan_rows = self.db.execute_sql(
-            "SELECT e.id, e.entry_type, e.title, e.updated_at FROM entry e "
-            "WHERE e.kb_name = :kb_name AND e.lifecycle = 'active' "
-            "AND e.updated_at < :cutoff "
-            "AND (e.importance IS NULL OR e.importance <= 3) "
-            "AND e.entry_type NOT IN ('backlog_item', 'qa_assessment', 'collection') "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM link l WHERE l.target_id = e.id AND l.target_kb = :kb_name"
-            ") "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM link l WHERE l.source_id = e.id AND l.source_kb = :kb_name"
-            ")",
-            {"kb_name": kb_name, "cutoff": cutoff},
-        )
-        existing_ids = {r["entry_id"] for r in results}
-        for row in orphan_rows:
-            if row["id"] not in existing_ids:
-                days_old = self._days_since(row.get("updated_at", ""), now)
-                results.append(
-                    {
-                        "entry_id": row["id"],
-                        "entry_type": row.get("entry_type", ""),
-                        "title": row.get("title", ""),
-                        "reason": "old_orphan",
-                        "days_old": days_old,
-                    }
-                )
-
-        return results
-
-    # =========================================================================
-    # Gap analysis
-    # =========================================================================
-
-    def analyze_gaps(
-        self,
-        kb_name: str,
-        threshold: int = 3,
-    ) -> dict[str, Any]:
-        """Analyze structural coverage gaps in a KB.
-
-        Reports:
-        - Entry types defined in kb.yaml with 0 entries
-        - Entry types with fewer than *threshold* entries
-        - Tags referenced in kb.yaml guidelines/goals with 0 entries
-        - Entries with no outbound links (no outlinks)
-        - Entries with no inbound links (unreferenced)
-        - Distribution: entries per type, per tag (top 20), per importance band
-
-        Returns a dict suitable for JSON serialisation or rich display.
-        """
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            return {"error": f"KB '{kb_name}' not found"}
-
-        kb_schema = kb_config.kb_schema
-
-        # -- 1. Collect declared types (from kb.yaml + core types) -----------
-        from ..schema.core_types import CORE_TYPES
-
-        declared_types: set[str] = set()
-        # Types from kb.yaml
-        if kb_schema and kb_schema.types:
-            declared_types.update(kb_schema.types.keys())
-        # Core types are always implicitly available
-        declared_types.update(CORE_TYPES.keys())
-
-        # -- 2. Actual entry counts by type ----------------------------------
-        type_count_rows = self.db.execute_sql(
-            "SELECT entry_type, COUNT(*) as cnt FROM entry "
-            "WHERE kb_name = :kb_name GROUP BY entry_type",
-            {"kb_name": kb_name},
-        )
-        type_counts: dict[str, int] = {row["entry_type"]: row["cnt"] for row in type_count_rows}
-
-        # Types with 0 entries
-        empty_types = sorted(declared_types - set(type_counts.keys()))
-
-        # Types below threshold
-        sparse_types = sorted(
-            [
-                {"type": t, "count": c}
-                for t, c in type_counts.items()
-                if c < threshold and t in declared_types
-            ],
-            key=lambda x: x["count"],
-        )
-
-        # -- 3. Tags referenced in kb.yaml guidelines/goals but with 0 entries
-        referenced_tags = self._extract_tags_from_schema(kb_schema)
-        actual_tags = dict(self.db.get_all_tags(kb_name=kb_name))
-        unused_tags = sorted(t for t in referenced_tags if t not in actual_tags)
-
-        # -- 4. No-outlink entries -------------------------------------------
-        no_outlink_rows = self.db.execute_sql(
-            "SELECT e.id, e.entry_type, e.title FROM entry e "
-            "WHERE e.kb_name = :kb_name "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM link l "
-            "  WHERE l.source_id = e.id AND l.source_kb = e.kb_name"
-            ") ORDER BY e.entry_type, e.id",
-            {"kb_name": kb_name},
-        )
-        no_outlinks = [
-            {"id": r["id"], "type": r["entry_type"], "title": r["title"]} for r in no_outlink_rows
-        ]
-
-        # -- 5. No-inlink entries (unreferenced) -----------------------------
-        no_inlink_rows = self.db.execute_sql(
-            "SELECT e.id, e.entry_type, e.title FROM entry e "
-            "WHERE e.kb_name = :kb_name "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM link l "
-            "  WHERE l.target_id = e.id AND l.target_kb = e.kb_name"
-            ") ORDER BY e.entry_type, e.id",
-            {"kb_name": kb_name},
-        )
-        no_inlinks = [
-            {"id": r["id"], "type": r["entry_type"], "title": r["title"]} for r in no_inlink_rows
-        ]
-
-        # -- 6. Distribution stats -------------------------------------------
-        # Entries per tag (top 20)
-        all_tags = self.db.get_all_tags(kb_name=kb_name)
-        tag_distribution = [
-            {"tag": tag, "count": count}
-            for tag, count in sorted(all_tags, key=lambda x: -x[1])[:20]
-        ]
-
-        # Entries per importance band
-        importance_rows = self.db.execute_sql(
-            "SELECT importance, COUNT(*) as cnt FROM entry "
-            "WHERE kb_name = :kb_name AND importance IS NOT NULL "
-            "GROUP BY importance ORDER BY importance",
-            {"kb_name": kb_name},
-        )
-        importance_distribution = {str(row["importance"]): row["cnt"] for row in importance_rows}
-
-        # Count entries with NULL importance
-        null_importance_rows = self.db.execute_sql(
-            "SELECT COUNT(*) as cnt FROM entry WHERE kb_name = :kb_name AND importance IS NULL",
-            {"kb_name": kb_name},
-        )
-        null_importance = null_importance_rows[0]["cnt"] if null_importance_rows else 0
-        if null_importance:
-            importance_distribution["unset"] = null_importance
-
-        # Total entry count
-        total_rows = self.db.execute_sql(
-            "SELECT COUNT(*) as cnt FROM entry WHERE kb_name = :kb_name",
-            {"kb_name": kb_name},
-        )
-        total = total_rows[0]["cnt"] if total_rows else 0
-
-        return {
-            "kb_name": kb_name,
-            "total_entries": total,
-            "threshold": threshold,
-            "empty_types": empty_types,
-            "sparse_types": sparse_types,
-            "unused_tags": unused_tags,
-            "no_outlinks": no_outlinks,
-            "no_inlinks": no_inlinks,
-            "distribution": {
-                "entries_per_type": dict(sorted(type_counts.items())),
-                "top_tags": tag_distribution,
-                "importance": importance_distribution,
-            },
-        }
-
-    @staticmethod
-    def _extract_tags_from_schema(kb_schema) -> set[str]:
-        """Extract tag-like tokens referenced in kb.yaml guidelines and goals.
-
-        Looks for words preceded by '#' or explicit tag references in
-        guidelines/goals text values.
-        """
-        import re
-
-        tags: set[str] = set()
-        if not kb_schema:
-            return tags
-
-        # Scan guidelines and goals (dict[str, str])
-        text_sources: list[str] = []
-        if kb_schema.guidelines:
-            text_sources.extend(v for v in kb_schema.guidelines.values() if isinstance(v, str))
-        if kb_schema.goals:
-            text_sources.extend(v for v in kb_schema.goals.values() if isinstance(v, str))
-
-        # Also scan type-level guidelines/goals
-        if kb_schema.types:
-            for ts in kb_schema.types.values():
-                if ts.guidelines and isinstance(ts.guidelines, str):
-                    text_sources.append(ts.guidelines)
-                if ts.goals and isinstance(ts.goals, str):
-                    text_sources.append(ts.goals)
-
-        # Extract #tag patterns
-        for text in text_sources:
-            tags.update(re.findall(r"#([a-zA-Z0-9_/-]+)", text))
-
-        return tags
-
-    @staticmethod
-    def _days_since(iso_str: str, now: datetime) -> int:
-        """Parse ISO timestamp and return days elapsed."""
-        try:
-            dt = datetime.fromisoformat(iso_str)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=UTC)
-            return (now - dt).days
-        except (ValueError, TypeError):
-            return 0
-
-    # =========================================================================
-    # Auto-fix API
-    # =========================================================================
-
-    # Rules that can be safely auto-fixed.
-    FIXABLE_RULES = frozenset(
-        {
-            "invalid_date",
-            "schema_violation",  # only missing-field sub-cases
-            "broken_link",
-        }
-    )
-
-    # Tag normalisation is not a validation rule per se — it's a normalisation
-    # pass that lowercases mixed-case tags.
+    # Expose FIXABLE_RULES for backward compatibility
+    @property
+    def FIXABLE_RULES(self):
+        from .qa_fix_service import QAFixService
+        return QAFixService.FIXABLE_RULES
 
     def fix_kb(
         self,
@@ -1531,408 +1217,101 @@ class QAService:
         dry_run: bool = True,
         fix_rules: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Auto-fix safe structural issues in a KB.
-
-        Runs validation first, then applies mechanical fixes where
-        unambiguous.  Returns a report of what was fixed, what was skipped,
-        and what still needs manual attention.
-
-        Args:
-            kb_name: KB to fix.
-            dry_run: If True, report planned fixes without writing.
-            fix_rules: Optional list of rule names to restrict fixes to.
-
-        Returns:
-            Dict with fixed, skipped, manual lists plus summary counts.
-        """
-        from .kb_service import KBService
-
-        kb_svc = KBService(self.config, self.db)
-
-        # Run validation to discover issues
-        result = self.validate_kb(kb_name)
-        issues = result["issues"]
-
-        fixed: list[dict[str, Any]] = []
-        skipped: list[dict[str, Any]] = []
-        manual: list[dict[str, Any]] = []
-
-        # Collect all entry IDs in this KB for wikilink matching
-        all_entry_ids = self._get_all_entry_ids(kb_name)
-
-        # Group issues by entry_id for batch updates
-        issues_by_entry: dict[str, list[dict[str, Any]]] = {}
-        for issue in issues:
-            eid = issue.get("entry_id", "")
-            if eid:
-                issues_by_entry.setdefault(eid, []).append(issue)
-
-        # Also run tag normalisation pass
-        tag_fixes = self._find_tag_normalisation_fixes(kb_name)
-
-        # Apply fix_rules filter if provided
-        active_fix_rules = set(fix_rules) if fix_rules else None
-
-        for entry_id, entry_issues in issues_by_entry.items():
-            updates: dict[str, Any] = {}
-
-            for issue in entry_issues:
-                rule = issue.get("rule", "")
-
-                # Filter by fix_rules if specified
-                if active_fix_rules and rule not in active_fix_rules:
-                    if rule not in active_fix_rules and "tag_case" not in active_fix_rules:
-                        skipped.append({**issue, "reason": "filtered_by_fix_rule"})
-                        continue
-
-                if rule == "invalid_date":
-                    fix = self._fix_invalid_date(issue)
-                    if fix:
-                        updates["date"] = fix["new_value"]
-                        fixed.append(fix)
-                    else:
-                        manual.append({**issue, "reason": "cannot_normalise_date"})
-
-                elif rule == "schema_violation" and "missing" in issue.get("message", "").lower():
-                    fix = self._fix_missing_field(issue)
-                    if fix:
-                        field_name = fix["field"]
-                        if field_name.startswith("metadata."):
-                            meta_key = field_name.split(".", 1)[1]
-                            meta_updates = updates.get("metadata", {})
-                            meta_updates[meta_key] = fix["new_value"]
-                            updates["metadata"] = meta_updates
-                        else:
-                            updates[field_name] = fix["new_value"]
-                        fixed.append(fix)
-                    else:
-                        manual.append({**issue, "reason": "no_safe_default"})
-
-                elif rule == "broken_link":
-                    fix = self._fix_broken_link(issue, all_entry_ids)
-                    if fix:
-                        fixed.append(fix)
-                        # Broken link fixes need special handling via link
-                        # update — applied separately below.
-                        if not dry_run:
-                            self._apply_link_fix(
-                                issue["entry_id"],
-                                issue["kb_name"],
-                                fix["old_target"],
-                                fix["new_value"],
-                                kb_svc,
-                            )
-                    else:
-                        manual.append({**issue, "reason": "no_close_match"})
-                else:
-                    manual.append({**issue, "reason": "not_auto_fixable"})
-
-            # Apply accumulated field updates for this entry
-            if updates and not dry_run:
-                try:
-                    # Handle metadata merge specially
-                    if "metadata" in updates:
-                        meta_extra = updates.pop("metadata")
-                        # Load current metadata first
-                        rows = self.db.execute_sql(
-                            "SELECT metadata FROM entry WHERE id = :eid AND kb_name = :kb",
-                            {"eid": entry_id, "kb": kb_name},
-                        )
-                        current_meta = parse_metadata(
-                            rows[0]["metadata"] if rows else None
-                        )
-                        current_meta.update(meta_extra)
-                        updates["metadata"] = current_meta
-
-                    kb_svc.update_entry(entry_id, kb_name, **updates)
-                except Exception as e:
-                    logger.warning("Failed to apply fix to %s: %s", entry_id, e)
-                    # Move these from fixed to manual
-                    for f in list(fixed):
-                        if f.get("entry_id") == entry_id:
-                            fixed.remove(f)
-                            manual.append({**f, "reason": f"update_failed: {e}"})
-
-        # Tag normalisation
-        for tag_fix in tag_fixes:
-            if active_fix_rules and "tag_case" not in active_fix_rules:
-                skipped.append({**tag_fix, "reason": "filtered_by_fix_rule"})
-                continue
-            fixed.append(tag_fix)
-            if not dry_run:
-                self._apply_tag_normalisation(
-                    tag_fix["entry_id"],
-                    kb_name,
-                    tag_fix["old_value"],
-                    tag_fix["new_value"],
-                    kb_svc,
-                )
-
-        return {
-            "kb_name": kb_name,
-            "dry_run": dry_run,
-            "fixed_count": len(fixed),
-            "skipped_count": len(skipped),
-            "manual_count": len(manual),
-            "fixed": fixed,
-            "skipped": skipped,
-            "manual": manual,
-        }
+        """Auto-fix safe structural issues in a KB. Delegates to QAFixService."""
+        return self._fix_svc.fix_kb(
+            kb_name,
+            dry_run=dry_run,
+            fix_rules=fix_rules,
+            validate_kb_fn=self.validate_kb,
+        )
 
     def _get_all_entry_ids(self, kb_name: str) -> list[str]:
-        """Get all entry IDs in a KB for edit-distance matching."""
-        rows = self.db.execute_sql(
-            "SELECT id FROM entry WHERE kb_name = :kb_name",
-            {"kb_name": kb_name},
-        )
-        return [row["id"] for row in rows]
+        """Delegate to QAFixService."""
+        return self._fix_svc._get_all_entry_ids(kb_name)
 
     @staticmethod
     def _normalise_date(raw: str) -> str | None:
-        """Try to normalise a date string to YYYY-MM-DD.
-
-        Handles: YYYY, YYYY-MM, MM/DD/YYYY, DD/MM/YYYY (if unambiguous),
-        and ISO datetime strings.
-
-        Returns normalised string or None if not parseable.
-        """
-        import re
-
-        raw = raw.strip().strip("'\"")
-
-        # Already valid YYYY-MM-DD
-        if re.match(r"^\d{4}-\d{2}-\d{2}$", raw):
-            return raw
-
-        # Just a year: YYYY → YYYY-01-01
-        if re.match(r"^\d{4}$", raw):
-            return f"{raw}-01-01"
-
-        # Year-month: YYYY-MM → YYYY-MM-01
-        m = re.match(r"^(\d{4})-(\d{1,2})$", raw)
-        if m:
-            year, month = m.group(1), m.group(2).zfill(2)
-            return f"{year}-{month}-01"
-
-        # ISO datetime: YYYY-MM-DDTHH:MM:SS... → YYYY-MM-DD
-        m = re.match(r"^(\d{4}-\d{2}-\d{2})T", raw)
-        if m:
-            return m.group(1)
-
-        # US-style: MM/DD/YYYY
-        m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", raw)
-        if m:
-            month, day, year = m.group(1).zfill(2), m.group(2).zfill(2), m.group(3)
-            try:
-                datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d")
-                return f"{year}-{month}-{day}"
-            except ValueError:
-                return None
-
-        return None
+        """Delegate to QAFixService."""
+        from .qa_fix_service import QAFixService
+        return QAFixService._normalise_date(raw)
 
     def _fix_invalid_date(self, issue: dict[str, Any]) -> dict[str, Any] | None:
-        """Attempt to fix an invalid date issue. Returns fix dict or None."""
-        msg = issue.get("message", "")
-        # Extract the raw date from the message (after "invalid date: '...'")
-        import re
-
-        m = re.search(r"invalid date:\s*'([^']*)'", msg)
-        if not m:
-            return None
-
-        raw_date = m.group(1)
-        normalised = self._normalise_date(raw_date)
-        if normalised is None:
-            return None
-
-        return {
-            "entry_id": issue["entry_id"],
-            "kb_name": issue["kb_name"],
-            "rule": "invalid_date",
-            "field": "date",
-            "old_value": raw_date,
-            "new_value": normalised,
-            "message": f"Normalised date '{raw_date}' → '{normalised}'",
-        }
+        """Delegate to QAFixService."""
+        return self._fix_svc._fix_invalid_date(issue)
 
     @staticmethod
     def _fix_missing_field(issue: dict[str, Any]) -> dict[str, Any] | None:
-        """Provide a type-appropriate default for a missing required field.
-
-        Only handles fields where a safe default exists.
-        Returns fix dict or None.
-        """
-        field = issue.get("field", "")
-
-        # Map of field names to safe defaults
-        safe_defaults: dict[str, Any] = {
-            "importance": 5,
-        }
-
-        default_val = safe_defaults.get(field)
-        if default_val is None:
-            return None
-
-        return {
-            "entry_id": issue["entry_id"],
-            "kb_name": issue["kb_name"],
-            "rule": "schema_violation",
-            "field": field,
-            "old_value": None,
-            "new_value": default_val,
-            "message": f"Added default {field}={default_val}",
-        }
+        """Delegate to QAFixService."""
+        from .qa_fix_service import QAFixService
+        return QAFixService._fix_missing_field(issue)
 
     @staticmethod
     def _edit_distance(a: str, b: str) -> int:
-        """Compute Levenshtein edit distance between two strings."""
-        if len(a) < len(b):
-            return QAService._edit_distance(b, a)
-
-        if len(b) == 0:
-            return len(a)
-
-        prev = list(range(len(b) + 1))
-        for i, ca in enumerate(a):
-            curr = [i + 1]
-            for j, cb in enumerate(b):
-                cost = 0 if ca == cb else 1
-                curr.append(min(curr[j] + 1, prev[j + 1] + 1, prev[j] + cost))
-            prev = curr
-
-        return prev[len(b)]
+        """Delegate to QAFixService."""
+        from .qa_fix_service import QAFixService
+        return QAFixService._edit_distance(a, b)
 
     def _fix_broken_link(
         self,
         issue: dict[str, Any],
         all_entry_ids: list[str],
     ) -> dict[str, Any] | None:
-        """Fix broken link by finding closest entry ID by edit distance.
+        """Delegate to QAFixService."""
+        return self._fix_svc._fix_broken_link(issue, all_entry_ids)
 
-        Only fixes if the best match is within 40% edit distance of the
-        target ID length (i.e. a plausible typo, not a completely
-        different ID).
-
-        Returns fix dict or None.
-        """
-        import re
-
-        msg = issue.get("message", "")
-        # Extract target_id from message: "links to non-existent 'xxx' in 'yyy'"
-        m = re.search(r"links to non-existent '([^']*)'", msg)
-        if not m:
-            return None
-
-        broken_target = m.group(1)
-
-        if not all_entry_ids:
-            return None
-
-        # Find closest match
-        best_id = None
-        best_dist = float("inf")
-        for eid in all_entry_ids:
-            d = self._edit_distance(broken_target, eid)
-            if d < best_dist:
-                best_dist = d
-                best_id = eid
-
-        # Only fix if within reasonable edit distance (40% of target length)
-        max_allowed = max(2, int(len(broken_target) * 0.4))
-        if best_dist > max_allowed or best_id is None:
-            return None
-
-        return {
-            "entry_id": issue["entry_id"],
-            "kb_name": issue["kb_name"],
-            "rule": "broken_link",
-            "field": "links",
-            "old_target": broken_target,
-            "old_value": broken_target,
-            "new_value": best_id,
-            "edit_distance": best_dist,
-            "message": f"Fixed broken link '{broken_target}' → '{best_id}' (distance={best_dist})",
-        }
-
-    def _apply_link_fix(
-        self,
-        entry_id: str,
-        kb_name: str,
-        old_target: str,
-        new_target: str,
-        kb_svc,
-    ) -> None:
-        """Update a broken link target in the entry's link list and re-save."""
-        from ..storage.repository import KBRepository
-
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            return
-
-        repo = KBRepository(kb_config)
-        entry = repo.load(entry_id)
-        if not entry:
-            return
-
-        # Update the link target in the entry's links list
-        changed = False
-        for link in entry.links:
-            if link.target == old_target:
-                link.target = new_target
-                changed = True
-
-        if changed:
-            kb_svc.update_entry(entry_id, kb_name, links=entry.links)
+    def _apply_link_fix(self, entry_id, kb_name, old_target, new_target, kb_svc):
+        """Delegate to QAFixService."""
+        return self._fix_svc._apply_link_fix(entry_id, kb_name, old_target, new_target, kb_svc)
 
     def _find_tag_normalisation_fixes(self, kb_name: str) -> list[dict[str, Any]]:
-        """Find tags with mixed case that should be lowercased.
+        """Delegate to QAFixService."""
+        return self._fix_svc._find_tag_normalisation_fixes(kb_name)
 
-        Returns list of fix dicts (one per entry+tag combination).
-        """
-        rows = self.db.execute_sql(
-            "SELECT et.entry_id, t.name AS tag_name FROM entry_tag et "
-            "JOIN tag t ON et.tag_id = t.id "
-            "WHERE et.kb_name = :kb_name AND t.name != LOWER(t.name)",
-            {"kb_name": kb_name},
-        )
+    def _apply_tag_normalisation(self, entry_id, kb_name, old_tag, new_tag, kb_svc):
+        """Delegate to QAFixService."""
+        return self._fix_svc._apply_tag_normalisation(entry_id, kb_name, old_tag, new_tag, kb_svc)
 
-        fixes = []
-        for row in rows:
-            tag_name = row["tag_name"]
-            fixes.append(
-                {
-                    "entry_id": row["entry_id"],
-                    "kb_name": kb_name,
-                    "rule": "tag_case",
-                    "field": "tags",
-                    "old_value": tag_name,
-                    "new_value": tag_name.lower(),
-                    "message": f"Normalised tag '{tag_name}' → '{tag_name.lower()}'",
-                }
-            )
+    # =========================================================================
+    # Delegated: Analytics API (QAAnalyticsService)
+    # =========================================================================
 
-        return fixes
+    # Expose _STALENESS_EXEMPT_TYPES for backward compatibility
+    @property
+    def _STALENESS_EXEMPT_TYPES(self):
+        return self._analytics_svc._STALENESS_EXEMPT_TYPES
 
-    def _apply_tag_normalisation(
-        self,
-        entry_id: str,
-        kb_name: str,
-        old_tag: str,
-        new_tag: str,
-        kb_svc,
+    def _check_staleness(
+        self, issues: list[dict[str, Any]], kb_name: str, max_age_days: int = 90
     ) -> None:
-        """Normalise a single tag on an entry by updating its tag list."""
-        from ..storage.repository import KBRepository
+        """Delegate to QAAnalyticsService."""
+        return self._analytics_svc._check_staleness(issues, kb_name, max_age_days)
 
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            return
+    def find_stale(self, kb_name: str, max_age_days: int = 90) -> list[dict[str, Any]]:
+        """Delegate to QAAnalyticsService."""
+        return self._analytics_svc.find_stale(kb_name, max_age_days)
 
-        repo = KBRepository(kb_config)
-        entry = repo.load(entry_id)
-        if not entry:
-            return
+    def find_archival_candidates(
+        self, kb_name: str, min_age_days: int = 90
+    ) -> list[dict[str, Any]]:
+        """Delegate to QAAnalyticsService."""
+        return self._analytics_svc.find_archival_candidates(kb_name, min_age_days)
 
-        new_tags = [new_tag if t == old_tag else t for t in entry.tags]
-        kb_svc.update_entry(entry_id, kb_name, tags=new_tags)
+    def analyze_gaps(
+        self,
+        kb_name: str,
+        threshold: int = 3,
+    ) -> dict[str, Any]:
+        """Delegate to QAAnalyticsService."""
+        return self._analytics_svc.analyze_gaps(kb_name, threshold)
+
+    @staticmethod
+    def _extract_tags_from_schema(kb_schema) -> set[str]:
+        """Delegate to QAAnalyticsService."""
+        from .qa_analytics_service import QAAnalyticsService
+        return QAAnalyticsService._extract_tags_from_schema(kb_schema)
+
+    @staticmethod
+    def _days_since(iso_str: str, now: datetime) -> int:
+        """Delegate to QAAnalyticsService."""
+        from .qa_analytics_service import QAAnalyticsService
+        return QAAnalyticsService._days_since(iso_str, now)
