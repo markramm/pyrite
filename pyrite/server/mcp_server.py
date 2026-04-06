@@ -1599,8 +1599,16 @@ class PyriteMCPServer:
             logger.exception("Tool %s failed with args %s", name, arguments)
             return _error("INTERNAL", str(e), retryable=True)
 
-    def build_sdk_server(self):
-        """Build an mcp.server.Server wired to this instance's business logic."""
+    def build_sdk_server(self, *, client_id: str = "stdio"):
+        """Build an mcp.server.Server wired to this instance's business logic.
+
+        Parameters
+        ----------
+        client_id : str
+            Identifier for the connected client, used for rate limiting
+            and audit logging. Defaults to "stdio" for local CLI usage.
+            SSE transport passes the authenticated username.
+        """
         from mcp.server import Server
         from mcp.types import (
             GetPromptResult,
@@ -1618,6 +1626,7 @@ class PyriteMCPServer:
         sdk = Server(f"pyrite-{self.tier}")
 
         mcp_server = self  # capture for closures
+        _client_id = client_id  # capture for closures
 
         @sdk.list_tools()
         async def _list_tools():
@@ -1632,7 +1641,7 @@ class PyriteMCPServer:
 
         @sdk.call_tool()
         async def _call_tool(name: str, arguments: dict):
-            result = mcp_server._dispatch_tool(name, arguments or {}, client_id="stdio")
+            result = mcp_server._dispatch_tool(name, arguments or {}, client_id=_client_id)
             return [
                 TextContent(
                     type="text", text=json.dumps(result, separators=(",", ":"), default=str)

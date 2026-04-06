@@ -669,6 +669,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
     application.include_router(auth_router)
 
+    # MCP SSE transport (mounted outside /api — handles its own Bearer auth)
+    from .mcp_routes import mount_mcp_routes
+
+    mount_mcp_routes(application, _app_get_config, _app_get_db)
+
     # Collect endpoint routers under /api with auth + read-tier baseline
     api_router = APIRouter(
         prefix="/api",

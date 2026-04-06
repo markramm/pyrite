@@ -4,10 +4,13 @@
 	import { onMount } from 'svelte';
 
 	type ApiKeyEntry = { provider: string; model: string; created_at: string };
+	type McpInfo = { endpoint: string; transport: string; auth: string; tools_count: number; tier: string };
 
 	let keys = $state<ApiKeyEntry[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let mcpInfo = $state<McpInfo | null>(null);
+	let mcpCopied = $state(false);
 
 	// Form state
 	let formProvider = $state('anthropic');
@@ -95,8 +98,41 @@
 		}
 	}
 
+	async function loadMcpInfo() {
+		try {
+			mcpInfo = await api.getMcpInfo();
+		} catch {
+			// Non-critical — just don't show the MCP section
+			mcpInfo = null;
+		}
+	}
+
+	function copyMcpConfig() {
+		if (!mcpInfo) return;
+		const config = JSON.stringify(
+			{
+				mcpServers: {
+					pyrite: {
+						url: mcpInfo.endpoint,
+						transport: 'sse',
+						headers: {
+							Authorization: 'Bearer YOUR_API_KEY'
+						}
+					}
+				}
+			},
+			null,
+			2
+		);
+		navigator.clipboard.writeText(config).then(() => {
+			mcpCopied = true;
+			setTimeout(() => (mcpCopied = false), 2000);
+		});
+	}
+
 	onMount(() => {
 		loadKeys();
+		loadMcpInfo();
 	});
 </script>
 
@@ -260,6 +296,59 @@
 					</div>
 				</div>
 			</section>
+
+			<!-- MCP Connection -->
+			{#if mcpInfo}
+				<section>
+					<h2 class="mb-3 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+						Connect Claude Desktop / Claude Code
+					</h2>
+					<div class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+						<p class="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
+							This Pyrite instance exposes an MCP server over SSE. Connect Claude Desktop
+							or Claude Code to access your knowledge bases as MCP tools.
+						</p>
+						<div class="mb-3 space-y-2 text-sm">
+							<div class="flex items-center gap-2">
+								<span class="w-20 shrink-0 font-medium text-zinc-700 dark:text-zinc-300">Endpoint</span>
+								<code class="rounded bg-zinc-200 px-2 py-0.5 text-xs dark:bg-zinc-700">{mcpInfo.endpoint}</code>
+							</div>
+							<div class="flex items-center gap-2">
+								<span class="w-20 shrink-0 font-medium text-zinc-700 dark:text-zinc-300">Transport</span>
+								<span class="text-zinc-600 dark:text-zinc-400">SSE (Server-Sent Events)</span>
+							</div>
+							<div class="flex items-center gap-2">
+								<span class="w-20 shrink-0 font-medium text-zinc-700 dark:text-zinc-300">Auth</span>
+								<span class="text-zinc-600 dark:text-zinc-400">Bearer token (use your Pyrite API key)</span>
+							</div>
+							<div class="flex items-center gap-2">
+								<span class="w-20 shrink-0 font-medium text-zinc-700 dark:text-zinc-300">Tools</span>
+								<span class="text-zinc-600 dark:text-zinc-400">{mcpInfo.tools_count} tools ({mcpInfo.tier} tier)</span>
+							</div>
+						</div>
+						<div class="mb-3 rounded-md bg-zinc-900 p-3 text-xs text-zinc-100 dark:bg-zinc-950">
+							<div class="mb-1 text-zinc-400">// claude_desktop_config.json or .mcp.json</div>
+							<pre class="whitespace-pre-wrap">&#123;
+  "mcpServers": &#123;
+    "pyrite": &#123;
+      "url": "{mcpInfo.endpoint}",
+      "transport": "sse",
+      "headers": &#123;
+        "Authorization": "Bearer YOUR_API_KEY"
+      &#125;
+    &#125;
+  &#125;
+&#125;</pre>
+						</div>
+						<button
+							onclick={copyMcpConfig}
+							class="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+						>
+							{mcpCopied ? 'Copied!' : 'Copy config'}
+						</button>
+					</div>
+				</section>
+			{/if}
 
 			<!-- Info -->
 			<section class="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-400">

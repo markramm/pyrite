@@ -512,6 +512,11 @@ class ApiClient {
 		return this.request('/api/ai/test', { method: 'POST' });
 	}
 
+	// MCP connection info
+	async getMcpInfo(): Promise<{ endpoint: string; transport: string; auth: string; tools_count: number; tier: string }> {
+		return this.request('/mcp/info');
+	}
+
 	// User API Keys (BYOK)
 	async listUserApiKeys(): Promise<{ keys: Array<{ provider: string; model: string; created_at: string }> }> {
 		return this.request('/auth/api-keys');
