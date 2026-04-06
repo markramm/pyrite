@@ -9,7 +9,7 @@ tags:
 - cascade
 importance: 5
 kind: epic
-status: in_progress
+status: completed
 priority: high
 effort: L
 rank: 0
