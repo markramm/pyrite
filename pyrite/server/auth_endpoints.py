@@ -498,6 +498,69 @@ def _require_auth(request: Request) -> dict:
     return user
 
 
+# ── User API Key Management (BYOK) ────────────────────────────────────
+
+
+class StoreApiKeyRequest(BaseModel):
+    provider: str  # anthropic, openai, gemini, openrouter
+    api_key: str
+    model: str = ""
+
+
+def _require_session_auth(request: Request, auth_service: AuthService) -> dict:
+    """Authenticate via session cookie and return user dict, or raise 401."""
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    user = auth_service.verify_session(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Session expired or invalid")
+    return user
+
+
+@auth_router.get("/api-keys")
+async def list_user_api_keys(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """List the current user's configured LLM providers (no keys exposed)."""
+    user = _require_session_auth(request, auth_service)
+    keys = auth_service.list_user_api_keys(user["id"])
+    return {"keys": keys}
+
+
+@auth_router.post("/api-keys")
+async def store_user_api_key(
+    body: StoreApiKeyRequest,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Store or update the current user's API key for a provider."""
+    user = _require_session_auth(request, auth_service)
+    valid_providers = ("anthropic", "openai", "gemini", "openrouter", "ollama")
+    if body.provider not in valid_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid provider: {body.provider}. Must be one of: {', '.join(valid_providers)}",
+        )
+    result = auth_service.store_user_api_key(user["id"], body.provider, body.api_key, body.model)
+    return result
+
+
+@auth_router.delete("/api-keys/{provider}")
+async def delete_user_api_key(
+    provider: str,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Delete the current user's API key for a provider."""
+    user = _require_session_auth(request, auth_service)
+    deleted = auth_service.delete_user_api_key(user["id"], provider)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"No API key found for provider: {provider}")
+    return {"ok": True, "provider": provider}
+
+
 # ── Invite Code Management (admin only) ────────────────────────────────
 
 

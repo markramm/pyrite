@@ -512,6 +512,24 @@ class ApiClient {
 		return this.request('/api/ai/test', { method: 'POST' });
 	}
 
+	// User API Keys (BYOK)
+	async listUserApiKeys(): Promise<{ keys: Array<{ provider: string; model: string; created_at: string }> }> {
+		return this.request('/auth/api-keys');
+	}
+
+	async storeUserApiKey(provider: string, apiKey: string, model: string = ''): Promise<{ provider: string; model: string; stored: boolean }> {
+		return this.request('/auth/api-keys', {
+			method: 'POST',
+			body: JSON.stringify({ provider, api_key: apiKey, model })
+		});
+	}
+
+	async deleteUserApiKey(provider: string): Promise<{ ok: boolean; provider: string }> {
+		return this.request(`/auth/api-keys/${encodeURIComponent(provider)}`, {
+			method: 'DELETE'
+		});
+	}
+
 	async aiSummarize(entryId: string, kbName: string): Promise<AISummarizeResponse> {
 		return this.request('/api/ai/summarize', {
 			method: 'POST',

@@ -8,7 +8,7 @@ tags:
 - infrastructure
 importance: 5
 kind: feature
-status: todo
+status: completed
 priority: critical
 effort: S
 rank: 0

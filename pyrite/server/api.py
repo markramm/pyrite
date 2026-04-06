@@ -155,6 +155,25 @@ def get_llm_service(
     return LLMService(settings)
 
 
+def get_user_llm_context(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> dict | None:
+    """Get the current user's LLM API key context, or None.
+
+    Returns {"provider": ..., "api_key": ..., "model": ...} if the user
+    has a stored BYOK key, otherwise None.
+    """
+    auth_user = getattr(request.state, "auth_user", None)
+    if not auth_user:
+        return None
+    from ..services.auth_service import AuthService
+
+    auth_svc = AuthService(db, config.settings.auth)
+    return auth_svc.get_user_api_key(auth_user["id"])
+
+
 def get_kb_registry(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),

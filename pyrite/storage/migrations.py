@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 18
+CURRENT_VERSION = 19
 
 
 @dataclass
@@ -395,6 +395,26 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS invite_code;
+        """,
+    ),
+    Migration(
+        version=19,
+        description="Add user_api_key table for BYOK per-user LLM API keys",
+        up="""
+        CREATE TABLE IF NOT EXISTS user_api_key (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            encrypted_key TEXT NOT NULL,
+            model TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, provider)
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_api_key_user ON user_api_key(user_id);
+        """,
+        down="""
+        DROP TABLE IF EXISTS user_api_key;
         """,
     ),
 ]

@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...services.search_service import SearchService
-from ..api import get_kb_service, get_llm_service, get_search_service, limiter, requires_tier
+from ..api import get_kb_service, get_llm_service, get_search_service, get_user_llm_context, limiter, requires_tier
 from ..schemas import (
     AIAutoTagResponse,
     AIChatRequest,
@@ -25,6 +25,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["AI"], dependencies=[Depends(requires_tier("write"))])
 
 
+def _resolve_llm(llm: LLMService, user_ctx: dict | None) -> LLMService:
+    """Apply user BYOK context to the LLM service if available."""
+    if user_ctx and user_ctx.get("api_key"):
+        return llm.with_user_key(
+            api_key=user_ctx["api_key"],
+            provider=user_ctx.get("provider"),
+            model=user_ctx.get("model") or None,
+        )
+    return llm
+
+
 def _require_configured(llm: LLMService) -> None:
     """Raise 503 if AI provider is not configured."""
     status = llm.status()
@@ -34,7 +45,7 @@ def _require_configured(llm: LLMService) -> None:
             detail={
                 "code": "AI_NOT_CONFIGURED",
                 "message": "AI provider is not configured",
-                "hint": "Configure an AI provider in Settings → AI Provider",
+                "hint": "Configure an AI provider in Settings → AI Provider, or set your own key in Settings → My API Keys",
             },
         )
 
@@ -57,8 +68,10 @@ async def ai_summarize(
     req: AIEntryRequest,
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
+    user_ctx: dict | None = Depends(get_user_llm_context),
 ):
     """Generate an AI summary for an entry."""
+    llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
@@ -85,8 +98,10 @@ async def ai_auto_tag(
     req: AIEntryRequest,
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
+    user_ctx: dict | None = Depends(get_user_llm_context),
 ):
     """Suggest tags for an entry using AI."""
+    llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
@@ -139,8 +154,10 @@ async def ai_suggest_links(
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
+    user_ctx: dict | None = Depends(get_user_llm_context),
 ):
     """Suggest wikilinks for an entry using AI + search."""
+    llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
@@ -218,8 +235,10 @@ async def ai_chat(
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
+    user_ctx: dict | None = Depends(get_user_llm_context),
 ):
     """Chat with your knowledge base using RAG. Returns SSE stream."""
+    llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
 
     if not req.messages:

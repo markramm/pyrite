@@ -95,6 +95,29 @@ class LLMService:
 
     # -- core API -----------------------------------------------------------
 
+    def with_user_key(
+        self,
+        api_key: str,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> "LLMService":
+        """Return a new LLMService instance with user-provided overrides.
+
+        This creates a copy of the underlying Settings with the user's API key
+        (and optionally provider/model) substituted in, so the original service
+        remains unmodified.
+        """
+        settings = Settings(
+            ai_provider=provider or self._settings.ai_provider,
+            ai_api_key=api_key,
+            ai_model=model or self._settings.ai_model,
+            ai_api_base=self._settings.ai_api_base,
+        )
+        # Apply default base URL for Gemini when switching provider
+        if settings.ai_provider == "gemini" and not settings.ai_api_base:
+            settings.ai_api_base = "https://generativelanguage.googleapis.com/v1beta/openai/"
+        return LLMService(settings)
+
     async def complete(
         self,
         prompt: str,

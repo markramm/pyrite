@@ -674,6 +674,85 @@ class AuthService:
         )
         return rowcount > 0
 
+    # =====================================================================
+    # Per-User API Key Management (BYOK)
+    # =====================================================================
+
+    def store_user_api_key(self, user_id: int, provider: str, api_key: str, model: str = "") -> dict:
+        """Store or update a user's API key (encrypted) for an LLM provider."""
+        key = self._get_encryption_key()
+        stored_value = self._encrypt_token(api_key, key) if key else api_key
+        now = datetime.now(UTC).isoformat()
+
+        self.db.execute_write_sql(
+            """INSERT INTO user_api_key (user_id, provider, encrypted_key, model, created_at, updated_at)
+            VALUES (:user_id, :provider, :encrypted_key, :model, :now, :now2)
+            ON CONFLICT(user_id, provider) DO UPDATE SET
+                encrypted_key = :encrypted_key2, model = :model2, updated_at = :now3""",
+            {
+                "user_id": user_id,
+                "provider": provider,
+                "encrypted_key": stored_value,
+                "model": model,
+                "now": now,
+                "now2": now,
+                "encrypted_key2": stored_value,
+                "model2": model,
+                "now3": now,
+            },
+        )
+        return {"provider": provider, "model": model, "stored": True}
+
+    def get_user_api_key(self, user_id: int, provider: str = "") -> dict | None:
+        """Get a user's API key (decrypted). If provider not specified, return the first one found."""
+        if provider:
+            rows = self.db.execute_sql(
+                "SELECT provider, encrypted_key, model FROM user_api_key"
+                " WHERE user_id = :user_id AND provider = :provider",
+                {"user_id": user_id, "provider": provider},
+            )
+        else:
+            rows = self.db.execute_sql(
+                "SELECT provider, encrypted_key, model FROM user_api_key"
+                " WHERE user_id = :user_id ORDER BY updated_at DESC LIMIT 1",
+                {"user_id": user_id},
+            )
+        if not rows:
+            return None
+
+        row = rows[0]
+        raw_key = row["encrypted_key"]
+        enc_key = self._get_encryption_key()
+        if enc_key:
+            try:
+                decrypted = self._decrypt_token(raw_key, enc_key)
+            except Exception:
+                decrypted = raw_key  # May be stored as plaintext
+        else:
+            decrypted = raw_key
+
+        return {
+            "provider": row["provider"],
+            "api_key": decrypted,
+            "model": row["model"] or "",
+        }
+
+    def delete_user_api_key(self, user_id: int, provider: str) -> bool:
+        """Delete a user's API key for a specific provider."""
+        rowcount = self.db.execute_write_sql(
+            "DELETE FROM user_api_key WHERE user_id = :user_id AND provider = :provider",
+            {"user_id": user_id, "provider": provider},
+        )
+        return rowcount > 0
+
+    def list_user_api_keys(self, user_id: int) -> list[dict]:
+        """List a user's configured providers (without exposing keys)."""
+        return self.db.execute_sql(
+            "SELECT provider, model, created_at FROM user_api_key"
+            " WHERE user_id = :user_id ORDER BY created_at",
+            {"user_id": user_id},
+        )
+
     def create_user_ephemeral_kb(self, user_id: int, ephemeral_service, name: str | None = None) -> dict:
         """Create an ephemeral KB for a user with per-KB admin grant.
 
