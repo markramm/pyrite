@@ -26,14 +26,99 @@ class AuthService:
         self.db = db
         self.config = auth_config
 
-    def register(self, username: str, password: str, display_name: str | None = None) -> dict:
+    # ── Invite codes ──────────────────────────────────────────────
+
+    def create_invite_code(
+        self, created_by: str, role: str = "write", note: str = "", expires_hours: int | None = None
+    ) -> dict:
+        """Generate a new invite code. Only admins should call this."""
+        code = secrets.token_urlsafe(16)
+        now = datetime.now(UTC).isoformat()
+        expires_at = None
+        if expires_hours:
+            expires_at = (datetime.now(UTC) + timedelta(hours=expires_hours)).isoformat()
+        self.db.execute_write_sql(
+            """INSERT INTO invite_code (code, created_by, created_at, expires_at, role, note)
+            VALUES (:code, :created_by, :now, :expires_at, :role, :note)""",
+            {"code": code, "created_by": created_by, "now": now,
+             "expires_at": expires_at, "role": role, "note": note},
+        )
+        return {"code": code, "role": role, "expires_at": expires_at, "note": note}
+
+    def list_invite_codes(self) -> list[dict]:
+        """List all invite codes with usage status."""
+        return self.db.execute_sql(
+            "SELECT code, created_by, created_at, expires_at, used_by, used_at, role, note FROM invite_code ORDER BY created_at DESC"
+        )
+
+    def validate_invite_code(self, code: str) -> dict | None:
+        """Validate an invite code. Returns code info or None if invalid."""
+        rows = self.db.execute_sql(
+            "SELECT * FROM invite_code WHERE code = :code", {"code": code}
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        if row.get("used_by"):
+            return None  # Already used
+        if row.get("expires_at"):
+            try:
+                expires = datetime.fromisoformat(row["expires_at"])
+                if datetime.now(UTC) > expires:
+                    return None  # Expired
+            except (ValueError, TypeError):
+                pass
+        return row
+
+    def _redeem_invite_code(self, code: str, username: str) -> str:
+        """Mark an invite code as used. Returns the role from the code."""
+        now = datetime.now(UTC).isoformat()
+        self.db.execute_write_sql(
+            "UPDATE invite_code SET used_by = :username, used_at = :now WHERE code = :code",
+            {"username": username, "now": now, "code": code},
+        )
+        rows = self.db.execute_sql(
+            "SELECT role FROM invite_code WHERE code = :code", {"code": code}
+        )
+        return rows[0]["role"] if rows else "read"
+
+    def delete_invite_code(self, code: str) -> bool:
+        """Delete an unused invite code."""
+        rows = self.db.execute_sql(
+            "SELECT used_by FROM invite_code WHERE code = :code", {"code": code}
+        )
+        if not rows:
+            return False
+        if rows[0].get("used_by"):
+            raise ValueError("Cannot delete a used invite code")
+        self.db.execute_write_sql(
+            "DELETE FROM invite_code WHERE code = :code", {"code": code}
+        )
+        return True
+
+    # ── Registration ──────────────────────────────────────────────
+
+    def register(self, username: str, password: str, display_name: str | None = None,
+                 invite_code: str | None = None) -> dict:
         """Create a new local user.
 
-        First registered user gets 'admin' role; subsequent users get 'read'.
-        Raises ValueError if username is taken or registration is disabled.
+        First registered user gets 'admin' role; subsequent users get role from
+        invite code (or 'read' default).
+        Raises ValueError if username is taken, registration is disabled, or
+        invite code is required but invalid.
         """
         if not self.config.allow_registration:
             raise ValueError("Registration is disabled")
+
+        # Validate invite code if required
+        invite_role = None
+        if self.config.require_invite_code:
+            if not invite_code:
+                raise ValueError("An invite code is required to register")
+            code_info = self.validate_invite_code(invite_code)
+            if not code_info:
+                raise ValueError("Invalid or expired invite code")
+            invite_role = code_info.get("role", "write")
 
         if not username or not password:
             raise ValueError("Username and password are required")
@@ -49,10 +134,15 @@ class AuthService:
         if rows:
             raise ValueError("Username already taken")
 
-        # First user gets admin role
+        # First user gets admin role; invite code overrides default role
         count_rows = self.db.execute_sql("SELECT COUNT(*) AS cnt FROM local_user")
         count = count_rows[0]["cnt"] if count_rows else 0
-        role = "admin" if count == 0 else "read"
+        if count == 0:
+            role = "admin"
+        elif invite_role:
+            role = invite_role
+        else:
+            role = "read"
 
         password_hash = self._hash_password(password)
         now = datetime.now(UTC).isoformat()
@@ -70,6 +160,10 @@ class AuthService:
                 "now2": now,
             },
         )
+
+        # Redeem invite code if one was used
+        if invite_code and invite_role:
+            self._redeem_invite_code(invite_code, username)
 
         rows = self.db.execute_sql(
             "SELECT id FROM local_user WHERE username = :username",

@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 17
+CURRENT_VERSION = 18
 
 
 @dataclass
@@ -375,6 +375,26 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS worktree;
+        """,
+    ),
+    Migration(
+        version=18,
+        description="Add invite_code table for invitation-only registration",
+        up="""
+        CREATE TABLE IF NOT EXISTS invite_code (
+            code TEXT PRIMARY KEY,
+            created_by TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT,
+            used_by TEXT,
+            used_at TEXT,
+            role TEXT DEFAULT 'write',
+            note TEXT DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_invite_code_used ON invite_code(used_by);
+        """,
+        down="""
+        DROP TABLE IF EXISTS invite_code;
         """,
     ),
 ]

@@ -5,7 +5,7 @@ import type { AuthConfig, AuthUser } from '$lib/types/auth';
 
 class AuthStore {
 	user = $state<AuthUser | null>(null);
-	authConfig = $state<AuthConfig>({ enabled: false, allow_registration: false, providers: [], anonymous_tier: 'none' });
+	authConfig = $state<AuthConfig>({ enabled: false, allow_registration: false, require_invite_code: false, providers: [], anonymous_tier: 'none' });
 	loading = $state(true);
 	error = $state<string | null>(null);
 
@@ -35,7 +35,7 @@ class AuthStore {
 			}
 		} catch {
 			// Auth config endpoint not available — auth is disabled
-			this.authConfig = { enabled: false, allow_registration: false, providers: [] };
+			this.authConfig = { enabled: false, allow_registration: false, require_invite_code: false, providers: [] };
 		} finally {
 			this.loading = false;
 		}
@@ -51,10 +51,10 @@ class AuthStore {
 		}
 	}
 
-	async register(username: string, password: string, display_name?: string) {
+	async register(username: string, password: string, display_name?: string, invite_code?: string) {
 		this.error = null;
 		try {
-			this.user = await api.register(username, password, display_name);
+			this.user = await api.register(username, password, display_name, invite_code);
 		} catch (e) {
 			this.error = e instanceof Error ? e.message : 'Registration failed';
 			throw e;

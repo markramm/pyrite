@@ -7,8 +7,11 @@
 	let password = $state('');
 	let confirmPassword = $state('');
 	let displayName = $state('');
+	let inviteCode = $state('');
 	let error = $state<string | null>(null);
 	let submitting = $state(false);
+
+	const requireInvite = $derived(authStore.authConfig.require_invite_code);
 
 	onMount(() => {
 		if (!authStore.authConfig.allow_registration) {
@@ -32,7 +35,7 @@
 
 		submitting = true;
 		try {
-			await authStore.register(username, password, displayName || undefined);
+			await authStore.register(username, password, displayName || undefined, inviteCode || undefined);
 			goto('/');
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Registration failed';
@@ -105,6 +108,20 @@
 					class="mt-1 block w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500"
 				/>
 			</div>
+
+			{#if requireInvite}
+				<div>
+					<label for="invite-code" class="block text-sm font-medium text-zinc-300">Invite Code</label>
+					<input
+						id="invite-code"
+						type="text"
+						bind:value={inviteCode}
+						required
+						placeholder="Enter your invite code"
+						class="mt-1 block w-full rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:border-gold-500 focus:outline-none focus:ring-1 focus:ring-gold-500"
+					/>
+				</div>
+			{/if}
 
 			<button
 				type="submit"

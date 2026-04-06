@@ -51,6 +51,7 @@ class RegisterRequest(BaseModel):
     username: str
     password: str
     display_name: str | None = None
+    invite_code: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -71,6 +72,7 @@ class AuthUserResponse(BaseModel):
 class AuthConfigResponse(BaseModel):
     enabled: bool
     allow_registration: bool
+    require_invite_code: bool = False
     providers: list[str] = []
     anonymous_tier: str = "none"
 
@@ -206,6 +208,7 @@ async def get_auth_config(
     return AuthConfigResponse(
         enabled=config.settings.auth.enabled,
         allow_registration=config.settings.auth.allow_registration,
+        require_invite_code=config.settings.auth.require_invite_code,
         providers=providers,
         anonymous_tier=config.settings.auth.anonymous_tier or "none",
     )
@@ -224,7 +227,7 @@ async def register(
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
 
     try:
-        user = auth_service.register(body.username, body.password, body.display_name)
+        user = auth_service.register(body.username, body.password, body.display_name, body.invite_code)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -485,3 +488,67 @@ async def github_disconnect(
 
     auth_service.clear_github_token(user["id"])
     return {"ok": True, "message": "GitHub disconnected"}
+
+
+def _require_auth(request: Request) -> dict:
+    """Extract authenticated user from request or raise 401."""
+    user = getattr(request.state, "auth_user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    return user
+
+
+# ── Invite Code Management (admin only) ────────────────────────────────
+
+
+class CreateInviteRequest(BaseModel):
+    role: str = "write"
+    note: str = ""
+    expires_hours: int | None = None
+
+
+@auth_router.post("/invite-codes")
+async def create_invite_code(
+    body: CreateInviteRequest,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Create a new invite code (admin only)."""
+    user = _require_auth(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return auth_service.create_invite_code(
+        created_by=user["username"],
+        role=body.role,
+        note=body.note,
+        expires_hours=body.expires_hours,
+    )
+
+
+@auth_router.get("/invite-codes")
+async def list_invite_codes(
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """List all invite codes (admin only)."""
+    user = _require_auth(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return {"codes": auth_service.list_invite_codes()}
+
+
+@auth_router.delete("/invite-codes/{code}")
+async def delete_invite_code(
+    code: str,
+    request: Request,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    """Delete an unused invite code (admin only)."""
+    user = _require_auth(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    try:
+        auth_service.delete_invite_code(code)
+        return {"ok": True}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

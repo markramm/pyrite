@@ -292,6 +292,7 @@ class AuthConfig:
     session_ttl_hours: int = 168
     max_sessions_per_user: int = 5
     allow_registration: bool = True
+    require_invite_code: bool = False
     providers: dict[str, OAuthProviderConfig] = field(default_factory=dict)
     ephemeral_min_tier: str = "write"
     ephemeral_max_per_user: int = 1

@@ -13,6 +13,7 @@ export interface AuthUser {
 export interface AuthConfig {
 	enabled: boolean;
 	allow_registration: boolean;
+	require_invite_code: boolean;
 	providers: string[];
 	anonymous_tier: string;
 }
