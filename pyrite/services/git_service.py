@@ -52,7 +52,7 @@ class GitService:
             return False, f"Clone failed: {error}"
         except subprocess.TimeoutExpired:
             return False, "Clone timed out"
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, f"Clone failed: {e}"
 
     @staticmethod
@@ -79,7 +79,7 @@ class GitService:
             return False, f"Pull failed: {error}"
         except subprocess.TimeoutExpired:
             return False, "Pull timed out"
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, f"Pull failed: {e}"
 
     @staticmethod
@@ -94,7 +94,7 @@ class GitService:
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get remote URL for %s", local_path, exc_info=True)
         return None
 
@@ -110,7 +110,7 @@ class GitService:
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get current branch for %s", local_path, exc_info=True)
         return "main"
 
@@ -126,7 +126,7 @@ class GitService:
             )
             if result.returncode == 0:
                 return result.stdout.strip()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get HEAD commit for %s", local_path, exc_info=True)
         return ""
 
@@ -180,7 +180,7 @@ class GitService:
                     }
                 )
             return entries
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to parse git log for %s", file_path, exc_info=True)
             return []
 
@@ -216,7 +216,7 @@ class GitService:
             )
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get changed files for %s", local_path, exc_info=True)
         return []
 
@@ -231,7 +231,7 @@ class GitService:
                 text=True,
             )
             return result.returncode == 0
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.debug("Not a git repo: %s", path)
             return False
 
@@ -248,7 +248,7 @@ class GitService:
             if result.returncode == 0:
                 return True, f"Added remote '{name}'"
             return False, result.stderr.strip()
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, str(e)
 
     @staticmethod
@@ -279,7 +279,7 @@ class GitService:
                     "error": f"GitHub API error: {response.status_code}",
                     "message": response.text,
                 }
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, {"error": str(e)}
 
     @staticmethod
@@ -338,7 +338,7 @@ class GitService:
                     "error": f"GitHub API error: {response.status_code}",
                     "message": response.text,
                 }
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, {"error": str(e)}
 
     @staticmethod
@@ -448,7 +448,7 @@ class GitService:
             }
         except subprocess.TimeoutExpired:
             return False, {"error": "Commit timed out"}
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, {"error": str(e)}
 
     @staticmethod
@@ -497,7 +497,7 @@ class GitService:
             return False, f"Push failed: {error}"
         except subprocess.TimeoutExpired:
             return False, "Push timed out"
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, f"Push failed: {e}"
 
     @staticmethod
@@ -540,7 +540,7 @@ class GitService:
                     result["unstaged"].append(filename)
 
             return result
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get git status for repo", exc_info=True)
             return result
 
@@ -604,7 +604,7 @@ class GitService:
             if result.returncode == 0:
                 return True, f"Created worktree at {worktree_path} on existing branch {branch}"
             return False, result.stderr.strip()
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, str(e)
 
     @staticmethod
@@ -640,7 +640,7 @@ class GitService:
             if current:
                 worktrees.append(current)
             return worktrees
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return []
 
     @staticmethod
@@ -661,7 +661,7 @@ class GitService:
             if result.returncode == 0:
                 return True, f"Removed worktree at {worktree_path}"
             return False, result.stderr.strip()
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, str(e)
 
     @staticmethod
@@ -703,7 +703,7 @@ class GitService:
                 text=True,
             )
             return False, f"Merge conflict: {conflict_info}"
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, str(e)
 
     @staticmethod
@@ -737,5 +737,5 @@ class GitService:
             return False, result.stderr.strip()
         except subprocess.TimeoutExpired:
             return False, "Diff timed out"
-        except Exception as e:
+        except (subprocess.SubprocessError, OSError) as e:
             return False, str(e)
