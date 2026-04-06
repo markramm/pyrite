@@ -137,8 +137,9 @@ class TestPyriteDB:
         results = db.search("Test Entry")
         assert len(results) >= 1
         result = results[0]
-        assert "body" not in result, "Search results should not include body field"
-        # But should still have other useful fields
+        assert "body" in result, "Search results should include body field for --include-body support"
+        assert result["body"] == "This is a long body that should not appear in search results."
+        # Should still have other useful fields
         assert result["id"] == "entry-1"
         assert result["title"] == "Test Entry"
         assert result["summary"] == "Short summary"

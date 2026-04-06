@@ -172,7 +172,7 @@ class TestIndexSync:
 
     def test_index_sync_specific_kb(self, admin_env):
         with _patch_config(admin_env):
-            result = runner.invoke(app, ["index", "sync", "test-events"])
+            result = runner.invoke(app, ["index", "sync", "-k", "test-events"])
             assert result.exit_code == 0
 
 
@@ -730,7 +730,7 @@ class TestIndexEmbed:
 
     def test_index_embed_specific_kb(self, admin_env):
         with _patch_config(admin_env):
-            result = runner.invoke(app, ["index", "embed", "test-events"])
+            result = runner.invoke(app, ["index", "embed", "-k", "test-events"])
             assert result.exit_code in (0, 1)
 
     def test_index_embed_force(self, admin_env):

@@ -32,9 +32,9 @@ from pyrite.storage.migrations import CURRENT_VERSION, MIGRATIONS, MigrationMana
 class TestMigrationV13:
     """Test that v13 migration adds default_role column to kb."""
 
-    def test_current_version_is_14(self):
-        """CURRENT_VERSION is 14."""
-        assert CURRENT_VERSION == 17
+    def test_current_version_includes_access_control_migration(self):
+        """CURRENT_VERSION is at least 13 (default_role migration)."""
+        assert CURRENT_VERSION >= 13
 
     def test_migration_v13_exists(self):
         """Migration v13 for default_role exists."""

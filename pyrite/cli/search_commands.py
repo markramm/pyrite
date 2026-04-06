@@ -124,11 +124,14 @@ def register_search_command(app: typer.Typer):
 
             for r in results:
                 date = r.get("date", "")[:10] if r.get("date") else ""
-                snippet = r.get("snippet", "")[:100] if r.get("snippet") else ""
+                raw_snippet = r.get("snippet", "") or ""
+                snippet = (raw_snippet[:97] + "...") if len(raw_snippet) > 100 else raw_snippet
+                raw_title = r.get("title", "") or ""
+                title = (raw_title[:37] + "...") if len(raw_title) > 40 else raw_title
                 table.add_row(
                     r.get("kb_name", ""),
                     r.get("entry_type", ""),
-                    r.get("title", "")[:40],
+                    title,
                     date,
                     snippet,
                 )
@@ -139,9 +142,15 @@ def register_search_command(app: typer.Typer):
             if output_format != "rich":
                 import json
 
-                typer.echo(json.dumps({"error": str(e)}))
+                typer.echo(json.dumps({
+                    "query": query,
+                    "count": 0,
+                    "results": [],
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }))
                 raise typer.Exit(1)
-            console.print(f"[red]Search error:[/red] {e}")
+            console.print(f"[red]Search error ({type(e).__name__}):[/red] {e}")
             console.print("[dim]Falling back to file search...[/dim]")
             _search_files(config, query, kb_name, entry_type, limit)
 

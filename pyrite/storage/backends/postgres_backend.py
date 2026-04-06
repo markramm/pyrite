@@ -155,7 +155,7 @@ class PostgresBackend(BaseBackend):
         # Build the tsquery — plainto_tsquery handles user input safely
         sql = """
             SELECT
-                e.id, e.kb_name, e.entry_type, e.title, e.summary,
+                e.id, e.kb_name, e.entry_type, e.title, e.body, e.summary,
                 e.file_path, e.date, e.importance, e.status, e.location,
                 e.lifecycle, e.metadata, e.created_at, e.updated_at, e.indexed_at,
                 e.created_by, e.modified_by,

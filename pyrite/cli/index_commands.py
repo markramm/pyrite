@@ -26,7 +26,7 @@ def _format_output(data: dict, fmt: str) -> str | None:
 
 @index_app.command("build")
 def index_build(
-    kb_name: str | None = typer.Argument(None, help="KB to index (all if omitted)"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to index (all if omitted)"),
     force: bool = typer.Option(False, "--force", "-f", help="Force full reindex"),
     with_attribution: bool = typer.Option(
         False, "--with-attribution", help="Extract git history for attribution"
@@ -132,7 +132,7 @@ def index_build(
 
 @index_app.command("sync")
 def index_sync(
-    kb_name: str | None = typer.Argument(None, help="KB to sync (all if omitted)"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to sync (all if omitted)"),
     no_embed: bool = typer.Option(False, "--no-embed", help="Skip auto-embedding after sync"),
     background: bool = typer.Option(False, "--background", help="Run in background thread"),
 ):
@@ -218,7 +218,7 @@ def index_stats(
 
 @index_app.command("embed")
 def index_embed(
-    kb_name: str | None = typer.Argument(None, help="KB to embed (all if omitted)"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to embed (all if omitted)"),
     force: bool = typer.Option(False, "--force", "-f", help="Re-embed all entries"),
 ):
     """Generate vector embeddings for semantic search."""

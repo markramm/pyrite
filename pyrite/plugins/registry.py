@@ -160,7 +160,10 @@ class PluginRegistry:
                     if items:
                         self._merge_dict(result, items, plugin.name, kind)
                 except Exception as e:
-                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+                    logger.error(
+                        "Plugin %s %s failed: %s — %s data from this plugin is missing",
+                        plugin.name, method_name, e, kind,
+                    )
         return result
 
     def _aggregate_list(self, method_name: str) -> list:
@@ -174,7 +177,10 @@ class PluginRegistry:
                     if items:
                         result.extend(items)
                 except Exception as e:
-                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+                    logger.error(
+                        "Plugin %s %s failed: %s — data from this plugin is missing",
+                        plugin.name, method_name, e,
+                    )
         return result
 
     def _aggregate_dict_of_lists(self, method_name: str) -> dict[str, list]:
@@ -189,7 +195,10 @@ class PluginRegistry:
                         for key, lst in items.items():
                             result.setdefault(key, []).extend(lst)
                 except Exception as e:
-                    logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
+                    logger.error(
+                        "Plugin %s %s failed: %s — data from this plugin is missing",
+                        plugin.name, method_name, e,
+                    )
         return result
 
     # =========================================================================
