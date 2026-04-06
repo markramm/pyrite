@@ -11,6 +11,7 @@ kind: epic
 priority: medium
 effort: XL
 status: in_progress
+progress: "Phases 1-4 complete. Phase 5 (continuous pipeline + dashboard) remaining."
 links:
 - target: qa-phase-1-tier-1-structural-validation
   relation: has_subtask
@@ -23,6 +24,17 @@ links:
 - target: qa-phase-5-continuous-qa-pipeline-and-dashboard
   relation: has_subtask
 ---
+
+## Progress
+
+**Phases 1-4: COMPLETE.** The QA system is implemented and operational:
+- Phase 1: Structural validation (`pyrite qa validate`) — missing titles, empty bodies, broken links, orphans, date/importance validation, schema checks, rubric evaluation
+- Phase 2: QA assessment entry type and storage
+- Phase 3: Tier 2 LLM-assisted consistency checks
+- Phase 4: Tier 3 factual verification
+- Post-save hook (`qa_on_write: true`) also done
+
+**Remaining: Phase 5 only** — scheduled batch runs, QA dashboard in web UI, "entries needing review" virtual collection.
 
 ## Problem
 
