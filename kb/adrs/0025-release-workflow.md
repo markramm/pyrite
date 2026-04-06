@@ -1,13 +1,12 @@
 ---
 id: adr-0025
-title: 'Release Workflow: Dev Branch, Tagged Releases, and Deployment Tiers'
 type: adr
-tags: [process, releases, deployment, git, ci]
-importance: 5
+title: "Release Workflow: Dev Branch, Tagged Releases, and Deployment Tiers"
 adr_number: 25
 status: accepted
 deciders: ["markr"]
 date: "2026-04-01"
+tags: [process, releases, deployment, git, ci]
 ---
 
 # ADR-0025: Release Workflow: Dev Branch, Tagged Releases, and Deployment Tiers
