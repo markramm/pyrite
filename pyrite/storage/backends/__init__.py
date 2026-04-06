@@ -6,10 +6,11 @@ SQLiteBackend implementation.  PostgresBackend is available when the
 ``psycopg2`` and ``pgvector`` packages are installed.
 """
 
+from .base_backend import BaseBackend
 from .protocol import SearchBackend
 from .sqlite_backend import SQLiteBackend
 
-__all__ = ["SearchBackend", "SQLiteBackend"]
+__all__ = ["BaseBackend", "SearchBackend", "SQLiteBackend"]
 
 try:
     from .postgres_backend import PostgresBackend  # noqa: F401

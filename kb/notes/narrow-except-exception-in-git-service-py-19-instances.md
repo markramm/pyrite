@@ -7,7 +7,7 @@ tags:
 - error-handling
 importance: 5
 kind: refactor
-status: todo
+status: completed
 priority: low
 effort: M
 rank: 0

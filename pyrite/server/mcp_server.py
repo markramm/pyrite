@@ -430,7 +430,7 @@ class PyriteMCPServer:
         kb_name = args.get("kb_name")
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            return _error(f"KB '{kb_name}' not found", "NOT_FOUND")
+            return _error("NOT_FOUND", f"KB '{kb_name}' not found")
 
         schema = kb_config.kb_schema
         return schema.to_agent_schema()
@@ -556,7 +556,7 @@ class PyriteMCPServer:
         try:
             return self.svc.orient(kb_name, recent_limit=recent_limit)
         except PyriteError as e:
-            return _error(str(e), "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", str(e))
 
     def _kb_recent(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get recently changed entries."""
@@ -923,7 +923,7 @@ class PyriteMCPServer:
         """Get all descendants of a task."""
         task_id = args.get("task_id")
         if not task_id:
-            return _error("task_id is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "task_id is required")
         kb_name = args.get("kb_name") or self._find_task_kb(task_id)
         result = self._task_svc.get_subtree(task_id, kb_name)
         return {"task_id": task_id, "count": len(result), "subtree": result}
@@ -932,7 +932,7 @@ class PyriteMCPServer:
         """Get parent chain from task to root."""
         task_id = args.get("task_id")
         if not task_id:
-            return _error("task_id is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "task_id is required")
         kb_name = args.get("kb_name") or self._find_task_kb(task_id)
         result = self._task_svc.get_ancestors(task_id, kb_name)
         return {"task_id": task_id, "count": len(result), "ancestors": result}
@@ -941,7 +941,7 @@ class PyriteMCPServer:
         """Get transitive dependency chain."""
         task_id = args.get("task_id")
         if not task_id:
-            return _error("task_id is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "task_id is required")
         kb_name = args.get("kb_name") or self._find_task_kb(task_id)
         result = self._task_svc.get_blocked_by(task_id, kb_name)
         return {"task_id": task_id, "count": len(result), "blocked_by": result}
@@ -950,7 +950,7 @@ class PyriteMCPServer:
         """Find the longest blocking dependency chain."""
         task_id = args.get("task_id")
         if not task_id:
-            return _error("task_id is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "task_id is required")
         kb_name = args.get("kb_name") or self._find_task_kb(task_id)
         result = self._task_svc.critical_path(task_id, kb_name)
         return {"task_id": task_id, "chain_length": len(result), "critical_path": result}
@@ -964,7 +964,7 @@ class PyriteMCPServer:
 
         task = self.task_svc.get_task(task_id, kb_name)
         if not task:
-            return _error(f"Task '{task_id}' not found", "NOT_FOUND")
+            return _error("NOT_FOUND", f"Task '{task_id}' not found")
 
         meta = task.get("metadata", {})
         if isinstance(meta, str):
@@ -998,7 +998,7 @@ class PyriteMCPServer:
         source_kb = args.get("source_kb")
         target_kb = args.get("target_kb")
         if not source_kb or not target_kb:
-            return _error("source_kb and target_kb are required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "source_kb and target_kb are required")
 
         from ..services.link_discovery_service import LinkDiscoveryService
 
@@ -1023,7 +1023,7 @@ class PyriteMCPServer:
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         if not entry_id or not kb_name:
-            return _error("entry_id and kb_name are required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "entry_id and kb_name are required")
 
         from ..services.link_discovery_service import LinkDiscoveryService
 
@@ -1061,9 +1061,9 @@ class PyriteMCPServer:
         task_id = args.get("task_id")
         kb_name = args.get("kb_name")
         if not task_id:
-            return _error("task_id is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "task_id is required")
         if not kb_name:
-            return _error("kb_name is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "kb_name is required")
 
         updates = {}
         if "status" in args:
@@ -1074,7 +1074,7 @@ class PyriteMCPServer:
             updates["priority"] = args["priority"]
 
         if not updates:
-            return _error("No updates specified", "VALIDATION_ERROR")
+            return _error("VALIDATION_ERROR", "No updates specified")
 
         return self.task_svc.update_task(task_id, kb_name, **updates)
 
@@ -1096,7 +1096,7 @@ class PyriteMCPServer:
             )
             return {"decomposed": True, "parent_id": args["parent_id"], "children": results}
         except ValueError as e:
-            return _error(str(e), "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", str(e))
 
     def _task_checkpoint(self, args: dict[str, Any]) -> dict[str, Any]:
         """Log a checkpoint on a task."""
@@ -1109,7 +1109,7 @@ class PyriteMCPServer:
                 partial_evidence=args.get("partial_evidence"),
             )
         except ValueError as e:
-            return _error(str(e), "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", str(e))
 
     # =========================================================================
     # Admin handlers
@@ -1165,17 +1165,17 @@ class PyriteMCPServer:
         elif action == "validate":
             kb_name = args.get("kb_name")
             if not kb_name:
-                return _error("kb_name required for validate", "MISSING_PARAMETER")
+                return _error("MISSING_PARAMETER", "kb_name required for validate")
             kb_config = self.config.get_kb(kb_name)
             if not kb_config:
-                return _error(f"KB '{kb_name}' not found", "NOT_FOUND")
+                return _error("NOT_FOUND", f"KB '{kb_name}' not found")
             schema = kb_config.kb_schema
             return {"valid": True, "types": list(schema.types.keys())}
 
         elif action in ("show_schema", "add_type", "remove_type", "set_schema"):
             return self._kb_manage_schema(action, args)
 
-        return _error(f"Unknown action: {action}", "OPERATION_FAILED")
+        return _error("OPERATION_FAILED", f"Unknown action: {action}")
 
     def _kb_manage_schema(self, action: str, args: dict[str, Any]) -> dict[str, Any]:
         """Handle schema management actions for _kb_manage."""
@@ -1187,32 +1187,32 @@ class PyriteMCPServer:
         try:
             if action == "show_schema":
                 if not kb_name:
-                    return _error("kb_name required for show_schema", "MISSING_PARAMETER")
+                    return _error("MISSING_PARAMETER", "kb_name required for show_schema")
                 return svc.show_schema(kb_name)
 
             elif action == "add_type":
                 type_name = args.get("type_name")
                 type_def = args.get("type_def", {})
                 if not kb_name or not type_name:
-                    return _error("kb_name and type_name required for add_type", "MISSING_PARAMETER")
+                    return _error("MISSING_PARAMETER", "kb_name and type_name required for add_type")
                 return svc.add_type(kb_name, type_name, type_def)
 
             elif action == "remove_type":
                 type_name = args.get("type_name")
                 if not kb_name or not type_name:
-                    return _error("kb_name and type_name required for remove_type", "MISSING_PARAMETER")
+                    return _error("MISSING_PARAMETER", "kb_name and type_name required for remove_type")
                 return svc.remove_type(kb_name, type_name)
 
             elif action == "set_schema":
                 schema = args.get("schema", {})
                 if not kb_name:
-                    return _error("kb_name required for set_schema", "MISSING_PARAMETER")
+                    return _error("MISSING_PARAMETER", "kb_name required for set_schema")
                 return svc.set_schema(kb_name, schema)
 
         except ValueError as e:
-            return _error(str(e), "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", str(e))
 
-        return _error(f"Unknown schema action: {action}", "OPERATION_FAILED")
+        return _error("OPERATION_FAILED", f"Unknown schema action: {action}")
 
     def _kb_commit(self, args: dict[str, Any]) -> dict[str, Any]:
         """Commit changes in a KB's git repository."""
@@ -1222,12 +1222,12 @@ class PyriteMCPServer:
         sign_off = args.get("sign_off", False)
 
         if not kb_name or not message:
-            return _error("Both 'kb' and 'message' are required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "Both 'kb' and 'message' are required")
 
         try:
             return self.export_svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
         except PyriteError as e:
-            return _error(str(e), "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", str(e))
 
     def _kb_push(self, args: dict[str, Any]) -> dict[str, Any]:
         """Push KB commits to a remote repository."""
@@ -1236,12 +1236,12 @@ class PyriteMCPServer:
         branch = args.get("branch")
 
         if not kb_name:
-            return _error("'kb' is required", "MISSING_PARAMETER")
+            return _error("MISSING_PARAMETER", "'kb' is required")
 
         try:
             return self.export_svc.push_kb(kb_name, remote=remote, branch=branch)
         except PyriteError as e:
-            return _error(str(e), "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", str(e))
 
     def _kb_registry_add(self, args: dict[str, Any]) -> dict[str, Any]:
         """Register a new user KB by path."""
@@ -1355,7 +1355,7 @@ class PyriteMCPServer:
         }
         handler = handlers.get(name)
         if not handler:
-            return _error(f"Unknown prompt: {name}", "OPERATION_FAILED")
+            return _error("OPERATION_FAILED", f"Unknown prompt: {name}")
         return handler(arguments)
 
     def _prompt_research_topic(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -1545,7 +1545,7 @@ class PyriteMCPServer:
             entry_id = uri[len(f"{URI_SCHEME}entries/") :]
             entry = self.svc.get_entry(entry_id)
             if not entry:
-                return _error(f"Entry '{entry_id}' not found", "NOT_FOUND")
+                return _error("NOT_FOUND", f"Entry '{entry_id}' not found")
             return {
                 "contents": [
                     {
@@ -1556,7 +1556,7 @@ class PyriteMCPServer:
                 ]
             }
 
-        return _error(f"Unknown resource URI: {uri}", "OPERATION_FAILED")
+        return _error("OPERATION_FAILED", f"Unknown resource URI: {uri}")
 
     # =========================================================================
     # MCP Protocol

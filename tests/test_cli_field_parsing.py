@@ -2,7 +2,7 @@
 
 import pytest
 
-from pyrite.cli import _parse_field_value
+from pyrite.cli.entry_commands import _parse_field_value
 
 
 class TestParseFieldValue:
