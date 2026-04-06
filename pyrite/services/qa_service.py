@@ -27,13 +27,14 @@ logger = logging.getLogger(__name__)
 class QAService:
     """Structural quality assurance for knowledge bases."""
 
-    def __init__(self, config: PyriteConfig, db: PyriteDB, llm_service=None):
+    def __init__(self, config: PyriteConfig, db: PyriteDB, llm_service=None, kb_svc=None):
         self.config = config
         self.db = db
         self._llm_service = llm_service
         self._llm_evaluator = None
         self._fix_service = None
         self._analytics_service = None
+        self._kb_svc_injected = kb_svc
 
     @property
     def _fix_svc(self):
@@ -194,6 +195,8 @@ class QAService:
 
     def _get_kb_service(self):
         """Lazy-load KBService for creating assessment entries."""
+        if self._kb_svc_injected is not None:
+            return self._kb_svc_injected
         if not hasattr(self, "_kb_svc"):
             from .kb_service import KBService
 

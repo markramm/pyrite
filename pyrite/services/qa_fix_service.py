@@ -31,9 +31,10 @@ class QAFixService:
         }
     )
 
-    def __init__(self, config: PyriteConfig, db: PyriteDB):
+    def __init__(self, config: PyriteConfig, db: PyriteDB, kb_svc=None):
         self.config = config
         self.db = db
+        self._kb_svc = kb_svc
 
     def fix_kb(
         self,
@@ -58,9 +59,12 @@ class QAFixService:
         Returns:
             Dict with fixed, skipped, manual lists plus summary counts.
         """
-        from .kb_service import KBService
+        if self._kb_svc is not None:
+            kb_svc = self._kb_svc
+        else:
+            from .kb_service import KBService
 
-        kb_svc = KBService(self.config, self.db)
+            kb_svc = KBService(self.config, self.db)
 
         # Run validation to discover issues
         result = validate_kb_fn(kb_name)

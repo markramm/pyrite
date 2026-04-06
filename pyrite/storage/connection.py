@@ -191,12 +191,30 @@ class ConnectionMixin:
         return self._raw_conn
 
     def execute_sql(self, sql: str, params=None) -> list[dict]:
-        """Execute raw SQL through the session connection. For read-only search queries."""
+        """Execute raw SQL through the session connection.
+
+        Uses named ``:param`` placeholders.  Returns a list of dicts for
+        SELECT statements or an empty list for non-returning statements.
+        Does **not** commit — call :meth:`execute_write_sql` for DML that
+        should be committed immediately.
+        """
         result = self.session.execute(text(sql), params or {})
         if result.returns_rows:
             cols = result.keys()
             return [dict(zip(cols, row, strict=False)) for row in result.fetchall()]
         return []
+
+    def execute_write_sql(self, sql: str, params=None, *, commit: bool = True) -> int:
+        """Execute a write (INSERT/UPDATE/DELETE) and return ``rowcount``.
+
+        Uses named ``:param`` placeholders.  Commits by default; pass
+        ``commit=False`` to defer the commit (e.g. for multi-statement
+        transactions finished with ``self.session.commit()``).
+        """
+        result = self.session.execute(text(sql), params or {})
+        if commit:
+            self.session.commit()
+        return result.rowcount
 
     def get_schema_version(self) -> int:
         """Get current schema version."""

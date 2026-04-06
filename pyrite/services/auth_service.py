@@ -41,31 +41,41 @@ class AuthService:
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters")
 
-        conn = self.db._raw_conn
-
         # Check if username exists
-        row = conn.execute("SELECT id FROM local_user WHERE username = ?", (username,)).fetchone()
-        if row:
+        rows = self.db.execute_sql(
+            "SELECT id FROM local_user WHERE username = :username",
+            {"username": username},
+        )
+        if rows:
             raise ValueError("Username already taken")
 
         # First user gets admin role
-        count = conn.execute("SELECT COUNT(*) FROM local_user").fetchone()[0]
+        count_rows = self.db.execute_sql("SELECT COUNT(*) AS cnt FROM local_user")
+        count = count_rows[0]["cnt"] if count_rows else 0
         role = "admin" if count == 0 else "read"
 
         password_hash = self._hash_password(password)
         now = datetime.now(UTC).isoformat()
 
-        conn.execute(
+        self.db.execute_write_sql(
             """INSERT INTO local_user
             (username, display_name, password_hash, role, auth_provider, created_at, updated_at)
-            VALUES (?, ?, ?, ?, 'local', ?, ?)""",
-            (username, display_name, password_hash, role, now, now),
+            VALUES (:username, :display_name, :password_hash, :role, 'local', :now, :now2)""",
+            {
+                "username": username,
+                "display_name": display_name,
+                "password_hash": password_hash,
+                "role": role,
+                "now": now,
+                "now2": now,
+            },
         )
-        conn.commit()
 
-        user_id = conn.execute(
-            "SELECT id FROM local_user WHERE username = ?", (username,)
-        ).fetchone()[0]
+        rows = self.db.execute_sql(
+            "SELECT id FROM local_user WHERE username = :username",
+            {"username": username},
+        )
+        user_id = rows[0]["id"]
 
         return {
             "id": user_id,
@@ -81,17 +91,22 @@ class AuthService:
 
         Returns (user_dict, raw_token). Raises ValueError on bad credentials.
         """
-        conn = self.db._raw_conn
-
-        row = conn.execute(
+        rows = self.db.execute_sql(
             "SELECT id, username, display_name, password_hash, role, auth_provider, avatar_url"
-            " FROM local_user WHERE username = ?",
-            (username,),
-        ).fetchone()
-        if not row:
+            " FROM local_user WHERE username = :username",
+            {"username": username},
+        )
+        if not rows:
             raise ValueError("Invalid username or password")
 
-        user_id, uname, display_name, password_hash, role, auth_provider, avatar_url = row
+        row = rows[0]
+        user_id = row["id"]
+        uname = row["username"]
+        display_name = row["display_name"]
+        password_hash = row["password_hash"]
+        role = row["role"]
+        auth_provider = row["auth_provider"]
+        avatar_url = row["avatar_url"]
 
         # Block password login for OAuth-only users
         if auth_provider != "local":
@@ -108,12 +123,17 @@ class AuthService:
         now = datetime.now(UTC)
         expires_at = now + timedelta(hours=self.config.session_ttl_hours)
 
-        conn.execute(
+        self.db.execute_write_sql(
             """INSERT INTO session (token_hash, user_id, created_at, expires_at, last_used)
-            VALUES (?, ?, ?, ?, ?)""",
-            (token_hash, user_id, now.isoformat(), expires_at.isoformat(), now.isoformat()),
+            VALUES (:token_hash, :user_id, :created_at, :expires_at, :last_used)""",
+            {
+                "token_hash": token_hash,
+                "user_id": user_id,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "last_used": now.isoformat(),
+            },
         )
-        conn.commit()
 
         user = {
             "id": user_id,
@@ -132,8 +152,6 @@ class AuthService:
 
         Raises ValueError if the user's orgs don't match allowed_orgs.
         """
-        conn = self.db._raw_conn
-
         # 1. Check org restrictions
         if provider_config.allowed_orgs:
             if not set(profile.orgs) & set(provider_config.allowed_orgs):
@@ -149,69 +167,87 @@ class AuthService:
                     role = mapped
 
         # 3. Look up existing OAuth user
-        row = conn.execute(
+        rows = self.db.execute_sql(
             "SELECT id, username, display_name, role, avatar_url"
-            " FROM local_user WHERE auth_provider = ? AND provider_id = ?",
-            (profile.provider, profile.provider_id),
-        ).fetchone()
+            " FROM local_user WHERE auth_provider = :provider AND provider_id = :provider_id",
+            {"provider": profile.provider, "provider_id": profile.provider_id},
+        )
 
         now = datetime.now(UTC).isoformat()
 
-        if row:
-            user_id, username, display_name, existing_role, _ = row
+        if rows:
+            row = rows[0]
+            user_id = row["id"]
+            username = row["username"]
+            display_name = row["display_name"]
+            existing_role = row["role"]
             # Update avatar and display name
-            conn.execute(
-                "UPDATE local_user SET avatar_url = ?, display_name = ?, updated_at = ? WHERE id = ?",
-                (profile.avatar_url, profile.display_name or display_name, now, user_id),
+            self.db.execute_write_sql(
+                "UPDATE local_user SET avatar_url = :avatar_url, display_name = :display_name,"
+                " updated_at = :now WHERE id = :user_id",
+                {
+                    "avatar_url": profile.avatar_url,
+                    "display_name": profile.display_name or display_name,
+                    "now": now,
+                    "user_id": user_id,
+                },
             )
-            conn.commit()
             role = existing_role  # preserve existing role
         else:
             # 4. New user — handle username conflict with local users
             username = profile.username
-            conflict = conn.execute(
-                "SELECT id FROM local_user WHERE username = ?", (username,)
-            ).fetchone()
+            conflict = self.db.execute_sql(
+                "SELECT id FROM local_user WHERE username = :username",
+                {"username": username},
+            )
             if conflict:
                 username = f"{profile.provider}:{profile.username}"
 
             # First OAuth user gets admin if no users exist at all
-            count = conn.execute("SELECT COUNT(*) FROM local_user").fetchone()[0]
+            count_rows = self.db.execute_sql("SELECT COUNT(*) AS cnt FROM local_user")
+            count = count_rows[0]["cnt"] if count_rows else 0
             if count == 0:
                 role = "admin"
 
-            conn.execute(
+            self.db.execute_write_sql(
                 """INSERT INTO local_user
                 (username, display_name, password_hash, role, auth_provider, provider_id,
                  avatar_url, created_at, updated_at)
-                VALUES (?, ?, '', ?, ?, ?, ?, ?, ?)""",
-                (
-                    username,
-                    profile.display_name,
-                    role,
-                    profile.provider,
-                    profile.provider_id,
-                    profile.avatar_url,
-                    now,
-                    now,
-                ),
+                VALUES (:username, :display_name, '', :role, :provider, :provider_id,
+                 :avatar_url, :now, :now2)""",
+                {
+                    "username": username,
+                    "display_name": profile.display_name,
+                    "role": role,
+                    "provider": profile.provider,
+                    "provider_id": profile.provider_id,
+                    "avatar_url": profile.avatar_url,
+                    "now": now,
+                    "now2": now,
+                },
             )
-            conn.commit()
-            user_id = conn.execute(
-                "SELECT id FROM local_user WHERE username = ?", (username,)
-            ).fetchone()[0]
+            id_rows = self.db.execute_sql(
+                "SELECT id FROM local_user WHERE username = :username",
+                {"username": username},
+            )
+            user_id = id_rows[0]["id"]
 
         # 5. Create session
         self._enforce_max_sessions(user_id)
         raw_token, token_hash = self._generate_token()
         now_dt = datetime.now(UTC)
         expires_at = now_dt + timedelta(hours=self.config.session_ttl_hours)
-        conn.execute(
+        self.db.execute_write_sql(
             """INSERT INTO session (token_hash, user_id, created_at, expires_at, last_used)
-            VALUES (?, ?, ?, ?, ?)""",
-            (token_hash, user_id, now_dt.isoformat(), expires_at.isoformat(), now_dt.isoformat()),
+            VALUES (:token_hash, :user_id, :created_at, :expires_at, :last_used)""",
+            {
+                "token_hash": token_hash,
+                "user_id": user_id,
+                "created_at": now_dt.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "last_used": now_dt.isoformat(),
+            },
         )
-        conn.commit()
 
         user = {
             "id": user_id,
@@ -229,39 +265,45 @@ class AuthService:
         Returns user dict or None if expired/invalid. Updates last_used.
         """
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        conn = self.db._raw_conn
 
         # Probabilistic cleanup (1 in 20 calls)
         if secrets.randbelow(20) == 0:
             self._cleanup_expired()
 
-        row = conn.execute(
+        rows = self.db.execute_sql(
             """SELECT s.id, s.user_id, s.expires_at,
                       u.username, u.display_name, u.role, u.auth_provider, u.avatar_url
             FROM session s JOIN local_user u ON s.user_id = u.id
-            WHERE s.token_hash = ?""",
-            (token_hash,),
-        ).fetchone()
+            WHERE s.token_hash = :token_hash""",
+            {"token_hash": token_hash},
+        )
 
-        if not row:
+        if not rows:
             return None
 
-        session_id, user_id, expires_at, username, display_name, role, auth_provider, avatar_url = (
-            row
-        )
+        row = rows[0]
+        session_id = row["id"]
+        user_id = row["user_id"]
+        expires_at = row["expires_at"]
+        username = row["username"]
+        display_name = row["display_name"]
+        role = row["role"]
+        auth_provider = row["auth_provider"]
+        avatar_url = row["avatar_url"]
 
         # Check expiry
         if datetime.fromisoformat(expires_at) < datetime.now(UTC):
-            conn.execute("DELETE FROM session WHERE id = ?", (session_id,))
-            conn.commit()
+            self.db.execute_write_sql(
+                "DELETE FROM session WHERE id = :session_id",
+                {"session_id": session_id},
+            )
             return None
 
         # Update last_used
-        conn.execute(
-            "UPDATE session SET last_used = ? WHERE id = ?",
-            (datetime.now(UTC).isoformat(), session_id),
+        self.db.execute_write_sql(
+            "UPDATE session SET last_used = :last_used WHERE id = :session_id",
+            {"last_used": datetime.now(UTC).isoformat(), "session_id": session_id},
         )
-        conn.commit()
 
         return {
             "id": user_id,
@@ -275,78 +317,68 @@ class AuthService:
     def logout(self, token: str) -> bool:
         """Delete session by token. Returns True if found."""
         token_hash = hashlib.sha256(token.encode()).hexdigest()
-        conn = self.db._raw_conn
-        cursor = conn.execute("DELETE FROM session WHERE token_hash = ?", (token_hash,))
-        conn.commit()
-        return cursor.rowcount > 0
+        rowcount = self.db.execute_write_sql(
+            "DELETE FROM session WHERE token_hash = :token_hash",
+            {"token_hash": token_hash},
+        )
+        return rowcount > 0
 
     def logout_all(self, user_id: int) -> int:
         """Delete all sessions for a user. Returns count deleted."""
-        conn = self.db._raw_conn
-        cursor = conn.execute("DELETE FROM session WHERE user_id = ?", (user_id,))
-        conn.commit()
-        return cursor.rowcount
+        return self.db.execute_write_sql(
+            "DELETE FROM session WHERE user_id = :user_id",
+            {"user_id": user_id},
+        )
 
     def get_user(self, user_id: int) -> dict | None:
         """Get user by ID."""
-        conn = self.db._raw_conn
-        row = conn.execute(
+        rows = self.db.execute_sql(
             "SELECT id, username, display_name, role, auth_provider, avatar_url"
-            " FROM local_user WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-        if not row:
+            " FROM local_user WHERE id = :user_id",
+            {"user_id": user_id},
+        )
+        if not rows:
             return None
-        return {
-            "id": row[0],
-            "username": row[1],
-            "display_name": row[2],
-            "role": row[3],
-            "auth_provider": row[4],
-            "avatar_url": row[5],
-        }
+        return rows[0]
 
     def set_role(self, user_id: int, role: str) -> bool:
         """Set user role. Returns True if user found."""
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
-        conn = self.db._raw_conn
-        cursor = conn.execute(
-            "UPDATE local_user SET role = ?, updated_at = ? WHERE id = ?",
-            (role, datetime.now(UTC).isoformat(), user_id),
+        rowcount = self.db.execute_write_sql(
+            "UPDATE local_user SET role = :role, updated_at = :now WHERE id = :user_id",
+            {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
-        conn.commit()
-        return cursor.rowcount > 0
+        return rowcount > 0
 
     def _cleanup_expired(self) -> int:
         """Delete expired sessions."""
-        conn = self.db._raw_conn
         now = datetime.now(UTC).isoformat()
-        cursor = conn.execute("DELETE FROM session WHERE expires_at < ?", (now,))
-        conn.commit()
-        deleted = cursor.rowcount
+        deleted = self.db.execute_write_sql(
+            "DELETE FROM session WHERE expires_at < :now", {"now": now}
+        )
         if deleted:
             logger.debug("Cleaned up %d expired sessions", deleted)
         return deleted
 
     def _enforce_max_sessions(self, user_id: int) -> None:
         """Delete oldest sessions if user has too many."""
-        conn = self.db._raw_conn
-        count = conn.execute(
-            "SELECT COUNT(*) FROM session WHERE user_id = ?", (user_id,)
-        ).fetchone()[0]
+        count_rows = self.db.execute_sql(
+            "SELECT COUNT(*) AS cnt FROM session WHERE user_id = :user_id",
+            {"user_id": user_id},
+        )
+        count = count_rows[0]["cnt"] if count_rows else 0
 
         if count >= self.config.max_sessions_per_user:
             # Delete oldest sessions to make room
             excess = count - self.config.max_sessions_per_user + 1
-            conn.execute(
+            self.db.execute_write_sql(
                 """DELETE FROM session WHERE id IN (
-                    SELECT id FROM session WHERE user_id = ?
-                    ORDER BY created_at ASC LIMIT ?
+                    SELECT id FROM session WHERE user_id = :user_id
+                    ORDER BY created_at ASC LIMIT :excess
                 )""",
-                (user_id, excess),
+                {"user_id": user_id, "excess": excess},
             )
-            conn.commit()
 
     def _hash_password(self, password: str) -> str:
         """Hash password with bcrypt."""
@@ -378,33 +410,33 @@ class AuthService:
         4. User global role
         5. Anonymous tier (when user_id is None)
         """
-        conn = self.db._raw_conn
-
         if user_id is not None:
             # Check if global admin
-            row = conn.execute("SELECT role FROM local_user WHERE id = ?", (user_id,)).fetchone()
-            if row and row[0] == "admin":
+            rows = self.db.execute_sql(
+                "SELECT role FROM local_user WHERE id = :user_id",
+                {"user_id": user_id},
+            )
+            if rows and rows[0]["role"] == "admin":
                 return "admin"
 
             # Check explicit KB grant
-            row = conn.execute(
-                "SELECT role FROM kb_permission WHERE user_id = ? AND kb_name = ?",
-                (user_id, kb_name),
-            ).fetchone()
-            if row:
-                return row[0]
+            perm_rows = self.db.execute_sql(
+                "SELECT role FROM kb_permission WHERE user_id = :user_id AND kb_name = :kb_name",
+                {"user_id": user_id, "kb_name": kb_name},
+            )
+            if perm_rows:
+                return perm_rows[0]["role"]
 
             # KB default_role
             if kb_default_role is not None and kb_default_role != "none":
                 return kb_default_role
 
             # Fall back to user's global role
-            row = conn.execute("SELECT role FROM local_user WHERE id = ?", (user_id,)).fetchone()
-            if row:
+            if rows:
                 # If KB is private (default_role="none"), deny unless explicit grant
                 if kb_default_role == "none":
                     return None
-                return row[0]
+                return rows[0]["role"]
 
         # Anonymous user
         if kb_default_role is not None and kb_default_role != "none":
@@ -417,65 +449,56 @@ class AuthService:
         """Grant or update a per-KB permission."""
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
-        conn = self.db._raw_conn
         now = datetime.now(UTC).isoformat()
-        conn.execute(
+        self.db.execute_write_sql(
             """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, kb_name) DO UPDATE SET role = ?, granted_by = ?, created_at = ?""",
-            (user_id, kb_name, role, granted_by, now, role, granted_by, now),
+            VALUES (:user_id, :kb_name, :role, :granted_by, :now)
+            ON CONFLICT(user_id, kb_name) DO UPDATE SET role = :role2, granted_by = :granted_by2, created_at = :now2""",
+            {
+                "user_id": user_id,
+                "kb_name": kb_name,
+                "role": role,
+                "granted_by": granted_by,
+                "now": now,
+                "role2": role,
+                "granted_by2": granted_by,
+                "now2": now,
+            },
         )
-        conn.commit()
 
     def revoke_kb_permission(self, user_id: int, kb_name: str) -> bool:
         """Revoke a per-KB permission. Returns True if found."""
-        conn = self.db._raw_conn
-        cursor = conn.execute(
-            "DELETE FROM kb_permission WHERE user_id = ? AND kb_name = ?",
-            (user_id, kb_name),
+        rowcount = self.db.execute_write_sql(
+            "DELETE FROM kb_permission WHERE user_id = :user_id AND kb_name = :kb_name",
+            {"user_id": user_id, "kb_name": kb_name},
         )
-        conn.commit()
-        return cursor.rowcount > 0
+        return rowcount > 0
 
     def list_kb_permissions(self, kb_name: str) -> list[dict]:
         """List all permission grants for a KB."""
-        conn = self.db._raw_conn
-        rows = conn.execute(
+        return self.db.execute_sql(
             """SELECT kp.user_id, u.username, kp.role, kp.granted_by, kp.created_at
             FROM kb_permission kp
             JOIN local_user u ON kp.user_id = u.id
-            WHERE kp.kb_name = ?
+            WHERE kp.kb_name = :kb_name
             ORDER BY kp.created_at""",
-            (kb_name,),
-        ).fetchall()
-        return [
-            {
-                "user_id": r[0],
-                "username": r[1],
-                "role": r[2],
-                "granted_by": r[3],
-                "created_at": r[4],
-            }
-            for r in rows
-        ]
+            {"kb_name": kb_name},
+        )
 
     def list_users(self) -> list[dict]:
         """List all local users (excluding password hashes)."""
-        conn = self.db._raw_conn
-        rows = conn.execute(
+        return self.db.execute_sql(
             "SELECT id, username, display_name, role, auth_provider, avatar_url "
             "FROM local_user ORDER BY username"
-        ).fetchall()
-        return [dict(r) for r in rows]
+        )
 
     def get_user_kb_permissions(self, user_id: int) -> dict[str, str]:
         """Get all explicit KB grants for a user. Returns {kb_name: role}."""
-        conn = self.db._raw_conn
-        rows = conn.execute(
-            "SELECT kb_name, role FROM kb_permission WHERE user_id = ?",
-            (user_id,),
-        ).fetchall()
-        return {r[0]: r[1] for r in rows}
+        rows = self.db.execute_sql(
+            "SELECT kb_name, role FROM kb_permission WHERE user_id = :user_id",
+            {"user_id": user_id},
+        )
+        return {r["kb_name"]: r["role"] for r in rows}
 
     # =====================================================================
     # GitHub Token Management
@@ -516,42 +539,46 @@ class AuthService:
         key = self._get_encryption_key()
         stored_value = self._encrypt_token(token, key) if key else token
 
-        conn = self.db._raw_conn
-        conn.execute(
-            "UPDATE local_user SET github_access_token = ?, github_token_scopes = ?, updated_at = ? WHERE id = ?",
-            (stored_value, scopes, datetime.now(UTC).isoformat(), user_id),
+        self.db.execute_write_sql(
+            "UPDATE local_user SET github_access_token = :token, github_token_scopes = :scopes,"
+            " updated_at = :now WHERE id = :user_id",
+            {
+                "token": stored_value,
+                "scopes": scopes,
+                "now": datetime.now(UTC).isoformat(),
+                "user_id": user_id,
+            },
         )
-        conn.commit()
 
     def get_github_token_for_user(self, user_id: int) -> tuple[str | None, str | None]:
         """Get GitHub token and scopes for a user. Decrypts if encrypted. Returns (token, scopes)."""
-        conn = self.db._raw_conn
-        row = conn.execute(
-            "SELECT github_access_token, github_token_scopes FROM local_user WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-        if not row or not row[0]:
-            return None, row[1] if row else None
+        rows = self.db.execute_sql(
+            "SELECT github_access_token, github_token_scopes FROM local_user WHERE id = :user_id",
+            {"user_id": user_id},
+        )
+        if not rows or not rows[0]["github_access_token"]:
+            scopes = rows[0]["github_token_scopes"] if rows else None
+            return None, scopes
 
-        raw_token = row[0]
+        raw_token = rows[0]["github_access_token"]
+        scopes = rows[0]["github_token_scopes"]
         key = self._get_encryption_key()
         if key:
             try:
-                return self._decrypt_token(raw_token, key), row[1]
+                return self._decrypt_token(raw_token, key), scopes
             except Exception:
                 # Token may be stored as plaintext from before encryption was enabled
-                return raw_token, row[1]
-        return raw_token, row[1]
+                return raw_token, scopes
+        return raw_token, scopes
 
     def clear_github_token(self, user_id: int) -> bool:
         """Remove stored GitHub token. Returns True if user found."""
-        conn = self.db._raw_conn
-        cursor = conn.execute(
-            "UPDATE local_user SET github_access_token = NULL, github_token_scopes = NULL, updated_at = ? WHERE id = ?",
-            (datetime.now(UTC).isoformat(), user_id),
+        rowcount = self.db.execute_write_sql(
+            "UPDATE local_user SET github_access_token = NULL, github_token_scopes = NULL,"
+            " updated_at = :now WHERE id = :user_id",
+            {"now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
-        conn.commit()
-        return cursor.rowcount > 0
+        return rowcount > 0
 
     def create_user_ephemeral_kb(self, user_id: int, ephemeral_service, name: str | None = None) -> dict:
         """Create an ephemeral KB for a user with per-KB admin grant.
@@ -559,17 +586,16 @@ class AuthService:
         Checks ephemeral_min_tier, ephemeral_max_per_user limits.
         Raises ValueError on policy violation.
         """
-        conn = self.db._raw_conn
-
         # Check user tier against ephemeral_min_tier
-        row = conn.execute(
-            "SELECT role, ephemeral_kb_count FROM local_user WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-        if not row:
+        rows = self.db.execute_sql(
+            "SELECT role, ephemeral_kb_count FROM local_user WHERE id = :user_id",
+            {"user_id": user_id},
+        )
+        if not rows:
             raise ValueError("User not found")
 
-        user_role, current_count = row[0], row[1] or 0
+        user_role = rows[0]["role"]
+        current_count = rows[0]["ephemeral_kb_count"] or 0
 
         tier_levels = {"read": 0, "write": 1, "admin": 2}
         min_tier = self.config.ephemeral_min_tier
@@ -596,18 +622,19 @@ class AuthService:
 
         # Grant creator admin on the KB
         now = datetime.now(UTC).isoformat()
-        conn.execute(
+        self.db.execute_write_sql(
             """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
-            VALUES (?, ?, 'admin', ?, ?)""",
-            (user_id, name, user_id, now),
+            VALUES (:user_id, :kb_name, 'admin', :granted_by, :now)""",
+            {"user_id": user_id, "kb_name": name, "granted_by": user_id, "now": now},
+            commit=False,
         )
 
         # Increment ephemeral_kb_count
-        conn.execute(
-            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1 WHERE id = ?",
-            (user_id,),
+        self.db.execute_write_sql(
+            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1"
+            " WHERE id = :user_id",
+            {"user_id": user_id},
         )
-        conn.commit()
 
         return {
             "name": kb.name,

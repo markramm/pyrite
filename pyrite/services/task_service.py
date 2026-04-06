@@ -18,10 +18,10 @@ class TaskService:
     atomic operations: claim, decompose, checkpoint, rollup.
     """
 
-    def __init__(self, config: PyriteConfig, db: PyriteDB):
+    def __init__(self, config: PyriteConfig, db: PyriteDB, kb_svc=None):
         self.config = config
         self.db = db
-        self._kb_svc = None
+        self._kb_svc = kb_svc
 
     @property
     def kb_svc(self):
