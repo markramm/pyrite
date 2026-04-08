@@ -133,7 +133,7 @@
 				<div class="px-4 py-3 text-sm text-zinc-500">Searching...</div>
 			{:else if results.length > 0}
 				<ul id="qs-listbox" class="max-h-80 overflow-y-auto py-2" role="listbox" data-testid="quick-switcher-results">
-					{#each results as result, i (result.id)}
+					{#each results as result, i (`${result.kb_name}:${result.id}`)}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<li
 							id="qs-option-{i}"
