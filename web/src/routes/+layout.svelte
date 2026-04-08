@@ -29,7 +29,8 @@
 	const AUTH_ROUTES = ['/login', '/register'];
 
 	onMount(() => {
-		// Initialize auth before loading KBs
+		// Initialize auth before loading KBs — session cookie must be
+		// available before API calls or they'll 401 when anonymous_tier=none
 		authStore.init().then(() => {
 			const path = $page.url.pathname;
 			const isAuthRoute = AUTH_ROUTES.includes(path);
@@ -42,10 +43,10 @@
 				goto('/');
 				return;
 			}
-		});
 
-		kbStore.load();
-		starredStore.load();
+			kbStore.load();
+			starredStore.load();
+		});
 
 		// WebSocket for multi-tab awareness
 		wsClient.connect();
