@@ -200,7 +200,7 @@
 			{#snippet children()}
 				<div class="flex h-full overflow-hidden">
 					<!-- Main content -->
-					<div class="flex-1 overflow-y-auto">
+					<div class="flex flex-1 flex-col overflow-hidden">
 						<!-- Toolbar + AI results -->
 						<AIPanel
 							entryId={entryStore.current?.id ?? ''}
@@ -310,7 +310,7 @@
 						</AIPanel>
 
 						<!-- Editor or rendered view -->
-						<div class="flex h-full flex-1 overflow-hidden">
+						<div class="flex min-h-0 flex-1 overflow-hidden">
 							{#if uiStore.outlinePanelOpen && !editing}
 								<aside class="w-56 shrink-0 overflow-y-auto border-r border-zinc-200 dark:border-zinc-800">
 									<OutlinePanel body={entryStore.current?.body ?? ''} />
