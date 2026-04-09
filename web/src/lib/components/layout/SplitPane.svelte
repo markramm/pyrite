@@ -115,12 +115,12 @@
 
 <div
 	bind:this={container}
-	class="relative flex-1 overflow-hidden {open && !isMobile ? 'grid' : ''}"
+	class="relative flex flex-1 flex-col overflow-hidden {open && !isMobile ? 'grid' : ''}"
 	style={gridStyle}
 	role="group"
 >
 	<!-- Main content -->
-	<div class="min-h-0 min-w-0 overflow-hidden">
+	<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
 		{@render children()}
 	</div>
 
