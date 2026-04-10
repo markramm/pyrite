@@ -154,6 +154,18 @@ class IndexManager:
                         value = ", ".join(str(v) for v in value)
                     data[key] = value
 
+        # Promote fips/state from metadata or entry attributes to DB columns
+        # for geographic filtering (cross-KB FIPS queries)
+        if hasattr(entry, "metadata") and entry.metadata:
+            if "fips" not in data and "fips" in entry.metadata:
+                data["fips"] = entry.metadata["fips"]
+            if "state" not in data and "state" in entry.metadata:
+                data["state"] = entry.metadata["state"]
+        if "fips" not in data and hasattr(entry, "fips"):
+            data["fips"] = getattr(entry, "fips", "")
+        if "state" not in data and hasattr(entry, "state"):
+            data["state"] = getattr(entry, "state", "")
+
         # Store extension-specific fields in metadata column
         # Use to_frontmatter() to capture all fields, then strip keys
         # already stored in their own DB columns

@@ -300,6 +300,8 @@ class PyriteMCPServer:
             offset=args.get("offset", 0),
             mode=args.get("mode", "hybrid"),
             expand=args.get("expand", False),
+            fips=args.get("fips"),
+            state=args.get("state"),
         )
 
         if fields:

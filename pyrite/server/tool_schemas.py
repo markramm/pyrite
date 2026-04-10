@@ -57,6 +57,14 @@ READ_TOOLS = {
                     "type": "boolean",
                     "description": "Use AI query expansion for additional search terms. Default: false",
                 },
+                "fips": {
+                    "type": "string",
+                    "description": "Filter by county FIPS code (5-digit, e.g. '12086' for Miami-Dade). Works across all KBs.",
+                },
+                "state": {
+                    "type": "string",
+                    "description": "Filter by US state abbreviation (e.g. 'FL', 'TX'). Works across all KBs.",
+                },
                 "include_body": {
                     "type": "boolean",
                     "description": "Include full body text in results. Default: false (returns snippet instead, saving tokens).",

@@ -70,6 +70,8 @@ class Entry(Base):
     start_date = Column(String)
     end_date = Column(String)
     coordinates = Column(String)
+    fips = Column(String)
+    state = Column(String)
 
     # Lifecycle (active / archived)
     lifecycle = Column(String, server_default="active")

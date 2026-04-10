@@ -113,6 +113,8 @@ class SearchService:
         mode: str | SearchMode = SearchMode.KEYWORD,
         expand: bool = False,
         include_archived: bool = False,
+        fips: str | None = None,
+        state: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -162,6 +164,8 @@ class SearchService:
                 offset,
                 sanitize,
                 expanded_query=expanded_query,
+                fips=fips,
+                state=state,
             )
 
         # Default: keyword search
@@ -179,6 +183,8 @@ class SearchService:
             limit=limit,
             offset=offset,
             include_archived=include_archived,
+            fips=fips,
+            state=state,
         )
 
     def _expand_query(self, query: str) -> str:
@@ -232,6 +238,8 @@ class SearchService:
         offset: int = 0,
         sanitize: bool = True,
         expanded_query: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Hybrid search using Reciprocal Rank Fusion (RRF).
@@ -253,6 +261,8 @@ class SearchService:
             date_to=date_to,
             limit=fetch_size,
             offset=0,
+            fips=fips,
+            state=state,
         )
 
         # Try to get semantic results

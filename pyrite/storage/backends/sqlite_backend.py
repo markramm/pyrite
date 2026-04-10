@@ -151,6 +151,8 @@ class SQLiteBackend(BaseBackend):
         offset: int = 0,
         include_archived: bool = False,
         lifecycle: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT
@@ -195,6 +197,12 @@ class SQLiteBackend(BaseBackend):
             """
             params.extend(tags)
             params.append(len(tags))
+        if fips:
+            sql += " AND e.fips = ?"
+            params.append(fips)
+        if state:
+            sql += " AND e.state = ?"
+            params.append(state)
         sql += " ORDER BY rank LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = self._raw_conn.execute(sql, params).fetchall()

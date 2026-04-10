@@ -99,6 +99,8 @@ class BaseBackend(ABC):
             existing.start_date = entry_data.get("start_date")
             existing.end_date = entry_data.get("end_date")
             existing.coordinates = entry_data.get("coordinates")
+            existing.fips = entry_data.get("fips")
+            existing.state = entry_data.get("state")
             existing.lifecycle = entry_data.get("lifecycle", "active")
             existing.extra_data = metadata_json
             existing.updated_at = entry_data.get("updated_at")
@@ -128,6 +130,8 @@ class BaseBackend(ABC):
                 start_date=entry_data.get("start_date"),
                 end_date=entry_data.get("end_date"),
                 coordinates=entry_data.get("coordinates"),
+                fips=entry_data.get("fips"),
+                state=entry_data.get("state"),
                 lifecycle=entry_data.get("lifecycle", "active"),
                 extra_data=metadata_json,
                 created_at=entry_data.get("created_at"),

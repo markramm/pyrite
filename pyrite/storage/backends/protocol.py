@@ -88,6 +88,8 @@ class SearchBackend(Protocol):
         offset: int = 0,
         include_archived: bool = False,
         lifecycle: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search across entries."""
         ...

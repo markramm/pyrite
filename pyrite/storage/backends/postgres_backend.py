@@ -151,6 +151,8 @@ class PostgresBackend(BaseBackend):
         offset: int = 0,
         include_archived: bool = False,
         lifecycle: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
     ) -> list[dict[str, Any]]:
         # Build the tsquery — plainto_tsquery handles user input safely
         sql = """
@@ -203,6 +205,12 @@ class PostgresBackend(BaseBackend):
             """
             params.update(tag_params)
             params["tag_count"] = len(tags)
+        if fips:
+            sql += " AND e.fips = :fips"
+            params["fips"] = fips
+        if state:
+            sql += " AND e.state = :state"
+            params["state"] = state
 
         sql += " ORDER BY rank DESC LIMIT :limit OFFSET :offset"
         params["limit"] = limit

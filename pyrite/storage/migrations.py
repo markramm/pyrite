@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 19
+CURRENT_VERSION = 20
 
 
 @dataclass
@@ -417,6 +417,18 @@ MIGRATIONS: list[Migration] = [
         DROP TABLE IF EXISTS user_api_key;
         """,
     ),
+    Migration(
+        version=20,
+        description="Add fips and state columns to entry for geographic filtering",
+        # Actual ALTER TABLE handled conditionally in _apply_v20() since columns
+        # may already exist from ORM create_all.
+        up="",
+        down="""
+        DROP INDEX IF EXISTS idx_entry_fips;
+        DROP INDEX IF EXISTS idx_entry_state;
+        -- SQLite < 3.35 does not support DROP COLUMN; columns remain but are unused.
+        """,
+    ),
 ]
 
 
@@ -628,6 +640,22 @@ class MigrationManager:
         existing = {row[1] for row in self.conn.execute("PRAGMA table_info(kb)").fetchall()}
         if "default_role" not in existing:
             self.conn.execute("ALTER TABLE kb ADD COLUMN default_role TEXT")
+        self.conn.commit()
+
+    def _apply_v20(self) -> None:
+        """Conditionally add fips and state columns to entry for geographic filtering."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entry'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(entry)").fetchall()}
+        if "fips" not in existing:
+            self.conn.execute("ALTER TABLE entry ADD COLUMN fips TEXT")
+        if "state" not in existing:
+            self.conn.execute("ALTER TABLE entry ADD COLUMN state TEXT")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_fips ON entry(fips)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_state ON entry(state)")
         self.conn.commit()
 
     def rollback(self, target_version: int = 0) -> list[Migration]:
