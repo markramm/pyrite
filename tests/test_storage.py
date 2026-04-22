@@ -2,6 +2,7 @@
 Tests for storage layer (database, repository, index).
 """
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -342,6 +343,42 @@ The actual body content starts here.
         assert loaded is not None
         assert not loaded.body.startswith("type:")
         assert "actual body content" in loaded.body
+
+    def test_load_frontmatter_with_triple_dash_in_quoted_value(self, events_kb, caplog):
+        """Frontmatter delimiter detection must require `---` at start of line.
+
+        Regression: quoted values containing `---` (e.g. "Rental Property --- Chicago, IL")
+        were being matched by text.find("---", 3), truncating frontmatter mid-field.
+        This caused a YAML ScannerError that silently fell back to EventEntry.load,
+        which uses a different (correct) regex-based parser and re-parses from scratch.
+        The symptom: warnings flooded the logs on every index/health run.
+        """
+        md = """---
+type: event
+id: 2025-01-20--triple-dash-in-value
+date: '2025-01-20'
+title: Triple Dash Test
+importance: 5
+status: confirmed
+key_holdings:
+- "Rental Property --- Chicago, IL"
+- "Another --- thing"
+---
+
+The body.
+"""
+        (events_kb.config.path / "events").mkdir(exist_ok=True)
+        (events_kb.config.path / "events" / "2025-01-20--triple-dash-in-value.md").write_text(md)
+
+        # Assert we do NOT hit the exception path — no warning should be logged.
+        with caplog.at_level(logging.WARNING, logger="pyrite.storage.repository"):
+            loaded = events_kb.load("2025-01-20--triple-dash-in-value")
+        assert not any(
+            "Entry load failed" in r.message for r in caplog.records
+        ), f"Should not have hit EventEntry fallback. Logs: {[r.message for r in caplog.records]}"
+        assert loaded is not None
+        assert loaded.title == "Triple Dash Test"
+        assert loaded.body.strip() == "The body."
 
     def test_load_preserves_body_with_colon_that_is_not_frontmatter_key(self, events_kb):
         """Body lines with colons that aren't frontmatter keys should be preserved."""

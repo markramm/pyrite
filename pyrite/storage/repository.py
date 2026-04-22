@@ -53,8 +53,21 @@ class KBRepository:
             text = file_path.read_text(encoding="utf-8")
             from pyrite.utils.yaml import load_yaml
 
-            if text.startswith("---"):
-                end = text.find("---", 3)
+            if text.startswith("---\n") or text.startswith("---\r\n"):
+                # Find the closing `---` delimiter at the start of a line.
+                # Simple text.find("---", 3) matches `---` inside quoted
+                # frontmatter values like "Rental Property --- Chicago, IL".
+                search_start = 3
+                end = -1
+                while True:
+                    hit = text.find("\n---", search_start)
+                    if hit < 0:
+                        break
+                    delim_end = hit + 4
+                    if delim_end == len(text) or text[delim_end] in ("\n", "\r"):
+                        end = hit + 1
+                        break
+                    search_start = hit + 1
                 if end > 0:
                     fm = load_yaml(text[3:end])
                     if fm and isinstance(fm, dict):

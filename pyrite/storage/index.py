@@ -39,6 +39,43 @@ _TRANSCLUSION_RE = re.compile(
     r"!\[\[(?:([a-z0-9-]+):)?([^\]|#^]+?)(?:#([^\]|^]+?))?(?:\^([^\]|]+?))?(?:\|([^\]]+?))?\]\]"
 )
 
+# Matches fenced code blocks (``` ... ```, ~~~ ... ~~~) including the fence lines.
+# Non-greedy so adjacent blocks don't collapse. DOTALL so . matches newlines.
+_FENCED_CODE_RE = re.compile(r"^(```|~~~).*?^\1\s*$", re.MULTILINE | re.DOTALL)
+
+# Matches inline code spans: `...` or ``...`` (spans that could contain a literal backtick).
+# Matches the shorter form only on a single line to avoid eating multi-paragraph text.
+_INLINE_CODE_RE = re.compile(r"``[^`\n]+?``|`[^`\n]+?`")
+
+
+def _strip_code_regions(text: str) -> str:
+    """Blank out fenced code blocks and inline code spans before link extraction.
+
+    Wikilink/transclusion syntax appearing inside code is documentation (e.g.
+    "write `[[entry-id]]` to link"), not a real reference. Stripping code
+    regions before regex scans avoids false-positive broken-link reports.
+    Replaces matches with same-length whitespace so any future position-based
+    logic stays aligned.
+    """
+    def _blank(m: re.Match) -> str:
+        return re.sub(r"[^\n]", " ", m.group(0))
+
+    stripped = _FENCED_CODE_RE.sub(_blank, text)
+    stripped = _INLINE_CODE_RE.sub(_blank, stripped)
+    return stripped
+
+
+def _is_valid_link_target(target: str) -> bool:
+    """Reject targets that can't be valid entry IDs.
+
+    Entry IDs are path-safe slugs — no slashes, whitespace, or backticks.
+    This filters extractor false positives like `[[jan6/witnesses]]` where
+    the `/` makes it structurally impossible to resolve to an entry.
+    """
+    if not target:
+        return False
+    return not any(ch in target for ch in "/\\`\n\r\t")
+
 
 def _parse_indexed_at(indexed_at: str) -> datetime:
     """Parse indexed_at timestamp string to a UTC-aware datetime.
@@ -205,9 +242,10 @@ class IndexManager:
 
         # Extract body wikilinks as links with relation="wikilink"
         body = entry.body or ""
-        if body:
+        scannable_body = _strip_code_regions(body) if body else ""
+        if scannable_body:
             existing_targets = {l.get("target") for l in data["links"]}
-            for match in _WIKILINK_RE.finditer(body):
+            for match in _WIKILINK_RE.finditer(scannable_body):
                 kb_prefix = match.group(1)  # Optional kb: prefix
                 target = match.group(2).strip()
                 heading = match.group(3)
@@ -217,7 +255,12 @@ class IndexManager:
                     note = f"#{heading}"
                 elif block_id:
                     note = f"^{block_id}"
-                if target and target != entry.id and target not in existing_targets:
+                if (
+                    target
+                    and _is_valid_link_target(target)
+                    and target != entry.id
+                    and target not in existing_targets
+                ):
                     data["links"].append(
                         {
                             "target": target,
@@ -265,8 +308,8 @@ class IndexManager:
                     existing_targets.add(ref_id)
 
         # Extract transclusions as links with relation="transclusion"
-        if body:
-            for match in _TRANSCLUSION_RE.finditer(body):
+        if scannable_body:
+            for match in _TRANSCLUSION_RE.finditer(scannable_body):
                 kb_prefix = match.group(1)
                 target = match.group(2).strip()
                 heading = match.group(3)
@@ -276,7 +319,12 @@ class IndexManager:
                     note = f"#{heading}"
                 elif block_id:
                     note = f"^{block_id}"
-                if target and target != entry.id and target not in existing_targets:
+                if (
+                    target
+                    and _is_valid_link_target(target)
+                    and target != entry.id
+                    and target not in existing_targets
+                ):
                     data["links"].append(
                         {
                             "target": target,
