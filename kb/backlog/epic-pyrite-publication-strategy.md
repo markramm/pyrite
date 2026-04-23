@@ -17,6 +17,15 @@ links:
 - target: pyrite-white-labeling
   relation: has_subtask
   kb: pyrite
+- target: pyrite-dynamic-sitemap
+  relation: has_subtask
+  kb: pyrite
+- target: pyrite-entry-page-seo-meta
+  relation: has_subtask
+  kb: pyrite
+- target: pyrite-remove-static-renderer
+  relation: has_subtask
+  kb: pyrite
 ---
 
 ## Thesis

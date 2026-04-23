@@ -72,16 +72,10 @@
 							</div>
 							<div class="flex gap-2">
 								<a
-									href="/site/{kb.name}"
+									href="/orient?kb={kb.name}"
 									class="rounded-md bg-zinc-100 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
 								>
-									Read
-								</a>
-								<a
-									href="/orient?kb={kb.name}"
-									class="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-700 dark:border-zinc-600 dark:hover:border-zinc-500"
-								>
-									Explore in app
+									Open
 								</a>
 							</div>
 						</div>
