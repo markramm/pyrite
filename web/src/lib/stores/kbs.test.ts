@@ -26,8 +26,8 @@ describe('KBStore', () => {
 		it('populates kbs from API response', async () => {
 			mockListKBs.mockResolvedValueOnce({
 				kbs: [
-					{ name: 'events', type: 'events', path: '/tmp/events', entries: 10, indexed: true },
-					{ name: 'research', type: 'research', path: '/tmp/research', entries: 5, indexed: true }
+					{ name: 'events', type: 'events', path: '/tmp/events', entries: 10, indexed: true, source: 'local', description: '', read_only: false, last_indexed: null, shortname: null, default_role: null },
+					{ name: 'research', type: 'research', path: '/tmp/research', entries: 5, indexed: true, source: 'local', description: '', read_only: false, last_indexed: null, shortname: null, default_role: null }
 				],
 				total: 2
 			});
@@ -39,7 +39,7 @@ describe('KBStore', () => {
 
 		it('auto-selects first KB when none active', async () => {
 			mockListKBs.mockResolvedValueOnce({
-				kbs: [{ name: 'first-kb', type: 'generic', path: '/tmp', entries: 0, indexed: false }],
+				kbs: [{ name: 'first-kb', type: 'generic', path: '/tmp', entries: 0, indexed: false, source: 'local', description: '', read_only: false, last_indexed: null, shortname: null, default_role: null }],
 				total: 1
 			});
 
@@ -50,7 +50,7 @@ describe('KBStore', () => {
 		it('preserves existing activeKB on reload', async () => {
 			kbStore.activeKB = 'existing';
 			mockListKBs.mockResolvedValueOnce({
-				kbs: [{ name: 'first-kb', type: 'generic', path: '/tmp', entries: 0, indexed: false }],
+				kbs: [{ name: 'first-kb', type: 'generic', path: '/tmp', entries: 0, indexed: false, source: 'local', description: '', read_only: false, last_indexed: null, shortname: null, default_role: null }],
 				total: 1
 			});
 

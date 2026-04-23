@@ -20,23 +20,37 @@ const mockRegister = vi.mocked(api.register);
 const mockLogout = vi.mocked(api.logout);
 
 const sampleUser = {
-	id: 'user-1',
+	id: 1,
 	username: 'alice',
 	display_name: 'Alice',
-	role: 'user' as const
+	role: 'read' as const,
+	auth_provider: 'local',
+	avatar_url: null,
+	kb_permissions: {}
 };
 
 const adminUser = {
-	id: 'user-2',
+	id: 2,
 	username: 'admin',
 	display_name: 'Admin',
-	role: 'admin' as const
+	role: 'admin' as const,
+	auth_provider: 'local',
+	avatar_url: null,
+	kb_permissions: {}
+};
+
+const disabledAuthConfig = {
+	enabled: false,
+	allow_registration: false,
+	require_invite_code: false,
+	providers: [],
+	anonymous_tier: 'none'
 };
 
 beforeEach(() => {
 	vi.clearAllMocks();
 	authStore.user = null;
-	authStore.authConfig = { enabled: false, allow_registration: false, providers: [] };
+	authStore.authConfig = { ...disabledAuthConfig };
 	authStore.loading = true;
 	authStore.error = null;
 });
@@ -44,7 +58,13 @@ beforeEach(() => {
 describe('AuthStore', () => {
 	describe('init', () => {
 		it('sets authConfig from API and loads user when auth enabled', async () => {
-			const config = { enabled: true, allow_registration: true, providers: ['local'] };
+			const config = {
+				enabled: true,
+				allow_registration: true,
+				require_invite_code: false,
+				providers: ['local'],
+				anonymous_tier: 'none'
+			};
 			mockGetAuthConfig.mockResolvedValueOnce(config);
 			mockGetMe.mockResolvedValueOnce(sampleUser);
 
@@ -54,11 +74,7 @@ describe('AuthStore', () => {
 		});
 
 		it('does not load user when auth is disabled', async () => {
-			mockGetAuthConfig.mockResolvedValueOnce({
-				enabled: false,
-				allow_registration: false,
-				providers: []
-			});
+			mockGetAuthConfig.mockResolvedValueOnce(disabledAuthConfig);
 
 			await authStore.init();
 			expect(mockGetMe).not.toHaveBeenCalled();
@@ -69,18 +85,14 @@ describe('AuthStore', () => {
 			mockGetAuthConfig.mockRejectedValueOnce(new Error('Network error'));
 
 			await authStore.init();
-			expect(authStore.authConfig).toEqual({
-				enabled: false,
-				allow_registration: false,
-				providers: []
-			});
+			expect(authStore.authConfig).toEqual(disabledAuthConfig);
 			expect(authStore.loading).toBe(false);
 		});
 
 		it('sets loading true during init and false after', async () => {
 			mockGetAuthConfig.mockImplementation(async () => {
 				expect(authStore.loading).toBe(true);
-				return { enabled: false, allow_registration: false, providers: [] };
+				return disabledAuthConfig;
 			});
 
 			await authStore.init();
@@ -119,7 +131,7 @@ describe('AuthStore', () => {
 
 			await authStore.register('alice', 'password123', 'Alice');
 			expect(authStore.user).toEqual(sampleUser);
-			expect(mockRegister).toHaveBeenCalledWith('alice', 'password123', 'Alice');
+			expect(mockRegister).toHaveBeenCalledWith('alice', 'password123', 'Alice', undefined);
 		});
 
 		it('sets error message and re-throws on failure', async () => {

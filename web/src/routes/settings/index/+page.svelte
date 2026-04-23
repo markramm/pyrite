@@ -251,7 +251,7 @@
 						<div class="space-y-2">
 							{#each typeCounts as tc}
 								<div class="flex items-center justify-between">
-									<span class="text-sm text-zinc-700 dark:text-zinc-300">{tc.type}</span>
+									<span class="text-sm text-zinc-700 dark:text-zinc-300">{tc.entry_type}</span>
 									<div class="flex items-center gap-2">
 										<div class="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
 											<div

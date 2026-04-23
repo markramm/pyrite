@@ -18,7 +18,7 @@
 	function getEntryField(entry: EntryResponse, field: string): string {
 		// Access known fields directly, fall back to metadata for custom fields
 		if (field in entry) {
-			return String((entry as Record<string, unknown>)[field] ?? '');
+			return String((entry as unknown as Record<string, unknown>)[field] ?? '');
 		}
 		return '';
 	}

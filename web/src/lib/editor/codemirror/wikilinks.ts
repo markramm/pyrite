@@ -102,14 +102,14 @@ export async function wikilinkCompletions(
 			const lowerFragment = fragmentQuery.toLowerCase();
 			const filtered = fragmentQuery
 				? blocks.filter(
-						(b: { block_id: string; heading?: string; content: string }) =>
+						(b) =>
 							(b.block_id?.toLowerCase().includes(lowerFragment)) ||
 							(b.heading?.toLowerCase().includes(lowerFragment)) ||
 							(b.content?.toLowerCase().includes(lowerFragment))
 					)
 				: blocks;
 
-			const options: Completion[] = filtered.slice(0, 30).map((b: { block_id: string; heading?: string; content: string }) => ({
+			const options: Completion[] = filtered.slice(0, 30).map((b) => ({
 				label: fragmentType === 'heading' ? (b.heading || b.block_id) : b.block_id,
 				detail: b.content?.slice(0, 60),
 				apply: (view: EditorView, _completion: Completion, applyFrom: number, applyTo: number) => {

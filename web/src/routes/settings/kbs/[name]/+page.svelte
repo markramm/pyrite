@@ -14,7 +14,8 @@
 		SyncResult
 	} from '$lib/api/types';
 
-	const kbName = $derived($page.params.name);
+	// Route is /settings/kbs/[name] so params.name is always defined at runtime.
+	const kbName = $derived($page.params.name as string);
 	let kb = $state<KBInfo | null>(null);
 	let permissions = $state<KBPermissionGrant[]>([]);
 	let users = $state<UserInfo[]>([]);

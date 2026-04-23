@@ -9,7 +9,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 
-	const collectionId = $derived($page.params.id);
+	const collectionId = $derived($page.params.id as string);
 	const kb = $derived($page.url.searchParams.get('kb') ?? '');
 
 	let sortBy = $state('title');

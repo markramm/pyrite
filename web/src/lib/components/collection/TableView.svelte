@@ -96,7 +96,7 @@
 									<span class="text-zinc-500">{entry.importance}</span>
 								{/if}
 							{:else}
-								<span class="text-zinc-500">{col in entry ? String((entry as Record<string, unknown>)[col] ?? '') : ''}</span>
+								<span class="text-zinc-500">{col in entry ? String((entry as unknown as Record<string, unknown>)[col] ?? '') : ''}</span>
 							{/if}
 						</td>
 					{/each}

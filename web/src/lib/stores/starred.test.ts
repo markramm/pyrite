@@ -20,14 +20,26 @@ const mockReorderStarred = vi.mocked(api.reorderStarred);
 const store = useStarred();
 
 const sampleStarred = [
-	{ entry_id: 'entry-1', kb_name: 'kb-1', sort_order: 0, title: 'First' },
-	{ entry_id: 'entry-2', kb_name: 'kb-2', sort_order: 1, title: 'Second' }
+	{
+		entry_id: 'entry-1',
+		kb_name: 'kb-1',
+		sort_order: 0,
+		title: 'First',
+		created_at: '2026-01-01T00:00:00Z'
+	},
+	{
+		entry_id: 'entry-2',
+		kb_name: 'kb-2',
+		sort_order: 1,
+		title: 'Second',
+		created_at: '2026-01-02T00:00:00Z'
+	}
 ];
 
 beforeEach(async () => {
 	vi.clearAllMocks();
 	// Reset module-level state by loading empty
-	mockGetStarred.mockResolvedValueOnce({ starred: [] });
+	mockGetStarred.mockResolvedValueOnce({ count: 0, starred: [] });
 	await store.load();
 	vi.clearAllMocks();
 });
@@ -35,7 +47,7 @@ beforeEach(async () => {
 describe('useStarred', () => {
 	describe('load', () => {
 		it('populates starred from API', async () => {
-			mockGetStarred.mockResolvedValueOnce({ starred: sampleStarred });
+			mockGetStarred.mockResolvedValueOnce({ count: 2, starred: sampleStarred });
 
 			await store.load();
 
@@ -57,7 +69,7 @@ describe('useStarred', () => {
 			let capturedLoading: boolean | undefined;
 			mockGetStarred.mockImplementationOnce(async () => {
 				capturedLoading = store.loading;
-				return { starred: [] };
+				return { count: 0, starred: [] };
 			});
 
 			await store.load();
@@ -69,8 +81,8 @@ describe('useStarred', () => {
 
 	describe('star', () => {
 		it('calls api.starEntry then reloads', async () => {
-			mockStarEntry.mockResolvedValueOnce(undefined);
-			mockGetStarred.mockResolvedValueOnce({ starred: sampleStarred });
+			mockStarEntry.mockResolvedValueOnce({ starred: true, entry_id: 'entry-1', kb_name: 'kb-1' });
+			mockGetStarred.mockResolvedValueOnce({ count: 2, starred: sampleStarred });
 
 			await store.star('entry-1', 'kb-1');
 
@@ -89,8 +101,8 @@ describe('useStarred', () => {
 
 	describe('unstar', () => {
 		it('calls api.unstarEntry then reloads', async () => {
-			mockUnstarEntry.mockResolvedValueOnce(undefined);
-			mockGetStarred.mockResolvedValueOnce({ starred: [] });
+			mockUnstarEntry.mockResolvedValueOnce({ unstarred: true, entry_id: 'entry-1' });
+			mockGetStarred.mockResolvedValueOnce({ count: 0, starred: [] });
 
 			await store.unstar('entry-1', 'kb-1');
 
@@ -101,14 +113,14 @@ describe('useStarred', () => {
 
 	describe('isStarred', () => {
 		it('returns true for starred entry', async () => {
-			mockGetStarred.mockResolvedValueOnce({ starred: sampleStarred });
+			mockGetStarred.mockResolvedValueOnce({ count: 2, starred: sampleStarred });
 			await store.load();
 
 			expect(store.isStarred('entry-1', 'kb-1')).toBe(true);
 		});
 
 		it('returns false for non-starred entry', async () => {
-			mockGetStarred.mockResolvedValueOnce({ starred: sampleStarred });
+			mockGetStarred.mockResolvedValueOnce({ count: 2, starred: sampleStarred });
 			await store.load();
 
 			expect(store.isStarred('entry-99', 'kb-1')).toBe(false);
@@ -121,8 +133,8 @@ describe('useStarred', () => {
 				{ entry_id: 'entry-2', kb_name: 'kb-2', sort_order: 0 },
 				{ entry_id: 'entry-1', kb_name: 'kb-1', sort_order: 1 }
 			];
-			mockReorderStarred.mockResolvedValueOnce(undefined);
-			mockGetStarred.mockResolvedValueOnce({ starred: sampleStarred });
+			mockReorderStarred.mockResolvedValueOnce({ reordered: true, count: 2 });
+			mockGetStarred.mockResolvedValueOnce({ count: 2, starred: sampleStarred });
 
 			await store.reorder(reorderPayload);
 

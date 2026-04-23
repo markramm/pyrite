@@ -35,7 +35,13 @@ class AuthStore {
 			}
 		} catch {
 			// Auth config endpoint not available — auth is disabled
-			this.authConfig = { enabled: false, allow_registration: false, require_invite_code: false, providers: [] };
+			this.authConfig = {
+				enabled: false,
+				allow_registration: false,
+				require_invite_code: false,
+				providers: [],
+				anonymous_tier: 'none'
+			};
 		} finally {
 			this.loading = false;
 		}

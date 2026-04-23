@@ -15,7 +15,7 @@
 	let viewMode = $state<'tree' | 'flat'>('tree');
 	let search = $state('');
 
-	const selectedKb = $derived(kbStore.selectedKb?.name ?? '');
+	const selectedKb = $derived(kbStore.activeKB ?? '');
 
 	const filteredFlat = $derived(
 		search

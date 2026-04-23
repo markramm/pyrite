@@ -52,14 +52,14 @@ describe('SettingsStore', () => {
 
 	describe('set', () => {
 		it('updates local settings immediately', async () => {
-			mockSetSetting.mockResolvedValueOnce(undefined);
+			mockSetSetting.mockResolvedValueOnce({ key: 'theme', value: 'light' });
 
 			await settingsStore.set('theme', 'light');
 			expect(settingsStore.settings['theme']).toBe('light');
 		});
 
 		it('calls api.setSetting', async () => {
-			mockSetSetting.mockResolvedValueOnce(undefined);
+			mockSetSetting.mockResolvedValueOnce({ key: 'theme', value: 'light' });
 
 			await settingsStore.set('theme', 'light');
 			expect(mockSetSetting).toHaveBeenCalledWith('theme', 'light');

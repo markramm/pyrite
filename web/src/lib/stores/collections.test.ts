@@ -20,7 +20,12 @@ const sampleCollection = {
 	kb_name: 'test-kb',
 	title: 'Test Collection',
 	description: 'A test collection',
-	query: {},
+	source_type: 'query',
+	icon: '',
+	entry_count: 0,
+	folder_path: '',
+	tags: [],
+	query: '',
 	view_config: { default_view: 'table' }
 };
 
@@ -53,7 +58,8 @@ describe('CollectionStore', () => {
 	describe('loadCollections', () => {
 		it('populates collections array', async () => {
 			mockListCollections.mockResolvedValueOnce({
-				collections: [sampleCollection]
+				collections: [sampleCollection],
+				total: 1
 			});
 
 			await collectionStore.loadCollections('test-kb');
@@ -95,7 +101,10 @@ describe('CollectionStore', () => {
 		});
 
 		it('defaults to list when no view_config', async () => {
-			const collectionNoConfig = { ...sampleCollection, view_config: null };
+			// Tests the store's defensive handling of null view_config from older
+			// API responses. Cast through unknown because the typed shape requires
+			// a record.
+			const collectionNoConfig = { ...sampleCollection, view_config: null } as unknown as typeof sampleCollection;
 			mockGetCollection.mockResolvedValueOnce(collectionNoConfig);
 
 			collectionStore.viewMode = 'table';
@@ -108,7 +117,8 @@ describe('CollectionStore', () => {
 		it('populates entries and total', async () => {
 			mockGetCollectionEntries.mockResolvedValueOnce({
 				entries: [sampleEntry],
-				total: 1
+				total: 1,
+				collection_id: 'col-1'
 			});
 
 			await collectionStore.loadEntries('col-1', 'test-kb');
@@ -119,7 +129,8 @@ describe('CollectionStore', () => {
 		it('passes sort/limit/offset options', async () => {
 			mockGetCollectionEntries.mockResolvedValueOnce({
 				entries: [],
-				total: 0
+				total: 0,
+				collection_id: 'col-1'
 			});
 
 			const options = { sort_by: 'title', sort_order: 'asc', limit: 10, offset: 20 };

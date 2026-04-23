@@ -122,7 +122,7 @@
 						opacity: 'data(nodeOpacity)',
 						'border-width': 0,
 						'overlay-padding': 4
-					}
+					} as unknown as cytoscape.Css.Node
 				},
 				{
 					selector: 'node[?isCenter]',
@@ -259,7 +259,7 @@
 			...getLayoutConfig(layoutName),
 			animate: true,
 			animationDuration: 500
-		}).run();
+		} as cytoscape.LayoutOptions).run();
 	}
 
 	export function fit() {

@@ -27,7 +27,7 @@
 	let editorContent = $state('');
 	let resolvedIds = $state<Set<string>>(new Set());
 
-	const entryId = $derived($page.params.id);
+	const entryId = $derived($page.params.id as string);
 
 	onMount(() => {
 		entryStore.loadEntry(entryId);
