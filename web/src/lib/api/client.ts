@@ -6,6 +6,7 @@
  */
 
 import type { AuthConfig, AuthUser } from '$lib/types/auth';
+import type { BrandingConfig } from '$lib/types/branding';
 import type {
 	AIAutoTagResponse,
 	AILinkSuggestResponse,
@@ -757,6 +758,10 @@ class ApiClient {
 
 	async getAuthConfig(): Promise<AuthConfig> {
 		return this.request('/auth/config');
+	}
+
+	async getBrandingConfig(): Promise<BrandingConfig> {
+		return this.request('/config/branding');
 	}
 
 	// Import/Export

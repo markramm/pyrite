@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { kbStore } from '$lib/stores/kbs.svelte';
+	import { brandStore } from '$lib/stores/brand.svelte';
 	import { api } from '$lib/api/client';
 	import { onMount } from 'svelte';
 	import type { StatsResponse } from '$lib/api/types';
@@ -16,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Pyrite</title>
+	<title>{brandStore.name}</title>
 </svelte:head>
 
 <div class="flex flex-1 flex-col overflow-y-auto">
@@ -24,10 +25,19 @@
 	<div class="border-b border-zinc-200 bg-zinc-50 px-6 py-10 dark:border-zinc-800 dark:bg-zinc-900">
 		<div class="mx-auto max-w-4xl">
 			<div class="flex items-center gap-3 mb-3">
-				<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-gold-400 to-gold-600">
-					<span class="text-lg font-bold text-zinc-900">Py</span>
-				</div>
-				<h1 class="text-3xl font-bold text-zinc-900 dark:text-zinc-100">Pyrite</h1>
+				{#if brandStore.logo_url}
+					<img
+						src={brandStore.logo_url}
+						alt=""
+						class="h-10 w-10 rounded-xl"
+						class:brand-invert-on-dark={brandStore.invert_on_dark}
+					/>
+				{:else}
+					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-gold-400 to-gold-600">
+						<span class="text-lg font-bold text-zinc-900">Py</span>
+					</div>
+				{/if}
+				<h1 class="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{brandStore.name}</h1>
 			</div>
 			<p class="text-zinc-500 max-w-xl">
 				Knowledge-as-Code for humans and AI agents. Browse the knowledge bases below, or

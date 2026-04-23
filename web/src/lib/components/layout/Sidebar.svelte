@@ -9,6 +9,8 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api/client';
 	import type { AuthUser } from '$lib/types/auth';
+	import { brandStore } from '$lib/stores/brand.svelte';
+	import PoweredBy from '$lib/components/common/PoweredBy.svelte';
 
 	let currentUser = $state<AuthUser | null>(null);
 	let authEnabled = $state(false);
@@ -113,8 +115,17 @@
 	<!-- Logo / Brand -->
 	<div class="flex items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
 		<a href="/" class="flex items-center gap-2">
-			<span class="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-zinc-900">Py</span>
-			<span class="font-display text-lg tracking-tight text-zinc-100">Pyrite</span>
+			{#if brandStore.logo_url}
+				<img
+					src={brandStore.logo_url}
+					alt=""
+					class="h-7 w-7 rounded"
+					class:brand-invert-on-dark={brandStore.invert_on_dark}
+				/>
+			{:else}
+				<span class="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-zinc-900">Py</span>
+			{/if}
+			<span class="font-display text-lg tracking-tight text-zinc-100">{brandStore.name}</span>
 			<span class="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-400">Alpha</span>
 		</a>
 		<ThemeToggle />
@@ -230,4 +241,6 @@
 			</div>
 		</div>
 	{/if}
+
+	<PoweredBy />
 </aside>

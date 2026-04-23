@@ -180,3 +180,8 @@ h1.page-title {
   font-family: var(--font-display);
   letter-spacing: -0.01em;
 }
+
+/* White-label branding: invert black-on-transparent logo/wordmark for dark theme. */
+.dark .brand-invert-on-dark {
+	filter: invert(1);
+}

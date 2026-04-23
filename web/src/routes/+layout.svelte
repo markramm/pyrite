@@ -13,6 +13,7 @@
 	import { wsClient } from '$lib/api/websocket';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { brandStore } from '$lib/stores/brand.svelte';
 	import { useStarred } from '$lib/stores/starred.svelte';
 	import { registerShortcut } from '$lib/utils/keyboard';
 	import { goto } from '$app/navigation';
@@ -29,6 +30,8 @@
 	const AUTH_ROUTES = ['/login', '/register'];
 
 	onMount(() => {
+		// Load branding early — non-blocking; display-only fallback is fine.
+		brandStore.init();
 		// Initialize auth before loading KBs — session cookie must be
 		// available before API calls or they'll 401 when anonymous_tier=none
 		authStore.init().then(() => {
@@ -106,6 +109,17 @@
 			unregisterSidebar();
 			window.removeEventListener('keydown', handleQuestionMark);
 		};
+	});
+
+	// Push branding into the DOM as it loads:
+	//   --brand-primary      — accent color referenced by chrome components
+	//   document.title       — replace app.html's static "Pyrite"
+	$effect(() => {
+		if (typeof document === 'undefined') return;
+		document.documentElement.style.setProperty('--brand-primary', brandStore.primary_color);
+		if (brandStore.loaded) {
+			document.title = brandStore.name;
+		}
 	});
 </script>
 

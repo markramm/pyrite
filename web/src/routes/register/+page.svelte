@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { brandStore } from '$lib/stores/brand.svelte';
 	import { onMount } from 'svelte';
 
 	let username = $state('');
@@ -45,12 +46,21 @@
 	}
 </script>
 
-<svelte:head><title>Register — Pyrite</title></svelte:head>
+<svelte:head><title>Register — {brandStore.name}</title></svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-zinc-900">
 	<div class="w-full max-w-sm space-y-6 px-4">
 		<div class="text-center">
-			<h1 class="font-display text-3xl text-gold-400">Pyrite</h1>
+			{#if brandStore.wordmark_url}
+				<img
+					src={brandStore.wordmark_url}
+					alt={brandStore.name}
+					class="mx-auto h-10"
+					class:brand-invert-on-dark={brandStore.invert_on_dark}
+				/>
+			{:else}
+				<h1 class="font-display text-3xl" style="color: var(--brand-primary)">{brandStore.name}</h1>
+			{/if}
 			<p class="mt-2 text-sm text-zinc-400">Create your account</p>
 		</div>
 
