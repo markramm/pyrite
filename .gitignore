@@ -73,3 +73,6 @@ site-cache/
 
 # Private deployment automation (not shipped to users)
 pyrite_deployments/
+
+# Claude Code harness lock files (local runtime state)
+.claude/scheduled_tasks.lock
