@@ -199,6 +199,13 @@ def parse_appointees(text: str) -> list[dict]:
     return entries
 
 
+def yaml_quote(value: str) -> str:
+    """Quote a string for YAML, using single quotes if it contains double quotes."""
+    if '"' in value:
+        return f"'{value}'"
+    return f'"{value}"'
+
+
 def generate_entry(appointee: dict, kb_name: str = "trump-appointees") -> str:
     """Generate a markdown entry for an appointee."""
     tags_yaml = "\n".join(f"- {t}" for t in appointee["tags"])
@@ -206,8 +213,8 @@ def generate_entry(appointee: dict, kb_name: str = "trump-appointees") -> str:
     return f"""---
 id: {appointee['slug']}
 type: person
-title: "{appointee['name']}"
-role: "{appointee['position']}"
+title: {yaml_quote(appointee['name'])}
+role: {yaml_quote(appointee['position'])}
 affiliations:
 - "{appointee['agency']}"
 net_worth: "{appointee['net_worth']}"
