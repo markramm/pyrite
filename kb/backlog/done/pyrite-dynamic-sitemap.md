@@ -18,6 +18,13 @@ effort: S
 rank: 0
 ---
 
+**Implementation note (as shipped):** this ticket references a
+`pyrite-kb-publication-flag` as the eventual clean signal for "which
+KBs are public." That ticket was subsequently dropped — the existing
+`KBConfig.default_role == "read"` field already serves this purpose
+across the permissions system and the sitemap, so no new flag was
+added. The sitemap service filters on `default_role == "read"`.
+
 ## Problem
 
 The live SvelteKit app is a client-rendered SPA. Crawlers in 2026 can

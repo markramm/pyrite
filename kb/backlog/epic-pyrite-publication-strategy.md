@@ -158,12 +158,6 @@ where applicable):
   help-text overrides. Driven by env vars or a deploy-level config
   file. Not tracked anywhere today despite being needed for both
   Transparency Cascade and any future branded deploy.
-- **`pyrite-kb-publication-flag`** — `kb.yaml` gets a
-  `published: true/false` field (decisions #2/#3). Public static
-  sites only pull from KBs where `published: true` AND the commit
-  is on main. Private KBs never reach public sites regardless of
-  merge state. This is the one schema gap for the static-publication
-  pipeline.
 - **`invite-code-registration`** — from the superseded journalists
   epic Phase 0. Needed for journalist onboarding without a public
   signup flow.
@@ -221,9 +215,11 @@ where applicable):
    **Already implemented:** per-KB permissions
    ([[per-kb-permissions]]), worktree-based per-user branches
    (ADR-0024), admin merge queue, `OverlaySearchBackend` for
-   diff-over-main reads. The one remaining schema gap is the
-   `published: true/false` flag in `kb.yaml` and the
-   static-export pipeline honoring it.
+   diff-over-main reads, and the `KBConfig.default_role` field —
+   which serves as the "publicly visible" signal for both the
+   permissions system and the [[pyrite-dynamic-sitemap]] crawler
+   surface. No separate `published:` flag needed; `default_role ==
+   "read"` is the authoritative signal.
 
 3. **Sites sync live from main** (follows from #2). Static publication
    sites rebuild on every merge-to-main of a published KB. No
@@ -298,17 +294,18 @@ new work is small:
 |----------|--------|
 | #1 generic export schema | Document today's bytes as v1 — new ticket in sub-epic C |
 | #2 per-KB access control | **Shipped** ([[per-kb-permissions]], done) |
-| #2/#3 `published: true/false` flag in `kb.yaml` | New — one ticket in sub-epic B |
+| #2/#3 KB publication signal | **Shipped** — `default_role == "read"` is the authoritative signal. Used by per-KB permissions and [[pyrite-dynamic-sitemap]]. No separate `published:` flag needed. |
 | #2/#3 per-user branches, overlay reads, merge queue | **Shipped** (ADR-0024, [[worktree-write-routing]]) |
 | #3 live sync from main | **Shipped** pattern (detention-pipeline); replicate for capturecascade |
-| #4 white-labeling | New — one ticket in sub-epic B |
+| #4 white-labeling | **Shipped** ([[pyrite-white-labeling]]) |
 | #5 BYOK LLM chat | **Shipped** ([[byok-per-user-encrypted-api-key-storage-and-routing]]) |
 | #5 overlay-safe embedding cost model | **Shipped** (main embeddings shared, diff embeddings per-user; Path B gap accepted) |
 
-Net new features: `published:` flag, white-labeling, invite-code
-registration, KB-seeding/packaging script, backup automation,
-onboarding flow. Everything architectural is shipped; what remains is
-a small set of productization tickets plus one schema gap.
+Net new features: white-labeling (**shipped**), sitemap + SEO meta
+(**shipped**), invite-code registration, KB-seeding/packaging script,
+backup automation, onboarding flow. Everything architectural is
+shipped; what remains is productization tickets for the actual
+hosted-instance deploy.
 
 ## Out of scope
 
