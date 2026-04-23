@@ -3,11 +3,23 @@ id: normalize-cascade-timeline-files
 type: backlog_item
 title: "Normalize cascade-timeline repo layout and frontmatter"
 kind: chore
-status: proposed
+status: superseded
 priority: medium
 effort: S
-tags: [data-quality, cascade]
+tags: [data-quality, cascade, superseded]
+links:
+- target: migrate-cascade-kbs-to-investigation
+  relation: superseded_by
+  kb: pyrite
 ---
+
+**Superseded by [[migrate-cascade-kbs-to-investigation]].** The cascade-timeline
+repo hygiene work (remove `.md.bak`, reconcile `events/`, canonical field
+order, checked-in normalize script) is folded into the broader migration.
+
+---
+
+Original scope, preserved for reference:
 
 Clean up the cascade-kb/cascade-timeline repo so it's self-consistent and
 easy to work with.

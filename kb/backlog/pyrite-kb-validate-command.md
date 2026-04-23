@@ -7,6 +7,10 @@ status: proposed
 priority: medium
 effort: S
 tags: [cli, robustness, dx]
+links:
+- target: epic-normalization-and-data-cleanup
+  relation: subtask_of
+  kb: pyrite
 ---
 
 Consolidate the new index-time warnings into one on-demand validation

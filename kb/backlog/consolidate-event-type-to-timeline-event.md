@@ -3,11 +3,27 @@ id: consolidate-event-type-to-timeline-event
 type: backlog_item
 title: "Consolidate investigation_event and timeline_event into a single type"
 kind: feature
-status: proposed
+status: superseded
 priority: high
 effort: M
-tags: [schema, journalism-investigation, cascade, migration]
+tags: [schema, journalism-investigation, cascade, migration, superseded]
+links:
+- target: rename-investigation-event-to-timeline-event
+  relation: superseded_by
+  kb: pyrite
+- target: migrate-cascade-kbs-to-investigation
+  relation: superseded_by
+  kb: pyrite
 ---
+
+**Superseded.** Split into two tickets after decision to deprecate the
+cascade plugin entirely: [[rename-investigation-event-to-timeline-event]]
+handles the JI-internal rename once cascade is gone, and
+[[migrate-cascade-kbs-to-investigation]] handles data migration.
+
+---
+
+Original scope, preserved for reference:
 
 Cascade-timeline is an investigation. The parallel `timeline_event`
 (cascade plugin) and `investigation_event` (JI plugin) types add ceremony

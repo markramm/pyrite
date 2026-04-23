@@ -7,6 +7,10 @@ status: proposed
 priority: high
 effort: S
 tags: [robustness, schema, health-check]
+links:
+- target: epic-normalization-and-data-cleanup
+  relation: subtask_of
+  kb: pyrite
 ---
 
 Today `pyrite index build` silently accepts entries with any `type:`

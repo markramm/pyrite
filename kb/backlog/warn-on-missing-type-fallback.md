@@ -7,6 +7,10 @@ status: proposed
 priority: medium
 effort: S
 tags: [robustness, schema]
+links:
+- target: epic-normalization-and-data-cleanup
+  relation: subtask_of
+  kb: pyrite
 ---
 
 Today when an entry's frontmatter lacks `type:`, pyrite silently defaults

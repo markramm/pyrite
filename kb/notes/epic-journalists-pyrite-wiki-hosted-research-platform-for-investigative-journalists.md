@@ -8,13 +8,34 @@ tags:
 - journalists
 - multi-user
 - hosted
+- superseded
 importance: 5
 kind: epic
-status: todo
+status: superseded
 priority: high
 effort: XL
 rank: 0
+links:
+- target: epic-pyrite-publication-strategy
+  relation: superseded_by
+  kb: pyrite
 ---
+
+**Superseded by [[epic-pyrite-publication-strategy]].** This epic was
+an earlier version of the same thinking, scoped to
+`journalists.pyrite.wiki` as the first branded deploy. The successor
+epic rebrands the first deploy as `investigate.transparencycascade.org`,
+generalizes "branded hosted Pyrite" into a white-labelable feature, and
+adds the static-publication-sites surface (capturecascade.org,
+detention-industrial) as a co-equal concern.
+
+Remaining open tickets from this epic (invite-code registration, KB
+seeding/packaging, authenticated MCP transport wiring, onboarding flow,
+backup automation) are now tracked under sub-epic B of the successor.
+
+---
+
+Original content preserved below for reference.
 
 ## Vision
 

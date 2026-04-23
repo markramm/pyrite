@@ -1,0 +1,16 @@
+name: "Transparency Cascade Press"
+tagline: "Tracing the money, naming the actors, connecting the patterns"
+primary_color: "#c93b3b"
+site_url: "https://investigate.transparencycascade.org"
+support_url: "mailto:contact@transparencycascade.org"
+footer_credit_url: "https://pyrite.wiki"
+
+logo: "logo.png"
+wordmark: "wordmark.png"
+invert_on_dark: true
+
+meta:
+  description: "Independent investigative journalism documenting institutional capture, corruption, and threats to democratic accountability."
+
+mcp:
+  agent_prompt_brand: "Transparency Cascade"

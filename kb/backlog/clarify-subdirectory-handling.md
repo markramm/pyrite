@@ -3,11 +3,25 @@ id: clarify-subdirectory-handling
 type: backlog_item
 title: "Decide and document subdirectory handling for entries"
 kind: chore
-status: proposed
+status: superseded
 priority: low
 effort: S
-tags: [schema, docs, cascade]
+tags: [schema, docs, cascade, superseded]
+links:
+- target: schema-required-field-validation
+  relation: superseded_by
+  kb: pyrite
 ---
+
+**Superseded.** Decision: go with option 2 (flexible). `subdirectory:`
+stays a writer hint, not a reader constraint. The warning for misplaced
+files joins the health-check infrastructure in
+[[schema-required-field-validation]]. Docs update is a small follow-up
+not worth tracking as a separate ticket.
+
+---
+
+Original scope, preserved for reference:
 
 `repo.list_files()` uses `rglob("*.md")` and silently accepts any layout.
 `kb.yaml` type declarations have a `subdirectory:` field that the writer

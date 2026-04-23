@@ -1,11 +1,7 @@
 ---
 id: epic-fork-system
-type: backlog_item
 title: "Epic: Multi-User Git Collaboration System"
-kind: epic
-status: in_progress
-priority: high
-effort: L
+type: backlog_item
 tags: [web, collaboration, git]
 links:
 - target: adr-0024
@@ -20,6 +16,12 @@ links:
 - target: worktree-merge-queue
   relation: has_subtask
   kb: pyrite
+importance: 5
+kind: epic
+status: done
+priority: high
+effort: L
+rank: 0
 ---
 
 ## Problem
