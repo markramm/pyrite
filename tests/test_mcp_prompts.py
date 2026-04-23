@@ -298,5 +298,50 @@ class TestCapabilities:
                     server.close()
 
 
+# ---------------------------------------------------------------------------
+# White-label branding in the research_topic prompt (pyrite-white-labeling)
+# ---------------------------------------------------------------------------
+
+
+class TestResearchTopicBranding:
+    def test_default_prompt_names_pyrite(self, mcp_server):
+        result = mcp_server._get_prompt("research_topic", {"topic": "anything"})
+        text = result["messages"][0]["content"]["text"]
+        assert "Pyrite knowledge bases" in text
+
+    def test_branded_prompt_names_brand_and_pyrite(self, tmp_path):
+        import textwrap
+
+        branding_dir = tmp_path / "branding"
+        branding_dir.mkdir()
+        (branding_dir / "branding.yaml").write_text(
+            textwrap.dedent(
+                """
+                name: "Transparency Cascade Press"
+                mcp:
+                  agent_prompt_brand: "Transparency Cascade"
+                """
+            ).lstrip()
+        )
+
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="test-kb", path=kb_path, kb_type=KBType.GENERIC)],
+            settings=Settings(
+                index_path=tmp_path / "index.db",
+                branding_dir=branding_dir,
+            ),
+        )
+        server = PyriteMCPServer(config=config, tier="read")
+        try:
+            result = server._get_prompt("research_topic", {"topic": "anything"})
+            text = result["messages"][0]["content"]["text"]
+            assert "Transparency Cascade knowledge bases" in text
+            assert "powered by Pyrite" in text
+        finally:
+            server.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

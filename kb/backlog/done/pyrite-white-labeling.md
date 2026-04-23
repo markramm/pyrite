@@ -1,16 +1,18 @@
 ---
 id: pyrite-white-labeling
-type: backlog_item
 title: "White-label branding via a configuration folder"
-kind: feature
-status: proposed
-priority: high
-effort: M
+type: backlog_item
 tags: [branding, ux, hosting, deployment, multi-user]
 links:
 - target: epic-pyrite-publication-strategy
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: completed
+priority: high
+effort: M
+rank: 0
 ---
 
 ## Problem

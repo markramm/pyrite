@@ -33,9 +33,15 @@ def _render_page(**kwargs: object) -> str:
 
 # schema.org type mapping
 _SCHEMA_TYPES = {
-    "note": "Article", "person": "Person", "organization": "Organization",
-    "event": "Event", "source": "ScholarlyArticle", "concept": "Article",
-    "writing": "Article", "era": "Article", "component": "SoftwareSourceCode",
+    "note": "Article",
+    "person": "Person",
+    "organization": "Organization",
+    "event": "Event",
+    "source": "ScholarlyArticle",
+    "concept": "Article",
+    "writing": "Article",
+    "era": "Article",
+    "component": "SoftwareSourceCode",
 }
 
 
@@ -43,9 +49,12 @@ class SiteCacheService:
     """Renders site pages to static HTML files."""
 
     def __init__(self, config: PyriteConfig, db: PyriteDB):
+        from .branding_service import BrandingService
+
         self.config = config
         self.db = db
         self.cache_dir = Path(config.settings.index_path).parent / "site-cache"
+        self._branding = BrandingService(config.settings.branding_dir).get()
 
     def render_all(self) -> dict:
         """Render all KB index pages and entry pages. Returns stats."""
@@ -137,9 +146,7 @@ class SiteCacheService:
                 if scores:
                     top = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:5]
                     related_map[eid] = [
-                        (entry_by_id[cid], score)
-                        for cid, score in top
-                        if cid in entry_by_id
+                        (entry_by_id[cid], score) for cid, score in top if cid in entry_by_id
                     ]
 
             # Check if KB is read-only (hide edit links on public sites)
@@ -157,7 +164,8 @@ class SiteCacheService:
                 try:
                     eid = entry["id"]
                     self._render_entry(
-                        kb_name, entry,
+                        kb_name,
+                        entry,
                         backlinks_map.get(eid, []),
                         outlinks_map.get(eid, []),
                         read_only=is_read_only,
@@ -190,6 +198,7 @@ class SiteCacheService:
     def invalidate_kb(self, kb_name: str):
         """Delete all cached pages for a KB."""
         import shutil
+
         kb_dir = self.cache_dir / kb_name
         if kb_dir.exists():
             shutil.rmtree(kb_dir)
@@ -199,28 +208,29 @@ class SiteCacheService:
         """Render the /site landing page."""
         cards = []
         for kb in kbs:
-            desc = f'<p>{_esc(kb.get("description", ""))}</p>' if kb.get("description") else ""
+            desc = f"<p>{_esc(kb.get('description', ''))}</p>" if kb.get("description") else ""
             entries = kb.get("entry_count", 0)
             cards.append(
                 f'<a href="/site/{_esc(kb["name"])}" class="kb-card">'
-                f'<h2>{_esc(kb["name"])}</h2>{desc}'
+                f"<h2>{_esc(kb['name'])}</h2>{desc}"
                 f'<span class="count">{entries} entries</span></a>'
             )
 
         body = (
-            '<h1>Knowledge Bases</h1>'
+            "<h1>Knowledge Bases</h1>"
             '<p style="color:var(--ink-soft);margin-bottom:0.5rem">Curated knowledge bases on systems thinking, lean, agile, and more.</p>'
             '<div id="site-search">'
             '<input type="text" placeholder="Search across all knowledge bases...">'
             '<div class="search-results entry-list" style="margin-top:0.5rem"></div>'
-            '</div>'
+            "</div>"
             f'<div class="kb-grid">{"".join(cards)}</div>'
         )
 
+        _brand_label = f"{self._branding.name} Knowledge Base"
         html = _render_page(
-            title="Pyrite Knowledge Base",
+            title=_brand_label,
             description="Browse knowledge bases on systems thinking, lean, agile, and more.",
-            og_title="Pyrite Knowledge Base",
+            og_title=_brand_label,
             og_type="website",
             og_url="/site",
             og_image="/static/favicon.svg",
@@ -243,7 +253,11 @@ class SiteCacheService:
             title = homepage.get("title", kb_name)
             has_about = self.db.get_entry("_about", kb_name) is not None
             body = _render_designed_homepage(homepage, kb_name, total, has_about=has_about)
-            page_desc = homepage.get("summary") or desc or f"{total} entries in the {kb_name} knowledge base."
+            page_desc = (
+                homepage.get("summary")
+                or desc
+                or f"{total} entries in the {kb_name} knowledge base."
+            )
         else:
             # Auto-generated KB index
             title = kb_name
@@ -251,16 +265,20 @@ class SiteCacheService:
             for e in entries:
                 entry_html.append(
                     f'<a href="/site/{_esc(kb_name)}/{_esc(e["id"])}">'
-                    f'<strong>{_esc(e.get("title", e["id"]))}</strong> '
+                    f"<strong>{_esc(e.get('title', e['id']))}</strong> "
                     f'<span class="badge">{_esc(e.get("entry_type", "note"))}</span>'
-                    f'</a>'
+                    f"</a>"
                 )
 
             body = (
                 f'<div class="breadcrumb"><a href="/site">Home</a><span class="sep">/</span><strong>{_esc(kb_name)}</strong></div>'
-                f'<h1>{_esc(kb_name)}</h1>'
+                f"<h1>{_esc(kb_name)}</h1>"
                 f'<p class="meta">{total} entries</p>'
-                + (f'<p style="color:var(--ink-soft);margin:1rem 0 2rem 0">{_esc(desc)}</p>' if desc else '')
+                + (
+                    f'<p style="color:var(--ink-soft);margin:1rem 0 2rem 0">{_esc(desc)}</p>'
+                    if desc
+                    else ""
+                )
                 + '<div id="site-search" style="margin-bottom:1.5rem">'
                 + f'<input type="text" placeholder="Search {_esc(kb_name)}...">'
                 + '<div class="search-results entry-list" style="margin-top:0.5rem"></div></div>'
@@ -268,10 +286,11 @@ class SiteCacheService:
             )
             page_desc = desc or f"Browse {total} entries in the {kb_name} knowledge base."
 
+        _brand_suffix = f"{self._branding.name} Knowledge Base"
         html = _render_page(
-            title=f"{_esc(title)} — Pyrite Knowledge Base",
+            title=f"{_esc(title)} — {_brand_suffix}",
             description=_esc(page_desc),
-            og_title=f"{_esc(title)} — Pyrite Knowledge Base",
+            og_title=f"{_esc(title)} — {_brand_suffix}",
             og_type="website",
             og_url=f"/site/{_esc(kb_name)}",
             og_image="/static/favicon.svg",
@@ -294,7 +313,7 @@ class SiteCacheService:
 
         for page_num in range(1, total_pages + 1):
             start = (page_num - 1) * page_size
-            page_entries = sorted_entries[start:start + page_size]
+            page_entries = sorted_entries[start : start + page_size]
 
             rows = []
             for e in page_entries:
@@ -308,35 +327,45 @@ class SiteCacheService:
                 )
                 if len(tags) > 3:
                     tag_html += f' <span class="tag" style="background:var(--surface-overlay);border-color:var(--border);color:var(--ink-muted)">+{len(tags) - 3}</span>'
-                date_span = f'<span style="font-family:\'JetBrains Mono\',monospace;font-size:0.8125rem;color:var(--ink-muted);min-width:6.5rem;display:inline-block">{date}</span>' if date else ''
+                date_span = (
+                    f"<span style=\"font-family:'JetBrains Mono',monospace;font-size:0.8125rem;color:var(--ink-muted);min-width:6.5rem;display:inline-block\">{date}</span>"
+                    if date
+                    else ""
+                )
                 rows.append(
                     f'<div class="index-entry">'
-                    f'{date_span}'
+                    f"{date_span}"
                     f'<a href="/site/{_esc(kb_name)}/{_esc(eid)}">{title}</a>'
                     f'<div class="index-tags">{tag_html}</div>'
-                    f'</div>'
+                    f"</div>"
                 )
 
             # Pagination nav
             nav_parts = []
             if page_num > 1:
-                nav_parts.append(f'<a href="/site/{_esc(kb_name)}/page/{page_num - 1}">&larr; Newer</a>')
-            nav_parts.append(f'<span style="color:var(--ink-muted);font-size:0.875rem">Page {page_num} of {total_pages}</span>')
+                nav_parts.append(
+                    f'<a href="/site/{_esc(kb_name)}/page/{page_num - 1}">&larr; Newer</a>'
+                )
+            nav_parts.append(
+                f'<span style="color:var(--ink-muted);font-size:0.875rem">Page {page_num} of {total_pages}</span>'
+            )
             if page_num < total_pages:
-                nav_parts.append(f'<a href="/site/{_esc(kb_name)}/page/{page_num + 1}">Older &rarr;</a>')
+                nav_parts.append(
+                    f'<a href="/site/{_esc(kb_name)}/page/{page_num + 1}">Older &rarr;</a>'
+                )
             nav_html = f'<nav style="display:flex;justify-content:center;align-items:center;gap:1.5rem;margin:2rem 0">{" ".join(nav_parts)}</nav>'
 
             body = (
                 f'<div class="breadcrumb"><a href="/site/{_esc(kb_name)}">Home</a><span class="sep">/</span><strong>Browse</strong></div>'
-                f'<h1>All Events</h1>'
+                f"<h1>All Events</h1>"
                 f'<p style="color:var(--ink-muted);margin-bottom:1.5rem">{total} events &middot; Page {page_num} of {total_pages} &middot; Sorted by date (newest first)</p>'
-                f'{nav_html}'
+                f"{nav_html}"
                 f'<div class="index-list">{"".join(rows)}</div>'
-                f'{nav_html}'
+                f"{nav_html}"
             )
 
             html = _render_page(
-                title=f"Browse Events (Page {page_num}) — {_esc(kb_name)} | Pyrite",
+                title=f"Browse Events (Page {page_num}) — {_esc(kb_name)} | {self._branding.name}",
                 description=f"Browse {total} events in {kb_name}, page {page_num} of {total_pages}",
                 og_title=f"Browse Events — {_esc(kb_name)}",
                 og_type="website",
@@ -349,7 +378,16 @@ class SiteCacheService:
             )
             (page_dir / f"{page_num}.html").write_text(html, encoding="utf-8")
 
-    def _render_entry(self, kb_name: str, entry: dict, backlinks: list, outlinks: list, *, read_only: bool = False, related: list[tuple[dict, int]] | None = None):
+    def _render_entry(
+        self,
+        kb_name: str,
+        entry: dict,
+        backlinks: list,
+        outlinks: list,
+        *,
+        read_only: bool = False,
+        related: list[tuple[dict, int]] | None = None,
+    ):
         """Render a single entry page."""
         import json
 
@@ -362,7 +400,11 @@ class SiteCacheService:
         date = entry.get("date") or ""
         status = entry.get("status") or ""
         location = entry.get("location") or ""
-        description = summary or (body_md[:160].replace("\n", " ") + "..." if len(body_md) > 160 else body_md.replace("\n", " "))
+        description = summary or (
+            body_md[:160].replace("\n", " ") + "..."
+            if len(body_md) > 160
+            else body_md.replace("\n", " ")
+        )
 
         # Parse metadata (may be a JSON string or already a dict)
         metadata = parse_metadata(entry.get("metadata"))
@@ -385,7 +427,7 @@ class SiteCacheService:
             "name": title,
             "description": description,
             "url": canonical_path,
-            "publisher": {"@type": "Organization", "name": "Pyrite"},
+            "publisher": {"@type": "Organization", "name": self._branding.name},
         }
         if date:
             jsonld["datePublished"] = date
@@ -436,12 +478,12 @@ class SiteCacheService:
         actors_html = ""
         if actors and isinstance(actors, list):
             actor_links = ", ".join(
-                f'<a href="/site/search?q={_esc(str(a))}">{_esc(str(a))}</a>'
-                for a in actors
-                if a
+                f'<a href="/site/search?q={_esc(str(a))}">{_esc(str(a))}</a>' for a in actors if a
             )
             if actor_links:
-                actors_html = f'<div class="actors"><span class="label">Actors:</span>{actor_links}</div>'
+                actors_html = (
+                    f'<div class="actors"><span class="label">Actors:</span>{actor_links}</div>'
+                )
 
         # Capture lanes
         capture_lanes = metadata.get("capture_lanes") or []
@@ -468,8 +510,14 @@ class SiteCacheService:
                 src_date = _esc(str(src.get("date") or ""))
 
                 # Only render href for http/https URLs
-                if src_url and isinstance(src_url, str) and src_url.lower().startswith(("http://", "https://")):
-                    title_part = f'<a href="{_esc(src_url)}" target="_blank" rel="noopener">{src_title}</a>'
+                if (
+                    src_url
+                    and isinstance(src_url, str)
+                    and src_url.lower().startswith(("http://", "https://"))
+                ):
+                    title_part = (
+                        f'<a href="{_esc(src_url)}" target="_blank" rel="noopener">{src_title}</a>'
+                    )
                 else:
                     title_part = src_title
 
@@ -478,12 +526,12 @@ class SiteCacheService:
                     parts.append(f'<span class="outlet">{src_outlet}</span>')
                 if src_date:
                     parts.append(f'<span class="source-date">({src_date})</span>')
-                source_items.append(f'<li>{" &mdash; ".join(parts)}</li>')
+                source_items.append(f"<li>{' &mdash; '.join(parts)}</li>")
 
             if source_items:
                 sources_html = (
                     f'<div class="sources-section"><h2>Sources</h2>'
-                    f'<ol>{"".join(source_items)}</ol></div>'
+                    f"<ol>{''.join(source_items)}</ol></div>"
                 )
 
         # Related events (entries sharing actors/tags, excluding self/backlinks/outlinks)
@@ -516,7 +564,11 @@ class SiteCacheService:
                 cov_title = _esc(cov.get("title", ""))
                 cov_url = cov.get("url", "")
                 cov_pub = _esc(cov.get("publication", ""))
-                if cov_url and isinstance(cov_url, str) and cov_url.startswith(("http://", "https://")):
+                if (
+                    cov_url
+                    and isinstance(cov_url, str)
+                    and cov_url.startswith(("http://", "https://"))
+                ):
                     pub_span = f' <span class="coverage-pub">— {cov_pub}</span>' if cov_pub else ""
                     coverage_items.append(
                         f'<a href="{_esc(cov_url)}" target="_blank" rel="noopener noreferrer">{cov_title or _esc(cov_url)}</a>{pub_span}'
@@ -549,7 +601,7 @@ class SiteCacheService:
         if date:
             meta_parts.append(_esc(date))
         if location:
-            meta_parts.append(f'<span>{_esc(location)}</span>')
+            meta_parts.append(f"<span>{_esc(location)}</span>")
         meta_parts.append(f'<span class="reading-time">{reading_mins} min read</span>')
         if not read_only:
             meta_parts.append(
@@ -559,16 +611,16 @@ class SiteCacheService:
 
         body = (
             f'<div class="breadcrumb"><a href="/site/{_esc(kb_name)}">Home</a><span class="sep">/</span>'
-            f'<strong>{_esc(title)}</strong></div>'
-            f'<h1>{_esc(title)}</h1>'
+            f"<strong>{_esc(title)}</strong></div>"
+            f"<h1>{_esc(title)}</h1>"
             f'<div class="entry-badges"><span class="badge">{_esc(_humanize_type(entry_type))}</span>{status_html}</div>'
-            f'{tags_section}{lanes_html}{actors_html}{meta_html}'
-            f'<article>{body_html}</article>'
-            f'{coverage_html}{related_html}{sources_html}{bl_html}{ol_html}'
+            f"{tags_section}{lanes_html}{actors_html}{meta_html}"
+            f"<article>{body_html}</article>"
+            f"{coverage_html}{related_html}{sources_html}{bl_html}{ol_html}"
         )
 
         html = _render_page(
-            title=f"{_esc(title)} — {_esc(kb_name)} | Pyrite",
+            title=f"{_esc(title)} — {_esc(kb_name)} | {self._branding.name}",
             description=_esc(description),
             og_title=f"{_esc(title)} — {_esc(kb_name)}",
             og_type="article",
@@ -585,7 +637,9 @@ class SiteCacheService:
         (kb_dir / f"{sanitize_filename(entry_id)}.html").write_text(html, encoding="utf-8")
 
 
-def _render_designed_homepage(homepage: dict, kb_name: str, total: int, *, has_about: bool = False) -> str:
+def _render_designed_homepage(
+    homepage: dict, kb_name: str, total: int, *, has_about: bool = False
+) -> str:
     """Render a designed homepage from a _homepage entry's structured markdown."""
     body_md = homepage.get("body") or ""
     title = homepage.get("title", kb_name)
@@ -614,59 +668,61 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int, *, has_a
             intro = sections[key]
             break
 
-    hero = f'''
+    hero = f"""
     <div style="text-align:center;padding:3rem 0 2.5rem 0;border-bottom:1px solid var(--border);margin-bottom:3rem">
         <h1 style="font-size:2.75rem;letter-spacing:-0.03em;margin-bottom:0.75rem;line-height:1.1">{_esc(title)}</h1>
-        {f'<p style="font-size:1.125rem;color:var(--ink-soft);max-width:38rem;margin:0 auto 1.5rem auto;line-height:1.6">{_md_inline(intro)}</p>' if intro else ''}
+        {f'<p style="font-size:1.125rem;color:var(--ink-soft);max-width:38rem;margin:0 auto 1.5rem auto;line-height:1.6">{_md_inline(intro)}</p>' if intro else ""}
         <div style="display:flex;justify-content:center;gap:2.5rem;margin:2rem 0">
             <div><div style="font-size:2rem;font-weight:700;color:var(--gold)">{total:,}</div><div style="font-size:0.75rem;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.08em">Events</div></div>
         </div>
         <div style="display:flex;justify-content:center;gap:0.75rem;margin-top:1.5rem">
             <a href="/viewer/" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;background:var(--gold);color:var(--surface);border-radius:0.5rem;font-weight:600;font-size:0.875rem;text-decoration:none">Explore the Timeline</a>
-            {'<a href="/site/' + _esc(kb_name) + '/_about" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;border:1px solid var(--border-light);color:var(--ink-soft);border-radius:0.5rem;font-weight:500;font-size:0.875rem;text-decoration:none">About &amp; Methodology</a>' if has_about else ''}
+            {'<a href="/site/' + _esc(kb_name) + '/_about" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.625rem 1.25rem;border:1px solid var(--border-light);color:var(--ink-soft);border-radius:0.5rem;font-weight:500;font-size:0.875rem;text-decoration:none">About &amp; Methodology</a>' if has_about else ""}
         </div>
-    </div>'''
+    </div>"""
 
     # --- Search ---
-    search = f'''
+    search = f"""
     <div id="site-search" style="margin-bottom:3rem">
         <input type="text" placeholder="Search {total:,} events..." style="text-align:center">
         <div class="search-results entry-list" style="margin-top:0.5rem"></div>
-    </div>'''
+    </div>"""
 
     # --- Cascade Pattern ---
     cascade_html = ""
     cascade_text = sections.get("The Cascade Pattern", "")
     if cascade_text:
         import re
-        steps = re.findall(r'\d+\.\s+\*\*(.+?)\*\*\s*[—–-]\s*(.+)', cascade_text)
+
+        steps = re.findall(r"\d+\.\s+\*\*(.+?)\*\*\s*[—–-]\s*(.+)", cascade_text)
         if steps:
             step_cards = []
             for i, (name, desc) in enumerate(steps):
                 step_cards.append(
                     f'<div style="background:var(--surface-raised);border:1px solid var(--border);border-radius:0.625rem;padding:1.25rem;position:relative">'
                     f'<div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:0.5rem">'
-                    f'<span style="display:inline-flex;align-items:center;justify-content:center;width:1.75rem;height:1.75rem;border-radius:50%;background:var(--gold-glow);border:1px solid var(--gold-border);color:var(--gold);font-size:0.75rem;font-weight:700;flex-shrink:0">{i+1}</span>'
+                    f'<span style="display:inline-flex;align-items:center;justify-content:center;width:1.75rem;height:1.75rem;border-radius:50%;background:var(--gold-glow);border:1px solid var(--gold-border);color:var(--gold);font-size:0.75rem;font-weight:700;flex-shrink:0">{i + 1}</span>'
                     f'<strong style="font-size:0.9375rem">{_esc(name)}</strong>'
-                    f'</div>'
+                    f"</div>"
                     f'<p style="font-size:0.8125rem;color:var(--ink-muted);margin:0;line-height:1.5">{_esc(desc)}</p>'
-                    f'</div>'
+                    f"</div>"
                 )
             # Intro text before the numbered list
             cascade_intro = cascade_text.split("1.")[0].strip()
-            cascade_html = f'''
+            cascade_html = f"""
             <section style="margin-bottom:3rem">
                 <h2 style="text-align:center;margin-bottom:0.5rem">The Cascade Pattern</h2>
-                {f'<p style="text-align:center;color:var(--ink-muted);margin-bottom:1.5rem;font-size:0.9375rem">{_md_inline(cascade_intro)}</p>' if cascade_intro else ''}
+                {f'<p style="text-align:center;color:var(--ink-muted);margin-bottom:1.5rem;font-size:0.9375rem">{_md_inline(cascade_intro)}</p>' if cascade_intro else ""}
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:0.75rem">{"".join(step_cards)}</div>
-            </section>'''
+            </section>"""
 
     # --- Key Findings ---
     findings_html = ""
     findings_text = sections.get("Key Findings", "")
     if findings_text:
         import re
-        items = re.findall(r'-\s+\*\*(.+?)\*\*:\s*(.+)', findings_text)
+
+        items = re.findall(r"-\s+\*\*(.+?)\*\*:\s*(.+)", findings_text)
         if items:
             finding_cards = []
             for label, detail in items:
@@ -674,71 +730,82 @@ def _render_designed_homepage(homepage: dict, kb_name: str, total: int, *, has_a
                     f'<div style="border-left:3px solid var(--gold-border);padding:0.75rem 1rem;background:var(--surface-raised);border-radius:0 0.375rem 0.375rem 0">'
                     f'<strong style="color:var(--gold);font-size:0.8125rem;display:block;margin-bottom:0.25rem">{_esc(label)}</strong>'
                     f'<span style="font-size:0.875rem;color:var(--ink-soft);line-height:1.5">{_esc(detail)}</span>'
-                    f'</div>'
+                    f"</div>"
                 )
-            findings_html = f'''
+            findings_html = f"""
             <section style="margin-bottom:3rem">
                 <h2 style="margin-bottom:1rem">Key Findings</h2>
                 <div style="display:grid;gap:0.75rem">{"".join(finding_cards)}</div>
-            </section>'''
+            </section>"""
 
     # --- Data Standards ---
     standards_html = ""
     standards_text = sections.get("Data Standards", "")
     if standards_text:
-        standards_html = f'''
+        standards_html = f"""
         <section style="margin-bottom:3rem;padding:1.5rem;background:var(--surface-raised);border:1px solid var(--border);border-radius:0.625rem">
             <h2 style="font-size:1rem;margin-bottom:0.75rem">Data Standards</h2>
             <div style="font-size:0.875rem;color:var(--ink-soft);line-height:1.6">{_md_to_html(standards_text, kb_name)}</div>
-        </section>'''
+        </section>"""
 
     # --- Explore links ---
     explore_html = ""
     explore_text = sections.get("Explore", "")
     if explore_text:
         import re
-        links = re.findall(r'\[(.+?)\]\((.+?)\)\s*[—–-]\s*(.+)', explore_text)
+
+        links = re.findall(r"\[(.+?)\]\((.+?)\)\s*[—–-]\s*(.+)", explore_text)
         if links:
             link_cards = []
             for label, href, desc in links:
                 link_cards.append(
                     f'<a href="{_esc(href)}" style="display:block;padding:1rem 1.25rem;border:1px solid var(--border);border-radius:0.625rem;text-decoration:none;transition:all 0.15s;background:var(--surface-raised)"'
-                    f' onmouseover="this.style.borderColor=\'var(--gold-border)\';this.style.boxShadow=\'0 2px 12px rgba(201,168,76,0.1)\'"'
-                    f' onmouseout="this.style.borderColor=\'var(--border)\';this.style.boxShadow=\'none\'">'
+                    f" onmouseover=\"this.style.borderColor='var(--gold-border)';this.style.boxShadow='0 2px 12px rgba(201,168,76,0.1)'\""
+                    f" onmouseout=\"this.style.borderColor='var(--border)';this.style.boxShadow='none'\">"
                     f'<strong style="color:var(--ink);display:block;margin-bottom:0.25rem">{_esc(label)}</strong>'
                     f'<span style="font-size:0.8125rem;color:var(--ink-muted)">{_esc(desc)}</span>'
-                    f'</a>'
+                    f"</a>"
                 )
-            explore_html = f'''
+            explore_html = f"""
             <section style="margin-bottom:3rem">
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:0.75rem">{"".join(link_cards)}</div>
-            </section>'''
+            </section>"""
 
     # --- Contribute ---
     contrib_html = ""
     contrib_text = sections.get("Contribute", "")
     if contrib_text:
-        contrib_html = '''
+        contrib_html = """
         <section style="text-align:center;padding:2rem 0;border-top:1px solid var(--border);margin-top:2rem">
             <h2 style="font-size:1rem;margin-bottom:0.5rem">Open Source</h2>
             <p style="font-size:0.875rem;color:var(--ink-muted);margin-bottom:1rem">Data: CC BY-SA 4.0 · Code: MIT</p>
             <a href="https://github.com/markramm/cascade-kb" style="display:inline-flex;align-items:center;gap:0.375rem;padding:0.5rem 1rem;border:1px solid var(--border-light);border-radius:0.375rem;font-size:0.8125rem;color:var(--ink-soft);text-decoration:none">View on GitHub</a>
-        </section>'''
+        </section>"""
 
     # --- Browse index link (for crawlers/AI agents) ---
-    browse_html = f'''
+    browse_html = f"""
     <section style="text-align:center;padding:1.5rem 0;margin-bottom:1rem">
         <a href="/site/{_esc(kb_name)}/page/1" style="font-size:0.875rem;color:var(--ink-muted)">Browse all {total:,} events by date &rarr;</a>
-    </section>'''
+    </section>"""
 
-    return hero + search + cascade_html + findings_html + explore_html + standards_html + browse_html + contrib_html
+    return (
+        hero
+        + search
+        + cascade_html
+        + findings_html
+        + explore_html
+        + standards_html
+        + browse_html
+        + contrib_html
+    )
 
 
 def _md_inline(text: str) -> str:
     """Convert inline markdown (bold, italic, links) without wrapping in paragraphs."""
     import re
-    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
-    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+
+    text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"\*(.+?)\*", r"<em>\1</em>", text)
 
     def _safe_inline_link(m: re.Match) -> str:
         link_text = _esc(m.group(1))
@@ -747,7 +814,7 @@ def _md_inline(text: str) -> str:
             return link_text
         return f'<a href="{_esc(url)}">{link_text}</a>'
 
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', _safe_inline_link, text)
+    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", _safe_inline_link, text)
     return text
 
 
@@ -761,7 +828,8 @@ def _esc(text: str) -> str:
     if text is None:
         return ""
     return (
-        str(text).replace("&", "&amp;")
+        str(text)
+        .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
@@ -788,7 +856,9 @@ def _md_to_html(md: str, kb_name: str) -> str:
         label = m.group(2) if m.group(2) else None
         parts = target.split(":", 1)
         if len(parts) == 2:
-            return f'<a href="/site/{_esc(parts[0])}/{_esc(parts[1])}">{_esc(label or parts[1])}</a>'
+            return (
+                f'<a href="/site/{_esc(parts[0])}/{_esc(parts[1])}">{_esc(label or parts[1])}</a>'
+            )
         return f'<a href="/site/{_esc(kb_name)}/{_esc(target)}">{_esc(label or target)}</a>'
 
     html = re.sub(r"\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]", _wikilink, html)

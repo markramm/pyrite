@@ -146,11 +146,15 @@ class PyriteMCPServer:
         # Merge DB-registered KBs into config
         try:
             from sqlalchemy import text
+
             rows = self.db.session.execute(
                 text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
             ).fetchall()
             if rows:
-                db_kbs = [{"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows]
+                db_kbs = [
+                    {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""}
+                    for r in rows
+                ]
                 self.config.register_db_kbs(db_kbs)
         except Exception:
             pass
@@ -1196,13 +1200,17 @@ class PyriteMCPServer:
                 type_name = args.get("type_name")
                 type_def = args.get("type_def", {})
                 if not kb_name or not type_name:
-                    return _error("MISSING_PARAMETER", "kb_name and type_name required for add_type")
+                    return _error(
+                        "MISSING_PARAMETER", "kb_name and type_name required for add_type"
+                    )
                 return svc.add_type(kb_name, type_name, type_def)
 
             elif action == "remove_type":
                 type_name = args.get("type_name")
                 if not kb_name or not type_name:
-                    return _error("MISSING_PARAMETER", "kb_name and type_name required for remove_type")
+                    return _error(
+                        "MISSING_PARAMETER", "kb_name and type_name required for remove_type"
+                    )
                 return svc.remove_type(kb_name, type_name)
 
             elif action == "set_schema":
@@ -1227,7 +1235,9 @@ class PyriteMCPServer:
             return _error("MISSING_PARAMETER", "Both 'kb' and 'message' are required")
 
         try:
-            return self.export_svc.commit_kb(kb_name, message=message, paths=paths, sign_off=sign_off)
+            return self.export_svc.commit_kb(
+                kb_name, message=message, paths=paths, sign_off=sign_off
+            )
         except PyriteError as e:
             return _error("OPERATION_FAILED", str(e))
 
@@ -1362,7 +1372,18 @@ class PyriteMCPServer:
 
     def _prompt_research_topic(self, args: dict[str, Any]) -> dict[str, Any]:
         """Generate research prompt for a topic."""
+        from ..services.branding_service import DEFAULT_BRAND_NAME, BrandingService
+
+        brand = BrandingService(self.config.settings.branding_dir).get()
+        brand_label = brand.mcp_agent_prompt_brand or brand.name
         topic = args.get("topic", "")
+        if brand_label == DEFAULT_BRAND_NAME:
+            intro = "You are a research assistant with access to Pyrite knowledge bases."
+        else:
+            intro = (
+                f"You are a research assistant with access to {brand_label} knowledge "
+                f"bases (powered by Pyrite)."
+            )
         return {
             "messages": [
                 {
@@ -1370,7 +1391,7 @@ class PyriteMCPServer:
                     "content": {
                         "type": "text",
                         "text": (
-                            f"You are a research assistant with access to Pyrite knowledge bases. "
+                            f"{intro} "
                             f"Research the topic: {topic}. Search across all KBs, summarize key "
                             f"findings, identify related entries, and note any gaps in coverage."
                         ),

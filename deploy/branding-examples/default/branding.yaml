@@ -1,0 +1,34 @@
+# Default Pyrite branding. This folder exists to document the config format.
+# If PYRITE_BRANDING_DIR is unset, Pyrite falls back to these same values
+# from code constants — the folder is not loaded automatically.
+#
+# To white-label a deployment, copy this file to your own branding folder,
+# edit the values, drop logo/wordmark assets alongside, and set:
+#   PYRITE_BRANDING_DIR=/path/to/your/branding
+
+name: "Pyrite"
+tagline: ""
+primary_color: "#d4a017"                   # hex; drives the --brand-primary CSS custom property
+site_url: ""                               # canonical URL for og/meta tags
+support_url: ""                            # shown in the UI when set
+footer_credit_url: "https://pyrite.wiki"   # where "Powered by Pyrite" links
+
+# Assets (relative to this folder). Omit if not shipping.
+# logo: "logo.png"           # square icon (sidebar, favicon source)
+# wordmark: "wordmark.png"   # horizontal wordmark (login, register, home)
+# favicon: "favicon.ico"
+# apple_touch_icon: "apple-touch-icon.png"
+
+# Set true to apply CSS filter: invert(1) on dark theme, so one
+# black-on-transparent asset renders correctly under both themes.
+invert_on_dark: false
+
+meta:
+  description: ""
+  # og_image_path: "og-image.png"
+
+mcp:
+  # Brand name injected into MCP research-topic system prompts.
+  # Defaults to `name` if unset. The MCP protocol handshake itself
+  # still announces Pyrite.
+  agent_prompt_brand: ""
