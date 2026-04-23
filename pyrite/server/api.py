@@ -674,6 +674,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
     application.include_router(branding_router)
 
+    # SEO endpoints: sitemap.xml + robots.txt (public — crawlers don't auth)
+    from .seo_endpoints import seo_router
+
+    application.include_router(seo_router)
+
     # MCP SSE transport (mounted outside /api — handles its own Bearer auth)
     from .mcp_routes import mount_mcp_routes
 

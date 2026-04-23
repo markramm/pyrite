@@ -1,11 +1,7 @@
 ---
 id: pyrite-entry-page-seo-meta
-type: backlog_item
 title: "Full SEO meta tags and JSON-LD on live-app entry pages"
-kind: feature
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [seo, publication, hosting, web]
 links:
 - target: epic-pyrite-publication-strategy
@@ -14,6 +10,12 @@ links:
 - target: pyrite-remove-static-renderer
   relation: unblocks
   kb: pyrite
+importance: 5
+kind: feature
+status: completed
+priority: medium
+effort: S
+rank: 0
 ---
 
 ## Problem

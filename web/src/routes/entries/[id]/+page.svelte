@@ -13,6 +13,8 @@
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { brandStore } from '$lib/stores/brand.svelte';
+	import { buildEntrySeo } from '$lib/utils/seo';
 	import { api } from '$lib/api/client';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
@@ -177,9 +179,43 @@
 		{ label: 'Entries', href: '/entries' },
 		{ label: entryStore.current?.title ?? entryId }
 	]);
+
+	// Full SEO meta built from the loaded entry + brand config. Null when
+	// the entry hasn't loaded yet (e.g. on initial route render) so the
+	// head falls back to a plain title.
+	const seo = $derived(
+		entryStore.current
+			? buildEntrySeo({
+					entry: entryStore.current,
+					brand: {
+						name: brandStore.name,
+						og_image_url: brandStore.og_image_url,
+						site_url: brandStore.site_url
+					}
+				})
+			: null
+	);
 </script>
 
-<svelte:head><title>{entryStore.current?.title ?? 'Entry'} — Pyrite</title></svelte:head>
+<svelte:head>
+	{#if seo}
+		<title>{seo.title}</title>
+		<meta name="description" content={seo.description} />
+		<link rel="canonical" href={seo.canonical} />
+		<meta property="og:title" content={seo.ogTitle} />
+		<meta property="og:description" content={seo.ogDescription} />
+		<meta property="og:type" content={seo.ogType} />
+		<meta property="og:url" content={seo.ogUrl} />
+		{#if seo.ogImage}<meta property="og:image" content={seo.ogImage} />{/if}
+		<meta name="twitter:card" content={seo.twitterCard} />
+		<meta name="twitter:title" content={seo.ogTitle} />
+		<meta name="twitter:description" content={seo.ogDescription} />
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+		{@html `<script type="application/ld+json">${JSON.stringify(seo.jsonLd)}</script>`}
+	{:else}
+		<title>{entryStore.current?.title ?? 'Entry'} — {brandStore.name}</title>
+	{/if}
+</svelte:head>
 
 <Topbar {breadcrumbs} />
 

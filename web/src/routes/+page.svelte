@@ -18,6 +18,18 @@
 
 <svelte:head>
 	<title>{brandStore.name}</title>
+	{#if brandStore.meta.description}
+		<meta name="description" content={brandStore.meta.description} />
+		<meta property="og:description" content={brandStore.meta.description} />
+		<meta name="twitter:description" content={brandStore.meta.description} />
+	{/if}
+	<meta property="og:title" content={brandStore.name} />
+	<meta property="og:type" content="website" />
+	{#if brandStore.site_url}<meta property="og:url" content={brandStore.site_url} />{/if}
+	{#if brandStore.og_image_url}<meta property="og:image" content={brandStore.og_image_url} />{/if}
+	<meta name="twitter:card" content="summary" />
+	<meta name="twitter:title" content={brandStore.name} />
+	{#if brandStore.site_url}<link rel="canonical" href={brandStore.site_url} />{/if}
 </svelte:head>
 
 <div class="flex flex-1 flex-col overflow-y-auto">

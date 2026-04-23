@@ -1,11 +1,7 @@
 ---
 id: pyrite-dynamic-sitemap
-type: backlog_item
 title: "Dynamic /sitemap.xml and /robots.txt for SEO"
-kind: feature
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [seo, publication, hosting, web]
 links:
 - target: epic-pyrite-publication-strategy
@@ -14,6 +10,12 @@ links:
 - target: pyrite-remove-static-renderer
   relation: unblocks
   kb: pyrite
+importance: 5
+kind: feature
+status: completed
+priority: medium
+effort: S
+rank: 0
 ---
 
 ## Problem
