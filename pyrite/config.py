@@ -338,10 +338,21 @@ class Settings:
     workspace_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "repos")
     strict_plugins: bool = False  # Raise on plugin load failures (dev/CI mode)
     prewarm_embeddings: bool = False  # Pre-load embedding model on server startup
+    # White-label branding folder. None = use built-in Pyrite defaults.
+    # Env override: PYRITE_BRANDING_DIR
+    branding_dir: Path | None = field(
+        default_factory=lambda: (
+            Path(os.environ["PYRITE_BRANDING_DIR"]).expanduser().resolve()
+            if os.environ.get("PYRITE_BRANDING_DIR")
+            else None
+        )
+    )
 
     def __post_init__(self):
         self.index_path = Path(self.index_path).expanduser().resolve()
         self.workspace_path = Path(self.workspace_path).expanduser().resolve()
+        if self.branding_dir is not None:
+            self.branding_dir = Path(self.branding_dir).expanduser().resolve()
         # Load from environment if not set
         if not self.ai_api_key:
             self.ai_api_key = (

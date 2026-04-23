@@ -669,6 +669,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
     application.include_router(auth_router)
 
+    # Branding router (public — the login page needs it before auth)
+    from .branding_endpoints import branding_router
+
+    application.include_router(branding_router)
+
     # MCP SSE transport (mounted outside /api — handles its own Bearer auth)
     from .mcp_routes import mount_mcp_routes
 
