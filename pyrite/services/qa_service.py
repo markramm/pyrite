@@ -616,7 +616,12 @@ class QAService:
                     "entry_id": row["source_id"],
                     "kb_name": row["source_kb"],
                     "rule": "broken_link",
-                    "severity": "error",
+                    # Wiki-style "wanted pages" — targets that don't exist
+                    # yet are an expected state in a growing KB, not data
+                    # corruption. Surface them as warnings so `pyrite qa
+                    # validate` (which exits 1 only on errors) doesn't
+                    # treat intentional forward references as failures.
+                    "severity": "warning",
                     "field": "links",
                     "message": (
                         f"Entry '{row['source_id']}' links to non-existent "
@@ -721,13 +726,14 @@ class QAService:
         outlinks = self.db.get_outlinks(entry_id, kb_name)
         for link in outlinks:
             if link.get("title") is None:
-                # LEFT JOIN returned NULL title = target doesn't exist
+                # LEFT JOIN returned NULL title = target doesn't exist.
+                # Treated as wiki-style wanted page — see _check_broken_links.
                 issues.append(
                     {
                         "entry_id": entry_id,
                         "kb_name": kb_name,
                         "rule": "broken_link",
-                        "severity": "error",
+                        "severity": "warning",
                         "field": "links",
                         "message": (
                             f"Entry '{entry_id}' links to non-existent "

@@ -275,3 +275,88 @@ class TestCITierOption:
             assert result.exit_code == 0
             # No LLM-related output
             assert "LLM not configured" not in result.output
+
+
+@pytest.fixture
+def ci_env_only_broken_links():
+    """Environment where the only issue is a broken wikilink (wanted page)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        db_path = tmpdir / "index.db"
+
+        kb_path = tmpdir / "wiki"
+        kb_path.mkdir()
+
+        kb_config = KBConfig(
+            name="wiki-kb",
+            path=kb_path,
+            kb_type=KBType.RESEARCH,
+            description="Wiki-style KB with wanted pages",
+        )
+
+        config = PyriteConfig(
+            knowledge_bases=[kb_config],
+            settings=Settings(index_path=db_path),
+        )
+
+        db = PyriteDB(db_path)
+        db.register_kb("wiki-kb", "research", str(kb_path), "Wiki-style KB")
+        # Valid entry — no structural errors.
+        db.upsert_entry(
+            {
+                "id": "page-a",
+                "kb_name": "wiki-kb",
+                "entry_type": "note",
+                "title": "Page A",
+                "body": "Body A referencing [[not-yet-written]].",
+                "importance": 5,
+                "status": "active",
+            }
+        )
+        # Wikilink to a page that hasn't been created yet.
+        db._raw_conn.execute(
+            "INSERT INTO link (source_id, source_kb, target_id, target_kb, relation, inverse_relation) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("page-a", "wiki-kb", "not-yet-written", "wiki-kb", "wikilink", "wikilink"),
+        )
+        db._raw_conn.commit()
+        db.close()
+
+        yield {"config": config, "tmpdir": tmpdir, "kb_config": kb_config}
+
+
+@pytest.mark.cli
+class TestQAValidateBrokenLinkExitCode:
+    """Broken wikilinks are wanted-pages, not errors — `pyrite qa validate` must exit 0."""
+
+    def test_qa_validate_rich_exits_zero_when_only_broken_links(self, ci_env_only_broken_links):
+        """Rich output of qa validate returns exit 0 when only broken links exist.
+
+        `pyrite qa validate` (rich output path) raises `typer.Exit(1)` only when
+        there is at least one error-severity issue. Broken wikilinks are
+        warning-severity (wiki wanted-page semantics), so a KB whose only
+        issues are broken links must still pass.
+        """
+        with patch(
+            "pyrite.cli.context.load_config", return_value=ci_env_only_broken_links["config"]
+        ):
+            # Rich output is the path that gates on error_count > 0.
+            # (JSON output, which is the CLI default, always exits 0 by design.)
+            result = runner.invoke(app, ["qa", "validate", "wiki-kb", "--format", "rich"])
+            assert result.exit_code == 0, result.output
+            assert "broken_link" in result.output
+            # Summary line should show 0 errors.
+            assert "0 errors" in result.output
+
+    def test_qa_validate_json_reports_broken_link_as_warning(self, ci_env_only_broken_links):
+        """JSON output classifies broken_link with severity=warning."""
+        with patch(
+            "pyrite.cli.context.load_config", return_value=ci_env_only_broken_links["config"]
+        ):
+            result = runner.invoke(app, ["qa", "validate", "wiki-kb", "--format", "json"])
+            assert result.exit_code == 0, result.output
+            data = json.loads(result.output)
+            severities = {i["severity"] for i in data["issues"] if i["rule"] == "broken_link"}
+            assert severities == {"warning"}, (
+                f"broken_link should be warning-level (wiki wanted pages), got {severities}"
+            )

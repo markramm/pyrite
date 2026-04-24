@@ -392,7 +392,8 @@ class TestCheckBrokenLinks:
         matched = [i for i in issues if i["rule"] == "broken_link"]
         assert len(matched) == 1
         assert matched[0]["entry_id"] == "source"
-        assert matched[0]["severity"] == "error"
+        # Wiki-style wanted-page semantics — warning, not error.
+        assert matched[0]["severity"] == "warning"
         assert matched[0]["field"] == "links"
         assert "nonexistent" in matched[0]["message"]
 
@@ -618,7 +619,8 @@ class TestCheckEntryLinks:
         svc._check_entry_links("src", "test", issues)
         matched = [i for i in issues if i["rule"] == "broken_link"]
         assert len(matched) == 1
-        assert matched[0]["severity"] == "error"
+        # Wanted-page semantics: visible but not CI-failing.
+        assert matched[0]["severity"] == "warning"
         assert "missing-target" in matched[0]["message"]
 
     def test_no_links_no_issues(self, qa):

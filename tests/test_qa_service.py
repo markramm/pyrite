@@ -174,7 +174,7 @@ class TestValidateCleanKB:
         assert date_issues[0]["severity"] == "error"
 
     def test_validate_detects_broken_link(self, qa_setup):
-        """Link to non-existent target flagged as error."""
+        """Link to non-existent target flagged as warning (wiki-style wanted page)."""
         db = qa_setup["db"]
         # Insert a link pointing to a non-existent entry
         db._raw_conn.execute(
@@ -194,7 +194,10 @@ class TestValidateCleanKB:
         result = qa_setup["qa"].validate_kb("test-events")
         broken = [i for i in result["issues"] if i["rule"] == "broken_link"]
         assert len(broken) >= 1
-        assert broken[0]["severity"] == "error"
+        # Broken wikilinks represent wanted-but-not-yet-created pages in a
+        # wiki, not data integrity errors. Keep them visible (warning) but
+        # don't fail CI (`pyrite qa validate` exits 1 only on errors).
+        assert broken[0]["severity"] == "warning"
 
     def test_validate_detects_invalid_date(self, qa_setup):
         """Entry with bad date format flagged as error."""
