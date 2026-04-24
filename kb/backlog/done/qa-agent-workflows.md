@@ -7,11 +7,6 @@ tags:
 - ai
 - quality
 - epic
-kind: epic
-priority: medium
-effort: XL
-status: in_progress
-progress: "Phases 1-4 complete. Phase 5 (continuous pipeline + dashboard) remaining."
 links:
 - target: qa-phase-1-tier-1-structural-validation
   relation: has_subtask
@@ -23,6 +18,12 @@ links:
   relation: has_subtask
 - target: qa-phase-5-continuous-qa-pipeline-and-dashboard
   relation: has_subtask
+importance: 5
+kind: epic
+status: completed
+priority: medium
+effort: XL
+rank: 0
 ---
 
 ## Progress
