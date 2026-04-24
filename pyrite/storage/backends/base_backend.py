@@ -104,7 +104,10 @@ class BaseBackend(ABC):
             existing.lifecycle = entry_data.get("lifecycle", "active")
             existing.extra_data = metadata_json
             existing.updated_at = entry_data.get("updated_at")
-            existing.indexed_at = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
+            # Microsecond precision + explicit UTC offset — second-level
+            # truncation caused `_is_stale` to fire immediately after
+            # indexing when file mtimes have sub-second precision.
+            existing.indexed_at = datetime.now(UTC).isoformat(timespec="microseconds")
             if entry_data.get("created_by") and not existing.created_by:
                 existing.created_by = entry_data.get("created_by")
             if entry_data.get("modified_by"):
@@ -136,6 +139,14 @@ class BaseBackend(ABC):
                 extra_data=metadata_json,
                 created_at=entry_data.get("created_at"),
                 updated_at=entry_data.get("updated_at"),
+                # Always set indexed_at explicitly — the Column's
+                # server_default="CURRENT_TIMESTAMP" stores the literal
+                # string under some SQLAlchemy/SQLite combinations, which
+                # breaks `_is_stale` on every subsequent sync.
+                # Microsecond precision + explicit UTC offset so
+                # `_is_stale` comparisons against sub-second file mtimes
+                # don't produce false positives immediately after index.
+                indexed_at=datetime.now(UTC).isoformat(timespec="microseconds"),
                 created_by=entry_data.get("created_by"),
                 modified_by=entry_data.get("modified_by"),
             )

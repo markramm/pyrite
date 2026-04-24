@@ -82,11 +82,17 @@ def _parse_indexed_at(indexed_at: str) -> datetime:
 
     SQLite CURRENT_TIMESTAMP produces UTC strings like '2026-02-25 12:00:00'.
     Some values may have 'Z' or '+00:00' suffix. We normalize all to UTC-aware.
-    If the value is the literal 'CURRENT_TIMESTAMP' (unresolved SQL default),
-    treat it as "now".
+
+    Legacy rows may store the literal string 'CURRENT_TIMESTAMP' — an
+    unresolved SQLAlchemy server_default from before the explicit-timestamp
+    fix in base_backend. Treat these as the Unix epoch so `_is_stale` sees
+    them as maximally out-of-date and the next sync re-indexes them. (A
+    prior version of this function returned `datetime.now(UTC)` here, which
+    had the opposite effect: the stale check always failed and the affected
+    rows were never touched by `sync_incremental`.)
     """
     if indexed_at == "CURRENT_TIMESTAMP":
-        return datetime.now(UTC)
+        return datetime.fromtimestamp(0, tz=UTC)
     cleaned = indexed_at.replace("Z", "+00:00")
     dt = datetime.fromisoformat(cleaned)
     if dt.tzinfo is None:

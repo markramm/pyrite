@@ -764,5 +764,127 @@ class TestDDLDefaultValidation:
             db._create_table_from_def(table_def)
 
 
+class TestIndexedAtOnInsert:
+    """Regression: `upsert_entry` INSERT path must write a real timestamp
+    into `indexed_at`, never the literal string 'CURRENT_TIMESTAMP'.
+
+    Bug history: `models.py` declared
+    `indexed_at = Column(String, server_default="CURRENT_TIMESTAMP")`.
+    Under some SQLAlchemy+SQLite combos the string-form server_default is
+    stored as the literal `"CURRENT_TIMESTAMP"` instead of being evaluated
+    as SQL. Combined with `_parse_indexed_at`'s old fallback (which mapped
+    the literal to `datetime.now()`), this broke `sync_incremental`: the
+    staleness check always saw `now() > file_mtime` and skipped the row
+    forever.
+
+    Fix: the INSERT branch in `_upsert_entry_main` sets `indexed_at`
+    explicitly, so the broken default is never reached.
+    """
+
+    @pytest.fixture
+    def db(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = PyriteDB(Path(tmpdir) / "index.db")
+            db.register_kb("test-kb", "generic", "/tmp/test", "")
+            yield db
+            db.close()
+
+    def test_fresh_insert_sets_real_timestamp(self, db):
+        db.upsert_entry(
+            {
+                "id": "new-entry",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Test",
+                "body": "Body",
+            }
+        )
+        row = db._raw_conn.execute(
+            "SELECT indexed_at FROM entry WHERE id = ? AND kb_name = ?",
+            ("new-entry", "test-kb"),
+        ).fetchone()
+        assert row is not None
+        indexed_at = row[0]
+        assert indexed_at != "CURRENT_TIMESTAMP", (
+            "indexed_at should be an actual timestamp, not the literal SQL default"
+        )
+        # Should parse without the fallback branch firing.
+        from pyrite.storage.index import _parse_indexed_at
+
+        parsed = _parse_indexed_at(indexed_at)
+        assert parsed.year >= 2026
+
+
+class TestSyncRecoversFromBrokenTimestamp:
+    """Regression: sync_incremental must reindex entries whose stored
+    `indexed_at` is the literal 'CURRENT_TIMESTAMP' string.
+
+    Without the fix, `_parse_indexed_at('CURRENT_TIMESTAMP')` returned
+    `datetime.now(UTC)`, which made `_is_stale` always return False for
+    those rows. They were permanently skipped by sync, which is exactly
+    the user-visible bug: edit-frontmatter + sync reported Updated:0.
+    """
+
+    def test_sync_reindexes_broken_timestamp_row(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            db = PyriteDB(db_path)
+            kb_config = KBConfig(
+                name="test-kb", path=kb_path, kb_type="generic", description="Test KB"
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+            )
+
+            # Create a markdown file on disk.
+            md_file = kb_path / "entry-a.md"
+            md_file.write_text(
+                "---\nid: entry-a\ntype: note\ntitle: Initial Title\n---\n\nOriginal body.\n"
+            )
+
+            # First index pass — the row gets inserted normally.
+            index_mgr = IndexManager(db, config)
+            index_mgr.index_all()
+
+            # Simulate the corrupt state: rewrite indexed_at to the literal
+            # 'CURRENT_TIMESTAMP' string, as the historical buggy INSERT path
+            # did. This mirrors what `select * from entry` shows for the 78
+            # affected rows on the live pyrite DB.
+            db._raw_conn.execute(
+                "UPDATE entry SET indexed_at = 'CURRENT_TIMESTAMP' WHERE id = ?",
+                ("entry-a",),
+            )
+            db._raw_conn.commit()
+
+            # Modify the file on disk (simulating a direct editor/script edit).
+            md_file.write_text(
+                "---\nid: entry-a\ntype: note\ntitle: Updated Title\n---\n\nNew body.\n"
+            )
+
+            # Sync. The corrupt row must be detected as stale and reindexed.
+            results = index_mgr.sync_incremental("test-kb")
+            assert results["updated"] >= 1, (
+                f"Expected sync to reindex the broken-timestamp row, got {results}"
+            )
+
+            # Title should now reflect the on-disk change.
+            row = db._raw_conn.execute(
+                "SELECT title, indexed_at FROM entry WHERE id = ?",
+                ("entry-a",),
+            ).fetchone()
+            assert row[0] == "Updated Title", (
+                "Expected reindex to pick up 'Updated Title' from the modified file"
+            )
+            assert row[1] != "CURRENT_TIMESTAMP", (
+                "After reindex, indexed_at must be a real timestamp, not the literal"
+            )
+
+            db.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
