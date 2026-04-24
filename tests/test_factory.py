@@ -1,5 +1,7 @@
 """Tests for build_entry() factory — branch coverage for all entry types."""
 
+import logging
+
 import pytest
 
 from pyrite.models.collection import CollectionEntry
@@ -8,6 +10,7 @@ from pyrite.models.core_types import (
     NoteEntry,
     OrganizationEntry,
     PersonEntry,
+    entry_from_frontmatter,
 )
 from pyrite.models.factory import build_entry
 from pyrite.models.generic import GenericEntry
@@ -104,3 +107,44 @@ class TestBuildEntryFactory:
         """When entry_id is None, ID should be generated from title."""
         entry = build_entry("note", title="My Cool Note")
         assert entry.id == "my-cool-note"
+
+
+class TestEntryFromFrontmatterMissingType:
+    """Warn when frontmatter lacks `type:` and factory falls back to note."""
+
+    def test_missing_type_logs_warning(self, caplog):
+        """entry_from_frontmatter should log a warning when type is absent."""
+        meta = {"id": "x", "title": "y"}
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.models.core_types"):
+            entry = entry_from_frontmatter(meta, "some body")
+
+        # Behavior preserved: still builds a NoteEntry fallback.
+        assert isinstance(entry, NoteEntry)
+
+        # Warning surfaced so the silent fallback is visible.
+        warnings = [
+            r for r in caplog.records
+            if r.levelno == logging.WARNING
+            and r.name == "pyrite.models.core_types"
+        ]
+        assert warnings, "expected a warning about missing type fallback"
+        msg = warnings[0].getMessage().lower()
+        assert "type" in msg
+        assert "note" in msg  # fallback type
+        assert "x" in warnings[0].getMessage()  # entry id
+
+    def test_explicit_type_does_not_warn(self, caplog):
+        """When frontmatter has an explicit type, no fallback warning is emitted."""
+        meta = {"id": "x", "title": "y", "type": "note"}
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.models.core_types"):
+            entry_from_frontmatter(meta, "body")
+
+        fallback_warnings = [
+            r for r in caplog.records
+            if r.levelno == logging.WARNING
+            and r.name == "pyrite.models.core_types"
+            and "fallback" in r.getMessage().lower()
+        ]
+        assert not fallback_warnings

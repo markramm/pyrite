@@ -414,7 +414,22 @@ def get_entry_class(entry_type: str) -> type[Entry]:
 
 def entry_from_frontmatter(meta: dict[str, Any], body: str) -> Entry:
     """Create an entry from frontmatter, auto-detecting the type."""
-    entry_type = meta.get("type", "note")
+    if not meta.get("type"):
+        # Silent fallback historically hid misclassifications (see
+        # epic-normalization-and-data-cleanup). Surface it as a structured
+        # warning so loaders can spot missing `type:` fields. File path is
+        # not available at this layer; callers that know the path should
+        # log additional context themselves.
+        logger.warning(
+            "Entry frontmatter missing 'type:' — falling back to 'note' "
+            "(id=%s, title=%s, available_keys=%s)",
+            meta.get("id", "?"),
+            meta.get("title", "?"),
+            sorted(meta.keys()),
+        )
+        entry_type = "note"
+    else:
+        entry_type = meta["type"]
     cls = get_entry_class(entry_type)
     entry = cls.from_frontmatter(meta, body)
     # Restore lifecycle from frontmatter (base field, not in subclass constructors)
