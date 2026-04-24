@@ -1047,5 +1047,282 @@ class TestUndeclaredTypesInHealth:
                 db.close()
 
 
+class TestRequiredFieldValidationInHealth:
+    """`check_health` must surface entries whose kb.yaml `required:` fields
+    are missing or empty.
+
+    See ticket `kb/backlog/schema-required-field-validation.md`. The index
+    silently accepts `type: timeline_event` entries missing `date:` even when
+    kb.yaml declares `required: [date, title]`. Surface per-entry issues so
+    drift can be fixed without waiting for query-time symptoms.
+    """
+
+    def _make_config(self, tmpdir: Path, kb_path: Path) -> tuple[PyriteDB, PyriteConfig]:
+        db_path = tmpdir / "index.db"
+        db = PyriteDB(db_path)
+        db.register_kb(kb_path.name, "generic", str(kb_path), "")
+        kb_config = KBConfig(
+            name=kb_path.name, path=kb_path, kb_type="generic", description="Test KB"
+        )
+        config = PyriteConfig(
+            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+        )
+        return db, config
+
+    def test_missing_required_field_surfaces_in_health(self):
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "cascade-timeline"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: cascade-timeline\n"
+                "kb_type: events\n"
+                "types:\n"
+                "  timeline_event:\n"
+                "    description: Event\n"
+                "    required: [date, title]\n"
+            )
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                # Missing `date`
+                db.upsert_entry(
+                    {
+                        "id": "tl-missing-date",
+                        "kb_name": kb_path.name,
+                        "entry_type": "timeline_event",
+                        "title": "Has title but no date",
+                        "body": "body",
+                        "file_path": str(kb_path / "tl-missing-date.md"),
+                    }
+                )
+                # Has both — must NOT be reported.
+                db.upsert_entry(
+                    {
+                        "id": "tl-ok",
+                        "kb_name": kb_path.name,
+                        "entry_type": "timeline_event",
+                        "title": "Complete",
+                        "body": "body",
+                        "date": "2026-04-24",
+                        "file_path": str(kb_path / "tl-ok.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                assert "missing_required_fields" in health, (
+                    "check_health must expose a 'missing_required_fields' field"
+                )
+                missing = health["missing_required_fields"]
+                flagged = [m for m in missing if m["id"] == "tl-missing-date"]
+                assert len(flagged) == 1, (
+                    f"expected tl-missing-date to be flagged once, got {missing}"
+                )
+                row = flagged[0]
+                assert row["kb"] == kb_path.name
+                assert row["type"] == "timeline_event"
+                assert "date" in row["missing"]
+                # Complete entry must not appear.
+                assert not any(m["id"] == "tl-ok" for m in missing), (
+                    f"complete entry must not be flagged: {missing}"
+                )
+            finally:
+                db.close()
+
+    def test_default_required_title_only(self):
+        """Types without explicit `required:` default to ['title']. An entry
+        with an empty title on such a type should be flagged; entries with
+        titles should not."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "default-req-kb"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: default-req-kb\n"
+                "kb_type: generic\n"
+                "types:\n"
+                "  custom_type:\n"
+                "    description: no required declared\n"
+            )
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "no-title",
+                        "kb_name": kb_path.name,
+                        "entry_type": "custom_type",
+                        "title": "",
+                        "body": "body",
+                        "file_path": str(kb_path / "no-title.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                missing = health.get("missing_required_fields", [])
+                flagged = [m for m in missing if m["id"] == "no-title"]
+                assert len(flagged) == 1
+                assert "title" in flagged[0]["missing"]
+            finally:
+                db.close()
+
+    def test_kb_without_kb_yaml_not_validated(self):
+        """Required-field enforcement is a no-op for KBs without kb.yaml."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "no-yaml-kb"
+            kb_path.mkdir()
+            # No kb.yaml.
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "empty-everything",
+                        "kb_name": kb_path.name,
+                        "entry_type": "note",
+                        "title": "",
+                        "body": "",
+                        "file_path": str(kb_path / "x.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                missing = health.get("missing_required_fields", [])
+                assert not any(m["kb"] == kb_path.name for m in missing), (
+                    f"KB without kb.yaml must not be validated: {missing}"
+                )
+            finally:
+                db.close()
+
+
+class TestSubdirectoryMismatchInHealth:
+    """`check_health` must surface entries whose file path does not match
+    the `subdirectory:` declared for their type in kb.yaml.
+
+    Per the ticket, `subdirectory:` is a writer hint, not a reader
+    constraint — the reader continues to accept any layout. But the
+    health check should warn about layout drift.
+    """
+
+    def _make_config(self, tmpdir: Path, kb_path: Path) -> tuple[PyriteDB, PyriteConfig]:
+        db_path = tmpdir / "index.db"
+        db = PyriteDB(db_path)
+        db.register_kb(kb_path.name, "generic", str(kb_path), "")
+        kb_config = KBConfig(
+            name=kb_path.name, path=kb_path, kb_type="generic", description="Test KB"
+        )
+        config = PyriteConfig(
+            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+        )
+        return db, config
+
+    def test_subdirectory_mismatch_surfaces_in_health(self):
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "cascade-timeline"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: cascade-timeline\n"
+                "kb_type: events\n"
+                "types:\n"
+                "  timeline_event:\n"
+                "    description: Event\n"
+                "    subdirectory: events\n"
+            )
+            # Entry lives at the KB root (wrong place).
+            wrong_path = kb_path / "wrong-place.md"
+            # Entry lives in the declared subdirectory (correct place).
+            (kb_path / "events").mkdir()
+            right_path = kb_path / "events" / "right-place.md"
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "wrong-place",
+                        "kb_name": kb_path.name,
+                        "entry_type": "timeline_event",
+                        "title": "Wrong",
+                        "body": "body",
+                        "file_path": str(wrong_path),
+                    }
+                )
+                db.upsert_entry(
+                    {
+                        "id": "right-place",
+                        "kb_name": kb_path.name,
+                        "entry_type": "timeline_event",
+                        "title": "Right",
+                        "body": "body",
+                        "file_path": str(right_path),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                assert "subdirectory_mismatches" in health, (
+                    "check_health must expose a 'subdirectory_mismatches' field"
+                )
+                mismatches = health["subdirectory_mismatches"]
+                flagged = [m for m in mismatches if m["id"] == "wrong-place"]
+                assert len(flagged) == 1, (
+                    f"expected wrong-place to be flagged, got {mismatches}"
+                )
+                row = flagged[0]
+                assert row["kb"] == kb_path.name
+                assert row["type"] == "timeline_event"
+                assert row["declared_subdirectory"] == "events"
+                # Correctly-placed entry must not appear.
+                assert not any(m["id"] == "right-place" for m in mismatches)
+            finally:
+                db.close()
+
+    def test_subdirectory_empty_allows_any_placement(self):
+        """`subdirectory: ""` means 'at KB root is explicit' — entries at
+        root should be OK, entries in subfolders should not be flagged
+        either (the reader is permissive)."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "root-kb"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: root-kb\n"
+                "kb_type: generic\n"
+                "types:\n"
+                "  note:\n"
+                "    description: Root-level notes\n"
+                "    subdirectory: ''\n"
+            )
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "at-root",
+                        "kb_name": kb_path.name,
+                        "entry_type": "note",
+                        "title": "Root",
+                        "body": "body",
+                        "file_path": str(kb_path / "at-root.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                mismatches = health.get("subdirectory_mismatches", [])
+                assert not any(m["id"] == "at-root" for m in mismatches)
+            finally:
+                db.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

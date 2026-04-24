@@ -287,8 +287,15 @@ def index_health(
 
     broken_links = health.get("broken_links", 0)
     undeclared_types = health.get("undeclared_types", [])
+    missing_required = health.get("missing_required_fields", [])
+    subdirectory_mismatches = health.get("subdirectory_mismatches", [])
     is_unhealthy = health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
-    has_warning = bool(broken_links) or bool(undeclared_types)
+    has_warning = (
+        bool(broken_links)
+        or bool(undeclared_types)
+        or bool(missing_required)
+        or bool(subdirectory_mismatches)
+    )
     status = "unhealthy" if is_unhealthy else ("warning" if has_warning else "healthy")
 
     formatted = _format_output(
@@ -299,6 +306,8 @@ def index_health(
             "stale_entries": len(health["stale_entries"]),
             "broken_links": broken_links,
             "undeclared_types": undeclared_types,
+            "missing_required_fields": missing_required,
+            "subdirectory_mismatches": subdirectory_mismatches,
             "checks": health,
         },
         output_format,
@@ -334,6 +343,30 @@ def index_health(
             )
         if len(undeclared_types) > 10:
             console.print(f"  ... and {len(undeclared_types) - 10} more")
+
+    if missing_required:
+        console.print(
+            f"[yellow]⚠ {len(missing_required)} entries missing required fields:[/yellow]"
+        )
+        for row in missing_required[:10]:
+            console.print(
+                f"  • {row['kb']}/{row['id']} (type={row['type']}): missing {row['missing']}"
+            )
+        if len(missing_required) > 10:
+            console.print(f"  ... and {len(missing_required) - 10} more")
+
+    if subdirectory_mismatches:
+        console.print(
+            f"[yellow]⚠ {len(subdirectory_mismatches)} entries in the wrong"
+            " subdirectory (writer hint, not enforced):[/yellow]"
+        )
+        for row in subdirectory_mismatches[:10]:
+            console.print(
+                f"  • {row['kb']}/{row['id']} (type={row['type']}):"
+                f" expected '{row['declared_subdirectory']}/', found '{row['actual_path']}/'"
+            )
+        if len(subdirectory_mismatches) > 10:
+            console.print(f"  ... and {len(subdirectory_mismatches) - 10} more")
 
     if health["missing_files"]:
         console.print(f"[red]Missing files ({len(health['missing_files'])}):[/red]")

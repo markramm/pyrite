@@ -1,16 +1,18 @@
 ---
 id: schema-required-field-validation
-type: backlog_item
 title: "Validate required fields and subdirectory placement against kb.yaml schema on index"
-kind: feature
-status: proposed
-priority: medium
-effort: M
+type: backlog_item
 tags: [robustness, schema, health-check]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: completed
+priority: medium
+effort: M
+rank: 0
 ---
 
 `kb.yaml` type declarations include `required:` lists and `subdirectory:`

@@ -575,6 +575,13 @@ class IndexManager:
           KB's `kb.yaml` types (and isn't a core type). Aggregated per
           `(kb, type)` with a count. KBs without a `kb.yaml` are skipped
           since there's no declared-type list to enforce.
+        - missing_required_fields: entries missing a field the type's
+          `required:` list declares. One entry per (kb, id, type, missing).
+          KBs without a `kb.yaml` are skipped.
+        - subdirectory_mismatches: entries whose file_path doesn't sit in
+          the `subdirectory:` the type declares. `subdirectory:` is a
+          writer hint, not a reader constraint, so this is surfaced as a
+          warning, not an error. KBs without a `kb.yaml` are skipped.
         """
         health = {
             "missing_files": [],
@@ -582,6 +589,8 @@ class IndexManager:
             "stale_entries": [],
             "broken_links": 0,
             "undeclared_types": [],
+            "missing_required_fields": [],
+            "subdirectory_mismatches": [],
         }
 
         for kb in self.config.knowledge_bases:
@@ -663,6 +672,70 @@ class IndexManager:
                     health["undeclared_types"].append(
                         {"kb": kb.name, "type": etype, "count": row["cnt"]}
                     )
+
+        # Required-field + subdirectory checks. Per KB with a kb.yaml,
+        # compare each entry against its type's `required:` list (default
+        # ["title"]) and its `subdirectory:` hint. Skip KBs with no kb.yaml.
+        for kb in self.config.knowledge_bases:
+            if not kb.path.exists() or not kb.kb_yaml_path.exists():
+                continue
+            kb_schema = kb.kb_schema
+            if not kb_schema or not kb_schema.types:
+                continue
+
+            entry_rows = self.db.execute_sql(
+                "SELECT id, entry_type, title, body, summary, file_path, "
+                "date, start_date, end_date, due_date, status, location, "
+                "assignee, priority FROM entry WHERE kb_name = :kb_name",
+                {"kb_name": kb.name},
+            )
+            for row in entry_rows:
+                type_schema = kb_schema.types.get(row["entry_type"])
+                if type_schema is None:
+                    continue  # undeclared_types handles this separately
+
+                missing = [
+                    fname
+                    for fname in type_schema.required
+                    # Only validate fields we can see as a column. Unknown
+                    # required-field names are silently skipped; they'd need
+                    # the metadata JSON to enforce, out of scope here.
+                    if fname in row and not row[fname]
+                ]
+                if missing:
+                    health["missing_required_fields"].append(
+                        {
+                            "kb": kb.name,
+                            "id": row["id"],
+                            "type": row["entry_type"],
+                            "missing": missing,
+                        }
+                    )
+
+                # Subdirectory mismatch. An empty string means "explicitly
+                # KB root allowed"; None means "no hint"; any non-empty
+                # string is the expected first-path-component.
+                declared_sub = type_schema.subdirectory
+                if declared_sub:  # non-empty string
+                    file_path = row["file_path"]
+                    if file_path:
+                        try:
+                            rel = Path(file_path).resolve().relative_to(
+                                kb.path.resolve()
+                            )
+                            actual_sub = rel.parts[0] if len(rel.parts) > 1 else ""
+                        except ValueError:
+                            actual_sub = ""
+                        if actual_sub != declared_sub:
+                            health["subdirectory_mismatches"].append(
+                                {
+                                    "kb": kb.name,
+                                    "id": row["id"],
+                                    "type": row["entry_type"],
+                                    "declared_subdirectory": declared_sub,
+                                    "actual_path": actual_sub or ".",
+                                }
+                            )
 
         return health
 
