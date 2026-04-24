@@ -286,8 +286,10 @@ def index_health(
     health = index_mgr.check_health()
 
     broken_links = health.get("broken_links", 0)
+    undeclared_types = health.get("undeclared_types", [])
     is_unhealthy = health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
-    status = "unhealthy" if is_unhealthy else ("warning" if broken_links else "healthy")
+    has_warning = bool(broken_links) or bool(undeclared_types)
+    status = "unhealthy" if is_unhealthy else ("warning" if has_warning else "healthy")
 
     formatted = _format_output(
         {
@@ -296,6 +298,7 @@ def index_health(
             "unindexed_files": len(health["unindexed_files"]),
             "stale_entries": len(health["stale_entries"]),
             "broken_links": broken_links,
+            "undeclared_types": undeclared_types,
             "checks": health,
         },
         output_format,
@@ -306,11 +309,11 @@ def index_health(
 
     console.print("\n[bold]Index Health Check[/bold]\n")
 
-    if not is_unhealthy and not broken_links:
+    if not is_unhealthy and not has_warning:
         console.print("[green]✓ Index is healthy[/green]")
         return
 
-    if not is_unhealthy and broken_links:
+    if not is_unhealthy and has_warning:
         console.print("[green]✓ Index is healthy[/green]")
 
     if broken_links:
@@ -318,6 +321,19 @@ def index_health(
             f"[yellow]⚠ {broken_links} broken link(s) found.[/yellow]"
             " Run 'pyrite links check' for details."
         )
+
+    if undeclared_types:
+        total = sum(row["count"] for row in undeclared_types)
+        console.print(
+            f"[yellow]⚠ {len(undeclared_types)} undeclared entry type(s)"
+            f" across {total} entries — not in kb.yaml:[/yellow]"
+        )
+        for row in undeclared_types[:10]:
+            console.print(
+                f"  • {row['kb']}: type='{row['type']}' ({row['count']} entries)"
+            )
+        if len(undeclared_types) > 10:
+            console.print(f"  ... and {len(undeclared_types) - 10} more")
 
     if health["missing_files"]:
         console.print(f"[red]Missing files ({len(health['missing_files'])}):[/red]")

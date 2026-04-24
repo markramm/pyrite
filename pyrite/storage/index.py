@@ -570,12 +570,18 @@ class IndexManager:
         - missing_files: entries in DB but file not found
         - unindexed_files: files not in DB
         - stale_entries: entries where file is newer than index
+        - broken_links: count of link rows with an unresolvable target
+        - undeclared_types: entries whose `entry_type` isn't declared in the
+          KB's `kb.yaml` types (and isn't a core type). Aggregated per
+          `(kb, type)` with a count. KBs without a `kb.yaml` are skipped
+          since there's no declared-type list to enforce.
         """
         health = {
             "missing_files": [],
             "unindexed_files": [],
             "stale_entries": [],
             "broken_links": 0,
+            "undeclared_types": [],
         }
 
         for kb in self.config.knowledge_bases:
@@ -629,6 +635,34 @@ class IndexManager:
         rows = self.db.execute_sql(broken_sql, {})
         if rows:
             health["broken_links"] = rows[0]["cnt"]
+
+        # Entries using an undeclared `entry_type` — drift detector.
+        # For each KB that ships a kb.yaml, build the set of declared types
+        # (kb.yaml types + CORE_TYPES) and report any (kb, type, count) not
+        # in that set. KBs without a kb.yaml are skipped: we can't enforce
+        # what isn't configured.
+        from ..schema.core_types import CORE_TYPES
+
+        for kb in self.config.knowledge_bases:
+            if not kb.path.exists() or not kb.kb_yaml_path.exists():
+                continue
+
+            declared: set[str] = set(CORE_TYPES.keys())
+            kb_schema = kb.kb_schema
+            if kb_schema and kb_schema.types:
+                declared.update(kb_schema.types.keys())
+
+            type_rows = self.db.execute_sql(
+                "SELECT entry_type, COUNT(*) AS cnt FROM entry "
+                "WHERE kb_name = :kb_name GROUP BY entry_type",
+                {"kb_name": kb.name},
+            )
+            for row in type_rows:
+                etype = row["entry_type"]
+                if etype and etype not in declared:
+                    health["undeclared_types"].append(
+                        {"kb": kb.name, "type": etype, "count": row["cnt"]}
+                    )
 
         return health
 

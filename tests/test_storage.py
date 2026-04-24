@@ -886,5 +886,166 @@ class TestSyncRecoversFromBrokenTimestamp:
             db.close()
 
 
+class TestUndeclaredTypesInHealth:
+    """`check_health` must surface entries whose `entry_type` is not declared
+    in the KB's `kb.yaml` types section.
+
+    Context: `pyrite index build` silently accepts entries with any `type:`
+    value. An entry with `type: timeline_event` indexes fine even if the KB's
+    `kb.yaml` only declares `type: event`. This is how cascade-timeline drift
+    went undetected for weeks. See ticket
+    `kb/backlog/warn-on-undeclared-entry-type.md`.
+
+    `check_health()` returns an `undeclared_types` list aggregated per
+    `(kb, type)` with a count. Core types (note, event, person, ...) and
+    all types declared in `kb.yaml` are treated as declared. If a KB has
+    no `kb.yaml` at all, nothing is reported for it — we can't enforce
+    what isn't configured.
+    """
+
+    def _make_config(self, tmpdir: Path, kb_path: Path) -> tuple[PyriteDB, PyriteConfig]:
+        db_path = tmpdir / "index.db"
+        db = PyriteDB(db_path)
+        # Register the KB so upsert_entry's FK constraint is satisfied.
+        db.register_kb(kb_path.name, "generic", str(kb_path), "")
+        kb_config = KBConfig(
+            name=kb_path.name, path=kb_path, kb_type="generic", description="Test KB"
+        )
+        config = PyriteConfig(
+            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+        )
+        return db, config
+
+    def test_undeclared_type_flagged(self):
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "cascade-timeline"
+            kb_path.mkdir()
+            # kb.yaml declares only the "event" type.
+            (kb_path / "kb.yaml").write_text(
+                "name: cascade-timeline\n"
+                "kb_type: events\n"
+                "types:\n"
+                "  event:\n"
+                "    description: A thing that happened\n"
+                "    subdirectory: events\n"
+            )
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                # Entry with an undeclared `timeline_event` type — not in
+                # kb.yaml and not in CORE_TYPES.
+                db.upsert_entry(
+                    {
+                        "id": "tl-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "timeline_event",
+                        "title": "Undeclared",
+                        "body": "body",
+                        "file_path": str(kb_path / "tl-1.md"),
+                    }
+                )
+                # Entry whose type IS declared — must NOT be reported.
+                db.upsert_entry(
+                    {
+                        "id": "ev-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "event",
+                        "title": "Declared",
+                        "body": "body",
+                        "file_path": str(kb_path / "ev-1.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                assert "undeclared_types" in health, (
+                    "check_health must expose an 'undeclared_types' field"
+                )
+                undeclared = health["undeclared_types"]
+                assert {
+                    "kb": kb_path.name,
+                    "type": "timeline_event",
+                    "count": 1,
+                } in undeclared, f"expected timeline_event row, got {undeclared}"
+                # The declared type must not appear as undeclared.
+                for row in undeclared:
+                    assert row["type"] != "event", (
+                        f"declared type 'event' must not be flagged: {row}"
+                    )
+            finally:
+                db.close()
+
+    def test_core_types_treated_as_declared(self):
+        """Entries using core types (e.g. `note`) should not be flagged,
+        even if kb.yaml doesn't explicitly redeclare them."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "core-kb"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: core-kb\n"
+                "kb_type: generic\n"
+                "types:\n"
+                "  event:\n"
+                "    description: A thing\n"
+            )
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "n-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "note",
+                        "title": "Core note",
+                        "body": "body",
+                        "file_path": str(kb_path / "n-1.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+                for row in health.get("undeclared_types", []):
+                    assert row["type"] != "note", (
+                        f"core type 'note' must not be flagged: {row}"
+                    )
+            finally:
+                db.close()
+
+    def test_kb_without_kb_yaml_not_warned(self):
+        """A KB with no kb.yaml has no declared-type list to enforce —
+        we must not emit warnings for it."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "no-yaml-kb"
+            kb_path.mkdir()
+            # NOTE: no kb.yaml written here.
+
+            db, config = self._make_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "x-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "utterly_made_up_type",
+                        "title": "Weird",
+                        "body": "body",
+                        "file_path": str(kb_path / "x-1.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+                undeclared = health.get("undeclared_types", [])
+                for row in undeclared:
+                    assert row["kb"] != kb_path.name, (
+                        f"KB without kb.yaml must not be flagged: {row}"
+                    )
+            finally:
+                db.close()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

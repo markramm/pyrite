@@ -1,16 +1,18 @@
 ---
 id: warn-on-undeclared-entry-type
-type: backlog_item
 title: "Warn when entry type is not declared in kb.yaml"
-kind: feature
-status: proposed
-priority: high
-effort: S
+type: backlog_item
 tags: [robustness, schema, health-check]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: completed
+priority: high
+effort: S
+rank: 0
 ---
 
 Today `pyrite index build` silently accepts entries with any `type:`
