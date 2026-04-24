@@ -169,13 +169,21 @@ class TestExtensionInstall:
 @pytest.mark.cli
 class TestExtensionList:
     def test_list_with_plugins(self):
-        """List shows installed plugins."""
-        mock_registry = MagicMock()
+        """List shows installed plugins with populated entry_types and tool_count.
+
+        Regression test: extension_commands previously called
+        get_registry().get(name) instead of get_plugin(name). A bare MagicMock
+        masked the bug because any attribute access returned a Mock. We now
+        use spec=PluginRegistry so wrong attributes raise AttributeError.
+        """
+        from pyrite.plugins.registry import PluginRegistry
+
+        mock_registry = MagicMock(spec=PluginRegistry)
         mock_registry.list_plugins.return_value = ["software_kb", "zettelkasten"]
         mock_plugin = MagicMock()
         mock_plugin.get_entry_types.return_value = {"adr": object, "component": object}
         mock_plugin.get_mcp_tools.return_value = {"tool1": {}}
-        mock_registry.get.return_value = mock_plugin
+        mock_registry.get_plugin.return_value = mock_plugin
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             result = runner.invoke(test_app, ["extension", "list", "--format", "json"])
@@ -184,3 +192,8 @@ class TestExtensionList:
             data = json.loads(result.output)
             assert data["count"] == 2
             assert len(data["plugins"]) == 2
+            # Both plugins should report their types and tool count —
+            # empty lists here mean the plugin lookup silently failed.
+            for p in data["plugins"]:
+                assert set(p["entry_types"]) == {"adr", "component"}, p
+                assert p["tool_count"] == 1, p

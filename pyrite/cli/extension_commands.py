@@ -390,9 +390,7 @@ def extension_list(
     plugins_data = []
     for name in plugin_names:
         try:
-            from ..plugins import get_registry
-
-            plugin = get_registry().get(name)
+            plugin = registry.get_plugin(name)
             entry_types = (
                 list(plugin.get_entry_types().keys()) if hasattr(plugin, "get_entry_types") else []
             )

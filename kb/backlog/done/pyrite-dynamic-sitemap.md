@@ -55,9 +55,9 @@ published KBs. For each entry:
 
 Only include:
 - Entries in KBs where `kb.yaml: published: true` AND the operator
-  has marked them indexable (depends on
-  [[pyrite-kb-publication-flag]]; until that ships, use a per-KB
-  `read_only: false` OR an explicit allowlist)
+  has marked them indexable (as shipped: filtered on
+  `KBConfig.default_role == "read"` — see the implementation note
+  above)
 - Non-archived or `lifecycle != retired`
 - Entries whose access default is `read` (public)
 
@@ -118,9 +118,9 @@ per-KB when access control is configured.
 
 ## Depends on
 
-Ideally [[pyrite-kb-publication-flag]] for the `published: true`
-signal. Can ship first using `read_only` or an env-var allowlist as
-a stopgap.
+As shipped: uses `KBConfig.default_role == "read"` as the publication
+signal (see implementation note at top). The originally-proposed
+`pyrite-kb-publication-flag` ticket was dropped as redundant.
 
 ## Unblocks
 
