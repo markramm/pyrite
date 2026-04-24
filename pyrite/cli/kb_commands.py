@@ -205,7 +205,18 @@ def kb_validate(
         "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
-    """Validate knowledge base configuration and contents."""
+    """Validate knowledge base configuration and contents.
+
+    Runs structural kb.yaml validation PLUS the three Phase 0 content-drift
+    checks (undeclared entry types, missing required fields, subdirectory
+    mismatches). Results are filtered per-KB when a specific KB name is
+    given.
+
+    Exit code: 0 clean, 1 if any KB has structural errors, 2 if only
+    content-drift warnings. Suitable for CI gating — `pyrite kb validate
+    && deploy` blocks on structural errors; scripts that want to gate on
+    drift too can check for exit code 2.
+    """
     config = load_config()
 
     if name:
@@ -217,21 +228,61 @@ def kb_validate(
     else:
         kbs = config.knowledge_bases
 
+    # Run content-drift checks once (check_health walks all KBs internally),
+    # then bucket results by kb name.
+    from ..storage import IndexManager
+    from ..storage.database import PyriteDB
+
+    db = PyriteDB(config.settings.index_path)
+    try:
+        index_mgr = IndexManager(db, config)
+        health = index_mgr.check_health()
+    finally:
+        db.close()
+
+    def _for_kb(kb_name: str, field: str) -> list:
+        return [row for row in health.get(field, []) if row.get("kb") == kb_name]
+
     # Collect results for all KBs
     kb_results = []
-    all_valid = True
+    any_structural_errors = False
+    any_drift = False
     for kb in kbs:
         errors = kb.validate()
         if errors:
-            all_valid = False
-        kb_results.append({"name": kb.name, "valid": len(errors) == 0, "errors": errors})
+            any_structural_errors = True
+
+        undeclared = _for_kb(kb.name, "undeclared_types")
+        missing_req = _for_kb(kb.name, "missing_required_fields")
+        sub_mismatch = _for_kb(kb.name, "subdirectory_mismatches")
+        if undeclared or missing_req or sub_mismatch:
+            any_drift = True
+
+        kb_results.append(
+            {
+                "name": kb.name,
+                "valid": len(errors) == 0,
+                "errors": errors,
+                "undeclared_types": undeclared,
+                "missing_required_fields": missing_req,
+                "subdirectory_mismatches": sub_mismatch,
+            }
+        )
 
     formatted = _format_output(
-        {"kbs": kb_results, "all_valid": all_valid},
+        {
+            "kbs": kb_results,
+            "all_valid": not any_structural_errors,
+            "has_drift": any_drift,
+        },
         output_format,
     )
     if formatted is not None:
         typer.echo(formatted)
+        if any_structural_errors:
+            raise typer.Exit(1)
+        if any_drift:
+            raise typer.Exit(2)
         return
 
     # Rich output
@@ -253,11 +304,40 @@ def kb_validate(
                 )
                 console.print(f"  [green]✓[/green] {count} markdown files found")
 
-    if all_valid:
-        console.print("\n[green]All KBs valid.[/green]")
-    else:
+        if kb_res["undeclared_types"]:
+            console.print(
+                f"  [yellow]⚠ {len(kb_res['undeclared_types'])} undeclared entry type(s):[/yellow]"
+            )
+            for row in kb_res["undeclared_types"][:10]:
+                console.print(f"    • type='{row['type']}' ({row['count']} entries)")
+        if kb_res["missing_required_fields"]:
+            console.print(
+                f"  [yellow]⚠ {len(kb_res['missing_required_fields'])} "
+                "entries missing required fields:[/yellow]"
+            )
+            for row in kb_res["missing_required_fields"][:10]:
+                console.print(
+                    f"    • {row['id']} (type={row['type']}): missing {row['missing']}"
+                )
+        if kb_res["subdirectory_mismatches"]:
+            console.print(
+                f"  [yellow]⚠ {len(kb_res['subdirectory_mismatches'])} "
+                "subdirectory mismatch(es):[/yellow]"
+            )
+            for row in kb_res["subdirectory_mismatches"][:10]:
+                console.print(
+                    f"    • {row['id']} (type={row['type']}):"
+                    f" expected '{row['declared_subdirectory']}/',"
+                    f" found '{row['actual_path']}/'"
+                )
+
+    if any_structural_errors:
         console.print("\n[red]Validation errors found.[/red]")
         raise typer.Exit(1)
+    if any_drift:
+        console.print("\n[yellow]Content drift detected (warnings only).[/yellow]")
+        raise typer.Exit(2)
+    console.print("\n[green]All KBs valid.[/green]")
 
 
 @kb_app.command("create")

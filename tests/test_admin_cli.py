@@ -134,18 +134,142 @@ class TestKBValidate:
     def test_kb_validate(self, admin_env):
         with _patch_config(admin_env):
             result = runner.invoke(app, ["kb", "validate"])
-            assert result.exit_code in (0, 1)
+            assert result.exit_code in (0, 1, 2)
 
     def test_kb_validate_specific_kb(self, admin_env):
         with _patch_config(admin_env):
             result = runner.invoke(app, ["kb", "validate", "test-events"])
-            # Exit 0 = valid, exit 1 = validation errors (both are non-crash)
-            assert result.exit_code in (0, 1)
+            # Exit 0 = clean, 1 = errors, 2 = warnings-only
+            assert result.exit_code in (0, 1, 2)
 
     def test_kb_validate_json(self, admin_env):
         with _patch_config(admin_env):
             result = runner.invoke(app, ["kb", "validate", "--format", "json"])
-            assert result.exit_code in (0, 1)
+            assert result.exit_code in (0, 1, 2)
+
+
+@pytest.fixture
+def drift_env(tmp_path):
+    """KB with intentional content drift — undeclared types, missing
+    required fields, and subdirectory mismatch — for exercising the
+    Phase 0 checks that `pyrite kb validate` consolidates."""
+    db_path = tmp_path / "index.db"
+
+    kb_path = tmp_path / "drift-kb"
+    kb_path.mkdir()
+    (kb_path / "kb.yaml").write_text(
+        "name: drift-kb\n"
+        "kb_type: events\n"
+        "types:\n"
+        "  event:\n"
+        "    description: A thing that happened\n"
+        "    required: [date, title]\n"
+        "    subdirectory: events\n"
+    )
+    (kb_path / "events").mkdir()
+
+    kb_config = KBConfig(
+        name="drift-kb",
+        path=kb_path,
+        kb_type=KBType.EVENTS,
+        description="KB with drift for validation tests",
+    )
+    config = PyriteConfig(
+        knowledge_bases=[kb_config],
+        settings=Settings(index_path=db_path),
+    )
+
+    db = PyriteDB(db_path)
+    db.register_kb("drift-kb", "events", str(kb_path), "")
+    # Undeclared type.
+    db.upsert_entry(
+        {
+            "id": "tl-undeclared",
+            "kb_name": "drift-kb",
+            "entry_type": "timeline_event",
+            "title": "Not in kb.yaml",
+            "body": "body",
+            "date": "2026-04-24",
+            "file_path": str(kb_path / "events" / "tl-undeclared.md"),
+        }
+    )
+    # Missing required field (date).
+    db.upsert_entry(
+        {
+            "id": "ev-missing-date",
+            "kb_name": "drift-kb",
+            "entry_type": "event",
+            "title": "No date here",
+            "body": "body",
+            "file_path": str(kb_path / "events" / "ev-missing-date.md"),
+        }
+    )
+    # Subdirectory mismatch.
+    db.upsert_entry(
+        {
+            "id": "ev-wrong-dir",
+            "kb_name": "drift-kb",
+            "entry_type": "event",
+            "title": "Wrong place",
+            "body": "body",
+            "date": "2026-04-24",
+            "file_path": str(kb_path / "ev-wrong-dir.md"),  # at root, not events/
+        }
+    )
+    db.close()
+
+    yield {"config": config, "tmpdir": tmp_path, "kb_config": kb_config, "kb_path": kb_path}
+
+
+@pytest.mark.cli
+class TestKBValidateContentDrift:
+    """`pyrite kb validate` consolidates Phase 0 content drift checks
+    (undeclared types, missing required fields, subdirectory mismatch)
+    with the existing kb.yaml structural validation.
+
+    Exit code semantics: 0 clean, 1 errors, 2 warnings-only.
+    Structural errors from kb.validate() are errors (exit 1); the
+    content-drift warnings are warnings (exit 2) when that's the only
+    issue.
+    """
+
+    def test_warnings_only_exit_code_is_2(self, drift_env):
+        """A KB with only content-drift warnings and no kb.yaml structural
+        errors should exit 2 (warnings-only)."""
+        with _patch_config(drift_env):
+            result = runner.invoke(app, ["kb", "validate", "drift-kb", "--format", "json"])
+            assert result.exit_code == 2, result.output
+
+    def test_json_reports_content_drift(self, drift_env):
+        with _patch_config(drift_env):
+            result = runner.invoke(app, ["kb", "validate", "drift-kb", "--format", "json"])
+            import json as _json
+
+            data = _json.loads(result.output)
+            # Look for the merged content-check fields on the per-kb result.
+            kbs = data.get("kbs", [])
+            assert len(kbs) == 1
+            kb_result = kbs[0]
+            assert "undeclared_types" in kb_result
+            assert any(
+                r["type"] == "timeline_event" for r in kb_result["undeclared_types"]
+            )
+            assert "missing_required_fields" in kb_result
+            assert any(
+                r["id"] == "ev-missing-date" for r in kb_result["missing_required_fields"]
+            )
+            assert "subdirectory_mismatches" in kb_result
+            assert any(
+                r["id"] == "ev-wrong-dir" for r in kb_result["subdirectory_mismatches"]
+            )
+
+    def test_clean_kb_exits_zero(self, admin_env):
+        """A KB with no content drift and valid kb.yaml should exit 0."""
+        # admin_env has no kb.yaml so content checks are no-op. The structural
+        # validator should also be clean.
+        with _patch_config(admin_env):
+            result = runner.invoke(app, ["kb", "validate", "test-events", "--format", "json"])
+            assert result.exit_code == 0, result.output
 
 
 # =========================================================================
