@@ -136,6 +136,30 @@ def test_source_round_trip():
     assert restored.url == "https://example.com"
 
 
+def test_provenance_from_dict_parses_mapping():
+    """Provenance.from_dict should read fields from a mapping."""
+    from pyrite.schema import Provenance
+
+    prov = Provenance.from_dict({"created_by": "mark", "agent_confidence": 0.7})
+    assert prov.created_by == "mark"
+    assert prov.agent_confidence == 0.7
+
+
+def test_provenance_from_dict_tolerates_non_mapping():
+    """Malformed provenance (a bare string/list) should not crash the loader.
+
+    Some hand-authored frontmatter writes ``provenance:`` as free text rather
+    than a mapping. from_dict must degrade to a default Provenance instead of
+    raising AttributeError, otherwise the entry loader crashes on real KBs.
+    """
+    from pyrite.schema import Provenance
+
+    for bad in ("free text note", ["a", "b"], 42, None):
+        prov = Provenance.from_dict(bad)
+        assert isinstance(prov, Provenance)
+        assert prov.created_by == ""
+
+
 def test_dunder_all_completeness():
     """__all__ should list all expected public symbols."""
     import pyrite.schema as schema_mod

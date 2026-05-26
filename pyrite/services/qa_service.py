@@ -16,10 +16,10 @@ from typing import Any
 
 from ..config import PyriteConfig
 from ..plugins.registry import get_registry
-from ..utils.metadata import parse_metadata
 from ..schema import validate_date, validate_importance
 from ..schema.core_types import SYSTEM_INTENT, resolve_type_metadata
 from ..storage.database import PyriteDB
+from ..utils.metadata import parse_metadata
 
 logger = logging.getLogger(__name__)
 

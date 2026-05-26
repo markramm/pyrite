@@ -6,6 +6,7 @@ import logging
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
+from ...config import PyriteConfig
 from ...exceptions import (
     EntryNotFoundError,
     KBNotFoundError,
@@ -14,7 +15,6 @@ from ...exceptions import (
     ValidationError,
 )
 from ...services.kb_service import KBService
-from ...config import PyriteConfig
 from ..api import (
     get_config,
     get_kb_service,
@@ -134,7 +134,7 @@ def list_type_schemas(
     2. Plugin-registered entry types and presets
     3. Core built-in types (fallback)
     """
-    from ...schema.core_types import CORE_TYPES, CORE_TYPE_METADATA
+    from ...schema.core_types import CORE_TYPE_METADATA, CORE_TYPES
 
     result: dict[str, dict] = {}
 

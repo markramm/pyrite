@@ -223,8 +223,19 @@ class Provenance:
         return result
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Provenance":
-        """Create from dictionary."""
+    def from_dict(cls, data: Any) -> "Provenance":
+        """Create from a dictionary.
+
+        Tolerates malformed frontmatter where ``provenance`` is not a mapping
+        (e.g. a bare string or list). In that case we return a default
+        Provenance rather than crashing the entry loader.
+        """
+        if not isinstance(data, dict):
+            logger.warning(
+                "Ignoring malformed provenance (expected mapping, got %s)",
+                type(data).__name__,
+            )
+            return cls()
         return cls(
             created_by=data.get("created_by", ""),
             created_date=data.get("created_date", ""),

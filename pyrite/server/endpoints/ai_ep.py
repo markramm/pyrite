@@ -9,7 +9,14 @@ from fastapi.responses import StreamingResponse
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...services.search_service import SearchService
-from ..api import get_kb_service, get_llm_service, get_search_service, get_user_llm_context, limiter, requires_tier
+from ..api import (
+    get_kb_service,
+    get_llm_service,
+    get_search_service,
+    get_user_llm_context,
+    limiter,
+    requires_tier,
+)
 from ..schemas import (
     AIAutoTagResponse,
     AIChatRequest,

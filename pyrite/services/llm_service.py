@@ -100,7 +100,7 @@ class LLMService:
         api_key: str,
         provider: str | None = None,
         model: str | None = None,
-    ) -> "LLMService":
+    ) -> LLMService:
         """Return a new LLMService instance with user-provided overrides.
 
         This creates a copy of the underlying Settings with the user's API key
@@ -239,8 +239,8 @@ class LLMService:
                     ollama_root = base.rstrip("/")
                     if ollama_root.endswith("/v1"):
                         ollama_root = ollama_root[:-3]
-                    import urllib.request
                     import json as _json
+                    import urllib.request
 
                     req = urllib.request.Request(f"{ollama_root}/api/tags", method="GET")
                     try:

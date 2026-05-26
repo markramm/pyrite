@@ -16,8 +16,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from .base_backend import BaseBackend
 from ..models import Link
+from .base_backend import BaseBackend
 
 logger = logging.getLogger(__name__)
 

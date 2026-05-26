@@ -9,6 +9,13 @@ import re
 import tempfile
 from pathlib import Path
 
+from ..config import PyriteConfig
+from ..exceptions import KBNotFoundError, PyriteError
+from ..storage.database import PyriteDB
+from ..utils.sanitize import sanitize_filename
+
+logger = logging.getLogger(__name__)
+
 
 def _yaml_quote(value: str) -> str:
     """Quote a YAML scalar value if it contains special characters."""
@@ -29,13 +36,6 @@ def _yaml_quote(value: str) -> str:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
         return f'"{escaped}"'
     return value
-
-from ..config import PyriteConfig
-from ..exceptions import KBNotFoundError, PyriteError
-from ..storage.database import PyriteDB
-from ..utils.sanitize import sanitize_filename
-
-logger = logging.getLogger(__name__)
 
 
 class ExportService:

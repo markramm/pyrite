@@ -20,8 +20,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..models import Block, EdgeEndpoint, Entry, EntryRef, EntryTag, Link, Source, Tag
 from ...utils.json_utils import SafeEncoder as _SafeEncoder
+from ..models import Block, EdgeEndpoint, Entry, EntryRef, EntryTag, Link, Source, Tag
 
 
 class BaseBackend(ABC):
