@@ -17,7 +17,7 @@ Systematic development workflow for Pyrite. Covers the full cycle: understand �
 1. NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST
 2. NO FIX ATTEMPTS WITHOUT ROOT CAUSE INVESTIGATION
 3. NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE
-4. NO BACKLOG CHANGES WITHOUT UPDATING BACKLOG.md
+4. NO BACKLOG CHANGES WITHOUT USING THE CLI (`pyrite update`, `pyrite create`)
 ```
 
 Thinking "skip this just once"? That's rationalization. These exist because skipping them always costs more time than following them.
@@ -232,12 +232,19 @@ Use the correct `type` frontmatter for KB entries so plugin tools can find them:
 - `type: standard` → shows in `pyrite sw standards`
 
 ```
-⚠️  PRE-COMMIT: UPDATE BACKLOG (use CLI to verify)
-───────────────────────────────────────────────────
-- Completed a backlog item? → Set status: completed, move to done/, update BACKLOG.md
-- Check backlog state: .venv/bin/pyrite sw backlog
-- Discovered new work? → Create backlog_item file, add to BACKLOG.md
-- Unblocked downstream items? → Note in BACKLOG.md
+⚠️  PRE-COMMIT: UPDATE BACKLOG (use CLI — no BACKLOG.md)
+─────────────────────────────────────────────────────────
+The backlog has no index file. `pyrite sw backlog` is the source of truth.
+
+- Completed an item?
+    .venv/bin/pyrite update <id> -k pyrite -f status=completed
+    git mv kb/backlog/<id>.md kb/backlog/done/
+    .venv/bin/pyrite index sync
+- Check current state:
+    .venv/bin/pyrite sw backlog
+- Discovered new work?
+    .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags <tags>
+- Unblocked downstream items? Note it in the item body via `pyrite update -b`.
 
 Ask: "Did this work change the status of any backlog item, or reveal new work?"
 ```
@@ -287,16 +294,15 @@ When implementation + verification are done, follow the backlog process:
    .venv/bin/pyrite update <item-id> -k pyrite -f status=completed
    ```
    **Never hand-edit YAML frontmatter for status changes** — the CLI validates field values and keeps the index in sync. Hand-editing skips validation and leaves the index stale until the next `pyrite index sync`.
-2. Move the file from `kb/backlog/` to `kb/backlog/done/`
-3. Update `kb/backlog/BACKLOG.md` — move to Completed section, re-number
+2. Move the file from `kb/backlog/` to `kb/backlog/done/` (`git mv`)
+3. Re-sync the index so the move is reflected: `.venv/bin/pyrite index sync`
 4. If work revealed new tech debt or follow-on features:
    - Create new backlog items via CLI:
      ```bash
      .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags enhancement
      ```
    - Move files to `kb/backlog/` (priority) or `kb/backlog/future-ideas/` (low priority)
-   - Add to `BACKLOG.md` in the correct position
-5. Verify with `pyrite sw backlog`
+5. Verify with `pyrite sw backlog` — it is the source of truth (no BACKLOG.md file exists)
 6. Commit the backlog changes
 
 ---

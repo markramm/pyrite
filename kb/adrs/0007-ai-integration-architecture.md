@@ -121,7 +121,7 @@ hooks/
 | `research-flow` | Gather sources → create entries → link findings → build timeline → synthesize |
 | `investigation` | Identify entity → collect mentions → map relationships → track source chain → assess confidence |
 | `pyrite-dev` | TDD, backlog process, architecture patterns (for Pyrite contributors) |
-| `backlog-mgmt` | Complete feature → move to done → update BACKLOG.md → add new items |
+| `backlog-mgmt` | Complete feature via `pyrite update -f status=completed` → `git mv` to `done/` → `pyrite index sync` → add new items via `pyrite create` |
 
 ### 5. MCP Server Enhancements
 

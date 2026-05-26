@@ -192,7 +192,8 @@ The backlog lives in `kb/backlog/` with three zones:
 | `kb/backlog/done/` | Completed items |
 | `kb/backlog/future-ideas/` | Lower-priority items for later |
 
-**`kb/backlog/BACKLOG.md`** is the single prioritized index — a numbered list linking to every item. Always keep it in sync.
+**The backlog has no index file.** `pyrite sw backlog` reads frontmatter
+directly and is the source of truth — there is no `BACKLOG.md` to keep in sync.
 
 ### When completing a feature:
 
@@ -201,21 +202,22 @@ The backlog lives in `kb/backlog/` with three zones:
    pyrite update <item-id> -k <kb> -f status=completed
    ```
    **Never hand-edit YAML frontmatter for field updates** — the CLI validates values and keeps the index in sync. Hand-editing skips validation and leaves the index stale.
-2. Move the file from `kb/backlog/` to `kb/backlog/done/`
-3. Update `BACKLOG.md` — move item to the Completed section
+2. Move the file from `kb/backlog/` to `kb/backlog/done/` with `git mv`
+3. Re-sync the index: `pyrite index sync`
 4. If the work revealed new tech debt, cleanup needs, or follow-on features:
    - Create new backlog items via CLI:
      ```bash
      pyrite create -k <kb> -t backlog_item --title "..." -b "..."
      ```
    - Place in `kb/backlog/` if high priority, or `kb/backlog/future-ideas/` if low
-   - Add to `BACKLOG.md` in the correct priority position
-5. Re-number priorities in `BACKLOG.md` if needed to keep the list clean
 
 ### When promoting a future idea:
 
-1. Move the file from `future-ideas/` to `kb/backlog/`
-2. Add it to `BACKLOG.md` in the right priority position
+```bash
+git mv kb/backlog/future-ideas/<id>.md kb/backlog/
+pyrite update <id> -k <kb> -f priority=<high|medium>
+pyrite index sync
+```
 
 ### Backlog item file format:
 
