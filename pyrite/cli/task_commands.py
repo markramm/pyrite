@@ -65,6 +65,9 @@ def task_create(
             console.print(f"  Parent: {parent}")
         if assignee:
             console.print(f"  Assignee: {assignee}")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -110,6 +113,9 @@ def task_list(
                 item["parent"][:12] if item["parent"] else "",
             )
         console.print(table)
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -178,6 +184,9 @@ def task_status(
             console.print(f"\n  [bold]Children ({len(children)}):[/bold]")
             for c in children:
                 console.print(f"    {c['id'][:12]}  {c['status']:12}  {c['title']}")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -248,6 +257,9 @@ def task_claim(
         else:
             console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
             raise typer.Exit(1)
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -277,9 +289,9 @@ def task_decompose(
                 console.print(f"  [green]+[/green] {r['entry_id']}")
             else:
                 console.print(f"  [red]x[/red] {r.get('error', 'Unknown error')}")
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -315,8 +327,8 @@ def task_checkpoint(
         console.print(f"  {message}")
         if confidence > 0:
             console.print(f"  Confidence: {int(confidence * 100)}%")
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     finally:
         db.close()

@@ -14,6 +14,7 @@ from rich.table import Table
 
 from .cli.search_commands import register_search_command
 from .config import CONFIG_FILE, load_config
+from .exceptions import PyriteError
 from .services.kb_service import KBService
 from .storage.database import PyriteDB
 
@@ -90,6 +91,9 @@ def get_entry(
                     console.print(f"  • {src.get('title', '')}: {src.get('url', '')}")
                 else:
                     console.print(f"  • {src.title}: {src.url}")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -131,6 +135,9 @@ def list_kbs(
             )
 
         console.print(table)
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -191,6 +198,9 @@ def timeline(
             )
 
         console.print(table)
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -235,6 +245,9 @@ def tags_cmd(
             table.add_row(tag.get("name", ""), str(tag.get("count", 0)))
 
         console.print(table)
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 
@@ -286,6 +299,9 @@ def backlinks_cmd(
             )
 
         console.print(table)
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 

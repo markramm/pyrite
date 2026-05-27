@@ -15,6 +15,7 @@ from ..config import (
     auto_discover_kbs,
     load_config,
 )
+from ..exceptions import PyriteError
 from .context import cli_context, cli_registry_context
 
 kb_app = typer.Typer(help="Knowledge base management")
@@ -94,7 +95,7 @@ def kb_add(
             console.print(
                 f"[green]Added KB:[/green] {result['name']} ({result['type']}) at {result['path']}"
             )
-        except ValueError as e:
+        except (PyriteError, ValueError) as e:
             console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
 
@@ -192,7 +193,7 @@ def kb_discover(
                             description=kb.description,
                         )
                         added += 1
-                    except ValueError:
+                    except (PyriteError, ValueError):
                         pass  # Already exists in DB
             if added:
                 console.print(f"[green]Added {added} KB(s) to registry.[/green]")
@@ -377,7 +378,7 @@ def kb_create(
                 description=description,
             )
             console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
-        except ValueError as e:
+        except (PyriteError, ValueError) as e:
             console.print(f"[red]Error:[/red] {e}")
             raise typer.Exit(1)
 
@@ -532,7 +533,7 @@ def schema_show(
     try:
         svc = SchemaService(config)
         result = svc.show_schema(kb_name)
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
 
@@ -597,7 +598,7 @@ def schema_add_type(
     try:
         svc = SchemaService(config)
         result = svc.add_type(kb_name, type_name, type_def)
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
 
@@ -626,7 +627,7 @@ def schema_remove_type(
     try:
         svc = SchemaService(config)
         result = svc.remove_type(kb_name, type_name)
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
 
@@ -663,7 +664,7 @@ def schema_set(
     try:
         svc = SchemaService(config)
         result = svc.set_schema(kb_name, schema)
-    except ValueError as e:
+    except (PyriteError, ValueError) as e:
         console.print(f"[red]Error:[/red] {e}")
         raise typer.Exit(1)
 

@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
 from ...config import PyriteConfig
-from ...exceptions import KBNotFoundError, KBProtectedError
+from ...exceptions import ConfigError, KBNotFoundError, KBProtectedError
 from ...services.auth_service import AuthService
 from ...services.ephemeral_service import EphemeralKBService
 from ...services.index_worker import IndexWorker
@@ -182,7 +182,7 @@ def create_kb(
 
     try:
         result = registry.add_kb(name=name, path=path, kb_type=kb_type, description=description)
-    except ValueError as e:
+    except ConfigError as e:
         raise HTTPException(status_code=409, detail={"code": "CONFLICT", "message": str(e)})
     return {"created": True, **result}
 

@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from ...exceptions import EntryNotFoundError
 from ...services.starred_service import StarredService
 from ..api import get_starred_service, limiter, requires_tier
 from ..schemas import (
@@ -61,7 +62,7 @@ def unstar_entry(
     """Unstar/remove bookmark from an entry."""
     try:
         svc.unstar_entry(entry_id=entry_id, kb_name=kb)
-    except ValueError:
+    except EntryNotFoundError:
         raise HTTPException(
             status_code=404,
             detail={

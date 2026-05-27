@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from ...exceptions import KBNotFoundError
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter
 from ..schemas import DailyDatesResponse, EntryResponse
@@ -118,7 +119,7 @@ def get_or_create_daily_note(
         )
         body = rendered.get("body", body)
         fm_tags = rendered.get("frontmatter", {}).get("tags", [])
-    except (FileNotFoundError, KeyError):
+    except (FileNotFoundError, KeyError, KBNotFoundError):
         fm_tags = ["daily"]
 
     try:

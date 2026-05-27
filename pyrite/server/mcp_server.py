@@ -1101,7 +1101,7 @@ class PyriteMCPServer:
                 children=args["children"],
             )
             return {"decomposed": True, "parent_id": args["parent_id"], "children": results}
-        except ValueError as e:
+        except (PyriteError, ValueError) as e:
             return _error("OPERATION_FAILED", str(e))
 
     def _task_checkpoint(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -1114,7 +1114,7 @@ class PyriteMCPServer:
                 confidence=args.get("confidence", 0.0),
                 partial_evidence=args.get("partial_evidence"),
             )
-        except ValueError as e:
+        except (PyriteError, ValueError) as e:
             return _error("OPERATION_FAILED", str(e))
 
     # =========================================================================
@@ -1219,7 +1219,7 @@ class PyriteMCPServer:
                     return _error("MISSING_PARAMETER", "kb_name required for set_schema")
                 return svc.set_schema(kb_name, schema)
 
-        except ValueError as e:
+        except (PyriteError, ValueError) as e:
             return _error("OPERATION_FAILED", str(e))
 
         return _error("OPERATION_FAILED", f"Unknown schema action: {action}")
@@ -1269,7 +1269,7 @@ class PyriteMCPServer:
                 description=args.get("description", ""),
             )
             return {"created": True, **result}
-        except ValueError as e:
+        except (PyriteError, ValueError) as e:
             return _error("CONFLICT", str(e))
 
     def _kb_registry_remove(self, args: dict[str, Any]) -> dict[str, Any]:
