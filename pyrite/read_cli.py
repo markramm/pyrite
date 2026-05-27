@@ -24,6 +24,23 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+# Errors/status print here so machine formats keep stdout clean and parseable.
+err_console = Console(stderr=True)
+
+
+def _emit_error(message: str, output_format: str, *, error_code: str = "ERROR") -> None:
+    """Report a CLI error without polluting stdout in machine formats.
+
+    In a non-rich format, write a valid JSON error object to stdout so a
+    programmatic caller's ``json.load()`` still parses; otherwise print a
+    human-readable error to stderr. Either way stdout stays parseable.
+    """
+    if output_format and output_format != "rich":
+        import json
+
+        typer.echo(json.dumps({"error": message, "error_code": error_code}))
+    else:
+        err_console.print(f"[red]Error:[/red] {message}")
 
 
 def _get_svc():
@@ -62,7 +79,7 @@ def get_entry(
         result = svc.get_entry(entry_id, kb_name=kb_name)
 
         if not result:
-            console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
+            _emit_error(f"Entry '{entry_id}' not found", output_format, error_code="NOT_FOUND")
             raise typer.Exit(1)
 
         formatted = _format_output(result, output_format)
@@ -92,7 +109,7 @@ def get_entry(
                 else:
                     console.print(f"  • {src.title}: {src.url}")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _emit_error(str(e), output_format)
         raise typer.Exit(1) from None
     finally:
         db.close()
@@ -136,7 +153,7 @@ def list_kbs(
 
         console.print(table)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _emit_error(str(e), output_format)
         raise typer.Exit(1) from None
     finally:
         db.close()
@@ -199,7 +216,7 @@ def timeline(
 
         console.print(table)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _emit_error(str(e), output_format)
         raise typer.Exit(1) from None
     finally:
         db.close()
@@ -246,7 +263,7 @@ def tags_cmd(
 
         console.print(table)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _emit_error(str(e), output_format)
         raise typer.Exit(1) from None
     finally:
         db.close()
@@ -300,7 +317,7 @@ def backlinks_cmd(
 
         console.print(table)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
+        _emit_error(str(e), output_format)
         raise typer.Exit(1) from None
     finally:
         db.close()

@@ -16,6 +16,9 @@ from ..storage.repository import KBRepository
 logger = logging.getLogger(__name__)
 
 console = Console()
+# Status/progress chatter goes here so it never pollutes stdout in machine
+# formats (-f json etc.), where stdout must be valid parseable output only.
+err_console = Console(stderr=True)
 
 
 def register_search_command(app: typer.Typer):
@@ -72,7 +75,8 @@ def register_search_command(app: typer.Typer):
             db = PyriteDB(config.settings.index_path)
 
             if db.count_entries() == 0:
-                console.print("[yellow]Index is empty. Building index...[/yellow]")
+                # Status to stderr — stdout must stay clean for -f json callers.
+                err_console.print("[yellow]Index is empty. Building index...[/yellow]")
                 from ..storage import IndexManager
 
                 index_mgr = IndexManager(db, config)
@@ -100,7 +104,17 @@ def register_search_command(app: typer.Typer):
             )
 
             if not results:
-                console.print("[yellow]No results found.[/yellow]")
+                if output_format != "rich":
+                    # Machine formats get a valid empty-result payload, not a
+                    # human "no results" line that would break json.load().
+                    from ..formats import format_response
+
+                    content, _ = format_response(
+                        {"query": query, "count": 0, "results": []}, output_format
+                    )
+                    typer.echo(content)
+                else:
+                    console.print("[yellow]No results found.[/yellow]")
                 return
 
             # Apply field projection

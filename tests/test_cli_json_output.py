@@ -220,3 +220,46 @@ def test_auth_whoami_json(cli_env):
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert "github_login" in data or "github_id" in data
+
+
+# ---------------------------------------------------------------------------
+# Machine-format stdout purity: -f json must emit ONLY parseable JSON to stdout
+# even on the error / empty-result paths, with human chatter routed to stderr.
+# Regression for: "pyrite get/search -f json intermittently emits non-JSON".
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cli
+def test_search_no_results_json_is_parseable(cli_env):
+    """search -f json with no matches returns valid empty-result JSON on stdout,
+    not a human 'No results found.' line that breaks json.load()."""
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        result = runner.invoke(
+            app, ["search", "zzznomatchquery12345xyz", "--format", "json"]
+        )
+    # stdout must parse cleanly even though there are no results.
+    data = json.loads(result.output)
+    assert data["count"] == 0
+    assert data["results"] == []
+
+
+@pytest.mark.cli
+def test_search_normal_results_json_is_parseable(cli_env):
+    """A normal search -f json still emits clean JSON on stdout."""
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        result = runner.invoke(app, ["search", "Test", "--format", "json"])
+    data = json.loads(result.output)
+    assert "results" in data and "count" in data
+
+
+@pytest.mark.cli
+def test_get_not_found_json_is_parseable(cli_env):
+    """get -f json for a missing entry emits a valid JSON error object on
+    stdout (so programmatic callers can parse it), not a rich error line."""
+    with _patch_config("pyrite.cli.entry_commands.load_config", cli_env):
+        result = runner.invoke(
+            app, ["get", "no-such-entry", "-k", "test-events", "--format", "json"]
+        )
+    # Non-zero exit, but stdout is still parseable JSON carrying the error.
+    data = json.loads(result.output)
+    assert data.get("error_code") == "NOT_FOUND" or "error" in data
