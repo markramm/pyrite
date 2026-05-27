@@ -1,5 +1,8 @@
 """Tests for pyrite.utils.yaml round-trip YAML utilities."""
 
+import pytest
+
+from pyrite.exceptions import FrontmatterError
 from pyrite.utils.yaml import dump_yaml, dump_yaml_file, load_yaml, load_yaml_file
 
 
@@ -35,6 +38,22 @@ class TestLoadYaml:
         assert result.get("c", "default") == "default"
         assert len(result) == 2
         assert list(result.items()) == [("a", 1), ("b", 2)]
+
+    def test_load_invalid_yaml_raises_frontmatter_error(self):
+        """A YAML parse error becomes a clean FrontmatterError, not a raw ruamel
+        traceback that crashes the entry loader."""
+        with pytest.raises(FrontmatterError):
+            load_yaml("a: [1, 2\nb: oops")  # unclosed flow sequence
+
+    def test_load_scalar_raises_frontmatter_error(self):
+        """Frontmatter that parses to a scalar (not a mapping) is rejected."""
+        with pytest.raises(FrontmatterError):
+            load_yaml("just a bare string, not a mapping")
+
+    def test_load_list_raises_frontmatter_error(self):
+        """Frontmatter that parses to a list (not a mapping) is rejected."""
+        with pytest.raises(FrontmatterError):
+            load_yaml("- a\n- b")
 
 
 class TestDumpYaml:

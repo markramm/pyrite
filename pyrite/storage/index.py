@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import KBConfig, PyriteConfig, load_config
+from ..exceptions import FrontmatterError
 from ..models import Entry
 from ..models.protocols import (
     PROTOCOL_COLUMN_KEYS,
@@ -591,6 +592,7 @@ class IndexManager:
             "undeclared_types": [],
             "missing_required_fields": [],
             "subdirectory_mismatches": [],
+            "malformed_frontmatter": [],
         }
 
         for kb in self.config.knowledge_bases:
@@ -624,8 +626,19 @@ class IndexManager:
                                     "indexed_at": indexed_at,
                                 }
                             )
+                except FrontmatterError as e:
+                    # Malformed YAML / missing frontmatter: a content problem in
+                    # the file, not a Pyrite bug. Surface it in the report and
+                    # log a clean one-liner rather than a stack trace.
+                    health["malformed_frontmatter"].append(
+                        {"kb": kb.name, "path": str(file_path), "error": str(e)}
+                    )
+                    logger.warning("Malformed frontmatter in %s: %s", file_path, e)
+                    continue
                 except Exception:
-                    logger.warning("Health check failed for entry %s", entry.id, exc_info=True)
+                    logger.warning(
+                        "Health check failed for %s", file_path, exc_info=True
+                    )
                     continue
 
             # Check for missing files

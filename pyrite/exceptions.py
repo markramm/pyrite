@@ -25,6 +25,15 @@ class ValidationError(PyriteError):
     """Raised when entry data fails validation."""
 
 
+class FrontmatterError(ValidationError):
+    """Raised when YAML frontmatter is malformed or not a mapping.
+
+    A ValidationError subclass so existing ``except ValidationError`` handlers
+    continue to catch it, while callers that care specifically about parse
+    failures can catch this narrower type.
+    """
+
+
 class PluginError(PyriteError):
     """Raised when a plugin operation fails."""
 

@@ -289,12 +289,14 @@ def index_health(
     undeclared_types = health.get("undeclared_types", [])
     missing_required = health.get("missing_required_fields", [])
     subdirectory_mismatches = health.get("subdirectory_mismatches", [])
+    malformed_frontmatter = health.get("malformed_frontmatter", [])
     is_unhealthy = health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
     has_warning = (
         bool(broken_links)
         or bool(undeclared_types)
         or bool(missing_required)
         or bool(subdirectory_mismatches)
+        or bool(malformed_frontmatter)
     )
     status = "unhealthy" if is_unhealthy else ("warning" if has_warning else "healthy")
 
@@ -308,6 +310,7 @@ def index_health(
             "undeclared_types": undeclared_types,
             "missing_required_fields": missing_required,
             "subdirectory_mismatches": subdirectory_mismatches,
+            "malformed_frontmatter": malformed_frontmatter,
             "checks": health,
         },
         output_format,
@@ -367,6 +370,16 @@ def index_health(
             )
         if len(subdirectory_mismatches) > 10:
             console.print(f"  ... and {len(subdirectory_mismatches) - 10} more")
+
+    if malformed_frontmatter:
+        console.print(
+            f"[yellow]⚠ {len(malformed_frontmatter)} file(s) with malformed"
+            " frontmatter (skipped — fix the YAML to index them):[/yellow]"
+        )
+        for row in malformed_frontmatter[:10]:
+            console.print(f"  • {row['kb']}: {row['path']} — {row['error']}")
+        if len(malformed_frontmatter) > 10:
+            console.print(f"  ... and {len(malformed_frontmatter) - 10} more")
 
     if health["missing_files"]:
         console.print(f"[red]Missing files ({len(health['missing_files'])}):[/red]")

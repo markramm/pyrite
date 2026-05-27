@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..config import KBConfig
-from ..exceptions import KBReadOnlyError
+from ..exceptions import FrontmatterError, KBReadOnlyError
 from ..migrations import get_migration_registry, load_plugin_migrations
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
@@ -98,6 +98,11 @@ class KBRepository:
 
             # Fallback: try EventEntry.load for backward compat
             return EventEntry.load(file_path)
+        except FrontmatterError:
+            # Malformed YAML: the EventEntry fallback re-parses the same bytes
+            # and would fail identically, so re-raise rather than retry.
+            logger.warning("Entry load failed for %s: malformed frontmatter", file_path)
+            raise
         except Exception:
             logger.warning(
                 "Entry load failed for %s, trying EventEntry fallback", file_path, exc_info=True

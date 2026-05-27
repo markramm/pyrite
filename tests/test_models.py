@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from pyrite.exceptions import FrontmatterError
 from pyrite.models import EventEntry
 from pyrite.models.core_types import (
     OrganizationEntry,
@@ -75,6 +76,13 @@ This is the event body.
         assert event.status == EventStatus.CONFIRMED
         assert len(event.participants) == 2
         assert "This is the event body" in event.body
+
+    def test_from_markdown_missing_frontmatter_raises_frontmatter_error(self):
+        """A file with no YAML frontmatter fence raises FrontmatterError rather
+        than a bare ValueError, so the entry loader can handle it as a content
+        problem instead of crashing."""
+        with pytest.raises(FrontmatterError):
+            EventEntry.from_markdown("Just body text, no frontmatter fence.\n")
 
     def test_event_validation(self):
         """Test event validation."""

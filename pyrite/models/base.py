@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ..exceptions import FrontmatterError
 from ..schema import Link, Provenance, Source
 from ..utils.yaml import dump_yaml, load_yaml
 
@@ -163,7 +164,7 @@ class Entry(ABC):
         """Parse from markdown string with YAML frontmatter."""
         parts = re.split(r"^---\s*$", text, flags=re.MULTILINE, maxsplit=2)
         if len(parts) < 3:
-            raise ValueError("Invalid entry format: missing YAML frontmatter")
+            raise FrontmatterError("Invalid entry format: missing YAML frontmatter")
 
         meta = load_yaml(parts[1])
         body = parts[2].strip()
