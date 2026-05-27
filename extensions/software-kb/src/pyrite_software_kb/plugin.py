@@ -1257,7 +1257,7 @@ class SoftwareKBPlugin:
                     status_to_lane[s] = i
 
             # Group items into lanes and collect in_progress/review
-            lane_counts: dict[int, int] = {i: 0 for i in range(len(board_config.get("lanes", [])))}
+            lane_counts: dict[int, int] = dict.fromkeys(range(len(board_config.get("lanes", []))), 0)
             in_progress_items: list[dict] = []
             review_items: list[dict] = []
 

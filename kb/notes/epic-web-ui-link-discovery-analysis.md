@@ -8,7 +8,7 @@ tags:
 - links
 importance: 5
 kind: epic
-status: todo
+status: planned
 priority: medium
 effort: L
 rank: 0

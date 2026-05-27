@@ -8,7 +8,7 @@ tags:
 - automation
 importance: 5
 kind: feature
-status: todo
+status: planned
 priority: medium
 effort: S
 rank: 0

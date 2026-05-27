@@ -48,6 +48,7 @@ BACKLOG_STATUSES = (
     "done",
     "retired",
     "deferred",
+    "superseded",
     "wont_do",
 )
 BACKLOG_PRIORITIES = ("critical", "high", "medium", "low")

@@ -8,7 +8,7 @@ tags:
 - git
 importance: 5
 kind: feature
-status: todo
+status: planned
 priority: low
 effort: M
 rank: 0

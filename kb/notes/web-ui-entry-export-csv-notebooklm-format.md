@@ -7,7 +7,7 @@ tags:
 - export
 importance: 5
 kind: feature
-status: todo
+status: planned
 priority: low
 effort: S
 rank: 0

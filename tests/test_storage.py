@@ -1047,6 +1047,119 @@ class TestUndeclaredTypesInHealth:
                 db.close()
 
 
+class TestInvalidStatusInHealth:
+    """`check_health` must surface backlog entries whose `status` is not in the
+    type's declared enum, reusing the registered plugin validators rather than
+    hardcoding the enum in core.
+
+    Context: 75 backlog items drifted onto an off-enum `completed` status that
+    nothing caught until a manual grooming pass, silently breaking epic-progress
+    rollups. See ticket
+    `kb/backlog/enforce-backlog-status-enum-at-index-time.md`.
+    """
+
+    def _make_software_config(
+        self, tmpdir: Path, kb_path: Path
+    ) -> tuple[PyriteDB, PyriteConfig]:
+        db_path = tmpdir / "index.db"
+        db = PyriteDB(db_path)
+        db.register_kb(kb_path.name, "software", str(kb_path), "")
+        kb_config = KBConfig(
+            name=kb_path.name, path=kb_path, kb_type="software", description="Test KB"
+        )
+        config = PyriteConfig(
+            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+        )
+        return db, config
+
+    def test_invalid_status_flagged(self):
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "sw-kb"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb\n"
+                "kb_type: software\n"
+                "types:\n"
+                "  backlog_item:\n"
+                "    description: A work item\n"
+            )
+
+            db, config = self._make_software_config(tmp, kb_path)
+            try:
+                # Off-enum status — must be flagged.
+                db.upsert_entry(
+                    {
+                        "id": "bad-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "backlog_item",
+                        "title": "Bad status",
+                        "body": "body",
+                        "status": "completed",  # not in BACKLOG_STATUSES
+                        "file_path": str(kb_path / "bad-1.md"),
+                    }
+                )
+                # Valid status — must NOT be flagged.
+                db.upsert_entry(
+                    {
+                        "id": "ok-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "backlog_item",
+                        "title": "Good status",
+                        "body": "body",
+                        "status": "done",
+                        "file_path": str(kb_path / "ok-1.md"),
+                    }
+                )
+
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+
+                assert "invalid_statuses" in health, (
+                    "check_health must expose an 'invalid_statuses' field"
+                )
+                invalid = health["invalid_statuses"]
+                bad_ids = {row["id"] for row in invalid}
+                assert "bad-1" in bad_ids, f"expected bad-1 flagged, got {invalid}"
+                assert "ok-1" not in bad_ids, f"valid status must not be flagged: {invalid}"
+                bad_row = next(r for r in invalid if r["id"] == "bad-1")
+                assert bad_row["status"] == "completed"
+                assert "done" in bad_row["allowed"]
+            finally:
+                db.close()
+
+    def test_superseded_status_accepted(self):
+        """`superseded` was added to BACKLOG_STATUSES; it must not be flagged."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "sw-kb2"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb2\nkb_type: software\ntypes:\n  backlog_item:\n"
+                "    description: A work item\n"
+            )
+
+            db, config = self._make_software_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "sup-1",
+                        "kb_name": kb_path.name,
+                        "entry_type": "backlog_item",
+                        "title": "Superseded item",
+                        "body": "body",
+                        "status": "superseded",
+                        "file_path": str(kb_path / "sup-1.md"),
+                    }
+                )
+                index_mgr = IndexManager(db, config)
+                health = index_mgr.check_health()
+                bad_ids = {row["id"] for row in health.get("invalid_statuses", [])}
+                assert "sup-1" not in bad_ids, "superseded must be an accepted status"
+            finally:
+                db.close()
+
+
 class TestRequiredFieldValidationInHealth:
     """`check_health` must surface entries whose kb.yaml `required:` fields
     are missing or empty.

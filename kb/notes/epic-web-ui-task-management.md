@@ -8,7 +8,7 @@ tags:
 - tasks
 importance: 5
 kind: epic
-status: todo
+status: planned
 priority: high
 effort: XL
 rank: 0

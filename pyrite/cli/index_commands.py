@@ -290,6 +290,7 @@ def index_health(
     missing_required = health.get("missing_required_fields", [])
     subdirectory_mismatches = health.get("subdirectory_mismatches", [])
     malformed_frontmatter = health.get("malformed_frontmatter", [])
+    invalid_statuses = health.get("invalid_statuses", [])
     is_unhealthy = health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
     has_warning = (
         bool(broken_links)
@@ -297,6 +298,7 @@ def index_health(
         or bool(missing_required)
         or bool(subdirectory_mismatches)
         or bool(malformed_frontmatter)
+        or bool(invalid_statuses)
     )
     status = "unhealthy" if is_unhealthy else ("warning" if has_warning else "healthy")
 
@@ -311,6 +313,7 @@ def index_health(
             "missing_required_fields": missing_required,
             "subdirectory_mismatches": subdirectory_mismatches,
             "malformed_frontmatter": malformed_frontmatter,
+            "invalid_statuses": invalid_statuses,
             "checks": health,
         },
         output_format,
@@ -380,6 +383,20 @@ def index_health(
             console.print(f"  • {row['kb']}: {row['path']} — {row['error']}")
         if len(malformed_frontmatter) > 10:
             console.print(f"  ... and {len(malformed_frontmatter) - 10} more")
+
+    if invalid_statuses:
+        console.print(
+            f"[yellow]⚠ {len(invalid_statuses)} entries with an invalid status"
+            " (not in the type's declared enum):[/yellow]"
+        )
+        for row in invalid_statuses[:10]:
+            allowed = ", ".join(row.get("allowed", [])) or "(see schema)"
+            console.print(
+                f"  • {row['kb']}/{row['id']} ({row['type']}):"
+                f" status='{row['status']}' — allowed: {allowed}"
+            )
+        if len(invalid_statuses) > 10:
+            console.print(f"  ... and {len(invalid_statuses) - 10} more")
 
     if health["missing_files"]:
         console.print(f"[red]Missing files ({len(health['missing_files'])}):[/red]")

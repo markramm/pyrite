@@ -593,6 +593,7 @@ class IndexManager:
             "missing_required_fields": [],
             "subdirectory_mismatches": [],
             "malformed_frontmatter": [],
+            "invalid_statuses": [],
         }
 
         for kb in self.config.knowledge_bases:
@@ -696,6 +697,17 @@ class IndexManager:
             if not kb_schema or not kb_schema.types:
                 continue
 
+            # Plugin validators scoped to this KB type. We reuse them (rather
+            # than hardcoding any status enum in core) to detect entries whose
+            # `status` is not in its type's declared set — the drift that let
+            # 75 backlog items sit on an off-enum `completed` status undetected.
+            try:
+                from ..plugins import get_registry
+
+                kb_validators = get_registry().get_validators_for_kb(kb.kb_type)
+            except Exception:
+                kb_validators = []
+
             entry_rows = self.db.execute_sql(
                 "SELECT id, entry_type, title, body, summary, file_path, "
                 "date, start_date, end_date, due_date, status, location, "
@@ -703,6 +715,8 @@ class IndexManager:
                 {"kb_name": kb.name},
             )
             for row in entry_rows:
+                self._check_invalid_status(kb, row, kb_validators, health)
+
                 type_schema = kb_schema.types.get(row["entry_type"])
                 if type_schema is None:
                     continue  # undeclared_types handles this separately
@@ -751,6 +765,43 @@ class IndexManager:
                             )
 
         return health
+
+    @staticmethod
+    def _check_invalid_status(kb, row: dict, validators: list, health: dict) -> None:
+        """Flag an entry whose `status` is not in its type's declared enum.
+
+        Runs the KB's plugin validators against the row's fields and records any
+        error reported on the `status` field with rule `enum`. This reuses the
+        existing validator logic (e.g. software-kb's BACKLOG_STATUSES) so core
+        does not hardcode any plugin's status vocabulary.
+        """
+        status = row.get("status")
+        if not status or not validators:
+            return
+        fields = {"status": status}
+        ctx = {"kb_type": kb.kb_type}
+        for validator in validators:
+            try:
+                results = validator(row["entry_type"], fields, ctx)
+            except TypeError:
+                try:
+                    results = validator(row["entry_type"], fields)
+                except Exception:
+                    continue
+            except Exception:
+                continue
+            for item in results or []:
+                if item.get("field") == "status" and item.get("rule") == "enum":
+                    health["invalid_statuses"].append(
+                        {
+                            "kb": kb.name,
+                            "id": row["id"],
+                            "type": row["entry_type"],
+                            "status": status,
+                            "allowed": item.get("expected", []),
+                        }
+                    )
+                    return  # one report per entry is enough
 
     def sync_incremental(
         self,
