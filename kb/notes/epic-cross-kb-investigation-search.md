@@ -25,7 +25,7 @@ links:
   relation: has_subtask
   kb: pyrite
 kind: epic
-status: retired
+status: done
 priority: high
 effort: L
 ---

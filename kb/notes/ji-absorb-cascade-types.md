@@ -1,16 +1,18 @@
 ---
 id: ji-absorb-cascade-types
-type: backlog_item
 title: "Move cascade entry types, relationships, validators, and hooks into JI plugin"
-kind: feature
-status: proposed
-priority: high
-effort: M
+type: backlog_item
 tags: [schema, journalism-investigation, cascade, deprecation]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: proposed
+priority: high
+effort: M
+rank: 100
 ---
 
 ## Scope

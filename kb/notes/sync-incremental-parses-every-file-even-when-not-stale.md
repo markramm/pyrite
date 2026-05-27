@@ -8,7 +8,7 @@ tags:
 - storage
 importance: 5
 kind: bug
-status: completed
+status: done
 priority: medium
 effort: S
 rank: 0

@@ -8,7 +8,7 @@ tags:
 - filtering
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: high
 effort: S
 rank: 0

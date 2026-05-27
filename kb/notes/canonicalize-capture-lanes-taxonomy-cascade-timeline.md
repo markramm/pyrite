@@ -1,12 +1,14 @@
 ---
 id: canonicalize-capture-lanes-taxonomy-cascade-timeline
-type: backlog_item
 title: "Canonicalize `capture_lanes` taxonomy in cascade-timeline (17 canonical lanes, fix drift, enforce enum)"
+type: backlog_item
+tags: [cascade-timeline, schema, taxonomy, data-quality, enum-enforcement]
+importance: 5
 kind: cleanup
 status: proposed
 priority: medium
 effort: M
-tags: [cascade-timeline, schema, taxonomy, data-quality, enum-enforcement]
+rank: 500
 ---
 
 ## Problem

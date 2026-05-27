@@ -8,7 +8,7 @@ tags:
 - journalists
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: critical
 effort: S
 rank: 0

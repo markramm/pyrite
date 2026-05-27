@@ -9,7 +9,7 @@ tags:
 - critical
 importance: 5
 kind: bug
-status: completed
+status: done
 priority: critical
 effort: S
 rank: 0

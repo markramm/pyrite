@@ -1,16 +1,18 @@
 ---
 id: ji-absorb-cascade-mcp
-type: backlog_item
 title: "Move cascade MCP tools into the JI plugin"
-kind: feature
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [mcp, journalism-investigation, cascade, deprecation]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: proposed
+priority: medium
+effort: S
+rank: 300
 ---
 
 ## Scope

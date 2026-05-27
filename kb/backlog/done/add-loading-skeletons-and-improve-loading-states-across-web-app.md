@@ -9,7 +9,7 @@ tags:
 - polish
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: low
 effort: S
 rank: 0

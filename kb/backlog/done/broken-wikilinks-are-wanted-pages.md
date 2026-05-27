@@ -9,7 +9,7 @@ tags:
 - decision
 importance: 5
 kind: chore
-status: completed
+status: done
 priority: medium
 effort: S
 rank: 0

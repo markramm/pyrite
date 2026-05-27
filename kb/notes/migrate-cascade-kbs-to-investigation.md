@@ -1,16 +1,18 @@
 ---
 id: migrate-cascade-kbs-to-investigation
-type: backlog_item
 title: "Migrate cascade KBs to investigation kb_type; normalize layout and schema"
-kind: feature
-status: proposed
-priority: high
-effort: M
+type: backlog_item
 tags: [schema, migration, cascade, journalism-investigation, data-quality]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: proposed
+priority: high
+effort: M
+rank: 600
 ---
 
 ## Scope

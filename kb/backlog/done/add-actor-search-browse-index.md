@@ -10,7 +10,7 @@ tags:
 - decision-needed
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: medium
 effort: L
 rank: 0

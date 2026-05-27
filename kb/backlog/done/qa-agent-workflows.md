@@ -20,7 +20,7 @@ links:
   relation: has_subtask
 importance: 5
 kind: epic
-status: completed
+status: done
 priority: medium
 effort: XL
 rank: 0

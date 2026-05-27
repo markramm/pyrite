@@ -10,7 +10,7 @@ tags:
 - credibility
 importance: 5
 kind: bug
-status: completed
+status: done
 priority: critical
 effort: M
 rank: 0

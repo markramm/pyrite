@@ -1,11 +1,7 @@
 ---
 id: ji-absorb-cascade-cli
-type: backlog_item
 title: "Move cascade CLI commands into the JI plugin"
-kind: feature
-status: proposed
-priority: high
-effort: S
+type: backlog_item
 tags: [cli, journalism-investigation, cascade, deprecation]
 links:
 - target: epic-normalization-and-data-cleanup
@@ -14,6 +10,12 @@ links:
 - target: epic-pyrite-publication-strategy
   relation: related_to
   kb: pyrite
+importance: 5
+kind: feature
+status: proposed
+priority: high
+effort: S
+rank: 200
 ---
 
 ## Scope

@@ -8,7 +8,7 @@ tags:
 - ux
 importance: 5
 kind: bug
-status: completed
+status: done
 priority: high
 effort: XS
 rank: 0

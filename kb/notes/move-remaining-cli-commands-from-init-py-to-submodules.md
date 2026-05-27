@@ -8,7 +8,7 @@ tags:
 - refactor
 importance: 5
 kind: refactor
-status: completed
+status: done
 priority: medium
 effort: M
 rank: 0

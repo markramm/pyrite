@@ -8,7 +8,7 @@ tags:
 - cleanup
 importance: 5
 kind: refactor
-status: completed
+status: done
 priority: low
 effort: S
 rank: 0

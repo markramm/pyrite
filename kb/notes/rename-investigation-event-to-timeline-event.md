@@ -1,16 +1,18 @@
 ---
 id: rename-investigation-event-to-timeline-event
-type: backlog_item
 title: "Rename investigation_event → timeline_event inside JI plugin"
-kind: feature
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [schema, journalism-investigation, cleanup]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: feature
+status: proposed
+priority: medium
+effort: S
+rank: 400
 ---
 
 ## Scope

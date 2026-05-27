@@ -8,7 +8,7 @@ tags:
 - systematic
 importance: 5
 kind: bug
-status: completed
+status: done
 priority: critical
 effort: L
 rank: 0

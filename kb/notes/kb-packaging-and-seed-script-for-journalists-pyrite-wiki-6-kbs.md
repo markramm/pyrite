@@ -8,7 +8,7 @@ tags:
 - kb-content
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: critical
 effort: S
 rank: 0

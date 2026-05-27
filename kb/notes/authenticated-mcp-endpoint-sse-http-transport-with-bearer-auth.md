@@ -8,7 +8,7 @@ tags:
 - multi-user
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: high
 effort: L
 rank: 0

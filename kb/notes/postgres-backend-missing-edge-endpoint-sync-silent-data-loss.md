@@ -8,7 +8,7 @@ tags:
 - postgres
 importance: 5
 kind: bug
-status: completed
+status: done
 priority: high
 effort: S
 rank: 0

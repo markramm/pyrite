@@ -1,16 +1,30 @@
 ---
 id: remove-cascade-plugin
-type: backlog_item
 title: "Delete the cascade plugin after deprecation cycle"
-kind: chore
-status: proposed
-priority: medium
-effort: S
+type: backlog_item
 tags: [cascade, deprecation, cleanup]
 links:
 - target: epic-normalization-and-data-cleanup
   relation: subtask_of
   kb: pyrite
+- target: ji-absorb-cascade-types
+  relation: depends_on
+  kb: pyrite
+- target: ji-absorb-cascade-cli
+  relation: depends_on
+  kb: pyrite
+- target: ji-absorb-cascade-mcp
+  relation: depends_on
+  kb: pyrite
+- target: migrate-cascade-kbs-to-investigation
+  relation: depends_on
+  kb: pyrite
+importance: 5
+kind: chore
+status: proposed
+priority: medium
+effort: S
+rank: 700
 ---
 
 ## Scope

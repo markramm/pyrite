@@ -9,7 +9,7 @@ links:
   kb: pyrite
 importance: 5
 kind: feature
-status: completed
+status: done
 priority: medium
 effort: M
 rank: 0

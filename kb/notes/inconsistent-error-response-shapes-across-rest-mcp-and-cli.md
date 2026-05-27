@@ -8,7 +8,7 @@ tags:
 - consistency
 importance: 5
 kind: refactor
-status: completed
+status: done
 priority: low
 effort: M
 rank: 0
