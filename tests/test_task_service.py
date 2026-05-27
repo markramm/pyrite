@@ -114,6 +114,34 @@ class TestUpdateTask:
         assert result["assignee"] == "agent:a"
         assert result["updates"] == {"status": "claimed", "assignee": "agent:a"}
 
+    def test_illegal_transition_raises_helpful_validation_error(self, task_env):
+        """Jumping a never-claimed task straight to 'done' must raise a typed
+        ValidationError with a helpful message — not a bare ValueError that the
+        CLI would render as a raw traceback."""
+        from pyrite.exceptions import ValidationError
+
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Redundant task")
+        entry_id = created["entry_id"]
+
+        with pytest.raises(ValidationError) as exc_info:
+            svc.update_task(entry_id, "test-tasks", status="done")
+
+        msg = str(exc_info.value)
+        assert "open" in msg and "done" in msg
+        assert "Allowed next" in msg  # tells the caller what they *can* do
+
+    def test_legal_multi_step_path_to_done(self, task_env):
+        """Walking the task through the legal states reaches 'done'."""
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Worked task")
+        entry_id = created["entry_id"]
+
+        svc.update_task(entry_id, "test-tasks", status="claimed", assignee="agent:a")
+        svc.update_task(entry_id, "test-tasks", status="in_progress")
+        result = svc.update_task(entry_id, "test-tasks", status="done")
+        assert result["status"] == "done"
+
 
 class TestClaimTask:
     def test_claim_success(self, task_env):

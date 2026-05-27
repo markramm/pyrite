@@ -278,8 +278,10 @@ class TestHooks:
             kb_type="task",
             extra={"old_status": "open"},
         )
-        # open → done is not a valid transition
-        with pytest.raises(ValueError, match="Invalid task transition"):
+        # open → done is not a valid transition — raises a typed, helpful error
+        from pyrite.exceptions import ValidationError
+
+        with pytest.raises(ValidationError, match="Cannot move task from 'open' to 'done'"):
             _task_validate_transition(entry, ctx)
 
     def test_before_save_allows_valid_transition(self):

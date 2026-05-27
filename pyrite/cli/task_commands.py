@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import load_config
+from ..exceptions import PyriteError
 from ..services.task_service import TaskService
 from ..storage.database import PyriteDB
 
@@ -215,6 +216,9 @@ def task_update(
         console.print(f"[green]Updated task:[/green] {task_id}")
         for k, v in updates.items():
             console.print(f"  {k}: {v}")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
     finally:
         db.close()
 

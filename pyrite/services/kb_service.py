@@ -1309,10 +1309,17 @@ def _task_validate_transition(entry: Any, context: dict) -> Any:
     if not old_status or not new_status or old_status == new_status:
         return entry
 
-    from ..models.task import TASK_WORKFLOW, can_transition
+    from ..models.task import TASK_WORKFLOW, can_transition, get_allowed_transitions
 
     if not can_transition(TASK_WORKFLOW, old_status, new_status, "write"):
-        raise ValueError(f"Invalid task transition: {old_status} → {new_status}")
+        allowed = [t["to"] for t in get_allowed_transitions(TASK_WORKFLOW, old_status, "write")]
+        allowed_msg = ", ".join(allowed) if allowed else "(none — terminal state)"
+        raise ValidationError(
+            f"Cannot move task from '{old_status}' to '{new_status}'. "
+            f"Allowed next: {allowed_msg}. "
+            f"Tasks follow open → claimed → in_progress → done/failed/blocked/review; "
+            f"walk through the intermediate states rather than skipping."
+        )
 
     return entry
 
