@@ -244,8 +244,10 @@ class TestDecomposeTask:
             assert ct["parent"] == parent_id
 
     def test_decompose_parent_not_found(self, task_env):
+        from pyrite.exceptions import EntryNotFoundError
+
         svc = task_env["svc"]
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(EntryNotFoundError, match="not found"):
             svc.decompose_task("nonexistent", "test-tasks", [{"title": "child"}])
 
 

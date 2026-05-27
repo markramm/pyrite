@@ -93,6 +93,80 @@ def test_env():
         db.close()
 
 
+class TestCentralExceptionHandler:
+    """register_pyrite_exception_handler maps every PyriteError to a clean HTTP
+    status + {code,message} body, instead of leaking a raw 500 traceback.
+
+    Tested on a minimal app wired with the same registration helper create_app
+    uses, so it exercises the real mapping without the full app's static-mount
+    and auth routing getting in the way.
+    """
+
+    @pytest.fixture
+    def error_client(self):
+        from fastapi import FastAPI
+
+        from pyrite.exceptions import (
+            ConfigError,
+            EntryNotFoundError,
+            FrontmatterError,
+            KBNotFoundError,
+            KBProtectedError,
+            PluginError,
+            PyriteError,
+            StorageError,
+            ValidationError,
+        )
+        from pyrite.server.api import register_pyrite_exception_handler
+
+        app = FastAPI()
+        register_pyrite_exception_handler(app)
+
+        raisers = {
+            "entry_not_found": EntryNotFoundError("no entry here"),
+            "kb_not_found": KBNotFoundError("no kb here"),
+            "protected": KBProtectedError("kb is protected"),
+            "validation": ValidationError("bad field"),
+            "frontmatter": FrontmatterError("bad yaml"),
+            "config": ConfigError("dup kb"),
+            "plugin": PluginError("missing sdk"),
+            "storage": StorageError("disk gone"),
+            "base": PyriteError("generic domain error"),
+        }
+        for name, exc in raisers.items():
+
+            def _route(_exc=exc):
+                raise _exc
+
+            app.add_api_route(f"/probe/{name}", _route, methods=["GET"])
+        # raise_server_exceptions=False so unhandled cases surface as responses;
+        # our handler should mean none are actually unhandled.
+        return TestClient(app, raise_server_exceptions=False)
+
+    @pytest.mark.parametrize(
+        "name,status,code",
+        [
+            ("entry_not_found", 404, "ENTRY_NOT_FOUND"),
+            ("kb_not_found", 404, "KB_NOT_FOUND"),
+            ("protected", 403, "KB_PROTECTED"),
+            ("frontmatter", 422, "INVALID_FRONTMATTER"),
+            ("validation", 422, "VALIDATION_ERROR"),
+            ("config", 409, "CONFIG_CONFLICT"),
+            ("plugin", 502, "PLUGIN_ERROR"),
+            ("storage", 500, "STORAGE_ERROR"),
+            ("base", 500, "INTERNAL_ERROR"),
+        ],
+    )
+    def test_domain_error_maps_to_status_and_shape(self, error_client, name, status, code):
+        resp = error_client.get(f"/probe/{name}")
+        assert resp.status_code == status
+        body = resp.json()
+        assert body["code"] == code
+        assert isinstance(body["message"], str) and body["message"]
+        # No traceback / internals leaked
+        assert "Traceback" not in body["message"]
+
+
 class TestKBEndpoints:
     """Test KB listing endpoint."""
 

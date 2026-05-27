@@ -3,6 +3,7 @@
 from typing import Any
 
 from pyrite.config import KBConfig, PyriteConfig
+from pyrite.exceptions import KBNotFoundError
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
 
@@ -20,7 +21,7 @@ class SchemaService:
         """Get KB config or raise."""
         kb = self.config.get_kb(kb_name)
         if not kb:
-            raise ValueError(f"KB '{kb_name}' not found")
+            raise KBNotFoundError(f"KB '{kb_name}' not found")
         return kb
 
     def _load_kb_yaml(self, kb: KBConfig) -> dict[str, Any]:

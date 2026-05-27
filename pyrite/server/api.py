@@ -24,6 +24,18 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from ..config import PyriteConfig, Settings, load_config
+from ..exceptions import (
+    ConfigError,
+    EntryNotFoundError,
+    FrontmatterError,
+    KBNotFoundError,
+    KBProtectedError,
+    KBReadOnlyError,
+    PluginError,
+    PyriteError,
+    StorageError,
+    ValidationError,
+)
 from ..services.ephemeral_service import EphemeralKBService
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
@@ -39,6 +51,48 @@ from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
 logger = logging.getLogger(__name__)
+
+
+# Domain-exception → (HTTP status, error code) mapping for the central handler.
+# Order matters: subclasses must precede their bases so isinstance() matches the
+# most specific type first (e.g. FrontmatterError before ValidationError).
+_PYRITE_ERROR_STATUS: list[tuple[type[PyriteError], int, str]] = [
+    (EntryNotFoundError, 404, "ENTRY_NOT_FOUND"),
+    (KBNotFoundError, 404, "KB_NOT_FOUND"),
+    (KBReadOnlyError, 403, "KB_READ_ONLY"),
+    (KBProtectedError, 403, "KB_PROTECTED"),
+    (FrontmatterError, 422, "INVALID_FRONTMATTER"),
+    (ValidationError, 422, "VALIDATION_ERROR"),
+    (ConfigError, 409, "CONFIG_CONFLICT"),
+    (PluginError, 502, "PLUGIN_ERROR"),
+    (StorageError, 500, "STORAGE_ERROR"),
+]
+
+
+def register_pyrite_exception_handler(app: FastAPI) -> None:
+    """Register a central handler mapping the PyriteError hierarchy to HTTP.
+
+    Any PyriteError an endpoint does not catch itself is converted to a proper
+    status code and a uniform ``{"code", "message"}`` JSON body, instead of
+    leaking a raw 500 with a Python traceback. The message is the exception's
+    own text — domain messages are written to be safe to show — and no
+    traceback or internals are exposed. 5xx cases are logged with a traceback
+    server-side for debugging.
+    """
+
+    def _classify(exc: PyriteError) -> tuple[int, str]:
+        for exc_type, status_code, code in _PYRITE_ERROR_STATUS:
+            if isinstance(exc, exc_type):
+                return status_code, code
+        return 500, "INTERNAL_ERROR"
+
+    def _handler(request: Request, exc: PyriteError) -> JSONResponse:
+        status_code, code = _classify(exc)
+        if status_code >= 500:
+            logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=True)
+        return JSONResponse(status_code=status_code, content={"code": code, "message": str(exc)})
+
+    app.add_exception_handler(PyriteError, _handler)
 
 
 def _anonymized_key_func(request: Request) -> str:
@@ -663,6 +717,11 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             headers={"Retry-After": str(getattr(exc, "retry_after", 60))},
         ),
     )
+
+    # Central handler for the domain exception hierarchy (see
+    # register_pyrite_exception_handler): any uncaught PyriteError is mapped to
+    # a proper HTTP status + uniform {"code","message"} body instead of a 500.
+    register_pyrite_exception_handler(application)
 
     # Auth router (mounted outside /api, no verify_api_key dependency)
     from .auth_endpoints import auth_router

@@ -88,7 +88,9 @@ class TestPyriteConfig:
         kb1 = KBConfig(name="test", path=Path("/tmp/1"), kb_type=KBType.RESEARCH)
         kb2 = KBConfig(name="test", path=Path("/tmp/2"), kb_type=KBType.RESEARCH)
         config.add_kb(kb1)
-        with pytest.raises(ValueError):
+        from pyrite.exceptions import ConfigError
+
+        with pytest.raises(ConfigError):
             config.add_kb(kb2)
 
     def test_remove_kb(self):

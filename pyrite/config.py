@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 
+from pyrite.exceptions import ConfigError
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -453,7 +454,7 @@ class PyriteConfig:
     def add_kb(self, kb: KBConfig) -> None:
         """Add a KB to the registry."""
         if kb.name in self._kb_by_name:
-            raise ValueError(f"KB with name '{kb.name}' already exists")
+            raise ConfigError(f"KB with name '{kb.name}' already exists")
         self.knowledge_bases.append(kb)
         self._kb_by_name[kb.name] = kb
 
@@ -473,7 +474,7 @@ class PyriteConfig:
     def add_repo(self, repo: Repository) -> None:
         """Add a repository to the registry."""
         if repo.name in self._repo_by_name:
-            raise ValueError(f"Repository with name '{repo.name}' already exists")
+            raise ConfigError(f"Repository with name '{repo.name}' already exists")
         self.repositories.append(repo)
         self._repo_by_name[repo.name] = repo
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.exceptions import KBNotFoundError
 from pyrite.services.template_service import TemplateService
 
 
@@ -118,7 +119,7 @@ class TestListTemplates:
         assert templates == []
 
     def test_missing_kb_raises(self, svc):
-        with pytest.raises(KeyError, match="not found"):
+        with pytest.raises(KBNotFoundError, match="not found"):
             svc.list_templates("nonexistent-kb")
 
 
@@ -145,7 +146,7 @@ class TestGetTemplate:
             svc.get_template("test-kb", "nonexistent")
 
     def test_missing_kb_raises(self, svc):
-        with pytest.raises(KeyError, match="not found"):
+        with pytest.raises(KBNotFoundError, match="not found"):
             svc.get_template("no-kb", "meeting-note")
 
 
@@ -199,5 +200,5 @@ class TestRenderTemplate:
             svc.render_template("test-kb", "nonexistent", {})
 
     def test_missing_kb_raises(self, svc):
-        with pytest.raises(KeyError):
+        with pytest.raises(KBNotFoundError):
             svc.render_template("no-kb", "meeting-note", {})

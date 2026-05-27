@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from pyrite.exceptions import KBNotFoundError
 from pyrite.services.schema_service import SchemaService
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
@@ -235,11 +236,11 @@ class TestNotFound:
     def test_show_unknown_kb(self):
         config = FakeConfig()
         svc = SchemaService(config)
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(KBNotFoundError, match="not found"):
             svc.show_schema("nonexistent")
 
     def test_add_type_unknown_kb(self):
         config = FakeConfig()
         svc = SchemaService(config)
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(KBNotFoundError, match="not found"):
             svc.add_type("nonexistent", "task", {})

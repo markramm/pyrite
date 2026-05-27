@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from pyrite.config import Settings
+from pyrite.exceptions import PluginError
 
 # ---------------------------------------------------------------------------
 # Config round-trip tests
@@ -309,7 +310,7 @@ class TestLLMServiceMissingSDK:
 
         with patch.dict("sys.modules", {"anthropic": None}):
             with patch("pyrite.services.llm_service._import_anthropic", return_value=None):
-                with pytest.raises(RuntimeError, match="anthropic"):
+                with pytest.raises(PluginError, match="anthropic"):
                     asyncio.run(svc.complete("Hello"))
 
     def test_openai_missing_sdk_error(self):
@@ -319,7 +320,7 @@ class TestLLMServiceMissingSDK:
         svc = LLMService(settings)
 
         with patch("pyrite.services.llm_service._import_openai", return_value=None):
-            with pytest.raises(RuntimeError, match="openai"):
+            with pytest.raises(PluginError, match="openai"):
                 asyncio.run(svc.complete("Hello"))
 
 

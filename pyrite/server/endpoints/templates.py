@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ...config import PyriteConfig
+from ...exceptions import KBNotFoundError
 from ..api import get_config, limiter
 from ..schemas import (
     RenderedTemplate,
@@ -31,7 +32,7 @@ def list_templates(request: Request, kb_name: str, svc=Depends(get_template_svc)
     """List available templates for a KB."""
     try:
         templates = svc.list_templates(kb_name)
-    except KeyError:
+    except KBNotFoundError:
         raise HTTPException(
             status_code=404,
             detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
@@ -53,7 +54,7 @@ def get_template_detail(
     """Get a template by name."""
     try:
         tpl = svc.get_template(kb_name, template_name)
-    except KeyError:
+    except KBNotFoundError:
         raise HTTPException(
             status_code=404,
             detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
@@ -84,7 +85,7 @@ def render_template(
     """Render a template with variables."""
     try:
         result = svc.render_template(kb_name, template_name, req.variables)
-    except KeyError:
+    except KBNotFoundError:
         raise HTTPException(
             status_code=404,
             detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},

@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any
 
 from pyrite.config import KBConfig, PyriteConfig
+from pyrite.exceptions import (
+    EntryNotFoundError,
+    KBNotFoundError,
+    StorageError,
+    ValidationError,
+)
 from pyrite.storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
@@ -66,7 +72,7 @@ class WorktreeService:
         safe = re.sub(r"[/\\.\x00-\x1f~^:?*\[\]@{} ]", "-", username)
         safe = safe.strip("-")
         if not safe:
-            raise ValueError("Username produces empty sanitized string")
+            raise ValidationError("Username produces empty sanitized string")
         return safe[:64]  # cap length
 
     def _find_repo_root(self, kb_config: KBConfig) -> Path | None:
@@ -176,11 +182,11 @@ class WorktreeService:
         # Resolve KB and repo
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            raise ValueError(f"KB '{kb_name}' not found")
+            raise KBNotFoundError(f"KB '{kb_name}' not found")
 
         repo_root = self._find_repo_root(kb_config)
         if not repo_root:
-            raise ValueError(f"KB '{kb_name}' is not in a git repository")
+            raise ValidationError(f"KB '{kb_name}' is not in a git repository")
 
         # Compute paths
         branch = f"user/{safe_username}"
@@ -191,7 +197,7 @@ class WorktreeService:
 
         success, msg = GitService.worktree_add(repo_root, worktree_path, branch)
         if not success:
-            raise ValueError(f"Failed to create worktree: {msg}")
+            raise StorageError(f"Failed to create worktree: {msg}")
 
         # Ensure diff DB directory exists and initialize the diff index
         diff_db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,7 +274,7 @@ class WorktreeService:
         """
         row = self._get_worktree_row(kb_name, user_id)
         if not row:
-            raise ValueError(f"No worktree for user {user_id} in KB '{kb_name}'")
+            raise EntryNotFoundError(f"No worktree for user {user_id} in KB '{kb_name}'")
 
         wt = self._row_to_info(row)
         worktree_path = Path(wt.worktree_path)
@@ -341,7 +347,7 @@ class WorktreeService:
         """Reject a submission with optional feedback."""
         row = self._get_worktree_row(kb_name, user_id)
         if not row:
-            raise ValueError(f"No worktree for user {user_id} in KB '{kb_name}'")
+            raise EntryNotFoundError(f"No worktree for user {user_id} in KB '{kb_name}'")
 
         now = datetime.now(UTC).isoformat()
         self.db._raw_conn.execute(
@@ -364,7 +370,7 @@ class WorktreeService:
         """
         row = self._get_worktree_row(kb_name, user_id)
         if not row:
-            raise ValueError(f"No worktree for user {user_id} in KB '{kb_name}'")
+            raise EntryNotFoundError(f"No worktree for user {user_id} in KB '{kb_name}'")
 
         wt = self._row_to_info(row)
         worktree_path = Path(wt.worktree_path)

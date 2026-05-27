@@ -100,11 +100,13 @@ class TestAddKB:
         assert result["source"] == "user"
         assert result["description"] == "New KB"
 
-    def test_add_duplicate_raises_value_error(self, registry):
-        """add_kb with a duplicate name raises ValueError."""
+    def test_add_duplicate_raises_config_error(self, registry):
+        """add_kb with a duplicate name raises ConfigError."""
+        from pyrite.exceptions import ConfigError
+
         registry.seed_from_config()
 
-        with pytest.raises(ValueError, match="already exists"):
+        with pytest.raises(ConfigError, match="already exists"):
             registry.add_kb(name="test-kb", path="/tmp/whatever")
 
 

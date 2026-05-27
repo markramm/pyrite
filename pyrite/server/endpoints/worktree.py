@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from ...exceptions import PyriteError
 from ..api import get_worktree_resolver, limiter, requires_tier
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,7 @@ def worktree_submit(
     wt_svc = resolver.worktree_service
     try:
         wt = wt_svc.submit(req.kb, auth_user["id"])
-    except ValueError as e:
+    except PyriteError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     return SubmitResponse(
@@ -206,7 +207,7 @@ def worktree_reset(
     wt_svc = resolver.worktree_service
     try:
         wt = wt_svc.reset_to_main(req.kb, auth_user["id"])
-    except ValueError as e:
+    except PyriteError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     return {"reset": True, "status": wt.status}

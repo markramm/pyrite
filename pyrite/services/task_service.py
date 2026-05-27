@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ..config import PyriteConfig
+from ..exceptions import EntryNotFoundError, KBNotFoundError
 from ..storage.database import PyriteDB
 from ..utils.metadata import parse_metadata
 
@@ -164,7 +165,7 @@ class TaskService:
         """Decompose a parent task into child tasks."""
         parent = self.kb_svc.get_entry(parent_id, kb_name)
         if not parent:
-            raise ValueError(f"Parent task '{parent_id}' not found in KB '{kb_name}'")
+            raise EntryNotFoundError(f"Parent task '{parent_id}' not found in KB '{kb_name}'")
 
         specs = []
         for child in children:
@@ -195,12 +196,12 @@ class TaskService:
 
         kb_config = self.config.get_kb(kb_name)
         if not kb_config:
-            raise ValueError(f"KB not found: {kb_name}")
+            raise KBNotFoundError(f"KB not found: {kb_name}")
 
         repo = KBRepository(kb_config)
         entry = repo.load(task_id)
         if not entry:
-            raise ValueError(f"Task '{task_id}' not found in KB '{kb_name}'")
+            raise EntryNotFoundError(f"Task '{task_id}' not found in KB '{kb_name}'")
 
         timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 

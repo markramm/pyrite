@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func
 
+from ..exceptions import EntryNotFoundError
 from ..storage.database import PyriteDB
 from ..storage.models import StarredEntry
 from .kb_service import KBService
@@ -94,7 +95,7 @@ class StarredService:
         self.db.session.commit()
 
         if deleted_count == 0:
-            raise ValueError(f"Starred entry '{entry_id}' not found")
+            raise EntryNotFoundError(f"Starred entry '{entry_id}' not found")
 
         return True
 

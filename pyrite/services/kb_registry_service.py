@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import KBConfig, PyriteConfig
-from ..exceptions import KBNotFoundError, KBProtectedError
+from ..exceptions import ConfigError, KBNotFoundError, KBProtectedError
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 
@@ -107,13 +107,13 @@ class KBRegistryService:
         If ``kb_type`` matches a registered plugin preset, the preset is
         materialized into the KB directory (kb.yaml, subdirectories, templates).
 
-        Raises ValueError if a KB with the same name already exists.
+        Raises ConfigError if a KB with the same name already exists.
         """
         from ..storage.models import KB
 
         existing = self.db.session.get(KB, name)
         if existing:
-            raise ValueError(f"KB '{name}' already exists")
+            raise ConfigError(f"KB '{name}' already exists")
 
         resolved = Path(path).expanduser().resolve()
         resolved.mkdir(parents=True, exist_ok=True)

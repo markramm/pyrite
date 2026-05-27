@@ -16,6 +16,7 @@ from typing import Any
 import yaml
 
 from ..config import PyriteConfig
+from ..exceptions import KBNotFoundError
 
 # Pattern for {{variable}} placeholders
 _VAR_PATTERN = re.compile(r"\{\{(\w+)\}\}")
@@ -38,7 +39,7 @@ class TemplateService:
         """Resolve the root path for a KB, raising if not found."""
         kb = self.config.get_kb(kb_name)
         if kb is None:
-            raise KeyError(f"KB '{kb_name}' not found")
+            raise KBNotFoundError(f"KB '{kb_name}' not found")
         return kb.path
 
     def _templates_dir(self, kb_name: str) -> Path:
