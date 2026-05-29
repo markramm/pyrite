@@ -42,26 +42,46 @@ canonical timeline event. The type-string rename lands in a later ticket
 
 Drop (redundant):
 
-- `cascade_org` — just `OrganizationEntry` with `tier` + `capture_lanes`.
-  Collapse those fields into the `metadata` bag on standard
-  `organization` entries, or add them as optional fields on JI's
-  existing org type.
+- `cascade_org` — just `OrganizationEntry` with `tier`, `capture_lanes`,
+  `chapters`. **Resolved (see Resolved decisions §1):** JI today has no
+  registered `organization` *type* (it uses an `entity_type` discriminator
+  on a generic entity model). Phase 1 adds `tier` as a first-class optional
+  field on the canonical `organization` type (cross-investigation rank
+  concept, parallels `tier` on `actor`); `capture_lanes` and `chapters`
+  go into the `metadata` bag (project-specific). Existing `cascade_org`
+  entries get rewritten to `type: organization` in Phase 2.
 - `cascade_event` — thin wrapper over `EventEntry`, unused (all real
   events are `timeline_event`). Delete; migrate any existing
   entries to `timeline_event` during Phase 2.
 
-### Relationship types (all 9 + inverses)
+### Relationship types (6 pairs moved, 1 pair dropped)
 
 Move these from `CascadePlugin.get_relationship_types()` to
 `JournalismInvestigationPlugin.get_relationship_types()`:
 
 `member_of` / `has_member`, `investigated` / `investigated_by`,
-`funded_by` / `funds`, `capture_mechanism` / `enabled_capture`,
+`capture_mechanism` / `enabled_capture`,
 `built_on` / `enabled`, `responded_to` / `provoked_response`,
 `actor_reference` / `has_actor`.
 
-Check for collisions with JI's existing relationship types before
-merging — `funded_by` / `funds` are the likely candidates.
+**Verified:** JI's 17 existing relationship types and cascade's 14 have
+**zero name collisions** (computed against source — JI uses FTM/financial-
+graph vocabulary like `transacted_with` / `received_transaction_from`;
+cascade has none of those names). The collision-check listed in the
+original ticket was based on a wrong guess.
+
+**Dropped — `funded_by` / `funds`:** this duplicates JI's existing
+`received_transaction_from` / `transacted_with` semantically, just
+without the transaction-detail layer. Resolved decision: keep one
+canonical funding vocabulary; cascade-KB entries with `funded_by` /
+`funds` links get rewritten in Phase 2 to
+`received_transaction_from` / `transacted_with` with `amount: "unknown"`
+(the marker preserves "this is a funding relation we know about but
+have no amount for" — distinct from `null` which would read as
+"explicitly absent"). See Resolved decisions §2.
+
+Net: JI's relationship-type registry grows from 17 → **29** after the
+merge (17 JI + 14 cascade − 2 dropped funding entries).
 
 ### Validators
 
@@ -70,6 +90,16 @@ Move `_validate_cascade_entry` from
 module. Rename to reflect the new home (e.g., `_validate_actor_entry`,
 `_validate_solidarity_event`), or fold the checks into existing JI
 validators where the types already overlap.
+
+**Signature reconciliation (resolved):** cascade's validator has the
+old 1-arg shape `_validate_cascade_entry(entry)`; JI's convention
+(invoked by `kb_schema.py:388` and the index-health status check) is
+the 3-arg `validator(entry_type, data, context) -> list[dict]`. Port
+to the 3-arg shape on move rather than relying on the `TypeError`
+fallback path — keeps the validator surface uniform and avoids the
+fallback's silent-skip-on-other-errors behavior. Returned error dicts
+follow the `{"field", "rule", "expected", "got"}` shape so the
+existing `invalid_statuses` health check picks them up automatically.
 
 ### Hooks
 
@@ -81,6 +111,46 @@ JI's hooks module. Also move the actor lookup cache
 The hook currently triggers on `timeline_event`, `solidarity_event`,
 `scene` — keep that trigger set.
 
+**Ordering with JI's existing `before_save` hook:** JI already registers
+`before_save: [enrich_connection_links]`. Post-merge it becomes
+`[enrich_connection_links, resolve_actor_links]` — actor link resolution
+runs **after** connection enrichment. This is the right order:
+`enrich_connection_links` reconciles relationship links from frontmatter,
+and `resolve_actor_links` then adds `actor_reference` links based on the
+`actors` field. Reversing the order would mean actor refs land before
+connection enrichment sees them, missing potential
+relationship-resolution wins. Document the ordering in the registration
+site so a future hook addition doesn't reshuffle silently.
+
+## Resolved decisions
+
+These were left open in the original ticket and resolved during
+deep-dive review (decisions locked; no need to re-litigate at
+implementation time).
+
+1. **`cascade_org` landing.** JI has no registered `organization` entry
+   type today — it models entities with an `entity_type` discriminator.
+   Phase 1 adds `tier` as a first-class optional field on the canonical
+   `organization` type (cross-investigation concept; parallels `tier`
+   on `actor`). `capture_lanes` and `chapters` go into the `metadata`
+   bag — project-specific enough not to deserve top-level schema.
+2. **Funding vocabulary.** Drop cascade's `funded_by` / `funds` rather
+   than carry two ways to express funding. Phase 2 rewrites existing
+   links to `received_transaction_from` / `transacted_with` with
+   `amount: "unknown"` (semantic marker — distinct from `null`).
+3. **Validator signature.** Port `_validate_cascade_entry(entry)` to
+   JI's 3-arg `validator(entry_type, data, context)` shape on move.
+   No reliance on the `TypeError` fallback.
+4. **Hook ordering.** `before_save` becomes
+   `[enrich_connection_links, resolve_actor_links]` — connection
+   enrichment first, actor-reference resolution second.
+5. **Dual event-type window.** During the one-release shim, JI
+   registers both `investigation_event` (its own) and `timeline_event`
+   (cascade's `TimelineEventEntry`, which subclasses it). Pyrite's
+   `_resolve_entry_type` already prefers the subclass for shared core
+   types, so this is safe — just don't *remove* either registration
+   until Phase 3's rename ticket lands.
+
 ## TDD
 
 Failing tests first, in JI's test suite:
@@ -90,6 +160,16 @@ Failing tests first, in JI's test suite:
 3. `test_resolve_actor_links_runs_on_timeline_event` — save a
    `timeline_event` with `actors: ["Donald Trump"]` in a KB that has a
    matching actor entry, assert `actor_reference` link is added
+4. `test_funded_by_relationship_not_registered` — assert
+   `"funded_by" not in JournalismInvestigationPlugin().get_relationship_types()`
+   (locks the funding-vocabulary decision in code, not just docs).
+5. `test_before_save_hook_order_is_enrich_then_actor_links` — assert
+   `JournalismInvestigationPlugin().get_hooks()["before_save"]` is
+   `[enrich_connection_links, resolve_actor_links]` in that order.
+6. `test_organization_tier_field_round_trips` — create an
+   `organization` entry with `tier: 1` and `metadata: {"capture_lanes":
+   ["finance"], "chapters": [3]}`, save+reload, assert all three values
+   survive the round-trip in their resolved homes.
 
 ## Changes
 
@@ -101,13 +181,21 @@ Failing tests first, in JI's test suite:
 
 ## Done when
 
-- All 7 kept types, 9 relationships, both hooks, and validator land in
-  JI
-- JI tests covering the moved surface pass
-- Cascade plugin still loads and exposes the same types via
-  re-export shim (full removal in Phase 3)
-- A migration plan for `cascade_org` and `cascade_event` entries is
-  written into [[migrate-cascade-kbs-to-investigation]]
+- All 7 kept entry types, **6 kept relationship pairs** (12 directions),
+  both hooks (in the documented order), and the ported validator land
+  in JI.
+- `tier` lives as a first-class optional field on the canonical
+  `organization` type; `capture_lanes` and `chapters` slot into
+  `metadata`.
+- `funded_by` / `funds` are NOT registered on the JI side (locked by
+  TDD case 4).
+- JI tests covering the moved surface pass.
+- Cascade plugin still loads and exposes the same types via re-export
+  shim (full removal in Phase 3).
+- Migration plans land in [[migrate-cascade-kbs-to-investigation]] for:
+  `cascade_org` → `organization` (with field-folding per §1),
+  `cascade_event` → `timeline_event`, and the funding-link rewrite
+  with `amount: "unknown"` (per §2).
 
 ## Depends on
 
