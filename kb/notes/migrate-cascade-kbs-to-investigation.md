@@ -45,8 +45,38 @@ For each KB:
   `type: cascade_event`, or missing `type:` that represent timeline
   events → rewrite to `type: timeline_event`
 - Any entries with `type: cascade_org` → rewrite to `type: organization`,
-  move cascade-specific fields (`tier`, `capture_lanes`) into `metadata:`
-  or into optional fields on JI's org schema per [[ji-absorb-cascade-types]]
+  and split the cascade-specific fields per the resolved decisions in
+  [[ji-absorb-cascade-types]]:
+  - `tier` → kept as a first-class top-level field on `organization`
+    (cross-investigation concept; JI adds it as an optional field on the
+    canonical org type in Phase 1).
+  - `capture_lanes` → moved into `metadata.capture_lanes` (project-
+    specific taxonomy; not promoted to top-level schema).
+  - `chapters` → moved into `metadata.chapters` (same rationale).
+
+### Funding-link rewrite
+
+Cascade KBs use `funded_by` / `funds` relationship links, dropped from
+the merged registry in [[ji-absorb-cascade-types]] (semantically
+duplicates JI's `received_transaction_from` / `transacted_with`).
+
+For every link with `relation: funded_by` or `relation: funds` in the
+cascade KBs:
+
+- `relation: funded_by` → `relation: received_transaction_from`
+- `relation: funds` → `relation: transacted_with`
+- Add `amount: "unknown"` to the link's properties — semantic marker
+  preserving "we know this funding relation exists but have no
+  transaction amount." Distinct from `null` (which would read as
+  "explicitly absent / not applicable") and from omitting the field
+  (which on a real transaction means "amount unrecorded" — different
+  state). The string `"unknown"` lets downstream queries and
+  re-investigation passes find these and fill them in.
+
+This rewrite happens in the same migrator pass as the type rewrites;
+it must not run before `ji-absorb-cascade-types` lands or the migrated
+KB will index against a registry that doesn't have the new relation
+names yet.
 
 ### cascade-timeline repo hygiene
 
@@ -80,10 +110,17 @@ community KBs).
 1. `test_migrate_from_cascade_rewrites_event_types` — fixture KB with
    `type: event` entry, run migrator, assert `type: timeline_event` in
    the rewritten file.
-2. `test_migrate_from_cascade_preserves_custom_fields` — `tier: 2` on a
-   `cascade_org` survives as `metadata.tier: 2` or as an optional field
-   on the new `organization` entry.
-3. `test_cascade_timeline_kb_passes_kb_validate` — after migration,
+2. `test_migrate_cascade_org_splits_fields` — a `cascade_org` entry
+   with `tier: 2`, `capture_lanes: ["finance"]`, `chapters: [3]`
+   migrates to `type: organization` with **`tier: 2` at the top level**
+   and **`metadata.capture_lanes: ["finance"]`** + **`metadata.chapters:
+   [3]`**. Asserts the field-split decision, not just "preserved
+   somewhere."
+3. `test_migrate_rewrites_funded_by_to_received_transaction_from` — a
+   link `{target: X, relation: funded_by}` becomes
+   `{target: X, relation: received_transaction_from, amount: "unknown"}`.
+   Same for `funds` → `transacted_with`.
+4. `test_cascade_timeline_kb_passes_kb_validate` — after migration,
    `pyrite kb validate -k cascade-timeline` exits 0.
 
 ## Changes
@@ -99,6 +136,11 @@ community KBs).
 - `pyrite kb validate -k cascade-timeline` exits 0 (no undeclared types,
   no missing required fields, no orphan entries)
 - Same for cascade-research and cascade-solidarity
+- No entries remain with `type: cascade_org` or `type: cascade_event`;
+  surviving `cascade_org` data has `tier` at the top level and
+  `capture_lanes`/`chapters` under `metadata`.
+- No links remain with `relation: funded_by` or `relation: funds`;
+  rewritten links carry `amount: "unknown"`.
 - `capturecascade.org` deploys cleanly from the migrated
   cascade-timeline (no entries dropped from the viewer)
 - `pyrite kb migrate --from-cascade` passes tests
