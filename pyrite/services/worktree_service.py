@@ -201,8 +201,21 @@ class WorktreeService:
 
         # Ensure diff DB directory exists and initialize the diff index
         diff_db_path.parent.mkdir(parents=True, exist_ok=True)
-        # Pre-create the diff DB so it's ready for immediate use
+        # The diff index lives inside the worktree (.pyrite/), so self-exclude it
+        # from git — otherwise `git add .` on submit commits the SQLite binaries
+        # into the user's branch and they'd merge into the KB.
+        (diff_db_path.parent / ".gitignore").write_text("*\n")
+        # Pre-create the diff DB so it's ready for immediate use. Register the KB
+        # in it (pointing at the worktree path) so the first overlay entry write
+        # satisfies the entry→kb foreign key — without this, any write into the
+        # worktree fails with a FOREIGN KEY constraint error.
         _diff_db = PyriteDB(diff_db_path)
+        _diff_db.register_kb(
+            name=kb_name,
+            kb_type=kb_config.kb_type,
+            path=str(worktree_path),
+            description=kb_config.description,
+        )
         _diff_db.close()
 
         # Insert DB record
