@@ -706,6 +706,8 @@ def update_entry(
         updates["importance"] = req.importance
     if req.tags is not None:
         updates["tags"] = req.tags
+    if req.metadata is not None:
+        updates["metadata"] = req.metadata
 
     try:
         svc.update_entry(entry_id, req.kb, **updates)

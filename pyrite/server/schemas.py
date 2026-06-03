@@ -130,6 +130,7 @@ class EntryResponse(BaseModel):
     outlinks: list[dict] = []
     backlinks: list[dict] = []
     file_path: str | None = None
+    metadata: dict = {}
     created_at: str | None = None
     updated_at: str | None = None
 

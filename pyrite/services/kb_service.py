@@ -455,7 +455,15 @@ class KBService:
 
         # Apply updates
         for key, value in updates.items():
-            if hasattr(entry, key):
+            if not hasattr(entry, key):
+                continue
+            # Metadata is a bag of keys — merge shallowly so a partial update
+            # (e.g. just review_comments) does not clobber other metadata.
+            if key == "metadata" and isinstance(value, dict):
+                merged = dict(getattr(entry, "metadata", None) or {})
+                merged.update(value)
+                setattr(entry, key, merged)
+            else:
                 setattr(entry, key, value)
 
         entry.updated_at = datetime.now(UTC)

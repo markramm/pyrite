@@ -196,6 +196,44 @@ class TestUpdateAndDeleteFlow:
         assert len(results) == 1
         assert results[0]["id"] == "update-test"
 
+    def test_update_entry_merges_metadata(self, integration_env):
+        """Updating metadata should merge shallowly, not clobber other keys."""
+        env = integration_env
+
+        env["kb_service"].create_entry(
+            kb_name="test-timeline",
+            entry_id="meta-merge-test",
+            title="Meta Merge",
+            entry_type="event",
+            body="Body.",
+            date="2024-01-01",
+        )
+
+        # Seed one metadata key.
+        env["kb_service"].update_entry(
+            entry_id="meta-merge-test",
+            kb_name="test-timeline",
+            metadata={"existing_key": "keep-me"},
+        )
+
+        # A partial update with a different key must not drop existing_key.
+        updated = env["kb_service"].update_entry(
+            entry_id="meta-merge-test",
+            kb_name="test-timeline",
+            metadata={"review_comments": [{"id": "c1", "note": "hi"}]},
+        )
+
+        assert updated.metadata["existing_key"] == "keep-me"
+        assert updated.metadata["review_comments"][0]["id"] == "c1"
+
+        # Reload from disk to confirm the merge persisted to frontmatter.
+        from pyrite.storage.repository import KBRepository
+
+        repo = KBRepository(env["config"].get_kb("test-timeline"))
+        reloaded = repo.load("meta-merge-test")
+        assert reloaded.metadata["existing_key"] == "keep-me"
+        assert reloaded.metadata["review_comments"][0]["id"] == "c1"
+
     def test_delete_entry_removes_from_index(self, integration_env):
         """Deleting an entry should remove it from search."""
         env = integration_env
