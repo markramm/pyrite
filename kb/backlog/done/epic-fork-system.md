@@ -45,3 +45,14 @@ Uses git worktrees for zero-copy per-user isolation with an in-app admin merge q
 - [[fork-conflict-resolution-ui]] — Visual conflict resolution
 - [[sync-conflict-resolution-ui]] — Git sync conflict resolution
 - [[web-ui-git-operations]] — General git operations panel (V1 uses submit/merge instead)
+
+## Closure note (2026-06-05)
+
+Closed at 3/8 subtasks done (38%) by design — the V1-scoped three subtasks
+(`worktree-service`, `worktree-write-routing`, `worktree-merge-queue`) all
+shipped; the five remainder items above were consciously deferred to V2
+rather than left as silent debt. Each deferred subtask exists as its own
+ticket with `status: deferred` so the work is tracked, just not in flight.
+The epic's "done at 38%" reading in `pyrite sw epics` is intentional, not a
+data bug — surface here so future readers don't try to "finish the epic"
+without revisiting the V2 prioritization first.

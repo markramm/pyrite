@@ -96,6 +96,13 @@ narrow protocol it actually uses, not on a god-Backend.
 
 - [[bug-postgres-backend-silent-return-empty-on-query-error]] — symptom of
   this Protocol's confusion; absorbed into Phase 4 of this ticket.
+- [[bug-collection-entries-endpoint-metadata-string-pydantic-rejection]]
+  (done) — narrow fix landed at the `get_collection_entries` boundary, but
+  the **broader** class of bug (raw-SQL `_exec` list paths return `metadata`
+  as a JSON-encoded string instead of a dict) covers ~13 latent call sites.
+  The principled fix — "all reads through this layer return parsed metadata"
+  — belongs in the EntityStore spec, and this ticket should absorb the
+  cleanup. Acceptance criteria below extended to make that contract explicit.
 - [[implement-extension-type-protocols]] — adjacent structural-protocol work
   (at the entry-type level). This ticket is at the backend level.
 - ADR-0013 (Unified Database Connection and Transaction Model) — the
@@ -103,3 +110,15 @@ narrow protocol it actually uses, not on a god-Backend.
 - ADR-0005 (SQLAlchemy ORM with Alembic) — relevant context for the ORM
   vs raw-SQL pattern split.
 - The modularity report committed alongside this ticket.
+
+## Acceptance criteria addition (2026-06-05)
+
+`EntityStore` (and any shared `BaseEntityStore` mixin) MUST normalize the
+shape of structured columns — at minimum `metadata` and `extra_data` —
+across both the ORM single-entry path and the raw-SQL list paths. The
+post-split contract: every row returned by an `EntityStore` method has
+`metadata` as a parsed dict, not a JSON-encoded string. This eliminates the
+divergence that produced
+[[bug-collection-entries-endpoint-metadata-string-pydantic-rejection]] and
+prevents the remaining ~13 latent raw-SQL list-path regressions from
+surfacing one bug report at a time.

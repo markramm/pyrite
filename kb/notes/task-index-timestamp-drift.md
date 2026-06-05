@@ -1,12 +1,14 @@
 ---
 id: task-index-timestamp-drift
-type: backlog_item
 title: "BUG: `updated_at` / `created_at` fields null in task index for many tasks; breaks 'done today' queries"
+type: backlog_item
+tags: [task-system, bug, index, timestamps, conductor-workflow, query]
+importance: 5
 kind: bug
 status: proposed
-priority: medium
+priority: high
 effort: S
-tags: [task-system, bug, index, timestamps, conductor-workflow, query]
+rank: 0
 ---
 
 ## Problem
