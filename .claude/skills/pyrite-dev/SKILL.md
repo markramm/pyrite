@@ -1,6 +1,6 @@
 ---
 name: pyrite-dev
-description: "Use when developing Pyrite core, extensions, web frontend, or API. Enforces TDD, systematic debugging, verification, and backlog management. Covers architecture, code patterns, testing conventions, and project processes."
+description: "This skill should be used when working in the /Users/markr/pyrite repo — fixing a bug, adding a feature, writing or running tests, debugging, completing or filing a backlog item, releasing dev→main, or deploying to demo.pyrite.wiki / capturecascade.org / pyrite.ink. Enforces TDD, root-cause debugging, evidence-before-claims verification, and CLI-driven backlog management."
 ---
 
 # Pyrite Development Skill
@@ -40,59 +40,9 @@ Thinking "skip this just once"? That's rationalization. These exist because skip
 
 Commit early and often to `dev`. The pre-commit hooks (ruff, tests) run automatically. Small, focused commits are better than large batches.
 
-### Releasing (dev → main)
+### Releasing & Deploying
 
-Only merge `dev` → `main` when the user explicitly asks to release. The process:
-
-```bash
-# 1. Ensure CI is green on dev
-# 2. Merge to main
-git checkout main
-git merge dev
-# 3. Update version in pyproject.toml (remove .dev0 suffix)
-# 4. Commit version bump
-# 5. Tag
-git tag -a v0.X.0 -m "v0.X.0: summary"
-git push && git push --tags
-# 6. Create GitHub release (triggers PyPI publish)
-# 7. Switch back to dev and bump to next dev version
-git checkout dev
-# Edit pyproject.toml to 0.X+1.0.dev0
-git commit -am "Bump version to 0.X+1.0.dev0"
-git push
-```
-
-### Deploying
-
-Use the deployment script at `pyrite_deployments/deploy.sh` (gitignored, local only):
-
-```bash
-# Check all sites
-./pyrite_deployments/deploy.sh status
-
-# Deploy latest dev to demo.pyrite.wiki
-./pyrite_deployments/deploy.sh demo
-
-# Deploy cascade (code only — fast, no re-index)
-./pyrite_deployments/deploy.sh cascade
-
-# Deploy cascade with full re-seed (re-copy KB data, rebuild index, re-export, re-render)
-./pyrite_deployments/deploy.sh cascade --reseed
-
-# Deploy specific tag to pyrite.ink
-./pyrite_deployments/deploy.sh ink v0.21.0
-```
-
-**When to use `--reseed`:** when KB content changed (new events, fixed bodies), or when the export/render code changed (new fields in site cache, new source data in timeline.json).
-
-**PyPI**: triggered automatically by creating a GitHub release from a tag.
-
-### Hotfixes
-
-For urgent fixes to a release:
-1. Cherry-pick the fix from `dev` to `main`
-2. Bump patch version, tag (e.g., `v0.21.1`)
-3. Deploy
+Daily development does not touch `main` or run the deploy script. When the user asks to release (`dev → main`), tag and ship a version, deploy to demo/cascade/pyrite.ink, or hotfix a release, follow [release-runbook.md](release-runbook.md) — it holds the full step-by-step process, the deploy.sh commands, and the site→branch mapping.
 
 ---
 
@@ -100,14 +50,14 @@ For urgent fixes to a release:
 
 ### Before Writing Code
 
-Read the relevant backlog item, ADR, or design doc. Understand what you're building and why.
+Read the relevant backlog item, ADR, or design doc. Understand the goal and the reason for the work before writing code.
 
 ```
 CHECKLIST — before any implementation:
 - [ ] Read the backlog item / design doc / ADR
 - [ ] Check kb/adrs/ for relevant architecture decisions
 - [ ] Identify which files need to change (see Key Source Files)
-- [ ] Check existing tests for the area you're modifying
+- [ ] Check existing tests for the area being modified
 - [ ] If multi-step: create tasks with TaskCreate, set dependencies
 ```
 
@@ -237,7 +187,7 @@ Use the correct `type` frontmatter for KB entries so plugin tools can find them:
 The backlog has no index file. `pyrite sw backlog` is the source of truth.
 
 - Completed an item?
-    .venv/bin/pyrite update <id> -k pyrite -f status=completed
+    .venv/bin/pyrite update <id> -k pyrite -f status=done
     git mv kb/backlog/<id>.md kb/backlog/done/
     .venv/bin/pyrite index sync
 - Check current state:
@@ -291,7 +241,7 @@ When implementation + verification are done, follow the backlog process:
 
 1. Update the item's status via CLI (validates + syncs index automatically):
    ```bash
-   .venv/bin/pyrite update <item-id> -k pyrite -f status=completed
+   .venv/bin/pyrite update <item-id> -k pyrite -f status=done
    ```
    **Never hand-edit YAML frontmatter for status changes** — the CLI validates field values and keeps the index in sync. Hand-editing skips validation and leaves the index stale until the next `pyrite index sync`.
 2. Move the file from `kb/backlog/` to `kb/backlog/done/` (`git mv`)
@@ -311,35 +261,7 @@ When implementation + verification are done, follow the backlog process:
 
 ### Key source files
 
-| File | Purpose |
-|------|---------|
-| `pyrite/plugins/protocol.py` | PyritePlugin Protocol (15 methods + `name` attribute) |
-| `pyrite/plugins/registry.py` | Plugin discovery and aggregation |
-| `pyrite/models/core_types.py` | 9 built-in entry types + ENTRY_TYPE_REGISTRY |
-| `pyrite/models/factory.py` | Entry factory — `build_entry()` single dispatch point |
-| `pyrite/cli/__init__.py` | Main Typer CLI app, all commands |
-| `pyrite/storage/database.py` | PyriteDB (SQLite + FTS5) |
-| `pyrite/storage/queries.py` | SQL queries (FTS search, tag search, graph) |
-| `pyrite/server/api.py` | REST API factory, deps, rate limiter |
-| `pyrite/server/endpoints/` | Per-feature endpoint modules (kbs, search, entries, etc.) |
-| `pyrite/server/mcp_server.py` | MCP server (3-tier tools) |
-| `pyrite/services/kb_service.py` | KBService CRUD with hooks |
-| `pyrite/services/search_service.py` | SearchService — keyword, semantic, hybrid search + RRF |
-| `pyrite/services/embedding_service.py` | EmbeddingService — vector storage, similarity search |
-| `pyrite/services/embedding_worker.py` | EmbeddingWorker — background embedding pipeline |
-| `pyrite/services/llm_service.py` | LLMService — provider-agnostic LLM abstraction |
-| `pyrite/services/template_service.py` | TemplateService — entry templates and presets |
-| `pyrite/services/git_service.py` | GitService — git operations, commit, diff |
-| `pyrite/services/repo_service.py` | RepoService — multi-repo management |
-| `pyrite/services/user_service.py` | UserService — user identity and auth |
-| `pyrite/services/clipper.py` | ClipperService — web clipper |
-| `pyrite/services/graph_service.py` | GraphService — graph/link queries (extracted from KBService) |
-| `pyrite/services/export_service.py` | ExportService — KB export and git operations (extracted from KBService) |
-| `pyrite/services/ephemeral_service.py` | EphemeralKBService — ephemeral KB lifecycle with TTL (extracted from KBService) |
-| `pyrite/services/quota_service.py` | QuotaService — usage tier limit checks (extracted from KBService) |
-| `pyrite/services/collection_query.py` | Collection query functions |
-| `pyrite/schema/` | KBSchema, FieldSchema — schema-as-config validation (6 submodules) |
-| `pyrite/config.py` | PyriteConfig, Settings, KBConfig |
+For the canonical file map (plugins, models, schema, CLI, storage, server, all services), see [architecture.md](architecture.md). Consult it when planning a change to know where to look first.
 
 ### Architecture decisions
 
