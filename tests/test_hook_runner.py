@@ -251,6 +251,47 @@ class TestKBServiceWiring:
             f"expected _parent_rollup in after_save hooks, got {after_names}"
         )
 
+    def test_task_hooks_live_in_task_service_after_step_3(self):
+        """Step 3 of the extraction: _task_validate_transition and
+        _parent_rollup move from kb_service.py to task_service.py where they
+        belong. The functions are importable from the new home, and the old
+        home no longer defines them."""
+        import pyrite.services.kb_service as kb_mod
+        import pyrite.services.task_service as task_mod
+
+        # New home — these must be importable from task_service.
+        assert hasattr(task_mod, "_task_validate_transition"), (
+            "_task_validate_transition should live in task_service.py after step 3"
+        )
+        assert hasattr(task_mod, "_parent_rollup"), (
+            "_parent_rollup should live in task_service.py after step 3"
+        )
+
+        # Old home — these should be gone from kb_service.
+        assert not hasattr(kb_mod, "_task_validate_transition"), (
+            "_task_validate_transition should be gone from kb_service.py "
+            "after step 3 (it was a wrong-home smell)"
+        )
+        assert not hasattr(kb_mod, "_parent_rollup"), (
+            "_parent_rollup should be gone from kb_service.py after step 3"
+        )
+
+    def test_register_task_hooks_helper_wires_runner(self):
+        """task_service.register_task_hooks(runner) is the explicit
+        registration entry point KBService calls. It must register both core
+        hooks on the runner; calling it twice on a fresh runner registers
+        them twice (so callers know the responsibility of not double-calling)."""
+        from pyrite.services.hook_runner import HookRunner
+        from pyrite.services.task_service import register_task_hooks
+
+        runner = HookRunner()
+        register_task_hooks(runner)
+
+        before_names = {fn.__name__ for fn in runner.core_hooks("before_save")}
+        after_names = {fn.__name__ for fn in runner.core_hooks("after_save")}
+        assert "_task_validate_transition" in before_names
+        assert "_parent_rollup" in after_names
+
     def test_kb_service_core_dispatch_goes_through_runner(self):
         """KBService's _run_hooks must delegate core-hook dispatch to
         self.hook_runner. A hook registered on the runner via

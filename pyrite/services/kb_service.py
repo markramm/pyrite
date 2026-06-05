@@ -70,13 +70,13 @@ class KBService:
         # get_registry`` to avoid the plugins↔services import cycle, and
         # threading that through HookRunner is a separate cleanup step).
         self.hook_runner = HookRunner(plugin_registry=None)
-        # Register the two platform-level core hooks. After step 3 of the
-        # extraction these move into task_service.py and register themselves
-        # at TaskService construction; until then they live as module-level
-        # functions and KBService registers them at startup so behavior is
-        # preserved.
-        self.hook_runner.register_core_hook("before_save", _task_validate_transition)
-        self.hook_runner.register_core_hook("after_save", _parent_rollup)
+        # Register the platform-level core hooks. The task-system ones live in
+        # task_service.py — register_task_hooks is the explicit entry point so
+        # the cross-service dependency is visible at the call site rather than
+        # buried in a module-level _CORE_HOOKS dict.
+        from .task_service import register_task_hooks
+
+        register_task_hooks(self.hook_runner)
 
     def _get_embedding_svc(self):
         """Lazy-load embedding service if available."""
@@ -1315,69 +1315,9 @@ class KBService:
 
 
 # =============================================================================
-# Core hooks — platform-level lifecycle hooks (run before plugin hooks)
+# Core hooks moved out: _task_validate_transition and _parent_rollup now live
+# in task_service.py, where they belong with task semantics. KBService.__init__
+# wires them via register_task_hooks(self.hook_runner). The module-level
+# _CORE_HOOKS dict that used to live here is gone — runner.core_hooks(name) is
+# the inspection surface now.
 # =============================================================================
-
-
-def _task_validate_transition(entry: Any, context: dict) -> Any:
-    """Validate task status transitions against workflow on update."""
-    if context.get("operation") != "update":
-        return entry
-    if not hasattr(entry, "entry_type") or entry.entry_type != "task":
-        return entry
-
-    old_status = context.get("old_status")
-    new_status = getattr(entry, "status", None)
-    if not old_status or not new_status or old_status == new_status:
-        return entry
-
-    from ..models.task import TASK_WORKFLOW, can_transition, get_allowed_transitions
-
-    if not can_transition(TASK_WORKFLOW, old_status, new_status, "write"):
-        allowed = [t["to"] for t in get_allowed_transitions(TASK_WORKFLOW, old_status, "write")]
-        allowed_msg = ", ".join(allowed) if allowed else "(none — terminal state)"
-        raise ValidationError(
-            f"Cannot move task from '{old_status}' to '{new_status}'. "
-            f"Allowed next: {allowed_msg}. "
-            f"Tasks follow open → claimed → in_progress → done/failed/blocked/review; "
-            f"walk through the intermediate states rather than skipping."
-        )
-
-    return entry
-
-
-def _parent_rollup(entry: Any, context: dict) -> Any:
-    """Auto-complete parent when all Parentable children reach terminal status."""
-    if not hasattr(entry, "entry_type"):
-        return entry
-    if getattr(entry, "status", "") != "done":
-        return entry
-
-    parent_id = getattr(entry, "parent", "")
-    if not parent_id:
-        return entry
-
-    kb_name = context.get("kb_name", "")
-    if not kb_name:
-        return entry
-
-    try:
-        config = context.get("config")
-        db = context.get("db")
-        if not config or not db:
-            return entry
-
-        from .task_service import TaskService
-
-        svc = TaskService(config, db)
-        svc.rollup_parent(parent_id, kb_name)
-    except Exception as e:
-        logger.warning("Parent rollup failed for %s: %s", parent_id, e)
-
-    return entry
-
-
-_CORE_HOOKS: dict[str, list] = {
-    "before_save": [_task_validate_transition],
-    "after_save": [_parent_rollup],
-}

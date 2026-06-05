@@ -1,13 +1,19 @@
 """Task service — operative task operations wrapping KBService."""
 
+from __future__ import annotations
+
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..config import PyriteConfig
-from ..exceptions import EntryNotFoundError, KBNotFoundError
+from ..exceptions import EntryNotFoundError, KBNotFoundError, ValidationError
 from ..storage.database import PyriteDB
 from ..utils.metadata import parse_metadata
+
+if TYPE_CHECKING:
+    from ..models import Entry
+    from .hook_runner import HookRunner
 
 logger = logging.getLogger(__name__)
 
@@ -551,3 +557,85 @@ class TaskService:
 def _parse_metadata(raw) -> dict[str, Any]:
     """Parse metadata JSON from a DB row."""
     return parse_metadata(raw)
+
+
+# =============================================================================
+# Core hooks — moved from kb_service.py in extract-hookrunner-from-kb-service
+# step 3. These are platform-level lifecycle hooks specific to tasks
+# (transition validation, parent rollup). They live here because they belong
+# with task semantics, not with generic CRUD. KBService registers them on its
+# HookRunner at startup via register_task_hooks().
+#
+# Both hooks are polymorphic over Entry: _task_validate_transition early-exits
+# unless entry_type == "task"; _parent_rollup runs for any Parentable entry
+# that reaches a terminal status. Hence the Entry type hint rather than
+# TaskEntry.
+# =============================================================================
+
+
+def _task_validate_transition(entry: Entry, context: dict) -> Entry:
+    """Validate task status transitions against workflow on update."""
+    if context.get("operation") != "update":
+        return entry
+    if not hasattr(entry, "entry_type") or entry.entry_type != "task":
+        return entry
+
+    old_status = context.get("old_status")
+    new_status = getattr(entry, "status", None)
+    if not old_status or not new_status or old_status == new_status:
+        return entry
+
+    from ..models.task import TASK_WORKFLOW, can_transition, get_allowed_transitions
+
+    if not can_transition(TASK_WORKFLOW, old_status, new_status, "write"):
+        allowed = [t["to"] for t in get_allowed_transitions(TASK_WORKFLOW, old_status, "write")]
+        allowed_msg = ", ".join(allowed) if allowed else "(none — terminal state)"
+        raise ValidationError(
+            f"Cannot move task from '{old_status}' to '{new_status}'. "
+            f"Allowed next: {allowed_msg}. "
+            f"Tasks follow open → claimed → in_progress → done/failed/blocked/review; "
+            f"walk through the intermediate states rather than skipping."
+        )
+
+    return entry
+
+
+def _parent_rollup(entry: Entry, context: dict) -> Entry:
+    """Auto-complete parent when all Parentable children reach terminal status."""
+    if not hasattr(entry, "entry_type"):
+        return entry
+    if getattr(entry, "status", "") != "done":
+        return entry
+
+    parent_id = getattr(entry, "parent", "")
+    if not parent_id:
+        return entry
+
+    kb_name = context.get("kb_name", "")
+    if not kb_name:
+        return entry
+
+    try:
+        config = context.get("config")
+        db = context.get("db")
+        if not config or not db:
+            return entry
+
+        svc = TaskService(config, db)
+        svc.rollup_parent(parent_id, kb_name)
+    except Exception as e:
+        logger.warning("Parent rollup failed for %s: %s", parent_id, e)
+
+    return entry
+
+
+def register_task_hooks(runner: HookRunner) -> None:
+    """Register the task-system core hooks on a HookRunner.
+
+    Called by KBService at construction time. Keeping the registration
+    explicit (rather than auto-registering at module import) means tests can
+    build a clean HookRunner and opt into task hooks deliberately, and the
+    next-extracted service has a worked example to follow.
+    """
+    runner.register_core_hook("before_save", _task_validate_transition)
+    runner.register_core_hook("after_save", _parent_rollup)

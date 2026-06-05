@@ -49,12 +49,17 @@ class TestCoreRegistration:
         assert "task" in presets
 
     def test_core_hooks_registered(self):
-        from pyrite.services.kb_service import _CORE_HOOKS
+        """KBService registers the task-system core hooks on its HookRunner
+        at construction. After the extract-hookrunner-from-kb-service refactor
+        (step 3) the registration lives in task_service.register_task_hooks
+        and runs from KBService.__init__; this test asserts the wiring."""
+        from unittest.mock import MagicMock
 
-        assert "before_save" in _CORE_HOOKS
-        assert "after_save" in _CORE_HOOKS
-        assert len(_CORE_HOOKS["before_save"]) >= 1
-        assert len(_CORE_HOOKS["after_save"]) >= 1
+        from pyrite.services.kb_service import KBService
+
+        svc = KBService(config=MagicMock(), db=MagicMock())
+        assert len(svc.hook_runner.core_hooks("before_save")) >= 1
+        assert len(svc.hook_runner.core_hooks("after_save")) >= 1
 
 
 # =========================================================================
@@ -267,7 +272,7 @@ class TestHooks:
         from unittest.mock import MagicMock
 
         from pyrite.plugins.context import PluginContext
-        from pyrite.services.kb_service import _task_validate_transition
+        from pyrite.services.task_service import _task_validate_transition
 
         entry = TaskEntry(id="t1", title="Test", status="done")
         ctx = PluginContext(
@@ -288,7 +293,7 @@ class TestHooks:
         from unittest.mock import MagicMock
 
         from pyrite.plugins.context import PluginContext
-        from pyrite.services.kb_service import _task_validate_transition
+        from pyrite.services.task_service import _task_validate_transition
 
         entry = TaskEntry(id="t1", title="Test", status="claimed")
         ctx = PluginContext(
@@ -306,7 +311,7 @@ class TestHooks:
         from unittest.mock import MagicMock
 
         from pyrite.plugins.context import PluginContext
-        from pyrite.services.kb_service import _task_validate_transition
+        from pyrite.services.task_service import _task_validate_transition
 
         entry = TaskEntry(id="t1", title="Test", status="done")
         ctx = PluginContext(
