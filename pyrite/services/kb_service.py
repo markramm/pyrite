@@ -627,6 +627,24 @@ class KBService:
         """List all collection entries."""
         return self.list_entries(kb_name=kb_name, entry_type="collection")
 
+    @staticmethod
+    def _normalize_metadata_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parse the ``metadata`` field on each row to a dict.
+
+        Raw-SQL list paths (``_exec``-based) return ``metadata`` as a
+        JSON-encoded string straight from the column, while the ORM
+        single-entry path (``_entry_to_dict``) returns it parsed. REST callers
+        rely on the parsed shape (``EntryResponse.metadata: dict``), so this
+        helper aligns the list-path contract.
+
+        See ``bug-collection-entries-endpoint-metadata-string-pydantic-rejection``
+        for the broader latent-bug class; this is the narrow per-call fix.
+        """
+        for r in rows:
+            if "metadata" in r:
+                r["metadata"] = parse_metadata(r["metadata"])
+        return rows
+
     def get_collection_entries(
         self,
         collection_id: str,
@@ -639,7 +657,10 @@ class KBService:
         """Get entries belonging to a collection (folder-based or query-based).
 
         Returns:
-            Tuple of (entries, total_count)
+            Tuple of (entries, total_count). Each entry's ``metadata`` field
+            is guaranteed to be a dict (parsed from the column JSON), not a
+            string — so REST callers can pass rows directly to
+            ``EntryResponse(**r)``.
 
         Raises:
             EntryNotFoundError: If collection not found
@@ -653,9 +674,10 @@ class KBService:
 
         # Virtual collection (query-based)
         if source_type == "query":
-            return self._get_query_collection_entries(
+            entries, total = self._get_query_collection_entries(
                 metadata, kb_name, sort_by, sort_order, limit, offset
             )
+            return self._normalize_metadata_rows(entries), total
 
         # Folder-based collection (Phase 1)
         folder_path = metadata.get("folder_path", "") if isinstance(metadata, dict) else ""
@@ -669,7 +691,7 @@ class KBService:
             kb_name, abs_folder, sort_by, sort_order, limit, offset
         )
         total = self.db.count_entries_in_folder(kb_name, abs_folder)
-        return entries, total
+        return self._normalize_metadata_rows(entries), total
 
     def _get_query_collection_entries(
         self,

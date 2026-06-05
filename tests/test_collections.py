@@ -267,6 +267,24 @@ class TestCollectionService:
         assert total == 3
         assert len(entries) == 3
 
+    def test_get_collection_entries_metadata_is_dict(self, svc_env):
+        """Regression: get_collection_entries returns rows whose `metadata`
+        field is a dict, not a JSON-encoded string.
+
+        Pre-fix, the raw-SQL list path (list_entries_in_folder → _exec)
+        returned metadata as the column-text string '{}', which broke the
+        REST endpoint's EntryResponse(metadata: dict) at construction. See
+        bug-collection-entries-endpoint-metadata-string-pydantic-rejection.
+        """
+        svc, _ = svc_env
+        entries, _ = svc.get_collection_entries("collection-notes", "test-kb")
+        assert entries, "fixture must return entries for this test to be meaningful"
+        for r in entries:
+            assert isinstance(r.get("metadata"), dict), (
+                f"entry {r.get('id')} metadata must be a dict, got "
+                f"{type(r.get('metadata')).__name__}: {r.get('metadata')!r}"
+            )
+
     def test_get_collection_entries_nonexistent(self, svc_env):
         from pyrite.exceptions import EntryNotFoundError
 

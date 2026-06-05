@@ -1,12 +1,14 @@
 ---
 id: extract-hookrunner-from-kb-service
-type: backlog_item
 title: "Extract HookRunner from KBService; move task-specific hooks to task_service"
+type: backlog_item
+tags: [architecture, services, kb_service, refactor, hooks, modularity]
+importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [architecture, services, kb_service, refactor, hooks, modularity]
+rank: 0
 ---
 
 ## Problem
