@@ -201,3 +201,80 @@ class TestDeleteHookContract:
         runner.register_core_hook("after_delete", crashy)
 
         runner.run_after_delete(MagicMock(), {})  # must not raise
+
+
+class TestKBServiceWiring:
+    """Step 2 of the extraction: KBService delegates to a HookRunner instance.
+
+    These tests pin the structural wiring (KBService owns a HookRunner) and the
+    behavioral equivalence (the existing core hooks — task validation and
+    parent rollup — are registered on the runner KBService actually uses). They
+    do NOT re-test hook semantics (covered above); they assert the wiring is
+    in place.
+    """
+
+    def test_kb_service_has_hook_runner_attribute(self):
+        """KBService instances expose a `hook_runner` attribute holding a
+        HookRunner instance — not None, not a static class."""
+        from unittest.mock import MagicMock
+
+        from pyrite.services.hook_runner import HookRunner
+        from pyrite.services.kb_service import KBService
+
+        svc = KBService(config=MagicMock(), db=MagicMock())
+        assert isinstance(svc.hook_runner, HookRunner)
+
+    def test_core_hooks_registered_on_runner(self):
+        """The two core hooks (task validation and parent rollup) must be
+        registered on the runner KBService owns. Step 3 will move them out of
+        kb_service.py, but step 2 keeps the behavior — the runner must carry
+        them either way."""
+        from unittest.mock import MagicMock
+
+        from pyrite.services.kb_service import KBService
+
+        svc = KBService(config=MagicMock(), db=MagicMock())
+
+        before_save = svc.hook_runner.core_hooks("before_save")
+        after_save = svc.hook_runner.core_hooks("after_save")
+
+        # before_save must include task transition validation; after_save
+        # must include the parent rollup. Check by function name to keep the
+        # assertion robust against the later move into task_service.
+        before_names = {getattr(fn, "__name__", "") for fn in before_save}
+        after_names = {getattr(fn, "__name__", "") for fn in after_save}
+
+        assert "_task_validate_transition" in before_names, (
+            f"expected _task_validate_transition in before_save hooks, got {before_names}"
+        )
+        assert "_parent_rollup" in after_names, (
+            f"expected _parent_rollup in after_save hooks, got {after_names}"
+        )
+
+    def test_kb_service_core_dispatch_goes_through_runner(self):
+        """KBService's _run_hooks must delegate core-hook dispatch to
+        self.hook_runner. A hook registered on the runner via
+        register_core_hook must fire when KBService runs its hooks.
+
+        This pins step 2's structural change: even though _run_hooks survives
+        as a thin instance method, the core-dispatch loop has moved out of
+        KBService and into HookRunner.
+        """
+        from unittest.mock import MagicMock
+
+        from pyrite.services.kb_service import KBService
+
+        svc = KBService(config=MagicMock(), db=MagicMock())
+
+        fired: list[str] = []
+
+        def probe(entry, ctx):
+            fired.append("probe-ran")
+            return entry
+
+        svc.hook_runner.register_core_hook("before_save", probe)
+
+        # Run hooks via KBService's own dispatch — the probe must fire,
+        # proving the dispatch went through the runner.
+        svc._run_hooks("before_save", MagicMock(), {})
+        assert fired == ["probe-ran"]

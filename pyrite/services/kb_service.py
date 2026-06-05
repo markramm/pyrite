@@ -30,6 +30,7 @@ from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
 from ..utils.metadata import parse_metadata
 from .export_service import ExportService
+from .hook_runner import HookRunner
 from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,20 @@ class KBService:
         self._embedding_checked = False
         self._embedding_worker = None  # Set externally to enable queue-based embedding
         self._wikilink_svc: WikilinkService | None = None
+
+        # Hook orchestration. The runner owns core-hook dispatch; plugin-hook
+        # dispatch stays inline in _dispatch_plugin_hooks below for now (the
+        # original code used a per-call lazy ``from ..plugins import
+        # get_registry`` to avoid the plugins↔services import cycle, and
+        # threading that through HookRunner is a separate cleanup step).
+        self.hook_runner = HookRunner(plugin_registry=None)
+        # Register the two platform-level core hooks. After step 3 of the
+        # extraction these move into task_service.py and register themselves
+        # at TaskService construction; until then they live as module-level
+        # functions and KBService registers them at startup so behavior is
+        # preserved.
+        self.hook_runner.register_core_hook("before_save", _task_validate_transition)
+        self.hook_runner.register_core_hook("after_save", _parent_rollup)
 
     def _get_embedding_svc(self):
         """Lazy-load embedding service if available."""
@@ -1059,30 +1074,29 @@ class KBService:
     # Hooks
     # =========================================================================
 
-    @staticmethod
-    def _run_hooks(hook_name: str, entry: Entry, context: dict) -> Entry:
-        """Run core hooks then plugin hooks, scoped by KB type.
+    def _run_hooks(self, hook_name: str, entry: Entry, context: dict) -> Entry:
+        """Run core hooks (via HookRunner) then plugin hooks.
 
         Hook ordering:
         - ``before_save`` / ``before_delete``: Run BEFORE persistence. If any hook
-          raises, the operation is aborted — the entry is NOT saved. All exceptions
-          propagate to the caller.
+          raises, the operation is aborted — the entry is NOT saved. All
+          exceptions propagate to the caller.
         - ``after_save`` / ``after_delete``: Run AFTER persistence. The entry is
           already committed. Exceptions are logged but swallowed — the operation
           is considered successful.
-        """
-        # Run core hooks first
-        for hook_fn in _CORE_HOOKS.get(hook_name, []):
-            try:
-                result = hook_fn(entry, context)
-                if result is not None:
-                    entry = result
-            except Exception:
-                if hook_name.startswith("before_"):
-                    raise
-                logger.warning("Core hook %s failed", hook_fn.__name__, exc_info=True)
 
-        # Then run plugin hooks
+        Core-hook dispatch lives in HookRunner; plugin-hook dispatch stays
+        inline here for now because of the plugins↔services import-cycle
+        constraint (a per-call lazy import). The HookRunner.plugin_registry
+        path will absorb this once that cycle is sorted.
+        """
+        # Core-hook phase — runner owns the loop + raise/swallow contract.
+        method = getattr(self.hook_runner, f"run_{hook_name}", None)
+        if method is None:
+            raise ValueError(f"Unknown hook name: {hook_name}")
+        entry = method(entry, context)
+
+        # Plugin-hook phase — same raise-vs-swallow contract, inline.
         try:
             from ..plugins import get_registry
 

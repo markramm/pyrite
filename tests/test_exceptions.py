@@ -74,7 +74,9 @@ class TestRunHooksPropagation:
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
             with pytest.raises(KBReadOnlyError):
-                KBService._run_hooks("before_save", entry, {})
+                KBService(config=MagicMock(), db=MagicMock())._run_hooks(
+                    "before_save", entry, {}
+                )
 
     def test_permission_error_propagated_in_before_hooks(self):
         """PermissionError in before_save hooks should propagate (hook atomicity)."""
@@ -87,7 +89,9 @@ class TestRunHooksPropagation:
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
             with pytest.raises(PermissionError, match="denied"):
-                KBService._run_hooks("before_save", entry, {})
+                KBService(config=MagicMock(), db=MagicMock())._run_hooks(
+                    "before_save", entry, {}
+                )
 
     def test_generic_exception_propagated_in_before_hooks(self):
         """Generic exceptions in before_save hooks should propagate (hook atomicity)."""
@@ -100,7 +104,9 @@ class TestRunHooksPropagation:
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
             with pytest.raises(RuntimeError, match="boom"):
-                KBService._run_hooks("before_save", entry, {})
+                KBService(config=MagicMock(), db=MagicMock())._run_hooks(
+                    "before_save", entry, {}
+                )
 
     def test_successful_hook_returns_result(self):
         """Successful hooks return the modified entry."""
@@ -113,7 +119,9 @@ class TestRunHooksPropagation:
 
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
-            result = KBService._run_hooks("before_save", entry, {})
+            result = KBService(config=MagicMock(), db=MagicMock())._run_hooks(
+                "before_save", entry, {}
+            )
             assert result is modified
 
 

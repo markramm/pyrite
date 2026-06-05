@@ -524,33 +524,35 @@ class TestHookAtomicity:
 
     def test_before_save_non_pyrite_error_propagates(self):
         """Non-PyriteError from before_save hook must propagate, not be swallowed."""
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
         from pyrite.services.kb_service import KBService
 
         entry = NoteEntry(id="test", title="Test")
         ctx = {"kb_type": "", "operation": "create"}
+        svc = KBService(config=MagicMock(), db=MagicMock())
 
         with patch("pyrite.plugins.get_registry") as mock_reg:
             mock_reg.return_value.run_hooks_for_kb.side_effect = ValueError(
                 "hook validation failed"
             )
             with pytest.raises(ValueError, match="hook validation failed"):
-                KBService._run_hooks("before_save", entry, ctx)
+                svc._run_hooks("before_save", entry, ctx)
 
     def test_after_save_non_pyrite_error_is_swallowed(self):
         """Non-PyriteError from after_save hook should be logged, not raised."""
-        from unittest.mock import patch
+        from unittest.mock import MagicMock, patch
 
         from pyrite.services.kb_service import KBService
 
         entry = NoteEntry(id="test", title="Test")
         ctx = {"kb_type": "", "operation": "create"}
+        svc = KBService(config=MagicMock(), db=MagicMock())
 
         with patch("pyrite.plugins.get_registry") as mock_reg:
             mock_reg.return_value.run_hooks_for_kb.side_effect = RuntimeError("oops")
             # Should NOT raise — after_save errors are swallowed
-            result = KBService._run_hooks("after_save", entry, ctx)
+            result = svc._run_hooks("after_save", entry, ctx)
             assert result is entry
 
 
