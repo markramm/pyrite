@@ -1,12 +1,14 @@
 ---
 id: search-include-body-empty
-type: backlog_item
 title: "Search --include-body returns empty body field in JSON results"
+type: backlog_item
+tags: [cli, search, bug]
+importance: 5
 kind: bug
 status: proposed
 priority: high
 effort: M
-tags: [cli, search, bug]
+rank: 2000
 ---
 
 ## Problem

@@ -1,12 +1,14 @@
 ---
 id: rename-move-support-with-redirect-and-wikilink-rewrite
-type: backlog_item
 title: "Rename/move support: rename a KB entry, leave redirect stub at old path, rewrite all internal [[wikilinks]]"
+type: backlog_item
+tags: [cli, wikilinks, refactor, external-links, kb-hygiene]
+importance: 5
 kind: feature
 status: proposed
 priority: high
 effort: M
-tags: [cli, wikilinks, refactor, external-links, kb-hygiene]
+rank: 1700
 ---
 
 ## Problem

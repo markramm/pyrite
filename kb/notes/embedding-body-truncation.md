@@ -1,12 +1,14 @@
 ---
 id: embedding-body-truncation
-type: backlog_item
 title: "Embedding service silently truncates body to 500 chars, degrading semantic search"
+type: backlog_item
+tags: [search, embeddings, semantic-search]
+importance: 5
 kind: bug
 status: proposed
 priority: high
 effort: M
-tags: [search, embeddings, semantic-search]
+rank: 2100
 ---
 
 ## Problem

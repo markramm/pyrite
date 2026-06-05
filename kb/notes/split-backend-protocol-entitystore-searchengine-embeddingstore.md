@@ -1,12 +1,14 @@
 ---
 id: split-backend-protocol-entitystore-searchengine-embeddingstore
-type: backlog_item
 title: "Split the 39-method Backend Protocol into EntityStore, SearchEngine, EmbeddingStore"
+type: backlog_item
+tags: [architecture, storage, backends, postgres, sqlite, protocol, modularity, refactor]
+importance: 5
 kind: improvement
 status: proposed
 priority: high
 effort: L
-tags: [architecture, storage, backends, postgres, sqlite, protocol, modularity, refactor]
+rank: 1400
 ---
 
 ## Problem

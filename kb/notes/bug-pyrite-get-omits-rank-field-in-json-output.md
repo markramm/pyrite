@@ -1,12 +1,14 @@
 ---
 id: bug-pyrite-get-omits-rank-field-in-json-output
-type: backlog_item
 title: "BUG: `pyrite get` JSON output silently omits the `rank` field even when set in source and index"
+type: backlog_item
+tags: [bug, cli, get, rank, backlog-grooming, projection, silent-data-loss]
+importance: 5
 kind: bug
 status: proposed
-priority: medium
+priority: high
 effort: XS
-tags: [bug, cli, get, rank, backlog-grooming, projection, silent-data-loss]
+rank: 1200
 ---
 
 ## Problem

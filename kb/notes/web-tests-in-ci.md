@@ -1,12 +1,14 @@
 ---
 id: web-tests-in-ci
-type: backlog_item
 title: "Run frontend unit + Playwright E2E tests in CI"
+type: backlog_item
+tags: [ci, testing, frontend, dx]
+importance: 5
 kind: improvement
 status: proposed
 priority: high
 effort: S
-tags: [ci, testing, frontend, dx]
+rank: 1900
 ---
 
 ## Problem

@@ -1,11 +1,7 @@
 ---
 id: epic-pyrite-publication-strategy
-type: backlog_item
 title: "Epic: Pyrite publication strategy — static sites + hosted investigation instance"
-kind: epic
-status: proposed
-priority: high
-effort: XL
+type: backlog_item
 tags: [strategy, publication, hosting, multi-user, static-sites, journalism]
 links:
 - target: epic-normalization-and-data-cleanup
@@ -26,6 +22,12 @@ links:
 - target: pyrite-remove-static-renderer
   relation: has_subtask
   kb: pyrite
+importance: 5
+kind: epic
+status: proposed
+priority: high
+effort: XL
+rank: 2400
 ---
 
 ## Thesis

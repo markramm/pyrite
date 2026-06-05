@@ -1,12 +1,14 @@
 ---
 id: clipper-ssrf-defense
-type: backlog_item
 title: "Web clipper SSRF defense: block private IPs, cap response size"
+type: backlog_item
+tags: [security, ssrf, clipper, hosting]
+importance: 5
 kind: bug
 status: proposed
 priority: high
 effort: S
-tags: [security, ssrf, clipper, hosting]
+rank: 1300
 ---
 
 ## Problem

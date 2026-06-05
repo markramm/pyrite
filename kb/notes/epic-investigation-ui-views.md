@@ -30,10 +30,12 @@ links:
 - target: ji-ui-source-panel
   relation: has_subtask
   kb: pyrite
+importance: 5
 kind: epic
 status: accepted
 priority: high
 effort: XL
+rank: 2500
 ---
 
 ## Overview

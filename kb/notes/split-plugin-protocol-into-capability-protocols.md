@@ -1,12 +1,14 @@
 ---
 id: split-plugin-protocol-into-capability-protocols
-type: backlog_item
 title: "Split the 20-method plugin Protocol into narrower capability protocols (or add a Capabilities enum)"
+type: backlog_item
+tags: [architecture, plugins, protocol, modularity, refactor]
+importance: 5
 kind: improvement
 status: proposed
 priority: high
 effort: M
-tags: [architecture, plugins, protocol, modularity, refactor]
+rank: 1500
 ---
 
 ## Problem

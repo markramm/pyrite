@@ -1,12 +1,14 @@
 ---
 id: curation-audit-queries
-type: backlog_item
 title: "Add curation coverage queries: sourcing rates, link density, KB health dashboard"
+type: backlog_item
+tags: [curation, search, cli, mcp]
+importance: 5
 kind: feature
 status: proposed
 priority: high
 effort: M
-tags: [curation, search, cli, mcp]
+rank: 2300
 ---
 
 ## Problem

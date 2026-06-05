@@ -1,11 +1,7 @@
 ---
 id: epic-normalization-and-data-cleanup
-type: backlog_item
 title: "Epic: KB normalization, data health, and cascade plugin deprecation"
-kind: epic
-status: proposed
-priority: high
-effort: XL
+type: backlog_item
 tags: [data-quality, schema, cascade, journalism-investigation, robustness, deprecation]
 links:
 - target: warn-on-undeclared-entry-type
@@ -38,6 +34,12 @@ links:
 - target: rename-investigation-event-to-timeline-event
   relation: has_subtask
   kb: pyrite
+importance: 5
+kind: epic
+status: proposed
+priority: high
+effort: XL
+rank: 1600
 ---
 
 ## Problem

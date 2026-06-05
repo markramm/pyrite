@@ -1,12 +1,14 @@
 ---
 id: plugin-registry-silent-failures
-type: backlog_item
 title: "Plugin registry swallows errors, returns partial data without indication"
+type: backlog_item
+tags: [plugins, error-handling, reliability]
+importance: 5
 kind: bug
 status: proposed
 priority: high
 effort: S
-tags: [plugins, error-handling, reliability]
+rank: 1000
 ---
 
 ## Problem

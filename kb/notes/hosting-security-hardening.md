@@ -1,16 +1,18 @@
 ---
 id: hosting-security-hardening
-type: backlog_item
 title: "Hosting security hardening for journalist deployments"
-kind: epic
-status: accepted
-priority: high
-effort: XL
+type: backlog_item
 tags: [security, privacy, deployment, journalism]
 links:
 - target: hosting-security-requirements
   relation: implements
   kb: pyrite
+importance: 5
+kind: epic
+status: accepted
+priority: high
+effort: XL
+rank: 1800
 ---
 
 ## Problem

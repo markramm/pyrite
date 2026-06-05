@@ -1,12 +1,14 @@
 ---
 id: llm-prompt-caching
-type: backlog_item
 title: "Implement Anthropic prompt caching in LLMService for RAG, chat, QA"
+type: backlog_item
+tags: [ai, llm, performance, cost, anthropic]
+importance: 5
 kind: improvement
 status: proposed
 priority: high
 effort: M
-tags: [ai, llm, performance, cost, anthropic]
+rank: 2200
 ---
 
 ## Problem
