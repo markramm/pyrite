@@ -574,7 +574,23 @@ def _parse_metadata(raw) -> dict[str, Any]:
 
 
 def _task_validate_transition(entry: Entry, context: dict) -> Entry:
-    """Validate task status transitions against workflow on update."""
+    """Validate task status transitions against workflow on update.
+
+    Dispatches through ``validate_status_change`` (Tier A r1175), which
+    chooses strict vs relaxed mode based on the workflow's
+    ``enforce_transitions`` flag. The core ``TASK_WORKFLOW`` defaults
+    to strict so every existing task keeps its pre-r1175 behavior; a
+    plugin that wants relaxed mode declares
+    ``enforce_transitions=false`` (and typically
+    ``require_reason_on_transition=true``) on its own entry-type's
+    ``state_machine`` config.
+
+    Per-entity-type workflow resolution (reading the entry type's
+    ``state_machine`` block from the KB schema and falling back to
+    ``TASK_WORKFLOW`` for the ``task`` type) lands in a follow-up
+    fire; this hook currently resolves to ``TASK_WORKFLOW`` for the
+    core ``task`` type, which preserves all existing behavior.
+    """
     if context.get("operation") != "update":
         return entry
     if not hasattr(entry, "entry_type") or entry.entry_type != "task":
@@ -585,17 +601,35 @@ def _task_validate_transition(entry: Entry, context: dict) -> Entry:
     if not old_status or not new_status or old_status == new_status:
         return entry
 
-    from ..models.task import TASK_WORKFLOW, can_transition, get_allowed_transitions
+    from ..models.task import TASK_WORKFLOW, validate_status_change
 
-    if not can_transition(TASK_WORKFLOW, old_status, new_status, "write"):
-        allowed = [t["to"] for t in get_allowed_transitions(TASK_WORKFLOW, old_status, "write")]
-        allowed_msg = ", ".join(allowed) if allowed else "(none — terminal state)"
-        raise ValidationError(
-            f"Cannot move task from '{old_status}' to '{new_status}'. "
-            f"Allowed next: {allowed_msg}. "
-            f"Tasks follow open → claimed → in_progress → done/failed/blocked/review; "
-            f"walk through the intermediate states rather than skipping."
-        )
+    # The reason field carries through frontmatter as `status_reason`; an
+    # absent attribute is treated as empty string.
+    status_reason = getattr(entry, "status_reason", "") or ""
+
+    ok, err = validate_status_change(
+        TASK_WORKFLOW,
+        old_status=old_status,
+        new_status=new_status,
+        status_reason=status_reason,
+        user_role="write",
+    )
+    if not ok:
+        # Under strict mode, preserve the task-specific guidance suffix
+        # (empirically helpful in conductor logs). Under relaxed mode,
+        # the validator's message is already specific to the rejection
+        # cause (missing reason, status not in states); don't pile on.
+        if TASK_WORKFLOW.get("enforce_transitions", True):
+            # Strip the "Cannot move from..." prefix from validate_status_change
+            # so we can substitute the task-specific one.
+            allowed_msg = err.split("Allowed next:", 1)[-1].strip() if "Allowed next:" in err else ""
+            raise ValidationError(
+                f"Cannot move task from '{old_status}' to '{new_status}'. "
+                f"Allowed next: {allowed_msg} "
+                f"Tasks follow open → claimed → in_progress → done/failed/blocked/review; "
+                f"walk through the intermediate states rather than skipping."
+            )
+        raise ValidationError(err)
 
     return entry
 

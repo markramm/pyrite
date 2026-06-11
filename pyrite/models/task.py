@@ -122,6 +122,94 @@ def requires_reason(workflow: dict, current_state: str, target_state: str) -> bo
     return False
 
 
+def validate_status_change(
+    workflow: dict,
+    old_status: str,
+    new_status: str,
+    status_reason: str = "",
+    user_role: str = "write",
+) -> tuple[bool, str]:
+    """Validate a status transition under either the strict or relaxed regime.
+
+    Dispatches based on the workflow's ``enforce_transitions`` flag (Tier A
+    r1175 per-entity-type relaxed-mode design):
+
+      - **strict** (``enforce_transitions=True``, default): the transition
+        must appear in the workflow's ``transitions`` table. Reason is
+        only required when the matching transition declares
+        ``requires_reason: True`` (matches pre-existing behavior).
+      - **relaxed** (``enforce_transitions=False``): any ``new_status``
+        that's a member of ``workflow["states"]`` is accepted, IFF
+        ``status_reason`` is non-empty (when
+        ``require_reason_on_transition=True``, the default for relaxed
+        mode). Loosens transitions but NOT state membership — typos in
+        status still fail, which keeps the index queryable.
+
+    The atomic ``open→claimed`` invariant lives at the repo/db
+    compare-and-swap layer, not here. This function never blocks
+    ``open→claimed`` under either mode (strict has it declared; relaxed
+    accepts it as a member of ``states`` with reason).
+
+    Args:
+        workflow: Workflow dict (see ``TASK_WORKFLOW`` for shape). May
+            carry ``enforce_transitions`` and
+            ``require_reason_on_transition`` keys; defaults preserve
+            back-compat (strict, reason optional).
+        old_status: Current task status.
+        new_status: Target status.
+        status_reason: Free-string reason for the transition (v1; entry-ref
+            shape is a future enrichment per ticket design).
+        user_role: Role of the caller; only consulted in strict mode.
+
+    Returns:
+        ``(ok, error_message)``. ``ok=True`` with empty message on
+        success; ``ok=False`` with a one-line human-readable message
+        otherwise.
+    """
+    enforce = workflow.get("enforce_transitions", True)
+    require_reason = workflow.get("require_reason_on_transition", False)
+
+    if enforce:
+        # Strict path: existing behavior. Transition must be in the
+        # declared table; reason is required only for transitions that
+        # opt in via `requires_reason: True`.
+        if not can_transition(workflow, old_status, new_status, user_role):
+            allowed = [
+                t["to"]
+                for t in get_allowed_transitions(workflow, old_status, user_role)
+            ]
+            allowed_msg = ", ".join(allowed) if allowed else "(none — terminal state)"
+            return (
+                False,
+                f"Cannot move from '{old_status}' to '{new_status}'. "
+                f"Allowed next: {allowed_msg}.",
+            )
+        if requires_reason(workflow, old_status, new_status) and not status_reason.strip():
+            return (
+                False,
+                f"Transition '{old_status}' → '{new_status}' requires a reason "
+                f"(set --reason / status_reason).",
+            )
+        return True, ""
+
+    # Relaxed path: any member of `states` accepted, with reason gating.
+    states = workflow.get("states", [])
+    if new_status not in states:
+        return (
+            False,
+            f"Status '{new_status}' is not in the declared state set "
+            f"({', '.join(states) or '(empty)'}). Relaxed mode loosens "
+            f"transitions, not state membership — check for typos.",
+        )
+    if require_reason and not status_reason.strip():
+        return (
+            False,
+            f"Relaxed-mode transition '{old_status}' → '{new_status}' "
+            f"requires a non-empty status_reason (set --reason).",
+        )
+    return True, ""
+
+
 # =========================================================================
 # KB Preset
 # =========================================================================
@@ -197,6 +285,7 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
     """Agent-oriented task with workflow state machine."""
 
     status: str = "open"  # overrides Statusable default
+    status_reason: str = ""  # Free-string reason for the current status (Tier A r1175)
     parent: str = ""  # overrides Parentable default
     dependencies: list[str] = field(default_factory=list)
     evidence: list[str] = field(default_factory=list)
@@ -211,6 +300,8 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
         meta = super().to_frontmatter()
         meta["type"] = "task"
         meta["status"] = self.status
+        if self.status_reason:
+            meta["status_reason"] = self.status_reason
         if self.assignee:
             meta["assignee"] = self.assignee
         if self.parent:
@@ -234,6 +325,7 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
         return cls(
             **kwargs,
             status=meta.get("status", "open"),
+            status_reason=meta.get("status_reason", "") or "",
             assignee=meta.get("assignee", ""),
             parent=parent,
             dependencies=meta.get("dependencies", []) or [],

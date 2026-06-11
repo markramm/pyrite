@@ -198,9 +198,20 @@ def task_update(
     status: str | None = typer.Option(None, "--status", "-s", help="New status"),
     assignee: str | None = typer.Option(None, "--assignee", "-a", help="New assignee"),
     priority: int | None = typer.Option(None, "--priority", help="New priority 1-10"),
+    reason: str | None = typer.Option(
+        None,
+        "--reason",
+        "--status-reason",
+        help=(
+            "Free-string reason for the status change. Required under "
+            "relaxed-mode entry types (Tier A r1175); ignored under "
+            "strict-mode types unless the transition declares "
+            "requires_reason."
+        ),
+    ),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
-    """Update task fields (status, assignee, priority)."""
+    """Update task fields (status, assignee, priority, reason)."""
     updates: dict[str, Any] = {}
     if status is not None:
         updates["status"] = status
@@ -208,6 +219,12 @@ def task_update(
         updates["assignee"] = assignee
     if priority is not None:
         updates["priority"] = priority
+    if reason is not None:
+        # Lands on the task entry's status_reason field via the
+        # KBService.update_entry pass-through. The relaxed-mode
+        # validator reads it from the entry attribute on the next
+        # before_save hook.
+        updates["status_reason"] = reason
 
     if not updates:
         console.print("[yellow]No updates specified.[/yellow]")
