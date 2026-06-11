@@ -228,6 +228,205 @@ class TestTaskWorkflow:
 
 
 # =========================================================================
+# Relaxed-mode state machine — Tier A r1175
+# =========================================================================
+
+
+class TestRelaxedModeWorkflowKeys:
+    """The core TASK_WORKFLOW declares the new toggles with strict defaults.
+
+    Existing tasks unchanged: enforce_transitions=True keeps the workflow
+    behaving exactly as it did, require_reason_on_transition=False keeps
+    status_reason optional. Per-type configs override these.
+    """
+
+    def test_default_enforce_transitions_is_true(self):
+        """Strict by default — back-compat for every task that existed
+        before this feature. `pyrite/models/task.py` ships strict."""
+        assert TASK_WORKFLOW.get("enforce_transitions", True) is True
+
+    def test_default_require_reason_on_transition_is_false(self):
+        """Reason optional by default — back-compat. A relaxed-mode type
+        schema overrides this to True."""
+        assert TASK_WORKFLOW.get("require_reason_on_transition", False) is False
+
+
+class TestValidateStatusChange:
+    """The new `validate_status_change` helper dispatches strict vs relaxed
+    based on the workflow's `enforce_transitions` flag. Returns
+    (ok: bool, error: str).
+
+    This is what `_task_validate_transition` will call after resolving
+    the per-type workflow. Tests pin both modes side-by-side.
+    """
+
+    @staticmethod
+    def _strict_workflow():
+        # Same shape as TASK_WORKFLOW but minimal — keep tests focused.
+        return {
+            "states": ["open", "claimed", "in_progress", "done"],
+            "initial": "open",
+            "field": "status",
+            "transitions": [
+                {"from": "open", "to": "claimed", "requires": "write"},
+                {"from": "claimed", "to": "in_progress", "requires": "write"},
+                {"from": "in_progress", "to": "done", "requires": "write"},
+            ],
+            "enforce_transitions": True,
+            "require_reason_on_transition": False,
+        }
+
+    @staticmethod
+    def _relaxed_workflow():
+        # Same states, but the transitions table is bypassed entirely.
+        return {
+            "states": ["open", "claimed", "in_progress", "blocked", "done"],
+            "initial": "open",
+            "field": "status",
+            "transitions": [],  # ignored under relaxed mode
+            "enforce_transitions": False,
+            "require_reason_on_transition": True,
+        }
+
+    # -- strict mode (existing behavior, regression-locked) -------------
+
+    def test_strict_mode_allows_declared_transition(self):
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._strict_workflow(),
+            old_status="open",
+            new_status="claimed",
+            status_reason="",
+            user_role="write",
+        )
+        assert ok is True, err
+
+    def test_strict_mode_rejects_skipped_state(self):
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._strict_workflow(),
+            old_status="open",
+            new_status="done",
+            status_reason="",
+            user_role="write",
+        )
+        assert ok is False
+        assert "claimed" in err or "open" in err  # mentions valid path
+
+    def test_strict_mode_does_not_require_reason(self):
+        """Strict mode keeps the pre-existing 'reason optional except
+        for transitions that opt in via requires_reason' behavior."""
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._strict_workflow(),
+            old_status="claimed",
+            new_status="in_progress",
+            status_reason="",  # no reason, allowed by strict
+            user_role="write",
+        )
+        assert ok is True, err
+
+    # -- relaxed mode (new behavior) ------------------------------------
+
+    def test_relaxed_mode_accepts_any_state_set_member_with_reason(self):
+        """The relaxed-mode contract: any status that's in the type's
+        `states` list is accepted, IFF status_reason is non-empty.
+        This is what unblocks open->blocked for the conductor without
+        adding a 'held' state."""
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._relaxed_workflow(),
+            old_status="open",
+            new_status="blocked",  # not in any strict transition
+            status_reason="awaiting GAO docket",
+            user_role="write",
+        )
+        assert ok is True, err
+
+    def test_relaxed_mode_rejects_without_reason(self):
+        """The whole point of relaxed mode is auditability via the
+        reason field. No reason -> rejected."""
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._relaxed_workflow(),
+            old_status="open",
+            new_status="blocked",
+            status_reason="",
+            user_role="write",
+        )
+        assert ok is False
+        assert "reason" in err.lower()
+
+    def test_relaxed_mode_rejects_status_not_in_states_set(self):
+        """Relaxed mode loosens transitions, NOT state membership.
+        `status` must still be a member of the declared `states` —
+        catches typos and keeps the index queryable."""
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._relaxed_workflow(),
+            old_status="open",
+            new_status="hung",  # not in states
+            status_reason="a reason",
+            user_role="write",
+        )
+        assert ok is False
+        assert "hung" in err.lower() or "state" in err.lower()
+
+    def test_relaxed_mode_whitespace_reason_is_not_a_reason(self):
+        """Whitespace-only reason fails the same way as empty.
+        Otherwise the audit field would be defeatable trivially."""
+        from pyrite.models.task import validate_status_change
+
+        ok, err = validate_status_change(
+            self._relaxed_workflow(),
+            old_status="open",
+            new_status="blocked",
+            status_reason="   \n  ",
+            user_role="write",
+        )
+        assert ok is False
+        assert "reason" in err.lower()
+
+    # -- atomic claim preservation (both modes) -------------------------
+
+    def test_open_to_claimed_works_under_strict_mode(self):
+        """Sanity: the atomic-claim path is reachable under strict."""
+        from pyrite.models.task import validate_status_change
+
+        ok, _ = validate_status_change(
+            self._strict_workflow(),
+            old_status="open",
+            new_status="claimed",
+            status_reason="",
+            user_role="write",
+        )
+        assert ok is True
+
+    def test_open_to_claimed_works_under_relaxed_mode(self):
+        """The relaxed dispatch must NOT clobber the atomic-claim path.
+        open->claimed must still be accepted whether or not the caller
+        passed a reason (the atomicity is enforced higher up at the
+        repo/db CAS layer; this just confirms the validator doesn't
+        block it)."""
+        from pyrite.models.task import validate_status_change
+
+        ok, _ = validate_status_change(
+            self._relaxed_workflow(),
+            old_status="open",
+            new_status="claimed",
+            status_reason="picked up by agent",
+            user_role="write",
+        )
+        assert ok is True
+
+
+# =========================================================================
 # Validators
 # =========================================================================
 
