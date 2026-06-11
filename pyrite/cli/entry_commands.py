@@ -438,6 +438,57 @@ def register_entry_commands(app: typer.Typer) -> None:
                 console.print(f"[red]Error:[/red] {e}")
                 raise typer.Exit(1)
 
+    @app.command("rename")
+    def rename_entry(
+        old_id: str = typer.Argument(..., help="Current entry ID"),
+        new_id: str = typer.Argument(..., help="Target entry ID"),
+        kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+        update_links: bool = typer.Option(
+            True,
+            "--update-links/--no-update-links",
+            help="Rewrite [[old_id]] / [[old_id|alias]] wikilinks in this KB",
+        ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Show the rename + link-rewrite plan without executing",
+        ),
+        output_format: str = typer.Option(
+            "json", "--format", help="Output format: json or rich"
+        ),
+    ):
+        """Rename an entry, rewrite frontmatter id, and update wikilinks.
+
+        Same-KB scope only in this release. Cross-KB wikilink rewrite
+        and redirect-stub creation are tracked as r1700 follow-ups.
+        """
+        with cli_context() as (config, db, svc):
+            try:
+                result = svc.rename_entry(
+                    old_id,
+                    new_id,
+                    kb_name,
+                    update_links=update_links,
+                    dry_run=dry_run,
+                )
+            except (PyriteError, ValueError) as e:
+                _cli_error(str(e), output_format)
+                return
+
+        if output_format == "rich":
+            verb = "Would rename" if dry_run else "Renamed"
+            console.print(f"[green]{verb}:[/green] {old_id} -> {new_id}")
+            if update_links:
+                console.print(
+                    f"  Wikilink rewrites: "
+                    f"{result['links_rewritten']} link(s) in "
+                    f"{result['files_rewritten']} file(s)"
+                )
+            if dry_run:
+                console.print("[yellow]Dry run — no files modified.[/yellow]")
+        else:
+            typer.echo(_json.dumps(result))
+
     @app.command("link")
     def link_entries(
         source: str = typer.Argument(..., help="Source entry ID"),

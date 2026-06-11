@@ -5,7 +5,7 @@ type: backlog_item
 tags: [cli, wikilinks, refactor, external-links, kb-hygiene]
 importance: 5
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 rank: 1700

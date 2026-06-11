@@ -11,7 +11,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from ..config import KBConfig
-from ..exceptions import FrontmatterError, KBReadOnlyError
+from ..exceptions import (
+    EntryNotFoundError,
+    FrontmatterError,
+    KBReadOnlyError,
+    ValidationError,
+)
 from ..migrations import get_migration_registry, load_plugin_migrations
 from ..models import Entry, EventEntry
 from ..models.collection import CollectionEntry
@@ -312,6 +317,150 @@ class KBRepository:
             file_path.unlink()
             return True
         return False
+
+    # ---------------------------------------------------------------
+    # Rename — Tier A r1700. The smallest useful slice: same-KB file
+    # rename + frontmatter id rewrite + wikilink rewrite. Cross-KB
+    # rewrite, redirect-stub creation, and the `move` (subdir-change)
+    # variant are filed as r1700 follow-ups.
+    # ---------------------------------------------------------------
+
+    def rename(
+        self,
+        old_id: str,
+        new_id: str,
+        *,
+        update_links: bool = True,
+        dry_run: bool = False,
+    ) -> dict:
+        """Rename an entry: move file, rewrite frontmatter id, rewrite
+        all in-KB wikilinks.
+
+        Args:
+            old_id: Current entry id.
+            new_id: Target entry id. Must not already exist.
+            update_links: When True (default), rewrite ``[[<old_id>]]``
+                and ``[[<old_id>|alias]]`` wikilinks in every entry
+                body in this KB. When False, only the renamed file
+                changes — references stay dangling (rarely useful,
+                kept for parity with the ticket spec).
+            dry_run: When True, return what would happen without
+                touching the filesystem.
+
+        Returns:
+            Plan/result dict with keys ``renamed`` (bool), ``old_id``,
+            ``new_id``, ``files_rewritten``, ``links_rewritten``,
+            ``dry_run``.
+
+        Raises:
+            EntryNotFoundError: if ``old_id`` doesn't exist in this KB.
+            ValidationError: if ``new_id`` already exists.
+            KBReadOnlyError: if the KB is read-only.
+        """
+        if self.config.read_only and not dry_run:
+            raise KBReadOnlyError(f"KB '{self.name}' is read-only")
+
+        # Same-id is a no-op — callers can script rename(x, x) safely.
+        if old_id == new_id:
+            return {
+                "renamed": False,
+                "old_id": old_id,
+                "new_id": new_id,
+                "files_rewritten": 0,
+                "links_rewritten": 0,
+                "dry_run": dry_run,
+            }
+
+        src = self.find_file(old_id)
+        if not src or not src.exists():
+            raise EntryNotFoundError(
+                f"Entry '{old_id}' not found in KB '{self.name}'"
+            )
+
+        if self.find_file(new_id):
+            raise ValidationError(
+                f"Cannot rename '{old_id}' to '{new_id}': target already exists "
+                f"in KB '{self.name}'"
+            )
+
+        # Plan the link rewrite. We scan every body once and substitute
+        # `[[<old_id>]]` and `[[<old_id>|...]]`. Substring matches at
+        # arbitrary positions are NOT touched (the spec calls for exact
+        # wikilink-id match only).
+        files_rewritten = 0
+        links_rewritten = 0
+        body_rewrites: list[tuple[Path, str]] = []  # (path, new_text)
+
+        if update_links:
+            import re
+
+            # Build the two patterns so we can both COUNT and REPLACE.
+            # Group 1 of `aliased` is the alias text we preserve.
+            bare = re.compile(rf"\[\[{re.escape(old_id)}\]\]")
+            aliased = re.compile(rf"\[\[{re.escape(old_id)}\|([^\]]*)\]\]")
+            new_bare = f"[[{new_id}]]"
+
+            for md_file in self.list_files():
+                # The source file itself will get a fresh write below;
+                # don't pre-count its body or double-write.
+                if md_file.resolve() == src.resolve():
+                    continue
+                try:
+                    text = md_file.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                count = len(bare.findall(text)) + len(aliased.findall(text))
+                if count == 0:
+                    continue
+                new_text = bare.sub(new_bare, text)
+                new_text = aliased.sub(
+                    lambda m, _n=new_id: f"[[{_n}|{m.group(1)}]]", new_text
+                )
+                files_rewritten += 1
+                links_rewritten += count
+                body_rewrites.append((md_file, new_text))
+
+        if dry_run:
+            return {
+                "renamed": True,
+                "old_id": old_id,
+                "new_id": new_id,
+                "files_rewritten": files_rewritten,
+                "links_rewritten": links_rewritten,
+                "dry_run": True,
+            }
+
+        # Execute. Rewrite-other-files first so a failure leaves the
+        # rename incomplete rather than orphaned wikilinks against a
+        # missing source.
+        for path, new_text in body_rewrites:
+            path.write_text(new_text, encoding="utf-8")
+
+        # Load the source entry, rewrite its id, save under new id,
+        # delete old file. Using load+save preserves frontmatter shape
+        # via the model layer instead of doing a regex on the source's
+        # own YAML.
+        entry = self._load_entry(src)
+        entry.id = new_id
+        # File pattern in some plugin schemas can pull subdir from id;
+        # keep the entry in the same subdir it lived in by saving with
+        # the explicit relative subdir of the old file.
+        rel = src.parent.relative_to(self.path)
+        subdir = str(rel) if str(rel) != "." else None
+        self.save(entry, subdir=subdir)
+
+        # Delete the old file only AFTER the new one is on disk.
+        if src.exists():
+            src.unlink()
+
+        return {
+            "renamed": True,
+            "old_id": old_id,
+            "new_id": new_id,
+            "files_rewritten": files_rewritten,
+            "links_rewritten": links_rewritten,
+            "dry_run": False,
+        }
 
     def list_files(self) -> Iterator[Path]:
         """Iterate over all markdown files in the KB."""

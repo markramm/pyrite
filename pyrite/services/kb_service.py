@@ -547,6 +547,61 @@ class KBService:
 
         return file_deleted
 
+    def rename_entry(
+        self,
+        old_id: str,
+        new_id: str,
+        kb_name: str,
+        *,
+        update_links: bool = True,
+        dry_run: bool = False,
+    ) -> dict:
+        """Rename an entry in-place: move the file, rewrite frontmatter
+        id, rewrite ``[[old_id]]`` and ``[[old_id|alias]]`` wikilinks
+        across this KB. Tier A r1700.
+
+        Cross-KB wikilink rewrite, redirect-stub creation, and the
+        ``move`` (subdir-change) variant are filed as r1700 follow-ups.
+
+        Args:
+            old_id: Existing entry id.
+            new_id: Target id. Must not already exist in this KB.
+            kb_name: KB containing the entry.
+            update_links: Default True. Set False to leave references
+                dangling (rare; ticket calls it out).
+            dry_run: When True, return the plan without modifying disk.
+
+        Returns:
+            See KBRepository.rename for the result-dict shape.
+        """
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+        if kb_config.read_only and not dry_run:
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
+
+        repo = KBRepository(kb_config)
+        result = repo.rename(
+            old_id, new_id, update_links=update_links, dry_run=dry_run
+        )
+
+        # Re-sync the index so old_id resolves to None and new_id
+        # resolves to the renamed entry. Skip on dry_run.
+        if not dry_run and result.get("renamed"):
+            try:
+                self._index_mgr.sync_incremental(kb_name)
+            except Exception as e:
+                # Don't fail the rename if reindex hiccups — the file
+                # operation already succeeded.
+                logger.warning(
+                    "Index sync after rename %s -> %s failed: %s",
+                    old_id,
+                    new_id,
+                    e,
+                )
+
+        return result
+
     def add_link(
         self,
         source_id: str,
