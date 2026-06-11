@@ -4110,3 +4110,148 @@ class TestOrphanBacklogItemChecker:
         }
         result = check_orphan_backlog_item(entry, None)
         assert result is None
+
+
+# =========================================================================
+# TestPrioritizeAfterAnchor — Tier A 1050
+# =========================================================================
+
+
+class TestPrioritizeAfterAnchor:
+    """`sw prioritize --after <anchor> item-a item-b` must assign ranks
+    starting just after the anchor's rank, not from a global 100/200/300...
+    sequence that clobbers existing ranks on other items.
+
+    Regression for bug-pyrite-sw-prioritize-renumbers-globally-clobbering-
+    existing-ranks (Tier A rank 1050). The pre-fix behavior renumbered every
+    named item from rank 100 with step 100; if any unnamed item already held
+    those ranks (e.g. the cascade cluster at 100-700), it was silently shadowed.
+    """
+
+    def test_after_anchor_with_batch_starts_at_anchor_plus_100(self):
+        """Multi-item prioritize with --after: ranks start at anchor_rank + 100,
+        step 100. Anchor and other ranked items are not modified."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    # The anchor: an existing ranked item that must NOT be touched.
+                    {
+                        "id": "anchor-item",
+                        "title": "Anchor",
+                        "entry_type": "backlog_item",
+                        "meta": {"kind": "feature", "rank": 700},
+                    },
+                    # The items to rank, none yet ranked.
+                    {
+                        "id": "new-a",
+                        "title": "New A",
+                        "entry_type": "backlog_item",
+                        "meta": {"kind": "feature"},
+                    },
+                    {
+                        "id": "new-b",
+                        "title": "New B",
+                        "entry_type": "backlog_item",
+                        "meta": {"kind": "feature"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_prioritize(
+                        {
+                            "kb_name": "test",
+                            "item_ids": ["new-a", "new-b"],
+                            "after": "anchor-item",
+                        }
+                    )
+
+                # No error
+                assert "error" not in result, result
+                # new-a got 800 (700 + 100), new-b got 900.
+                updates = {u["id"]: u["rank"] for u in result.get("updated", [])}
+                assert updates == {"new-a": 800, "new-b": 900}, updates
+
+                # Crucially: anchor-item's rank was never written. mock_svc
+                # records every update_entry call.
+                anchor_calls = [
+                    c for c in mock_svc.update_entry.call_args_list
+                    if c.args[:2] == ("anchor-item", "test")
+                ]
+                assert anchor_calls == [], (
+                    f"--after must NOT update the anchor; got calls {anchor_calls}"
+                )
+            finally:
+                db.close()
+
+    def test_after_anchor_missing_returns_error(self):
+        """If the anchor ID doesn't exist, refuse with an error rather than
+        silently falling back to the global-renumber path."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(
+                tmpdir,
+                entries=[
+                    {
+                        "id": "new-a",
+                        "title": "New A",
+                        "entry_type": "backlog_item",
+                        "meta": {"kind": "feature"},
+                    },
+                ],
+            )
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_prioritize(
+                        {
+                            "kb_name": "test",
+                            "item_ids": ["new-a"],
+                            "after": "no-such-anchor",
+                        }
+                    )
+                assert "error" in result
+                assert "no-such-anchor" in result["error"]
+                # And the unranked items were not silently re-ranked.
+                assert mock_svc.update_entry.call_count == 0
+            finally:
+                db.close()
+
+    def test_no_anchor_batch_still_works(self):
+        """Existing batch-without-anchor behavior preserved: ranks 100, 200, ...
+        This is the pre-fix path; it stays as the fallback so callers who
+        accept the destructive default can still use it."""
+        from unittest.mock import MagicMock, patch
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = _make_test_db(tmpdir, entries=[])
+            try:
+                plugin = _make_plugin_with_db(db)
+                mock_svc = MagicMock()
+                with (
+                    patch("pyrite.config.load_config"),
+                    patch("pyrite.services.kb_service.KBService", return_value=mock_svc),
+                ):
+                    result = plugin._mcp_prioritize(
+                        {
+                            "kb_name": "test",
+                            "item_ids": ["a", "b"],
+                        }
+                    )
+                updates = {u["id"]: u["rank"] for u in result.get("updated", [])}
+                assert updates == {"a": 100, "b": 200}
+            finally:
+                db.close()

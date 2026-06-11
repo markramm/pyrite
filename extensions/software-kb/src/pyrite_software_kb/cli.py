@@ -372,19 +372,17 @@ def sw_prioritize(
     plugin = SoftwareKBPlugin()
 
     args: dict[str, Any] = {"kb_name": kb_name or ""}
-    if item_ids and len(item_ids) > 1:
-        args["item_ids"] = item_ids
-    elif item_ids and len(item_ids) == 1 and (after or before):
-        args["item_id"] = item_ids[0]
-        if after:
-            args["after"] = after
-        if before:
-            args["before"] = before
-    elif item_ids:
-        args["item_ids"] = item_ids
-    else:
+    if not item_ids:
         console.print("[red]Provide item IDs to prioritize[/red]")
         raise typer.Exit(1)
+    # Always pass item_ids for the batch path. The single-item relative-
+    # positioning mode (--after with one ID and no co-ranking) is now a
+    # special case of the batch path; the MCP handler handles both.
+    args["item_ids"] = item_ids
+    if after:
+        args["after"] = after
+    if before:
+        args["before"] = before
 
     result = plugin._mcp_prioritize(args)
 

@@ -1109,10 +1109,58 @@ class SoftwareKBPlugin:
             svc = KBService(config, db)
 
             if item_ids:
-                # Batch mode: assign gap-numbered ranks
+                # Determine starting rank. With --after/--before, anchor to the
+                # named item so we don't clobber other items' existing ranks
+                # (bug-pyrite-sw-prioritize-renumbers-globally-clobbering-
+                # existing-ranks, Tier A 1050). Without an anchor, fall back
+                # to the historical 100-step-from-zero behavior.
+                start_rank = 0
+                if after_id or before_id:
+                    anchor_id = after_id or before_id
+                    anchor_row = db._raw_conn.execute(
+                        "SELECT metadata FROM entry WHERE id = ? AND kb_name = ?",
+                        (anchor_id, kb_name),
+                    ).fetchone()
+                    if not anchor_row:
+                        return {
+                            "error": (
+                                f"Anchor item '{anchor_id}' not found in KB "
+                                f"'{kb_name}'. Pass an existing item ID to "
+                                f"--after / --before, or omit the flag to "
+                                f"use global numbering."
+                            )
+                        }
+                    anchor_meta = {}
+                    if anchor_row["metadata"]:
+                        try:
+                            anchor_meta = json.loads(anchor_row["metadata"])
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+                    anchor_rank = int(anchor_meta.get("rank", 0))
+                    # --after: start at anchor + 100. --before: start at
+                    # max(1, anchor - 100*N) so the highest item lands just
+                    # before the anchor.
+                    if after_id:
+                        start_rank = anchor_rank
+                    else:
+                        # For --before with N items, the last (lowest-rank in
+                        # the batch) item lands at anchor_rank - 100. The
+                        # first item lands at anchor_rank - 100*N.
+                        start_rank = anchor_rank - 100 * len(item_ids)
+                        if start_rank < 0:
+                            return {
+                                "error": (
+                                    f"--before '{anchor_id}' (rank "
+                                    f"{anchor_rank}) leaves no room for "
+                                    f"{len(item_ids)} item(s) above it. "
+                                    f"Reorder or anchor to a higher-ranked "
+                                    f"item."
+                                )
+                            }
+
                 updated = []
                 for i, iid in enumerate(item_ids):
-                    rank = (i + 1) * 100
+                    rank = start_rank + (i + 1) * 100
                     try:
                         svc.update_entry(iid, kb_name, rank=rank)
                         updated.append({"id": iid, "rank": rank})
