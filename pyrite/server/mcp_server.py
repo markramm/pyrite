@@ -747,6 +747,41 @@ class PyriteMCPServer:
 
         # Validate against schema
         schema = kb_config.kb_schema
+
+        # Write-side type enforcement: refuse undeclared types unless the
+        # caller explicitly overrides. The schema validator surfaces this as
+        # a warning when validation.enforce=False (the common default for
+        # ephemeral KBs); but for the create path we need a refusal to stop
+        # external agents (e.g. the cascade-research conductor) from silently
+        # filing entries with their native type vocabulary into KBs that
+        # declare a different schema. See Tier A 1090 / commit b2e7ae8 for
+        # the conductor-filing incident.
+        if not args.get("allow_undeclared"):
+            from pyrite.schema import CORE_TYPES
+
+            declared_types = sorted(schema.types.keys()) if schema.types else []
+            if (
+                declared_types  # only enforce when the KB has a declared schema
+                and entry_type not in CORE_TYPES
+                and entry_type not in schema.types
+            ):
+                err = _error(
+                    "UNDECLARED_TYPE",
+                    (
+                        f"type '{entry_type}' is not declared in KB '{kb_name}'. "
+                        f"Declared types: {', '.join(declared_types)}. "
+                        f"Use kb_schema to inspect the full schema, or pass "
+                        f"allow_undeclared=true to override (the entry will be "
+                        f"flagged by `pyrite index health`)."
+                    ),
+                    suggestion=(
+                        f"Re-call kb_create with entry_type in "
+                        f"[{', '.join(declared_types)}]."
+                    ),
+                )
+                err["declared_types"] = declared_types
+                return err
+
         validation = schema.validate_entry(entry_type, args, context={"kb_type": kb_config.kb_type})
         warnings = validation.get("warnings", [])
 

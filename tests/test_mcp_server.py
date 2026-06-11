@@ -571,6 +571,88 @@ class TestPyriteMCPServer:
             assert "error" in result
             assert "read-only" in result["error"]
 
+    def test_kb_create_refuses_undeclared_type(self):
+        """kb_create must refuse entry_type values that aren't in the KB's
+        kb.yaml schema. Regression for Tier A 1090
+        (bug-create-silently-accepts-undeclared-types). Without this guard
+        external agents — like the cascade-research conductor — silently
+        file entries with their native vocabulary (`type: task`) into KBs
+        that declare a different schema (this repo's `kb.yaml` accepts only
+        adr | backlog_item | component | standard).
+        """
+
+        def write_kb_yaml(_config, kb_map):
+            kb_path = kb_map["sw-kb"].path
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb\n"
+                "kb_type: generic\n"
+                "types:\n"
+                "  backlog_item:\n"
+                "    description: A backlog work item\n"
+                "validation:\n"
+                "  enforce: false\n"
+            )
+
+        with _make_mcp_server(
+            [{"name": "sw-kb", "kb_type": KBType.GENERIC}],
+            tier="write",
+            extra_setup=write_kb_yaml,
+        ) as env:
+            result = env["server"]._dispatch_tool(
+                "kb_create",
+                {
+                    "kb_name": "sw-kb",
+                    "entry_type": "task",  # conductor's mistake — not in this KB's schema
+                    "title": "Conductor-filed task",
+                    "body": "Some body",
+                },
+            )
+            # The create must NOT silently succeed.
+            assert result.get("created") is not True, (
+                f"undeclared type 'task' must be refused; got result {result}"
+            )
+            # The error must name the offending type, name the declared types,
+            # and use a machine-readable error code so callers can self-correct.
+            assert "error" in result or "error_code" in result
+            error_code = result.get("error_code") or ""
+            assert error_code == "UNDECLARED_TYPE", (
+                f"expected error_code=UNDECLARED_TYPE; got {error_code!r}"
+            )
+            # Declared types listed so the caller doesn't have to round-trip
+            # through kb_schema.
+            declared = result.get("declared_types") or []
+            assert "backlog_item" in declared
+            assert "task" not in declared
+
+    def test_kb_create_allows_undeclared_with_override(self):
+        """Passing allow_undeclared=true overrides the refusal, for ephemeral
+        KBs or migration scenarios where the schema is fluid. The entry will
+        still be flagged by `pyrite index health`'s undeclared_types check."""
+
+        def write_kb_yaml(_config, kb_map):
+            (kb_map["sw-kb"].path / "kb.yaml").write_text(
+                "name: sw-kb\nkb_type: generic\ntypes:\n  backlog_item:\n"
+                "    description: A backlog work item\n"
+            )
+
+        with _make_mcp_server(
+            [{"name": "sw-kb", "kb_type": KBType.GENERIC}],
+            tier="write",
+            extra_setup=write_kb_yaml,
+        ) as env:
+            result = env["server"]._dispatch_tool(
+                "kb_create",
+                {
+                    "kb_name": "sw-kb",
+                    "entry_type": "task",
+                    "title": "Override case",
+                    "allow_undeclared": True,
+                },
+            )
+            assert result.get("created") is True, (
+                f"allow_undeclared=true must let the create succeed; got {result}"
+            )
+
     def test_kb_update_not_found(self, mcp_admin_server):
         """Test updating a non-existent entry returns error."""
         result = mcp_admin_server["server"]._dispatch_tool(
