@@ -5,7 +5,7 @@ type: backlog_item
 tags: [bug, conductor-filed, cli, task-system]
 importance: 5
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 1175
