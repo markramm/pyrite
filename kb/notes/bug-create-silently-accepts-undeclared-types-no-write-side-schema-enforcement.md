@@ -1,12 +1,13 @@
 ---
 id: bug-create-silently-accepts-undeclared-types-no-write-side-schema-enforcement
-type: backlog_item
 title: "BUG: `pyrite create` and MCP `kb_create` silently accept undeclared entry types — schema validator runs but its result is discarded"
+type: backlog_item
+tags: [bug, cli, mcp, schema, write-validation, silent-data-loss, conductor-friction, backlog-grooming]
+importance: 5
 kind: bug
 status: proposed
 priority: high
 effort: S
-tags: [bug, cli, mcp, schema, write-validation, silent-data-loss, conductor-friction, backlog-grooming]
 rank: 1090
 ---
 

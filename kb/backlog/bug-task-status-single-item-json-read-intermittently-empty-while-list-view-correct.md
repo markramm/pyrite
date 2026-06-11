@@ -36,3 +36,27 @@ Acceptance criteria additions:
 - Regression test: claim a task, immediately call `task get <id>
   --format json`, assert non-empty parseable JSON with the new state.
 
+
+## Audit note (2026-06-11) — needs better repro
+
+Attempted to reproduce during the Tier A audit loop pass:
+
+- `pyrite task status <id> --format json` returned full parseable JSON
+  on a single try.
+
+The conductor report described the bug as "intermittent" — a single
+successful call doesn't disprove it. Likely candidates for the
+intermittency:
+
+- Read-after-write timing window between `task claim` (or
+  `task update -s claimed`) and the subsequent `task status` — the
+  conductor's repro spec calls this out.
+- A specific edge case in `task status`'s JSON serialization that only
+  hits some tasks (the ones with empty/null children, for instance).
+
+Don't fix speculatively. Before working this ticket, get a deterministic
+repro: instrument the conductor's actual call sequence and capture both
+the empty-JSON case and the surrounding context. If the bug is genuinely
+non-deterministic timing in the file-read path, the fix probably lands
+naturally in the `task status` → `task get` rename + read-path
+consolidation that's already in this ticket's acceptance criteria.

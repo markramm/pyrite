@@ -102,3 +102,17 @@ gets caught.
 - [[cli-error-shape-consistency]] — adjacent CLI-output-contract work.
 - Discovered during the 2026-06-05 backlog grooming pass — fixing this
   unblocks reliable rank-based grooming queries.
+
+## Empirical reproduction confirmed (2026-06-11)
+
+Reproduced cleanly during the Tier A audit loop pass:
+
+- `pyrite get bug-create-silently-accepts-undeclared-types-...` JSON
+  output contains no `rank` field at all (not even `null`) — the field is
+  fully omitted from the projection.
+- `pyrite sw backlog` shows `updated_at: None` for **all 525 backlog
+  items**, including tickets touched seconds ago by `pyrite update`.
+  Whatever indexing happens on update does not propagate to
+  `updated_at`.
+
+High-confidence bug; the fix is unblocked.

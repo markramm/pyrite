@@ -1,12 +1,13 @@
 ---
 id: bug-pyrite-update-doesnt-keep-index-in-sync-with-source
-type: backlog_item
 title: "BUG: `pyrite update` writes the source file but does not refresh the index — downstream commands return stale data until manual `index sync`"
+type: backlog_item
+tags: [bug, cli, update, index, coherence, silent-data-loss, backlog-grooming]
+importance: 5
 kind: bug
-status: proposed
+status: wont_do
 priority: medium
 effort: S
-tags: [bug, cli, update, index, coherence, silent-data-loss, backlog-grooming]
 rank: 1025
 ---
 
@@ -123,3 +124,43 @@ Filed from the 2026-06-09 PO-review grooming pass after a fresh
 `pyrite index sync` removed 12 stale entries and updated 465 — a margin
 large enough that the previous Jun 5 grooming review's framing of the
 cascade cluster's priorities was materially wrong.
+
+## Closure note (2026-06-11) — did not reproduce
+
+Empirically verified during the loop pass on 2026-06-11: the bug described
+here does NOT reproduce. The repro steps:
+
+1. Picked a real backlog ticket (`bug-create-silently-accepts-undeclared-types-...`).
+2. Ran `pyrite update <id> -k pyrite -f assignee=test-repro-marker`.
+3. Without running `pyrite index sync`, called both `pyrite get` and
+   `pyrite sw backlog`.
+
+Both reads returned the new `assignee` value immediately. `pyrite update`
+DOES reindex the touched entry through `KBService.update_entry` →
+`DocumentManager.save_entry` (`pyrite/storage/document_manager.py:65`) →
+`IndexManager.index_entry`. The reindex is wired.
+
+The observation that drove this ticket's filing (the Jun 5 grooming review
+needed a manual `index sync` to get accurate counts) was real — but the
+diagnosis was wrong. The index WAS stale, but `pyrite update` was not the
+cause. More likely candidates for the staleness root cause:
+
+- Manual file edits in the working tree (e.g. my own hand-edits during
+  the conductor-ticket triage). Pyrite has no file watcher.
+- Git operations (checkouts, merges) that change files without going
+  through any pyrite write path.
+- A separate bug where `pyrite update` succeeds at indexing the *touched*
+  entry but leaves *related* entries (e.g. parent-rollup targets) stale.
+
+Closing as `wont_do` because the specific claim (the `update` write path
+doesn't reindex) is false. If the underlying "index gets stale over time"
+problem proves recurring, file a fresh ticket with the corrected
+diagnosis. A `pyrite index health` extension to detect mtime-vs-index
+skew would be a reasonable preventive measure.
+
+This is the second false-positive ticket I caught this session-arc; the
+first was the duplicate-frontmatter-keys alarm in
+[[bug-pyrite-update-appends-instead-of-replacing-frontmatter-keys]]
+which was a fenced-code-block grep artifact. Pattern: I've been filing
+based on observations without empirical reproduction. Iron Law #2 says
+investigate before fixing; the same discipline applies to filing.
