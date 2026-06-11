@@ -818,9 +818,20 @@ class IndexManager:
             kb_name: Sync specific KB (all if None)
             progress_callback: Optional callback(current, total) for progress updates
 
-        Returns dict with counts of added, updated, removed entries.
+        Returns dict with counts of added, updated, removed entries, plus
+        a ``malformed`` list of ``{"path", "error"}`` entries — files whose
+        frontmatter could not be parsed. The CLI surfaces this as a summary
+        (N files skipped, paths…) rather than spewing per-file tracebacks
+        for each malformed file. See Tier A 1080
+        (bug-index-sync-scannererror-output-pollution-no-skip-for-malformed-
+        or-hidden-scratch-files).
         """
-        results = {"added": 0, "updated": 0, "removed": 0}
+        results: dict[str, Any] = {
+            "added": 0,
+            "updated": 0,
+            "removed": 0,
+            "malformed": [],
+        }
 
         kbs = [self.config.get_kb(kb_name)] if kb_name else self.config.knowledge_bases
         kbs = [kb for kb in kbs if kb and kb.path.exists()]
@@ -872,6 +883,15 @@ class IndexManager:
                                 entry = repo.load_entry_from_file(file_path)
                                 self.index_entry(entry, kb.name, file_path)
                                 results["updated"] += 1
+                        except FrontmatterError as e:
+                            # Malformed frontmatter is content drift, not a
+                            # Pyrite bug. Surface in the summary; log one-line.
+                            results["malformed"].append(
+                                {"path": str(file_path), "error": str(e)}
+                            )
+                            logger.warning(
+                                "Malformed frontmatter in %s: %s", file_path, e
+                            )
                         except Exception:
                             logger.warning(
                                 "Stale check/re-index failed for %s", entry_id, exc_info=True
@@ -889,6 +909,14 @@ class IndexManager:
                             # Genuinely new entry
                             self.index_entry(entry, kb.name, file_path)
                             results["added"] += 1
+                    except FrontmatterError as e:
+                        # Same: malformed-frontmatter content drift, not a bug.
+                        results["malformed"].append(
+                            {"path": str(file_path), "error": str(e)}
+                        )
+                        logger.warning(
+                            "Malformed frontmatter in %s: %s", file_path, e
+                        )
                     except Exception:
                         logger.warning("Could not parse new file %s", file_path, exc_info=True)
 

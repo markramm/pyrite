@@ -158,6 +158,17 @@ def index_sync(
     console.print(f"  Added: {results['added']}")
     console.print(f"  Updated: {results['updated']}")
     console.print(f"  Removed: {results['removed']}")
+    # Surface malformed-frontmatter files as a summary instead of letting
+    # per-file ScannerError tracebacks pollute stderr. Tier A 1080.
+    malformed = results.get("malformed", [])
+    if malformed:
+        console.print(
+            f"  [yellow]Malformed: {len(malformed)} file(s) skipped[/yellow]"
+        )
+        for entry in malformed[:5]:
+            console.print(f"    [dim]• {entry['path']}[/dim]")
+        if len(malformed) > 5:
+            console.print(f"    [dim]… and {len(malformed) - 5} more[/dim]")
 
     # Auto-embed new/updated entries if embeddings are available
     changed = results["added"] + results["updated"]

@@ -597,6 +597,97 @@ Article body referencing events.
         assert health["unindexed_files"] == []
 
 
+class TestSyncMalformedFileSummary:
+    """`sync_incremental` must collect malformed-file parse failures and
+    return them in a `malformed` key — not spew per-file ScannerError
+    tracebacks to the log. Regression for Tier A 1080
+    (bug-index-sync-scannererror-output-pollution-no-skip-for-malformed-
+    or-hidden-scratch-files). The cascade-research drafts KB has ~13
+    scratch files with intentionally-broken frontmatter; the noise from
+    those was masking legitimate sync output.
+    """
+
+    @pytest.fixture
+    def setup_with_malformed(self):
+        """KB with 2 valid entries + 2 files with broken frontmatter."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            db = PyriteDB(db_path)
+            kb_path = tmpdir / "test-kb"
+            kb_path.mkdir()
+            kb_config = KBConfig(
+                name="test-kb", path=kb_path, kb_type="events", description="Test KB"
+            )
+            repo = KBRepository(kb_config)
+            # Two valid events
+            for i in range(2):
+                event = EventEntry.create(
+                    date=f"2025-01-{10 + i:02d}",
+                    title=f"Event {i}",
+                    body=f"Body {i}.",
+                )
+                repo.save(event)
+            # Two files with malformed frontmatter (the kind the conductor
+            # was hitting in cascade-research drafts — undefined YAML
+            # aliases from unquoted markdown body content).
+            (kb_path / "bad-1.md").write_text(
+                "---\ntitle: Bad One\n*undefined-alias\n---\n\nBody\n"
+            )
+            (kb_path / "bad-2.md").write_text(
+                "---\ntitle: Bad Two\n*another-undef\n---\n\nBody\n"
+            )
+
+            config = PyriteConfig(
+                knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+            )
+            index_mgr = IndexManager(db, config)
+            yield {"db": db, "config": config, "index_mgr": index_mgr, "kb_path": kb_path}
+            db.close()
+
+    def test_sync_returns_malformed_files_in_result(self, setup_with_malformed):
+        """sync_incremental's result dict carries the list of malformed
+        files so the caller can render a summary instead of relying on log
+        spew."""
+        results = setup_with_malformed["index_mgr"].sync_incremental("test-kb")
+        assert "malformed" in results, (
+            f"expected 'malformed' key in sync result; got keys {list(results.keys())}"
+        )
+        malformed = results["malformed"]
+        # Two bad files seeded.
+        assert len(malformed) == 2, f"expected 2 malformed files, got {malformed}"
+        # Each entry should at least name the path.
+        paths = [m.get("path") if isinstance(m, dict) else str(m) for m in malformed]
+        assert any("bad-1.md" in p for p in paths)
+        assert any("bad-2.md" in p for p in paths)
+        # Valid files still indexed.
+        assert results.get("added", 0) == 2, results
+
+    def test_sync_does_not_log_tracebacks_for_malformed_files(
+        self, setup_with_malformed, caplog
+    ):
+        """The per-file `exc_info=True` traceback spew is the bug. Logging
+        a one-line warning is fine; emitting full stack traces for each
+        bad file is what was polluting stderr."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.storage.index"):
+            setup_with_malformed["index_mgr"].sync_incremental("test-kb")
+
+        # Look for any log record carrying exception info — that's the
+        # `exc_info=True` spew we want gone for the malformed-frontmatter
+        # case.
+        records_with_traceback = [
+            r for r in caplog.records
+            if r.exc_info is not None
+            and any(name in str(r.getMessage()) for name in ("bad-1.md", "bad-2.md"))
+        ]
+        assert records_with_traceback == [], (
+            f"sync_incremental must not log tracebacks for malformed files; got "
+            f"{[r.getMessage() for r in records_with_traceback]}"
+        )
+
+
 class TestParseIndexedAt:
     """Tests for _parse_indexed_at() helper in index.py."""
 

@@ -1,12 +1,13 @@
 ---
 id: bug-index-sync-scannererror-output-pollution-no-skip-for-malformed-or-hidden-scratch-files
-type: backlog_item
 title: "INDEX SYNC robustness (re-filed from cascade-research; the drafts-KB DATA cleanup is Mark-gated and stays in cascade-res"
+type: backlog_item
+tags: [bug, conductor-filed, cli, task-system]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [bug, conductor-filed, cli, task-system]
 rank: 1080
 ---
 

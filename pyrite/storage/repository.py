@@ -103,9 +103,17 @@ class KBRepository:
             # and would fail identically, so re-raise rather than retry.
             logger.warning("Entry load failed for %s: malformed frontmatter", file_path)
             raise
-        except Exception:
+        except Exception as e:
+            # Log a one-line warning instead of a full traceback. Per-file
+            # tracebacks spam the operator during bulk sync (cascade-research
+            # drafts hit ~13 of these every operation). The underlying parse
+            # error is wrapped into FrontmatterError on re-raise from
+            # EventEntry.load if the cause is YAML; sync_incremental's
+            # malformed-summary captures it. Tier A 1080.
             logger.warning(
-                "Entry load failed for %s, trying EventEntry fallback", file_path, exc_info=True
+                "Entry load failed for %s, trying EventEntry fallback: %s",
+                file_path,
+                e,
             )
             return EventEntry.load(file_path)
 
