@@ -11,43 +11,97 @@ effort: S
 rank: 1175
 ---
 
-FEATURE PROPOSAL (Mark direction 2026-06-10, from investigation-conductor session). Add a RELAXED state-machine MODE rather than removing the machine. Separate two checks the machine currently conflates: (1) is 'status' a member of the allowed STATE SET — always enforce (cheap; catches typos; keeps index queryable); (2) is this TRANSITION legal given current state — make OPTIONAL.
+FEATURE: per-entity-type RELAXED state-machine MODE. Separate two checks the machine currently conflates: (1) is `status` a member of the allowed STATE SET — always enforce (cheap; catches typos; keeps index queryable); (2) is this TRANSITION legal given current state — make CONFIGURABLE PER ENTITY TYPE.
 
-Config: task_state_machine: { states: [open,claimed,in_progress,review,blocked,done,failed], enforce_transitions: false, require_reason_on_transition: true }. Rule: any status change allowed iff status_reason (+status_by) is set; git supplies who/when/ordered-history.
+THE ONE INVARIANT TO KEEP: `open->claimed` stays an ATOMIC compare-and-swap regardless of mode (concurrency guard, not a lifecycle rule; lives outside the transition table).
 
-THE ONE INVARIANT TO KEEP: open->claimed stays an ATOMIC compare-and-swap (the only concurrency collision point + the crash-recovery breadcrumb). It's a concurrency guard, not a lifecycle rule, so it lives OUTSIDE the transition table and stays guarded in BOTH modes. Mark: 'Claimed is atomic. Generally there is no contention on the ticket after that as the agent works it to completion (or times out).'
+MOTIVATION (friction observed every conductor tick): (a) conductor cannot triage an UNCLAIMED task `open->blocked` without a workaround; (b) subsumes `issue-add-held-state` — no 'held' enum needed: `status:blocked` + `status_reason:"deliverables-met, awaiting GAO docket"` is more expressive than any fixed state; (c) reason-on-every-transition under relaxed mode, uniform, no happy-path exemption (exempting "obvious" transitions smuggles a mini transition-table back in). Reason field is what makes a git diff legible weeks later.
 
-MOTIVATION (friction observed every conductor tick): (a) conductor cannot triage an UNCLAIMED task open->blocked (no orchestrator-grooming path that skips the claim) — currently worked around with parked_awaiting frontmatter + hand-edits; (b) subsumes issue-add-held-state — no 'held' enum needed: status:blocked + status_reason:'deliverables-met, awaiting GAO docket' is more expressive than any fixed state; (c) reason-on-EVERY-transition, uniform, no happy-path exemption (exempting 'obvious' transitions smuggles a mini transition-table back in). REASON enforced by rejecting the write, not by convention. Reason field is what makes a git diff legible weeks later. CAVEAT: a free status can drift from reality (done with no artifact) — but the strict machine never guarded transition TRUTH either, only ORDER; the real guard is the consumer's QC pass. Owner: pyrite repo. Related: issue-add-held-state-to-pyrite-task-state-machine (this subsumes it).
+## Design (LOCKED 2026-06-11 by Mark)
 
-## PO triage note (2026-06-10)
+**Reading C — per-entity-type config.** The `enforce_transitions` and `require_reason_on_transition` toggles live on the **entry type definition itself**, not on the KB config. A KB that holds both strict `task`s and relaxed `sw_ticket`s is fine — schema travels with the entity.
 
-Ranked into **Tier A meta-bugs** (rank 1175) per PO call. The conductor explicitly notes friction "every conductor tick" because it can't triage unclaimed tasks open->blocked without a workaround. That's the same "grooming-tools-sabotage-grooming" family as the rank-projection, prioritize-clobbers-ranks, and index-sync-after-update bugs in this tier.
+### Concrete shape
 
-The relaxed mode is itself a grooming-quality improvement: it removes the hand-edit/parked_awaiting workaround that conductor sessions are currently using to express states the strict machine doesn't allow.
+In `pyrite/models/task.py`, the existing `TASK_WORKFLOW` dict grows:
 
-Subsumes the proposed issue-add-held-state-to-pyrite-task-state-machine (per the ticket body), which can be retired in the same commit that implements the relaxed mode.
+```python
+TASK_WORKFLOW = {
+    "states": ["open", "claimed", ...],
+    "initial": "open",
+    "field": "status",
+    "transitions": [...],
+    # New, Tier A r1175:
+    "enforce_transitions": True,       # strict by default for core tasks
+    "require_reason_on_transition": False,
+    "atomic_claim": True,              # always; lives outside the toggle
+}
+```
 
-## Design questions (yielded from /pyrite-dev cron fire 2026-06-11)
+A plugin's `sw_ticket` (or similar) type schema can declare its own:
 
-Before implementation, the following decisions need to be locked. The ticket gestures at answers but a fire that picks this up needs them nailed down to write GREEN code without speculation:
+```yaml
+# software-kb's sw_ticket schema
+state_machine:
+  states: [open, claimed, in_progress, review, blocked, done, failed]
+  initial: open
+  field: status
+  enforce_transitions: false
+  require_reason_on_transition: true
+```
 
-1. **Config location.** enforce_transitions / require_reason_on_transition — per-KB config (kb.yaml schema), global Pyrite settings, or task-system-specific (e.g., pyrite/models/task.py constant overridable via env)? **Recommendation: per-KB**, since some KBs (investigations) want relaxed, others (CI/release pipelines) want strict. Confirm?
+### Behavior matrix
 
-2. **Field shape.** status_reason (free string, required ≥ N chars?) and status_by (auto-fill from PluginContext.user_id or require explicit?). **Recommendation: free string, min 3 chars, status_by auto-filled from context when available, falls back to required CLI flag.** Confirm?
+| `enforce_transitions` | `require_reason_on_transition` | Effect |
+|---|---|---|
+| true | false (current) | Strict workflow — only declared transitions allowed |
+| false | true | Any status in `states` allowed iff `status_reason` is set |
+| false | false | Any status in `states` allowed, no reason required (unlikely default) |
+| true | true | Strict workflow + require reason on every transition (audit-heavy) |
 
-3. **Toggle granularity.** Per-call CLI flag (pyrite task update --force), per-KB config (relaxed for whole KB), or both? **Recommendation: per-KB config sets the default; no per-call override (keeps git diffs auditable — operators can't quietly bypass).** Confirm?
+`_task_validate_transition` (in `pyrite/services/task_service.py:576`) reads the type's `state_machine` config (falling back to the core `TASK_WORKFLOW` for `task` type), then dispatches.
 
-4. **Backward-compat.** Existing tasks have no status_reason field. Three options:
-   - (a) Fail closed: any future update to such a task requires reason on EVERY transition (relaxed mode rule).
-   - (b) Fail open: existing tasks grandfathered; new fields required only for tasks created after a flag is set.
-   - (c) Migration script: one-off backfill of status_reason='pre-relaxed-mode'.
+`open->claimed` always goes through atomic CAS regardless of mode.
 
-   **Recommendation: (a) fail closed.** Cleanest semantics, no migration debt; the next update auto-backfills via the required field. Confirm?
+### `status_reason` shape — v1
 
-5. **CLI ergonomics.** pyrite task update <id> -f status=blocked --reason "awaiting GAO"? Or position-required pyrite task update <id> blocked "awaiting GAO"? **Recommendation: --reason flag + accept --status-reason alias** to match frontmatter field name. Confirm?
+**Free string** for v1 (e.g., `status_reason: "awaiting GAO docket"`). Entry-ref (`status_reason: [[awaiting-gao-docket]]`) is a follow-up enrichment that doesn't break compat — a wikilink in a free-string field still renders and indexes correctly; the upgrade path is just adding ref-resolution validation later.
 
-6. **Atomic claim.** Verify: open->claimed is currently atomic via a CAS-equivalent in the task service? If implemented via filesystem rename or DB row update, relaxed mode must NOT touch this path. Need to read pyrite/services/task_service.py to confirm.
+### Backward compatibility — migration script
 
-7. **Retire-in-same-commit.** Confirm: when this lands, also delete issue-add-held-state-to-pyrite-task-state-machine (status: wont_do, note: subsumed by relaxed mode) per ticket body. Need to verify the ticket still exists.
+New CLI: `pyrite task migrate-relaxed-mode <kb> [--dry-run]`. Walks every task in the KB whose entry-type declares `enforce_transitions=false` AND `require_reason_on_transition=true`, and backfills `status_reason: "pre-relaxed-mode"` for any task missing the field. Idempotent. Reports count of tasks migrated.
 
-If recommendations are accepted as-written, the next fire can go straight to RED tests + implementation. Estimate: ~2 fires for code + tests, 1 fire for CLI surface + docs.
+### CLI
+
+`pyrite task update <id> -f status=blocked --reason "awaiting GAO"` — `--reason` flag, with `--status-reason` as alias to match the frontmatter field name.
+
+### Retire `issue-add-held-state`
+
+In the same commit that lands this feature, mark `issue-add-held-state-to-pyrite-task-state-machine` as `wont_do` with note "subsumed by Tier A r1175 relaxed-mode per-entity-type config."
+
+### Concurrency
+
+`open->claimed` is ALWAYS atomic CAS, regardless of mode. The relaxed-mode dispatch must NOT touch this path. Verified in `pyrite/services/task_service.py` — keep the existing claim transaction.
+
+## Acceptance criteria
+
+- `state_machine` config block on the `task` entry type with the four keys: `states`, `transitions`, `enforce_transitions`, `require_reason_on_transition`. Defaults: strict (`enforce_transitions=true`, `require_reason_on_transition=false`) so existing tasks unchanged.
+- Plugins can override the block on their own entry types (e.g., `software-kb`'s `sw_ticket`).
+- `_task_validate_transition` reads the type's config and dispatches: strict path uses the existing transition table; relaxed path validates only `status in states` AND `status_reason` is non-empty.
+- `--reason` flag on `pyrite task update` writes `status_reason` to frontmatter.
+- `pyrite task migrate-relaxed-mode <kb> [--dry-run]` backfills `status_reason` for existing tasks of relaxed-mode types.
+- `open->claimed` remains an atomic CAS in BOTH modes (preserve existing claim transaction).
+- `issue-add-held-state-to-pyrite-task-state-machine` retired (`wont_do`) in the same commit.
+- Tests cover: (a) strict-mode rejection of bad transition (regression — existing behavior); (b) relaxed-mode acceptance of any state-set member with reason; (c) relaxed-mode rejection without reason; (d) `open->claimed` atomicity in both modes; (e) migration script backfill + idempotency.
+
+## Implementation arc
+
+Estimated ~4 fires:
+1. RED tests for state_machine config plumbing + relaxed-mode dispatch
+2. GREEN: `_task_validate_transition` reads per-type config; relaxed-mode path; `--reason` CLI flag
+3. Migration script `pyrite task migrate-relaxed-mode` + tests
+4. Retire `issue-add-held-state`; documentation note in task service component doc
+
+## Owner / related
+
+Owner: pyrite repo. Subsumes `issue-add-held-state-to-pyrite-task-state-machine`. Related to the `feat-editorial-notes-sidecar` conductor-friction family (both came out of the 2026-06-10 conductor session).
