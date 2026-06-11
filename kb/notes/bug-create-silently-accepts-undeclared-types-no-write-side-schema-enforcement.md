@@ -5,7 +5,7 @@ type: backlog_item
 tags: [bug, cli, mcp, schema, write-validation, silent-data-loss, conductor-friction, backlog-grooming]
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 1090

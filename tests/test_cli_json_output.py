@@ -263,3 +263,102 @@ def test_get_not_found_json_is_parseable(cli_env):
     # Non-zero exit, but stdout is still parseable JSON carrying the error.
     data = json.loads(result.output)
     assert data.get("error_code") == "NOT_FOUND" or "error" in data
+
+
+# =========================================================================
+# CLI write-side type enforcement — Tier A 1090 CLI half
+# =========================================================================
+
+
+@pytest.mark.cli
+def test_create_refuses_undeclared_type(cli_env):
+    """`pyrite create -t <undeclared>` must refuse when the KB's kb.yaml
+    declares a schema that does not include the requested type. Regression for
+    Tier A 1090 — the MCP half landed in commit 435be48; this is the CLI half."""
+    # Write kb.yaml declaring backlog_item only — and invalidate the
+    # schema cache because the KBConfig was instantiated before this write.
+    (cli_env["tmpdir"] / "events" / "kb.yaml").write_text(
+        "name: test-events\nkb_type: events\ntypes:\n  backlog_item:\n"
+        "    description: A backlog work item\n"
+    )
+    cli_env["config"].knowledge_bases[0].invalidate_schema_cache()
+
+    with _patch_config("pyrite.cli.entry_commands.load_config", cli_env):
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "-k", "test-events",
+                "-t", "task",  # not declared in kb.yaml; not a core type either
+                "--title", "Conductor-filed task",
+                "--body", "Should be refused",
+            ],
+        )
+
+    # Refusal: non-zero exit, error message names declared types.
+    assert result.exit_code != 0, (
+        f"create with undeclared type 'task' must fail; got exit 0 with output:\n{result.output}"
+    )
+    out = result.output
+    assert "task" in out, f"error message should name the offending type; got:\n{out}"
+    assert "backlog_item" in out, (
+        f"error message should name declared types so the caller can self-correct; got:\n{out}"
+    )
+
+
+@pytest.mark.cli
+def test_create_allows_undeclared_with_override(cli_env):
+    """Passing --allow-undeclared bypasses the refusal — useful for ephemeral
+    KBs or migration scenarios. The entry will still be flagged by
+    `pyrite index health`'s undeclared_types check."""
+    (cli_env["tmpdir"] / "events" / "kb.yaml").write_text(
+        "name: test-events\nkb_type: events\ntypes:\n  backlog_item:\n"
+        "    description: A backlog work item\n"
+    )
+
+    with _patch_config("pyrite.cli.entry_commands.load_config", cli_env):
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "-k", "test-events",
+                "-t", "task",
+                "--title", "Override case",
+                "--body", "Allowed by override",
+                "--allow-undeclared",
+            ],
+        )
+
+    assert result.exit_code == 0, (
+        f"--allow-undeclared must let undeclared types through; got exit "
+        f"{result.exit_code} with output:\n{result.output}"
+    )
+    assert "Created" in result.output
+
+
+@pytest.mark.cli
+def test_create_allows_core_types_even_without_declaration(cli_env):
+    """Core types (note, event, person, ...) stay accepted regardless of the
+    KB's declared schema — they're the universal fallback. This pins the
+    contract that the refusal only fires for genuinely-unknown types."""
+    (cli_env["tmpdir"] / "events" / "kb.yaml").write_text(
+        "name: test-events\nkb_type: events\ntypes:\n  backlog_item:\n"
+        "    description: A backlog work item\n"
+    )
+
+    with _patch_config("pyrite.cli.entry_commands.load_config", cli_env):
+        result = runner.invoke(
+            app,
+            [
+                "create",
+                "-k", "test-events",
+                "-t", "note",  # core type, not in this KB's kb.yaml — must succeed
+                "--title", "Core type is fine",
+                "--body", "Notes are universal",
+            ],
+        )
+
+    assert result.exit_code == 0, (
+        f"core type 'note' must succeed even when not in kb.yaml; got exit "
+        f"{result.exit_code} with output:\n{result.output}"
+    )

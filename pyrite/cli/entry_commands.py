@@ -158,6 +158,12 @@ def register_entry_commands(app: typer.Typer) -> None:
         body_file: Path | None = typer.Option(None, "--body-file", help="Read body from file"),
         stdin: bool = typer.Option(False, "--stdin", help="Read body from stdin"),
         template: bool = typer.Option(False, "--template", help="Output entry skeleton to stdout"),
+        allow_undeclared: bool = typer.Option(
+            False,
+            "--allow-undeclared",
+            help="Allow entry types not declared in the KB's kb.yaml (the "
+            "entry will be flagged by `pyrite index health`).",
+        ),
     ):
         """Create a new entry in a knowledge base."""
         from ..schema import CORE_TYPES, generate_entry_id
@@ -241,6 +247,37 @@ def register_entry_commands(app: typer.Typer) -> None:
                 extra[k] = _parse_field_value(v)
 
         with cli_context() as (config, db, svc):
+            # Write-side type enforcement: refuse undeclared types unless
+            # --allow-undeclared was passed. Mirrors the MCP-side check in
+            # _kb_create (commit 435be48). Closes the CLI half of Tier A
+            # 1090 (bug-create-silently-accepts-undeclared-types).
+            if not allow_undeclared:
+                kb_config_check = config.get_kb(kb_name)
+                if kb_config_check is not None:
+                    schema = kb_config_check.kb_schema
+                    declared_types = (
+                        sorted(schema.types.keys())
+                        if schema and schema.types
+                        else []
+                    )
+                    if (
+                        declared_types
+                        and entry_type not in CORE_TYPES
+                        and entry_type not in schema.types
+                    ):
+                        _cli_error(
+                            (
+                                f"type '{entry_type}' is not declared in KB "
+                                f"'{kb_name}'. Declared types: "
+                                f"{', '.join(declared_types)}. Use "
+                                f"`pyrite kb schema show {kb_name}` to inspect "
+                                f"the full schema, or pass --allow-undeclared "
+                                f"to override (the entry will be flagged by "
+                                f"`pyrite index health`)."
+                            ),
+                            "rich",
+                            "UNDECLARED_TYPE",
+                        )
             try:
                 entry = svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
                 console.print(f"[green]Created:[/green] {entry.id}")
