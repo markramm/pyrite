@@ -5,7 +5,7 @@ type: backlog_item
 tags: [plugins, error-handling, reliability]
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 1000

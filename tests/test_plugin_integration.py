@@ -1117,3 +1117,86 @@ class TestPluginCollisionDetection:
 
         collision_warnings = [r for r in caplog.records if "conflicts with" in r.message]
         assert len(collision_warnings) == 0
+
+
+class TestPluginRegistryFailureVisibility:
+    """Regression tests for r1000 plugin-registry-silent-failures.
+
+    The contract: when a plugin raises from an aggregation method
+    (get_entry_types, get_validators, etc.), the registry must NOT
+    silently swallow it. The failure must be logged at ERROR level
+    with the plugin name AND the method name, so an operator running
+    pyrite from a terminal sees the crash on stderr (default WARNING+
+    is at INFO/ERROR — ERROR is always shown).
+
+    Other plugins' contributions must still be returned: a single bad
+    plugin must not bring down the registry. This is the partial-
+    aggregation contract.
+    """
+
+    @staticmethod
+    def _make_crashing_plugin(name: str, method: str):
+        """Build a minimal plugin whose `method` raises on call."""
+        plugin = ZettelkastenPlugin()
+        plugin.name = name
+
+        def crash():
+            raise RuntimeError(f"simulated crash in {method}")
+
+        setattr(plugin, method, crash)
+        return plugin
+
+    def test_crashing_get_entry_types_logs_error_with_plugin_and_method(self, caplog):
+        """A plugin whose get_entry_types() raises must produce an
+        ERROR log naming the plugin and the method. Pre-r1000 the
+        registry logged at DEBUG and the crash was invisible."""
+        reg = PluginRegistry()
+        bad = self._make_crashing_plugin("bad-plugin", "get_entry_types")
+        good = ZettelkastenPlugin()
+        good.name = "good-plugin"
+        reg.register(bad)
+        reg.register(good)
+
+        with caplog.at_level(logging.ERROR, logger="pyrite.plugins.registry"):
+            result = reg.get_all_entry_types()
+
+        # Partial aggregation: good plugin still contributes.
+        assert len(result) > 0, "good plugin's types should still be returned"
+
+        # Error visibility: ERROR-level log naming plugin AND method.
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any(
+            "bad-plugin" in r.getMessage() and "get_entry_types" in r.getMessage()
+            for r in errors
+        ), f"expected ERROR mentioning bad-plugin and get_entry_types; got {[r.getMessage() for r in errors]}"
+
+    def test_crashing_get_validators_logs_error_with_plugin_and_method(self, caplog):
+        """Same contract for get_validators (list-aggregation path)."""
+        reg = PluginRegistry()
+        bad = self._make_crashing_plugin("bad-validators", "get_validators")
+        reg.register(bad)
+
+        with caplog.at_level(logging.ERROR, logger="pyrite.plugins.registry"):
+            reg.get_all_validators()
+
+        errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any(
+            "bad-validators" in r.getMessage() and "get_validators" in r.getMessage()
+            for r in errors
+        ), f"expected ERROR mentioning bad-validators and get_validators; got {[r.getMessage() for r in errors]}"
+
+    def test_crashing_plugin_does_not_break_registry_for_other_plugins(self, caplog):
+        """The partial-aggregation contract: one bad plugin must not
+        prevent other plugins' types from being returned."""
+        reg = PluginRegistry()
+        bad = self._make_crashing_plugin("bad", "get_entry_types")
+        good = ZettelkastenPlugin()
+        good.name = "good"
+        reg.register(bad)
+        reg.register(good)
+
+        with caplog.at_level(logging.ERROR, logger="pyrite.plugins.registry"):
+            result = reg.get_all_entry_types()
+
+        # The good plugin's entry types are present in spite of the bad one.
+        assert "zettel" in result or len(result) > 0
