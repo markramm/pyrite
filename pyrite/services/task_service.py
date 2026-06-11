@@ -113,6 +113,88 @@ class TaskService:
             "updates": updates,
         }
 
+    def migrate_relaxed_mode(
+        self, kb_name: str, dry_run: bool = False
+    ) -> dict[str, Any]:
+        """Backfill status_reason='pre-relaxed-mode' for tasks of types
+        that have opted into relaxed mode.
+
+        Walks every task in ``kb_name``, resolves each one's workflow
+        via the KB schema, and stamps ``status_reason='pre-relaxed-mode'``
+        on any task whose type declares
+        ``require_reason_on_transition=true`` AND that lacks a
+        ``status_reason``.
+
+        Idempotent: a task with an existing reason is skipped.
+
+        Tier A r1175 — provides a migration path so existing tasks
+        don't fail validation the next time their status changes.
+
+        Args:
+            kb_name: KB to migrate.
+            dry_run: When True, return the plan without writing.
+
+        Returns:
+            ``{"kb_name", "scanned", "migrated", "skipped", "dry_run"}``.
+        """
+        from ..models.task import resolve_workflow_for_type
+
+        kb_config = self.config.get_kb(kb_name)
+        if kb_config is None:
+            from ..exceptions import KBNotFoundError
+
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+
+        kb_schema = getattr(kb_config, "kb_schema", None)
+
+        # Pull every task in this KB. The migration is per-KB so we
+        # don't have to worry about cross-KB schema resolution.
+        rows = self._query(
+            "SELECT id, entry_type FROM entry "
+            "WHERE kb_name = :kb AND entry_type = 'task'",
+            {"kb": kb_name},
+        )
+
+        scanned = len(rows)
+        migrated = 0
+        skipped = 0
+        migrated_ids: list[str] = []
+
+        for row in rows:
+            entry_type = row.get("entry_type") or "task"
+            workflow = resolve_workflow_for_type(entry_type, kb_schema)
+            if not workflow.get("require_reason_on_transition", False):
+                # Type isn't in relaxed-reason mode — nothing to do.
+                skipped += 1
+                continue
+
+            # Load the entry to check the reason field.
+            entry = self.kb_svc.get_entry(row["id"], kb_name)
+            if entry is None:
+                skipped += 1
+                continue
+            existing = (entry.get("status_reason") or "").strip()
+            if existing:
+                # Already has a reason — idempotency.
+                skipped += 1
+                continue
+
+            migrated += 1
+            migrated_ids.append(row["id"])
+            if not dry_run:
+                self.kb_svc.update_entry(
+                    row["id"], kb_name, status_reason="pre-relaxed-mode"
+                )
+
+        return {
+            "kb_name": kb_name,
+            "scanned": scanned,
+            "migrated": migrated,
+            "skipped": skipped,
+            "migrated_ids": migrated_ids,
+            "dry_run": dry_run,
+        }
+
     def get_task(self, task_id: str, kb_name: str | None = None) -> dict[str, Any] | None:
         """Get task details from the index."""
         return self.kb_svc.get_entry(task_id, kb_name)
@@ -574,26 +656,48 @@ def _parse_metadata(raw) -> dict[str, Any]:
 
 
 def _task_validate_transition(entry: Entry, context: dict) -> Entry:
-    """Validate task status transitions against workflow on update.
+    """Validate status transitions against the type's workflow on update.
 
     Dispatches through ``validate_status_change`` (Tier A r1175), which
     chooses strict vs relaxed mode based on the workflow's
     ``enforce_transitions`` flag. The core ``TASK_WORKFLOW`` defaults
     to strict so every existing task keeps its pre-r1175 behavior; a
-    plugin that wants relaxed mode declares
+    plugin's entry type opts into relaxed mode by declaring a
+    ``state_machine`` block on its TypeSchema with
     ``enforce_transitions=false`` (and typically
-    ``require_reason_on_transition=true``) on its own entry-type's
-    ``state_machine`` config.
+    ``require_reason_on_transition=true``).
 
-    Per-entity-type workflow resolution (reading the entry type's
-    ``state_machine`` block from the KB schema and falling back to
-    ``TASK_WORKFLOW`` for the ``task`` type) lands in a follow-up
-    fire; this hook currently resolves to ``TASK_WORKFLOW`` for the
-    core ``task`` type, which preserves all existing behavior.
+    Per-entity-type workflow resolution (Tier A r1175 fire 3): the
+    hook now calls ``resolve_workflow_for_type`` which reads the
+    entry-type's ``state_machine`` from the KB schema when present,
+    falling back to ``TASK_WORKFLOW`` for the ``task`` type. The hook
+    fires for any entry whose type has a state_machine override OR is
+    the core ``task`` type — so plugins that want this workflow on
+    their own types (e.g. ``sw_ticket``) just declare a state_machine.
     """
     if context.get("operation") != "update":
         return entry
-    if not hasattr(entry, "entry_type") or entry.entry_type != "task":
+    if not hasattr(entry, "entry_type"):
+        return entry
+
+    from ..models.task import (
+        TASK_WORKFLOW,
+        resolve_workflow_for_type,
+        validate_status_change,
+    )
+
+    # Resolve the workflow for this entry-type. If we're not the core
+    # `task` type AND no state_machine is declared, the resolver falls
+    # back to TASK_WORKFLOW; gate on whether this is the task type or
+    # the type has explicit state_machine config to avoid firing on
+    # arbitrary types that happen to have a `status` field.
+    kb_schema = context.get("kb_schema")
+    workflow = resolve_workflow_for_type(entry.entry_type, kb_schema)
+    is_task_or_opted_in = (
+        entry.entry_type == "task"
+        or (workflow is not TASK_WORKFLOW)  # type opted in via state_machine
+    )
+    if not is_task_or_opted_in:
         return entry
 
     old_status = context.get("old_status")
@@ -601,14 +705,12 @@ def _task_validate_transition(entry: Entry, context: dict) -> Entry:
     if not old_status or not new_status or old_status == new_status:
         return entry
 
-    from ..models.task import TASK_WORKFLOW, validate_status_change
-
     # The reason field carries through frontmatter as `status_reason`; an
     # absent attribute is treated as empty string.
     status_reason = getattr(entry, "status_reason", "") or ""
 
     ok, err = validate_status_change(
-        TASK_WORKFLOW,
+        workflow,
         old_status=old_status,
         new_status=new_status,
         status_reason=status_reason,
@@ -619,7 +721,7 @@ def _task_validate_transition(entry: Entry, context: dict) -> Entry:
         # (empirically helpful in conductor logs). Under relaxed mode,
         # the validator's message is already specific to the rejection
         # cause (missing reason, status not in states); don't pile on.
-        if TASK_WORKFLOW.get("enforce_transitions", True):
+        if workflow.get("enforce_transitions", True):
             # Strip the "Cannot move from..." prefix from validate_status_change
             # so we can substitute the task-specific one.
             allowed_msg = err.split("Allowed next:", 1)[-1].strip() if "Allowed next:" in err else ""

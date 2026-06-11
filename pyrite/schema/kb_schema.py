@@ -91,6 +91,7 @@ class KBSchema:
                     evaluation_rubric=type_data.get("evaluation_rubric", []),
                     edge_type=type_data.get("edge_type", False),
                     endpoints=endpoints,
+                    state_machine=type_data.get("state_machine"),
                 )
             else:
                 types[type_name] = TypeSchema(name=type_name)

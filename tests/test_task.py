@@ -427,6 +427,91 @@ class TestValidateStatusChange:
 
 
 # =========================================================================
+# Per-entity-type workflow resolver — Tier A r1175 fire 3/4
+# =========================================================================
+
+
+class TestResolveWorkflowForType:
+    """`resolve_workflow_for_type(entry_type, kb_schema)` returns the
+    workflow dict the dispatcher should validate against:
+
+      - For the core `task` type or any type with no `state_machine`
+        block on its TypeSchema: TASK_WORKFLOW (back-compat).
+      - For a type whose TypeSchema carries a `state_machine` dict
+        (e.g., a plugin's `sw_ticket` that opts into relaxed mode):
+        the type's own dict — letting plugins override
+        enforce_transitions / require_reason_on_transition / states /
+        transitions independently.
+
+    Per-type config is the core of Reading C from the locked design.
+    """
+
+    def test_task_type_falls_back_to_TASK_WORKFLOW(self):
+        from pyrite.models.task import TASK_WORKFLOW, resolve_workflow_for_type
+
+        # kb_schema can be None — the resolver still gives back the
+        # core workflow for the `task` type.
+        result = resolve_workflow_for_type("task", None)
+        assert result is TASK_WORKFLOW
+
+    def test_unknown_type_with_no_schema_returns_task_workflow(self):
+        """If we don't have a schema and the type isn't `task`, return
+        TASK_WORKFLOW as the safe default — the dispatcher won't
+        actually fire because _task_validate_transition filters on
+        entry_type, but the resolver shouldn't crash on None."""
+        from pyrite.models.task import TASK_WORKFLOW, resolve_workflow_for_type
+
+        assert resolve_workflow_for_type("sw_ticket", None) is TASK_WORKFLOW
+
+    def test_type_schema_state_machine_overrides_task_workflow(self):
+        """The locked design: a plugin's entry-type schema can carry
+        its own `state_machine` block. When present, the resolver
+        returns it instead of TASK_WORKFLOW."""
+        from pyrite.models.task import resolve_workflow_for_type
+        from pyrite.schema import KBSchema, TypeSchema
+
+        custom_workflow = {
+            "states": ["open", "claimed", "in_progress", "blocked", "done"],
+            "initial": "open",
+            "field": "status",
+            "transitions": [],
+            "enforce_transitions": False,
+            "require_reason_on_transition": True,
+        }
+        schema = KBSchema(
+            name="test",
+            kb_type="generic",
+            types={
+                "sw_ticket": TypeSchema(
+                    name="sw_ticket",
+                    state_machine=custom_workflow,
+                ),
+            },
+        )
+
+        result = resolve_workflow_for_type("sw_ticket", schema)
+        assert result is custom_workflow
+        # And the relaxed flags survived round-trip:
+        assert result["enforce_transitions"] is False
+        assert result["require_reason_on_transition"] is True
+
+    def test_type_without_state_machine_falls_back(self):
+        """A TypeSchema with NO state_machine block: fall back to
+        TASK_WORKFLOW. This is the case for every existing plugin
+        until it opts in."""
+        from pyrite.models.task import TASK_WORKFLOW, resolve_workflow_for_type
+        from pyrite.schema import KBSchema, TypeSchema
+
+        schema = KBSchema(
+            name="test",
+            kb_type="generic",
+            types={"sw_ticket": TypeSchema(name="sw_ticket")},
+        )
+        # No state_machine declared -> back-compat fallback
+        assert resolve_workflow_for_type("sw_ticket", schema) is TASK_WORKFLOW
+
+
+# =========================================================================
 # Validators
 # =========================================================================
 

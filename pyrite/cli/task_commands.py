@@ -313,6 +313,43 @@ def task_decompose(
         db.close()
 
 
+@task_app.command("migrate-relaxed-mode")
+def task_migrate_relaxed_mode(
+    kb_name: str = typer.Argument(..., help="Knowledge base to migrate"),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show the plan without writing"
+    ),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+):
+    """Backfill status_reason='pre-relaxed-mode' for tasks of types
+    that have opted into relaxed-reason mode but lack a reason.
+
+    Tier A r1175 — provides a migration path so existing tasks don't
+    fail validation the next time their status changes. Idempotent.
+    """
+    svc, db = _get_service()
+    try:
+        result = svc.migrate_relaxed_mode(kb_name, dry_run=dry_run)
+
+        formatted = _format_output(result, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        verb = "Would migrate" if dry_run else "Migrated"
+        console.print(f"[green]{verb}[/green] in '{kb_name}':")
+        console.print(f"  Scanned: {result['scanned']}")
+        console.print(f"  Migrated: {result['migrated']}")
+        console.print(f"  Skipped: {result['skipped']}")
+        if dry_run:
+            console.print("[yellow]Dry run — no files modified.[/yellow]")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    finally:
+        db.close()
+
+
 @task_app.command("checkpoint")
 def task_checkpoint(
     task_id: str = typer.Argument(..., help="Task entry ID"),

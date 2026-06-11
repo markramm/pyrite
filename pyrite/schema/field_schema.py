@@ -158,6 +158,7 @@ class TypeSchema:
     )  # Assertions for QA validation
     edge_type: bool = False  # Whether this type represents an edge/relationship
     endpoints: dict[str, EndpointSpec] = field(default_factory=dict)  # Edge endpoint specs
+    state_machine: dict[str, Any] | None = None  # Per-type workflow override (Tier A r1175)
 
     def resolve_subdirectory(self, entry: Entry) -> str:
         """Return the resolved subdirectory, expanding template placeholders."""

@@ -122,6 +122,42 @@ def requires_reason(workflow: dict, current_state: str, target_state: str) -> bo
     return False
 
 
+def resolve_workflow_for_type(entry_type: str, kb_schema: Any) -> dict:
+    """Return the workflow dict that should govern transitions for entries
+    of ``entry_type``.
+
+    The locked design (Tier A r1175, Reading C):
+
+      - For the core ``task`` type or any type whose TypeSchema does not
+        carry a ``state_machine`` block: return ``TASK_WORKFLOW``
+        (preserves all existing behavior).
+      - For a type whose TypeSchema carries a ``state_machine`` dict
+        (e.g. a plugin's ``sw_ticket`` that opts into relaxed mode):
+        return that dict. Plugin can override ``enforce_transitions``,
+        ``require_reason_on_transition``, ``states``, ``transitions``
+        independently.
+
+    Args:
+        entry_type: The entry's type name (e.g. ``"task"``, ``"sw_ticket"``).
+        kb_schema: The KB's ``KBSchema`` instance, or None if unavailable.
+
+    Returns:
+        A workflow dict in the same shape as ``TASK_WORKFLOW``.
+    """
+    if kb_schema is None:
+        return TASK_WORKFLOW
+    get_type_schema = getattr(kb_schema, "get_type_schema", None)
+    if get_type_schema is None:
+        return TASK_WORKFLOW
+    type_schema = get_type_schema(entry_type)
+    if type_schema is None:
+        return TASK_WORKFLOW
+    state_machine = getattr(type_schema, "state_machine", None)
+    if state_machine:
+        return state_machine
+    return TASK_WORKFLOW
+
+
 def validate_status_change(
     workflow: dict,
     old_status: str,

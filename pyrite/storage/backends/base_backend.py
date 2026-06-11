@@ -322,6 +322,13 @@ class BaseBackend(ABC):
         for key in ("rank", "effort", "kind"):
             if key in metadata and key not in result:
                 result[key] = metadata[key]
+        # status_reason is the per-transition audit field for the
+        # relaxed-mode state machine (Tier A r1175). Plugins and the
+        # task migration script read it directly off the entry dict;
+        # lift here so consumers don't have to special-case
+        # entry["metadata"]["status_reason"].
+        if "status_reason" in metadata and "status_reason" not in result:
+            result["status_reason"] = metadata["status_reason"]
         return result
 
     def _get_entry_tags(self, entry_id: str, kb_name: str) -> list[str]:

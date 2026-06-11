@@ -412,3 +412,153 @@ class TestListTasks:
         assert len(assigned) >= 1
         titles = [t["title"] for t in assigned]
         assert "Assigned" in titles
+
+
+# =========================================================================
+# Migration: pyrite task migrate-relaxed-mode — Tier A r1175 fire 3/4
+# =========================================================================
+
+
+@pytest.fixture
+def migration_env():
+    """Fresh per-test env so migration counters are deterministic.
+
+    The class-scoped task_env accumulates state across tests which makes
+    scanned/migrated counts unstable for assertions.
+    """
+    import tempfile
+    from pathlib import Path
+
+    from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
+    from pyrite.services.task_service import TaskService
+    from pyrite.storage.database import PyriteDB
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        kb_path = tmpdir / "kb"
+        kb_path.mkdir()
+
+        kb_config = KBConfig(
+            name="migration-kb",
+            path=kb_path,
+            kb_type=KBType.GENERIC,
+        )
+        config = PyriteConfig(
+            knowledge_bases=[kb_config],
+            settings=Settings(index_path=tmpdir / "index.db"),
+        )
+        db = PyriteDB(config.settings.index_path)
+        db.register_kb(
+            name="migration-kb",
+            kb_type="generic",
+            path=str(kb_path),
+            description="",
+        )
+        svc = TaskService(config, db)
+        yield {"svc": svc, "config": config, "db": db, "kb_config": kb_config}
+        db.close()
+
+
+class TestMigrateRelaxedMode:
+    """`TaskService.migrate_relaxed_mode(kb_name, dry_run=False)` backfills
+    status_reason='pre-relaxed-mode' for tasks of types that have
+    opted into relaxed-reason mode but lack a reason.
+
+    Strict-mode tasks are skipped (back-compat). Tasks that already
+    have a status_reason are skipped (idempotency).
+    """
+
+    def _patch_relaxed_workflow(self, kb_config):
+        """Inject a state_machine on the `task` type's schema so the
+        resolver sees it as a relaxed-reason type. Real-world this
+        would live in kb.yaml; here we shortcut to the schema layer."""
+        from pyrite.schema import TypeSchema
+
+        relaxed = {
+            "states": ["open", "claimed", "in_progress", "blocked", "done"],
+            "initial": "open",
+            "field": "status",
+            "transitions": [],
+            "enforce_transitions": False,
+            "require_reason_on_transition": True,
+        }
+        kb_config.kb_schema.types["task"] = TypeSchema(
+            name="task", state_machine=relaxed
+        )
+
+    def test_strict_mode_kb_migrates_nothing(self, migration_env):
+        """A KB whose `task` type has NO state_machine override means
+        TASK_WORKFLOW (strict, no reason required) → no tasks need
+        backfilling."""
+        svc = migration_env["svc"]
+        svc.create_task(kb_name="migration-kb", title="t1")
+        svc.create_task(kb_name="migration-kb", title="t2")
+
+        result = svc.migrate_relaxed_mode("migration-kb")
+        assert result["scanned"] == 2
+        assert result["migrated"] == 0
+        assert result["skipped"] == 2
+        assert result["dry_run"] is False
+
+    def test_relaxed_mode_migrates_tasks_without_reason(self, migration_env):
+        """Under a relaxed-reason type, tasks lacking status_reason
+        get backfilled with 'pre-relaxed-mode'."""
+        svc = migration_env["svc"]
+        kb_config = migration_env["kb_config"]
+
+        svc.create_task(kb_name="migration-kb", title="t1")
+        svc.create_task(kb_name="migration-kb", title="t2")
+
+        self._patch_relaxed_workflow(kb_config)
+
+        result = svc.migrate_relaxed_mode("migration-kb")
+        assert result["scanned"] == 2
+        assert result["migrated"] == 2
+        assert result["skipped"] == 0
+        assert len(result["migrated_ids"]) == 2
+
+        # Verify the reason actually landed on disk
+        for tid in result["migrated_ids"]:
+            entry = svc.kb_svc.get_entry(tid, "migration-kb")
+            assert entry["status_reason"] == "pre-relaxed-mode"
+
+    def test_dry_run_does_not_write(self, migration_env):
+        svc = migration_env["svc"]
+        kb_config = migration_env["kb_config"]
+
+        svc.create_task(kb_name="migration-kb", title="t1")
+        self._patch_relaxed_workflow(kb_config)
+
+        result = svc.migrate_relaxed_mode("migration-kb", dry_run=True)
+        assert result["dry_run"] is True
+        assert result["migrated"] == 1
+
+        # Confirm no write happened — entry still has empty reason
+        tid = result["migrated_ids"][0]
+        entry = svc.kb_svc.get_entry(tid, "migration-kb")
+        assert (entry.get("status_reason") or "") == ""
+
+    def test_idempotent_skips_tasks_with_existing_reason(self, migration_env):
+        """A second migration run finds nothing left to do."""
+        svc = migration_env["svc"]
+        kb_config = migration_env["kb_config"]
+
+        svc.create_task(kb_name="migration-kb", title="t1")
+        self._patch_relaxed_workflow(kb_config)
+
+        first = svc.migrate_relaxed_mode("migration-kb")
+        assert first["migrated"] == 1
+
+        # Second pass: same KB, same data, but now every task already
+        # has a reason — nothing to migrate.
+        second = svc.migrate_relaxed_mode("migration-kb")
+        assert second["scanned"] == 1
+        assert second["migrated"] == 0
+        assert second["skipped"] == 1
+
+    def test_unknown_kb_raises(self, migration_env):
+        from pyrite.exceptions import KBNotFoundError
+
+        svc = migration_env["svc"]
+        with pytest.raises(KBNotFoundError):
+            svc.migrate_relaxed_mode("no-such-kb")
