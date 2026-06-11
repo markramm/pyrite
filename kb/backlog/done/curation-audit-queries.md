@@ -5,7 +5,7 @@ type: backlog_item
 tags: [curation, search, cli, mcp]
 importance: 5
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: M
 rank: 2300

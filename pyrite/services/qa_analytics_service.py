@@ -345,3 +345,160 @@ class QAAnalyticsService:
             return (now - dt).days
         except (ValueError, TypeError):
             return 0
+
+    # =========================================================================
+    # Coverage stats — Tier A r2300
+    # =========================================================================
+
+    def coverage_stats(
+        self, kb_name: str, entry_type: str | None = None
+    ) -> dict[str, Any]:
+        """Aggregate curation-coverage stats for a KB.
+
+        Answers the planning-level questions `pyrite qa validate`
+        can't:
+
+          - How many entries do we have? Broken down by type?
+          - What status distribution? (stub/working/done/...)
+          - What fraction have non-empty body?
+          - What fraction have outbound wikilinks? Average per entry?
+          - What fraction have structured sources attached?
+
+        Args:
+            kb_name: KB to summarize.
+            entry_type: Restrict the report to one type when set.
+
+        Returns:
+            Dict shaped:
+              {
+                "kb_name": str,
+                "entry_type": str | None,
+                "total_entries": int,
+                "by_type": {type: count, ...},
+                "by_status": {status: count, ...},
+                "body_coverage": {"with_body", "without_body", "total", "fraction"},
+                "link_coverage": {"with_outlinks", "total_outlinks", "total", "avg_per_entry"},
+                "source_coverage": {"with_sources", "total", "fraction"},
+              }
+        """
+        # Build the WHERE clause once so we don't duplicate the filter
+        # logic across each aggregation query. SQLite parameter binding
+        # handles the values; the type filter is optional.
+        params: dict[str, Any] = {"kb": kb_name}
+        type_clause = ""
+        if entry_type is not None:
+            type_clause = " AND entry_type = :etype"
+            params["etype"] = entry_type
+
+        # 1. Total entries
+        total_row = self.db.execute_sql(
+            f"SELECT COUNT(*) AS n FROM entry "
+            f"WHERE kb_name = :kb{type_clause}",
+            params,
+        )
+        total = int(total_row[0]["n"]) if total_row else 0
+
+        if total == 0:
+            return {
+                "kb_name": kb_name,
+                "entry_type": entry_type,
+                "total_entries": 0,
+                "by_type": {},
+                "by_status": {},
+                "body_coverage": {
+                    "with_body": 0,
+                    "without_body": 0,
+                    "total": 0,
+                    "fraction": 0.0,
+                },
+                "link_coverage": {
+                    "with_outlinks": 0,
+                    "total_outlinks": 0,
+                    "total": 0,
+                    "avg_per_entry": 0.0,
+                },
+                "source_coverage": {
+                    "with_sources": 0,
+                    "total": 0,
+                    "fraction": 0.0,
+                },
+            }
+
+        # 2. By type
+        by_type_rows = self.db.execute_sql(
+            f"SELECT entry_type, COUNT(*) AS n FROM entry "
+            f"WHERE kb_name = :kb{type_clause} "
+            "GROUP BY entry_type",
+            params,
+        )
+        by_type = {r["entry_type"]: int(r["n"]) for r in by_type_rows}
+
+        # 3. By status
+        by_status_rows = self.db.execute_sql(
+            f"SELECT status, COUNT(*) AS n FROM entry "
+            f"WHERE kb_name = :kb{type_clause} "
+            "GROUP BY status",
+            params,
+        )
+        by_status = {(r["status"] or ""): int(r["n"]) for r in by_status_rows}
+
+        # 4. Body coverage — non-empty body field
+        body_rows = self.db.execute_sql(
+            f"SELECT COUNT(*) AS n FROM entry "
+            f"WHERE kb_name = :kb{type_clause} "
+            "AND body IS NOT NULL AND TRIM(body) != ''",
+            params,
+        )
+        with_body = int(body_rows[0]["n"]) if body_rows else 0
+        body_coverage = {
+            "with_body": with_body,
+            "without_body": total - with_body,
+            "total": total,
+            "fraction": (with_body / total) if total else 0.0,
+        }
+
+        # 5. Link coverage — outbound wikilinks. Joins through the link
+        # table where source_id is the entry id.
+        outlink_rows = self.db.execute_sql(
+            f"SELECT e.id AS eid, COUNT(l.id) AS n "
+            f"FROM entry e LEFT JOIN link l "
+            "ON l.source_id = e.id AND l.source_kb = e.kb_name "
+            f"WHERE e.kb_name = :kb{(' AND e.entry_type = :etype' if entry_type else '')} "
+            "GROUP BY e.id",
+            params,
+        )
+        with_outlinks = sum(1 for r in outlink_rows if int(r["n"]) > 0)
+        total_outlinks = sum(int(r["n"]) for r in outlink_rows)
+        link_coverage = {
+            "with_outlinks": with_outlinks,
+            "total_outlinks": total_outlinks,
+            "total": total,
+            "avg_per_entry": (total_outlinks / total) if total else 0.0,
+        }
+
+        # 6. Source coverage — structured `sources:` field, joined
+        # through the source table.
+        source_rows = self.db.execute_sql(
+            f"SELECT COUNT(DISTINCT e.id) AS n FROM entry e "
+            "INNER JOIN source s ON s.entry_id = e.id AND s.kb_name = e.kb_name "
+            f"WHERE e.kb_name = :kb"
+            f"{(' AND e.entry_type = :etype' if entry_type else '')}",
+            params,
+        )
+        with_sources = int(source_rows[0]["n"]) if source_rows else 0
+        source_coverage = {
+            "with_sources": with_sources,
+            "total": total,
+            "fraction": (with_sources / total) if total else 0.0,
+        }
+
+        return {
+            "kb_name": kb_name,
+            "entry_type": entry_type,
+            "total_entries": total,
+            "by_type": by_type,
+            "by_status": by_status,
+            "body_coverage": body_coverage,
+            "link_coverage": link_coverage,
+            "source_coverage": source_coverage,
+        }

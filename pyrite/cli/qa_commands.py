@@ -791,3 +791,90 @@ def qa_check_urls(
             table.add_row(detail["url"], status, entries)
 
         console.print(table)
+
+
+# =========================================================================
+# qa coverage — curation coverage stats — Tier A r2300
+# =========================================================================
+
+
+@qa_app.command("coverage")
+def qa_coverage(
+    kb_name: str = typer.Argument(..., help="KB to summarize"),
+    entry_type: str | None = typer.Option(
+        None, "--type", "-t", help="Restrict report to one entry type"
+    ),
+    output_format: str = typer.Option(
+        "rich", "--format", help="Output format: rich or json"
+    ),
+):
+    """Curation coverage stats for a KB.
+
+    Aggregates the planning-level numbers `pyrite qa validate` doesn't:
+    body coverage, link density, source coverage, status distribution,
+    and per-type breakdown. Read-only — never mutates the KB.
+
+    Examples:
+        pyrite qa coverage cascade-research
+        pyrite qa coverage cascade-research --type actor
+        pyrite qa coverage pyrite --format json
+    """
+    import json as _json
+
+    from ..services.qa_analytics_service import QAAnalyticsService
+
+    with cli_context() as (config, db, _svc):
+        if config.get_kb(kb_name) is None:
+            if output_format == "json":
+                typer.echo(
+                    _json.dumps(
+                        {
+                            "error": f"KB '{kb_name}' not found",
+                            "error_code": "KB_NOT_FOUND",
+                        }
+                    )
+                )
+            else:
+                console.print(f"[red]KB '{kb_name}' not found[/red]")
+            raise typer.Exit(1)
+
+        analytics = QAAnalyticsService(config, db)
+        stats = analytics.coverage_stats(kb_name, entry_type=entry_type)
+
+    if output_format == "json":
+        typer.echo(_json.dumps(stats))
+        return
+
+    # Rich output — summary box that mirrors the ticket's example shape.
+    scope = f" ({entry_type})" if entry_type else ""
+    console.print(f"\n[bold]{kb_name}{scope} coverage:[/bold]")
+    console.print(f"  Entries: {stats['total_entries']}")
+
+    if stats["by_type"] and not entry_type:
+        types = ", ".join(f"{t}={n}" for t, n in sorted(stats["by_type"].items()))
+        console.print(f"  By type: {types}")
+
+    if stats["by_status"]:
+        # Drop empty-string status from the human view if it's the only one.
+        statuses = ", ".join(
+            f"{s or '<unset>'}={n}" for s, n in sorted(stats["by_status"].items())
+        )
+        console.print(f"  By status: {statuses}")
+
+    bc = stats["body_coverage"]
+    console.print(
+        f"  Body: {bc['with_body']}/{bc['total']} have content "
+        f"({bc['fraction']:.1%})"
+    )
+
+    lc = stats["link_coverage"]
+    console.print(
+        f"  Links: {lc['with_outlinks']}/{lc['total']} have outlinks, "
+        f"avg {lc['avg_per_entry']:.2f} per entry"
+    )
+
+    sc = stats["source_coverage"]
+    console.print(
+        f"  Sources (structured): {sc['with_sources']}/{sc['total']} "
+        f"({sc['fraction']:.1%})"
+    )
