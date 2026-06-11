@@ -5,7 +5,7 @@ type: backlog_item
 tags: [architecture, plugins, protocol, modularity, refactor]
 importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: M
 rank: 1500

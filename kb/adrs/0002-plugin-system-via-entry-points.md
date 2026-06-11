@@ -48,3 +48,125 @@ The plugin protocol has grown from 5 integration points and 11 methods to **19 m
 19. `set_context(ctx)` — receives config, db, and services at startup
 
 Six extensions ship: software-kb, zettelkasten, encyclopedia, social, journalism-investigation, cascade.
+
+## Addendum (2026-06-11): Capability Declarations (Tier A r1500, Option B)
+
+The 19-method Protocol from the prior addendum was costing per-plugin
+dispatch overhead and a silent-failure surface that grew with the
+method count — every method is another `hasattr` guard, another
+`getattr` call, and another silent-skip site if the method exists
+but returns empty. The audit for r1500 documented two specific
+patterns:
+
+- ~12 of 19 methods return empty in any given extension. Pure cost,
+  no value.
+- "Does this plugin extend storage?" was a runtime question (does
+  `get_db_columns` return non-empty?), not a structural one — making
+  it impossible to reason about plugin scope without calling every
+  method.
+
+Option B chosen over Option A (splitting the Protocol into 5
+capability protocols) because it ships in one commit with a small
+diff per plugin, leaves the Protocol interface stable, and is a
+strict subset of Option A's data: every Capability member can become
+its own Protocol later without changing the declared `capabilities`
+sets. Option A is reserved as a deprecation-cycle follow-up.
+
+### Capability enum
+
+`pyrite.plugins.capabilities.Capability(StrEnum)` declares the 5
+subsystem groupings the 19 methods clustered into:
+
+```python
+class Capability(StrEnum):
+    SCHEMA   = "schema"    # entry types, type metadata, collection types,
+                           # field schemas, structural protocols
+    STORAGE  = "storage"   # db columns, db tables, migrations, validators,
+                           # hooks
+    SURFACE  = "surface"   # CLI commands, MCP tools, KB presets, KB types
+    DOMAIN   = "domain"    # relationship types, workflows, rubric checkers
+    CONTEXT  = "context"   # set_context, get_orient_supplement
+```
+
+Names mirror the 5-subsystem split so the eventual move to Option A
+is mechanical — each Capability becomes its own Protocol with the
+same name.
+
+### Declaration
+
+Plugins declare a `capabilities: ClassVar[set[Capability]]` class
+attribute. The registry consults this set before dispatching to each
+method, skipping methods whose capability the plugin did not claim.
+
+```python
+class MyPlugin:
+    name = "my-plugin"
+    capabilities: ClassVar[set[Capability]] = {
+        Capability.SCHEMA, Capability.SURFACE,
+    }
+```
+
+### Empty-set default
+
+A plugin with no `capabilities` attribute is treated as having ZERO
+declared capabilities — the registry skips ALL its dispatch loops.
+This is the safe failure mode: a plugin that forgets to declare
+gets ignored entirely rather than silently half-loaded. Mitigated
+by the same-commit migration of every in-tree plugin to declare its
+real set, with a regression test
+(`test_plugin_without_capabilities_attribute_is_skipped_for_all`)
+that pins the contract.
+
+### Method-to-capability map
+
+`pyrite/plugins/registry.py:_METHOD_CAPABILITIES` hard-codes the
+mapping from method name to Capability — 19 entries, one per
+dispatched method. New methods added to the Protocol must be added
+to this dict at the same time, enforced by
+`test_every_dispatched_method_has_a_capability`.
+
+### Drift behavior
+
+When a plugin returns non-empty from a method whose capability it
+did NOT declare:
+
+- **Default (warn-and-skip):** the registry logs a WARNING with
+  plugin name + method name + expected capability, and drops the
+  return value from aggregation.
+- **`strict_plugins=True`:** mirrors the existing strict-discover
+  toggle behavior at the load level — raises `PluginError`.
+
+### Migration of in-tree extensions
+
+All 6 in-tree extensions migrated in the same commit
+(`af38db4`):
+
+- zettelkasten:              SCHEMA STORAGE SURFACE DOMAIN CONTEXT
+- social:                    SCHEMA STORAGE SURFACE         CONTEXT
+- encyclopedia:              SCHEMA STORAGE SURFACE DOMAIN CONTEXT
+- cascade:                   SCHEMA STORAGE SURFACE DOMAIN CONTEXT
+- journalism_investigation:  SCHEMA STORAGE SURFACE DOMAIN CONTEXT
+- software_kb:               SCHEMA STORAGE SURFACE DOMAIN CONTEXT
+
+Audited by a script that constructs each plugin, calls every
+`get_*` method in `_METHOD_CAPABILITIES`, and infers the declared
+set from which calls return non-empty data. The capabilities
+listed above are the result of that audit, not aspirational.
+
+### Reservation for Option A
+
+When the cost-benefit of Option A becomes worth the migration
+churn — i.e. when the dispatch-skip alone stops being enough and
+plugin authors want compile-time guarantees that they're
+implementing the right protocol — a successor ADR will document
+the split into 5 Protocol classes. The Capability member names
+above are reserved as the Protocol class names so the migration
+is `git mv` plus moving each plugin's class definition through the
+multi-inherit pattern.
+
+### Related
+
+- Tier A r1500 ticket: `split-plugin-protocol-into-capability-protocols`
+- `admin-plugin-info-endpoint-should-expose-has-errors-error-list-when-partial-aggregation-occurred`
+  (the partial-aggregation surface gets cleaner once dispatch-skip
+  reduces the per-plugin call count)
