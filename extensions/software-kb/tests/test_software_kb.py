@@ -1233,6 +1233,74 @@ class TestBacklogStatusColumn:
                 db.close()
 
 
+class TestBacklogTimestampProjection:
+    """`sw backlog` must surface `updated_at` and `created_at` in its JSON
+    projection. Regression for task-index-timestamp-drift (Tier A rank 1100):
+    the DB stored both fields correctly, but `_mcp_backlog`'s output dict
+    dropped `updated_at` entirely and exposed `created_at` only as an
+    internal `_created` sort key that got deleted before return. Conductor
+    workflows like "done today" / "opened today" need these fields.
+    """
+
+    def test_mcp_backlog_returns_updated_at_and_created_at(self):
+        from pyrite_software_kb.plugin import SoftwareKBPlugin
+
+        from pyrite.storage.database import PyriteDB
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            db = PyriteDB(db_path)
+            try:
+                db._raw_conn.execute(
+                    "INSERT INTO kb (name, path, kb_type) VALUES (?, ?, ?)",
+                    ("test", str(tmpdir), "generic"),
+                )
+                db._raw_conn.execute(
+                    "INSERT INTO entry (id, kb_name, entry_type, title, body, status, "
+                    "priority, metadata, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        "test-item-ts",
+                        "test",
+                        "backlog_item",
+                        "Timestamps Test",
+                        "",
+                        "proposed",
+                        "high",
+                        json.dumps({"kind": "bug"}),
+                        "2026-06-10T12:34:56+00:00",
+                        "2026-06-11T01:23:45+00:00",
+                    ),
+                )
+                db._raw_conn.commit()
+
+                # Inject the test DB via PluginContext so _get_db returns it
+                from unittest.mock import MagicMock
+
+                from pyrite.plugins.context import PluginContext
+
+                plugin = SoftwareKBPlugin()
+                plugin.set_context(
+                    PluginContext(config=MagicMock(), db=db, kb_name="test")
+                )
+                result = plugin._mcp_backlog({"kb_name": "test"})
+                items = result.get("items", [])
+                assert len(items) == 1, f"expected 1 item, got {items}"
+                item = items[0]
+
+                # Both timestamps must surface in the projection
+                assert "updated_at" in item, (
+                    f"updated_at missing from sw backlog projection; got keys: {list(item.keys())}"
+                )
+                assert "created_at" in item, (
+                    f"created_at missing from sw backlog projection; got keys: {list(item.keys())}"
+                )
+                assert item["updated_at"].startswith("2026-06-11"), item["updated_at"]
+                assert item["created_at"].startswith("2026-06-10"), item["created_at"]
+            finally:
+                db.close()
+
+
 # =========================================================================
 # MilestoneEntry
 # =========================================================================

@@ -5,7 +5,7 @@ type: backlog_item
 tags: [task-system, bug, index, timestamps, conductor-workflow, query]
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 1100

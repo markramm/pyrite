@@ -903,6 +903,14 @@ class SoftwareKBPlugin:
                         "rank": rank,
                         "assignee": assignee,
                         "kb_name": row["kb_name"],
+                        # Timestamps: the DB carries these but the projection
+                        # used to drop updated_at entirely and only kept
+                        # created_at as an internal sort key (_created).
+                        # Conductor workflows like "done today" / "opened
+                        # today" depend on both being surfaced. See
+                        # task-index-timestamp-drift (Tier A rank 1100).
+                        "created_at": row["created_at"] or "",
+                        "updated_at": row["updated_at"] or "",
                         "_created": row["created_at"] or "",
                     }
                 )
