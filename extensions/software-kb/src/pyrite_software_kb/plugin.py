@@ -2,7 +2,9 @@
 
 from collections.abc import Callable
 from datetime import UTC
-from typing import Any
+from typing import Any, ClassVar
+
+from pyrite.plugins.capabilities import Capability
 
 from .entry_types import (
     ADREntry,
@@ -29,6 +31,14 @@ class SoftwareKBPlugin:
     """
 
     name = "software_kb"
+    # Tier A r1500 (Option B): declared plugin capabilities.
+    capabilities: ClassVar[set[Capability]] = {
+        Capability.SCHEMA,
+        Capability.STORAGE,
+        Capability.SURFACE,
+        Capability.DOMAIN,
+        Capability.CONTEXT,
+    }
 
     def __init__(self):
         self.ctx = None

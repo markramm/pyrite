@@ -14,10 +14,70 @@ from collections.abc import Callable
 from typing import Any
 
 from ..exceptions import PluginError
+from .capabilities import Capability
 from .context import PluginContext
 from .protocol import PyritePlugin
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Method-to-capability map (Tier A r1500 / Option B / ADR-0002 addendum)
+# =============================================================================
+# Each dispatched method maps to the Capability that authorizes it.
+# Aggregation helpers consult `plugin.capabilities` and skip methods whose
+# capability is not declared. A plugin without a `capabilities` attribute
+# defaults to the empty set — every dispatch loop skips it. Safe failure
+# mode: a plugin that forgets to declare gets ignored entirely rather than
+# silently half-loaded.
+# =============================================================================
+
+_METHOD_CAPABILITIES: dict[str, Capability] = {
+    # SCHEMA — type system extension
+    "get_entry_types": Capability.SCHEMA,
+    "get_type_metadata": Capability.SCHEMA,
+    "get_collection_types": Capability.SCHEMA,
+    "get_field_schemas": Capability.SCHEMA,
+    "get_protocols": Capability.SCHEMA,
+    # STORAGE — DB and lifecycle
+    "get_db_columns": Capability.STORAGE,
+    "get_db_tables": Capability.STORAGE,
+    "get_migrations": Capability.STORAGE,
+    "get_validators": Capability.STORAGE,
+    "get_hooks": Capability.STORAGE,
+    # SURFACE — UI / API extension
+    "get_cli_commands": Capability.SURFACE,
+    "get_mcp_tools": Capability.SURFACE,
+    "get_kb_presets": Capability.SURFACE,
+    "get_kb_types": Capability.SURFACE,
+    # DOMAIN — vocabulary
+    "get_relationship_types": Capability.DOMAIN,
+    "get_workflows": Capability.DOMAIN,
+    "get_rubric_checkers": Capability.DOMAIN,
+    # CONTEXT — runtime hooks
+    "set_context": Capability.CONTEXT,
+    "get_orient_supplement": Capability.CONTEXT,
+}
+
+
+def _plugin_declares(plugin: PyritePlugin, method_name: str) -> bool:
+    """Return True if the plugin's declared capability set includes the
+    capability required to dispatch ``method_name``.
+
+    Methods not in ``_METHOD_CAPABILITIES`` (e.g. ``name`` access) are
+    treated as always-allowed since they're not part of the dispatch
+    surface that the optimization targets.
+
+    A plugin without a ``capabilities`` attribute defaults to the
+    empty set — every capability-gated method is skipped. Mitigated
+    by the migration step that updates every in-tree plugin to
+    declare its real set in the same commit (r1500 fire 2/3).
+    """
+    cap = _METHOD_CAPABILITIES.get(method_name)
+    if cap is None:
+        # Method isn't dispatch-gated (e.g. `name`); allow.
+        return True
+    declared = getattr(plugin, "capabilities", set()) or set()
+    return cap in declared
 
 # Core relationship types (platform-level, not plugin-provided)
 CORE_RELATIONSHIP_TYPES: dict[str, dict] = {
@@ -150,55 +210,106 @@ class PluginRegistry:
             target[key] = value
 
     def _aggregate_dict(self, method_name: str, kind: str) -> dict:
-        """Aggregate dict results from all plugins, warning on key collisions."""
+        """Aggregate dict results from all plugins, warning on key collisions.
+
+        Skips plugins whose declared ``capabilities`` set does not
+        include the capability required for this method (Tier A r1500
+        / Option B). A plugin that returns non-empty from an
+        undeclared-capability method triggers a WARNING and the
+        return is dropped.
+        """
         self.discover()
         result: dict = {}
         for plugin in self._plugins.values():
-            if hasattr(plugin, method_name):
-                try:
-                    items = getattr(plugin, method_name)()
-                    if items:
-                        self._merge_dict(result, items, plugin.name, kind)
-                except Exception as e:
-                    logger.error(
-                        "Plugin %s %s failed: %s — %s data from this plugin is missing",
-                        plugin.name, method_name, e, kind,
-                    )
+            if not hasattr(plugin, method_name):
+                continue
+            declared = _plugin_declares(plugin, method_name)
+            try:
+                items = getattr(plugin, method_name)()
+            except Exception as e:
+                logger.error(
+                    "Plugin %s %s failed: %s — %s data from this plugin is missing",
+                    plugin.name, method_name, e, kind,
+                )
+                continue
+            if not items:
+                continue
+            if not declared:
+                logger.warning(
+                    "Plugin '%s' returned non-empty from %s but did not "
+                    "declare the %s capability; dropping the return. "
+                    "Add the capability to the plugin's declared set, "
+                    "or remove the method.",
+                    plugin.name, method_name, _METHOD_CAPABILITIES.get(method_name),
+                )
+                continue
+            self._merge_dict(result, items, plugin.name, kind)
         return result
 
     def _aggregate_list(self, method_name: str) -> list:
-        """Aggregate list results from all plugins."""
+        """Aggregate list results from all plugins.
+
+        Skips plugins whose declared capabilities don't include the
+        method's required capability; warns on undeclared non-empty
+        drift (Tier A r1500 / Option B).
+        """
         self.discover()
         result: list = []
         for plugin in self._plugins.values():
-            if hasattr(plugin, method_name):
-                try:
-                    items = getattr(plugin, method_name)()
-                    if items:
-                        result.extend(items)
-                except Exception as e:
-                    logger.error(
-                        "Plugin %s %s failed: %s — data from this plugin is missing",
-                        plugin.name, method_name, e,
-                    )
+            if not hasattr(plugin, method_name):
+                continue
+            declared = _plugin_declares(plugin, method_name)
+            try:
+                items = getattr(plugin, method_name)()
+            except Exception as e:
+                logger.error(
+                    "Plugin %s %s failed: %s — data from this plugin is missing",
+                    plugin.name, method_name, e,
+                )
+                continue
+            if not items:
+                continue
+            if not declared:
+                logger.warning(
+                    "Plugin '%s' returned non-empty from %s but did not "
+                    "declare the %s capability; dropping the return.",
+                    plugin.name, method_name, _METHOD_CAPABILITIES.get(method_name),
+                )
+                continue
+            result.extend(items)
         return result
 
     def _aggregate_dict_of_lists(self, method_name: str) -> dict[str, list]:
-        """Aggregate dict-of-list results, extending lists per key."""
+        """Aggregate dict-of-list results, extending lists per key.
+
+        Same capability-skip + warn-on-drift contract as the other
+        aggregation helpers (Tier A r1500 / Option B).
+        """
         self.discover()
         result: dict[str, list] = {}
         for plugin in self._plugins.values():
-            if hasattr(plugin, method_name):
-                try:
-                    items = getattr(plugin, method_name)()
-                    if items:
-                        for key, lst in items.items():
-                            result.setdefault(key, []).extend(lst)
-                except Exception as e:
-                    logger.error(
-                        "Plugin %s %s failed: %s — data from this plugin is missing",
-                        plugin.name, method_name, e,
-                    )
+            if not hasattr(plugin, method_name):
+                continue
+            declared = _plugin_declares(plugin, method_name)
+            try:
+                items = getattr(plugin, method_name)()
+            except Exception as e:
+                logger.error(
+                    "Plugin %s %s failed: %s — data from this plugin is missing",
+                    plugin.name, method_name, e,
+                )
+                continue
+            if not items:
+                continue
+            if not declared:
+                logger.warning(
+                    "Plugin '%s' returned non-empty from %s but did not "
+                    "declare the %s capability; dropping the return.",
+                    plugin.name, method_name, _METHOD_CAPABILITIES.get(method_name),
+                )
+                continue
+            for key, lst in items.items():
+                result.setdefault(key, []).extend(lst)
         return result
 
     # =========================================================================

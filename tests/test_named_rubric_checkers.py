@@ -196,8 +196,14 @@ class TestPluginRubricCheckers:
         def custom_checker(entry, schema, params=None):
             return None
 
+        from pyrite.plugins.capabilities import Capability
+
         class FakePlugin:
             name = "test_plugin"
+            # get_rubric_checkers is a DOMAIN-capability method
+            # (Tier A r1500); declared so the registry's dispatch-skip
+            # lets it through.
+            capabilities = {Capability.DOMAIN}
 
             def get_rubric_checkers(self):
                 return {"test_plugin.custom": custom_checker}

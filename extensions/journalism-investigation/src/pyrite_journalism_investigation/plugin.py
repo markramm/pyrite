@@ -1,8 +1,9 @@
 """Journalism Investigation plugin for pyrite."""
 
-from typing import Any
+from typing import Any, ClassVar
 
-from .preset import JOURNALISM_INVESTIGATION_PRESET, KNOWN_ENTITIES_PRESET
+from pyrite.plugins.capabilities import Capability
+
 from .entry_types import (
     AccountEntry,
     AssetEntry,
@@ -17,8 +18,8 @@ from .entry_types import (
     TransactionEntry,
 )
 from .hooks import enrich_connection_links
+from .preset import JOURNALISM_INVESTIGATION_PRESET, KNOWN_ENTITIES_PRESET
 from .queries import (
-    ENTITY_TYPE_ALIASES,
     query_claims,
     query_entities,
     query_evidence_chain,
@@ -39,6 +40,14 @@ class JournalismInvestigationPlugin:
     """
 
     name = "journalism_investigation"
+    # Tier A r1500 (Option B): declared plugin capabilities.
+    capabilities: ClassVar[set[Capability]] = {
+        Capability.SCHEMA,
+        Capability.STORAGE,
+        Capability.SURFACE,
+        Capability.DOMAIN,
+        Capability.CONTEXT,
+    }
 
     def __init__(self):
         self.ctx = None

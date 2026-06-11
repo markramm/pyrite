@@ -1,7 +1,9 @@
 """Zettelkasten plugin — personal knowledge management for pyrite."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
+
+from pyrite.plugins.capabilities import Capability
 
 from .entry_types import LiteratureNoteEntry, ZettelEntry
 from .preset import ZETTELKASTEN_PRESET
@@ -16,6 +18,15 @@ class ZettelkastenPlugin:
     """
 
     name = "zettelkasten"
+    # Tier A r1500 (Option B): declared plugin capabilities. Registry
+    # skips dispatch loops for capabilities not in this set.
+    capabilities: ClassVar[set[Capability]] = {
+        Capability.SCHEMA,
+        Capability.STORAGE,
+        Capability.SURFACE,
+        Capability.DOMAIN,
+        Capability.CONTEXT,
+    }
 
     def __init__(self):
         self.ctx = None

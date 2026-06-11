@@ -1,9 +1,11 @@
 """Cascade Series plugin — investigative journalism knowledge management for pyrite."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 from pyrite_journalism_investigation.queries import query_network
 from pyrite_journalism_investigation.utils import parse_meta
+
+from pyrite.plugins.capabilities import Capability
 
 from .entry_types import (
     ActorEntry,
@@ -29,6 +31,14 @@ class CascadePlugin:
     """
 
     name = "cascade"
+    # Tier A r1500 (Option B): declared plugin capabilities.
+    capabilities: ClassVar[set[Capability]] = {
+        Capability.SCHEMA,
+        Capability.STORAGE,
+        Capability.SURFACE,
+        Capability.DOMAIN,
+        Capability.CONTEXT,
+    }
 
     def __init__(self):
         self.ctx = None

@@ -50,16 +50,22 @@ class TestRegistryCollectionTypes:
 
     def test_get_all_collection_types_merges(self):
         """Registry merges collection types from multiple plugins."""
+        from pyrite.plugins.capabilities import Capability
         from pyrite.plugins.registry import PluginRegistry
 
         class PluginA:
             name = "plugin-a"
+            # get_collection_types is a SCHEMA-capability method
+            # (Tier A r1500); ad-hoc test plugins must declare so the
+            # registry's dispatch-skip lets them through.
+            capabilities = {Capability.SCHEMA}
 
             def get_collection_types(self):
                 return {"board": {"description": "A board", "default_view": "kanban"}}
 
         class PluginB:
             name = "plugin-b"
+            capabilities = {Capability.SCHEMA}
 
             def get_collection_types(self):
                 return {"gallery": {"description": "A gallery", "default_view": "gallery"}}

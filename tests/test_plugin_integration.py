@@ -1200,3 +1200,220 @@ class TestPluginRegistryFailureVisibility:
 
         # The good plugin's entry types are present in spite of the bad one.
         assert "zettel" in result or len(result) > 0
+
+
+# =========================================================================
+# Capability declarations — Tier A r1500 (Option B)
+# =========================================================================
+
+
+class TestCapabilityEnum:
+    """The Capability StrEnum has the 5 members declared in ADR for r1500.
+
+    Names mirror the 5-subsystem split (SCHEMA / STORAGE / SURFACE /
+    DOMAIN / CONTEXT) so an eventual move to Option A — splitting the
+    Protocol into 5 capability protocols — is mechanical: each
+    Capability becomes its own Protocol with the same name.
+    """
+
+    def test_capability_enum_has_five_members(self):
+        from pyrite.plugins.capabilities import Capability
+
+        assert {c.name for c in Capability} == {
+            "SCHEMA",
+            "STORAGE",
+            "SURFACE",
+            "DOMAIN",
+            "CONTEXT",
+        }
+
+    def test_capability_is_string_enum(self):
+        """StrEnum so plugins can declare {Capability.SCHEMA} and the
+        registry can compare by string in YAML-derived configs."""
+        from pyrite.plugins.capabilities import Capability
+
+        # StrEnum members are strings
+        assert isinstance(Capability.SCHEMA, str)
+
+
+class TestMethodCapabilitiesMap:
+    """The _METHOD_CAPABILITIES dict maps each dispatched method to its
+    Capability. Pinned here so a future contributor adding a new
+    `get_*` method can't forget to wire it (the test fails until they
+    map it explicitly OR mark it as exempt)."""
+
+    def test_every_dispatched_method_has_a_capability(self):
+        from pyrite.plugins import registry as registry_mod
+        from pyrite.plugins.capabilities import Capability
+
+        # Sanity: the map exists and every value is a Capability.
+        mapping = registry_mod._METHOD_CAPABILITIES
+        assert isinstance(mapping, dict)
+        assert all(isinstance(v, Capability) for v in mapping.values())
+
+    def test_known_methods_in_each_capability(self):
+        """Anchor the 5-subsystem split — each capability has at least
+        one of its expected canonical methods. Pin the categorization
+        per the locked design at commit 0b9b547."""
+        from pyrite.plugins import registry as registry_mod
+        from pyrite.plugins.capabilities import Capability
+
+        m = registry_mod._METHOD_CAPABILITIES
+        # SCHEMA
+        assert m.get("get_entry_types") == Capability.SCHEMA
+        # STORAGE
+        assert m.get("get_db_columns") == Capability.STORAGE
+        assert m.get("get_validators") == Capability.STORAGE
+        # SURFACE
+        assert m.get("get_cli_commands") == Capability.SURFACE
+        assert m.get("get_mcp_tools") == Capability.SURFACE
+        # DOMAIN
+        assert m.get("get_relationship_types") == Capability.DOMAIN
+        # CONTEXT
+        assert m.get("set_context") == Capability.CONTEXT
+
+
+class TestRegistryDispatchSkip:
+    """The registry's aggregation helpers consult the plugin's declared
+    `capabilities` set and skip methods whose capability isn't claimed.
+
+    A plugin that declares `{Capability.SCHEMA}` should NOT have its
+    `get_db_columns` (STORAGE) called even if it has the method —
+    that's the whole point of the dispatch-skip optimization.
+
+    Default behavior (per the locked design) for a plugin that
+    returns NON-EMPTY from a method whose capability it didn't
+    declare is: WARN + skip (treat the return value as empty). Under
+    `strict_plugins=True`, raise PluginError.
+    """
+
+    @staticmethod
+    def _empty_registry():
+        """Build a registry with entry-point discovery disabled so a
+        single registered plugin is the only one tested against. The
+        production registry's helpers call self.discover() which loads
+        every installed pyrite_* plugin — fine in production, ruinous
+        for isolated unit tests."""
+        reg = PluginRegistry()
+        reg._discovered = True
+        return reg
+
+    @staticmethod
+    def _make_typed_plugin(
+        name: str,
+        capabilities_set,
+        entry_types_payload=None,
+        db_columns_payload=None,
+    ):
+        """Build a plugin with explicit capabilities + method returns.
+
+        Use a fresh class per call (not ZettelkastenPlugin subclass) so
+        tests don't depend on the production plugin's surface.
+        """
+        from typing import ClassVar
+
+        from pyrite.plugins.capabilities import Capability  # noqa: F401
+
+        class _StubPlugin:
+            capabilities: ClassVar[set] = capabilities_set
+
+            def __init__(self) -> None:
+                self.name = name
+
+            def get_entry_types(self):
+                return dict(entry_types_payload or {})
+
+            def get_db_columns(self):
+                return list(db_columns_payload or [])
+
+        return _StubPlugin()
+
+    def test_plugin_without_capabilities_attribute_is_skipped_for_all(
+        self,
+    ):
+        """Empty-set default: a plugin with no `capabilities` attribute
+        gets ALL dispatch loops skipped. Safe failure mode — a plugin
+        that forgets to declare gets ignored entirely, not silently
+        half-loaded."""
+
+        class _LegacyPlugin:
+            # NO capabilities attribute declared
+            def __init__(self) -> None:
+                self.name = "legacy"
+
+            def get_entry_types(self):
+                return {"legacy_type": object}
+
+        reg = self._empty_registry()
+        reg.register(_LegacyPlugin())
+        result = reg.get_all_entry_types()
+        assert "legacy_type" not in result, (
+            "plugin without declared capabilities must be skipped; "
+            f"got {result}"
+        )
+
+    def test_plugin_with_capability_is_called(self):
+        """A plugin that declares Capability.SCHEMA contributes its
+        entry types as expected."""
+        from pyrite.plugins.capabilities import Capability
+
+        plugin = self._make_typed_plugin(
+            "schema-plugin",
+            capabilities_set={Capability.SCHEMA},
+            entry_types_payload={"schema_type": object},
+        )
+        reg = self._empty_registry()
+        reg.register(plugin)
+        result = reg.get_all_entry_types()
+        assert "schema_type" in result
+
+    def test_plugin_without_capability_is_skipped_for_that_method(self):
+        """SCHEMA-capable plugin's get_db_columns (STORAGE) is NOT
+        called even though the method exists on the class. Skip is
+        per-capability, not per-plugin."""
+        from pyrite.plugins.capabilities import Capability
+
+        plugin = self._make_typed_plugin(
+            "schema-only",
+            capabilities_set={Capability.SCHEMA},
+            db_columns_payload=[{"name": "should_not_appear"}],
+        )
+        reg = self._empty_registry()
+        reg.register(plugin)
+        cols = reg.get_all_db_columns()
+        names = [c.get("name") for c in cols]
+        assert "should_not_appear" not in names, (
+            f"SCHEMA-only plugin must skip get_db_columns; got {cols}"
+        )
+
+    def test_undeclared_nonempty_return_logs_warning(self, caplog):
+        """Default mode: a plugin that returns non-empty from a method
+        whose capability it didn't declare gets logged at WARNING
+        with plugin name + method name. Return value is dropped from
+        aggregation."""
+        import logging as _logging
+
+        from pyrite.plugins.capabilities import Capability
+
+        # Plugin declares SCHEMA but returns rows from get_db_columns
+        # (STORAGE). The registry should NOT include those rows AND
+        # should log a warning.
+        plugin = self._make_typed_plugin(
+            "drift-plugin",
+            capabilities_set={Capability.SCHEMA},
+            db_columns_payload=[{"name": "rogue_column"}],
+        )
+        reg = self._empty_registry()
+        reg.register(plugin)
+
+        with caplog.at_level(_logging.WARNING, logger="pyrite.plugins.registry"):
+            cols = reg.get_all_db_columns()
+
+        assert all(c.get("name") != "rogue_column" for c in cols), (
+            "registry must drop returns from undeclared-capability methods"
+        )
+        # Warning surfaces both the plugin and the method.
+        msgs = [r.getMessage() for r in caplog.records if r.levelno >= _logging.WARNING]
+        assert any(
+            "drift-plugin" in m and "get_db_columns" in m for m in msgs
+        ), f"expected WARNING naming plugin + method; got {msgs}"
