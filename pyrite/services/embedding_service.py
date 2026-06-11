@@ -26,8 +26,43 @@ def is_available() -> bool:
         return False
 
 
-def _entry_text(entry: dict[str, Any]) -> str:
-    """Combine entry fields into text for embedding."""
+#: Default max body chars per embedding model. Each model has an
+#: effective token window — all-MiniLM-L6-v2 is ~256 tokens (~1200 chars
+#: of typical English) but in practice 500 chars after title+summary
+#: prefixes is the conservative slot that fits. Tune per model.
+_MODEL_MAX_BODY_CHARS: dict[str, int] = {
+    "all-MiniLM-L6-v2": 500,
+    "all-MiniLM-L12-v2": 500,
+    "all-mpnet-base-v2": 1500,  # ~384 token window, larger effective text budget
+    "BAAI/bge-small-en-v1.5": 1500,
+    "BAAI/bge-base-en-v1.5": 1500,
+}
+
+#: Fallback when the model name is unknown. Keep conservative so a
+#: surprise model doesn't blow past its real context window.
+_DEFAULT_MAX_BODY_CHARS = 500
+
+
+def max_body_chars_for_model(model_name: str) -> int:
+    """Look up the safe body-truncation limit for a given embedding model.
+
+    Falls back to ``_DEFAULT_MAX_BODY_CHARS`` for unknown models so the
+    behavior degrades safely rather than embedding the full body and
+    overflowing the model's real token window.
+    """
+    return _MODEL_MAX_BODY_CHARS.get(model_name, _DEFAULT_MAX_BODY_CHARS)
+
+
+def _entry_text(entry: dict[str, Any], max_body_chars: int = 500) -> str:
+    """Combine entry fields into text for embedding.
+
+    Args:
+        entry: Entry dict with title/summary/body fields.
+        max_body_chars: Truncate body to this many chars. Default 500
+            matches the historical hardcoded limit; callers
+            (EmbeddingService) override per the configured model. See
+            ``max_body_chars_for_model`` for the per-model table.
+    """
     parts = []
     if entry.get("title"):
         parts.append(entry["title"])
@@ -35,7 +70,7 @@ def _entry_text(entry: dict[str, Any]) -> str:
         parts.append(entry["summary"])
     body = entry.get("body") or ""
     if body:
-        parts.append(body[:500])
+        parts.append(body[:max_body_chars])
     return " ".join(parts)
 
 
@@ -134,10 +169,22 @@ class EmbeddingService:
     the SearchBackend for vector storage and KNN search.
     """
 
-    def __init__(self, db: PyriteDB, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(
+        self,
+        db: PyriteDB,
+        model_name: str = "all-MiniLM-L6-v2",
+        max_body_chars: int | None = None,
+    ):
         self.db = db
         self.model_name = model_name
         self._model = None
+        # If the caller didn't pin a limit, derive one from the model so a
+        # model swap doesn't silently leave bodies clipped at the old
+        # limit (Tier A r2100). max_body_chars=0 is treated as "no
+        # limit" — useful for tests.
+        if max_body_chars is None:
+            max_body_chars = max_body_chars_for_model(model_name)
+        self.max_body_chars = max_body_chars
 
     def _get_model(self):
         """Lazy-load the sentence-transformers model."""
@@ -200,7 +247,17 @@ class EmbeddingService:
         if not entry:
             return False
 
-        text = _entry_text(entry)
+        body = entry.get("body") or ""
+        if body and len(body) > self.max_body_chars:
+            logger.debug(
+                "Embedding-body truncated for %s/%s: %d -> %d chars",
+                kb_name,
+                entry_id,
+                len(body),
+                self.max_body_chars,
+            )
+
+        text = _entry_text(entry, max_body_chars=self.max_body_chars)
         if not text.strip():
             return False
 
@@ -226,9 +283,9 @@ class EmbeddingService:
         """
         backend = self.db.backend
         if not backend.vec_available:
-            return {"embedded": 0, "skipped": 0, "errors": 0}
+            return {"embedded": 0, "skipped": 0, "errors": 0, "truncated": 0}
 
-        stats = {"embedded": 0, "skipped": 0, "errors": 0}
+        stats = {"embedded": 0, "skipped": 0, "errors": 0, "truncated": 0}
 
         rows = backend.get_entries_for_embedding(kb_name)
         total = len(rows)
@@ -248,7 +305,21 @@ class EmbeddingService:
                 continue
 
             try:
-                text = _entry_text(row)
+                # Count truncation BEFORE _entry_text clips the body so
+                # operators know how many entries fed only a prefix to
+                # the model (Tier A r2100).
+                body = row.get("body") or ""
+                if body and len(body) > self.max_body_chars:
+                    stats["truncated"] += 1
+                    logger.debug(
+                        "Embedding-body truncated for %s/%s: %d -> %d chars",
+                        row.get("kb_name"),
+                        row.get("id"),
+                        len(body),
+                        self.max_body_chars,
+                    )
+
+                text = _entry_text(row, max_body_chars=self.max_body_chars)
                 if not text.strip():
                     stats["skipped"] += 1
                     continue

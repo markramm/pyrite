@@ -278,6 +278,13 @@ def index_embed(
     console.print("\n[green]Embedding complete.[/green]")
     console.print(f"  Embedded: {stats['embedded']}")
     console.print(f"  Skipped: {stats['skipped']}")
+    if stats.get("truncated"):
+        # Surface silent body-truncation count so operators know
+        # how many entries had only a prefix embedded (Tier A r2100).
+        console.print(
+            f"  [yellow]Truncated: {stats['truncated']}[/yellow]"
+            f" (body clipped to embedding model's char limit)"
+        )
     if stats["errors"]:
         console.print(f"  [red]Errors: {stats['errors']}[/red]")
 

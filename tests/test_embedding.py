@@ -134,7 +134,7 @@ class TestEntryText:
         assert "Test body content" in text
 
     def test_truncates_body(self):
-        """Body is truncated to 500 chars."""
+        """Body is truncated to the default 500 chars (back-compat)."""
         entry = {
             "title": "Title",
             "summary": None,
@@ -143,6 +143,30 @@ class TestEntryText:
         text = _entry_text(entry)
         # Title (5) + space (1) + body (500) = 506
         assert len(text) <= 506
+
+    def test_truncation_limit_is_configurable(self):
+        """_entry_text accepts max_body_chars override (Tier A r2100).
+
+        Hardcoded 500-char truncation was a silent bottleneck. Callers
+        (EmbeddingService) need to derive the limit from the chosen
+        model so a model upgrade doesn't leave embeddings clipped at
+        the old limit.
+        """
+        entry = {
+            "title": "T",
+            "summary": None,
+            "body": "x" * 2000,
+        }
+        # Larger limit (e.g., bigger model with larger context window)
+        text = _entry_text(entry, max_body_chars=1500)
+        # Title (1) + space (1) + body (1500) = 1502
+        assert len(text) <= 1502
+        # And body actually got more than the old 500-char window
+        assert text.count("x") == 1500
+
+        # Smaller limit (constrained model or test)
+        text_small = _entry_text(entry, max_body_chars=100)
+        assert text_small.count("x") == 100
 
     def test_handles_missing_fields(self):
         """Missing fields are skipped gracefully."""
@@ -227,6 +251,36 @@ class TestEmbeddingService:
 
         stats = svc.embed_all(kb_name="test-kb")
         assert stats["embedded"] == 3
+
+    def test_embed_all_stats_include_truncated_count(self, populated_db):
+        """embed_all stats include a `truncated` count so operators can
+        see how many entries had body content clipped during
+        embedding. Tier A r2100 (embedding-body-truncation).
+
+        Pre-fix the truncation was silent. With this contract, the
+        count is visible in the stats dict and surfaces in
+        `pyrite index embed`'s output.
+        """
+        svc = EmbeddingService(populated_db)
+
+        # Insert a long entry that will exceed the default 500-char limit
+        populated_db.upsert_entry(
+            {
+                "id": "long-entry",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Long Entry",
+                "body": "x" * 2000,
+                "summary": "",
+                "tags": [],
+            }
+        )
+
+        stats = svc.embed_all()
+        assert "truncated" in stats, f"stats missing 'truncated' key: {stats}"
+        assert stats["truncated"] >= 1, (
+            f"long-entry should have been counted as truncated; stats={stats}"
+        )
 
         stats = svc.embed_all(kb_name="nonexistent")
         assert stats["embedded"] == 0

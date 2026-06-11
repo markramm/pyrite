@@ -5,7 +5,7 @@ type: backlog_item
 tags: [search, embeddings, semantic-search]
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
 rank: 2100
