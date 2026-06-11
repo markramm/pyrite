@@ -5,7 +5,7 @@ type: backlog_item
 tags: [bug, cli, get, rank, backlog-grooming, projection, silent-data-loss]
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: XS
 rank: 1200

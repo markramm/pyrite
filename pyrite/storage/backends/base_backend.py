@@ -282,7 +282,8 @@ class BaseBackend(ABC):
         return {}
 
     def _entry_to_dict(self, entry: Entry) -> dict[str, Any]:
-        return {
+        metadata = self._parse_metadata(entry.extra_data)
+        result = {
             "id": entry.id,
             "kb_name": entry.kb_name,
             "entry_type": entry.entry_type,
@@ -303,13 +304,25 @@ class BaseBackend(ABC):
             "start_date": entry.start_date,
             "end_date": entry.end_date,
             "coordinates": entry.coordinates,
-            "metadata": self._parse_metadata(entry.extra_data),
+            "metadata": metadata,
             "created_at": entry.created_at,
             "updated_at": entry.updated_at,
             "indexed_at": entry.indexed_at,
             "created_by": entry.created_by,
             "modified_by": entry.modified_by,
         }
+        # Lift well-known top-level fields that live in metadata for legacy
+        # reasons (the software-kb plugin stores rank/effort/kind in the
+        # `metadata` JSON bag rather than as Prioritizable protocol fields).
+        # Consumers expect them at the top level — `pyrite sw backlog` already
+        # does this lift in its own projection. Surface them here so
+        # `pyrite get`, REST `/entries/{id}`, and the MCP `kb_get` tool all
+        # see the same shape. Regression for Tier A 1200
+        # (bug-pyrite-get-omits-rank-field-in-json-output).
+        for key in ("rank", "effort", "kind"):
+            if key in metadata and key not in result:
+                result[key] = metadata[key]
+        return result
 
     def _get_entry_tags(self, entry_id: str, kb_name: str) -> list[str]:
         results = (

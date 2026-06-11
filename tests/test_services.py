@@ -348,6 +348,42 @@ class TestKBService:
         assert entry is not None
         assert entry["title"] == "Get Test"
 
+    def test_get_entry_projects_well_known_metadata_fields_to_top_level(
+        self, test_db, test_config
+    ):
+        """The read projection lifts well-known software-kb metadata fields
+        (rank, effort, kind) to the top level. Regression for Tier A 1200:
+        `pyrite get` silently omitted `rank` from JSON even though it was in
+        the index's metadata column. The conductor's rank-aware grooming
+        scripts and the cascade-cluster sequencing depend on this.
+        """
+        service = KBService(test_config, test_db)
+
+        service.create_entry(
+            kb_name="test-research",
+            entry_id="rank-projection-test",
+            title="Rank Projection Test",
+            entry_type="actor",
+            # These three are software-kb fields stored in metadata; they
+            # used to silently disappear from the read projection.
+            rank=1200,
+            effort="S",
+            kind="bug",
+        )
+
+        entry = service.get_entry("rank-projection-test", "test-research")
+
+        assert entry is not None
+        # Lifted fields — primary regression assertions.
+        assert entry.get("rank") == 1200, (
+            f"rank missing from get_entry projection (Tier A 1200); "
+            f"got keys {sorted(entry.keys())}"
+        )
+        assert entry.get("effort") == "S", "effort missing from projection"
+        assert entry.get("kind") == "bug", "kind missing from projection"
+        # The full metadata bag is still nested for callers that need it.
+        assert isinstance(entry.get("metadata"), dict)
+
     def test_get_entry_searches_all_kbs(self, test_db, test_config):
         """get_entry without kb_name searches all KBs."""
         service = KBService(test_config, test_db)
