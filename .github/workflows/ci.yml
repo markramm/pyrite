@@ -61,3 +61,98 @@ jobs:
 
       - name: Run full test suite (including API/MCP tests)
         run: pytest --cov=pyrite --cov-report=term-missing
+
+  # ===========================================================================
+  # Frontend: unit tests + svelte-check + build. Fast (~1 min); runs in
+  # parallel with backend. r1900 web-tests-in-ci.
+  # ===========================================================================
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check (svelte-check)
+        run: npm run check
+
+      - name: Unit tests (vitest)
+        run: npm run test:unit
+
+      - name: Build
+        run: npm run build
+
+  # ===========================================================================
+  # E2E: Playwright against a real backend. Slower (~5-8 min) so it runs in
+  # its own job — a unit-test failure shouldn't block the E2E signal and
+  # vice versa. r1900 web-tests-in-ci.
+  # ===========================================================================
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install pyrite into a venv at .venv
+        # playwright.config.ts launches the backend via .venv/bin/uvicorn,
+        # so the venv path must match that expectation.
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e ".[all]"
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system deps (cached browser path)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: web
+        run: npx playwright install-deps chromium
+
+      - name: Run Playwright e2e tests
+        working-directory: web
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 14

@@ -5,7 +5,7 @@ type: backlog_item
 tags: [ci, testing, frontend, dx]
 importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 1900
