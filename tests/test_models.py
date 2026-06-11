@@ -84,6 +84,82 @@ This is the event body.
         with pytest.raises(FrontmatterError):
             EventEntry.from_markdown("Just body text, no frontmatter fence.\n")
 
+    def test_from_markdown_rejects_body_triple_dash_as_frontmatter(self):
+        """A file that lacks a frontmatter fence at the top but contains
+        `---` dividers in the body must NOT have the body content parsed as
+        YAML. Regression for Tier A 1030
+        (bug-from-markdown-splits-on-body-triple-dash-parsing-prose-as-
+        frontmatter-yaml). The conductor hit this on cascade-research
+        drafts where '**Whipple Building**' in body prose parsed as the
+        YAML alias '*Whipple' and triggered a ruamel ComposerError.
+        """
+        # The file starts with body text. The `---` on its own line is a
+        # markdown thematic-break / divider, NOT a frontmatter delimiter.
+        # Pre-fix, re.split caught these and parsed paragraph 2 as YAML.
+        body_with_divider = (
+            "Some introductory paragraph that happens to be the first line.\n"
+            "\n"
+            "---\n"
+            "\n"
+            "**Whipple Building**: a body-prose mention that pre-fix parsed\n"
+            "as the YAML alias `*Whipple` and crashed ruamel.\n"
+            "\n"
+            "---\n"
+        )
+        with pytest.raises(FrontmatterError):
+            EventEntry.from_markdown(body_with_divider)
+
+    def test_from_markdown_does_not_treat_body_yaml_as_frontmatter(self):
+        """The dangerous silent-corruption case: the body between two `---`
+        dividers happens to be valid YAML. Pre-fix, re.split would parse
+        it as frontmatter and build an entry from BODY metadata —
+        silently corrupting the loader. Post-fix the file must be
+        rejected as missing frontmatter."""
+        # No fence at line 1. Body-between-dividers parses as valid YAML
+        # (`foo: bar`) but is plain text in the source file.
+        body_yaml_lookalike = (
+            "Introductory paragraph.\n"
+            "\n"
+            "---\n"
+            "foo: bar\n"
+            "title: Body-yaml-not-frontmatter\n"
+            "---\n"
+            "\n"
+            "More body.\n"
+        )
+        with pytest.raises(FrontmatterError):
+            EventEntry.from_markdown(body_yaml_lookalike)
+
+    def test_from_markdown_requires_opening_fence_at_line_one(self):
+        """The opening `---` must be on line 1. A leading blank line, a
+        BOM, or any text before the fence means the file lacks a
+        frontmatter block."""
+        # Leading blank line — fence not at top.
+        leading_blank = (
+            "\n"
+            "---\n"
+            "id: x\n"
+            "title: X\n"
+            "---\n"
+            "\n"
+            "Body\n"
+        )
+        with pytest.raises(FrontmatterError):
+            EventEntry.from_markdown(leading_blank)
+
+        # Leading prose — fence not at top.
+        leading_text = (
+            "preamble line\n"
+            "---\n"
+            "id: x\n"
+            "title: X\n"
+            "---\n"
+            "\n"
+            "Body\n"
+        )
+        with pytest.raises(FrontmatterError):
+            EventEntry.from_markdown(leading_text)
+
     def test_event_validation(self):
         """Test event validation."""
         # Valid event

@@ -1,12 +1,13 @@
 ---
 id: bug-from-markdown-splits-on-body-triple-dash-parsing-prose-as-frontmatter-yaml
-type: backlog_item
 title: "PARSER ROBUSTNESS BUG (re-filed from cascade-research; the data-instance was fixed but the underlying pyrite defect was"
+type: backlog_item
+tags: [bug, conductor-filed, cli, task-system]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [bug, conductor-filed, cli, task-system]
 rank: 1030
 ---
 
