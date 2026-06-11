@@ -5,7 +5,7 @@ type: backlog_item
 tags: [ai, llm, performance, cost, anthropic]
 importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: high
 effort: M
 rank: 2200

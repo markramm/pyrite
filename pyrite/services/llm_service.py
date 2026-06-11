@@ -124,12 +124,26 @@ class LLMService:
         prompt: str,
         system: str | None = None,
         max_tokens: int = 1024,
+        cache_system: bool = False,
     ) -> str:
-        """Generate a completion and return the full text."""
+        """Generate a completion and return the full text.
+
+        Args:
+            prompt: User-turn content.
+            system: Optional system prompt.
+            max_tokens: Response token cap.
+            cache_system: When True and provider is Anthropic, the system
+                prompt is sent as a content block tagged
+                ``cache_control: {"type": "ephemeral"}`` so the provider
+                caches it for ~5 minutes at ~10% input cost. Use for
+                long, stable system prompts replayed across calls (RAG
+                chat, on-save QA, summarize). No-op for non-Anthropic
+                providers. See Tier A r2200.
+        """
         if self._provider == "stub":
             return ""
         if self._provider == "anthropic":
-            return self._anthropic_complete(prompt, system, max_tokens)
+            return self._anthropic_complete(prompt, system, max_tokens, cache_system)
         if self._provider in self._OPENAI_COMPAT_PROVIDERS:
             return self._openai_complete(prompt, system, max_tokens)
         return ""
@@ -138,12 +152,16 @@ class LLMService:
         self,
         prompt: str,
         system: str | None = None,
+        cache_system: bool = False,
     ) -> AsyncIterator[str]:
-        """Stream completion tokens as an async iterator."""
+        """Stream completion tokens as an async iterator.
+
+        See :meth:`complete` for ``cache_system`` semantics.
+        """
         if self._provider == "stub":
             return
         if self._provider == "anthropic":
-            for chunk in self._anthropic_stream(prompt, system):
+            for chunk in self._anthropic_stream(prompt, system, cache_system):
                 yield chunk
             return
         if self._provider in self._OPENAI_COMPAT_PROVIDERS:
@@ -176,7 +194,53 @@ class LLMService:
             kwargs["base_url"] = self._settings.ai_api_base
         return mod.Anthropic(**kwargs)
 
-    def _anthropic_complete(self, prompt: str, system: str | None, max_tokens: int) -> str:
+    @staticmethod
+    def _anthropic_system_arg(system: str, cache_system: bool):
+        """Build the ``system`` kwarg in the shape Anthropic expects.
+
+        Plain string (back-compat) when ``cache_system`` is False; a single
+        text block with ``cache_control: ephemeral`` when True. Wrapping
+        the system prompt is what makes the provider cache it for ~5
+        minutes — repeated calls then pay ~10% of the input price on the
+        cached tokens (Tier A r2200).
+        """
+        if not cache_system:
+            return system
+        return [
+            {
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+    @staticmethod
+    def _log_anthropic_cache_usage(response) -> None:
+        """If the response's usage carries cache token counts, emit a one-
+        line INFO log so operators can measure cache hit rate after rollout.
+        """
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        created = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        if created or read:
+            logger.info(
+                "Anthropic prompt-cache usage: creation=%d read=%d "
+                "(input=%d output=%d)",
+                created,
+                read,
+                getattr(usage, "input_tokens", 0) or 0,
+                getattr(usage, "output_tokens", 0) or 0,
+            )
+
+    def _anthropic_complete(
+        self,
+        prompt: str,
+        system: str | None,
+        max_tokens: int,
+        cache_system: bool = False,
+    ) -> str:
         client = self._get_anthropic_client()
         kwargs: dict[str, Any] = {
             "model": self._settings.ai_model,
@@ -184,11 +248,17 @@ class LLMService:
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = self._anthropic_system_arg(system, cache_system)
         response = client.messages.create(**kwargs)
+        self._log_anthropic_cache_usage(response)
         return response.content[0].text
 
-    def _anthropic_stream(self, prompt: str, system: str | None):
+    def _anthropic_stream(
+        self,
+        prompt: str,
+        system: str | None,
+        cache_system: bool = False,
+    ):
         client = self._get_anthropic_client()
         kwargs: dict[str, Any] = {
             "model": self._settings.ai_model,
@@ -197,7 +267,7 @@ class LLMService:
             "stream": True,
         }
         if system:
-            kwargs["system"] = system
+            kwargs["system"] = self._anthropic_system_arg(system, cache_system)
         with client.messages.stream(**kwargs) as stream:
             yield from stream.text_stream
 

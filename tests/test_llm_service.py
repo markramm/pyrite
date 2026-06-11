@@ -518,3 +518,142 @@ class TestAIStatusEndpoint:
             data = response.json()
             assert "ok" in data
             assert "message" in data
+
+
+# ---------------------------------------------------------------------------
+# Anthropic prompt caching — Tier A r2200
+# ---------------------------------------------------------------------------
+
+
+class TestAnthropicPromptCaching:
+    """Verify LLMService.complete()/stream() pass cache_control through to the
+    Anthropic SDK when cache_system=True (Tier A r2200).
+
+    Pre-fix: every call rebuilt the system kwarg as a plain string with no
+    cache_control, so cached tokens never landed even though the SDK
+    supports them and the workload (RAG chat, on-save QA, summarize) is
+    exactly the long-system-prompt-replayed-across-calls shape that prompt
+    caching targets.
+    """
+
+    def _patch_anthropic(self, complete_text="ok", usage=None):
+        """Build a mock anthropic module wired into _import_anthropic.
+
+        Returns the patch context manager and the inner messages.create
+        mock so tests can assert the kwargs passed to it.
+        """
+        from unittest.mock import MagicMock
+
+        # Mock response.content[0].text = "ok" and response.usage carries
+        # the cache_read / cache_creation token counts the ticket wants
+        # surfaced for hit-rate measurement.
+        msg = MagicMock()
+        msg.text = complete_text
+        response = MagicMock()
+        response.content = [msg]
+        response.usage = usage or MagicMock(
+            input_tokens=100,
+            output_tokens=10,
+            cache_creation_input_tokens=0,
+            cache_read_input_tokens=0,
+        )
+
+        client = MagicMock()
+        client.messages.create.return_value = response
+
+        anthropic_mod = MagicMock()
+        anthropic_mod.Anthropic.return_value = client
+
+        return anthropic_mod, client
+
+    def test_complete_without_cache_sends_plain_system_string(self):
+        """Default behavior (no caching flag): system is passed as a plain
+        string, no cache_control anywhere — back-compat."""
+        from pyrite.services.llm_service import LLMService
+
+        anthropic_mod, client = self._patch_anthropic()
+        settings = Settings(ai_provider="anthropic", ai_api_key="sk-test")
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=anthropic_mod):
+            svc = LLMService(settings)
+            asyncio.run(svc.complete("hi", system="You are a researcher."))
+
+        kwargs = client.messages.create.call_args.kwargs
+        assert kwargs["system"] == "You are a researcher.", (
+            f"default path must keep system as plain string; got {kwargs['system']!r}"
+        )
+
+    def test_complete_with_cache_system_uses_cache_control_block(self):
+        """cache_system=True wraps the system prompt in the Anthropic SDK's
+        block shape with cache_control: ephemeral. This is what makes the
+        provider cache the system prompt for ~5 minutes at ~10% input cost.
+        """
+        from pyrite.services.llm_service import LLMService
+
+        anthropic_mod, client = self._patch_anthropic()
+        settings = Settings(ai_provider="anthropic", ai_api_key="sk-test")
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=anthropic_mod):
+            svc = LLMService(settings)
+            asyncio.run(
+                svc.complete(
+                    "hi", system="A long detailed system prompt.", cache_system=True
+                )
+            )
+
+        kwargs = client.messages.create.call_args.kwargs
+        system_arg = kwargs["system"]
+        assert isinstance(system_arg, list), (
+            f"cache_system=True must use the list-of-blocks shape; got {type(system_arg)}"
+        )
+        assert len(system_arg) == 1
+        block = system_arg[0]
+        assert block["type"] == "text"
+        assert block["text"] == "A long detailed system prompt."
+        assert block["cache_control"] == {"type": "ephemeral"}
+
+    def test_complete_with_cache_system_but_no_system_does_not_set_system(self):
+        """cache_system=True with system=None is a no-op — don't accidentally
+        send an empty cached block."""
+        from pyrite.services.llm_service import LLMService
+
+        anthropic_mod, client = self._patch_anthropic()
+        settings = Settings(ai_provider="anthropic", ai_api_key="sk-test")
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=anthropic_mod):
+            svc = LLMService(settings)
+            asyncio.run(svc.complete("hi", system=None, cache_system=True))
+
+        kwargs = client.messages.create.call_args.kwargs
+        assert "system" not in kwargs, (
+            "no system text means no system kwarg, cached or otherwise"
+        )
+
+    def test_complete_logs_cache_token_counts_when_returned(self, caplog):
+        """When the Anthropic response carries cache_read_input_tokens or
+        cache_creation_input_tokens, the service emits an INFO log line so
+        operators can measure cache hit rate after rollout (Tier A r2200
+        acceptance: 'log line records cache_read_input_tokens')."""
+        import logging
+
+        from pyrite.services.llm_service import LLMService
+
+        usage = MagicMock(
+            input_tokens=100,
+            output_tokens=10,
+            cache_creation_input_tokens=80,
+            cache_read_input_tokens=0,
+        )
+        anthropic_mod, _ = self._patch_anthropic(usage=usage)
+        settings = Settings(ai_provider="anthropic", ai_api_key="sk-test")
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=anthropic_mod):
+            svc = LLMService(settings)
+            with caplog.at_level(logging.INFO, logger="pyrite.services.llm_service"):
+                asyncio.run(svc.complete("hi", system="sys", cache_system=True))
+
+        messages = [r.getMessage() for r in caplog.records]
+        assert any(
+            "cache" in m.lower() and ("80" in m or "creation" in m.lower())
+            for m in messages
+        ), f"expected a cache-token log line; got {messages}"
