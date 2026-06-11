@@ -252,6 +252,49 @@ def test_search_normal_results_json_is_parseable(cli_env):
     assert "results" in data and "count" in data
 
 
+# ---------------------------------------------------------------------------
+# --include-body must populate body field — Tier A r2000 regression lock
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cli
+def test_search_include_body_populates_body_field(cli_env):
+    """`pyrite search --include-body -f json` must return the actual body
+    text in each result's `body` field. Pre-fix (per r2000 ticket), the
+    field was empty even when --include-body was set. The bug doesn't
+    reproduce at HEAD; this test locks the contract so a future
+    regression (e.g., a projection layer that drops body again) is
+    caught immediately. cli_env seeds one event with body 'Body text.'.
+    """
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        result = runner.invoke(
+            app, ["search", "Test", "--include-body", "--format", "json"]
+        )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["count"] >= 1
+    # At least one result must have a non-empty body field.
+    bodies = [r.get("body", "") for r in data["results"]]
+    assert any(b for b in bodies), f"--include-body returned only empty bodies: {bodies}"
+    # And specifically the seeded body is present.
+    assert any("Body text." in b for b in bodies)
+
+
+@pytest.mark.cli
+def test_search_without_include_body_omits_body_field(cli_env):
+    """Without --include-body, results must NOT include the body field —
+    saves tokens for callers that only need metadata + snippet."""
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        result = runner.invoke(app, ["search", "Test", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["count"] >= 1
+    for r in data["results"]:
+        assert "body" not in r, (
+            f"Default search must omit body; result has it: {list(r)}"
+        )
+
+
 @pytest.mark.cli
 def test_get_not_found_json_is_parseable(cli_env):
     """get -f json for a missing entry emits a valid JSON error object on
