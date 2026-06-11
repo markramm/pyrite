@@ -48,3 +48,16 @@ class KBProtectedError(PyriteError):
 
 class ConfigError(PyriteError):
     """Raised when configuration is invalid."""
+
+
+class ClipperBlockedHostError(PyriteError):
+    """Raised when the web clipper refuses to fetch a URL because the
+    resolved host is on the SSRF blocklist (loopback, link-local,
+    RFC1918 private, reserved IPv4/IPv6 ranges) or because the URL uses
+    a non-http(s) scheme.
+
+    Carries an ``error_code`` attribute (``CLIPPER_BLOCKED_HOST``) so
+    REST/MCP handlers can surface a stable identifier.
+    """
+
+    error_code = "CLIPPER_BLOCKED_HOST"

@@ -1,13 +1,93 @@
 """Web Clipper service — fetch URL, extract content, convert to Markdown."""
 
+import ipaddress
 import logging
 import re
+import socket
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from urllib.parse import urlparse
 
 import httpx
 
+from ..exceptions import ClipperBlockedHostError
+
 logger = logging.getLogger(__name__)
+
+
+def _check_url_safe(url: str) -> None:
+    """Reject URLs that would let the clipper act as an SSRF gadget.
+
+    Raises ClipperBlockedHostError if:
+      - the scheme is not http(s);
+      - the URL has no host;
+      - the host resolves to a loopback, link-local, private, reserved,
+        unspecified, or multicast IPv4/IPv6 address.
+
+    All resolved IPs for the host are checked. If ANY resolved IP is
+    blocked, the URL is rejected — that prevents the trivial DNS-mixed
+    case where a host returns both a public and a private A record.
+    (Full DNS-rebinding defense — pinning the connection to the resolved
+    IP — is a follow-up; see follow-up ticket
+    clipper-ssrf-defense-followups.)
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ClipperBlockedHostError(
+            f"Refusing scheme {parsed.scheme!r}; only http(s) is permitted"
+        )
+    host = parsed.hostname
+    if not host:
+        raise ClipperBlockedHostError(f"URL {url!r} has no host")
+
+    # Try parsing the host directly as an IP literal first; that catches
+    # http://127.0.0.1/ and http://[::1]/ without a DNS lookup.
+    try:
+        ip = ipaddress.ip_address(host)
+        _reject_if_blocked(ip, host)
+        return
+    except ValueError:
+        pass  # not an IP literal — resolve via DNS
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise ClipperBlockedHostError(
+            f"Could not resolve host {host!r}: {exc}"
+        ) from exc
+
+    seen: set[str] = set()
+    for info in infos:
+        addr = info[4][0]
+        if addr in seen:
+            continue
+        seen.add(addr)
+        try:
+            ip = ipaddress.ip_address(addr)
+        except ValueError:
+            continue  # unparseable; skip rather than fail open
+        _reject_if_blocked(ip, host)
+
+
+def _reject_if_blocked(
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: str
+) -> None:
+    """Raise ClipperBlockedHostError if `ip` is on the SSRF blocklist."""
+    # The stdlib classifiers cover loopback (127.0.0.0/8, ::1/128),
+    # link-local (169.254.0.0/16 incl. AWS metadata, fe80::/10),
+    # private (RFC1918 v4, fc00::/7), unspecified (0.0.0.0, ::),
+    # reserved, and multicast.
+    if (
+        ip.is_loopback
+        or ip.is_link_local
+        or ip.is_private
+        or ip.is_unspecified
+        or ip.is_reserved
+        or ip.is_multicast
+    ):
+        raise ClipperBlockedHostError(
+            f"Refusing to fetch {host!r}: resolved IP {ip} is on the SSRF blocklist"
+        )
 
 
 @dataclass
@@ -96,7 +176,14 @@ class ClipperService:
 
         Returns:
             ClipResult with title, body (Markdown), source_url, description.
+
+        Raises:
+            ClipperBlockedHostError: if ``url`` uses a non-http(s) scheme
+                or resolves to a loopback / link-local / RFC1918 private /
+                reserved address. The check runs before any HTTP request.
         """
+        _check_url_safe(url)
+
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=True,

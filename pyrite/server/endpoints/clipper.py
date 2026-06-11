@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from ...exceptions import ClipperBlockedHostError
 from ...services.clipper import ClipperService
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter, requires_tier
@@ -39,11 +40,19 @@ async def clip_url(
     clipper = ClipperService()
     try:
         result = await clipper.clip_url(req.url, title=req.title)
+    except ClipperBlockedHostError as e:
+        # SSRF defense: blocked host/scheme. Surface a 400 with the
+        # stable error code so callers can distinguish a policy
+        # rejection from an upstream fetch failure.
+        raise HTTPException(
+            status_code=400,
+            detail={"code": e.error_code, "message": str(e)},
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=502,
             detail={"code": "CLIP_FAILED", "message": f"Failed to fetch URL: {e}"},
-        )
+        ) from e
 
     # Build entry body with source attribution
     source_header = f"> Clipped from [{result.title}]({result.source_url})\n\n"
