@@ -50,7 +50,13 @@ class LinkDiscoveryService:
             if lower not in seen:
                 seen.add(lower)
                 unique.append(t)
-        return " OR ".join(unique)
+        # Quote each term so FTS5 treats it as a literal phrase. Without quoting,
+        # a bare token that collides with an FTS column name (e.g. "capture",
+        # "legalism") is parsed as a `column:` filter and raises
+        # `OperationalError: no such column: <token>`. Double-quoting disables
+        # operator/column interpretation for the token. Escape embedded quotes.
+        quoted = ['"' + t.replace('"', '""') + '"' for t in unique]
+        return " OR ".join(quoted)
 
     # ------------------------------------------------------------------
     # suggest_links — single-entry keyword-based suggestion
@@ -170,7 +176,10 @@ class LinkDiscoveryService:
                 if lower not in seen:
                     seen.add(lower)
                     unique.append(t)
-            query = " OR ".join(unique)
+            # Quote each term: a bare token matching an FTS column name (e.g.
+            # "capture", "legalism") is otherwise parsed as a `column:` filter
+            # and raises OperationalError. Same fix as build_suggest_query.
+            query = " OR ".join('"' + t.replace('"', '""') + '"' for t in unique)
 
         if not query.strip():
             return []
