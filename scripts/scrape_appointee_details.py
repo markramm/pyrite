@@ -37,6 +37,11 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
+
+def _plural(n: int, singular: str, plural: str = None) -> str:
+    """Return 'singular' when n == 1, else 'plural' (default: singular + 's')."""
+    return singular if n == 1 else (plural or singular + "s")
+
 try:
     from playwright.sync_api import sync_playwright
 except ImportError:
@@ -439,14 +444,14 @@ def update_person_entry(person_path: Path, sections: dict, roles: list,
         current = [r for r in roles if r["is_current"]]
         former = [r for r in roles if not r["is_current"]]
         if current:
-            body_parts.append(f"**{len(current)} current positions:**\n")
+            body_parts.append(f"**{len(current)} current {_plural(len(current), 'position')}:**\n")
             for r in current[:20]:
                 body_parts.append(f"- {r['position']} at {r['organization']} ({r['date_range']})")
         if former:
-            body_parts.append(f"\n**{len(former)} former positions.**")
+            body_parts.append(f"\n**{len(former)} former {_plural(len(former), 'position')}.**")
 
     if holdings:
-        body_parts.append(f"\n## Notable Holdings ({len(holdings)} significant items)\n")
+        body_parts.append(f"\n## Notable Holdings ({len(holdings)} significant {_plural(len(holdings), 'item')})\n")
         for h in sorted(holdings, key=lambda x: x["value_midpoint"], reverse=True)[:15]:
             val = h["value_range"] or "undisclosed"
             body_parts.append(f"- **{h['description'][:100]}** — {val}")

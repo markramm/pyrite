@@ -117,6 +117,13 @@ def parse_appointees(text: str) -> list[dict]:
         name = lines[i].strip()
         i += 1
 
+        # Guard against record misalignment: a "name" that is actually a dollar
+        # amount (e.g. "$30,002", "$528K") means the previous record was missing a
+        # line and the 3-line cursor has desynced. Skip this stray line and resync
+        # rather than emit a garbage entry (title=$amount, net_worth=next person's name).
+        if re.match(r"^\$[\d,]+(\.\d+)?[KMB]?$", name):
+            continue
+
         # Position line
         if i >= len(lines):
             break
