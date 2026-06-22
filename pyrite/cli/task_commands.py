@@ -120,13 +120,34 @@ def task_list(
         db.close()
 
 
+@task_app.command("get")
+def task_get(
+    task_id: str = typer.Argument(..., help="Task entry ID"),
+    kb_name: str | None = typer.Option(None, "--kb", "-k", help="Knowledge base name"),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+):
+    """Show task details with children, dependencies, and evidence."""
+    _task_get_impl(task_id, kb_name, fmt)
+
+
 @task_app.command("status")
 def task_status(
     task_id: str = typer.Argument(..., help="Task entry ID"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="Knowledge base name"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
-    """Show task details with children, dependencies, and evidence."""
+    """[Deprecated] Alias for `task get`. Use `task get` instead."""
+    # Deprecation notice goes to stderr so it never corrupts JSON on stdout.
+    Console(stderr=True).print(
+        "[yellow]Warning:[/yellow] `task status` is deprecated and will be "
+        "removed in a future release; use `task get` instead.",
+        style="dim",
+    )
+    _task_get_impl(task_id, kb_name, fmt)
+
+
+def _task_get_impl(task_id: str, kb_name: str | None, fmt: str):
+    """Shared implementation for `task get` and the deprecated `task status`."""
     svc, db = _get_service()
     try:
         task = svc.get_task(task_id, kb_name)

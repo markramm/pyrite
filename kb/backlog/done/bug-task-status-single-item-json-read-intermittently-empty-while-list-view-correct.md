@@ -1,12 +1,13 @@
 ---
 id: bug-task-status-single-item-json-read-intermittently-empty-while-list-view-correct
-type: backlog_item
 title: "READ-PATH INCONSISTENCY (investigation-conductor session 2026-06-10)"
+type: backlog_item
+tags: [bug, conductor-filed, cli, task-system]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [bug, conductor-filed, cli, task-system]
 rank: 1150
 ---
 
@@ -60,3 +61,25 @@ the empty-JSON case and the surrounding context. If the bug is genuinely
 non-deterministic timing in the file-read path, the fix probably lands
 naturally in the `task status` → `task get` rename + read-path
 consolidation that's already in this ticket's acceptance criteria.
+
+## Resolution (2026-06-22)
+
+Root cause: `TaskService.get_task` read via `KBService.get_entry` →
+`session.get(Entry, ...)` (ORM identity-mapped), while `list_tasks` read via
+a fresh `execute_sql` query. `claim_entry` mutates the row with a raw SQL
+UPDATE, so the single-item and list reads went through structurally different
+paths — the documented read-after-write divergence.
+
+Fix:
+1. `get_task` now reads via the SAME fresh SQL path as `list_tasks`
+   (SELECT ... FROM entry WHERE entry_type='task' AND id=:id), so the two
+   single-item and list reads can no longer diverge.
+2. CLI `task status` → renamed to `task get` (mirrors `pyrite get`).
+   `task status` kept as a deprecated alias emitting a stderr deprecation
+   notice (stdout stays clean JSON); slated for removal next release.
+3. Regression tests: tests/test_task_service.py::TestGetTaskReadConsistency
+   and tests/test_task_cli_get.py (get/status alias + claim-before-read).
+
+Note: the original 'intermittent' race could not be reproduced deterministically
+at HEAD (SQLAlchemy expire_on_commit reloads after the claim commit), but the
+read-path consolidation makes any future divergence structurally impossible.

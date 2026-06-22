@@ -196,8 +196,30 @@ class TaskService:
         }
 
     def get_task(self, task_id: str, kb_name: str | None = None) -> dict[str, Any] | None:
-        """Get task details from the index."""
-        return self.kb_svc.get_entry(task_id, kb_name)
+        """Get task details from the index.
+
+        Reads via the SAME fresh SQL path as :meth:`list_tasks` rather than
+        the ORM ``session.get`` used by ``KBService.get_entry``. Task claims
+        mutate the row through a raw SQL UPDATE; routing the single-item read
+        through identity-mapped ``session.get`` risked returning stale/empty
+        data that diverged from the list view (the read-after-write window
+        documented in the task-status read-inconsistency bug). Using one SQL
+        read path for both makes that divergence structurally impossible.
+        """
+        sql = (
+            "SELECT id, title, kb_name, status, assignee, priority, metadata "
+            "FROM entry WHERE entry_type = 'task' AND id = :id"
+        )
+        params: dict[str, str] = {"id": task_id}
+        if kb_name:
+            sql += " AND kb_name = :kb_name"
+            params["kb_name"] = kb_name
+        sql += " LIMIT 1"
+
+        rows = self._query(sql, params)
+        if not rows:
+            return None
+        return rows[0]
 
     def list_tasks(
         self,

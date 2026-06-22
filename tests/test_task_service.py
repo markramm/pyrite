@@ -222,6 +222,42 @@ class TestClaimEntry:
         assert result["status"] == "in_progress"
 
 
+class TestGetTaskReadConsistency:
+    """Regression coverage for
+    `bug-task-status-single-item-single-item-json-read-intermittently-empty`.
+
+    `claim_entry` mutates the index via a raw SQL UPDATE that bypasses the
+    ORM identity map. A subsequent single-item read via `session.get()`
+    returned the stale identity-mapped object (or empty), while the list
+    view (a fresh SQL query) reported the new state correctly. `get_task`
+    must read the SAME fresh path as `list_tasks` so the two never diverge.
+    """
+
+    def test_get_task_reflects_claim_made_after_first_read(self, task_env):
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Read consistency")
+        entry_id = created["entry_id"]
+
+        # Prime the session identity map with a pre-claim read.
+        first = svc.get_task(entry_id, "test-tasks")
+        assert first is not None
+        assert (first.get("status") or "open") == "open"
+
+        # Claim mutates the row via raw SQL UPDATE (bypasses identity map).
+        claim = svc.claim_task(entry_id, "test-tasks", "agent:reader")
+        assert claim["claimed"] is True
+
+        # Single-item read must now agree with the list view.
+        after = svc.get_task(entry_id, "test-tasks")
+        assert after is not None, "get_task returned empty after claim (read-path divergence)"
+        listed = {t["id"]: t for t in svc.list_tasks(kb_name="test-tasks")}[entry_id]
+        assert after.get("status") == listed["status"] == "claimed", (
+            f"get_task status {after.get('status')!r} diverged from "
+            f"list_tasks status {listed['status']!r}"
+        )
+        assert (after.get("assignee") or "") == "agent:reader"
+
+
 class TestDecomposeTask:
     def test_decompose_creates_children(self, task_env):
         svc = task_env["svc"]
