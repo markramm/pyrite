@@ -31,7 +31,10 @@ def _get_service() -> tuple[TaskService, PyriteDB]:
 
 @task_app.command("create")
 def task_create(
-    title: str = typer.Argument(..., help="Task title"),
+    title_arg: str | None = typer.Argument(
+        None, metavar="TITLE", help="Task title (or use --title)"
+    ),
+    title_opt: str | None = typer.Option(None, "--title", "-t", help="Task title"),
     kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
     parent: str | None = typer.Option(None, "--parent", "-p", help="Parent task entry ID"),
     priority: int = typer.Option(5, "--priority", help="Priority 1-10"),
@@ -41,7 +44,26 @@ def task_create(
     body: str | None = typer.Option(None, "--body", "-b", help="Task description"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
-    """Create a new task."""
+    """Create a new task.
+
+    The title may be given either positionally (``task create "Title"``) or via
+    the ``--title`` flag (``task create --title "Title"``) — both work, for
+    consistency with the other ``--body``/``--priority`` flags.
+    """
+    if title_arg and title_opt:
+        console.print(
+            "[red]Error:[/red] Provide the title either positionally or with "
+            "--title, not both."
+        )
+        raise typer.Exit(1)
+    title = title_arg or title_opt
+    if not title:
+        console.print(
+            "[red]Error:[/red] A task title is required: "
+            "`pyrite task create <title> ...` or `--title <title>`."
+        )
+        raise typer.Exit(1)
+
     svc, db = _get_service()
     try:
         result = svc.create_task(
