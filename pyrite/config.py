@@ -451,6 +451,20 @@ class PyriteConfig:
         type_str = kb_type.value if hasattr(kb_type, "value") else kb_type
         return [kb for kb in self.knowledge_bases if kb.kb_type == type_str]
 
+    def all_kbs(self) -> list[KBConfig]:
+        """All KBs including DB-registered (``pyrite kb add``) ones.
+
+        ``knowledge_bases`` holds only config.yaml KBs; DB-registered KBs live
+        in the fallback cache (resolvable via :meth:`get_kb` but deliberately
+        absent from ``knowledge_bases`` so seeding doesn't re-register them).
+        Operations that must act on *every* KB — notably indexing — should
+        enumerate via this method, not ``knowledge_bases`` directly, or they
+        silently skip ``kb add`` KBs. config.yaml KBs take precedence on name.
+        """
+        seen = {kb.name for kb in self.knowledge_bases}
+        extra = [kb for name, kb in self._db_kb_cache.items() if name not in seen]
+        return [*self.knowledge_bases, *extra]
+
     def add_kb(self, kb: KBConfig) -> None:
         """Add a KB to the registry."""
         if kb.name in self._kb_by_name:

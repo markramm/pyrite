@@ -489,7 +489,7 @@ class IndexManager:
         """
         results = {}
 
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             if not kb.path.exists():
                 logger.warning("Skipping %s: path does not exist", kb.name)
                 continue
@@ -833,7 +833,7 @@ class IndexManager:
             "malformed": [],
         }
 
-        kbs = [self.config.get_kb(kb_name)] if kb_name else self.config.knowledge_bases
+        kbs = [self.config.get_kb(kb_name)] if kb_name else self.config.all_kbs()
         kbs = [kb for kb in kbs if kb and kb.path.exists()]
 
         # Count total files across all KBs for progress (cheap: just path listing)

@@ -48,9 +48,9 @@ def index_build(
         if kb_name:
             job_id = worker.submit_rebuild(kb_name)
         else:
-            # Submit rebuild for each KB
+            # Submit rebuild for each KB (incl. `kb add` / DB-registered ones)
             job_ids = []
-            for kb in config.knowledge_bases:
+            for kb in config.all_kbs():
                 if kb.path.exists():
                     job_ids.append(worker.submit_rebuild(kb.name))
             console.print(f"[green]Submitted {len(job_ids)} rebuild job(s)[/green]")
@@ -69,7 +69,7 @@ def index_build(
             raise typer.Exit(1)
         kbs = [kb]
     else:
-        kbs = config.knowledge_bases
+        kbs = config.all_kbs()
 
     if not kbs:
         console.print("[yellow]No knowledge bases configured.[/yellow]")

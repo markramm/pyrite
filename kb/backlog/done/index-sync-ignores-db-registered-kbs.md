@@ -1,12 +1,14 @@
 ---
 id: index-sync-ignores-db-registered-kbs
-type: backlog_item
 title: "index sync/build ignore DB-registered KBs (get_config_and_db skips _register_db_kbs)"
+type: backlog_item
+tags: [index, cli, kb-registry, context, cloud, headless]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
-tags: [index, cli, kb-registry, context, cloud, headless]
+rank: 0
 ---
 
 ## Problem
@@ -79,3 +81,28 @@ Surfaced 2026-06-22 by the daily-capture cloud smoke test (a headless container 
 `kb add cascade-timeline` then `index sync`). Also filed as GitHub issue markramm/pyrite#2.
 Workaround in the capture fleet: drop pyrite from the cloud path entirely (stdlib grep over the
 cloned timeline) — but this bug should still be fixed for any `kb add` + index user.
+
+## Resolution (2026-06-22)
+
+Two-part fix:
+
+1. `get_config_and_db()` and `cli_db_context()` (pyrite/cli/context.py) now
+   call `_register_db_kbs(config, db)`, matching `_init_base()`. This populates
+   the config's DB-KB fallback cache so `config.get_kb(name)` resolves
+   `kb add` KBs — fixing `index sync -k <kb>`.
+
+2. Root subtlety: `register_db_kbs()` deliberately keeps DB KBs OUT of
+   `config.knowledge_bases` (so `seed_from_config` won't re-register them),
+   storing them in a fallback cache. So the bare `index sync` / `index build`
+   (no -k), which iterated `knowledge_bases`, still missed them. Added
+   `PyriteConfig.all_kbs()` (knowledge_bases + DB cache) and switched the index
+   write-paths to it: IndexManager.index_all/sync_incremental and the
+   index_commands.py build paths. `seed_from_config` still uses
+   `knowledge_bases` so its protection is intact.
+
+Verified end-to-end via the issue's exact CLI repro: `kb add` →
+`index sync -k some-kb` now reports 'Added: 1' (was 'Updated: 0') and
+`search` returns results. Regression tests: tests/test_cli_context_db_kbs.py
+(3 tests incl. an end-to-end sync_incremental count assertion).
+
+Fixes GitHub #2.

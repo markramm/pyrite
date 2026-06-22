@@ -76,6 +76,7 @@ def cli_db_context() -> Generator[tuple[PyriteConfig, PyriteDB], None, None]:
     """Provide config and db for commands that only need db access."""
     config = load_config()
     db = PyriteDB(config.settings.index_path)
+    _register_db_kbs(config, db)
     try:
         yield config, db
     finally:
@@ -85,9 +86,15 @@ def cli_db_context() -> Generator[tuple[PyriteConfig, PyriteDB], None, None]:
 def get_config_and_db() -> tuple[PyriteConfig, PyriteDB]:
     """Get config and db without a context manager.
 
+    Merges DB-registered KBs (added via ``pyrite kb add``) into the config so
+    that commands like ``index sync`` see them — matching ``_init_base()``.
+    Without this merge, KBs that live only in the DB (not the YAML config) are
+    invisible and indexing them produces 0 entries.
+
     Note: callers are responsible for calling db.close(). Prefer cli_db_context()
     for new code.
     """
     config = load_config()
     db = PyriteDB(config.settings.index_path)
+    _register_db_kbs(config, db)
     return config, db
