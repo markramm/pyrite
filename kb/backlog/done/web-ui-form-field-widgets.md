@@ -1,12 +1,14 @@
 ---
 id: web-ui-form-field-widgets
-type: backlog_item
 title: "Web UI: render select/date/number/checkbox widgets for typed schema fields"
+type: backlog_item
+tags: [web-ui, schema, ux, follow-on]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: M
-tags: [web-ui, schema, ux, follow-on]
+rank: 0
 ---
 
 ## Problem
@@ -55,3 +57,26 @@ In `web/src/lib/components/entry-form/`:
 - `web-ui-type-aware-entry-form` (done) — this fills the gap that ticket left
 - `schema-constraints-in-mcp-and-rest` — surfaces the constraints needed
   here for both surfaces
+
+## Resolution (2026-06-22)
+
+The core defect — typed fields rendering as plain text inputs, causing
+invalid submissions — is fixed in `web/src/routes/entries/new/+page.svelte`.
+Current state:
+- `string`+`enum` → <select> (was already present)
+- `list` → comma-separated text input (already present)
+- `number`/`integer` → number input; `date`/`datetime` → date input
+- `checkbox`/`boolean` → **NEW** native checkbox bound to .checked.
+  Previously checkbox fell through to a text input bound to .value, so the
+  save-time coercion (`value === 'true'`) never matched and a checkbox could
+  never be saved as true. Now fixed.
+
+Coercion logic extracted to a unit-tested helper
+`web/src/lib/utils/entry-fields.ts` (coerceFieldValue/buildMetadata), with
+9 tests in entry-fields.test.ts (incl. the checkbox regression).
+
+Acceptance criteria met: each declared field type renders the matching
+widget (1); server-side validation unchanged (2); actor form renders cleanly
+end-to-end (4). Remaining: Playwright visual-regression test (3) and the
+object_ref typeahead enhancement — split into follow-up
+[[web-ui-form-widgets-playwright-visual-regression-object-ref-typeahead]].

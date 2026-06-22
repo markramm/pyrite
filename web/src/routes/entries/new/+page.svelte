@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import type { TemplateSummary } from '$lib/api/types';
 	import type { TypeSchemaInfo } from '$lib/api/types';
+	import { buildMetadata } from '$lib/utils/entry-fields';
 
 	let step = $state<'pick' | 'edit'>('pick');
 	let templates = $state<TemplateSummary[]>([]);
@@ -123,25 +124,8 @@
 			if (importance !== 5) req.importance = importance;
 			if (status.trim()) req.status = status.trim();
 
-			// Merge non-empty custom fields into metadata
-			const meta: Record<string, unknown> = {};
-			for (const [key, value] of Object.entries(customFields)) {
-				if (value.trim()) {
-					const schema = selectedTypeSchema?.fields[key];
-					if (schema?.type === 'number') {
-						meta[key] = Number(value) || 0;
-					} else if (schema?.type === 'list') {
-						meta[key] = value
-							.split(',')
-							.map((v) => v.trim())
-							.filter(Boolean);
-					} else if (schema?.type === 'checkbox') {
-						meta[key] = value === 'true';
-					} else {
-						meta[key] = value;
-					}
-				}
-			}
+			// Merge non-empty custom fields into metadata, coerced by schema type.
+			const meta = buildMetadata(customFields, selectedTypeSchema?.fields);
 			if (Object.keys(meta).length > 0) req.metadata = meta;
 
 			const res = await api.createEntry(req as any);
@@ -353,6 +337,17 @@
 												(customFields[fieldName] = e.currentTarget.value)}
 											placeholder="Comma-separated values"
 											class="w-full rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+										/>
+									{:else if fieldSchema.type === 'checkbox' || fieldSchema.type === 'boolean'}
+										<input
+											id="field-{fieldName}"
+											type="checkbox"
+											checked={customFields[fieldName] === 'true'}
+											onchange={(e) =>
+												(customFields[fieldName] = e.currentTarget.checked
+													? 'true'
+													: 'false')}
+											class="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 dark:bg-zinc-800"
 										/>
 									{:else}
 										<input
