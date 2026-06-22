@@ -157,6 +157,10 @@ def register_search_command(app: typer.Typer):
             console.print(table)
 
         except Exception as e:
+            # Log the full exception (with traceback) so operators can tell a
+            # corrupt index from a bad query from a locked DB — the one-line
+            # messages below are not enough to troubleshoot from.
+            logger.debug("Index search failed for query %r", query, exc_info=True)
             if output_format != "rich":
                 import json
 

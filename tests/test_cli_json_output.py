@@ -296,6 +296,50 @@ def test_search_without_include_body_omits_body_field(cli_env):
 
 
 @pytest.mark.cli
+def test_search_error_json_is_clean_structured_error(cli_env):
+    """When the index search raises, -f json must emit a clean structured
+    error object (error + error_type) and exit non-zero — never a mix of
+    error line + fallback file-search results. Regression lock for
+    `search-fallback-error-obscured`."""
+    boom = RuntimeError("simulated index failure")
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        with patch(
+            "pyrite.services.search_service.SearchService.search",
+            side_effect=boom,
+        ):
+            result = runner.invoke(app, ["search", "Test", "--format", "json"])
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["error_type"] == "RuntimeError"
+    assert "simulated index failure" in data["error"]
+    # Must NOT leak fallback file-search results into the JSON payload.
+    assert data["results"] == []
+
+
+@pytest.mark.cli
+def test_search_error_logged_at_debug(cli_env, caplog):
+    """The full exception must be logged (with traceback) when index search
+    fails, so operators can troubleshoot — not just shown as a one-line
+    message. Regression lock for `search-fallback-error-obscured`."""
+    import logging
+
+    boom = RuntimeError("simulated index failure")
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        with patch(
+            "pyrite.services.search_service.SearchService.search",
+            side_effect=boom,
+        ):
+            with caplog.at_level(logging.DEBUG, logger="pyrite.cli.search_commands"):
+                runner.invoke(app, ["search", "Test"])  # rich mode → fallback path
+    # A log record must carry the original exception with traceback info.
+    assert any(
+        rec.exc_info is not None and "simulated index failure" in rec.getMessage() + str(rec.exc_text or "")
+        or (rec.exc_info and rec.exc_info[1] is boom)
+        for rec in caplog.records
+    ), f"expected exception logged; got records: {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+
+
+@pytest.mark.cli
 def test_get_not_found_json_is_parseable(cli_env):
     """get -f json for a missing entry emits a valid JSON error object on
     stdout (so programmatic callers can parse it), not a rich error line."""

@@ -1,12 +1,14 @@
 ---
 id: search-cli-field-truncation
-type: backlog_item
 title: "Search CLI truncates title and snippet without ellipsis or indication"
+type: backlog_item
+tags: [cli, search, ux]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [cli, search, ux]
+rank: 0
 ---
 
 ## Problem

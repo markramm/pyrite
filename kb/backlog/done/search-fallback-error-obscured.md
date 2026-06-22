@@ -1,12 +1,14 @@
 ---
 id: search-fallback-error-obscured
-type: backlog_item
 title: "Search silently falls back to file search when index search fails"
+type: backlog_item
+tags: [cli, search, error-handling]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [cli, search, error-handling]
+rank: 0
 ---
 
 ## Problem

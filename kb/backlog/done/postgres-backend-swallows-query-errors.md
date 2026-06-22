@@ -1,12 +1,14 @@
 ---
 id: postgres-backend-swallows-query-errors
-type: backlog_item
 title: "PostgresBackend._exec swallows result errors into empty list (silent masking)"
+type: backlog_item
+tags: [storage, postgres, errors, silent-data-loss, backend]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [storage, postgres, errors, silent-data-loss, backend]
+rank: 0
 ---
 
 ## Problem

@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from ...exceptions import StorageError
 from ..models import Link
 from .base_backend import BaseBackend
 
@@ -88,14 +89,22 @@ class PostgresBackend(BaseBackend):
     # =====================================================================
 
     def _exec(self, sql: str, params: dict | None = None) -> list[dict[str, Any]]:
-        """Execute raw SQL and return all rows as list of dicts."""
+        """Execute raw SQL and return all rows as list of dicts.
+
+        A legitimate zero-row result returns ``[]``. A failure during result
+        materialization (driver decode error, unexpected row shape, strict-zip
+        mismatch) is logged and re-raised as ``StorageError`` rather than
+        masked as an empty list — empty-on-error is indistinguishable from a
+        genuine no-match and has historically hidden silent-data-loss bugs.
+        """
         result = self._session.execute(text(sql), params or {})
         try:
             rows = result.fetchall()
             cols = result.keys()
             return [dict(zip(cols, row, strict=True)) for row in rows]
-        except Exception:
-            return []
+        except Exception as e:
+            logger.error("Failed to materialize result for SQL: %s", sql, exc_info=True)
+            raise StorageError(f"Failed to materialize query result: {e}") from e
 
     def _exec_one(self, sql: str, params: dict | None = None) -> dict | None:
         """Execute raw SQL and return first row as dict, or None."""
