@@ -1,12 +1,14 @@
 ---
 id: search-keyword-and-no-fallback
-type: backlog_item
 title: "Keyword FTS search is implicit-AND with no relaxation or semantic fallback"
+type: backlog_item
 tags: [search, fts, recall, ux]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
+rank: 0
 ---
 
 ## Problem

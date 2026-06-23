@@ -106,6 +106,33 @@ class TestSearchService:
         """FTS5 query sanitization handles special characters and operators."""
         assert SearchService.sanitize_fts_query(input_query) == expected
 
+    @pytest.mark.parametrize(
+        "input_query, expected",
+        [
+            ("orange county florida", "orange OR county OR florida"),
+            ("single", None),  # one term: nothing to relax
+            ("", None),  # empty: nothing to relax
+            ("trump AND biden", None),  # explicit operator: leave it alone
+            ("trump OR biden", None),  # already OR: leave it alone
+            ('"family separation"', None),  # quoted phrase: leave it alone
+            ("a b c d", "a OR b OR c OR d"),
+        ],
+        ids=[
+            "three-terms-to-or",
+            "single-term-noop",
+            "empty-noop",
+            "explicit-and-noop",
+            "explicit-or-noop",
+            "quoted-phrase-noop",
+            "four-terms-to-or",
+        ],
+    )
+    def test_relax_to_or(self, input_query, expected):
+        """_relax_to_or OR-combines bare multi-term queries, leaving
+        operator/quoted/single-term queries untouched (returns None to signal
+        'no relaxation applicable')."""
+        assert SearchService._relax_to_or(input_query) == expected
+
     def test_search_normalizes_all_kbs(self, test_db, test_config):
         """'All KBs' is normalized to None."""
         service = SearchService(test_db)
@@ -173,6 +200,64 @@ class TestSearchService:
 
         only_open = service.search("queue", mode="keyword", status="unprocessed")
         assert [r["id"] for r in only_open] == ["queue-open"]
+
+    def test_keyword_or_relaxation_on_zero_hits(self, test_db, test_config):
+        """A multi-term keyword query that returns 0 hits under implicit-AND
+        retries OR-relaxed so a near-miss still surfaces
+        (search-keyword-and-no-fallback)."""
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        test_db.upsert_entry(
+            {
+                "id": "orange-county-igsa",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Orange County Florida IGSA terminated",
+                "body": "The county ended its ICE detention agreement.",
+                "tags": [],
+            }
+        )
+        service = SearchService(test_db)
+
+        # Implicit-AND: this exact phrase with an absent term ("quarterly")
+        # would normally zero out. With OR-relaxation it should still find the
+        # entry on a 0-hit retry.
+        results = service.search(
+            "orange county florida quarterly absent", mode="keyword"
+        )
+        assert any(r["id"] == "orange-county-igsa" for r in results), (
+            "OR-relaxation should surface the near-miss entry on 0 AND-hits"
+        )
+
+    def test_keyword_no_relaxation_when_results_exist(self, test_db, test_config):
+        """Relaxation only fires on 0 hits — a query that already matches under
+        AND is returned as-is, not widened."""
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        test_db.upsert_entry(
+            {
+                "id": "alpha-doc",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Alpha specific document",
+                "body": "alpha specific content",
+                "tags": [],
+            }
+        )
+        test_db.upsert_entry(
+            {
+                "id": "beta-doc",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Beta unrelated",
+                "body": "beta only",
+                "tags": [],
+            }
+        )
+        service = SearchService(test_db)
+
+        # "alpha specific" matches alpha-doc under AND; must NOT widen to also
+        # pull beta-doc via OR.
+        results = service.search("alpha specific", mode="keyword")
+        assert [r["id"] for r in results] == ["alpha-doc"]
 
     def test_search_hybrid_fallback_no_embeddings(self, test_db, test_config):
         """Hybrid search falls back to keyword when no embeddings exist."""

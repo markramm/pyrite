@@ -95,6 +95,32 @@ class SearchService:
         sanitized = re.sub(r"(\S*[^\w\s]\S*)", r'"\1"', query)
         return sanitized
 
+    @staticmethod
+    def _relax_to_or(query: str) -> str | None:
+        """OR-combine the terms of a bare multi-term query.
+
+        FTS5 `MATCH` is implicit-AND, so a query like "orange county florida
+        quarterly" requires *every* term — one absent word zeroes the result
+        set. When an AND search finds nothing, retrying with the terms
+        OR-combined ("orange OR county OR florida OR quarterly") recovers the
+        near-misses.
+
+        Returns the OR-combined query, or ``None`` when relaxation does not
+        apply: a single term (nothing to relax), an empty query, or a query the
+        user already wrote with explicit operators or quoted phrases (we honor
+        their intent rather than widening it).
+        """
+        if not query or not query.strip():
+            return None
+        # Respect explicit operators / quoted phrases — same guard the
+        # sanitizer uses to decide "the user knows what they want."
+        if any(op in query.upper() for op in [" AND ", " OR ", " NOT ", '"']):
+            return None
+        terms = query.split()
+        if len(terms) < 2:
+            return None
+        return " OR ".join(terms)
+
     # =========================================================================
     # Search Operations
     # =========================================================================
@@ -178,20 +204,38 @@ class SearchService:
         if sanitize:
             kw_query = self.sanitize_fts_query(kw_query)
 
-        return self.db.search(
-            query=kw_query,
-            kb_name=kb_name,
-            entry_type=entry_type,
-            tags=tags,
-            date_from=date_from,
-            date_to=date_to,
-            limit=limit,
-            offset=offset,
-            include_archived=include_archived,
-            fips=fips,
-            state=state,
-            status=status,
-        )
+        def _run(q: str) -> list[dict[str, Any]]:
+            return self.db.search(
+                query=q,
+                kb_name=kb_name,
+                entry_type=entry_type,
+                tags=tags,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset,
+                include_archived=include_archived,
+                fips=fips,
+                state=state,
+                status=status,
+            )
+
+        results = _run(kw_query)
+
+        # Implicit-AND zeroes out when one term is absent. On exactly 0 hits,
+        # retry once with the terms OR-combined so a near-miss still surfaces
+        # rather than the caller seeing a confident empty result. Relax the
+        # pre-sanitized query (terms, not the quoted form) and skip when the
+        # user already used operators/quotes — _relax_to_or returns None then.
+        if not results:
+            relaxed = self._relax_to_or(expanded_query)
+            if relaxed:
+                logger.debug(
+                    "keyword search 0 hits; retrying OR-relaxed: %r", relaxed
+                )
+                results = _run(relaxed)
+
+        return results
 
     def _expand_query(self, query: str) -> str:
         """Expand query with AI-generated terms, returning OR-combined FTS5 query."""
