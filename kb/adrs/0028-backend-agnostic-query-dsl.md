@@ -1,12 +1,13 @@
 ---
 id: adr-0028
-type: adr
 title: "Backend-Agnostic Query DSL"
+type: adr
+tags: [search, dsl, backend, architecture, agents]
+importance: 5
 adr_number: 28
-status: proposed
+status: accepted
 deciders: ["markr"]
 date: "2026-06-23"
-tags: [search, dsl, backend, architecture, agents]
 ---
 
 # ADR-0028: Backend-Agnostic Query DSL
