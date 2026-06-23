@@ -256,11 +256,24 @@ db.execute_sql("SELECT * FROM entry WHERE id = ?", (entry_id,))
 
 **When this bites you:** Creating KB entries with filenames like `templated-foo.md`, `template-bar.md`, or `path-templates.md`. They silently won't be indexed. Rename to avoid the word entirely (e.g., `dynamic-foo.md`).
 
-## `pyrite update -f status=completed` Moves Backlog Items to `kb/notes/`, Not `kb/backlog/done/`
+## Closing a Backlog Item: Use `status=done`, and Beware Auto-Replacement to `kb/notes/`
 
-When you mark a `backlog_item` completed via `pyrite update <id> -k pyrite -f status=completed`, the CLI re-placements logic routes the file to its type's default subdirectory (`kb/notes/` for generic entries) rather than honoring the backlog-specific `done/` convention. The original file is deleted and a new copy lands in the wrong place.
+Two traps when closing a `backlog_item`, both load-bearing:
 
-**Workaround:** After `pyrite update ... -f status=completed`, do:
+**Trap 1 — the status value.** Use `status=done`, **never** `status=completed`.
+`completed` is off-enum for backlog items (the type declares `proposed`/`planned`/
+`in_progress`/`done`; the board maps both `done` and `completed` to the Done column,
+which masks the problem). It passes silently but drifts the board — this exact mistake
+once stranded 75 items on an undetected `completed` status (see `index.py:703`). As of
+this writing 380 items use `done` and 0 use `completed`. `done` is canonical.
+
+**Trap 2 — file placement.** When you mark an item `done` via
+`pyrite update <id> -k pyrite -f status=done`, the CLI's re-placement logic routes the
+file to its type's default subdirectory (`kb/notes/` for generic entries) rather than
+honoring the backlog-specific `done/` convention. The original file is deleted and a new
+copy lands in the wrong place.
+
+**Workaround:** After `pyrite update ... -f status=done`, do:
 
 ```bash
 mv kb/notes/<id>.md kb/backlog/done/<id>.md
@@ -271,3 +284,22 @@ git add kb/backlog/done/<id>.md
 Don't use `git mv` here — the file at `kb/notes/` is untracked (the original at `kb/backlog/` is the one git knows about), so git mv errors with "not under version control."
 
 **Root cause (not fixed):** the backlog `done/` directory is a convention, not a schema-declared subdirectory. The CLI's status-update path rewrites placement based on the entry type's default subdirectory, ignoring the source directory. Fix would require either declaring `subdirectory: done` for completed-status backlog items in the type schema or preserving the source path on status-only updates. Not yet ticketed.
+
+## `pyrite sw new-adr` Takes a Positional TITLE and Misfiles Without `-k`
+
+Two traps in one command:
+
+1. **`TITLE` is a positional argument, not `--title`.** `pyrite sw new-adr --title "X"`
+   fails. Correct: `pyrite sw new-adr "X" -k pyrite --status accepted`. (Note this differs
+   from `pyrite create`, which *does* take `--title` — the inconsistency is real.)
+2. **Without `-k`, the file is written to `./adrs/` relative to your current directory**,
+   not the KB's `kb/adrs/`. The command resolves the KB path only when `--kb` is passed;
+   otherwise it falls back to `Path(".")` (`cli.py:135-141` in the software-kb extension).
+   It reports `Created ADR-NNNN` and exits 0, so the misplacement is silent — the file is
+   never indexed and `pyrite sw adrs` never shows it. The next-number lookup *does* default
+   the KB, so you get a correctly-numbered ADR in the wrong place.
+
+**Always pass `-k pyrite`.** If you forget, `mv ./adrs/<file> kb/adrs/`, remove the stray
+`./adrs/`, then `pyrite index sync`.
+
+**Status:** ticketed — backlog item `new-adr-writes-to-cwd-without-kb-flag`.

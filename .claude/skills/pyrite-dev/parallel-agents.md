@@ -11,7 +11,7 @@ How to safely launch, coordinate, and merge work from multiple Claude Code agent
 - The merge ceremony (copy new files, read diffs, patch shared files) adds significant overhead
 - An agent that worked directly on main (no worktree) produced the cleanest, most mergeable result
 
-**Instead:** Launch agents without isolation. Rely on **file footprint planning** to prevent conflicts. Agents write directly to the working tree. Since we validate that no two agents touch the same file, there are no conflicts to resolve.
+**Instead:** Launch agents without isolation. Rely on **file footprint planning** to prevent conflicts. Agents write directly to the working tree (the `dev` branch — see ADR-0025; the "main" references in the lessons below are historical, from before the dev/main split). Since we validate that no two agents touch the same file, there are no conflicts to resolve.
 
 ### When Worktrees Make Sense
 
@@ -50,7 +50,7 @@ FIX: Run #10 + #12 in parallel. #14 waits or runs after #12 commits.
 ## Agent Launch Checklist
 
 ```
-- [ ] All pending work committed to main
+- [ ] All pending work committed to the working branch (dev)
 - [ ] File footprints validated — no two agents modify the same file
 - [ ] Agent prompt specifies which files are NEW vs EXISTING
 - [ ] Agent prompt lists exact files for EXISTING modifications
@@ -74,7 +74,7 @@ FIX: Run #10 + #12 in parallel. #14 waits or runs after #12 commits.
 
 ## Merge Protocol
 
-Since agents work directly on main without worktrees:
+Since agents work directly on the working branch (`dev`) without worktrees:
 
 ### 1. Verify no conflicts after agents complete
 
@@ -107,7 +107,7 @@ Commit one agent at a time. Run tests between commits. This gives clean rollback
 
 ### 4. If something breaks
 
-Since all changes are on main, use `git checkout -- <file>` to revert specific files, or `git stash` to save everything and debug.
+Since all changes are on the working branch (`dev`), use `git checkout -- <file>` to revert specific files, or `git stash` to save everything and debug.
 
 ## The Three Failure Modes
 

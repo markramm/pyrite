@@ -165,8 +165,9 @@ BEFORE claiming any work is complete:
    .venv/bin/pyrite create -k pyrite -t component --title "..." -b "..." --tags core,api
    .venv/bin/pyrite update <entry-id> -k pyrite -b "new body"
 
-5. For new ADRs:
-   .venv/bin/pyrite sw new-adr --title "..." --status accepted
+5. For new ADRs (TITLE is positional, not --title; always pass -k or the file
+   lands in ./adrs/ in your cwd instead of kb/adrs/ — see gotchas.md):
+   .venv/bin/pyrite sw new-adr "Title Here" -k pyrite --status accepted
 
 6. Verify the new content is findable:
    .venv/bin/pyrite search "<key terms>" -k pyrite
@@ -190,6 +191,9 @@ The backlog has no index file. `pyrite sw backlog` is the source of truth.
     .venv/bin/pyrite update <id> -k pyrite -f status=done
     git mv kb/backlog/<id>.md kb/backlog/done/
     .venv/bin/pyrite index sync
+  Use `status=done` — never `completed`. `completed` is off-enum for backlog
+  items; it passes silently but drifts the board (it once stranded 75 items on
+  an undetected status). `done` is the canonical value (see gotchas.md).
 - Check current state:
     .venv/bin/pyrite sw backlog
 - Discovered new work?
@@ -275,6 +279,12 @@ See `kb/adrs/` for full details:
 | 0006 | MCP three-tier tools (read/write/admin) |
 | 0007 | AI integration: three surfaces, BYOK, Anthropic+OpenAI SDKs |
 | 0008 | Structured data: schema-as-config, field types, object refs |
+| 0017 | Entry protocol mixins (promoted indexed columns) |
+| 0025 | Release workflow: dev branch default, tagged releases, deploy tiers |
+| 0026 | FIPS/state as promoted entry columns |
+
+The list above is a curated subset (the repo is at ADR-0028). Run `pyrite sw adrs`
+for the current full set before relying on a decision being recorded.
 
 ### 6 plugin integration points
 
