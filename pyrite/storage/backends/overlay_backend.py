@@ -155,6 +155,7 @@ class OverlaySearchBackend:
         lifecycle: str | None = None,
         fips: str | None = None,
         state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         main_results = self._main.search(
             query,
@@ -169,6 +170,7 @@ class OverlaySearchBackend:
             lifecycle=lifecycle,
             fips=fips,
             state=state,
+            status=status,
         )
         diff_results = self._diff.search(
             query,
@@ -183,6 +185,7 @@ class OverlaySearchBackend:
             lifecycle=lifecycle,
             fips=fips,
             state=state,
+            status=status,
         )
         merged = self._merge_entry_lists(main_results, diff_results)
         return merged[offset : offset + limit] if limit else merged

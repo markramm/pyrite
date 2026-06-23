@@ -65,6 +65,10 @@ READ_TOOLS = {
                     "type": "string",
                     "description": "Filter by US state abbreviation (e.g. 'FL', 'TX'). Works across all KBs.",
                 },
+                "status": {
+                    "type": "string",
+                    "description": "Filter by entry status (e.g. 'unprocessed', 'draft', 'done'). Works across all KBs and entry types.",
+                },
                 "include_body": {
                     "type": "boolean",
                     "description": "Include full body text in results. Default: false (returns snippet instead, saving tokens).",

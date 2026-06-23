@@ -506,6 +506,9 @@ class BaseBackend(ABC):
         offset: int = 0,
         include_archived: bool = False,
         lifecycle: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search — FTS5 (SQLite) or tsvector (Postgres)."""
         ...

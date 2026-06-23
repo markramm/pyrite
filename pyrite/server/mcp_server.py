@@ -306,6 +306,7 @@ class PyriteMCPServer:
             expand=args.get("expand", False),
             fips=args.get("fips"),
             state=args.get("state"),
+            status=args.get("status"),
         )
 
         if fields:

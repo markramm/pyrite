@@ -115,6 +115,7 @@ class SearchService:
         include_archived: bool = False,
         fips: str | None = None,
         state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -131,6 +132,9 @@ class SearchService:
             sanitize: Whether to sanitize query for FTS5 (default True)
             mode: Search mode - keyword, semantic, or hybrid
             expand: Whether to use AI query expansion for additional terms
+            status: Filter to entries with this lifecycle status (e.g.
+                "unprocessed"). Applies to keyword and hybrid modes; the
+                semantic leg does not filter.
 
         Returns:
             List of matching entries with snippets and rank
@@ -166,6 +170,7 @@ class SearchService:
                 expanded_query=expanded_query,
                 fips=fips,
                 state=state,
+                status=status,
             )
 
         # Default: keyword search
@@ -185,6 +190,7 @@ class SearchService:
             include_archived=include_archived,
             fips=fips,
             state=state,
+            status=status,
         )
 
     def _expand_query(self, query: str) -> str:
@@ -240,6 +246,7 @@ class SearchService:
         expanded_query: str | None = None,
         fips: str | None = None,
         state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Hybrid search using Reciprocal Rank Fusion (RRF).
@@ -263,10 +270,19 @@ class SearchService:
             offset=0,
             fips=fips,
             state=state,
+            status=status,
         )
 
         # Try to get semantic results
         semantic_results = self._semantic_search(query, kb_name, limit=fetch_size)
+
+        # The semantic leg can't filter by status, so a wrong-status entry could
+        # enter the fused set via the vector side. Drop those to keep the hybrid
+        # result consistent with the keyword leg's status filter.
+        if status:
+            semantic_results = [
+                r for r in semantic_results if r.get("status") == status
+            ]
 
         if not semantic_results:
             # No embeddings — fall back to keyword only

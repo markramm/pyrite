@@ -1,12 +1,14 @@
 ---
 id: search-status-filter-cli
-type: backlog_item
 title: "Wire --status metadata filter into the CLI search command"
+type: backlog_item
 tags: [cli, search, status]
+importance: 5
 kind: feature
-status: proposed
+status: done
 priority: high
 effort: S
+rank: 0
 ---
 
 ## Problem

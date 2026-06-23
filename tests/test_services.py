@@ -137,6 +137,43 @@ class TestSearchService:
         results = service.search("test", mode="keyword")
         assert isinstance(results, list)
 
+    def test_search_status_filter_keyword(self, test_db, test_config):
+        """SearchService.search(status=...) scopes keyword results by status.
+
+        Covers the CLI/MCP --status path end-to-end at the service tier
+        (search-status-filter-cli).
+        """
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        test_db.upsert_entry(
+            {
+                "id": "queue-open",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Queue widget alpha",
+                "body": "An open queue item.",
+                "status": "unprocessed",
+                "tags": [],
+            }
+        )
+        test_db.upsert_entry(
+            {
+                "id": "queue-closed",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Queue widget beta",
+                "body": "A processed queue item.",
+                "status": "processed",
+                "tags": [],
+            }
+        )
+        service = SearchService(test_db)
+
+        both = service.search("queue", mode="keyword")
+        assert {r["id"] for r in both} == {"queue-open", "queue-closed"}
+
+        only_open = service.search("queue", mode="keyword", status="unprocessed")
+        assert [r["id"] for r in only_open] == ["queue-open"]
+
     def test_search_hybrid_fallback_no_embeddings(self, test_db, test_config):
         """Hybrid search falls back to keyword when no embeddings exist."""
         service = SearchService(test_db)

@@ -33,6 +33,7 @@ class QueryMixin:
         lifecycle: str | None = None,
         fips: str | None = None,
         state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         """Full-text search across entries using FTS5."""
         return self._backend.search(
@@ -48,6 +49,7 @@ class QueryMixin:
             lifecycle=lifecycle,
             fips=fips,
             state=state,
+            status=status,
         )
 
     def search_by_tag(

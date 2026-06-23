@@ -120,6 +120,51 @@ class TestPyriteDB:
         results = db.search("Stephen OR Steve")
         assert len(results) == 2
 
+    def test_search_filters_by_status(self, db):
+        """search(status=...) should return only entries with that status.
+
+        Regression for search-status-filter-cli: the status column is indexed
+        but db.search() never filtered on it, so callers had no way to scope a
+        query to e.g. unprocessed ledger rows.
+        """
+        db.register_kb("test-kb", "generic", "/tmp/test", "")
+        db.upsert_entry(
+            {
+                "id": "ledger-1",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Story one ledger entry",
+                "body": "An unprocessed story awaiting promotion.",
+                "summary": "",
+                "status": "unprocessed",
+                "tags": [],
+            }
+        )
+        db.upsert_entry(
+            {
+                "id": "ledger-2",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Story two ledger entry",
+                "body": "A processed story already promoted.",
+                "summary": "",
+                "status": "processed",
+                "tags": [],
+            }
+        )
+
+        # Without the filter, both match the shared term.
+        assert len(db.search("ledger")) == 2
+
+        # With the filter, only the matching-status entry comes back.
+        unprocessed = db.search("ledger", status="unprocessed")
+        assert len(unprocessed) == 1
+        assert unprocessed[0]["id"] == "ledger-1"
+
+        processed = db.search("ledger", status="processed")
+        assert len(processed) == 1
+        assert processed[0]["id"] == "ledger-2"
+
     def test_search_fts_excludes_body(self, db):
         """FTS search results should not include body to save tokens."""
         db.register_kb("test-kb", "generic", "/tmp/test", "")

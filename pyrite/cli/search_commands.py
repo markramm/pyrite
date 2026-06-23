@@ -34,6 +34,9 @@ def register_search_command(app: typer.Typer):
         date_to: str | None = typer.Option(None, "--to", help="Events until date (YYYY-MM-DD)"),
         fips: str | None = typer.Option(None, "--fips", help="Filter by county FIPS code (e.g. 12086)"),
         state_filter: str | None = typer.Option(None, "--state", help="Filter by US state (e.g. FL, TX)"),
+        status: str | None = typer.Option(
+            None, "--status", help="Filter by entry status (e.g. unprocessed, draft, done)"
+        ),
         limit: int = typer.Option(20, "--limit", "-n", help="Max results"),
         mode: str = typer.Option(
             None, "--mode", "-m", help="Search mode: keyword, semantic, hybrid"
@@ -101,6 +104,7 @@ def register_search_command(app: typer.Typer):
                 include_archived=include_archived,
                 fips=fips,
                 state=state_filter,
+                status=status,
             )
 
             if not results:

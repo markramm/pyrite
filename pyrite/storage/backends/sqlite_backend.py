@@ -153,6 +153,7 @@ class SQLiteBackend(BaseBackend):
         lifecycle: str | None = None,
         fips: str | None = None,
         state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT
@@ -203,6 +204,9 @@ class SQLiteBackend(BaseBackend):
         if state:
             sql += " AND e.state = ?"
             params.append(state)
+        if status:
+            sql += " AND e.status = ?"
+            params.append(status)
         sql += " ORDER BY rank LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = self._raw_conn.execute(sql, params).fetchall()

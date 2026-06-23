@@ -162,6 +162,7 @@ class PostgresBackend(BaseBackend):
         lifecycle: str | None = None,
         fips: str | None = None,
         state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
         # Build the tsquery — plainto_tsquery handles user input safely
         sql = """
@@ -220,6 +221,9 @@ class PostgresBackend(BaseBackend):
         if state:
             sql += " AND e.state = :state"
             params["state"] = state
+        if status:
+            sql += " AND e.status = :status"
+            params["status"] = status
 
         sql += " ORDER BY rank DESC LIMIT :limit OFFSET :offset"
         params["limit"] = limit
