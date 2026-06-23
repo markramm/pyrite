@@ -1,12 +1,14 @@
 ---
 id: search-stale-index-silent
-type: backlog_item
 title: "Search queries a stale index silently — no staleness warning on the search path"
+type: backlog_item
 tags: [search, index, correctness]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
+rank: 0
 ---
 
 ## Problem

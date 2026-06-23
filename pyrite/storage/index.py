@@ -556,6 +556,70 @@ class IndexManager:
             }
         return indexed
 
+    def check_staleness(self) -> list[dict[str, Any]]:
+        """Cheap per-KB staleness probe for the search path.
+
+        Unlike ``check_health()``, this does NOT parse every entry. For each
+        KB it walks the files for the newest mtime, then compares it against
+        the index's newest ``indexed_at``. A KB is reported stale when a file
+        on disk is newer than the last index write — which covers both edited
+        files and brand-new files (a new file carries a recent mtime).
+
+        The mtime comparison is deliberately the *only* signal. A naive
+        file-count-vs-indexed-count check looks tempting but false-positives:
+        the indexer stores one entry per id, so duplicate ids on disk (e.g. a
+        file left behind by a botched ``done/`` move) make the counts diverge
+        permanently without the index being stale at all. Counting would cry
+        wolf on every search; mtime does not.
+
+        Returns one dict per stale KB:
+        ``{"kb", "reason", "newest_file_mtime", "newest_indexed_at"}``. Empty
+        list means the index is fresh — safe to search without a warning.
+        Cheap enough to run on every search invocation.
+        """
+        stale: list[dict[str, Any]] = []
+
+        for kb in self.config.knowledge_bases:
+            if not kb.path.exists():
+                continue
+
+            repo = KBRepository(kb)
+            newest_mtime: datetime | None = None
+            for file_path in repo.list_files():
+                mtime = datetime.fromtimestamp(file_path.stat().st_mtime, tz=UTC)
+                if newest_mtime is None or mtime > newest_mtime:
+                    newest_mtime = mtime
+
+            indexed = self._load_indexed_state(kb.name)
+            newest_indexed: datetime | None = None
+            for meta in indexed.values():
+                ts = meta.get("indexed_at")
+                if not ts:
+                    continue
+                parsed = _parse_indexed_at(ts)
+                if newest_indexed is None or parsed > newest_indexed:
+                    newest_indexed = parsed
+
+            # A non-empty index with no parseable timestamp is itself suspect
+            # (legacy rows): treat as stale so the user re-syncs.
+            is_stale = (newest_mtime is not None) and (
+                newest_indexed is None or newest_mtime > newest_indexed
+            )
+
+            if is_stale:
+                stale.append(
+                    {
+                        "kb": kb.name,
+                        "reason": "a file is newer than the index",
+                        "newest_file_mtime": newest_mtime.isoformat(),
+                        "newest_indexed_at": (
+                            newest_indexed.isoformat() if newest_indexed else None
+                        ),
+                    }
+                )
+
+        return stale
+
     @staticmethod
     def _is_stale(file_path: Path, indexed_at: str) -> bool:
         """Check whether a file is newer than its indexed_at timestamp."""

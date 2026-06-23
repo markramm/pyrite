@@ -577,6 +577,48 @@ class TestIndexManager:
         assert stats["total_entries"] == 5
         assert "test-kb" in stats["kbs"]
 
+    def test_check_staleness_clean_after_index(self, setup):
+        """A freshly indexed KB reports no staleness.
+
+        check_staleness() is the cheap (no per-entry parse) probe the search
+        path uses to warn when the index is behind the files on disk
+        (search-stale-index-silent).
+        """
+        setup["index_mgr"].index_kb("test-kb")
+
+        stale = setup["index_mgr"].check_staleness()
+        assert stale == [], f"freshly indexed KB should be clean, got {stale}"
+
+    def test_check_staleness_detects_modified_file(self, setup):
+        """A file modified after indexing makes its KB report stale."""
+        import os
+        import time
+
+        setup["index_mgr"].index_kb("test-kb")
+        assert setup["index_mgr"].check_staleness() == []
+
+        # Touch a file so its mtime is newer than the index timestamp.
+        kb_path = setup["kb_path"]
+        target = next(kb_path.rglob("*.md"))
+        future = time.time() + 60
+        os.utime(target, (future, future))
+
+        stale = setup["index_mgr"].check_staleness()
+        assert len(stale) == 1
+        assert stale[0]["kb"] == "test-kb"
+
+    def test_check_staleness_detects_new_file(self, setup):
+        """A brand-new unindexed file makes its KB report stale."""
+        setup["index_mgr"].index_kb("test-kb")
+        assert setup["index_mgr"].check_staleness() == []
+
+        repo = KBRepository(setup["config"].get_kb("test-kb"))
+        repo.save(EventEntry.create(date="2025-02-01", title="Later Event", body="new"))
+
+        stale = setup["index_mgr"].check_staleness()
+        assert len(stale) == 1
+        assert stale[0]["kb"] == "test-kb"
+
     def test_incremental_sync(self, setup):
         """Test incremental sync."""
         # Initial index

@@ -21,6 +21,31 @@ console = Console()
 err_console = Console(stderr=True)
 
 
+def _warn_if_stale(config, db, kb_name: str | None) -> None:
+    """Emit a stderr warning if the index is behind the files on disk.
+
+    Keeps the warning off stdout so `--format json` output stays parseable.
+    Best-effort: any failure in the probe is swallowed (a staleness check must
+    never break a search). Scoped to ``kb_name`` when the caller passed ``-k``.
+    """
+    try:
+        from ..storage import IndexManager
+
+        stale = IndexManager(db, config).check_staleness()
+        if kb_name:
+            stale = [s for s in stale if s["kb"] == kb_name]
+        if not stale:
+            return
+        kbs = ", ".join(s["kb"] for s in stale)
+        err_console.print(
+            f"[yellow]Warning:[/yellow] index may be stale for: {kbs} "
+            f"(a file on disk is newer than the index). Results could be out "
+            f"of date — run [cyan]pyrite index sync[/cyan] to refresh."
+        )
+    except Exception:
+        logger.debug("Staleness probe failed; continuing with search", exc_info=True)
+
+
 def register_search_command(app: typer.Typer):
     """Register the search command on the given Typer app."""
 
@@ -84,6 +109,12 @@ def register_search_command(app: typer.Typer):
 
                 index_mgr = IndexManager(db, config)
                 index_mgr.index_all()
+            else:
+                # Warn (never silently) when the index is behind the files on
+                # disk — otherwise search returns a confidently-wrong stale
+                # view. Cheap probe (no per-entry parse); warning goes to
+                # stderr so it never corrupts `--format json` on stdout.
+                _warn_if_stale(config, db, kb_name)
 
             tags_list = [tag] if tag else None
 
