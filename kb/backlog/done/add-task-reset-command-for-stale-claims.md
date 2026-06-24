@@ -1,12 +1,14 @@
 ---
 id: add-task-reset-command-for-stale-claims
-type: backlog_item
 title: "Add `pyrite task reset` command to release stale claims back to `open` status"
+type: backlog_item
+tags: [task-system, conductor-workflow, claim-management, atomic-claim, stale-recovery]
+importance: 5
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [task-system, conductor-workflow, claim-management, atomic-claim, stale-recovery]
+rank: 0
 ---
 
 ## Problem
@@ -70,3 +72,15 @@ For a system designed to operate autonomously (`/loop /investigation-conductor`)
 - `/Users/markr/tcp-skills/plugins/tcp-skills/skills/investigation-conductor/SKILL.md` Step 4 grooming
 - `add-blocked-on-optional-field-to-task-schema.md` — separate but adjacent task-system improvement
 - Memory note in `/Users/markr/.claude/projects/-Users-markr-kb/memory/` flagging the stale-claim workflow trap discovered 2026-05-11
+
+## Resolution (2026-06-24)
+
+Pyrite side complete: legal `in_progress→open` / `blocked→open` recovery edges
+(requires_reason), `TaskService.reset_task()`, and `pyrite task reset` CLI.
+Implemented as auditable workflow edges rather than a state-machine bypass.
+Tests + live end-to-end verified.
+
+**Cross-repo follow-up (not done here):** the `investigation-conductor` SKILL.md
+in the **tcp-skills** repo still documents the old `update -s blocked` workaround
+in Step 4. Update it to reference `pyrite task reset` in a tcp-skills-scoped
+change (separate repo, separate commit discipline).
