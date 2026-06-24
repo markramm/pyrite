@@ -11,14 +11,25 @@ Inherits shared ORM/SQL logic from BaseBackend.  Only overrides:
 from __future__ import annotations
 
 import struct
-from typing import Any
+from typing import Any, ClassVar
 
 from ..models import Link
 from .base_backend import BaseBackend
+from .capabilities import BackendCapability
 
 
 class SQLiteBackend(BaseBackend):
     """SearchBackend implementation for SQLite + FTS5 + sqlite-vec."""
+
+    # SQLite implements the full backend protocol: entity CRUD (BaseBackend),
+    # FTS5 keyword search, and sqlite-vec embeddings. EMBEDDING is declared at
+    # the class level ("can in principle"); whether sqlite-vec is loaded right
+    # now is a separate runtime gate (``vec_available``). See capabilities.py.
+    capabilities: ClassVar[set[BackendCapability]] = {
+        BackendCapability.ENTITY,
+        BackendCapability.SEARCH,
+        BackendCapability.EMBEDDING,
+    }
 
     def __init__(
         self,

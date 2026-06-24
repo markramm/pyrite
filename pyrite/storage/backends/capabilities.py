@@ -1,4 +1,9 @@
-"""Backend capability declarations (Tier A r1400 / ADR-0028).
+"""Backend capability declarations (Tier A r1400; locked design commit 3777cb5).
+
+Note: an earlier draft of this docstring cited "ADR-0028", but that number was
+later assigned to the backend-agnostic query DSL. The r1400 capability design
+was never written up as a numbered ADR; the locked decision lives in commit
+3777cb5.
 
 Backend classes declare which of the 3 backend-protocol subsystems they
 support via a ``capabilities: ClassVar[set[BackendCapability]]`` class

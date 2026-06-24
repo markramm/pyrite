@@ -11,7 +11,7 @@ Inherits shared ORM/SQL logic from BaseBackend.  Only overrides:
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from ...exceptions import StorageError
 from ..models import Link
 from .base_backend import BaseBackend
+from .capabilities import BackendCapability
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,16 @@ def ensure_schema(engine) -> None:
 
 class PostgresBackend(BaseBackend):
     """SearchBackend implementation for PostgreSQL + tsvector + pgvector."""
+
+    # Postgres implements the full backend protocol: entity CRUD (BaseBackend),
+    # tsvector keyword search, and pgvector embeddings. Declared at the class
+    # level; runtime availability of the extensions is a separate gate. See
+    # capabilities.py.
+    capabilities: ClassVar[set[BackendCapability]] = {
+        BackendCapability.ENTITY,
+        BackendCapability.SEARCH,
+        BackendCapability.EMBEDDING,
+    }
 
     def __init__(self, session: Session, engine=None):
         self._session = session
