@@ -1,12 +1,14 @@
 ---
 id: fix-red-extension-to-frontmatter-tests
-type: backlog_item
 title: "9 RED extension tests: to_frontmatter now writes defaults the tests expect omitted"
+type: backlog_item
 tags: [tests, ci, extensions, to-frontmatter, tech-debt]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
+rank: 0
 ---
 
 ## Problem
