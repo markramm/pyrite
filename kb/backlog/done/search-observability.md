@@ -1,12 +1,14 @@
 ---
 id: search-observability
-type: backlog_item
 title: "Search observability: log which mode served each query, latency, fallback reason"
+type: backlog_item
+tags: [search, observability, debugging, logging]
+importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [search, observability, debugging, logging]
+rank: 0
 ---
 
 ## Problem
