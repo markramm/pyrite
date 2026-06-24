@@ -1,12 +1,14 @@
 ---
 id: enforce-backlog-status-enum-at-index-time
-type: backlog_item
-kind: improvement
 title: "Enforce backlog status enum at index time + reconcile off-enum statuses"
-status: proposed
+type: backlog_item
+tags: [software-kb, validation, data-health, index, backlog, status-enum]
+importance: 5
+kind: improvement
+status: done
 priority: medium
 effort: S
-tags: [software-kb, validation, data-health, index, backlog, status-enum]
+rank: 0
 ---
 
 ## Problem
@@ -64,3 +66,18 @@ superseded, wont_do`.
 - `warn-on-undeclared-entry-type`, `schema-required-field-validation` (done) —
   the index-health-warning pattern this extends.
 - `cli-error-shape-consistency` — adjacent consistency work.
+
+## Resolution
+
+Verified 2026-06-24: already fully implemented (work landed in the `402f0a4`
+grooming pass and follow-ups, but the ticket was never closed).
+
+- `superseded` is in `BACKLOG_STATUSES` (`entry_types.py:51`); canonical set
+  matches the spec exactly.
+- No backlog item carries `todo` or `completed`.
+- `IndexManager.check_health()` populates `invalid_statuses` (`index.py:859`) and
+  `pyrite index health` renders it (`index_commands.py:405-417`).
+- Tests `TestInvalidStatusInHealth::{test_invalid_status_flagged,
+  test_superseded_status_accepted}` (`tests/test_storage.py:1228+`) pass.
+
+All acceptance criteria met — closing.
