@@ -269,6 +269,65 @@ class TaskService:
         """Atomically claim an open task. Delegates to KBService.claim_entry()."""
         return self.kb_svc.claim_entry(task_id, kb_name, assignee)
 
+    def reset_task(
+        self,
+        task_id: str,
+        kb_name: str,
+        reason: str = "",
+        operator: str = "operator",
+    ) -> dict[str, Any]:
+        """Release a stale claim back to `open` (privileged recovery path).
+
+        For tasks stuck `in_progress` or `blocked` because a worker crashed,
+        was killed, or finished without updating status. Returns the task to
+        `open` so the conductor can re-dispatch it, clears the assignee, and
+        appends a work-log entry for the audit trail. Refuses tasks that aren't
+        `in_progress`/`blocked` (there's nothing to release).
+        """
+        from ..storage.repository import KBRepository
+
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+
+        repo = KBRepository(kb_config)
+        entry = repo.load(task_id)
+        if not entry:
+            raise EntryNotFoundError(f"Task '{task_id}' not found in KB '{kb_name}'")
+
+        prior_status = getattr(entry, "status", "")
+        if prior_status not in ("in_progress", "blocked"):
+            raise ValidationError(
+                f"Cannot reset task in status '{prior_status}'. Reset only "
+                f"releases a stale 'in_progress' or 'blocked' claim back to "
+                f"'open'."
+            )
+
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        why = reason or "stale-claim recovery"
+        log_line = (
+            f"\n\n## Reset {timestamp}\n\n"
+            f"Reset from {prior_status} by {operator} on {timestamp}. "
+            f"Reason: {why}."
+        )
+        new_body = (entry.body or "") + log_line
+
+        self.kb_svc.update_entry(
+            task_id,
+            kb_name,
+            status="open",
+            assignee="",
+            status_reason=why,
+            body=new_body,
+        )
+        return {
+            "reset": True,
+            "task_id": task_id,
+            "status": "open",
+            "prior_status": prior_status,
+            "reason": why,
+        }
+
     def decompose_task(
         self, parent_id: str, kb_name: str, children: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:

@@ -324,6 +324,44 @@ def task_claim(
         db.close()
 
 
+@task_app.command("reset")
+def task_reset(
+    task_id: str = typer.Argument(..., help="Task entry ID"),
+    kb_name: str = typer.Option(..., "--kb", "-k", help="Knowledge base name"),
+    reason: str = typer.Option(
+        "", "--reason", "-r", help="Why the claim is being released (audit trail)"
+    ),
+    operator: str = typer.Option(
+        "operator", "--operator", help="Who is performing the reset (e.g. conductor)"
+    ),
+    fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+):
+    """Release a stale in_progress/blocked claim back to `open`.
+
+    For tasks whose worker crashed or aged out: returns the task to `open` so it
+    can be re-dispatched, clears the assignee, and appends a work-log entry.
+    """
+    svc, db = _get_service()
+    try:
+        result = svc.reset_task(task_id, kb_name, reason=reason, operator=operator)
+
+        formatted = _format_output(result, fmt)
+        if formatted is not None:
+            typer.echo(formatted)
+            return
+
+        console.print(
+            f"[green]Reset:[/green] {task_id} "
+            f"({result['prior_status']} → open)"
+        )
+        console.print(f"  Reason: {result['reason']}")
+    except (PyriteError, ValueError) as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise typer.Exit(1) from None
+    finally:
+        db.close()
+
+
 @task_app.command("decompose")
 def task_decompose(
     parent_id: str = typer.Argument(..., help="Parent task entry ID"),

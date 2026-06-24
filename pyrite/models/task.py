@@ -138,6 +138,24 @@ TASK_WORKFLOW = {
             "requires": "write",
             "description": "Cancel a task in review that's no longer needed",
         },
+        # Privileged stale-claim recovery: release a claim back to open when a
+        # worker crashed/aged out. Requires a reason for the audit trail. This
+        # is the conductor/operator path (see TaskService.reset_task), not a
+        # normal worker transition.
+        {
+            "from": "in_progress",
+            "to": "open",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Reset a stale in_progress claim back to open",
+        },
+        {
+            "from": "blocked",
+            "to": "open",
+            "requires": "write",
+            "requires_reason": True,
+            "description": "Reset a stale blocked claim back to open",
+        },
     ],
 }
 

@@ -213,6 +213,58 @@ class TestCancelledState:
         assert repo.load(dep_id).status != "blocked"
 
 
+class TestResetTask:
+    """`reset_task` releases a stale claim back to `open` (privileged recovery
+    path) without the lossy `blocked` + clear-assignee workaround
+    (add-task-reset-command-for-stale-claims)."""
+
+    def _to_in_progress(self, svc, title="Stale task", assignee="agent:dead"):
+        created = svc.create_task(kb_name="test-tasks", title=title)
+        eid = created["entry_id"]
+        svc.update_task(eid, "test-tasks", status="claimed", assignee=assignee)
+        svc.update_task(eid, "test-tasks", status="in_progress")
+        return eid
+
+    def test_reset_in_progress_to_open(self, task_env):
+        svc = task_env["svc"]
+        eid = self._to_in_progress(svc)
+        result = svc.reset_task(eid, "test-tasks", reason="stale claim from prior tick")
+        assert result["status"] == "open"
+
+    def test_reset_clears_assignee(self, task_env):
+        svc = task_env["svc"]
+        eid = self._to_in_progress(svc, assignee="agent:crashed")
+        svc.reset_task(eid, "test-tasks")
+        repo = KBRepository(task_env["kb_config"])
+        entry = repo.load(eid)
+        assert entry.status == "open"
+        assert (getattr(entry, "assignee", "") or "") == ""
+
+    def test_reset_appends_work_log(self, task_env):
+        svc = task_env["svc"]
+        eid = self._to_in_progress(svc)
+        svc.reset_task(eid, "test-tasks", reason="worker died", operator="conductor")
+        repo = KBRepository(task_env["kb_config"])
+        body = repo.load(eid).body or ""
+        assert "Reset from in_progress" in body
+        assert "worker died" in body
+
+    def test_reset_blocked_to_open(self, task_env):
+        svc = task_env["svc"]
+        eid = self._to_in_progress(svc)
+        svc.update_task(eid, "test-tasks", status="blocked")
+        result = svc.reset_task(eid, "test-tasks")
+        assert result["status"] == "open"
+
+    def test_reset_refuses_open_and_done(self, task_env):
+        from pyrite.exceptions import ValidationError
+
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Already open")
+        with pytest.raises(ValidationError):
+            svc.reset_task(created["entry_id"], "test-tasks")
+
+
 class TestClaimTask:
     def test_claim_success(self, task_env):
         svc = task_env["svc"]
