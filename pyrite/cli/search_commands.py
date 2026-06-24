@@ -96,6 +96,20 @@ def register_search_command(app: typer.Typer):
         """
         config = load_config()
 
+        # A search scoped to an unregistered KB used to return an empty result
+        # set (exit 0), which looks like a query miss rather than a wrong KB.
+        # Fail loudly with a distinct KB_NOT_FOUND instead.
+        if kb_name and config.get_kb(kb_name) is None:
+            from ..utils.errors import cli_error
+
+            known = ", ".join(sorted(kb.name for kb in config.knowledge_bases)) or "none"
+            cli_error(
+                f"KB not found: {kb_name}",
+                output_format,
+                error_code="KB_NOT_FOUND",
+                suggestion=f"known KBs: {known} (or run `pyrite kb list`)",
+            )
+
         if use_files:
             _search_files(config, query, kb_name, entry_type, limit)
             return

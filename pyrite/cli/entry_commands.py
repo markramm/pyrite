@@ -28,15 +28,11 @@ def _format_output(data: dict, fmt: str) -> str | None:
 
 
 def _cli_error(message: str, output_format: str = "rich", error_code: str | None = None) -> None:
-    """Print an error and exit. Uses JSON when output_format is not rich."""
-    if output_format != "rich":
-        payload: dict[str, Any] = {"error": message}
-        if error_code:
-            payload["error_code"] = error_code
-        typer.echo(_json.dumps(payload))
-    else:
-        console.print(f"[red]Error:[/red] {message}")
-    raise typer.Exit(1)
+    """Print an error and exit. Thin wrapper over the shared cli_error helper
+    (kept for the existing call sites' 3-arg signature)."""
+    from ..utils.errors import cli_error
+
+    cli_error(message, output_format, error_code=error_code or "ERROR")
 
 
 def _parse_field_value(value: str) -> Any:
