@@ -1,12 +1,14 @@
 ---
 id: duplicate-entry-ids-across-backlog-and-done
-type: backlog_item
 title: "Duplicate entry-id files: same id present in both kb/backlog/ and kb/backlog/done/"
+type: backlog_item
 tags: [kb-hygiene, index, backlog, data-cleanup]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
+rank: 0
 ---
 
 ## Problem
