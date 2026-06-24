@@ -1,12 +1,14 @@
 ---
 id: update-relocates-entry-to-type-default-subdir
-type: backlog_item
 title: "Updating an entry relocates its file to the type-default subdir, ignoring deliberate placement"
+type: backlog_item
 tags: [storage, update, subdirectory, placement, data-integrity]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
+rank: 0
 ---
 
 ## Problem
