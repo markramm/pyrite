@@ -49,7 +49,19 @@ class DocumentManager:
         # Find current on-disk location before saving to new path
         old_path = repo.find_file(entry.id)
 
-        file_path = repo.save(entry)
+        # Preserve deliberate placement on update. By default repo.save()
+        # re-infers the type-default subdirectory, which would relocate a file
+        # the user/convention deliberately put elsewhere (e.g. a backlog item in
+        # backlog/done/, an ADR in adrs/). Only a *templated* subdirectory
+        # (e.g. backlog/{status}) legitimately implies a move on field change;
+        # for static/unset subdirs, keep the file where it already is.
+        subdir = None
+        if old_path is not None and not self._uses_templated_subdir(repo, entry):
+            existing_subdir = self._subdir_of(old_path, kb_config.path)
+            if existing_subdir is not None:
+                subdir = existing_subdir
+
+        file_path = repo.save(entry, subdir=subdir)
 
         # Clean up old file if path changed (template-driven move)
         if old_path and old_path.resolve() != file_path.resolve() and old_path.exists():
@@ -64,6 +76,29 @@ class DocumentManager:
 
         self._index_mgr.index_entry(entry, kb_name, file_path)
         return file_path
+
+    @staticmethod
+    def _uses_templated_subdir(repo: KBRepository, entry: Entry) -> bool:
+        """True if the entry type's declared subdirectory has a ``{field}``
+        placeholder, meaning a field change can legitimately move the file."""
+        try:
+            schema = repo.config.kb_schema
+            type_schema = schema.get_type_schema(entry.entry_type)
+        except Exception:
+            return False
+        sub = getattr(type_schema, "subdirectory", None) if type_schema else None
+        return bool(sub) and "{" in sub
+
+    @staticmethod
+    def _subdir_of(path: Path, kb_root: Path) -> str | None:
+        """Subdirectory of ``path`` relative to the KB root, or None if the file
+        sits at the KB root. Used to keep an entry in its existing location."""
+        try:
+            rel = path.resolve().relative_to(kb_root.resolve())
+        except (ValueError, OSError):
+            return None
+        parent = rel.parent
+        return None if str(parent) == "." else str(parent)
 
     def _remove_old_file(self, old_path: Path, kb_root: Path) -> None:
         """Remove old file after a template-driven path change. Git-aware."""

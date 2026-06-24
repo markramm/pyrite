@@ -267,23 +267,24 @@ which masks the problem). It passes silently but drifts the board — this exact
 once stranded 75 items on an undetected `completed` status (see `index.py:703`). As of
 this writing 380 items use `done` and 0 use `completed`. `done` is canonical.
 
-**Trap 2 — file placement.** When you mark an item `done` via
-`pyrite update <id> -k pyrite -f status=done`, the CLI's re-placement logic routes the
-file to its type's default subdirectory (`kb/notes/` for generic entries) rather than
-honoring the backlog-specific `done/` convention. The original file is deleted and a new
-copy lands in the wrong place.
+**Trap 2 — file placement.** Largely **fixed** (commit on the
+`update-relocates-entry-to-type-default-subdir` ticket): `pyrite update` now preserves an
+entry's existing subdirectory instead of relocating it to the type default. A
+`backlog_item` already in `kb/backlog/` or `kb/backlog/done/` **stays put** on
+`status=done` — no more manual `mv` after updates.
 
-**Workaround:** After `pyrite update ... -f status=done`, do:
+Residual nuance: `pyrite create -t backlog_item` still lands new items in `kb/notes/`
+(not `kb/backlog/`), because `backlog_item` isn't a schema-declared type in pyrite's
+`kb.yaml` and falls to the generic default. So the workflow is:
 
 ```bash
-mv kb/notes/<id>.md kb/backlog/done/<id>.md
+# create lands in kb/notes/ — move it into the backlog convention once:
+git mv kb/notes/<id>.md kb/backlog/<id>.md   # (or kb/backlog/done/ when closing)
 .venv/bin/pyrite index sync
-git add kb/backlog/done/<id>.md
 ```
 
-Don't use `git mv` here — the file at `kb/notes/` is untracked (the original at `kb/backlog/` is the one git knows about), so git mv errors with "not under version control."
-
-**Root cause (not fixed):** the backlog `done/` directory is a convention, not a schema-declared subdirectory. The CLI's status-update path rewrites placement based on the entry type's default subdirectory, ignoring the source directory. Fix would require either declaring `subdirectory: done` for completed-status backlog items in the type schema or preserving the source path on status-only updates. Not yet ticketed.
+After that initial placement, updates keep it there. To remove the residual create-side
+quirk entirely, declare `backlog_item` with `subdirectory: backlog` in the KB schema.
 
 ## `pyrite sw new-adr` Takes a Positional TITLE and Misfiles Without `-k`
 

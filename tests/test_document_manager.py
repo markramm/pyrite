@@ -187,3 +187,36 @@ def test_save_entry_no_move_when_path_unchanged(template_setup):
 
     assert first_path == second_path
     assert second_path.exists()
+
+
+def test_save_entry_preserves_deliberate_subdir_on_update(setup):
+    """Updating an entry that lives in a non-default subdirectory must keep it
+    there, not relocate it to the type-default subdir.
+
+    Regression for update-relocates-entry-to-type-default-subdir: marking a
+    backlog item done used to move kb/backlog/<id>.md to the generic default
+    (kb/notes/), deleting the original.
+    """
+    from pyrite.storage.repository import KBRepository
+
+    doc_mgr = setup["doc_mgr"]
+    kb = setup["kb"]
+    kb_path = setup["kb_path"]
+
+    # Place the file deliberately in a non-default subdir (e.g. backlog/done).
+    entry = build_entry("note", entry_id="placed-note", title="Placed", body="b")
+    repo = KBRepository(kb)
+    placed_path = repo.save(entry, subdir="backlog/done")
+    assert placed_path == kb_path / "backlog" / "done" / "placed-note.md"
+    assert placed_path.exists()
+
+    # Now update a field via the save_entry (update) path.
+    entry.title = "Placed Updated"
+    new_path = doc_mgr.save_entry(entry, "test", kb)
+
+    # It must stay in backlog/done, not move to the type default.
+    assert new_path == placed_path, f"file should stay put, moved to {new_path}"
+    assert new_path.exists()
+    assert "Placed Updated" in new_path.read_text()
+    # No stray copy at the type default / root.
+    assert not (kb_path / "placed-note.md").exists()
