@@ -1,12 +1,14 @@
 ---
 id: event-write-actors-not-participants
-type: backlog_item
 title: "EventEntry writes participants: but the timeline convention is actors:"
+type: backlog_item
 tags: [models, events, frontmatter, convention]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
+rank: 0
 ---
 
 ## Problem
