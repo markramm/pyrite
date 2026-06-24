@@ -158,7 +158,10 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
         if self.location:
             meta["location"] = self.location
         if self.participants:
-            meta["participants"] = self.participants
+            # Serialize as `actors` — the cascade-timeline convention used by
+            # the existing corpus and CONTRIBUTING.md. The internal property
+            # stays `participants`; only the frontmatter key is `actors`.
+            meta["actors"] = self.participants
         if self.notes:
             meta["notes"] = self.notes
         if self.summary:
@@ -170,8 +173,9 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
         kw = cls._base_kwargs(meta, body)
         kw["date"] = meta.get("date", "")
         kw["location"] = meta.get("location", "")
-        # Support both "participants" and legacy "actors"
-        kw["participants"] = meta.get("participants", meta.get("actors", [])) or []
+        # Read `actors` (the written convention); accept legacy `participants`
+        # for files written before the rename.
+        kw["participants"] = meta.get("actors", meta.get("participants", [])) or []
         kw["notes"] = meta.get("notes", "")
         status_str = meta.get("status", "confirmed")
         try:

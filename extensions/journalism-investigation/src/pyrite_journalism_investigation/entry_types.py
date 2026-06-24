@@ -7,7 +7,6 @@ from pyrite.models.base import Entry, parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import DocumentEntry, EventEntry
 from pyrite.schema import EventStatus, Provenance, generate_entry_id
 
-
 # ---------------------------------------------------------------------------
 # Helper: build common kwargs from frontmatter meta dict
 # ---------------------------------------------------------------------------
@@ -286,7 +285,7 @@ class InvestigationEventEntry(EventEntry):
             importance=int(meta.get("importance", 5)),
             status=_parse_event_status(meta),
             location=meta.get("location", ""),
-            participants=meta.get("participants", []) or [],
+            participants=meta.get("actors", meta.get("participants", [])) or [],
             notes=meta.get("notes", ""),
             actors=meta.get("actors", []) or [],
             source_refs=meta.get("source_refs", []) or [],
@@ -337,7 +336,7 @@ class TransactionEntry(EventEntry):
             importance=int(meta.get("importance", 5)),
             status=_parse_event_status(meta),
             location=meta.get("location", ""),
-            participants=meta.get("participants", []) or [],
+            participants=meta.get("actors", meta.get("participants", [])) or [],
             notes=meta.get("notes", ""),
             amount=_str_or_empty(meta.get("amount", "")),
             currency=meta.get("currency", ""),
@@ -391,7 +390,7 @@ class LegalActionEntry(EventEntry):
             importance=int(meta.get("importance", 5)),
             status=_parse_event_status(meta),
             location=meta.get("location", ""),
-            participants=meta.get("participants", []) or [],
+            participants=meta.get("actors", meta.get("participants", [])) or [],
             notes=meta.get("notes", ""),
             case_type=meta.get("case_type", ""),
             jurisdiction=meta.get("jurisdiction", ""),

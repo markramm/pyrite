@@ -51,6 +51,39 @@ class TestEventEntry:
         assert "importance: 8" in md
         assert "Federal agents" in md
 
+    def test_to_frontmatter_writes_actors_not_participants(self):
+        """EventEntry must serialize the people/orgs field as `actors`, the
+        cascade-timeline convention used by ~4,500 existing files, not
+        `participants`. The internal property stays `participants`; only the
+        emitted frontmatter key changes (event-write-actors-not-participants).
+        """
+        event = EventEntry(
+            id="2025-01-06--raid",
+            title="Raid",
+            date="2025-01-06",
+            participants=["Alice", "DOJ"],
+        )
+        fm = event.to_frontmatter()
+        assert fm.get("actors") == ["Alice", "DOJ"]
+        assert "participants" not in fm
+
+    def test_actors_round_trips_under_actors_key(self):
+        """A file written with `actors:` reads back and re-serializes as
+        `actors:` — no silent rename on round-trip."""
+        loaded = EventEntry.from_frontmatter(
+            {"id": "x", "title": "T", "date": "2026-01-01", "actors": ["Bob", "FBI"]},
+            "body",
+        )
+        assert loaded.participants == ["Bob", "FBI"]  # internal name unchanged
+        assert loaded.to_frontmatter().get("actors") == ["Bob", "FBI"]
+
+    def test_legacy_participants_key_still_read(self):
+        """Existing files using the legacy `participants:` key must still load."""
+        loaded = EventEntry.from_frontmatter(
+            {"id": "y", "title": "T", "participants": ["Carol"]}, "body"
+        )
+        assert loaded.participants == ["Carol"]
+
     def test_event_from_markdown(self):
         """Test parsing event from markdown."""
         md = """---

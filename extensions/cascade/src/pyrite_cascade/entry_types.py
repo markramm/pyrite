@@ -3,9 +3,10 @@
 from dataclasses import dataclass, field
 from typing import Any
 
+from pyrite_journalism_investigation.entry_types import InvestigationEventEntry
+
 from pyrite.models.base import Entry, parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import EventEntry, OrganizationEntry, PersonEntry, TopicEntry
-from pyrite_journalism_investigation.entry_types import InvestigationEventEntry
 from pyrite.models.protocols import Locatable
 from pyrite.schema import Provenance, generate_entry_id
 
@@ -182,7 +183,7 @@ class CascadeEventEntry(EventEntry):
             importance=int(meta.get("importance", 5)),
             status=status,
             location=meta.get("location", ""),
-            participants=meta.get("participants", []) or [],
+            participants=meta.get("actors", meta.get("participants", [])) or [],
             notes=meta.get("notes", ""),
             era=str(meta.get("era", "")),
             capture_lanes=meta.get("capture_lanes", []) or [],
@@ -241,7 +242,7 @@ class TimelineEventEntry(InvestigationEventEntry):
             importance=int(meta.get("importance", 5)),
             status=status,
             location=meta.get("location", ""),
-            participants=meta.get("participants", []) or [],
+            participants=meta.get("actors", meta.get("participants", [])) or [],
             notes=meta.get("notes", ""),
             # JI-inherited fields
             actors=meta.get("actors", []) or [],
@@ -314,7 +315,7 @@ class SolidarityEventEntry(EventEntry):
             importance=int(meta.get("importance", 5)),
             status=status,
             location=meta.get("location", ""),
-            participants=meta.get("participants", []) or [],
+            participants=meta.get("actors", meta.get("participants", [])) or [],
             notes=meta.get("notes", ""),
             infrastructure_types=meta.get("infrastructure_types", []) or [],
             actors=meta.get("actors", []) or [],
