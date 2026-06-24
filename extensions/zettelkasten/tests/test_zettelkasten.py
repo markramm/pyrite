@@ -105,13 +105,15 @@ class TestZettelEntry:
         assert fm["source_ref"] == "ref-123"
         assert fm["processing_stage"] == "connect"
 
-    def test_to_frontmatter_omits_defaults(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: meaningful enum defaults are written so readers/agents
+        # don't have to know the default; genuinely empty fields stay omitted.
         entry = ZettelEntry(id="test", title="Test")
         fm = entry.to_frontmatter()
-        assert "zettel_type" not in fm  # fleeting is default
-        assert "maturity" not in fm  # seed is default
-        assert "source_ref" not in fm
-        assert "processing_stage" not in fm
+        assert fm["zettel_type"] == "fleeting"  # default written
+        assert fm["maturity"] == "seed"  # default written
+        assert "source_ref" not in fm  # empty string omitted
+        assert "processing_stage" not in fm  # empty string omitted
 
     def test_from_frontmatter(self):
         meta = {

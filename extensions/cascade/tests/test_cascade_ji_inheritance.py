@@ -1,9 +1,9 @@
 """Tests for Cascade entry type inheritance from journalism-investigation base types."""
 
-import pytest
 
 from pyrite_cascade.entry_types import TimelineEventEntry
 from pyrite_journalism_investigation.entry_types import InvestigationEventEntry
+
 from pyrite.models.core_types import EventEntry
 
 
@@ -113,8 +113,9 @@ class TestTimelineEventJIFields:
         fm = entry.to_frontmatter()
         assert fm["verification_status"] == "verified"
 
-    def test_verification_status_default_not_in_frontmatter(self):
-        """When verification_status is default ('unverified'), it should not appear in frontmatter."""
+    def test_verification_status_default_written_to_frontmatter(self):
+        """44f81f3: default verification_status ('unverified') is written so a
+        reader/agent doesn't have to know the default."""
         meta = {
             "id": "te-012",
             "title": "Unverified Event",
@@ -122,7 +123,7 @@ class TestTimelineEventJIFields:
         }
         entry = TimelineEventEntry.from_frontmatter(meta, "")
         fm = entry.to_frontmatter()
-        assert "verification_status" not in fm
+        assert fm["verification_status"] == "unverified"
 
     def test_empty_source_refs_not_in_frontmatter(self):
         """Empty source_refs should not appear in frontmatter."""

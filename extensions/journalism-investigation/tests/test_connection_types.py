@@ -1,10 +1,10 @@
 """Tests for connection entry types (edge-entities)."""
 
 from pyrite_journalism_investigation.entry_types import (
+    FUNDING_MECHANISMS,
     FundingEntry,
     MembershipEntry,
     OwnershipEntry,
-    FUNDING_MECHANISMS,
 )
 
 
@@ -50,13 +50,15 @@ class TestOwnershipEntry:
         assert entry.legal_basis == ""
         assert entry.beneficial is False
 
-    def test_to_frontmatter_omits_empty(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: structural edge endpoints (owner/asset) and meaningful
+        # bool default (beneficial) are always written; empty fields omitted.
         entry = OwnershipEntry(id="o1", title="Test")
         meta = entry.to_frontmatter()
-        assert "owner" not in meta
-        assert "asset" not in meta
-        assert "percentage" not in meta
-        assert "beneficial" not in meta
+        assert meta["owner"] == ""  # endpoint always written
+        assert meta["asset"] == ""  # endpoint always written
+        assert meta["beneficial"] is False  # default written
+        assert "percentage" not in meta  # empty string omitted
 
 
 class TestMembershipEntry:
@@ -95,12 +97,14 @@ class TestMembershipEntry:
         assert entry.start_date == ""
         assert entry.end_date == ""
 
-    def test_to_frontmatter_omits_empty(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: structural edge endpoints (person/organization) are always
+        # written so the membership is unambiguous; empty role omitted.
         entry = MembershipEntry(id="m1", title="Test")
         meta = entry.to_frontmatter()
-        assert "person" not in meta
-        assert "organization" not in meta
-        assert "role" not in meta
+        assert meta["person"] == ""  # endpoint always written
+        assert meta["organization"] == ""  # endpoint always written
+        assert "role" not in meta  # empty string omitted
 
 
 class TestFundingEntry:
@@ -145,13 +149,15 @@ class TestFundingEntry:
         assert entry.purpose == ""
         assert entry.mechanism == ""
 
-    def test_to_frontmatter_omits_empty(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: structural edge endpoints (funder/recipient) are always
+        # written so the funding edge is unambiguous; empty fields omitted.
         entry = FundingEntry(id="f1", title="Test")
         meta = entry.to_frontmatter()
-        assert "funder" not in meta
-        assert "recipient" not in meta
-        assert "amount" not in meta
-        assert "mechanism" not in meta
+        assert meta["funder"] == ""  # endpoint always written
+        assert meta["recipient"] == ""  # endpoint always written
+        assert "amount" not in meta  # empty string omitted
+        assert "mechanism" not in meta  # empty string omitted
 
     def test_funding_mechanism_values(self):
         assert "grant" in FUNDING_MECHANISMS

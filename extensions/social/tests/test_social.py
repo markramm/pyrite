@@ -125,11 +125,13 @@ class TestWriteupEntry:
         assert fm["writeup_type"] == "opinion"
         assert fm["allow_voting"] is False
 
-    def test_to_frontmatter_omits_defaults(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: meaningful enum defaults are written so readers/agents
+        # don't have to know the default; allow_voting stays omitted at default.
         entry = WriteupEntry(id="test", title="Test", author_id="bob")
         fm = entry.to_frontmatter()
-        assert "writeup_type" not in fm  # essay is default
-        assert "allow_voting" not in fm  # True is default
+        assert fm["writeup_type"] == "essay"  # default written
+        assert "allow_voting" not in fm  # default True omitted
         assert fm["author_id"] == "bob"
 
     def test_from_frontmatter(self):

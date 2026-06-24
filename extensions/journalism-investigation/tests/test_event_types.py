@@ -59,12 +59,14 @@ class TestInvestigationEventEntry:
             )
             assert entry.verification_status == v
 
-    def test_to_frontmatter_omits_empty(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: meaningful enum defaults are written so readers/agents
+        # don't have to know the default; empty lists stay omitted.
         entry = InvestigationEventEntry(id="test", title="Test")
         fm = entry.to_frontmatter()
-        assert "actors" not in fm
-        assert "source_refs" not in fm
-        assert "verification_status" not in fm  # default "unverified" omitted
+        assert "actors" not in fm  # empty list omitted
+        assert "source_refs" not in fm  # empty list omitted
+        assert fm["verification_status"] == "unverified"  # default written
 
 
 class TestTransactionEntry:
@@ -139,16 +141,18 @@ class TestTransactionEntry:
             )
             assert entry.transaction_type == t
 
-    def test_to_frontmatter_omits_empty(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: structural edge endpoints (sender/receiver) are always
+        # written so the transaction is unambiguous; other empty fields omitted.
         entry = TransactionEntry(id="test", title="Test")
         fm = entry.to_frontmatter()
-        assert "amount" not in fm
-        assert "currency" not in fm
-        assert "sender" not in fm
-        assert "receiver" not in fm
-        assert "method" not in fm
-        assert "purpose" not in fm
-        assert "transaction_type" not in fm
+        assert fm["sender"] == ""  # endpoint always written
+        assert fm["receiver"] == ""  # endpoint always written
+        assert "amount" not in fm  # empty string omitted
+        assert "currency" not in fm  # empty string omitted
+        assert "method" not in fm  # empty string omitted
+        assert "purpose" not in fm  # empty string omitted
+        assert "transaction_type" not in fm  # empty string omitted
 
 
 class TestLegalActionEntry:

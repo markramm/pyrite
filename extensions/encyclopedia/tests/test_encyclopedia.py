@@ -143,13 +143,15 @@ class TestArticleEntry:
         assert fm["protection_level"] == "semi"
         assert fm["categories"] == ["physics", "science"]
 
-    def test_to_frontmatter_omits_defaults(self):
+    def test_to_frontmatter_field_presence(self):
+        # 44f81f3: meaningful enum defaults are written so readers/agents
+        # don't have to know the default; empty list stays omitted.
         entry = ArticleEntry(id="test", title="Test")
         fm = entry.to_frontmatter()
-        assert "quality" not in fm  # stub is default
-        assert "review_status" not in fm  # draft is default
-        assert "protection_level" not in fm  # none is default
-        assert "categories" not in fm  # empty is default
+        assert fm["quality"] == "stub"  # default written
+        assert fm["review_status"] == "draft"  # default written
+        assert fm["protection_level"] == "none"  # default written
+        assert "categories" not in fm  # empty list omitted
 
     def test_from_frontmatter(self):
         meta = {
