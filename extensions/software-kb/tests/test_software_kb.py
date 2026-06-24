@@ -2060,6 +2060,59 @@ class TestNewAdrCreatesFile:
             finally:
                 db.close()
 
+    def test_resolves_single_kb_without_kb_flag(self, tmp_path, monkeypatch):
+        """Without --kb, new-adr must write into the (single) configured KB's
+        adrs/ dir, not ./adrs relative to the cwd.
+
+        Regression for new-adr-writes-to-cwd-without-kb-flag: the file path was
+        resolved only when --kb was passed, otherwise silently falling back to
+        Path('.'), so the ADR landed in the cwd and was never indexed.
+        """
+        from unittest.mock import patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+
+        kb_path = tmp_path / "kb-root"
+        kb_path.mkdir()
+        # Run from a DIFFERENT cwd so a Path(".") fallback would be detectable.
+        run_cwd = tmp_path / "elsewhere"
+        run_cwd.mkdir()
+        monkeypatch.chdir(run_cwd)
+
+        db = _make_test_db(str(tmp_path))
+        try:
+            mock_config = type(
+                "C",
+                (),
+                {
+                    "settings": type("S", (), {"index_path": tmp_path / "test.db"})(),
+                    "get_kb": lambda self, name: (
+                        type("KB", (), {"path": kb_path})() if name else None
+                    ),
+                    "knowledge_bases": [
+                        type("KB", (), {"name": "only-kb", "path": kb_path})()
+                    ],
+                },
+            )()
+
+            with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
+                with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
+                    # NOTE: no --kb passed.
+                    result = runner.invoke(sw_app, ["new-adr", "Use gRPC"])
+
+            assert result.exit_code == 0, result.output
+            expected = kb_path / "adrs" / "0001-use-grpc.md"
+            assert expected.exists(), f"ADR should land in the KB: {expected}"
+            # And must NOT have been written to the cwd.
+            assert not (run_cwd / "adrs").exists(), (
+                "new-adr must not create ./adrs in the current directory"
+            )
+        finally:
+            db.close()
+
 
 # =========================================================================
 # TestBacklogDependencies

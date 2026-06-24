@@ -14,6 +14,51 @@ sw_app = typer.Typer(help="Software KB commands (ADRs, backlog, standards, compo
 console = Console()
 
 
+def _resolve_adr_kb(config: Any, kb_name: str | None):
+    """Resolve which KB an ADR should be written to.
+
+    With an explicit ``kb_name`` this is just ``config.get_kb``. Without one,
+    fall back to the configured KBs rather than the cwd: prefer the single
+    configured KB, otherwise the (single) KB whose schema declares the ``adr``
+    type. Returns ``None`` only when the choice is genuinely ambiguous or there
+    are no KBs — the caller then warns instead of writing silently to cwd.
+    """
+    if kb_name:
+        return config.get_kb(kb_name)
+
+    kbs = list(getattr(config, "knowledge_bases", []) or [])
+    if len(kbs) == 1:
+        return kbs[0]
+    if not kbs:
+        return None
+
+    # Multiple KBs: disambiguate to the one that actually declares ADRs.
+    adr_kbs = []
+    for kb in kbs:
+        try:
+            if kb.kb_schema and kb.kb_schema.get_type_schema("adr"):
+                adr_kbs.append(kb)
+        except Exception:
+            continue
+    return adr_kbs[0] if len(adr_kbs) == 1 else None
+
+
+def _adr_subdirectory(kb_conf: Any) -> str:
+    """Subdirectory ADRs live in for this KB.
+
+    Prefer the ``adr`` type's declared ``subdirectory`` so a KB that configured
+    a non-default location is honored; fall back to the conventional ``adrs``.
+    """
+    try:
+        schema = kb_conf.kb_schema
+        type_schema = schema.get_type_schema("adr") if schema else None
+        if type_schema and type_schema.subdirectory:
+            return type_schema.subdirectory.rstrip("/")
+    except Exception:
+        pass
+    return "adrs"
+
+
 def _query_entries(db: PyriteDB, entry_type: str, kb_name: str | None = None) -> list[dict]:
     """Query entries by type, returning rows with parsed metadata."""
     query = "SELECT * FROM entry WHERE entry_type = ?"
@@ -131,16 +176,23 @@ def sw_new_adr(
         filename = f"{next_num:04d}-{slug}.md"
         today = date.today().isoformat()
 
-        # Resolve KB path for file creation
-        kb_path = None
-        if kb_name:
-            kb_conf = config.get_kb(kb_name)
-            if kb_conf:
-                kb_path = kb_conf.path
-        if kb_path is None:
+        # Resolve KB for file creation. When --kb is omitted, fall back to the
+        # configured KB the same way the numbering query does, rather than
+        # silently writing ./adrs in the cwd (where the file is never indexed).
+        kb_conf = _resolve_adr_kb(config, kb_name)
+        if kb_conf is None:
             kb_path = Path(".")
+            console.print(
+                "[yellow]Warning:[/yellow] no KB resolved (pass --kb); writing "
+                f"ADR under {(kb_path / 'adrs').resolve()} — it will not be "
+                "indexed until moved into a KB."
+            )
+            adr_subdir = "adrs"
+        else:
+            kb_path = kb_conf.path
+            adr_subdir = _adr_subdirectory(kb_conf)
 
-        adrs_dir = kb_path / "adrs"
+        adrs_dir = kb_path / adr_subdir
         adrs_dir.mkdir(parents=True, exist_ok=True)
         file_path = adrs_dir / filename
 
