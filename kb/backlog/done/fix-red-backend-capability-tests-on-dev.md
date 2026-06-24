@@ -1,12 +1,14 @@
 ---
 id: fix-red-backend-capability-tests-on-dev
-type: backlog_item
 title: "Fix 2 pre-existing RED tests on dev: backend capability declarations never landed"
+type: backlog_item
 tags: [tests, ci, backends, capabilities, r1400, tech-debt]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
+rank: 0
 ---
 
 ## Problem
