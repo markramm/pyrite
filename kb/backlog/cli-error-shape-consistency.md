@@ -61,3 +61,16 @@ visible to anyone driving Pyrite from a script or an agent.
 - `agent-oriented-error-responses-across-cli-and-mcp` (done) — landed the
   MCP shape; this carries it to the CLI side
 - `consistent-kb-flag-across-commands` — adjacent CLI consistency work
+
+## Progress (2026-06-24)
+
+Core landed (commit on this branch): shared `pyrite/utils/errors.py` with the
+canonical shape; both `_cli_error` duplicates de-duplicated onto it; the
+search-against-unregistered-KB bug fixed (now `KB_NOT_FOUND`, exit 1, lists known
+KBs). Tests cover the helper shape + the KB_NOT_FOUND case.
+
+**Remaining** (effort was under-estimated — this part is M, not S): convert the
+~79 ad-hoc `typer.echo("Error: ...")` / `console.print("[red]Error...")` sites
+across the CLI to the shared helper, and add tests for the full
+NOT_FOUND/VALIDATION_FAILED/PERMISSION_DENIED set. The helper is in place; this is
+a mechanical sweep.
