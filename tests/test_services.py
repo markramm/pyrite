@@ -140,6 +140,72 @@ class TestSearchService:
         results = service.search("test", kb_name="All KBs")
         assert isinstance(results, list)
 
+    def test_search_populates_trace(self, test_db, test_config):
+        """A caller-supplied trace dict is filled with observability fields
+        (search-observability)."""
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        test_db.upsert_entry(
+            {
+                "id": "trace-doc",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Traceable widget",
+                "body": "content",
+                "tags": [],
+            }
+        )
+        service = SearchService(test_db)
+        trace: dict = {}
+        results = service.search("widget", mode="keyword", trace=trace)
+
+        assert trace["requested_mode"] == "keyword"
+        assert trace["actual_mode"] == "keyword"
+        assert trace["result_count"] == len(results)
+        assert trace["query_len"] == len("widget")
+        assert isinstance(trace["latency_ms"], (int, float))
+        assert trace["latency_ms"] >= 0
+
+    def test_trace_records_hybrid_keyword_fallback(self, test_db, test_config):
+        """Hybrid degrades to keyword when no embeddings exist, and the trace
+        records the actual mode and the reason."""
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        test_db.upsert_entry(
+            {
+                "id": "fallback-doc",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Fallback widget",
+                "body": "content",
+                "tags": [],
+            }
+        )
+        service = SearchService(test_db)
+        trace: dict = {}
+        # No embeddings in this test DB → hybrid must fall back to keyword.
+        service.search("widget", mode="hybrid", trace=trace)
+
+        assert trace["requested_mode"] == "hybrid"
+        assert trace["actual_mode"] == "keyword"
+        assert trace["reason"]  # a non-empty reason for the degrade
+
+    def test_trace_records_or_relaxation(self, test_db, test_config):
+        """When a 0-hit keyword query is OR-relaxed, the trace flags it."""
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        test_db.upsert_entry(
+            {
+                "id": "relax-doc",
+                "kb_name": "research",
+                "entry_type": "note",
+                "title": "Orange county widget",
+                "body": "content",
+                "tags": [],
+            }
+        )
+        service = SearchService(test_db)
+        trace: dict = {}
+        service.search("orange county absentterm", mode="keyword", trace=trace)
+        assert trace.get("relaxed") is True
+
     def test_search_mode_enum(self):
         """SearchMode enum has expected values."""
         assert SearchMode.KEYWORD.value == "keyword"

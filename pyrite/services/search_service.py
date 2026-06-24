@@ -7,6 +7,7 @@ Used by API, CLI, and UI layers.
 
 import logging
 import re
+import time
 from enum import StrEnum
 from typing import Any
 
@@ -142,6 +143,7 @@ class SearchService:
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        trace: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -165,6 +167,13 @@ class SearchService:
         Returns:
             List of matching entries with snippets and rank
         """
+        # Observability trace — a caller may pass a dict to receive the
+        # mode/fallback/latency decisions; we always keep a local one so the
+        # structured log line below is emitted on every search. Held locally
+        # (not on self) because the service instance is shared across requests
+        # on the server/MCP side.
+        tr: dict[str, Any] = trace if trace is not None else {}
+
         # Normalize mode
         if isinstance(mode, str):
             try:
@@ -176,64 +185,97 @@ class SearchService:
         if kb_name == "All KBs":
             kb_name = None
 
-        # Apply query expansion to the FTS5 query (keyword leg only)
-        expanded_query = self._expand_query(query) if expand else query
+        tr["requested_mode"] = mode.value
+        tr["actual_mode"] = mode.value
+        tr["reason"] = ""
+        tr["relaxed"] = False
+        tr["query_len"] = len(query)
+        tr["kb"] = kb_name
 
-        if mode == SearchMode.SEMANTIC:
-            # Semantic uses original natural language query, not expanded
-            return self._semantic_search(query, kb_name, limit, offset=offset)
-        elif mode == SearchMode.HYBRID:
-            return self._hybrid_search(
-                query,
-                kb_name,
-                entry_type,
-                tags,
-                date_from,
-                date_to,
-                limit,
-                offset,
-                sanitize,
-                expanded_query=expanded_query,
-                fips=fips,
-                state=state,
-                status=status,
-            )
+        results: list[dict[str, Any]] = []
+        start = time.perf_counter()
+        try:
+            # Apply query expansion to the FTS5 query (keyword leg only)
+            expanded_query = self._expand_query(query) if expand else query
 
-        # Default: keyword search
-        kw_query = expanded_query
-        if sanitize:
-            kw_query = self.sanitize_fts_query(kw_query)
-
-        def _run(q: str) -> list[dict[str, Any]]:
-            return self.db.search(
-                query=q,
-                kb_name=kb_name,
-                entry_type=entry_type,
-                tags=tags,
-                date_from=date_from,
-                date_to=date_to,
-                limit=limit,
-                offset=offset,
-                include_archived=include_archived,
-                fips=fips,
-                state=state,
-                status=status,
-            )
-
-        results = _run(kw_query)
-
-        # Implicit-AND zeroes out when one term is absent. On exactly 0 hits,
-        # retry once with the terms OR-combined so a near-miss still surfaces
-        # rather than the caller seeing a confident empty result. Relax the
-        # pre-sanitized query (terms, not the quoted form) and skip when the
-        # user already used operators/quotes — _relax_to_or returns None then.
-        if not results:
-            relaxed = self._relax_to_or(expanded_query)
-            if relaxed:
-                logger.debug(
-                    "keyword search 0 hits; retrying OR-relaxed: %r", relaxed
+            if mode == SearchMode.SEMANTIC:
+                # Semantic uses original natural language query, not expanded
+                results = self._semantic_search(query, kb_name, limit, offset=offset)
+                if not results:
+                    # Semantic returned nothing (commonly: no embeddings).
+                    tr["actual_mode"] = "keyword"
+                    tr["reason"] = "semantic_empty_no_embeddings"
+            elif mode == SearchMode.HYBRID:
+                results = self._hybrid_search(
+                    query,
+                    kb_name,
+                    entry_type,
+                    tags,
+                    date_from,
+                    date_to,
+                    limit,
+                    offset,
+                    sanitize,
+                    expanded_query=expanded_query,
+                    fips=fips,
+                    state=state,
+                    status=status,
+                    trace=tr,
                 )
-                results = _run(relaxed)
+            else:
+                # Default: keyword search
+                kw_query = expanded_query
+                if sanitize:
+                    kw_query = self.sanitize_fts_query(kw_query)
+
+                def _run(q: str) -> list[dict[str, Any]]:
+                    return self.db.search(
+                        query=q,
+                        kb_name=kb_name,
+                        entry_type=entry_type,
+                        tags=tags,
+                        date_from=date_from,
+                        date_to=date_to,
+                        limit=limit,
+                        offset=offset,
+                        include_archived=include_archived,
+                        fips=fips,
+                        state=state,
+                        status=status,
+                    )
+
+                results = _run(kw_query)
+
+                # Implicit-AND zeroes out when one term is absent. On exactly 0
+                # hits, retry once with the terms OR-combined so a near-miss
+                # still surfaces. Skip when the user already used
+                # operators/quotes — _relax_to_or returns None then.
+                if not results:
+                    relaxed = self._relax_to_or(expanded_query)
+                    if relaxed:
+                        logger.debug(
+                            "keyword search 0 hits; retrying OR-relaxed: %r", relaxed
+                        )
+                        results = _run(relaxed)
+                        tr["relaxed"] = True
+                        if results:
+                            tr["reason"] = "or_relaxation_recovered"
+        finally:
+            tr["latency_ms"] = round((time.perf_counter() - start) * 1000, 2)
+            tr["result_count"] = len(results)
+
+        logger.info(
+            "search.query kb=%s mode=%s actual=%s reason=%s query_len=%d "
+            "result_count=%d latency_ms=%s relaxed=%s",
+            tr["kb"],
+            tr["requested_mode"],
+            tr["actual_mode"],
+            tr["reason"] or "-",
+            tr["query_len"],
+            tr["result_count"],
+            tr["latency_ms"],
+            tr["relaxed"],
+        )
 
         return results
 
@@ -291,6 +333,7 @@ class SearchService:
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        trace: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Hybrid search using Reciprocal Rank Fusion (RRF).
@@ -330,7 +373,13 @@ class SearchService:
 
         if not semantic_results:
             # No embeddings — fall back to keyword only
+            if trace is not None:
+                trace["actual_mode"] = "keyword"
+                trace["reason"] = "hybrid_no_embeddings"
             return keyword_results[offset : offset + limit]
+
+        if trace is not None:
+            trace["actual_mode"] = "hybrid"
 
         # Reciprocal Rank Fusion
         k = 60  # RRF constant

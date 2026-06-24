@@ -74,6 +74,9 @@ def register_search_command(app: typer.Typer):
         include_body: bool = typer.Option(
             False, "--include-body", help="Include full body text (default: snippet only)"
         ),
+        debug: bool = typer.Option(
+            False, "--debug", help="Print the search trace (mode, fallback reason, latency)"
+        ),
         fields: str = typer.Option(
             None, "--fields", help="Comma-separated fields to return (e.g. id,title,tags)"
         ),
@@ -122,6 +125,7 @@ def register_search_command(app: typer.Typer):
 
             search_svc = SearchService(db, settings=config.settings)
             search_mode = mode or config.settings.search_mode or "keyword"
+            search_trace: dict = {} if debug else None
             results = search_svc.search(
                 query=query,
                 kb_name=kb_name,
@@ -136,7 +140,20 @@ def register_search_command(app: typer.Typer):
                 fips=fips,
                 state=state_filter,
                 status=status,
+                trace=search_trace,
             )
+
+            if debug and search_trace is not None:
+                # Trace goes to stderr so it never corrupts --format json on stdout.
+                err_console.print(
+                    "[dim]trace:[/dim] "
+                    f"mode={search_trace.get('requested_mode')} "
+                    f"actual={search_trace.get('actual_mode')} "
+                    f"reason={search_trace.get('reason') or '-'} "
+                    f"results={search_trace.get('result_count')} "
+                    f"latency_ms={search_trace.get('latency_ms')} "
+                    f"relaxed={search_trace.get('relaxed')}"
+                )
 
             if not results:
                 if output_format != "rich":
