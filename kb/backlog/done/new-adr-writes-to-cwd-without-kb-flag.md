@@ -1,12 +1,14 @@
 ---
 id: new-adr-writes-to-cwd-without-kb-flag
-type: backlog_item
 title: "sw new-adr writes ADR to ./adrs when --kb is omitted instead of the KB root"
+type: backlog_item
 tags: [cli, software-kb, adr, path-resolution]
+importance: 5
 kind: bug
-status: proposed
+status: done
 priority: medium
 effort: S
+rank: 0
 ---
 
 ## Problem
