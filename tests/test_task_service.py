@@ -143,6 +143,76 @@ class TestUpdateTask:
         assert result["status"] == "done"
 
 
+class TestCancelledState:
+    """A `cancelled` terminal state lets an obsolete task close honestly in one
+    call without claiming phantom work (add-cancelled-terminal-state...)."""
+
+    def test_open_to_cancelled_one_call(self, task_env):
+        """A never-claimed obsolete task → cancelled directly, no phantom work."""
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Obsolete task")
+        result = svc.update_task(created["entry_id"], "test-tasks", status="cancelled")
+        assert result["status"] == "cancelled"
+
+    def test_in_progress_to_cancelled(self, task_env):
+        """A task recognized as obsolete mid-work can also be cancelled."""
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Abandon me")
+        eid = created["entry_id"]
+        svc.update_task(eid, "test-tasks", status="claimed", assignee="agent:a")
+        svc.update_task(eid, "test-tasks", status="in_progress")
+        result = svc.update_task(eid, "test-tasks", status="cancelled")
+        assert result["status"] == "cancelled"
+
+    def test_rollup_counts_cancelled_as_resolved(self, task_env):
+        """A parent auto-completes when all children are terminal, treating a
+        cancelled child as resolved (so an all-resolved parent doesn't hang)."""
+        svc = task_env["svc"]
+        parent = svc.create_task(kb_name="test-tasks", title="Parent")
+        parent_id = parent["entry_id"]
+        svc.update_task(parent_id, "test-tasks", status="claimed")
+        svc.update_task(parent_id, "test-tasks", status="in_progress")
+
+        c1 = svc.create_task(kb_name="test-tasks", title="Done child", parent=parent_id)
+        c2 = svc.create_task(kb_name="test-tasks", title="Cancelled child", parent=parent_id)
+
+        svc.update_task(c1["entry_id"], "test-tasks", status="claimed")
+        svc.update_task(c1["entry_id"], "test-tasks", status="in_progress")
+        svc.update_task(c1["entry_id"], "test-tasks", status="done")
+        # Cancel the second child — parent should still roll up.
+        svc.update_task(c2["entry_id"], "test-tasks", status="cancelled")
+
+        repo = KBRepository(task_env["kb_config"])
+        assert repo.load(parent_id).status == "done"
+
+    def test_cancelled_blocker_satisfies_dependency(self, task_env):
+        """A cancelled blocker is resolved-by-removal: unblock_dependents treats
+        it the same as a done blocker and releases the blocked dependent."""
+        svc = task_env["svc"]
+        blocker = svc.create_task(kb_name="test-tasks", title="Blocker")
+        blocker_id = blocker["entry_id"]
+        dependent = svc.create_task(
+            kb_name="test-tasks",
+            title="Dependent",
+            dependencies=[blocker_id],
+        )
+        dep_id = dependent["entry_id"]
+        # Walk dependent to blocked (open → claimed → in_progress → blocked).
+        svc.update_task(dep_id, "test-tasks", status="claimed", assignee="agent:a")
+        svc.update_task(dep_id, "test-tasks", status="in_progress")
+        svc.update_task(dep_id, "test-tasks", status="blocked")
+
+        # Cancel the blocker, then run the (explicit) unblock pass.
+        svc.update_task(blocker_id, "test-tasks", status="cancelled")
+        unblocked = svc.unblock_dependents(blocker_id, "test-tasks")
+
+        assert any(u["id"] == dep_id for u in unblocked), (
+            "a cancelled blocker should release its dependents"
+        )
+        repo = KBRepository(task_env["kb_config"])
+        assert repo.load(dep_id).status != "blocked"
+
+
 class TestClaimTask:
     def test_claim_success(self, task_env):
         svc = task_env["svc"]

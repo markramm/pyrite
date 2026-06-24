@@ -185,6 +185,7 @@ class TestTaskWorkflow:
             "review",
             "done",
             "failed",
+            "cancelled",
         ]
         assert TASK_WORKFLOW["initial"] == "open"
         assert TASK_WORKFLOW["field"] == "status"
@@ -680,4 +681,5 @@ class TestEnums:
         assert "review" in TASK_STATUSES
         assert "done" in TASK_STATUSES
         assert "failed" in TASK_STATUSES
-        assert len(TASK_STATUSES) == 7
+        assert "cancelled" in TASK_STATUSES
+        assert len(TASK_STATUSES) == 8

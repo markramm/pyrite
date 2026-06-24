@@ -9,15 +9,39 @@ from .base import parse_datetime, parse_links, parse_sources
 from .core_types import NoteEntry
 from .protocols import Assignable, Parentable, Prioritizable, Statusable, Temporal
 
-TASK_STATUSES = ("open", "claimed", "in_progress", "blocked", "review", "done", "failed")
+TASK_STATUSES = (
+    "open",
+    "claimed",
+    "in_progress",
+    "blocked",
+    "review",
+    "done",
+    "failed",
+    "cancelled",
+)
 TASK_PRIORITIES = tuple(range(1, 11))  # 1-10
+
+# Terminal states that mean "resolved, no further work expected" — both for
+# parent rollup and dependency unblocking. `failed` is intentionally excluded:
+# a failed task is not resolved (it can be reopened), so it should not roll up a
+# parent or unblock dependents.
+TASK_RESOLVED_STATUSES = ("done", "cancelled")
 
 # =========================================================================
 # Workflow
 # =========================================================================
 
 TASK_WORKFLOW = {
-    "states": ["open", "claimed", "in_progress", "blocked", "review", "done", "failed"],
+    "states": [
+        "open",
+        "claimed",
+        "in_progress",
+        "blocked",
+        "review",
+        "done",
+        "failed",
+        "cancelled",
+    ],
     "initial": "open",
     "field": "status",
     "transitions": [
@@ -81,6 +105,38 @@ TASK_WORKFLOW = {
             "requires": "write",
             "requires_reason": True,
             "description": "Reopen a failed task",
+        },
+        # Cancel an obsolete task from any non-terminal state. Closes in one
+        # call and reads honestly: no work was claimed or performed.
+        {
+            "from": "open",
+            "to": "cancelled",
+            "requires": "write",
+            "description": "Cancel an obsolete, never-worked task",
+        },
+        {
+            "from": "claimed",
+            "to": "cancelled",
+            "requires": "write",
+            "description": "Cancel a claimed but obsolete task",
+        },
+        {
+            "from": "in_progress",
+            "to": "cancelled",
+            "requires": "write",
+            "description": "Cancel a task recognized as obsolete mid-work",
+        },
+        {
+            "from": "blocked",
+            "to": "cancelled",
+            "requires": "write",
+            "description": "Cancel a blocked, no-longer-needed task",
+        },
+        {
+            "from": "review",
+            "to": "cancelled",
+            "requires": "write",
+            "description": "Cancel a task in review that's no longer needed",
         },
     ],
 }

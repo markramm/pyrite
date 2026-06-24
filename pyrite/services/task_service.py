@@ -353,7 +353,10 @@ class TaskService:
         }
 
     def rollup_parent(self, parent_id: str, kb_name: str) -> dict[str, Any] | None:
-        """Auto-complete a parent task if all children are done."""
+        """Auto-complete a parent task when all children are resolved (done or
+        cancelled). A cancelled child counts as resolved-by-retirement."""
+        from ..models.task import TASK_RESOLVED_STATUSES
+
         rows = self._query(
             """SELECT id, status
                FROM entry
@@ -365,8 +368,8 @@ class TaskService:
         if not rows:
             return None
 
-        all_done = all(row["status"] == "done" for row in rows)
-        if not all_done:
+        all_resolved = all(row["status"] in TASK_RESOLVED_STATUSES for row in rows)
+        if not all_resolved:
             return None
 
         parent_rows = self._query(
@@ -400,11 +403,14 @@ class TaskService:
 
 
     def unblock_dependents(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
-        """When a task completes, auto-unblock tasks that depended on it.
+        """When a task resolves, auto-unblock tasks that depended on it.
 
-        Finds tasks with status='blocked' whose dependencies all resolve to done,
-        and transitions them to 'open'.
+        Finds tasks with status='blocked' whose dependencies all resolve to a
+        terminal-resolved status (done or cancelled — a cancelled blocker is
+        resolved-by-removal), and transitions them onward.
         """
+        from ..models.task import TASK_RESOLVED_STATUSES
+
         # Find tasks that have this task as a dependency
         rows = self._query(
             """SELECT id, metadata FROM entry
@@ -420,14 +426,14 @@ class TaskService:
             if not deps or task_id not in deps:
                 continue
 
-            # Check if ALL dependencies are now done
+            # Check if ALL dependencies are now resolved (done or cancelled)
             all_done = True
             for dep_id in deps:
                 dep_rows = self._query(
                     "SELECT status FROM entry WHERE id = :id AND kb_name = :kb_name",
                     {"id": dep_id, "kb_name": kb_name},
                 )
-                if not dep_rows or dep_rows[0].get("status") != "done":
+                if not dep_rows or dep_rows[0].get("status") not in TASK_RESOLVED_STATUSES:
                     all_done = False
                     break
 
@@ -751,7 +757,8 @@ def _task_validate_transition(entry: Entry, context: dict) -> Entry:
                 f"Cannot move task from '{old_status}' to '{new_status}'. "
                 f"Allowed next: {allowed_msg} "
                 f"Tasks follow open → claimed → in_progress → done/failed/blocked/review; "
-                f"walk through the intermediate states rather than skipping."
+                f"walk through the intermediate states rather than skipping "
+                f"(or use 'cancelled' to retire an obsolete task from any state)."
             )
         raise ValidationError(err)
 
@@ -760,9 +767,13 @@ def _task_validate_transition(entry: Entry, context: dict) -> Entry:
 
 def _parent_rollup(entry: Entry, context: dict) -> Entry:
     """Auto-complete parent when all Parentable children reach terminal status."""
+    from ..models.task import TASK_RESOLVED_STATUSES
+
     if not hasattr(entry, "entry_type"):
         return entry
-    if getattr(entry, "status", "") != "done":
+    # Trigger on any *resolved* terminal state (done or cancelled) so an
+    # all-resolved parent rolls up even when some children were cancelled.
+    if getattr(entry, "status", "") not in TASK_RESOLVED_STATUSES:
         return entry
 
     parent_id = getattr(entry, "parent", "")
