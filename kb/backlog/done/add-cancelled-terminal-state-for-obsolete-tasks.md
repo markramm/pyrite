@@ -1,12 +1,14 @@
 ---
 id: add-cancelled-terminal-state-for-obsolete-tasks
-type: backlog_item
 title: "Add `cancelled`/`wontfix` terminal state for obsolete tasks (open → cancelled edge)"
+type: backlog_item
+tags: [task-system, conductor-workflow, workflow-state-machine, audit-honesty, grooming]
+importance: 5
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [task-system, conductor-workflow, workflow-state-machine, audit-honesty, grooming]
+rank: 0
 ---
 
 ## Problem
