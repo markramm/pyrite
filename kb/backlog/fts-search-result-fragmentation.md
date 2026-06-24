@@ -1,13 +1,22 @@
 ---
 id: fts-search-result-fragmentation
-type: backlog_item
 title: "Epstein FTS search splits single documents into multiple fragments"
+type: backlog_item
+tags: [epstein-files, search, fts]
+importance: 5
 kind: bug
-status: proposed
+status: deferred
 priority: medium
 effort: M
-tags: [epstein-files, search, fts]
+rank: 0
 ---
+
+> **Belongs to the epstein_files repo, not pyrite.** The referenced files
+> (`database/fts_search.sh`, `database/search_epstein.py`) do not exist in the
+> pyrite codebase — this is a separate project's email-ingestion/FTS tooling.
+> Filed here by mistake; deferred in the pyrite backlog. Track and fix in the
+> epstein_files repo. Pyrite's own FTS work is `[[backend-agnostic-query-dsl]]`
+> / `[[search-keyword-and-no-fallback]]`. (Reclassified 2026-06-24.)
 
 ## Problem
 

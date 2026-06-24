@@ -1,13 +1,20 @@
 ---
 id: epstein-like-search-boolean-and
-type: backlog_item
 title: "Epstein LIKE search should support implicit AND for multi-term queries"
+type: backlog_item
+tags: [epstein-files, search, ux]
+importance: 5
 kind: feature
-status: proposed
+status: deferred
 priority: medium
 effort: S
-tags: [epstein-files, search, ux]
+rank: 0
 ---
+
+> **Belongs to the epstein_files repo, not pyrite.** `search_epstein.py` does
+> not exist in the pyrite codebase — this is a separate project's tooling. Filed
+> here by mistake; deferred in the pyrite backlog. Track and fix in the
+> epstein_files repo. (Reclassified 2026-06-24.)
 
 ## Problem
 
