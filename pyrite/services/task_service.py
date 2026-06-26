@@ -99,9 +99,41 @@ class TaskService:
     def update_task(self, task_id: str, kb_name: str, **updates) -> dict[str, Any]:
         """Update task fields.
 
+        A ``comment`` (and optional ``by``) records *why* a status transition
+        happened: when this update changes ``status`` and a comment is supplied,
+        a structured entry is appended to the task's ``status_change_log``
+        (audit trail lives with the task, not only in git history). A comment on
+        a non-status update is ignored — no phantom transition is logged.
+
         Returns:
             Dict with updated=True and entry details.
         """
+        comment = updates.pop("comment", "") or ""
+        by = updates.pop("by", "") or ""
+
+        # Capture the prior status so we can record the transition.
+        old_status = ""
+        if comment and "status" in updates:
+            from ..storage.repository import KBRepository
+
+            kb_config = self.config.get_kb(kb_name)
+            if kb_config:
+                existing = KBRepository(kb_config).load(task_id)
+                old_status = getattr(existing, "status", "") if existing else ""
+                new_status = updates["status"]
+                if old_status != new_status:
+                    log = list(getattr(existing, "status_change_log", []) or [])
+                    log.append(
+                        {
+                            "date": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "from": old_status,
+                            "to": new_status,
+                            "by": by or "operator",
+                            "comment": comment,
+                        }
+                    )
+                    updates["status_change_log"] = log
+
         entry = self.kb_svc.update_entry(task_id, kb_name, **updates)
         return {
             "updated": True,

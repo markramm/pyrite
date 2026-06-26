@@ -252,6 +252,17 @@ def task_update(
             "requires_reason."
         ),
     ),
+    comment: str | None = typer.Option(
+        None,
+        "--comment",
+        help=(
+            "Audit comment recorded in the task's status_change_log when this "
+            "update changes status (captures *why* the transition happened)."
+        ),
+    ),
+    by: str | None = typer.Option(
+        None, "--by", help="Who made the change, for the status_change_log entry"
+    ),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Update task fields (status, assignee, priority, reason)."""
@@ -268,6 +279,10 @@ def task_update(
         # validator reads it from the entry attribute on the next
         # before_save hook.
         updates["status_reason"] = reason
+    if comment is not None:
+        updates["comment"] = comment
+    if by is not None:
+        updates["by"] = by
 
     if not updates:
         console.print("[yellow]No updates specified.[/yellow]")

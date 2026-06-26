@@ -142,6 +142,50 @@ class TestUpdateTask:
         result = svc.update_task(entry_id, "test-tasks", status="done")
         assert result["status"] == "done"
 
+    def test_comment_appends_status_change_log(self, task_env):
+        """update_task(..., comment=...) on a status change appends a structured
+        status_change_log entry with from/to/by/comment
+        (task-update-comment-flag)."""
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Logged task")
+        eid = created["entry_id"]
+
+        svc.update_task(
+            eid, "test-tasks", status="claimed",
+            comment="claimed for the alpha sweep", by="agent:a",
+        )
+        repo = KBRepository(task_env["kb_config"])
+        log = getattr(repo.load(eid), "status_change_log", [])
+        assert len(log) == 1
+        assert log[0]["from"] == "open"
+        assert log[0]["to"] == "claimed"
+        assert log[0]["by"] == "agent:a"
+        assert log[0]["comment"] == "claimed for the alpha sweep"
+        assert log[0].get("date")  # a timestamp was stamped
+
+    def test_comment_accumulates_across_transitions(self, task_env):
+        """Each commented transition adds a log entry; earlier ones are kept."""
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Multi-step")
+        eid = created["entry_id"]
+        svc.update_task(eid, "test-tasks", status="claimed", comment="claim", by="a")
+        svc.update_task(eid, "test-tasks", status="in_progress", comment="start", by="a")
+        svc.update_task(eid, "test-tasks", status="done", comment="ship", by="a")
+
+        repo = KBRepository(task_env["kb_config"])
+        log = getattr(repo.load(eid), "status_change_log", [])
+        assert [e["to"] for e in log] == ["claimed", "in_progress", "done"]
+
+    def test_no_log_entry_without_status_change(self, task_env):
+        """A comment on a non-status update (e.g. priority) does not log a
+        phantom transition."""
+        svc = task_env["svc"]
+        created = svc.create_task(kb_name="test-tasks", title="Priority bump")
+        eid = created["entry_id"]
+        svc.update_task(eid, "test-tasks", priority=8, comment="reprioritized")
+        repo = KBRepository(task_env["kb_config"])
+        assert getattr(repo.load(eid), "status_change_log", []) == []
+
 
 class TestCancelledState:
     """A `cancelled` terminal state lets an obsolete task close honestly in one

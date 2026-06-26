@@ -401,6 +401,11 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
     evidence: list[str] = field(default_factory=list)
     priority: int = 5  # overrides Prioritizable default
     agent_context: dict[str, Any] = field(default_factory=dict)
+    # Structured audit trail of status transitions: each entry is
+    # {date, from, to, by, comment}. Appended on status change when a comment
+    # is supplied, so the *why* of a transition lives with the task rather than
+    # only in git history.
+    status_change_log: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def entry_type(self) -> str:
@@ -425,6 +430,8 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
             meta["due_date"] = self.due_date
         if self.agent_context:
             meta["agent_context"] = self.agent_context
+        if self.status_change_log:
+            meta["status_change_log"] = self.status_change_log
         return meta
 
     @classmethod
@@ -443,4 +450,5 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
             priority=meta.get("priority", 5),
             due_date=meta.get("due_date", ""),
             agent_context=meta.get("agent_context", {}) or {},
+            status_change_log=meta.get("status_change_log", []) or [],
         )
