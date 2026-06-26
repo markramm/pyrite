@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..utils.errors import cli_error
 from .context import cli_context
 
 logger = logging.getLogger(__name__)
@@ -277,8 +278,11 @@ def schema_diff(
     with cli_context() as (config, db, svc):
         kb_config = config.get_kb(kb_name)
         if not kb_config:
-            console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-            raise typer.Exit(1)
+            cli_error(
+                f"KB '{kb_name}' not found",
+                error_code="KB_NOT_FOUND",
+                suggestion="run `pyrite kb list` to see available knowledge bases",
+            )
 
         if not kb_config.kb_yaml_path.exists():
             console.print(f"[yellow]No kb.yaml found for '{kb_name}'[/yellow]")
@@ -336,8 +340,11 @@ def schema_migrate(
     with cli_context() as (config, db, svc):
         kb_config = config.get_kb(kb_name)
         if not kb_config:
-            console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-            raise typer.Exit(1)
+            cli_error(
+                f"KB '{kb_name}' not found",
+                error_code="KB_NOT_FOUND",
+                suggestion="run `pyrite kb list` to see available knowledge bases",
+            )
 
         repo = KBRepository(kb_config)
         checked = 0
@@ -447,8 +454,11 @@ def schema_validate(
     if kb_name:
         kb_config = config.get_kb(kb_name)
         if not kb_config:
-            console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-            raise typer.Exit(1)
+            cli_error(
+                f"KB '{kb_name}' not found",
+                error_code="KB_NOT_FOUND",
+                suggestion="run `pyrite kb list` to see available knowledge bases",
+            )
         md_files = _collect_md_files([kb_config.path])
         schema = kb_config.kb_schema
     elif changed:

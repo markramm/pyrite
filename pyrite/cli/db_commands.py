@@ -15,6 +15,7 @@ import typer
 from rich.console import Console
 
 from ..config import load_config
+from ..utils.errors import cli_error
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +35,11 @@ def db_backup(
     db_path = config.settings.index_path
 
     if not db_path.exists():
-        console.print("[red]Error:[/red] Database file does not exist.")
-        raise typer.Exit(1)
+        cli_error(
+            "Database file does not exist.",
+            error_code="NOT_FOUND",
+            suggestion="run `pyrite index sync` to build the index",
+        )
 
     if output is None:
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
@@ -68,8 +72,11 @@ def db_restore(
     backup = Path(backup_path)
 
     if not backup.exists():
-        console.print(f"[red]Error:[/red] Backup file not found: {backup}")
-        raise typer.Exit(1)
+        cli_error(
+            f"Backup file not found: {backup}",
+            error_code="NOT_FOUND",
+            suggestion="check the path or list backups with `ls *.db`",
+        )
 
     # Validate it's a real SQLite database
     try:
@@ -77,8 +84,10 @@ def db_restore(
         conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         conn.close()
     except sqlite3.DatabaseError:
-        console.print(f"[red]Error:[/red] Not a valid SQLite database: {backup}")
-        raise typer.Exit(1)
+        cli_error(
+            f"Not a valid SQLite database: {backup}",
+            error_code="VALIDATION_FAILED",
+        )
 
     if not force:
         console.print(

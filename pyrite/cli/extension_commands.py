@@ -13,6 +13,8 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..utils.errors import cli_error
+
 logger = logging.getLogger(__name__)
 
 extension_app = typer.Typer(help="Extension management")
@@ -61,8 +63,12 @@ def extension_init(
 
     # Idempotency check
     if (out_path / "pyproject.toml").exists():
-        console.print(f"[red]Error:[/red] {out_path}/pyproject.toml already exists")
-        raise typer.Exit(1)
+        cli_error(
+            f"{out_path}/pyproject.toml already exists",
+            output_format,
+            error_code="VALIDATION_FAILED",
+            suggestion="choose a different --path or remove the existing extension",
+        )
 
     # Parse types
     type_names = [t.strip() for t in types.split(",") if t.strip()] if types else []
@@ -302,8 +308,12 @@ def extension_install(
     path = path.expanduser().resolve()
 
     if not (path / "pyproject.toml").exists():
-        console.print(f"[red]Error:[/red] No pyproject.toml found at {path}")
-        raise typer.Exit(1)
+        cli_error(
+            f"No pyproject.toml found at {path}",
+            output_format,
+            error_code="NOT_FOUND",
+            suggestion="point install at an extension directory created by `pyrite extension init`",
+        )
 
     # Parse plugin name from pyproject.toml
     plugin_name = None
@@ -325,8 +335,11 @@ def extension_install(
     )
 
     if result.returncode != 0:
-        console.print(f"[red]Error:[/red] pip install failed:\n{result.stderr}")
-        raise typer.Exit(1)
+        cli_error(
+            f"pip install failed:\n{result.stderr}",
+            output_format,
+            error_code="ERROR",
+        )
 
     # Verify plugin loads
     verified = False
@@ -456,8 +469,11 @@ def extension_uninstall(
     )
 
     if result.returncode != 0:
-        console.print(f"[red]Error:[/red] pip uninstall failed:\n{result.stderr}")
-        raise typer.Exit(1)
+        cli_error(
+            f"pip uninstall failed:\n{result.stderr}",
+            output_format,
+            error_code="ERROR",
+        )
 
     output = {"status": "uninstalled", "name": name, "package": pkg_name}
 

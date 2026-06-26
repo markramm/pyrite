@@ -353,8 +353,13 @@ def init_kb(
     preset = None
     if schema_file:
         if not schema_file.exists():
-            console.print(f"[red]Error:[/red] Schema file not found: {schema_file}")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"Schema file not found: {schema_file}",
+                error_code="NOT_FOUND",
+                suggestion="check the --schema path",
+            )
         preset = load_yaml_file(schema_file)
     else:
         try:

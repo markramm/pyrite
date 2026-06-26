@@ -89,9 +89,13 @@ def query_entries(
 
         errors = validate_query(query)
         if errors:
-            for err in errors:
-                console.print(f"[red]Error:[/red] {err}")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                "; ".join(str(e) for e in errors),
+                output_format,
+                error_code="VALIDATION_FAILED",
+            )
 
         entries, total = evaluate_query(query, db)
 

@@ -248,8 +248,13 @@ def _search_files(config, query, kb_name, entry_type, limit):
     if kb_name:
         kb = config.get_kb(kb_name)
         if not kb:
-            console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"KB '{kb_name}' not found",
+                error_code="KB_NOT_FOUND",
+                suggestion="run `pyrite kb list` to see registered KBs",
+            )
         kbs = [kb]
     else:
         kbs = config.knowledge_bases

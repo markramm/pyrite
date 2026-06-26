@@ -59,8 +59,13 @@ def protocol_check(
         with cli_context() as (config, db, svc):
             kb_config = config.get_kb(kb_name)
             if not kb_config:
-                console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-                raise typer.Exit(1)
+                from ..utils.errors import cli_error
+
+                cli_error(
+                    f"KB '{kb_name}' not found",
+                    error_code="KB_NOT_FOUND",
+                    suggestion="run `pyrite kb list` to see registered KBs",
+                )
             schema = kb_config.kb_schema
             for tn, ts in schema.types.items():
                 metadata = resolve_type_metadata(tn, schema)
