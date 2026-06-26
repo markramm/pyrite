@@ -1,12 +1,14 @@
 ---
 id: task-update-comment-flag
-type: backlog_item
 title: "Add `--comment` flag to `pyrite task update` for status-change audit trail"
+type: backlog_item
+tags: [task-system, cli, audit-trail, conductor-workflow, grooming]
+importance: 5
 kind: feature
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [task-system, cli, audit-trail, conductor-workflow, grooming]
+rank: 0
 ---
 
 ## Problem
