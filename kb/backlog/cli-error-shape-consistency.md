@@ -74,3 +74,12 @@ KBs). Tests cover the helper shape + the KB_NOT_FOUND case.
 across the CLI to the shared helper, and add tests for the full
 NOT_FOUND/VALIDATION_FAILED/PERMISSION_DENIED set. The helper is in place; this is
 a mechanical sweep.
+
+### Update (2026-06-26)
+
+task_commands.py fully converted (10 sites → shared cli_error via a _task_error
+type→code mapper; Task-not-found is now NOT_FOUND with a suggestion). Verified
+live + tests. Running total converted: search KB_NOT_FOUND, entry/browse de-dup,
+task_commands. **Still remaining**: kb_commands (18), entry_commands inline sites
+(12), link_commands (7), __init__ (7), repo/index/extension/schema/db/etc. —
+~57 sites across 11 files. Mechanical; best as a focused parallel-agent wave.
