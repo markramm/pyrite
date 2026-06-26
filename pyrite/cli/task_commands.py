@@ -22,6 +22,29 @@ def _format_output(data: dict, fmt: str) -> str | None:
     return format_output(data, fmt)
 
 
+def _task_error(exc: Exception, fmt: str = "rich") -> None:
+    """Emit a structured error for a caught task-command exception and exit.
+
+    Maps the exception type to a machine code so scripts/agents get a stable
+    error_code, and routes through the shared cli_error so JSON callers get the
+    canonical shape (cli-error-shape-consistency)."""
+    from ..exceptions import (
+        EntryNotFoundError,
+        KBNotFoundError,
+        ValidationError,
+    )
+    from ..utils.errors import cli_error
+
+    code = "ERROR"
+    if isinstance(exc, EntryNotFoundError):
+        code = "NOT_FOUND"
+    elif isinstance(exc, KBNotFoundError):
+        code = "KB_NOT_FOUND"
+    elif isinstance(exc, ValidationError):
+        code = "VALIDATION_FAILED"
+    cli_error(str(exc), fmt, error_code=code)
+
+
 def _get_service() -> tuple[TaskService, PyriteDB]:
     """Create TaskService and return (service, db) for cleanup."""
     config = load_config()
@@ -88,8 +111,7 @@ def task_create(
         if assignee:
             console.print(f"  Assignee: {assignee}")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -136,8 +158,7 @@ def task_list(
             )
         console.print(table)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -174,8 +195,14 @@ def _task_get_impl(task_id: str, kb_name: str | None, fmt: str):
     try:
         task = svc.get_task(task_id, kb_name)
         if not task:
-            console.print(f"[red]Error:[/red] Task '{task_id}' not found")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"Task '{task_id}' not found",
+                fmt,
+                error_code="NOT_FOUND",
+                suggestion=f"run `pyrite task list -k {kb_name or '<kb>'}` to find task IDs",
+            )
 
         meta = task.get("metadata", {})
         if isinstance(meta, str):
@@ -228,8 +255,7 @@ def _task_get_impl(task_id: str, kb_name: str | None, fmt: str):
             for c in children:
                 console.print(f"    {c['id'][:12]}  {c['status']:12}  {c['title']}")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -301,8 +327,7 @@ def task_update(
         for k, v in updates.items():
             console.print(f"  {k}: {v}")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -333,8 +358,7 @@ def task_claim(
             console.print(f"[red]Failed:[/red] {result.get('error', 'Unknown error')}")
             raise typer.Exit(1)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -371,8 +395,7 @@ def task_reset(
         )
         console.print(f"  Reason: {result['reason']}")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -403,8 +426,7 @@ def task_decompose(
             else:
                 console.print(f"  [red]x[/red] {r.get('error', 'Unknown error')}")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -440,8 +462,7 @@ def task_migrate_relaxed_mode(
         if dry_run:
             console.print("[yellow]Dry run — no files modified.[/yellow]")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
 
@@ -478,7 +499,6 @@ def task_checkpoint(
         if confidence > 0:
             console.print(f"  Confidence: {int(confidence * 100)}%")
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
+        _task_error(e, fmt)
     finally:
         db.close()
