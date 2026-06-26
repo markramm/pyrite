@@ -1,12 +1,14 @@
 ---
 id: cli-error-shape-consistency
-type: backlog_item
 title: "Consistent CLI error shape: every error returns JSON with error_code + suggestion"
+type: backlog_item
+tags: [cli, ux, agent-ux, errors]
+importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: S
-tags: [cli, ux, agent-ux, errors]
+rank: 0
 ---
 
 ## Problem
@@ -83,3 +85,25 @@ live + tests. Running total converted: search KB_NOT_FOUND, entry/browse de-dup,
 task_commands. **Still remaining**: kb_commands (18), entry_commands inline sites
 (12), link_commands (7), __init__ (7), repo/index/extension/schema/db/etc. —
 ~57 sites across 11 files. Mechanical; best as a focused parallel-agent wave.
+
+## Resolution (2026-06-26)
+
+COMPLETE. Every ad-hoc `console.print("[red]Error:...")` / `typer.echo("Error:...")`
+site across all of `pyrite/cli/` is converted to the shared `cli_error` helper
+(`pyrite/utils/errors.py`) with a semantically-correct error_code and, where
+useful, a suggestion. Verified CLI-wide: zero ad-hoc error sites remain.
+
+Acceptance criteria:
+- [x] All CLI errors emit error_code + (where useful) suggestion — done across
+      kb/entry/link/task/__init__/repo/index/extension/schema/db/search/protocol/
+      init/collection command modules.
+- [x] JSON format matches the MCP error shape (build_error → {error, error_code,
+      suggestion?, retryable}).
+- [x] Unregistered-KB on search returns KB_NOT_FOUND, not empty results.
+- [x] Tests cover the common classes (NOT_FOUND, KB_NOT_FOUND, VALIDATION_FAILED,
+      PERMISSION_DENIED) at the shared-helper chokepoint + a search integration test.
+
+Done across this session: the shared helper + de-dup + search fix (first commit),
+task_commands, then a 3-wave parallel-agent sweep (9 agents) for the remaining
+13 modules, each independently verified before commit. Non-fatal warnings,
+confirmation prompts, and per-item report loops were deliberately left untouched.
