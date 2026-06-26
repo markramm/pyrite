@@ -189,13 +189,19 @@ def register_entry_commands(app: typer.Typer) -> None:
 
         # Require title for non-template mode
         if title is None:
-            console.print("[red]Error:[/red] --title is required (unless using --template)")
-            raise typer.Exit(1)
+            _cli_error(
+                "--title is required (unless using --template)",
+                "rich",
+                "VALIDATION_FAILED",
+            )
 
         # Require kb for non-template mode
         if kb_name is None:
-            console.print("[red]Error:[/red] --kb is required (unless using --template)")
-            raise typer.Exit(1)
+            _cli_error(
+                "--kb is required (unless using --template)",
+                "rich",
+                "VALIDATION_FAILED",
+            )
 
         # Body resolution: --stdin > --body-file > --body
         if stdin:
@@ -204,8 +210,7 @@ def register_entry_commands(app: typer.Typer) -> None:
             body = sys.stdin.read()
         elif body_file:
             if not body_file.exists():
-                console.print(f"[red]Error:[/red] Body file not found: {body_file}")
-                raise typer.Exit(1)
+                _cli_error(f"Body file not found: {body_file}", "rich", "NOT_FOUND")
             body = body_file.read_text(encoding="utf-8")
 
         # Extract YAML frontmatter from body content (--body-file or --stdin)
@@ -237,8 +242,11 @@ def register_entry_commands(app: typer.Typer) -> None:
         if field:
             for fv in field:
                 if "=" not in fv:
-                    console.print(f"[red]Error:[/red] --field must be key=value, got '{fv}'")
-                    raise typer.Exit(1)
+                    _cli_error(
+                        f"--field must be key=value, got '{fv}'",
+                        "rich",
+                        "VALIDATION_FAILED",
+                    )
                 k, v = fv.split("=", 1)
                 extra[k] = _parse_field_value(v)
 
@@ -311,8 +319,7 @@ def register_entry_commands(app: typer.Typer) -> None:
         generated from the title.
         """
         if not file_path.exists():
-            console.print(f"[red]Error:[/red] File not found: {file_path}")
-            raise typer.Exit(1)
+            _cli_error(f"File not found: {file_path}", "rich", "NOT_FOUND")
 
         with cli_context() as (config, db, svc):
             try:
@@ -327,20 +334,20 @@ def register_entry_commands(app: typer.Typer) -> None:
                 if validate_only:
                     errors = result.get("errors", [])
                     if errors:
-                        for err in errors:
-                            console.print(f"[red]Error:[/red] {err}")
-                        raise typer.Exit(1)
+                        _cli_error(
+                            "Validation failed: " + "; ".join(str(e) for e in errors),
+                            "rich",
+                            "VALIDATION_FAILED",
+                        )
                     console.print(f"[green]Valid:[/green] {entry.id}")
                     console.print(f"[dim]Type: {entry.entry_type}[/dim]")
                 else:
                     console.print(f"[green]Added:[/green] {entry.id}")
                     console.print(f"[dim]Type: {entry.entry_type}[/dim]")
             except ValidationError as e:
-                console.print(f"[red]Error:[/red] {e}")
-                raise typer.Exit(1)
+                _cli_error(str(e), "rich", "VALIDATION_FAILED")
             except PyriteError as e:
-                console.print(f"[red]Error:[/red] {e}")
-                raise typer.Exit(1)
+                _cli_error(str(e), "rich", "ERROR")
 
     @app.command("update")
     def update_entry(
@@ -370,8 +377,9 @@ def register_entry_commands(app: typer.Typer) -> None:
             body = sys.stdin.read()
         elif body_file:
             if not body_file.exists():
-                console.print(f"[red]Error:[/red] Body file not found: {body_file}")
-                raise typer.Exit(1)
+                _cli_error(
+                    f"Body file not found: {body_file}", output_format, "NOT_FOUND"
+                )
             body = body_file.read_text(encoding="utf-8")
 
         updates: dict[str, Any] = {}
@@ -427,12 +435,10 @@ def register_entry_commands(app: typer.Typer) -> None:
             try:
                 deleted = svc.delete_entry(entry_id, kb_name)
                 if not deleted:
-                    console.print(f"[red]Error:[/red] Entry '{entry_id}' not found")
-                    raise typer.Exit(1)
+                    _cli_error(f"Entry '{entry_id}' not found", "rich", "NOT_FOUND")
                 console.print(f"[green]Deleted:[/green] {entry_id}")
             except (PyriteError, ValueError) as e:
-                console.print(f"[red]Error:[/red] {e}")
-                raise typer.Exit(1)
+                _cli_error(str(e), "rich", "ERROR")
 
     @app.command("rename")
     def rename_entry(
@@ -513,5 +519,4 @@ def register_entry_commands(app: typer.Typer) -> None:
                         f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})"
                     )
             except (PyriteError, ValueError) as e:
-                console.print(f"[red]Error:[/red] {e}")
-                raise typer.Exit(1)
+                _cli_error(str(e), "rich", "ERROR")

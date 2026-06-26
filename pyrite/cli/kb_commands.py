@@ -28,6 +28,32 @@ def _format_output(data: dict, fmt: str) -> str | None:
     return format_output(data, fmt)
 
 
+def _kb_error(exc: Exception, fmt: str = "rich") -> None:
+    """Emit a structured error for a caught KB-command exception and exit.
+
+    Maps the exception type to a machine code so scripts/agents get a stable
+    error_code, and routes through the shared cli_error so JSON callers get the
+    canonical shape (cli-error-shape-consistency)."""
+    from ..exceptions import (
+        EntryNotFoundError,
+        KBNotFoundError,
+        KBProtectedError,
+        ValidationError,
+    )
+    from ..utils.errors import cli_error
+
+    code = "ERROR"
+    if isinstance(exc, EntryNotFoundError):
+        code = "NOT_FOUND"
+    elif isinstance(exc, KBNotFoundError):
+        code = "KB_NOT_FOUND"
+    elif isinstance(exc, KBProtectedError):
+        code = "PERMISSION_DENIED"
+    elif isinstance(exc, ValidationError):
+        code = "VALIDATION_FAILED"
+    cli_error(str(exc), fmt, error_code=code)
+
+
 @kb_app.command("list")
 def kb_list(
     kb_type: str | None = typer.Option(
@@ -82,8 +108,13 @@ def kb_add(
     """Add a knowledge base to the registry."""
     resolved = path.expanduser().resolve()
     if not resolved.exists():
-        console.print(f"[red]Error:[/red] Path does not exist: {resolved}")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            f"Path does not exist: {resolved}",
+            error_code="NOT_FOUND",
+            suggestion="Create the directory first, or pass an existing path.",
+        )
 
     kb_name = name or resolved.name
 
@@ -96,8 +127,7 @@ def kb_add(
                 f"[green]Added KB:[/green] {result['name']} ({result['type']}) at {result['path']}"
             )
         except (PyriteError, ValueError) as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e)
 
 
 @kb_app.command("remove")
@@ -109,8 +139,13 @@ def kb_remove(
     with cli_registry_context() as (config, db, svc, registry):
         kb = registry.get_kb(name)
         if not kb:
-            console.print(f"[red]Error:[/red] KB '{name}' not found")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"KB '{name}' not found",
+                error_code="KB_NOT_FOUND",
+                suggestion="Run `pyrite kb list` to see registered KBs.",
+            )
 
         if not force:
             confirm = typer.confirm(f"Remove KB '{name}' from registry?")
@@ -124,8 +159,7 @@ def kb_remove(
             console.print(f"[green]Removed:[/green] {name}")
             console.print(f"[dim]Note: Files at {kb['path']} were not deleted.[/dim]")
         except KBProtectedError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e)
 
 
 @kb_app.command("discover")
@@ -223,8 +257,14 @@ def kb_validate(
     if name:
         kb = config.get_kb(name)
         if not kb:
-            console.print(f"[red]Error:[/red] KB '{name}' not found")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"KB '{name}' not found",
+                output_format,
+                error_code="KB_NOT_FOUND",
+                suggestion="Run `pyrite kb list` to see registered KBs.",
+            )
         kbs = [kb]
     else:
         kbs = config.knowledge_bases
@@ -364,8 +404,13 @@ def kb_create(
             return
 
         if not path:
-            console.print("[red]Error:[/red] --path is required for non-ephemeral KBs")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                "--path is required for non-ephemeral KBs",
+                error_code="VALIDATION_FAILED",
+                suggestion="Pass --path <dir>, or use --ephemeral.",
+            )
 
         resolved_path = path.expanduser().resolve()
         resolved_path.mkdir(parents=True, exist_ok=True)
@@ -379,8 +424,7 @@ def kb_create(
             )
             console.print(f"[green]Created KB:[/green] {name} at {resolved_path}")
         except (PyriteError, ValueError) as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e)
 
 
 @kb_app.command("reindex")
@@ -397,8 +441,7 @@ def kb_reindex(
         try:
             result = registry.reindex_kb(kb_name)
         except KBNotFoundError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e, output_format)
 
         data = {"name": kb_name, **result}
         formatted = _format_output(data, output_format)
@@ -426,8 +469,7 @@ def kb_health(
         try:
             result = registry.health_kb(kb_name)
         except KBNotFoundError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e, output_format)
 
         formatted = _format_output(result, output_format)
         if formatted is not None:
@@ -469,8 +511,7 @@ def kb_commit(
             else:
                 console.print(f"[yellow]No commit:[/yellow] {result.get('error', 'Unknown error')}")
         except Exception as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e)
 
 
 @kb_app.command("push")
@@ -486,14 +527,15 @@ def kb_push(
         export_svc = ExportService(config, db)
         try:
             result = export_svc.push_kb(kb_name, remote=remote, branch=branch)
-            if result["success"]:
-                console.print(f"[green]Pushed:[/green] {result['message']}")
-            else:
-                console.print(f"[red]Push failed:[/red] {result['message']}")
-                raise typer.Exit(1)
         except Exception as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _kb_error(e)
+
+        if result["success"]:
+            console.print(f"[green]Pushed:[/green] {result['message']}")
+        else:
+            from ..utils.errors import cli_error
+
+            cli_error(result["message"], error_code="PUSH_FAILED", retryable=True)
 
 
 @kb_app.command("gc")
@@ -534,8 +576,7 @@ def schema_show(
         svc = SchemaService(config)
         result = svc.show_schema(kb_name)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        _kb_error(e, output_format)
 
     formatted = _format_output(result, output_format)
     if formatted is not None:
@@ -599,12 +640,12 @@ def schema_add_type(
         svc = SchemaService(config)
         result = svc.add_type(kb_name, type_name, type_def)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        _kb_error(e, output_format)
 
     if "error" in result:
-        console.print(f"[red]Error:[/red] {result['error']}")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(result["error"], output_format, error_code="VALIDATION_FAILED")
 
     formatted = _format_output(result, output_format)
     if formatted is not None:
@@ -628,12 +669,12 @@ def schema_remove_type(
         svc = SchemaService(config)
         result = svc.remove_type(kb_name, type_name)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        _kb_error(e, output_format)
 
     if "error" in result:
-        console.print(f"[red]Error:[/red] {result['error']}")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(result["error"], output_format, error_code="VALIDATION_FAILED")
 
     formatted = _format_output(result, output_format)
     if formatted is not None:
@@ -656,8 +697,14 @@ def schema_set(
     config = load_config()
 
     if not schema_file.exists():
-        console.print(f"[red]Error:[/red] File not found: {schema_file}")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            f"File not found: {schema_file}",
+            output_format,
+            error_code="NOT_FOUND",
+            suggestion="Pass an existing YAML file with --schema-file.",
+        )
 
     schema = load_yaml(schema_file)
 
@@ -665,8 +712,7 @@ def schema_set(
         svc = SchemaService(config)
         result = svc.set_schema(kb_name, schema)
     except (PyriteError, ValueError) as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1)
+        _kb_error(e, output_format)
 
     formatted = _format_output(result, output_format)
     if formatted is not None:

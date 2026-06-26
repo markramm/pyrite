@@ -165,36 +165,67 @@ def links_bulk_create(
 
         p = Path(input_path)
         if not p.exists():
-            console.print(f"[red]Error:[/red] File not found: {input_path}")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"File not found: {input_path}",
+                "rich",
+                error_code="NOT_FOUND",
+                suggestion="Provide a path to an existing YAML file.",
+            )
         raw = p.read_text(encoding="utf-8")
     else:
-        console.print("[red]Error:[/red] Provide a YAML file path, --file, or pipe to stdin")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            "Provide a YAML file path, --file, or pipe to stdin",
+            "rich",
+            error_code="VALIDATION_FAILED",
+        )
 
     try:
         specs = _parse_link_specs(raw)
     except Exception as e:
-        console.print(f"[red]Error:[/red] Failed to parse YAML: {e}")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            f"Failed to parse YAML: {e}",
+            "rich",
+            error_code="VALIDATION_FAILED",
+        )
 
     # Validate all specs up front
     all_errors: list[str] = []
     for i, spec in enumerate(specs):
         all_errors.extend(_validate_link_spec(spec, i))
     if all_errors:
-        for err in all_errors:
-            console.print(f"[red]{err}[/red]")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            "; ".join(all_errors),
+            "rich",
+            error_code="VALIDATION_FAILED",
+        )
 
     with cli_context() as (_config, _db, svc):
         kb_config = _config.get_kb(kb_name)
         if not kb_config:
-            console.print(f"[red]Error:[/red] KB not found: {kb_name}")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"KB not found: {kb_name}",
+                "rich",
+                error_code="KB_NOT_FOUND",
+                suggestion="Run `pyrite kb list` to see available KBs.",
+            )
         if kb_config.read_only:
-            console.print(f"[red]Error:[/red] KB is read-only: {kb_name}")
-            raise typer.Exit(1)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                f"KB is read-only: {kb_name}",
+                "rich",
+                error_code="READ_ONLY",
+            )
 
         repo = KBRepository(kb_config)
 
@@ -327,8 +358,13 @@ def links_suggest(
         db.close()
 
     if entry is None:
-        console.print(f"[red]Error:[/red] Entry not found: {entry_id} (kb={kb_name})")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            f"Entry not found: {entry_id} (kb={kb_name})",
+            output_format,
+            error_code="NOT_FOUND",
+        )
 
     candidates = _suggest_links(entry_id, kb_name, target_kb, limit)
 
@@ -451,8 +487,13 @@ def links_discover(
         db.close()
 
     if entry is None:
-        console.print(f"[red]Error:[/red] Entry not found: {entry_id} (kb={kb_name})")
-        raise typer.Exit(1)
+        from ..utils.errors import cli_error
+
+        cli_error(
+            f"Entry not found: {entry_id} (kb={kb_name})",
+            output_format,
+            error_code="NOT_FOUND",
+        )
 
     candidates = _discover_neighbors(
         entry_id, kb_name, target_kb, limit,
