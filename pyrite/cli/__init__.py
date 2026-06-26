@@ -26,9 +26,15 @@ from ..config import (
     load_config,
     save_config,
 )
-from ..exceptions import PyriteError
+from ..exceptions import (
+    EntryNotFoundError,
+    KBNotFoundError,
+    PyriteError,
+    ValidationError,
+)
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
+from ..utils.errors import cli_error
 from .browse_commands import register_browse_commands
 from .collection_commands import collections_app
 from .context import cli_context
@@ -65,6 +71,21 @@ def _get_svc():
     config = load_config()
     db = PyriteDB(config.settings.index_path)
     return KBService(config, db), db
+
+
+def _cli_err(exc: Exception, fmt: str = "rich") -> None:
+    """Map a caught PyriteError to the right machine code and emit via cli_error.
+
+    Always raises typer.Exit(1).
+    """
+    code = "ERROR"
+    if isinstance(exc, EntryNotFoundError):
+        code = "NOT_FOUND"
+    elif isinstance(exc, KBNotFoundError):
+        code = "KB_NOT_FOUND"
+    elif isinstance(exc, ValidationError):
+        code = "VALIDATION_FAILED"
+    cli_error(str(exc), fmt, error_code=code)
 
 
 # Register sub-apps
@@ -391,8 +412,10 @@ def serve(
             ["npm", "run", "build"], cwd=str(web_dir), capture_output=True, text=True
         )
         if result.returncode != 0:
-            console.print(f"[red]Build failed:[/red]\n{result.stderr}")
-            raise typer.Exit(1)
+            cli_error(
+                f"Frontend build failed:\n{result.stderr}",
+                error_code="BUILD_FAILED",
+            )
         console.print("[green]Frontend built successfully.[/green]")
 
     if dev:
@@ -437,8 +460,11 @@ def repo_add(
     repo_name = name or path.name
 
     if config.get_repo(repo_name):
-        console.print(f"[red]Error:[/red] Repository '{repo_name}' already exists")
-        raise typer.Exit(1)
+        cli_error(
+            f"Repository '{repo_name}' already exists",
+            error_code="ALREADY_EXISTS",
+            suggestion="Use a different --name or remove the existing repo first.",
+        )
 
     repo = Repository(
         name=repo_name,
@@ -472,8 +498,11 @@ def repo_remove(
 
     repo = config.get_repo(name)
     if not repo:
-        console.print(f"[red]Error:[/red] Repository '{name}' not found")
-        raise typer.Exit(1)
+        cli_error(
+            f"Repository '{name}' not found",
+            error_code="NOT_FOUND",
+            suggestion="Run `pyrite repo list` to see registered repositories.",
+        )
 
     kbs = config.get_kbs_in_repo(name)
 
@@ -713,8 +742,10 @@ def import_entries(
     from ..formats.importers import get_importer_registry
 
     if not file_path.exists():
-        console.print(f"[red]Error:[/red] File not found: {file_path}")
-        raise typer.Exit(1)
+        cli_error(
+            f"File not found: {file_path}",
+            error_code="NOT_FOUND",
+        )
 
     # Auto-detect format from extension
     if fmt is None:
@@ -722,27 +753,26 @@ def import_entries(
         format_map = {".json": "json", ".yaml": "yaml", ".yml": "yaml"}
         fmt = format_map.get(suffix)
         if fmt is None:
-            console.print(
-                f"[red]Error:[/red] Cannot detect format from extension '{suffix}'. "
-                "Use --format json or --format yaml."
+            cli_error(
+                f"Cannot detect format from extension '{suffix}'.",
+                error_code="VALIDATION_FAILED",
+                suggestion="Use --format json or --format yaml.",
             )
-            raise typer.Exit(1)
 
     registry = get_importer_registry()
     importer = registry.get(fmt)
     if importer is None:
-        console.print(
-            f"[red]Error:[/red] Unknown format '{fmt}'. "
-            f"Available: {', '.join(registry.available_formats())}"
+        cli_error(
+            f"Unknown format '{fmt}'.",
+            error_code="VALIDATION_FAILED",
+            suggestion=f"Available: {', '.join(registry.available_formats())}",
         )
-        raise typer.Exit(1)
 
     data = file_path.read_text(encoding="utf-8")
     try:
         parsed = importer(data)
     except Exception as e:
-        console.print(f"[red]Error parsing file:[/red] {e}")
-        raise typer.Exit(1)
+        cli_error(f"Error parsing file: {e}", error_code="VALIDATION_FAILED")
 
     if not parsed:
         console.print("[yellow]No entries found in file.[/yellow]")
@@ -761,8 +791,7 @@ def import_entries(
         try:
             results = svc.bulk_create_entries(kb_name, parsed)
         except PyriteError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _cli_err(e)
 
         created = sum(1 for r in results if r.get("created"))
         failed = sum(1 for r in results if not r.get("created"))
@@ -796,14 +825,16 @@ def generate_readme_cmd(
         try:
             readme = svc.generate_readme(kb_name)
         except PyriteError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            raise typer.Exit(1)
+            _cli_err(e)
 
         if write:
             kb_config = config.get_kb(kb_name)
             if not kb_config:
-                console.print(f"[red]Error:[/red] KB not found: {kb_name}")
-                raise typer.Exit(1)
+                cli_error(
+                    f"KB not found: {kb_name}",
+                    error_code="KB_NOT_FOUND",
+                    suggestion="Run `pyrite kb list` to see available KBs.",
+                )
             readme_path = kb_config.path / "README.md"
             readme_path.write_text(readme, encoding="utf-8")
             console.print(f"[green]Written:[/green] {readme_path}")

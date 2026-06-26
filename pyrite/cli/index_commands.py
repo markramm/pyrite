@@ -10,6 +10,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..utils.errors import cli_error
 from .context import get_config_and_db
 
 logger = logging.getLogger(__name__)
@@ -65,8 +66,11 @@ def index_build(
     if kb_name:
         kb = config.get_kb(kb_name)
         if not kb:
-            console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-            raise typer.Exit(1)
+            cli_error(
+                f"KB '{kb_name}' not found",
+                error_code="KB_NOT_FOUND",
+                suggestion="run `pyrite kb list` to see available KBs",
+            )
         kbs = [kb]
     else:
         kbs = config.all_kbs()
@@ -236,22 +240,29 @@ def index_embed(
     from ..services.embedding_service import EmbeddingService, is_available
 
     if not is_available():
-        console.print("[red]Error:[/red] sentence-transformers is not installed.")
-        console.print("Install with: pip install pyrite[semantic]")
-        raise typer.Exit(1)
+        cli_error(
+            "sentence-transformers is not installed.",
+            error_code="DEPENDENCY_MISSING",
+            suggestion="install with: pip install pyrite[semantic]",
+        )
 
     config, db = get_config_and_db()
 
     if not db.vec_available:
-        console.print("[red]Error:[/red] sqlite-vec is not installed or failed to load.")
-        console.print("Install with: pip install pyrite[semantic]")
-        raise typer.Exit(1)
+        cli_error(
+            "sqlite-vec is not installed or failed to load.",
+            error_code="DEPENDENCY_MISSING",
+            suggestion="install with: pip install pyrite[semantic]",
+        )
 
     # Check index has entries
     row = db._raw_conn.execute("SELECT COUNT(*) FROM entry").fetchone()
     if row[0] == 0:
-        console.print("[yellow]Index is empty. Run 'pyrite index build' first.[/yellow]")
-        raise typer.Exit(1)
+        cli_error(
+            "Index is empty.",
+            error_code="INDEX_EMPTY",
+            suggestion="run `pyrite index build` first",
+        )
 
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
@@ -457,8 +468,11 @@ def index_reconcile(
     config, db = get_config_and_db()
     kb_config = config.get_kb(kb_name)
     if not kb_config:
-        console.print(f"[red]Error:[/red] KB '{kb_name}' not found")
-        raise typer.Exit(1)
+        cli_error(
+            f"KB '{kb_name}' not found",
+            error_code="KB_NOT_FOUND",
+            suggestion="run `pyrite kb list` to see available KBs",
+        )
 
     repo = KBRepository(kb_config)
     moves = []
@@ -503,7 +517,8 @@ def index_reconcile(
             doc_mgr.save_entry(entry, kb_name, kb_config)
             moved += 1
         except Exception as e:
-            console.print(f"[red]Error moving {entry.id}:[/red] {e}")
+            # Per-entry failure inside a batch: warn and continue, do NOT exit.
+            console.print(f"[red]Failed to move {entry.id}:[/red] {e}")
 
     console.print(f"\n[green]Moved {moved} file(s).[/green]")
     console.print("Run 'pyrite index sync' to update the index.")

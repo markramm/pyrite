@@ -10,6 +10,7 @@ from rich.table import Table
 
 from ..config import load_config
 from ..storage.database import PyriteDB
+from ..utils.errors import cli_error
 
 repo_collab_app = typer.Typer(help="Repository collaboration commands")
 console = Console()
@@ -53,8 +54,11 @@ def repo_subscribe(
                 console.print(f"    - {kb}")
             console.print(f"  Entries indexed: {result['entries_indexed']}")
         else:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            raise typer.Exit(1)
+            cli_error(
+                result["error"],
+                error_code="SUBSCRIBE_FAILED",
+                retryable=True,
+            )
     finally:
         db.close()
 
@@ -76,8 +80,11 @@ def repo_fork(
             if result.get("kbs"):
                 console.print(f"  KBs: {', '.join(result['kbs'])}")
         else:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            raise typer.Exit(1)
+            cli_error(
+                result["error"],
+                error_code="FORK_FAILED",
+                retryable=True,
+            )
     finally:
         db.close()
 
@@ -93,8 +100,11 @@ def repo_sync(
         result = repo_service.sync(repo_name=name)
 
         if not result["success"]:
-            console.print(f"[red]Error:[/red] {result.get('error', 'Unknown error')}")
-            raise typer.Exit(1)
+            cli_error(
+                result.get("error", "Unknown error"),
+                error_code="SYNC_FAILED",
+                retryable=True,
+            )
 
         for repo_name, info in result.get("repos", {}).items():
             if info["success"]:
@@ -131,8 +141,10 @@ def repo_unsubscribe(
             if result["kbs_removed"]:
                 console.print(f"  KBs removed: {', '.join(result['kbs_removed'])}")
         else:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            raise typer.Exit(1)
+            cli_error(
+                result["error"],
+                error_code="UNSUBSCRIBE_FAILED",
+            )
     finally:
         db.close()
 
@@ -150,8 +162,12 @@ def repo_status(
         status = repo_service.get_repo_status(name)
 
         if not status.get("name"):
-            console.print(f"[red]Error:[/red] {status.get('error', 'Not found')}")
-            raise typer.Exit(1)
+            cli_error(
+                status.get("error", f"Repository not found: {name}"),
+                output_format,
+                error_code="REPO_NOT_FOUND",
+                suggestion="run `pyrite repo list` to see subscribed repos",
+            )
 
         formatted = _format_output(status, output_format)
         if formatted is not None:
