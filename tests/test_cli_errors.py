@@ -33,6 +33,15 @@ def test_build_error_minimal():
     assert payload["retryable"] is False
 
 
+def test_build_error_common_classes():
+    """The canonical shape carries each of the common error classes verbatim,
+    incl. PERMISSION_DENIED and a retryable failure."""
+    for code in ("NOT_FOUND", "KB_NOT_FOUND", "VALIDATION_FAILED", "PERMISSION_DENIED"):
+        assert build_error("m", code)["error_code"] == code
+    retryable = build_error("transient", "SYNC_FAILED", retryable=True)
+    assert retryable["retryable"] is True
+
+
 def test_cli_error_json_format(capsys):
     """In a machine format, cli_error emits the structured payload as JSON and
     exits non-zero."""
