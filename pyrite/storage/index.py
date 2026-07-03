@@ -805,6 +805,19 @@ class IndexManager:
 
                 kb_validators = get_registry().get_validators_for_kb(kb.kb_type)
             except Exception:
+                # get_validators_for_kb already degrades per-plugin with its
+                # own warning logs internally -- this outer except only
+                # catches something unexpected (e.g. the import itself
+                # failing). Log it: the invalid-status check silently
+                # turning itself off for a whole KB is exactly the failure
+                # mode that let 75 backlog items drift onto an off-enum
+                # status undetected (fail-open-exception-sweep site #2).
+                logger.warning(
+                    "Could not load status validators for KB %r; invalid-status "
+                    "check is disabled for this KB this pass",
+                    kb.name,
+                    exc_info=True,
+                )
                 kb_validators = []
 
             entry_rows = self.db.execute_sql(
@@ -883,11 +896,29 @@ class IndexManager:
             try:
                 results = validator(row["entry_type"], fields, ctx)
             except TypeError:
+                # Signature fallback: some validators take (entry_type,
+                # fields) without ctx. Not an error -- try the 2-arg form.
                 try:
                     results = validator(row["entry_type"], fields)
                 except Exception:
+                    logger.warning(
+                        "Status validator %r raised for %s/%s (2-arg form); "
+                        "invalid-status check skipped for this entry",
+                        getattr(validator, "__name__", validator),
+                        kb.name,
+                        row["id"],
+                        exc_info=True,
+                    )
                     continue
             except Exception:
+                logger.warning(
+                    "Status validator %r raised for %s/%s; invalid-status "
+                    "check skipped for this entry",
+                    getattr(validator, "__name__", validator),
+                    kb.name,
+                    row["id"],
+                    exc_info=True,
+                )
                 continue
             for item in results or []:
                 if item.get("field") == "status" and item.get("rule") == "enum":

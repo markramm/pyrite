@@ -5,6 +5,7 @@ Tests for storage layer (database, repository, index).
 import logging
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -1370,6 +1371,108 @@ class TestInvalidStatusInHealth:
                 health = index_mgr.check_health()
                 bad_ids = {row["id"] for row in health.get("invalid_statuses", [])}
                 assert "sup-1" not in bad_ids, "superseded must be an accepted status"
+            finally:
+                db.close()
+
+    def test_validator_lookup_failure_logs_warning_not_silent(self, caplog):
+        """fail-open-exception-sweep site #2a: index.py's `get_validators_for_kb`
+        call was wrapped in a bare `except Exception: kb_validators = []` with
+        no log line -- a lookup failure silently disables the invalid-status
+        check for the whole KB, and the drift detector built after the
+        75-entry `completed` incident can turn itself off without a trace."""
+        import logging
+
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "sw-kb3"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb3\nkb_type: software\ntypes:\n  backlog_item:\n"
+                "    description: A work item\n"
+            )
+
+            db, config = self._make_software_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "bad-2",
+                        "kb_name": kb_path.name,
+                        "entry_type": "backlog_item",
+                        "title": "Bad status",
+                        "body": "body",
+                        "status": "completed",
+                        "file_path": str(kb_path / "bad-2.md"),
+                    }
+                )
+                index_mgr = IndexManager(db, config)
+
+                with patch(
+                    "pyrite.plugins.get_registry",
+                    side_effect=RuntimeError("simulated registry failure"),
+                ):
+                    with caplog.at_level(logging.WARNING, logger="pyrite.storage.index"):
+                        health = index_mgr.check_health()
+
+                warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+                assert warnings, (
+                    "expected a warning-level log when validator lookup fails; "
+                    f"got {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+                )
+                # The check degrades (no validators -> nothing flagged this
+                # pass), but it must be visible in logs, not silent.
+                assert health.get("invalid_statuses", []) == []
+            finally:
+                db.close()
+
+    def test_broken_validator_logs_warning_not_silent(self, caplog):
+        """fail-open-exception-sweep site #2b: each validator call in
+        `_check_invalid_status` was wrapped in a bare `except Exception:
+        continue` -- a buggy/raising validator is silently skipped per
+        entry, with no log line to reveal that the check is degraded."""
+        import logging
+
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "sw-kb4"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb4\nkb_type: software\ntypes:\n  backlog_item:\n"
+                "    description: A work item\n"
+            )
+
+            db, config = self._make_software_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "bad-3",
+                        "kb_name": kb_path.name,
+                        "entry_type": "backlog_item",
+                        "title": "Bad status",
+                        "body": "body",
+                        "status": "completed",
+                        "file_path": str(kb_path / "bad-3.md"),
+                    }
+                )
+                index_mgr = IndexManager(db, config)
+
+                def _broken_validator(entry_type, fields, ctx=None):
+                    raise RuntimeError("simulated validator crash")
+
+                with patch(
+                    "pyrite.plugins.get_registry"
+                ) as mock_get_registry:
+                    mock_get_registry.return_value.get_validators_for_kb.return_value = [
+                        _broken_validator
+                    ]
+                    with caplog.at_level(logging.WARNING, logger="pyrite.storage.index"):
+                        health = index_mgr.check_health()
+
+                warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+                assert warnings, (
+                    "expected a warning-level log when a validator raises; "
+                    f"got {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+                )
+                assert health.get("invalid_statuses", []) == []
             finally:
                 db.close()
 
