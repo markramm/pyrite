@@ -619,6 +619,42 @@ class TestIndexManager:
         assert len(stale) == 1
         assert stale[0]["kb"] == "test-kb"
 
+    def test_check_health_detects_same_second_content_edit(self, setup):
+        """A file edited without its mtime advancing (same-second double
+        edit, or a filesystem with coarse mtime resolution) must still show
+        up in check_health(). mtime-only comparison (stale_entries) misses
+        this; content-hash comparison (content_changed) catches it because
+        the on-disk hash no longer matches the hash recorded at index time.
+
+        check_staleness() intentionally stays mtime-only (cheap, safe on
+        every search call); hash comparison lives in check_health() instead,
+        which already reads every file's bytes per entry."""
+        setup["index_mgr"].index_kb("test-kb")
+        clean = setup["index_mgr"].check_health()
+        assert clean["stale_entries"] == []
+        assert clean["content_changed"] == []
+
+        kb_path = setup["kb_path"]
+        target = next(kb_path.rglob("*.md"))
+        original_mtime = target.stat().st_mtime
+
+        content = target.read_text()
+        target.write_text(content + "\nEdited without advancing mtime.\n")
+        import os
+
+        os.utime(target, (original_mtime, original_mtime))
+        assert target.stat().st_mtime == original_mtime
+
+        health = setup["index_mgr"].check_health()
+        assert health["stale_entries"] == [], (
+            "sanity check: mtime-only comparison should NOT catch this edit"
+        )
+        assert len(health["content_changed"]) == 1, (
+            "content changed but mtime did not advance — hash comparison "
+            "must still catch it, mtime-only comparison cannot"
+        )
+        assert health["content_changed"][0]["kb"] == "test-kb"
+
     def test_incremental_sync(self, setup):
         """Test incremental sync."""
         # Initial index

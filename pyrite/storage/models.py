@@ -84,6 +84,10 @@ class Entry(Base):
     updated_at = Column(String)
     indexed_at = Column(String, server_default="CURRENT_TIMESTAMP")
 
+    # SHA-256 of the on-disk file content at index time. Lets check_staleness
+    # catch same-second content edits that mtime comparison alone misses.
+    content_hash = Column(String(64))
+
     # Attribution
     created_by = Column(String, nullable=True)
     modified_by = Column(String, nullable=True)

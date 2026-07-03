@@ -137,6 +137,31 @@ def test_index_health_json(cli_env):
 
 
 @pytest.mark.cli
+def test_index_health_json_reports_content_changed_as_unhealthy(cli_env):
+    """A same-second content edit (mtime unchanged) surfaces via
+    content_changed and flips status to unhealthy — the CLI-visible half of
+    hash-based staleness detection (see test_storage.py's
+    test_check_health_detects_same_second_content_edit for the IndexManager
+    level)."""
+    import os
+
+    events_path = cli_env["tmpdir"] / "events"
+    target = next(events_path.rglob("*.md"))
+    original_mtime = target.stat().st_mtime
+
+    content = target.read_text()
+    target.write_text(content + "\nEdited without advancing mtime.\n")
+    os.utime(target, (original_mtime, original_mtime))
+
+    with _patch_config("pyrite.cli.index_commands.load_config", cli_env):
+        result = runner.invoke(app, ["index", "health", "--format", "json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["status"] == "unhealthy", data
+    assert data["checks"]["content_changed"], data["checks"]
+
+
+@pytest.mark.cli
 def test_repo_list_json(cli_env):
     """repo list --format json returns valid JSON with 'repos' key."""
     from unittest.mock import MagicMock

@@ -5,6 +5,7 @@ Handles indexing entries from file-based KBs into the SQLite FTS database.
 Supports incremental updates based on file modification times.
 """
 
+import hashlib
 import logging
 import re
 from collections.abc import Callable
@@ -64,6 +65,18 @@ def _strip_code_regions(text: str) -> str:
     stripped = _FENCED_CODE_RE.sub(_blank, text)
     stripped = _INLINE_CODE_RE.sub(_blank, stripped)
     return stripped
+
+
+def _hash_file(file_path: Path) -> str | None:
+    """SHA-256 of a file's raw bytes, or None if it can't be read.
+
+    Used for content-based staleness detection: mtime alone misses
+    same-second edits and coarse-resolution filesystems.
+    """
+    try:
+        return hashlib.sha256(file_path.read_bytes()).hexdigest()
+    except OSError:
+        return None
 
 
 def _is_valid_link_target(target: str) -> bool:
@@ -126,6 +139,7 @@ class IndexManager:
             "body": entry.body,
             "summary": entry.summary,
             "file_path": str(file_path),
+            "content_hash": _hash_file(file_path),
             "tags": entry.tags,
             "aliases": entry.aliases,
             "sources": [s.to_dict() for s in entry.sources],
@@ -546,13 +560,14 @@ class IndexManager:
     def _load_indexed_state(self, kb_name: str) -> dict[str, dict[str, str]]:
         """Load indexed entry state from DB for a KB.
 
-        Returns dict mapping entry_id -> {"file_path": ..., "indexed_at": ...}.
+        Returns dict mapping entry_id -> {"file_path", "indexed_at", "content_hash"}.
         """
         indexed = {}
         for row in self.db.get_entries_for_indexing(kb_name):
             indexed[row["id"]] = {
                 "file_path": row["file_path"],
                 "indexed_at": row["indexed_at"],
+                "content_hash": row.get("content_hash"),
             }
         return indexed
 
@@ -635,6 +650,13 @@ class IndexManager:
         - missing_files: entries in DB but file not found
         - unindexed_files: files not in DB
         - stale_entries: entries where file is newer than index
+        - content_changed: entries whose on-disk content hash no longer
+          matches the hash recorded at index time. Catches same-second
+          edits and coarse-mtime filesystems that `stale_entries` (mtime
+          comparison) misses. This check already reads every file's bytes
+          (via `_load_entry`), so hashing here is nearly free — unlike
+          `check_staleness()`, which stays mtime-only to remain cheap
+          enough for the search path.
         - broken_links: count of link rows with an unresolvable target
         - undeclared_types: entries whose `entry_type` isn't declared in the
           KB's `kb.yaml` types (and isn't a core type). Aggregated per
@@ -652,6 +674,7 @@ class IndexManager:
             "missing_files": [],
             "unindexed_files": [],
             "stale_entries": [],
+            "content_changed": [],
             "broken_links": 0,
             "undeclared_types": [],
             "missing_required_fields": [],
@@ -691,6 +714,18 @@ class IndexManager:
                                     "indexed_at": indexed_at,
                                 }
                             )
+
+                        indexed_hash = indexed[entry.id].get("content_hash")
+                        if indexed_hash:
+                            current_hash = _hash_file(file_path)
+                            if current_hash and current_hash != indexed_hash:
+                                health["content_changed"].append(
+                                    {
+                                        "kb": kb.name,
+                                        "id": entry.id,
+                                        "path": str(file_path),
+                                    }
+                                )
                 except FrontmatterError as e:
                     # Malformed YAML / missing frontmatter: a content problem in
                     # the file, not a Pyrite bug. Surface it in the report and

@@ -320,7 +320,12 @@ def index_health(
     subdirectory_mismatches = health.get("subdirectory_mismatches", [])
     malformed_frontmatter = health.get("malformed_frontmatter", [])
     invalid_statuses = health.get("invalid_statuses", [])
-    is_unhealthy = health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
+    is_unhealthy = (
+        health["missing_files"]
+        or health["unindexed_files"]
+        or health["stale_entries"]
+        or health.get("content_changed")
+    )
     has_warning = (
         bool(broken_links)
         or bool(undeclared_types)
@@ -337,6 +342,7 @@ def index_health(
             "missing_files": len(health["missing_files"]),
             "unindexed_files": len(health["unindexed_files"]),
             "stale_entries": len(health["stale_entries"]),
+            "content_changed": len(health.get("content_changed", [])),
             "broken_links": broken_links,
             "undeclared_types": undeclared_types,
             "missing_required_fields": missing_required,
@@ -447,6 +453,16 @@ def index_health(
             console.print(f"  • {item['kb']}/{item['id']}")
         if len(health["stale_entries"]) > 10:
             console.print(f"  ... and {len(health['stale_entries']) - 10} more")
+
+    content_changed = health.get("content_changed", [])
+    if content_changed:
+        console.print(
+            f"[yellow]Content changed, mtime unchanged ({len(content_changed)}):[/yellow]"
+        )
+        for item in content_changed[:10]:
+            console.print(f"  • {item['kb']}/{item['id']}")
+        if len(content_changed) > 10:
+            console.print(f"  ... and {len(content_changed) - 10} more")
 
     console.print("\nRun 'pyrite index sync' to fix issues.")
 
