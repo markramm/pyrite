@@ -97,6 +97,7 @@ class WorktreeService:
                 cwd=str(kb_config.path),
                 capture_output=True,
                 text=True,
+                env=GitService.subprocess_env(),
             )
             if result.returncode == 0:
                 return Path(result.stdout.strip())
@@ -372,11 +373,14 @@ class WorktreeService:
         # Reset branch to main
         import subprocess
 
+        from pyrite.services.git_service import GitService
+
         subprocess.run(
             ["git", "reset", "--hard", "main"],
             cwd=str(worktree_path),
             capture_output=True,
             text=True,
+            env=GitService.subprocess_env(),
         )
 
         # Clear diff index

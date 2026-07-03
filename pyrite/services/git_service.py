@@ -12,9 +12,48 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Env vars a parent git process (e.g. a pre-commit hook, itself a child of
+# `git commit`) sets for its own subprocesses. If a GitService call inherits
+# these while operating on a *different* repository (a different `cwd`), a
+# relative GIT_INDEX_FILE resolves against the wrong repo -- corrupting or
+# misdirecting the operation entirely (reproduced directly: pytest run as a
+# pre-commit hook subprocess, itself a `git commit` child, failed `git init`
+# in an unrelated tmp_path repo because GIT_INDEX_FILE=".git/index" pointed
+# at the outer pyrite repo's relative path instead).
+_LEAKABLE_GIT_ENV_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL",
+    "GIT_AUTHOR_DATE",
+    "GIT_COMMITTER_NAME",
+    "GIT_COMMITTER_EMAIL",
+    "GIT_COMMITTER_DATE",
+    "GIT_EDITOR",
+)
+
+
+def _git_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Environment for a git subprocess, isolated from any parent git
+    process's repo-scoped state. Pass `extra` to layer in e.g. token vars."""
+    env = os.environ.copy()
+    for var in _LEAKABLE_GIT_ENV_VARS:
+        env.pop(var, None)
+    if extra:
+        env.update(extra)
+    return env
+
 
 class GitService:
     """Low-level git operations via subprocess."""
+
+    @staticmethod
+    def subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+        """Public entry point for other modules that shell out to git
+        directly (e.g. WorktreeService) to get the same leak-isolated
+        environment GitService's own subprocess calls use."""
+        return _git_env(extra)
 
     @staticmethod
     def clone(
@@ -45,7 +84,9 @@ class GitService:
         cmd.extend([url, str(local_path)])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120, env=_git_env()
+            )
             if result.returncode == 0:
                 return True, f"Cloned to {local_path}"
             error = GitService._sanitize_output(result.stderr, token)
@@ -58,11 +99,12 @@ class GitService:
     @staticmethod
     def pull(local_path: Path, token: str | None = None) -> tuple[bool, str]:
         """Pull latest changes. Returns (success, message)."""
-        env = os.environ.copy()
+        extra = {}
         if token:
-            env["GIT_ASKPASS"] = "echo"
-            env["GIT_USERNAME"] = "oauth2"
-            env["GIT_PASSWORD"] = token
+            extra["GIT_ASKPASS"] = "echo"
+            extra["GIT_USERNAME"] = "oauth2"
+            extra["GIT_PASSWORD"] = token
+        env = _git_env(extra)
 
         try:
             result = subprocess.run(
@@ -91,6 +133,7 @@ class GitService:
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -107,6 +150,7 @@ class GitService:
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -123,6 +167,7 @@ class GitService:
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return result.stdout.strip()
@@ -159,6 +204,7 @@ class GitService:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                env=_git_env(),
             )
             if result.returncode != 0:
                 return []
@@ -213,6 +259,7 @@ class GitService:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return [f for f in result.stdout.strip().split("\n") if f]
@@ -229,6 +276,7 @@ class GitService:
                 cwd=str(path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             return result.returncode == 0
         except (subprocess.SubprocessError, OSError):
@@ -244,6 +292,7 @@ class GitService:
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return True, f"Added remote '{name}'"
@@ -398,6 +447,7 @@ class GitService:
                         cwd=str(local_path),
                         capture_output=True,
                         text=True,
+                        env=_git_env(),
                     )
                     if result.returncode != 0:
                         return False, {"error": f"Failed to stage {p}: {result.stderr.strip()}"}
@@ -407,6 +457,7 @@ class GitService:
                     cwd=str(local_path),
                     capture_output=True,
                     text=True,
+                    env=_git_env(),
                 )
                 if result.returncode != 0:
                     return False, {"error": f"Failed to stage: {result.stderr.strip()}"}
@@ -417,6 +468,7 @@ class GitService:
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             staged_files = [f for f in status_result.stdout.strip().split("\n") if f]
             if not staged_files:
@@ -433,6 +485,7 @@ class GitService:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                env=_git_env(),
             )
             if result.returncode != 0:
                 return False, {"error": f"Commit failed: {result.stderr.strip()}"}
@@ -476,11 +529,12 @@ class GitService:
         if branch is None:
             branch = GitService.get_current_branch(local_path)
 
-        env = os.environ.copy()
+        extra = {}
         if token:
-            env["GIT_ASKPASS"] = "echo"
-            env["GIT_USERNAME"] = "oauth2"
-            env["GIT_PASSWORD"] = token
+            extra["GIT_ASKPASS"] = "echo"
+            extra["GIT_USERNAME"] = "oauth2"
+            extra["GIT_PASSWORD"] = token
+        env = _git_env(extra)
 
         try:
             result = subprocess.run(
@@ -518,6 +572,7 @@ class GitService:
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if status.returncode != 0:
                 return result
@@ -589,6 +644,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return True, f"Created worktree at {worktree_path} on branch {branch}"
@@ -598,6 +654,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return True, f"Created worktree at {worktree_path} on existing branch {branch}"
@@ -617,6 +674,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode != 0:
                 return []
@@ -655,6 +713,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return True, f"Removed worktree at {worktree_path}"
@@ -676,6 +735,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode != 0:
                 return False, f"Failed to checkout {into}: {result.stderr.strip()}"
@@ -686,6 +746,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return True, f"Merged {branch} into {into}"
@@ -697,6 +758,7 @@ class GitService:
                 cwd=str(repo_path),
                 capture_output=True,
                 text=True,
+                env=_git_env(),
             )
             return False, f"Merge conflict: {conflict_info}"
         except (subprocess.SubprocessError, OSError) as e:
@@ -727,6 +789,7 @@ class GitService:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                env=_git_env(),
             )
             if result.returncode == 0:
                 return True, result.stdout
