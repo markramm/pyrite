@@ -1,14 +1,8 @@
 ---
 id: fail-open-exception-sweep
-type: backlog_item
 title: "Fail-open exception sweep: ~10 broad excepts convert failure to false success at trust boundaries"
-kind: tech_debt
-status: proposed
-priority: high
-effort: S
-created: "2026-07-03"
+type: backlog_item
 tags: [reliability, exceptions, audit-2026-07]
-epic: shared-instance-readiness
 links:
 - target: epic-shared-instance-readiness
   relation: subtask_of
@@ -16,6 +10,12 @@ links:
 - target: verify-after-write-on-the-index-path
   relation: related
   kb: pyrite
+importance: 5
+kind: tech_debt
+status: proposed
+priority: high
+effort: S
+rank: 0
 ---
 
 ## Problem
@@ -62,8 +62,35 @@ degraded-state result) where the site guards an invariant. Follow the
 plugin-registry policy shape. Add ruff BLE001 (or a review-checklist
 rule): no bare pass / fail-open without a log line and a WHY comment.
 
+## Progress
+
+- [x] **Site #1 — mcp_server.py DB-registered-KB merge** (37a37c9,
+  2026-07-03) — turned out to be a third near-identical copy of the
+  same raw-SQL merge (cli/context.py had its own, already logging at
+  debug; server/api.py had a fourth, also bare `except: pass`).
+  Consolidated all three call sites into
+  `PyriteDB.merge_registered_kbs(config)` (storage/kb_ops.py), narrowed
+  to `SQLAlchemyError`, logs at warning with `exc_info`. Fault-injection
+  test in tests/test_merge_registered_kbs.py. Net -60 LOC.
+- [ ] Site #2 — index.py invalid-status drift detector swallows and
+  self-disables
+- [ ] Site #3 — kb_service.py push_error masks auth/network failures
+  as "no remote configured"
+- [ ] Site #4 — index.py frontmatter `references` dropped silently
+- [ ] Site #5 — auth_service.py decryption failure silently falls
+  back to plaintext (security-relevant, at minimum warning-log)
+- [ ] Site #6 — plugins/registry.py KB-type check fail-open (`return
+  True` on error — fail-open authorization)
+- [ ] Low-stakes site #7 (repository.py, document_manager.py, alembic
+  4x pass)
+- [ ] CLI-consistency-review items: search_commands.py silent
+  file-search fallback, qa_service.py/kb_service.py debug-level write
+  failures
+- [ ] Lint/checklist rule preventing new fail-open sites
+
 ## Acceptance criteria
 
 - Sites 1-6 fixed with a test each where feasible (fault-inject the
   swallowed exception, assert the failure is now visible).
 - A lint or documented checklist rule prevents new fail-open sites.
+
