@@ -1,18 +1,18 @@
 ---
 id: ci-make-green-and-load-bearing
-type: backlog_item
 title: "Make CI green and load-bearing: 100/100 recent runs failed; pre-commit configured but not installed"
-kind: bug
-status: proposed
-priority: high
-effort: M
-created: "2026-07-03"
+type: backlog_item
 tags: [ci, testing, reliability, audit-2026-07]
-epic: shared-instance-readiness
 links:
 - target: epic-shared-instance-readiness
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: bug
+status: proposed
+priority: high
+effort: M
+rank: 0
 ---
 
 ## Problem
@@ -55,9 +55,54 @@ actual merge gate today is whatever gets run locally.
 6. Ratchet mypy strict on `pyrite/storage/` only (280 sampled errors
    concentrate there — the layer that produced the field bugs).
 
+## Progress
+
+- [x] **Item 1 — CI ruff failure diagnosed and fixed** (86e4ff3,
+  2026-07-03) — not a version/scope mismatch as hypothesized
+  (`ruff>=0.15.0,<0.16` pin matches local 0.15.2 exactly). CI's lint
+  step runs both `ruff check` (already clean) and `ruff format
+  --check` (was failing: 82 files had drifted out of formatting
+  compliance, root-caused to item 2 below -- pre-commit's ruff-format
+  hook never ran on any commit). Applied `ruff format pyrite/
+  tests/`; diff confirmed whitespace/style-only; full suite re-run
+  clean (3018 passed) after the reformat.
+- [x] **Item 2 — pre-commit install + hook fixes** (74a2cb1,
+  2026-07-03) — `pre-commit` was never a declared dependency (no
+  pyproject.toml entry) -- root cause of item 1's drift. Added
+  `pre-commit>=3.6.0` to dev extras; unset a redundant local
+  `core.hooksPath` override that blocked installation; installed
+  hooks. Fixed the `pyrite-schema-validate` hook itself (never
+  successfully ran before -- `python -m pyrite` fails, pyrite/ has no
+  `__main__.py`; now calls the `pyrite` console script directly), and
+  a scoping bug that fix exposed (`--changed` validated non-KB
+  markdown as KB entries; added KB-path filtering, two new tests).
+  Documented setup + a flaky-test caveat in CLAUDE.md.
+- [ ] Item 3 — postgres service container + `PYRITE_TEST_PG_URL` in
+  CI (0 skips for the 71 conformance params)
+- [ ] Item 4 — triage `test-optional-deps` and Playwright CI
+  failures (separate from the local flaky-test finding below --
+  these are the actual CI jobs, not yet re-run against green ruff)
+- [ ] Item 5 — optional ratchets (coverage `fail_under`, `fix:`-commit
+  test-touch check)
+- [ ] Item 6 — mypy strict ratchet on `pyrite/storage/`
+
+**Related finding, filed separately:** fixing item 2 (the pytest-check
+hook now actually runs the full suite with `-x`) surfaced three
+full-suite-only flaky tests today (`test_index_worker.py`,
+`test_review_flow_e2e.py` -- now removed as an unrelated product
+decision, and `test_worktree_service.py`), none reproducible in
+isolation, none related to the diffs that triggered them. This is the
+same "permanently-red trains people to ignore the signal" problem
+this ticket's own problem statement describes, just one layer down at
+the local pre-commit hook instead of CI. Filed as
+[[full-suite-only-flaky-tests-state-leak-across-test-files]] (high,
+M) -- likely blocks fully closing this ticket's acceptance criteria,
+since a red-on-flake `-x` hook isn't a trustworthy local gate either.
+
 ## Acceptance criteria
 
 - CI green on dev HEAD, and red CI blocks (or at minimum pages)
   rather than being ambient.
 - Postgres conformance runs in CI (0 skips for the postgres param).
 - Pre-commit hooks installed and passing locally.
+
