@@ -504,7 +504,7 @@ class AuthService:
     def get_user(self, user_id: int) -> dict | None:
         """Get user by ID."""
         rows = self.db.execute_sql(
-            "SELECT id, username, display_name, role, auth_provider, avatar_url"
+            "SELECT id, username, display_name, role, auth_provider, avatar_url, usage_tier"
             " FROM local_user WHERE id = :user_id",
             {"user_id": user_id},
         )
@@ -519,6 +519,21 @@ class AuthService:
         rowcount = self.db.execute_write_sql(
             "UPDATE local_user SET role = :role, updated_at = :now WHERE id = :user_id",
             {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
+        )
+        return rowcount > 0
+
+    def set_usage_tier(self, user_id: int, usage_tier: str) -> bool:
+        """Set a user's usage tier (free/pro/enterprise — a resource/
+        billing axis, distinct from `role`). Returns True if user found.
+
+        Unlike set_role, the tier name isn't validated against a fixed
+        enum here — it's matched against config.settings.auth.usage_tiers
+        at check time (QuotaService), and an admin may configure
+        arbitrary tier names there.
+        """
+        rowcount = self.db.execute_write_sql(
+            "UPDATE local_user SET usage_tier = :usage_tier, updated_at = :now WHERE id = :user_id",
+            {"usage_tier": usage_tier, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
         return rowcount > 0
 

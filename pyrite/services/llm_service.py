@@ -135,6 +135,7 @@ class LLMService:
         system: str | None = None,
         max_tokens: int = 1024,
         cache_system: bool = False,
+        kind: str = "chat",
     ) -> str:
         """Generate a completion and return the full text.
 
@@ -149,11 +150,15 @@ class LLMService:
                 long, stable system prompts replayed across calls (RAG
                 chat, on-save QA, summarize). No-op for non-Anthropic
                 providers. See Tier A r2200.
+            kind: Usage-tracking category recorded alongside token counts
+                (e.g. "chat", "summarize", "auto-tag") -- must match what
+                per-kind quota checks (QuotaService.check_llm_quota) query
+                for, or usage recorded here becomes invisible to them.
         """
         if self._provider == "stub":
             return ""
         if self._provider == "anthropic":
-            return self._anthropic_complete(prompt, system, max_tokens, cache_system)
+            return self._anthropic_complete(prompt, system, max_tokens, cache_system, kind)
         if self._provider in self._OPENAI_COMPAT_PROVIDERS:
             return self._openai_complete(prompt, system, max_tokens)
         return ""
@@ -243,7 +248,7 @@ class LLMService:
                 getattr(usage, "output_tokens", 0) or 0,
             )
 
-    def _record_anthropic_usage(self, response) -> None:
+    def _record_anthropic_usage(self, response, kind: str = "chat") -> None:
         """Record token usage via the injected usage_service, if configured.
         No-op when usage_service is unset (default) -- callers that don't
         wire tracking keep working exactly as before."""
@@ -256,6 +261,7 @@ class LLMService:
             user_id=self._user_id,
             provider=self._provider,
             model=self._settings.ai_model,
+            kind=kind,
             input_tokens=getattr(usage, "input_tokens", 0) or 0,
             output_tokens=getattr(usage, "output_tokens", 0) or 0,
             cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
@@ -268,6 +274,7 @@ class LLMService:
         system: str | None,
         max_tokens: int,
         cache_system: bool = False,
+        kind: str = "chat",
     ) -> str:
         client = self._get_anthropic_client()
         kwargs: dict[str, Any] = {
@@ -279,7 +286,7 @@ class LLMService:
             kwargs["system"] = self._anthropic_system_arg(system, cache_system)
         response = client.messages.create(**kwargs)
         self._log_anthropic_cache_usage(response)
-        self._record_anthropic_usage(response)
+        self._record_anthropic_usage(response, kind=kind)
         return response.content[0].text
 
     def _anthropic_stream(

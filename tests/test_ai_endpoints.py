@@ -28,7 +28,7 @@ class MockLLMService:
             "model": "test-model",
         }
 
-    async def complete(self, prompt, system=None, max_tokens=1024):
+    async def complete(self, prompt, system=None, max_tokens=1024, cache_system=False, kind="chat"):
         return self._complete_response
 
     async def stream(self, prompt, system=None):

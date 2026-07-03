@@ -6,10 +6,17 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from ...config import PyriteConfig
+from ...services.auth_service import AuthService
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
+from ...services.llm_usage_service import LLMUsageService
+from ...services.quota_service import QuotaService
 from ...services.search_service import SearchService
+from ...storage.database import PyriteDB
 from ..api import (
+    get_config,
+    get_db,
     get_kb_service,
     get_llm_service,
     get_search_service,
@@ -68,6 +75,32 @@ def _get_entry(svc: KBService, entry_id: str, kb_name: str) -> dict:
     return entry
 
 
+def _enforce_llm_quota(request: Request, config: PyriteConfig, db: PyriteDB, kind: str) -> None:
+    """Raise 429 if the current user is over their tier's daily LLM
+    quota. No-op (unlimited) for anonymous requests (auth disabled) or
+    when no usage_tiers are configured -- matches QuotaService's
+    existing fail-open-on-no-config convention."""
+    auth_user = getattr(request.state, "auth_user", None)
+    if not auth_user:
+        return
+
+    auth_service = AuthService(db, config.settings.auth)
+    user = auth_service.get_user(auth_user["id"])
+    if not user:
+        return
+
+    quota_svc = QuotaService(config)
+    usage_svc = LLMUsageService(db)
+    allowed, message = quota_svc.check_llm_quota(
+        user_id=auth_user["id"],
+        kind=kind,
+        user_tier=user["usage_tier"],
+        usage_service=usage_svc,
+    )
+    if not allowed:
+        raise HTTPException(status_code=429, detail={"code": "QUOTA_EXCEEDED", "message": message})
+
+
 @router.post("/summarize", response_model=AISummarizeResponse)
 @limiter.limit("30/minute")
 async def ai_summarize(
@@ -76,10 +109,13 @@ async def ai_summarize(
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
 ):
     """Generate an AI summary for an entry."""
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
+    _enforce_llm_quota(request, config, db, kind="summarize")
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
     body = entry.get("body", "") or ""
@@ -91,7 +127,7 @@ async def ai_summarize(
     prompt = f"Title: {title}\n\n{body}"
 
     try:
-        summary = await llm.complete(prompt, system=system, max_tokens=256)
+        summary = await llm.complete(prompt, system=system, max_tokens=256, kind="summarize")
         return AISummarizeResponse(summary=summary.strip())
     except Exception as e:
         logger.exception("AI summarize failed")
@@ -106,10 +142,13 @@ async def ai_auto_tag(
     llm: LLMService = Depends(get_llm_service),
     svc: KBService = Depends(get_kb_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
 ):
     """Suggest tags for an entry using AI."""
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
+    _enforce_llm_quota(request, config, db, kind="auto-tag")
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
     body = entry.get("body", "") or ""
@@ -137,7 +176,7 @@ Existing tags on this entry: {json.dumps(existing_tags)}
 Tag vocabulary: {json.dumps(tag_vocab[:100])}"""
 
     try:
-        result = await llm.complete(prompt, system=system, max_tokens=512)
+        result = await llm.complete(prompt, system=system, max_tokens=512, kind="auto-tag")
         # Parse JSON from response
         result = result.strip()
         if result.startswith("```"):
@@ -162,10 +201,13 @@ async def ai_suggest_links(
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
 ):
     """Suggest wikilinks for an entry using AI + search."""
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
+    _enforce_llm_quota(request, config, db, kind="suggest-links")
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
     body = entry.get("body", "") or ""
@@ -209,7 +251,7 @@ Candidate entries to link:
 {candidates}"""
 
     try:
-        result = await llm.complete(prompt, system=system, max_tokens=512)
+        result = await llm.complete(prompt, system=system, max_tokens=512, kind="suggest-links")
         result = result.strip()
         if result.startswith("```"):
             result = result.split("\n", 1)[1].rsplit("```", 1)[0].strip()

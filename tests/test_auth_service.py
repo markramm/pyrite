@@ -159,6 +159,36 @@ class TestRoles:
             service.set_role(reg["id"], "superadmin")
 
 
+class TestUsageTier:
+    """wire-user-usage-tier-resolution-for-quota-enforcement: usage_tier
+    (free/pro/enterprise, a resource/billing axis) is distinct from role
+    (read/write/admin, an auth-permission axis). The local_user.usage_tier
+    column has existed since migration v10 but nothing read or wrote it."""
+
+    def test_get_user_includes_usage_tier(self, auth_env):
+        service, _ = auth_env
+        reg = service.register("alice", "password123")
+        user = service.get_user(reg["id"])
+        assert "usage_tier" in user
+
+    def test_new_user_defaults_to_default_tier(self, auth_env):
+        service, _ = auth_env
+        reg = service.register("alice", "password123")
+        user = service.get_user(reg["id"])
+        assert user["usage_tier"] == "default"
+
+    def test_set_usage_tier(self, auth_env):
+        service, _ = auth_env
+        reg = service.register("alice", "password123")
+        assert service.set_usage_tier(reg["id"], "pro") is True
+        user = service.get_user(reg["id"])
+        assert user["usage_tier"] == "pro"
+
+    def test_set_usage_tier_unknown_user_returns_false(self, auth_env):
+        service, _ = auth_env
+        assert service.set_usage_tier(999, "pro") is False
+
+
 class TestOAuthStateStore:
     """oauth-state-store-persistence: CSRF state moved from an in-memory
     dict to the DB (oauth_state table, migration v22) so a process restart

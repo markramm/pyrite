@@ -394,6 +394,69 @@ class TestLLMServiceUsageTracking:
         assert call_kwargs["input_tokens"] == 12
         assert call_kwargs["output_tokens"] == 7
 
+    def test_complete_records_usage_with_caller_supplied_kind(self):
+        """The recorded kind must reflect what the caller actually asked
+        for (summarize/auto-tag/chat/...), not a hardcoded default --
+        otherwise a quota check scoped to e.g. kind='summarize' can never
+        see rows a summarize call actually produced."""
+        from unittest.mock import MagicMock
+
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="anthropic", ai_api_key="sk-test", ai_model="claude-sonnet-4-20250514"
+        )
+        usage_service = MagicMock()
+        svc = LLMService(settings, usage_service=usage_service, user_id=42)
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Summary text")]
+        mock_response.usage.input_tokens = 12
+        mock_response.usage.output_tokens = 7
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.usage.cache_read_input_tokens = 0
+        mock_client.messages.create = MagicMock(return_value=mock_response)
+
+        mock_module = MagicMock()
+        mock_module.Anthropic.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=mock_module):
+            asyncio.run(svc.complete("Summarize this", kind="summarize"))
+
+        call_kwargs = usage_service.record_usage.call_args.kwargs
+        assert call_kwargs["kind"] == "summarize"
+
+    def test_complete_default_kind_is_chat(self):
+        """Callers that don't specify kind keep the existing default."""
+        from unittest.mock import MagicMock
+
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="anthropic", ai_api_key="sk-test", ai_model="claude-sonnet-4-20250514"
+        )
+        usage_service = MagicMock()
+        svc = LLMService(settings, usage_service=usage_service, user_id=42)
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Hi")]
+        mock_response.usage.input_tokens = 1
+        mock_response.usage.output_tokens = 1
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.usage.cache_read_input_tokens = 0
+        mock_client.messages.create = MagicMock(return_value=mock_response)
+
+        mock_module = MagicMock()
+        mock_module.Anthropic.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=mock_module):
+            asyncio.run(svc.complete("Hi"))
+
+        call_kwargs = usage_service.record_usage.call_args.kwargs
+        assert call_kwargs["kind"] == "chat"
+
     def test_complete_without_usage_service_does_not_raise(self):
         """Default construction (no usage tracking wired) must behave
         exactly as before -- MCP/CLI callers that don't pass

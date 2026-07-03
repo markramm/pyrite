@@ -88,7 +88,8 @@ Consequences for the hosted instance:
   its response shape needs a similar usage-extraction path but wasn't
   done here to keep the change reviewable. Streaming (`.stream()`) also
   not wired — token counts for streamed responses aren't available the
-  same way (need end-of-stream accounting), separate follow-up.
+  same way (need end-of-stream accounting), separate follow-up
+  ([[wire-llm-usage-recording-quota-enforcement-into-ai-chat-s-streaming-path]]).
 - [x] **REST endpoints** (2026-07-04) — `GET /api/usage/me` (any
   authenticated user, or the anonymous/null-user bucket when auth is
   disabled) and `GET /api/admin/usage` (admin-tier gated, per-user
@@ -129,49 +130,50 @@ Consequences for the hosted instance:
   `LLMUsageService.check_quota` (already had the DB query; this method
   is the tier-config lookup layer in front of it). 5 new tests, all
   passing.
-
-  **NOT wired into any live request path** — and after investigating,
-  this surfaced a real, pre-existing design gap wider than this
-  ticket: `check_llm_quota`'s `user_tier` parameter has no source of
-  truth to read from. `local_user.role` is an auth-permission tier
-  (read/write/admin), not a resource/billing tier
-  (free/pro/enterprise) — there is no column or lookup anywhere that
-  maps a user to a `usage_tiers` key. This isn't new to the LLM
-  quota specifically: `check_kb_creation_allowed` and
-  `check_entry_creation_allowed` have the exact same unresolved
-  `user_tier` parameter and are ALSO never called anywhere in
-  production code (confirmed via a repo-wide grep for
-  `QuotaService(` — zero call sites outside the test file, for any
-  of its three check methods). `QuotaService` has existed as
-  dead/unwired code for all three of its methods, not just the new
-  one. Wiring `check_llm_quota` into `ai_ep.py`'s summarize/auto-tag/
-  suggest-links/chat endpoints would require first deciding how a
-  user's usage tier is determined and stored — a real design
-  question (a new `local_user` column? An admin-set per-user
-  override? Derived from `role`?) that deserves its own scoping pass,
-  not a guess bolted onto this ticket. Filed as a separate, more
-  precisely-scoped follow-up:
-  [[wire-user-usage-tier-resolution-for-quota-enforcement]].
+- [x] **Wired into live request paths** (2026-07-04, closing
+  [[wire-user-usage-tier-resolution-for-quota-enforcement]]) — usage
+  tier now resolves from `local_user.usage_tier` (column existed since
+  migration v10, never read/written until now;
+  `AuthService.get_user()`/`set_usage_tier()` added). New
+  `_enforce_llm_quota()` helper in `ai_ep.py`, called from
+  `ai_summarize` (kind="summarize"), `ai_auto_tag` (kind="auto-tag"),
+  `ai_suggest_links` (kind="suggest-links"). Fixed a real bug found
+  during this wiring: `LLMService.complete()` had no `kind` parameter,
+  so every recorded row was hardcoded to `kind="chat"` regardless of
+  caller — meaning a `kind="summarize"` quota check could never see
+  summarize usage and always reported unlimited. Added `kind: str =
+  "chat"` param to `complete()`, threaded through
+  `_anthropic_complete()`/`_record_anthropic_usage()`. `ai_chat` still
+  NOT wired (uses `.stream()`, no usage-recording path exists for
+  streaming yet) — separate follow-up filed:
+  [[wire-llm-usage-recording-quota-enforcement-into-ai-chat-s-streaming-path]].
+  `check_kb_creation_allowed`/`check_entry_creation_allowed` also still
+  unwired — no real endpoint matches their semantics; separate
+  follow-up filed:
+  [[wire-kb-entry-creation-quota-checks-or-remove-dead-quotaservice-methods]].
+  7 new endpoint tests in `tests/test_ai_quota_enforcement.py`, 2 new
+  tests in `tests/test_llm_service.py` for the `kind` fix.
 
 ## Acceptance criteria
 
 - Every LLM call records a usage row. **Partially met** — every
   Anthropic `complete()` call through the REST layer (and MCP QA
-  assessment) records a row. OpenAI-compatible providers and streaming
-  calls do not yet.
+  assessment) records a row, now correctly tagged per-kind. OpenAI-
+  compatible providers and streaming calls (`ai_chat`) do not yet.
 - Cost estimates use a model→price config (versioned, easy to
   update). **Met** — `PRICING` dict in `llm_usage_service.py`.
 - Quota check fires before the provider call and returns a useful
-  error. **Partially met** — `QuotaService.check_llm_quota()` exists,
-  is tested, and returns a clear message on denial, but isn't called
-  from any request path yet (blocked on the user-tier-resolution gap
-  above, tracked separately).
+  error. **Met for summarize/auto-tag/suggest-links** —
+  `QuotaService.check_llm_quota()` is called pre-request via
+  `_enforce_llm_quota()` and returns a 429 with a clear message on
+  denial. `ai_chat` still open (streaming follow-up above).
 - Admin endpoint shows per-user totals. **Met** —
   `GET /api/admin/usage`.
 - Tests cover: usage record creation, quota enforcement (over and
   under), cost estimation arithmetic, cache-token tracking. **Met** —
-  20 service-level tests (15 usage + 5 quota) + 2 endpoint tests + 3 LLMService-integration
-  tests cover all four areas named.
+  20 service-level tests (15 usage + 5 quota) + 2 admin-endpoint tests
+  + 5 LLMService-integration tests + 7 AI-endpoint quota-enforcement
+  tests cover all areas named.
 
 ## Related
 
