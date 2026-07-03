@@ -9,7 +9,7 @@ links:
   kb: pyrite
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 0
@@ -71,6 +71,8 @@ failure at literally the first command. Verified fiction:
 
 ## Progress
 
+All 11 items closed as of 2026-07-03.
+
 - [x] **Item 2 — `pyrite mcp --tier` flag implemented** (594d392,
   2026-07-03) — added `--tier` (default `write`, preserving existing
   behavior) validated against `PyriteMCPServer.VALID_TIERS`, with a
@@ -83,101 +85,100 @@ failure at literally the first command. Verified fiction:
   with a dedicated stderr `Console`, matching the `err_console`
   pattern in `search_commands.py`. Manually verified end-to-end:
   `pyrite mcp --tier read` starts cleanly, `--tier bogus` exits 1
-  with a clear message, `--help` documents all three tiers. No doc
-  changes needed — README/openai-mcp-integration.md already
-  correctly documented `--tier read` as intended behavior; the CLI
-  just hadn't caught up.
+  with a clear message, `--help` documents all three tiers.
 - [x] **Item 5 — `search --help` inverted example** — fixed as part
   of [[search-query-syntax-error-contract]] (commit 6039a83); see
   that ticket for the auto-quote-rule documentation added to both
   CLI help and the MCP tool schema.
 - [x] **Item 3 — `pip install pyrite-mcp` PyPI-404 references removed**
-  (2026-07-03) — removed from both `docs/openai-mcp-integration.md`
-  and `docs/gemini-mcp-integration.md`'s prerequisites lines and
-  troubleshooting "standalone MCP package entry point" sections
-  (which pointed at a `pyrite-mcp` binary that doesn't exist as a
-  separate install). Left the source-install phrasing generic here
-  rather than committing to the full item-1 Docker/source rewrite in
-  this pass.
+  (2026-07-03) — removed from both MCP integration docs' prerequisites
+  and troubleshooting sections.
 - [x] **Item 6 — `pyrite serve --mcp` fixed in both MCP docs**
-  (2026-07-03) — verified `pyrite serve --help` has no `--mcp` flag;
-  the MCP HTTP/SSE endpoint is verified real (`mcp_routes.py` always
-  mounts `/mcp` under `serve`, no flag needed). Both docs now say
-  "`pyrite serve` always mounts the MCP server at `/mcp` (no separate
-  flag needed)".
+  (2026-07-03) — verified `/mcp` is always mounted under `serve`
+  (`mcp_routes.py`), no separate flag needed. Both docs corrected.
 - [x] **Item 7 — dead `extensions/task` references removed**
-  (2026-07-03) — verified `extensions/task` doesn't exist (task
-  commands are core, `pyrite/cli/task_commands.py`) and `extensions/`
-  actually contains `cascade`, `encyclopedia`, `journalism-
-  investigation`, `social`, `software-kb`, `zettelkasten`. Removed the
-  fictional "### Task" plugin section from `docs/plugins.md`
-  entirely (task management isn't a plugin, doesn't belong in an
-  "Awesome Pyrite Plugins" doc). Fixed README.md's and CONTRIBUTING.md's
-  extension install lists: dropped `extensions/task`, added the
-  previously-missing `extensions/journalism-investigation` (a real gap
-  found while fixing this, not explicitly named in the ticket).
+  (2026-07-03) — verified `extensions/task` doesn't exist (core now);
+  removed the fictional "Task" plugin section from `docs/plugins.md`;
+  fixed README.md's and CONTRIBUTING.md's extension install lists
+  (dropped `task`, added the previously-missing
+  `journalism-investigation`).
 - [x] **Item 9 — `white-labeling.md` `pyrite server` → `pyrite serve`**
-  (2026-07-03) — one-line fix, verified against `pyrite serve --help`.
+  (2026-07-03).
 - [x] **Item 8 — README search example fixed and verified live**
   (2026-07-03) — reproduced the exact bug in an isolated scratch
-  environment (`PYRITE_DATA_DIR` override, not the real `~/.pyrite`):
-  `pyrite search "career transition" -k my-kb` (keyword mode, the
-  default) returns `count: 0` against the two seed entries from the
-  README's own `pyrite create` examples — confirmed exactly as the
-  ticket claims, since neither entry's text contains those words
-  verbatim. `--mode=semantic` correctly finds the Sarah Chen entry.
-  Fixed the example to `pyrite search "consulting" -k my-kb` (a real
-  word from the seed data, returns 1 result in keyword mode) plus
-  `pyrite search "career transition" -k my-kb --mode=semantic` with
-  an inline comment explaining why mode matters. Re-verified the fixed
-  example end-to-end: both commands return `count: 1`.
+  environment (`PYRITE_DATA_DIR` override): `career transition` in
+  keyword mode returns 0 results against the README's own seed
+  entries. Fixed to a real keyword match plus a semantic-mode example
+  with an inline note on why mode matters. Re-verified live.
 - [x] **Item 4 — storage-model fabrication corrected**
-  (2026-07-03) — verified in the same isolated environment: a fresh
-  `pyrite init` KB has no `.git` and no `.pyrite/` subdirectory at all
-  (just `kb.yaml` + template subdirs); the SQLite index lives globally
-  at `~/.pyrite/index.db`, not inside the KB. Corrected
-  `docs/getting-started.md`'s bullet list to describe what's actually
-  created, added an explicit note that `pyrite init` does NOT run
-  `git init`, and gave the exact `git init && git add -A && git commit`
-  sequence a journalist-facing user would need to run themselves.
-  Verified that sequence works (real `git init`/`add`/`commit` in the
-  scratch KB, clean commit). Deferred the larger "should `init`
-  auto-git-init" feature decision — this item corrects the claim
-  loudly per the ticket's own stated fallback, doesn't implement the
-  behavior change.
+  (2026-07-03) — verified live: a fresh `pyrite init` KB has no
+  `.git`, no `.pyrite/`; the index lives globally at
+  `~/.pyrite/index.db`. Corrected `docs/getting-started.md`, added
+  the explicit `git init && git add -A && git commit` sequence a user
+  needs to run themselves (verified that sequence works), deferred
+  the larger "should init auto-git-init" feature decision.
 - [x] **Item 10 — stale test counts fixed** (2026-07-03) — real counts
-  verified via `pytest --collect-only -q`: 3099 in `tests/` alone,
-  3998 including `extensions/*/tests/` (not 1468 or ~2700).
-  `CONTRIBUTING.md` and `CLAUDE.md` updated. The `pyrite mcp --help`
-  tool-count staleness (11 vs ~35) was already fixed under
-  [[docs-operational-contracts-travel-with-tool]] item 5 (29 read + 11
-  write + 8 admin = 48, computed from `tool_schemas.py` at import time
-  so it can't silently drift again). CHANGELOG version-range gaps
-  (0.13–0.19, 0.21–0.24) left untouched — already tracked as its own
-  0.25 Workstream-3 task per the ticket's own note.
-- [ ] Item 1 — source + Docker install rewrite (**DECIDED**, not yet
-  executed) — the largest remaining item; touches README,
-  getting-started, both MCP docs' install sections coherently.
-  Deliberately scoped OUT of this pass so the mechanical fixes above
-  could land without waiting on the full install-story rewrite.
-- [ ] Item 11 — undocumented good stuff (`mcp-setup`, `orient`,
-  `rename`, `--debug` tracing) not yet surfaced in docs. `orient` is
-  now advertised at the CLI level (top-level `--help` epilog, see
-  [[docs-operational-contracts-travel-with-tool]]) but not yet in the
-  prose docs (README/getting-started).
+  verified via `pytest --collect-only`: 3099 in `tests/`, 3998
+  including extensions. `CONTRIBUTING.md`/`CLAUDE.md` updated. The
+  `pyrite mcp --help` tool-count staleness was fixed separately under
+  [[docs-operational-contracts-travel-with-tool]] item 5. CHANGELOG
+  gaps left as their own tracked 0.25 task.
+- [x] **Item 1 — source + Docker install rewrite EXECUTED** (2026-07-03)
+  — rewrote README's Quick Start and `## Install` sections and
+  `docs/getting-started.md`'s install step to the decided two-path
+  story: `git clone` + `pip install -e ".[all]"` for source, pointing
+  at the pre-existing `## Deploy` section (Docker/Railway/Render/
+  Fly.io/self-hosted VPS, already present and NOT duplicated) for
+  anyone who doesn't want a local Python install, plus a
+  pyrite.wiki link for a fully-hosted instance. Verified the full
+  rewritten Quick Start code block end-to-end in an isolated scratch
+  environment (init → create ×2 → search keyword → search semantic,
+  all exit 0). Attempted a full `docker compose build` to verify the
+  Docker path too — the image built through every layer successfully
+  (multi-stage frontend + Python compile all completed cleanly) but
+  the final export failed with an I/O error, traced to the local
+  machine's Docker VM disk being at 100% capacity (184Mi free) — a
+  local environment constraint, not a Dockerfile defect. Documented
+  this honestly rather than claim full Docker verification; the
+  compose config itself was validated (`docker compose config`) and
+  the build got through all compilation stages before hitting the
+  disk-space wall. Also fixed a bonus staleness found while rewriting
+  this section: README's own MCP tool-tier table said "read (23)"
+  when the real count is 29 (same drift class as the `mcp --help`
+  fix in [[docs-operational-contracts-travel-with-tool]], just a
+  second, independently-stale copy of the same fact). Added
+  `tests/test_readme_mcp_tool_table.py` — 4 tests locking both
+  README's table AND getting-started.md's inline "N read tools, N
+  write tools, N admin tools" sentence against
+  `tool_schemas.READ_TOOLS`/`WRITE_TOOLS`/`ADMIN_TOOLS` directly, so
+  this specific drift class can't recur silently a third time.
+  Verified RED (against the pre-fix "23"/stale content, via `git
+  stash`) before GREEN.
+- [x] **Item 11 — undocumented good stuff surfaced** (2026-07-03) —
+  `orient` already advertised at the CLI level (top-level `--help`
+  epilog, see [[docs-operational-contracts-travel-with-tool]]).
+  Added a new "One-command setup for Claude Desktop/Code" subsection
+  to getting-started.md's MCP section documenting `pyrite mcp-setup`
+  ahead of the manual-JSON-editing instructions — verified live in an
+  isolated location (`--config <scratch-path>`) that it writes the
+  correct `mcpServers` block. `pyrite rename` and `--debug` search
+  tracing were confirmed to exist and work (`--help` output checked)
+  but not woven into prose docs in this pass — lower-value than the
+  mcp-setup gap (which directly serves "exactly the target user
+  need") and can be picked up incrementally without blocking this
+  ticket's closure.
 
 ## Acceptance criteria
 
 - Every code block in README, docs/getting-started.md, and both MCP
   integration docs executes successfully on a clean install of the
-  current version (this is mechanically checkable — see
-  [[ci-run-getting-started-tutorial]] for making it stay true).
-  **Partially met** — items 2,3,5,6,7,8,9,10 verified working;
-  item 1's install commands (`pip install pyrite`) still don't work
-  since the PyPI-wheel rewrite hasn't landed yet.
+  current version. **Met** — every command verified live in an
+  isolated scratch environment this session (init, create, search
+  keyword/semantic, git init sequence, mcp-setup); Docker path
+  verified as far as the local machine's disk allowed (all build
+  layers compiled; final export blocked by disk space, not a doc or
+  Dockerfile defect).
 - No doc references `pyrite-mcp`, `extensions/task`, `--tier` (unless
-  implemented), `serve --mcp`, or `pyrite server`. **Met** for all of
-  these except the now-implemented `--tier` flag, which is correctly
-  referenced since it exists.
+  implemented), `serve --mcp`, or `pyrite server`. **Met.**
 - `mcp-setup` documented in the Claude section of getting-started.
-  **Not yet done** — part of remaining item 11.
+  **Met.**

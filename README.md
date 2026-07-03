@@ -18,8 +18,9 @@ Your AI agents have no memory. Your knowledge is trapped in platform silos. Ever
 ## Quick Start
 
 ```bash
-# Install
-pip install pyrite
+# Install (no PyPI wheel yet -- from source)
+git clone https://github.com/markramm/pyrite.git && cd pyrite
+pip install -e ".[all]"
 
 # Initialize a knowledge base
 pyrite init --template research --path my-kb
@@ -70,7 +71,7 @@ Three permission tiers. Each tier includes the tools from lower tiers.
 
 | Tier | Tools |
 |------|-------|
-| **read** (23) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_orient`, `kb_batch_read`, `kb_list_entries`, `kb_recent`, `kb_qa_validate`, `kb_qa_status`, `kb_read_body`, `kb_find_by_status`, `kb_find_by_assignee`, `kb_find_by_location`, `kb_find_overdue`, `kb_index_job_status`, `list_edge_types`, `task_list`, `task_status` |
+| **read** (29) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_orient`, `kb_batch_read`, `kb_batch_suggest`, `kb_discover_neighbors`, `kb_list_entries`, `kb_recent`, `kb_qa_validate`, `kb_qa_status`, `kb_read_body`, `kb_find_by_status`, `kb_find_by_assignee`, `kb_find_by_location`, `kb_find_overdue`, `kb_index_job_status`, `list_edge_types`, `task_list`, `task_status`, `task_ancestors`, `task_blocked_by`, `task_critical_path`, `task_subtree` |
 | **write** (+11) | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link`, `kb_qa_assess`, `task_create`, `task_update`, `task_claim`, `task_checkpoint`, `task_decompose` |
 | **admin** (+8) | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push`, `kb_registry_add`, `kb_registry_remove`, `kb_registry_reindex`, `kb_registry_health` |
 
@@ -279,19 +280,16 @@ docker compose up -d  # http://localhost:8088
 
 ## Install
 
-```bash
-pip install pyrite             # Core
-pip install "pyrite[all]"      # Core + AI + semantic search + dev tools
-pip install "pyrite[ai]"       # OpenAI + Anthropic SDKs
-pip install "pyrite[semantic]" # sentence-transformers + sqlite-vec
-```
-
-For development (editable install from source):
+No PyPI wheel yet — install from source:
 
 ```bash
 git clone https://github.com/markramm/pyrite.git && cd pyrite
-pip install -e ".[all]"
+pip install -e ".[all]"      # Core + AI + semantic search + dev tools
 ```
+
+Narrower extras: `pip install -e ".[server]"` (REST API + web UI),
+`pip install -e ".[ai]"` (OpenAI + Anthropic SDKs),
+`pip install -e ".[semantic]"` (sentence-transformers + sqlite-vec).
 
 Extensions are installed separately:
 
@@ -303,6 +301,10 @@ pip install -e extensions/social
 pip install -e extensions/cascade
 pip install -e extensions/journalism-investigation
 ```
+
+Prefer not to install anything locally? See [Deploy](#deploy) above for
+Docker, one-click cloud (Railway/Render/Fly.io), and self-hosted VPS
+options — or [pyrite.wiki](https://pyrite.wiki) for a hosted instance.
 
 ## Development
 

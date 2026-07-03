@@ -4,15 +4,17 @@ Pyrite is a Knowledge-as-Code platform. You keep structured knowledge in markdow
 
 ## Install Pyrite
 
-```bash
-pip install pyrite
-```
-
-Or with AI-powered semantic search and all extras:
+No PyPI wheel yet — install from source:
 
 ```bash
-pip install "pyrite[all]"
+git clone https://github.com/markramm/pyrite.git && cd pyrite
+pip install -e ".[all]"   # Core + AI + semantic search + dev tools
 ```
+
+Or run the bundled Docker image instead (`docker compose up -d`, serves
+on `http://localhost:8088`) — see the [README](../README.md#install)
+for details, or [pyrite.wiki](https://pyrite.wiki) for hosted/one-click
+cloud options.
 
 ## Create Your First Knowledge Base
 
@@ -112,7 +114,20 @@ pyrite search "computing history" -k my-research --mode hybrid
 
 ## Connect an AI via MCP
 
-Pyrite includes a built-in MCP server. Add this to your Claude Desktop or Claude Code config:
+Pyrite includes a built-in MCP server.
+
+**One-command setup for Claude Desktop/Code:**
+
+```bash
+pyrite mcp-setup
+```
+
+This writes the `mcpServers` entry directly into
+`~/.claude/claude_desktop_config.json` (or pass `--config` for a
+different path) — no manual JSON editing needed. Restart Claude
+Desktop/Code afterward to pick up the change.
+
+**Manual setup** (any MCP-compatible client): add this to your config:
 
 ```json
 {
@@ -125,7 +140,7 @@ Pyrite includes a built-in MCP server. Add this to your Claude Desktop or Claude
 }
 ```
 
-Your AI can now search, read, and create entries in your knowledge base. It gets 23 read tools, 11 write tools, and 8 admin tools across three permission tiers. For read-only access:
+Your AI can now search, read, and create entries in your knowledge base. It gets 29 read tools, 11 write tools, and 8 admin tools across three permission tiers. For read-only access:
 
 ```json
 {
@@ -156,10 +171,9 @@ The **software** template adds ADRs, components, backlog items, standards, and r
 
 ## Launch the Web UI
 
-Pyrite ships an optional web interface for browsing, editing, and visualizing your knowledge base:
+Pyrite ships an optional web interface for browsing, editing, and visualizing your knowledge base. If you installed with the `server` extra (included in `[all]`):
 
 ```bash
-pip install "pyrite[server]"
 pyrite serve
 ```
 
