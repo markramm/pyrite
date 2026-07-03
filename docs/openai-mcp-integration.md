@@ -4,7 +4,7 @@ Pyrite exposes an MCP (Model Context Protocol) server that OpenAI's Codex CLI ca
 
 ## Prerequisites
 
-- Pyrite installed (`pip install pyrite` or `pip install pyrite-mcp` for the standalone MCP package)
+- Pyrite installed from source (`pip install -e .` — no PyPI wheel yet)
 - At least one knowledge base initialized (`pyrite init`)
 - [Codex CLI](https://github.com/openai/codex) installed
 
@@ -44,7 +44,7 @@ args = ["mcp", "--tier", "read"]
 
 ### Remote Pyrite instance (HTTP transport)
 
-If you're running `pyrite serve --mcp` on a remote server:
+`pyrite serve` always mounts the MCP server at `/mcp` (no separate flag needed). If you're running `pyrite serve` on a remote server:
 
 ```toml
 [mcp_servers.pyrite]
@@ -84,13 +84,6 @@ You should see Codex call `kb_list` and return your knowledge bases. If the serv
 [mcp_servers.pyrite]
 command = "/path/to/.venv/bin/pyrite"
 args = ["mcp"]
-```
-
-Or use the standalone MCP package entry point:
-
-```toml
-[mcp_servers.pyrite]
-command = "pyrite-mcp"
 ```
 
 **Timeout errors** -- Increase `startup_timeout_sec` if Pyrite takes time to initialize (e.g., building the index on first run).

@@ -22,7 +22,7 @@ the web UI footer and in KB export trailers.
 
    ```bash
    export PYRITE_BRANDING_DIR=/etc/pyrite/branding
-   pyrite server
+   pyrite serve
    ```
 
 3. The web UI, site-cache export, KB README footer, and MCP

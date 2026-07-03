@@ -27,14 +27,15 @@ uv pip install -e ".[dev]"
 .venv/bin/pip install -e extensions/social
 .venv/bin/pip install -e extensions/encyclopedia
 .venv/bin/pip install -e extensions/software-kb
-.venv/bin/pip install -e extensions/task
+.venv/bin/pip install -e extensions/cascade
+.venv/bin/pip install -e extensions/journalism-investigation
 
 # Install pre-commit hooks
 pre-commit install
 
 # Verify installation
 .venv/bin/pytest tests/ extensions/*/tests/ -q
-# Expected: 1468+ tests passing
+# Expected: ~4000 tests passing
 ```
 
 See [Setting Up the Development Environment](kb/runbooks/setting-up-dev-environment.md) for troubleshooting.

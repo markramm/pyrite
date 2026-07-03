@@ -84,7 +84,7 @@ Use correct `type` frontmatter so plugin tools can find entries:
 ## Testing
 
 ```bash
-# Backend tests (~2700 tests)
+# Backend tests (~3100 in tests/, ~4000 including extensions/*/tests/)
 .venv/bin/pytest tests/ -v
 
 # Frontend

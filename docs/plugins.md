@@ -110,28 +110,6 @@ Investigative journalism knowledge management covering actors, organizations, ev
 
 ---
 
-### Task
-
-Agent-oriented task management with a workflow state machine, parent-child decomposition, dependency tracking, evidence linking, and checkpoints.
-
-**Install:** `pip install -e extensions/task`
-
-**Adds:**
-
-- **Entry types:** `task`
-- **MCP tools:** `task_list`, `task_status`, `task_create`, `task_update`, `task_claim`, `task_decompose`, `task_checkpoint`
-- **CLI commands:** `pyrite task`
-- **Preset:** `task`
-- **Workflows:** Task workflow (open, claimed, in_progress, blocked, review, done, failed)
-- **Hooks:** `before_save` (transition validation), `after_save` (parent rollup)
-- **Relationships:** `subtask_of`, `produces` (and inverses)
-
-**Use case:** AI agent orchestration -- agents claim tasks atomically, decompose work into subtasks, log checkpoints with confidence scores, and link evidence entries as they go.
-
-[Full docs](https://github.com/markramm/pyrite/tree/main/extensions/task)
-
----
-
 ## Community Plugins
 
 Community plugins will be listed here. See [Building Your Own](#building-your-own) to create and submit one.

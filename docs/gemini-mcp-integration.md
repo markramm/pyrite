@@ -4,7 +4,7 @@ Pyrite exposes an MCP (Model Context Protocol) server that Google's Gemini CLI c
 
 ## Prerequisites
 
-- Pyrite installed (`pip install pyrite` or `pip install pyrite-mcp` for the standalone MCP package)
+- Pyrite installed from source (`pip install -e .` — no PyPI wheel yet)
 - At least one knowledge base initialized (`pyrite init`)
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli) installed
 
@@ -42,7 +42,7 @@ For read-only access:
 
 ### HTTP/SSE transport (remote Pyrite instance)
 
-If you're running `pyrite serve --mcp` on a remote server:
+`pyrite serve` always mounts the MCP server at `/mcp` (no separate flag needed). If you're running `pyrite serve` on a remote server:
 
 ```json
 {
@@ -115,18 +115,6 @@ You should see Gemini call `kb_list` and return your knowledge bases.
     "pyrite": {
       "command": "/path/to/.venv/bin/pyrite",
       "args": ["mcp"]
-    }
-  }
-}
-```
-
-Or use the standalone MCP package entry point:
-
-```json
-{
-  "mcpServers": {
-    "pyrite": {
-      "command": "pyrite-mcp"
     }
   }
 }

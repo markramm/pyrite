@@ -24,8 +24,15 @@ cd my-research
 This creates:
 
 - **`kb.yaml`** — your KB configuration: name, entry types, field schemas
-- **`.pyrite/`** — SQLite index and internal state (derived from your files, rebuildable anytime)
-- A **git repo** initialized automatically, so every change is versioned from the start
+- Template subdirectories (e.g. `people/`, `organizations/`, `events/`, `notes/`) for the `research` template
+
+The SQLite search index lives outside the KB directory, at `~/.pyrite/index.db` — it's derived from your files and rebuildable anytime (`pyrite index build`), so it's fine to leave out of version control.
+
+`pyrite init` does **not** run `git init` for you. If you want every change versioned from the start (recommended for a git-native product), initialize git yourself:
+
+```bash
+cd my-research && git init && git add -A && git commit -m "Initial KB"
+```
 
 Templates available: `research`, `software`, `zettelkasten`, `intellectual-biography`, `movement`, `empty`.
 

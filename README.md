@@ -32,8 +32,8 @@ pyrite create -k my-kb --type note --title "Switch to async standups" \
   --body "Decided 2026-03-01. Reduces meeting load by 3hrs/week." --tags "process"
 
 # Search (keyword, semantic, or hybrid)
-pyrite search "career transition" -k my-kb
-pyrite search "team decisions" -k my-kb --mode=semantic
+pyrite search "consulting" -k my-kb
+pyrite search "career transition" -k my-kb --mode=semantic  # keyword mode finds exact words only
 
 # Connect to Claude Desktop / Claude Code
 # Add to your MCP config:
@@ -301,7 +301,7 @@ pip install -e extensions/zettelkasten
 pip install -e extensions/encyclopedia
 pip install -e extensions/social
 pip install -e extensions/cascade
-pip install -e extensions/task
+pip install -e extensions/journalism-investigation
 ```
 
 ## Development
