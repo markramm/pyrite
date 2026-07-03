@@ -509,3 +509,59 @@ class TestTyperConfigCommand:
             result = runner.invoke(app, ["config"])
             assert result.exit_code == 0
             assert "Config file" in result.output
+
+
+@pytest.mark.cli
+class TestMcpCommandTier:
+    """docs-onboarding-fiction-sweep item 2: `pyrite mcp --tier read` is
+    documented in README/getting-started/both MCP integration docs (the
+    headline three-tier security story) but the CLI never exposed a
+    --tier flag -- it hardcoded tier="write" unconditionally. The
+    PyriteMCPServer backend already supports read/write/admin tiers;
+    only the CLI flag was missing."""
+
+    def test_default_tier_is_write(self, cli_env):
+        """No --tier flag: preserves existing default behavior (write)."""
+        from unittest.mock import MagicMock, patch
+
+        with _patch_config(cli_env):
+            with patch("pyrite.server.mcp_server.PyriteMCPServer") as mock_server_cls:
+                mock_server_cls.VALID_TIERS = ("read", "write", "admin")
+                mock_server_cls.return_value = MagicMock()
+                runner.invoke(app, ["mcp"])
+
+        mock_server_cls.assert_called_once()
+        assert mock_server_cls.call_args.kwargs.get("tier") == "write"
+
+    def test_tier_read_flag_constructs_read_tier_server(self, cli_env):
+        from unittest.mock import MagicMock, patch
+
+        with _patch_config(cli_env):
+            with patch("pyrite.server.mcp_server.PyriteMCPServer") as mock_server_cls:
+                mock_server_cls.VALID_TIERS = ("read", "write", "admin")
+                mock_server_cls.return_value = MagicMock()
+                result = runner.invoke(app, ["mcp", "--tier", "read"])
+
+        assert result.exit_code == 0, result.output
+        mock_server_cls.assert_called_once()
+        assert mock_server_cls.call_args.kwargs.get("tier") == "read"
+
+    def test_tier_admin_flag_constructs_admin_tier_server(self, cli_env):
+        from unittest.mock import MagicMock, patch
+
+        with _patch_config(cli_env):
+            with patch("pyrite.server.mcp_server.PyriteMCPServer") as mock_server_cls:
+                mock_server_cls.VALID_TIERS = ("read", "write", "admin")
+                mock_server_cls.return_value = MagicMock()
+                result = runner.invoke(app, ["mcp", "--tier", "admin"])
+
+        assert result.exit_code == 0, result.output
+        mock_server_cls.assert_called_once()
+        assert mock_server_cls.call_args.kwargs.get("tier") == "admin"
+
+    def test_invalid_tier_rejected(self, cli_env):
+        with _patch_config(cli_env):
+            result = runner.invoke(app, ["mcp", "--tier", "bogus"])
+
+        assert result.exit_code != 0
+        assert "bogus" in result.output.lower() or "invalid" in result.output.lower()

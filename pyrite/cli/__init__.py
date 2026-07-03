@@ -641,21 +641,36 @@ def auth_github_setup():
 
 
 @app.command("mcp")
-def mcp_server():
+def mcp_server(
+    tier: str = typer.Option(
+        "write",
+        "--tier",
+        help="Tool tier to expose: read, write, or admin",
+    ),
+):
     """
     Start the MCP (Model Context Protocol) server.
 
-    This runs the write-tier server over stdio for integration with Claude Code
-    and other MCP-compatible AI agents.
+    Runs the server over stdio for integration with Claude Code and other
+    MCP-compatible AI agents. Tier controls which tools are exposed:
 
-    Tools exposed (write tier):
-    - kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema
-    - kb_create, kb_update, kb_delete
+    - read: kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema
+    - write: read tier + kb_create, kb_update, kb_delete
+    - admin: write tier + KB management and user administration tools
     """
     from ..server.mcp_server import PyriteMCPServer
 
-    console.print("[dim]Starting MCP server (write tier) on stdio...[/dim]", err=True)
-    server = PyriteMCPServer(tier="write")
+    if tier not in PyriteMCPServer.VALID_TIERS:
+        cli_error(
+            f"Invalid tier: {tier!r}",
+            "rich",
+            error_code="INVALID_TIER",
+            suggestion=f"choose one of: {', '.join(PyriteMCPServer.VALID_TIERS)}",
+        )
+
+    # stderr, not stdout -- stdout carries the MCP protocol stream itself.
+    Console(stderr=True).print(f"[dim]Starting MCP server ({tier} tier) on stdio...[/dim]")
+    server = PyriteMCPServer(tier=tier)
     try:
         server.run_stdio()
     finally:
