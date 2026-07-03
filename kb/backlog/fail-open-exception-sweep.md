@@ -82,8 +82,21 @@ rule): no bare pass / fail-open without a log line and a WHY comment.
   The `TypeError` signature-compatibility fallback between validator
   call forms is unchanged -- legitimate boundary, not a swallow. Two
   fault-injection tests in test_storage.py::TestInvalidStatusInHealth.
-- [ ] Site #3 — kb_service.py push_error masks auth/network failures
-  as "no remote configured"
+- [x] **Site #3 — kb_service.py push_error mislabel** (2463476,
+  2026-07-03) — root cause: `GitService.push()` never actually raises
+  for real push failures (no remote, auth, network) -- it catches its
+  own subprocess and returns `(False, message)`, which `push_kb()`
+  already surfaced via `push_result["message"]` one line above the
+  `except`. The `except Exception: push_error = "No remote configured"`
+  was unreachable for the real no-remote case and only fires on
+  something genuinely unexpected (e.g. a future `push_kb` change) --
+  when it did, it categorically mislabeled whatever the real error was
+  (e.g. an auth failure reported as a config problem). Now logs at
+  warning with `exc_info` and surfaces `str(exception)`. Two tests:
+  one confirms the already-working no-remote path reports the real git
+  error (passed immediately -- documents existing correct behavior);
+  one fault-injects `push_kb` raising and asserts the real message
+  surfaces (failed before the fix, proving the swallow was reachable).
 - [ ] Site #4 — index.py frontmatter `references` dropped silently
 - [ ] Site #5 — auth_service.py decryption failure silently falls
   back to plaintext (security-relevant, at minimum warning-log)
@@ -110,5 +123,6 @@ rule): no bare pass / fail-open without a log line and a WHY comment.
 - Sites 1-6 fixed with a test each where feasible (fault-inject the
   swallowed exception, assert the failure is now visible).
 - A lint or documented checklist rule prevents new fail-open sites.
+
 
 
