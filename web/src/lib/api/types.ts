@@ -114,6 +114,7 @@ export interface EntryResponse {
 	outlinks: Record<string, unknown>[];
 	backlinks: Record<string, unknown>[];
 	file_path: string;
+	metadata?: Record<string, unknown>;
 	created_at?: string;
 	updated_at?: string;
 }

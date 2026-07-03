@@ -10,6 +10,13 @@
 	import TiptapEditor from '$lib/editor/TiptapEditor.svelte';
 	import OutlinePanel from '$lib/components/entry/OutlinePanel.svelte';
 	import AIPanel from '$lib/components/entry/AIPanel.svelte';
+	import CommentsPanel from '$lib/components/entry/CommentsPanel.svelte';
+	import SubmitForReview from '$lib/components/entry/SubmitForReview.svelte';
+	import {
+		captureSelectionAnchor,
+		resolveAnchor,
+		type ReviewComment
+	} from '$lib/editor/comment-anchor';
 	import { entryStore } from '$lib/stores/entries.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
@@ -28,6 +35,13 @@
 	let editing = $state(false);
 	let editorContent = $state('');
 	let resolvedIds = $state<Set<string>>(new Set());
+	let reviewRefreshKey = $state(0);
+
+	// The submit-for-review control only applies to non-admin authenticated
+	// users, whose edits route into a personal worktree. Admins write to main.
+	const showSubmitForReview = $derived(
+		authStore.authConfig.enabled && authStore.isAuthenticated && !authStore.isAdmin
+	);
 
 	const entryId = $derived($page.params.id as string);
 
@@ -50,6 +64,10 @@
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'G') {
 				e.preventDefault();
 				uiStore.toggleLocalGraphPanel();
+			}
+			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'M') {
+				e.preventDefault();
+				uiStore.toggleCommentsPanel();
 			}
 		}
 		window.addEventListener('keydown', handleKeydown);
@@ -158,9 +176,107 @@
 			await entryStore.save(entryStore.current.id, entryStore.current.kb_name, {
 				body: editorContent
 			});
+			reviewRefreshKey++;
 			uiStore.toast('Saved', 'success');
 		} catch {
 			uiStore.toast('Failed to save', 'error');
+		}
+	}
+
+	// --- Review comments (metadata.review_comments) ---
+	let bodyEl = $state<HTMLElement | null>(null);
+
+	const comments = $derived(
+		((entryStore.current?.metadata?.review_comments as ReviewComment[]) ?? []) as ReviewComment[]
+	);
+
+	const commentAuthor = $derived(authStore.user?.username ?? 'editor');
+
+	function nowIso(): string {
+		return new Date().toISOString();
+	}
+
+	function genCommentId(): string {
+		return 'c-' + Math.random().toString(36).slice(2, 10);
+	}
+
+	async function saveComments(next: ReviewComment[]) {
+		if (!entryStore.current) return;
+		try {
+			await entryStore.save(entryStore.current.id, entryStore.current.kb_name, {
+				metadata: { review_comments: next }
+			});
+			reviewRefreshKey++;
+		} catch {
+			uiStore.toast('Failed to save comment', 'error');
+		}
+	}
+
+	function addComment(note: string) {
+		const anchor =
+			(bodyEl && captureSelectionAnchor(bodyEl)) ||
+			({ quote: '', context_before: '', context_after: '' } as const);
+		const comment: ReviewComment = {
+			id: genCommentId(),
+			author: commentAuthor,
+			created_at: nowIso(),
+			quote: anchor.quote,
+			context_before: anchor.context_before,
+			context_after: anchor.context_after,
+			note,
+			status: 'open'
+		};
+		saveComments([...comments, comment]);
+	}
+
+	function toggleCommentStatus(id: string) {
+		saveComments(
+			comments.map((c) =>
+				c.id === id ? { ...c, status: c.status === 'resolved' ? 'open' : 'resolved' } : c
+			)
+		);
+	}
+
+	function deleteComment(id: string) {
+		saveComments(comments.filter((c) => c.id !== id));
+	}
+
+	function jumpToComment(comment: ReviewComment) {
+		const body = entryStore.current?.body ?? '';
+		const match = resolveAnchor(body, comment);
+		if (!match || !bodyEl) return;
+		// Find the quote text in the rendered DOM and scroll/flash it.
+		const walker = document.createTreeWalker(bodyEl, NodeFilter.SHOW_TEXT);
+		let node: Node | null;
+		while ((node = walker.nextNode())) {
+			const text = node.textContent ?? '';
+			const idx = text.indexOf(comment.quote);
+			if (idx !== -1) {
+				const range = document.createRange();
+				range.setStart(node, idx);
+				range.setEnd(node, idx + comment.quote.length);
+				const rect = range.getBoundingClientRect();
+				const parent = (node.parentElement as HTMLElement) ?? null;
+				parent?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+				flashRange(range, rect);
+				break;
+			}
+		}
+	}
+
+	function flashRange(range: Range, _rect: DOMRect) {
+		try {
+			const mark = document.createElement('mark');
+			mark.className = 'comment-flash';
+			range.surroundContents(mark);
+			setTimeout(() => {
+				const parent = mark.parentNode;
+				while (mark.firstChild) parent?.insertBefore(mark.firstChild, mark);
+				parent?.removeChild(mark);
+			}, 1600);
+		} catch {
+			// surroundContents throws if the range crosses element boundaries;
+			// the scroll already happened, so silently skip the flash.
 		}
 	}
 
@@ -232,7 +348,7 @@
 	{:else if entryStore.error}
 		<div class="flex flex-1 items-center justify-center text-red-500">{entryStore.error}</div>
 	{:else if entryStore.current}
-		<SplitPane open={uiStore.backlinksPanelOpen || uiStore.versionHistoryPanelOpen || uiStore.localGraphPanelOpen}>
+		<SplitPane open={uiStore.backlinksPanelOpen || uiStore.versionHistoryPanelOpen || uiStore.localGraphPanelOpen || uiStore.commentsPanelOpen}>
 			{#snippet children()}
 				<div class="flex h-full overflow-hidden">
 					<!-- Main content -->
@@ -253,6 +369,9 @@
 									</div>
 									<div class="flex items-center gap-2">
 										<!-- Group 1: Edit actions -->
+										{#if showSubmitForReview && entryStore.current}
+											<SubmitForReview kb={entryStore.current.kb_name} refreshKey={reviewRefreshKey} />
+										{/if}
 										{#if editing}
 											<button
 												onclick={save}
@@ -340,6 +459,18 @@
 												<path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
 											</svg>
 										</button>
+										<button
+											onclick={() => uiStore.toggleCommentsPanel()}
+											class="hidden h-8 w-8 items-center justify-center rounded-md border lg:flex {uiStore.commentsPanelOpen
+												? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+												: 'border-zinc-300 dark:border-zinc-600'}"
+											title="Toggle comments (Cmd+Shift+M)"
+											aria-label="Toggle comments panel"
+										>
+											<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+												<path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.83L3 20l1.17-3.5A7.96 7.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+											</svg>
+										</button>
 									</div>
 								</div>
 							{/snippet}
@@ -362,7 +493,7 @@
 										<Editor content={editorContent} onchange={onEditorChange} onsave={save} />
 									</div>
 								{:else}
-									<div class="prose dark:prose-invert max-w-4xl">
+									<div class="prose dark:prose-invert max-w-4xl" bind:this={bodyEl}>
 										{@html renderMarkdownWithLinks(entryStore.current?.body ?? '', resolvedIds)}
 									</div>
 									{#if entryStore.current?.participants && entryStore.current.participants.length > 0}
@@ -405,7 +536,18 @@
 			{/snippet}
 
 			{#snippet panel()}
-				{#if uiStore.localGraphPanelOpen}
+				{#if uiStore.commentsPanelOpen}
+					<CommentsPanel
+						comments={comments}
+						body={entryStore.current?.body ?? ''}
+						author={commentAuthor}
+						canComment={canEdit}
+						onAdd={addComment}
+						onToggleStatus={toggleCommentStatus}
+						onDelete={deleteComment}
+						onJump={jumpToComment}
+					/>
+				{:else if uiStore.localGraphPanelOpen}
 					<LocalGraphPanel
 						entryId={entryStore.current?.id ?? ''}
 						kbName={entryStore.current?.kb_name ?? ''}
@@ -458,3 +600,19 @@
 		return html;
 	}
 </script>
+
+<style>
+	:global(mark.comment-flash) {
+		background-color: rgb(253 230 138);
+		border-radius: 2px;
+		animation: comment-flash-fade 1.6s ease-out forwards;
+	}
+	@keyframes comment-flash-fade {
+		0% {
+			background-color: rgb(252 211 77);
+		}
+		100% {
+			background-color: rgb(253 230 138 / 0);
+		}
+	}
+</style>
