@@ -124,15 +124,26 @@ no need to reopen them here.
   [[typed-entries-silently-drop-the-references-frontmatter-field]]
   (medium, M) — out of scope for this sweep, which is about swallow
   visibility, not the underlying recall gap.
-- [ ] Site #5 — auth_service.py decryption failure silently falls
-  back to plaintext. **DECIDED 2026-07-03 (Mark): fail closed** — a
-  token that fails decryption is rejected with a clear re-auth error
-  (in-band, per the amendment), never treated as plaintext. If the
-  fallback exists for legacy pre-encryption tokens, replace it with
-  an explicit one-time migration (detect-and-re-encrypt on
-  successful auth, or a migration command), not a silent runtime
-  fallback. Worst case is a forced re-login; that beats silently
-  authenticating with corrupt-key material.
+- [x] **Site #5 — auth_service.py decryption failure fails closed**
+  (16a0e65, 2026-07-03) — both `get_github_token_for_user` and
+  `get_user_api_key` had `except Exception: <return raw undecryptable
+  bytes>`, rationalized as "may be stored as plaintext from before
+  encryption was enabled." Fernet's `decrypt()` raises `InvalidToken`
+  for ANY non-ciphertext value -- corrupted data, a rotated/wrong key,
+  and genuine legacy plaintext are indistinguishable by exception type,
+  so the old code returned corrupt-key-material as a usable token in
+  every failure case, not just the legacy one. Now: logs a warning with
+  `exc_info` and returns the same "absent" shape already used for
+  no-token-stored (`(None, scopes)` / `None`) -- forces a reconnect,
+  which re-stores through the normal encrypted path (the migration for
+  legacy plaintext rows). The no-key-configured path (plaintext storage
+  mode when `PYRITE_ENCRYPTION_KEY` isn't set) is untouched -- different
+  code branch, `test_plaintext_fallback_when_no_key` still passes
+  unchanged. Two fault-injection tests (GitHub token + API key) both
+  failed before the fix (corrupted bytes returned as a real token/key).
+  Full in-band signaling (surfacing the forced-reconnect reason to the
+  UI, not just server logs) deferred to
+  [[in-band-degradation-signaling]] per the same split as sites 1-4.
 - [x] **Site #6 — plugins/registry.py `_plugin_matches_kb_type` fail
   closed** (a7e0b82, 2026-07-03) — mechanical flip per the operator
   decision: `except Exception: return True` → `return False`, warning
@@ -160,4 +171,5 @@ no need to reopen them here.
 - Sites 1-6 fixed with a test each where feasible (fault-inject the
   swallowed exception, assert the failure is now visible).
 - A lint or documented checklist rule prevents new fail-open sites.
+
 
