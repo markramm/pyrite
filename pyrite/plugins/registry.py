@@ -506,7 +506,17 @@ class PluginRegistry:
     # =========================================================================
 
     def _plugin_matches_kb_type(self, plugin: PyritePlugin, kb_type: str) -> bool:
-        """Check if a plugin should be active for a given KB type."""
+        """Check if a plugin should be active for a given KB type.
+
+        Fails CLOSED: a plugin whose get_kb_types() raises is excluded
+        from this KB rather than assumed compatible. DECIDED 2026-07-03
+        (fail-open-exception-sweep site #6, see
+        plugin-type-resolution-scoping) -- the check reads static plugin
+        declarations, so a failure here is structural, not transient, and
+        the blast radius of wrongly applying an incompatible plugin
+        (global type remapping) outweighs the cost of skipping a plugin
+        that might have been compatible.
+        """
         if not kb_type:
             return True
         if not hasattr(plugin, "get_kb_types"):
@@ -517,8 +527,14 @@ class PluginRegistry:
                 return True
             return kb_type in plugin_kb_types
         except Exception:
-            logger.warning("Failed to check KB type compatibility for plugin", exc_info=True)
-            return True
+            logger.warning(
+                "Plugin %r's KB-type compatibility check failed; excluding it "
+                "from KB type %r (fail closed)",
+                getattr(plugin, "name", plugin),
+                kb_type,
+                exc_info=True,
+            )
+            return False
 
     def _aggregate_list_for_kb(self, method_name: str, kb_type: str) -> list:
         """Aggregate list results from plugins matching a KB type."""

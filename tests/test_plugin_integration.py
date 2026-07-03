@@ -982,6 +982,37 @@ class TestValidatorScoping:
         validators = reg.get_validators_for_kb("")
         assert len(validators) == 1
 
+    def test_crashing_kb_type_check_fails_closed(self, caplog):
+        """fail-open-exception-sweep site #6, DECIDED 2026-07-03 (fail
+        closed, see plugin-type-resolution-scoping): if a plugin's
+        get_kb_types() raises, _plugin_matches_kb_type must exclude that
+        plugin from the KB rather than including it. Rationale: the
+        compat check reads static plugin declarations (errors are
+        structural, not transient), while the blast radius of a
+        wrongly-applied plugin is global type remapping."""
+        reg = self._fresh_registry()
+
+        def task_validator(entry_type, data, ctx):
+            return [{"field": "status", "rule": "task_only"}]
+
+        crashing = self._make_scoped_plugin("crashing", ["task"], task_validator)
+
+        def _raise():
+            raise RuntimeError("simulated get_kb_types crash")
+
+        crashing.get_kb_types = _raise
+        reg.register(crashing)
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
+            validators = reg.get_validators_for_kb("task")
+
+        assert validators == [], (
+            "a plugin whose compat check crashes must be excluded (fail "
+            f"closed), not included: got {validators}"
+        )
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings, "expected a warning-level log for the crashed compat check"
+
     def test_universal_plugin_always_included(self):
         """A plugin with empty kb_types is always included."""
         reg = self._fresh_registry()
