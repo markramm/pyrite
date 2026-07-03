@@ -6,17 +6,16 @@ tags:
 - tech-debt
 - reliability
 - index
+links:
+- target: epic-shared-instance-readiness
+  relation: subtask_of
+  kb: pyrite
 importance: 5
 kind: tech_debt
 status: proposed
 priority: high
 effort: M
 rank: 0
-epic: shared-instance-readiness
-links:
-- target: epic-shared-instance-readiness
-  relation: subtask_of
-  kb: pyrite
 ---
 
 ## Problem
@@ -31,10 +30,15 @@ The files-vs-index seam has no post-write verification: an entry write that succ
 
 After any write that triggers indexing (create/update/rename/delete), read the indexed row back and verify id, file_path, and non-empty body match the file. On mismatch or index failure, surface a hard error (or a structured degraded-state result), not a log-level warning. Consider a `--no-verify` escape hatch for bulk operations.
 
+## Progress
+
+- [x] **Content-hash staleness** (caa3902, 2026-07-03) — added `entry.content_hash` (SHA-256, migration v21), computed on every indexing write, compared in `check_health()`'s new `content_changed` finding. Closes the same-second-edit gap: `check_staleness()` deliberately stays mtime-only (cheap, safe on every search call per its documented cost contract); hash comparison lives in `check_health()` instead, which already reads every file's bytes per entry so hashing there is nearly free. Wired into `pyrite index health` CLI (JSON + rich text, counts toward `unhealthy`).
+- [ ] Read-back verification after create/update/rename/delete (hard error on mismatch, not a warning)
+- [ ] Convert the ~9 `except Exception -> logger.warning` sites to hard errors / structured degraded-state results
+- [ ] `--no-verify` escape hatch for bulk operations
+
 ## Notes
 
 This is the second half of the derived-state-synchronization fix; the first half (registry enumeration via all_kbs()) landed with tests/test_index_covers_db_registered_kbs.py. See also [[collapse-kb-registry-to-one-source-of-truth]].
-
-Adjacent gap, same seam (fold in or split out): staleness detection is mtime-only, so a same-second double-edit is never re-indexed. Storing a content hash per indexed row and comparing hash (not just mtime) in `check_staleness` closes it; the read-back verification above needs the hash column anyway.
 
 Prerequisite for [[epic-shared-instance-readiness]]: invited peers must never hit the silent-index class the operator works around from muscle memory.
