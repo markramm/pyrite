@@ -1388,14 +1388,24 @@ class KBService:
         if not commit_result.get("success"):
             return {"success": False, "error": commit_result.get("error", "Commit failed")}
 
-        # Try to push (non-fatal if no remote)
+        # Try to push (non-fatal -- the commit already succeeded either
+        # way). GitService.push() never raises for real push failures
+        # (no remote, auth, network); it catches its own subprocess and
+        # returns (False, message), which surfaces below. The except only
+        # catches something genuinely unexpected (e.g. push_kb's own
+        # KBNotFoundError/PyriteError checks, already impossible here
+        # since kb_name and git-repo-ness were validated above, or a
+        # future push_kb change). Report the real exception, not a canned
+        # "No remote configured" that could mask an auth/network failure
+        # as a config problem (fail-open-exception-sweep site #3).
         push_error = None
         try:
             push_result = self._export_svc.push_kb(kb_name)
             if not push_result.get("success"):
                 push_error = push_result.get("message", "Push failed")
-        except Exception:
-            push_error = "No remote configured"
+        except Exception as e:
+            logger.warning("Push failed for KB %r after publish: %s", kb_name, e, exc_info=True)
+            push_error = str(e)
 
         return {
             "success": True,

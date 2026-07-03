@@ -146,3 +146,51 @@ class TestPublishChanges:
         # Check the commit message in git log
         log = _git(["log", "-1", "--format=%s"], str(git_kb["kb_path"]))
         assert "Updated 1" in log.stdout or "Created 1" in log.stdout or "Published" in log.stdout
+
+    def test_publish_no_remote_reports_real_git_error(self, git_kb):
+        """fail-open-exception-sweep site #3: publish_changes wrapped the
+        push in a bare `except Exception: push_error = "No remote
+        configured"`. GitService.push() never raises for a real no-remote
+        failure -- it captures the subprocess error and returns
+        (False, "Push failed: ..."), which push_kb already surfaces via
+        push_result["message"]. The try/except's fallback was unreachable
+        for the real no-remote case and, if it ever did trigger (e.g. a
+        future push_kb change that raises), would mask whatever the actual
+        error was behind a generic, wrong label. The real git error must
+        surface, not a canned string."""
+        (git_kb["kb_path"] / "hello.md").write_text(
+            "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nPublished.\n"
+        )
+
+        result = git_kb["svc"].publish_changes("test-kb", summary="Test publish")
+
+        assert result["success"] is True  # commit succeeds regardless of push
+        assert result["push_error"], "expected a push_error since no remote is configured"
+        assert result["push_error"] != "No remote configured", (
+            "push_error must be the real git failure message, not the generic "
+            f"mislabel that could hide the actual cause: {result['push_error']!r}"
+        )
+
+    def test_publish_push_raising_surfaces_real_exception(self, git_kb, monkeypatch):
+        """The narrower regression: if push_kb ever does raise (a future
+        change, a genuinely unexpected error), the message must reflect
+        that exception -- not be silently relabeled "No remote
+        configured", which would be actively misleading (e.g. an auth
+        failure told to the user as a missing-remote problem)."""
+        (git_kb["kb_path"] / "hello.md").write_text(
+            "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nPublished.\n"
+        )
+
+        def _raise(*args, **kwargs):
+            raise RuntimeError("simulated auth failure")
+
+        monkeypatch.setattr(
+            git_kb["svc"]._export_svc, "push_kb", _raise
+        )
+
+        result = git_kb["svc"].publish_changes("test-kb", summary="Test publish")
+
+        assert result["success"] is True
+        assert "simulated auth failure" in (result["push_error"] or ""), (
+            f"expected the real exception message surfaced, got {result['push_error']!r}"
+        )
