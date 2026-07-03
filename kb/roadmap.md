@@ -142,6 +142,12 @@ quarter is to be *boring* for its operator and *trustworthy* for one or
 two invited peers — every candidate item is tested against that and
 nothing else.
 
+**SCOPE FROZEN 2026-07-03 (Mark).** The 0.25 item set is closed as of
+this date. New findings (from audits, field use, or reviews) go to
+0.26 unless they are pilot-blocking by the trustworthy-for-a-peer
+test — and claiming that exception requires naming the peer-visible
+failure it prevents.
+
 ### Workstream 1 — Derived-state reliability (prerequisite)
 
 - [[ci-make-green-and-load-bearing]] (high, M) — CI red 100/100 runs

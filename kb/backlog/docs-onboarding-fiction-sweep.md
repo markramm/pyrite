@@ -26,8 +26,14 @@ failure at literally the first command. Verified fiction:
    0.1 release with no distribution files ("No matching distribution
    found"). In README line ~22, docs/getting-started.md line ~8, and
    both MCP integration docs. pyrite.wiki already (correctly) says
-   clone-from-source — the repo docs are behind the website. Decide:
-   publish real wheels, or switch all docs to the source install.
+   clone-from-source — the repo docs are behind the website.
+   **DECIDED 2026-07-03 (Mark): rewrite all docs to source + Docker
+   install for now** (no PyPI wheels yet — revisit at a later
+   release). The install story is two paths: (a) clone + pip install
+   from source for developers; (b) Docker container for everyone
+   else, with the one-click cloud-service launch options
+   (Railway/Render/Fly configs exist) featured — pyrite.wiki has the
+   details and the repo docs should match/link it, not contradict it.
 2. **`pyrite mcp --tier read` does not exist** ("No such option") —
    documented in README, getting-started, openai-mcp-integration,
    gemini-mcp-integration. The backend supports tiers

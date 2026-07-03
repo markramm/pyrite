@@ -107,7 +107,14 @@ no need to reopen them here.
   surfaces (failed before the fix, proving the swallow was reachable).
 - [ ] Site #4 — index.py frontmatter `references` dropped silently
 - [ ] Site #5 — auth_service.py decryption failure silently falls
-  back to plaintext (security-relevant, at minimum warning-log)
+  back to plaintext. **DECIDED 2026-07-03 (Mark): fail closed** — a
+  token that fails decryption is rejected with a clear re-auth error
+  (in-band, per the amendment), never treated as plaintext. If the
+  fallback exists for legacy pre-encryption tokens, replace it with
+  an explicit one-time migration (detect-and-re-encrypt on
+  successful auth, or a migration command), not a silent runtime
+  fallback. Worst case is a forced re-login; that beats silently
+  authenticating with corrupt-key material.
 - [x] **Site #6 — plugins/registry.py `_plugin_matches_kb_type` fail
   closed** (a7e0b82, 2026-07-03) — mechanical flip per the operator
   decision: `except Exception: return True` → `return False`, warning
