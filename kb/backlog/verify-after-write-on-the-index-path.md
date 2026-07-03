@@ -33,8 +33,8 @@ After any write that triggers indexing (create/update/rename/delete), read the i
 ## Progress
 
 - [x] **Content-hash staleness** (caa3902, 2026-07-03) — added `entry.content_hash` (SHA-256, migration v21), computed on every indexing write, compared in `check_health()`'s new `content_changed` finding. Closes the same-second-edit gap: `check_staleness()` deliberately stays mtime-only (cheap, safe on every search call per its documented cost contract); hash comparison lives in `check_health()` instead, which already reads every file's bytes per entry so hashing there is nearly free. Wired into `pyrite index health` CLI (JSON + rich text, counts toward `unhealthy`).
-- [ ] Read-back verification after create/update/rename/delete (hard error on mismatch, not a warning)
-- [ ] Convert the ~9 `except Exception -> logger.warning` sites to hard errors / structured degraded-state results
+- [x] **Rename-path read-back verification** (318037f, 2026-07-03) — `KBService.rename_entry` now reads back `db.get_entry(new_id, kb_name)` after `sync_incremental` and raises `StorageError` (not a swallowed warning) on either a sync exception or a failed read-back. Result gains `index_verified: true` on success. File rename is never rolled back — only the index side is treated as degraded, with a `pyrite index sync` recovery hint in the error message. This closes the one concrete site named in the ticket; the other ~8 `repository.py` parse-path sites (below) are the same pattern applied to create/update/delete.
+- [ ] Convert the ~8 `repository.py` `except Exception -> logger.warning` sites on the parse path to hard errors / structured degraded-state results
 - [ ] `--no-verify` escape hatch for bulk operations
 
 ## Notes
@@ -42,3 +42,4 @@ After any write that triggers indexing (create/update/rename/delete), read the i
 This is the second half of the derived-state-synchronization fix; the first half (registry enumeration via all_kbs()) landed with tests/test_index_covers_db_registered_kbs.py. See also [[collapse-kb-registry-to-one-source-of-truth]].
 
 Prerequisite for [[epic-shared-instance-readiness]]: invited peers must never hit the silent-index class the operator works around from muscle memory.
+
