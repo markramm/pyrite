@@ -145,9 +145,7 @@ class TaskService:
             "updates": updates,
         }
 
-    def migrate_relaxed_mode(
-        self, kb_name: str, dry_run: bool = False
-    ) -> dict[str, Any]:
+    def migrate_relaxed_mode(self, kb_name: str, dry_run: bool = False) -> dict[str, Any]:
         """Backfill status_reason='pre-relaxed-mode' for tasks of types
         that have opted into relaxed mode.
 
@@ -182,8 +180,7 @@ class TaskService:
         # Pull every task in this KB. The migration is per-KB so we
         # don't have to worry about cross-KB schema resolution.
         rows = self._query(
-            "SELECT id, entry_type FROM entry "
-            "WHERE kb_name = :kb AND entry_type = 'task'",
+            "SELECT id, entry_type FROM entry WHERE kb_name = :kb AND entry_type = 'task'",
             {"kb": kb_name},
         )
 
@@ -214,9 +211,7 @@ class TaskService:
             migrated += 1
             migrated_ids.append(row["id"])
             if not dry_run:
-                self.kb_svc.update_entry(
-                    row["id"], kb_name, status_reason="pre-relaxed-mode"
-                )
+                self.kb_svc.update_entry(row["id"], kb_name, status_reason="pre-relaxed-mode")
 
         return {
             "kb_name": kb_name,
@@ -492,7 +487,6 @@ class TaskService:
 
         return result
 
-
     def unblock_dependents(self, task_id: str, kb_name: str) -> list[dict[str, Any]]:
         """When a task resolves, auto-unblock tasks that depended on it.
 
@@ -567,7 +561,11 @@ class TaskService:
 
         self.kb_svc.update_entry(parent_id, kb_name, evidence=new_evidence)
         added = len(new_evidence) - len(parent_evidence)
-        return {"parent_id": parent_id, "evidence_added": added, "total_evidence": len(new_evidence)}
+        return {
+            "parent_id": parent_id,
+            "evidence_added": added,
+            "total_evidence": len(new_evidence),
+        }
 
     def list_entries_needing_qa(self, kb_name: str | None = None) -> list[dict[str, Any]]:
         """Find entries that have open/unclaimed QA validation tasks.
@@ -590,9 +588,7 @@ class TaskService:
 
         return self._query(query, params)
 
-    def link_qa_assessment(
-        self, task_id: str, assessment_id: str, kb_name: str
-    ) -> dict[str, Any]:
+    def link_qa_assessment(self, task_id: str, assessment_id: str, kb_name: str) -> dict[str, Any]:
         """Link a QA assessment entry as evidence on a QA task.
 
         When a QA agent creates an assessment entry, this links it
@@ -669,12 +665,14 @@ class TaskService:
             if not parent:
                 break
 
-            result.append({
-                "id": parent["id"],
-                "title": parent.get("title", ""),
-                "status": parent.get("status", ""),
-                "entry_type": parent.get("entry_type", "task"),
-            })
+            result.append(
+                {
+                    "id": parent["id"],
+                    "title": parent.get("title", ""),
+                    "status": parent.get("status", ""),
+                    "entry_type": parent.get("entry_type", "task"),
+                }
+            )
             current_id = parent_id
 
         return result
@@ -701,12 +699,14 @@ class TaskService:
                     continue
                 dep = self.get_task(dep_id, kb_name)
                 if dep:
-                    result.append({
-                        "id": dep["id"],
-                        "title": dep.get("title", ""),
-                        "status": dep.get("status", ""),
-                        "entry_type": dep.get("entry_type", "task"),
-                    })
+                    result.append(
+                        {
+                            "id": dep["id"],
+                            "title": dep.get("title", ""),
+                            "status": dep.get("status", ""),
+                            "entry_type": dep.get("entry_type", "task"),
+                        }
+                    )
                     _collect_deps(dep_id)
 
         _collect_deps(task_id)
@@ -741,12 +741,14 @@ class TaskService:
                 if not dep:
                     continue
                 sub_chain = _longest_chain(dep_id)
-                candidate = [{
-                    "id": dep["id"],
-                    "title": dep.get("title", ""),
-                    "status": dep.get("status", ""),
-                    "entry_type": dep.get("entry_type", "task"),
-                }] + sub_chain
+                candidate = [
+                    {
+                        "id": dep["id"],
+                        "title": dep.get("title", ""),
+                        "status": dep.get("status", ""),
+                        "entry_type": dep.get("entry_type", "task"),
+                    }
+                ] + sub_chain
                 if len(candidate) > len(best_chain):
                     best_chain = candidate
 
@@ -843,7 +845,9 @@ def _task_validate_transition(entry: Entry, context: dict) -> Entry:
         if workflow.get("enforce_transitions", True):
             # Strip the "Cannot move from..." prefix from validate_status_change
             # so we can substitute the task-specific one.
-            allowed_msg = err.split("Allowed next:", 1)[-1].strip() if "Allowed next:" in err else ""
+            allowed_msg = (
+                err.split("Allowed next:", 1)[-1].strip() if "Allowed next:" in err else ""
+            )
             raise ValidationError(
                 f"Cannot move task from '{old_status}' to '{new_status}'. "
                 f"Allowed next: {allowed_msg} "

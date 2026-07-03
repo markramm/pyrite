@@ -137,9 +137,7 @@ class TestRenameNoUpdateLinks:
     """
 
     def test_no_update_links_leaves_wikilinks_unchanged(self, repo_with_links):
-        result = repo_with_links.rename(
-            "entry-a", "renamed-a", update_links=False
-        )
+        result = repo_with_links.rename("entry-a", "renamed-a", update_links=False)
         assert (repo_with_links.path / "notes" / "renamed-a.md").exists()
         b = repo_with_links.load("entry-b")
         # Old link still there — now dangling

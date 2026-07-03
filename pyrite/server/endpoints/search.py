@@ -29,8 +29,12 @@ def search(
         False, description="Include full body text in results (default: snippet only)"
     ),
     fields: str | None = Query(None, description="Comma-separated fields to return per result"),
-    group_by_kb: bool = Query(False, description="Return top results per KB instead of global ranking"),
-    limit_per_kb: int = Query(3, ge=1, le=20, description="Max results per KB when group_by_kb=true"),
+    group_by_kb: bool = Query(
+        False, description="Return top results per KB instead of global ranking"
+    ),
+    limit_per_kb: int = Query(
+        3, ge=1, le=20, description="Max results per KB when group_by_kb=true"
+    ),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
 ):
@@ -77,7 +81,11 @@ def search(
             remaining = dict(by_kb)
             while remaining:
                 exhausted = []
-                for k in sorted(remaining, key=lambda k: remaining[k][0].get("score", 0) if remaining[k] else 0, reverse=True):
+                for k in sorted(
+                    remaining,
+                    key=lambda k: remaining[k][0].get("score", 0) if remaining[k] else 0,
+                    reverse=True,
+                ):
                     if remaining[k]:
                         grouped.append(remaining[k].pop(0))
                     if not remaining[k]:

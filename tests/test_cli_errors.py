@@ -46,8 +46,9 @@ def test_cli_error_json_format(capsys):
     """In a machine format, cli_error emits the structured payload as JSON and
     exits non-zero."""
     with pytest.raises(typer.Exit) as exc:
-        cli_error("KB not found: x", "json", error_code="KB_NOT_FOUND",
-                  suggestion="run `pyrite kb list`")
+        cli_error(
+            "KB not found: x", "json", error_code="KB_NOT_FOUND", suggestion="run `pyrite kb list`"
+        )
     assert exc.value.exit_code == 1
     out = capsys.readouterr().out
     parsed = json.loads(out)

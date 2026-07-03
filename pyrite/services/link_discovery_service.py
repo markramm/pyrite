@@ -190,7 +190,11 @@ class LinkDiscoveryService:
             try:
                 from .embedding_service import is_available
 
-                if not is_available() or not getattr(self.db, "backend", None) or not getattr(self.db.backend, "vec_available", False):
+                if (
+                    not is_available()
+                    or not getattr(self.db, "backend", None)
+                    or not getattr(self.db.backend, "vec_available", False)
+                ):
                     actual_mode = "keyword"
             except (ImportError, AttributeError):
                 actual_mode = "keyword"
@@ -230,14 +234,16 @@ class LinkDiscoveryService:
             else:
                 score = round(r.get("rank", 0.0), 4)
 
-            candidates.append({
-                "id": rid,
-                "kb_name": r_kb,
-                "title": r.get("title", ""),
-                "entry_type": r.get("entry_type", ""),
-                "score": score,
-                "snippet": (r.get("snippet") or r.get("summary") or "")[:150],
-            })
+            candidates.append(
+                {
+                    "id": rid,
+                    "kb_name": r_kb,
+                    "title": r.get("title", ""),
+                    "entry_type": r.get("entry_type", ""),
+                    "score": score,
+                    "snippet": (r.get("snippet") or r.get("summary") or "")[:150],
+                }
+            )
             if len(candidates) >= limit:
                 break
 
@@ -286,16 +292,18 @@ class LinkDiscoveryService:
                     continue
                 seen_pairs.add(pair_key)
 
-                all_pairs.append({
-                    "source_id": eid,
-                    "source_title": entry.get("title", ""),
-                    "source_type": entry.get("entry_type", ""),
-                    "target_id": c["id"],
-                    "target_title": c["title"],
-                    "target_type": c["entry_type"],
-                    "score": c["score"],
-                    "snippet": c.get("snippet", ""),
-                })
+                all_pairs.append(
+                    {
+                        "source_id": eid,
+                        "source_title": entry.get("title", ""),
+                        "source_type": entry.get("entry_type", ""),
+                        "target_id": c["id"],
+                        "target_title": c["title"],
+                        "target_type": c["entry_type"],
+                        "score": c["score"],
+                        "snippet": c.get("snippet", ""),
+                    }
+                )
 
         # Sort by score descending
         all_pairs.sort(key=lambda x: x["score"], reverse=True)
@@ -334,10 +342,9 @@ class LinkDiscoveryService:
             # Count existing cross-KB links
             outlinks = self.db.get_outlinks(eid, kb_name)
             backlinks = self.db.get_backlinks(eid, kb_name)
-            cross_kb_links = len([
-                link for link in (outlinks + backlinks)
-                if link.get("kb_name", kb_name) != kb_name
-            ])
+            cross_kb_links = len(
+                [link for link in (outlinks + backlinks) if link.get("kb_name", kb_name) != kb_name]
+            )
 
             # Count potential cross-KB matches (excluding own KB)
             neighbors = self.discover_neighbors(
@@ -355,15 +362,17 @@ class LinkDiscoveryService:
             if orphan_score <= 0 and potential == 0:
                 continue
 
-            candidates.append({
-                "id": eid,
-                "title": entry.get("title", ""),
-                "entry_type": entry.get("entry_type", ""),
-                "importance": importance,
-                "cross_kb_links": cross_kb_links,
-                "potential_matches": potential,
-                "orphan_score": orphan_score,
-            })
+            candidates.append(
+                {
+                    "id": eid,
+                    "title": entry.get("title", ""),
+                    "entry_type": entry.get("entry_type", ""),
+                    "importance": importance,
+                    "cross_kb_links": cross_kb_links,
+                    "potential_matches": potential,
+                    "orphan_score": orphan_score,
+                }
+            )
 
         # Sort by orphan score descending, then by importance descending
         candidates.sort(key=lambda x: (x["orphan_score"], x["importance"]), reverse=True)
@@ -418,28 +427,32 @@ class LinkDiscoveryService:
 
         for (src, tgt), relation in forward_links.items():
             if (tgt, src) not in reverse_links:
-                results.append({
-                    "source_id": src,
-                    "source_kb": kb_a,
-                    "source_title": titles_a.get(src, src),
-                    "target_id": tgt,
-                    "target_kb": kb_b,
-                    "target_title": titles_b.get(tgt, tgt),
-                    "direction": f"{kb_a} \u2192 {kb_b}",
-                    "relation": relation,
-                })
+                results.append(
+                    {
+                        "source_id": src,
+                        "source_kb": kb_a,
+                        "source_title": titles_a.get(src, src),
+                        "target_id": tgt,
+                        "target_kb": kb_b,
+                        "target_title": titles_b.get(tgt, tgt),
+                        "direction": f"{kb_a} \u2192 {kb_b}",
+                        "relation": relation,
+                    }
+                )
 
         for (src, tgt), relation in reverse_links.items():
             if (tgt, src) not in forward_links:
-                results.append({
-                    "source_id": src,
-                    "source_kb": kb_b,
-                    "source_title": titles_b.get(src, src),
-                    "target_id": tgt,
-                    "target_kb": kb_a,
-                    "target_title": titles_a.get(tgt, tgt),
-                    "direction": f"{kb_b} \u2192 {kb_a}",
-                    "relation": relation,
-                })
+                results.append(
+                    {
+                        "source_id": src,
+                        "source_kb": kb_b,
+                        "source_title": titles_b.get(src, src),
+                        "target_id": tgt,
+                        "target_kb": kb_a,
+                        "target_title": titles_a.get(tgt, tgt),
+                        "direction": f"{kb_b} \u2192 {kb_a}",
+                        "relation": relation,
+                    }
+                )
 
         return results

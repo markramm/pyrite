@@ -569,9 +569,7 @@ class GitService:
     # =========================================================================
 
     @staticmethod
-    def worktree_add(
-        repo_path: Path, worktree_path: Path, branch: str
-    ) -> tuple[bool, str]:
+    def worktree_add(repo_path: Path, worktree_path: Path, branch: str) -> tuple[bool, str]:
         """Create a git worktree with a new branch.
 
         Args:
@@ -665,9 +663,7 @@ class GitService:
             return False, str(e)
 
     @staticmethod
-    def merge_branch(
-        repo_path: Path, branch: str, into: str = "main"
-    ) -> tuple[bool, str]:
+    def merge_branch(repo_path: Path, branch: str, into: str = "main") -> tuple[bool, str]:
         """Merge a branch into another (typically main).
 
         Performs checkout + merge in the repo_path working directory.

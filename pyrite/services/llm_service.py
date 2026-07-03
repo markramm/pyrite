@@ -226,8 +226,7 @@ class LLMService:
         read = getattr(usage, "cache_read_input_tokens", 0) or 0
         if created or read:
             logger.info(
-                "Anthropic prompt-cache usage: creation=%d read=%d "
-                "(input=%d output=%d)",
+                "Anthropic prompt-cache usage: creation=%d read=%d (input=%d output=%d)",
                 created,
                 read,
                 getattr(usage, "input_tokens", 0) or 0,
@@ -299,7 +298,10 @@ class LLMService:
                     max_tokens=1,
                     messages=[{"role": "user", "content": "hi"}],
                 )
-                return {"ok": True, "message": f"Connected: {self._provider} ({self._settings.ai_model})"}
+                return {
+                    "ok": True,
+                    "message": f"Connected: {self._provider} ({self._settings.ai_model})",
+                }
 
             if self._provider in self._OPENAI_COMPAT_PROVIDERS:
                 client = self._get_openai_client()
@@ -318,13 +320,15 @@ class LLMService:
                         with urllib.request.urlopen(req, timeout=5) as resp:
                             data = _json.loads(resp.read())
                     except (urllib.error.URLError, OSError) as exc:
-                        return {"ok": False, "message": f"Cannot reach Ollama at {ollama_root}: {exc}"}
+                        return {
+                            "ok": False,
+                            "message": f"Cannot reach Ollama at {ollama_root}: {exc}",
+                        }
                     available = [m["name"] for m in data.get("models", [])]
                     model = self._settings.ai_model
                     # Ollama model names can be "llama3.2" or "llama3.2:latest"
                     matched = any(
-                        model == name or model == name.split(":")[0]
-                        for name in available
+                        model == name or model == name.split(":")[0] for name in available
                     )
                     if not matched:
                         short_list = ", ".join(available[:8])
@@ -341,7 +345,10 @@ class LLMService:
                         messages=[{"role": "user", "content": "hi"}],
                         max_tokens=1,
                     )
-                    return {"ok": True, "message": f"Connected: {self._provider} ({self._settings.ai_model})"}
+                    return {
+                        "ok": True,
+                        "message": f"Connected: {self._provider} ({self._settings.ai_model})",
+                    }
 
         except Exception as exc:
             msg = str(exc)

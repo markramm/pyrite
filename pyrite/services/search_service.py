@@ -276,9 +276,7 @@ class SearchService:
                 if not results:
                     relaxed = self._relax_to_or(expanded_query)
                     if relaxed:
-                        logger.debug(
-                            "keyword search 0 hits; retrying OR-relaxed: %r", relaxed
-                        )
+                        logger.debug("keyword search 0 hits; retrying OR-relaxed: %r", relaxed)
                         results = _run(relaxed)
                         tr["relaxed"] = True
                         if results:
@@ -390,9 +388,7 @@ class SearchService:
         # enter the fused set via the vector side. Drop those to keep the hybrid
         # result consistent with the keyword leg's status filter.
         if status:
-            semantic_results = [
-                r for r in semantic_results if r.get("status") == status
-            ]
+            semantic_results = [r for r in semantic_results if r.get("status") == status]
 
         if not semantic_results:
             # No embeddings — fall back to keyword only

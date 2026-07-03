@@ -85,9 +85,7 @@ class StarredService:
         Returns True if the entry was found and deleted.
         Raises ValueError if no matching starred entry exists.
         """
-        query = self.db.session.query(StarredEntry).filter(
-            StarredEntry.entry_id == entry_id
-        )
+        query = self.db.session.query(StarredEntry).filter(StarredEntry.entry_id == entry_id)
         if kb_name:
             query = query.filter(StarredEntry.kb_name == kb_name)
 

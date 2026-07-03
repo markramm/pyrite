@@ -62,9 +62,7 @@ class TestBackendMethodCapabilitiesMap:
 
         mapping = cap_mod._METHOD_CAPABILITIES
         assert isinstance(mapping, dict)
-        assert len(mapping) >= 30, (
-            f"expected ~38 dispatched-method mappings; got {len(mapping)}"
-        )
+        assert len(mapping) >= 30, f"expected ~38 dispatched-method mappings; got {len(mapping)}"
         assert all(isinstance(v, BackendCapability) for v in mapping.values())
 
     def test_canonical_methods_in_each_capability(self):

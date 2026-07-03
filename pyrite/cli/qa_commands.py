@@ -804,9 +804,7 @@ def qa_coverage(
     entry_type: str | None = typer.Option(
         None, "--type", "-t", help="Restrict report to one entry type"
     ),
-    output_format: str = typer.Option(
-        "rich", "--format", help="Output format: rich or json"
-    ),
+    output_format: str = typer.Option("rich", "--format", help="Output format: rich or json"),
 ):
     """Curation coverage stats for a KB.
 
@@ -856,16 +854,11 @@ def qa_coverage(
 
     if stats["by_status"]:
         # Drop empty-string status from the human view if it's the only one.
-        statuses = ", ".join(
-            f"{s or '<unset>'}={n}" for s, n in sorted(stats["by_status"].items())
-        )
+        statuses = ", ".join(f"{s or '<unset>'}={n}" for s, n in sorted(stats["by_status"].items()))
         console.print(f"  By status: {statuses}")
 
     bc = stats["body_coverage"]
-    console.print(
-        f"  Body: {bc['with_body']}/{bc['total']} have content "
-        f"({bc['fraction']:.1%})"
-    )
+    console.print(f"  Body: {bc['with_body']}/{bc['total']} have content ({bc['fraction']:.1%})")
 
     lc = stats["link_coverage"]
     console.print(
@@ -875,6 +868,5 @@ def qa_coverage(
 
     sc = stats["source_coverage"]
     console.print(
-        f"  Sources (structured): {sc['with_sources']}/{sc['total']} "
-        f"({sc['fraction']:.1%})"
+        f"  Sources (structured): {sc['with_sources']}/{sc['total']} ({sc['fraction']:.1%})"
     )

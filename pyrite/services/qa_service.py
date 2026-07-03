@@ -1217,6 +1217,7 @@ class QAService:
     @property
     def FIXABLE_RULES(self):
         from .qa_fix_service import QAFixService
+
         return QAFixService.FIXABLE_RULES
 
     def fix_kb(
@@ -1242,6 +1243,7 @@ class QAService:
     def _normalise_date(raw: str) -> str | None:
         """Delegate to QAFixService."""
         from .qa_fix_service import QAFixService
+
         return QAFixService._normalise_date(raw)
 
     def _fix_invalid_date(self, issue: dict[str, Any]) -> dict[str, Any] | None:
@@ -1252,12 +1254,14 @@ class QAService:
     def _fix_missing_field(issue: dict[str, Any]) -> dict[str, Any] | None:
         """Delegate to QAFixService."""
         from .qa_fix_service import QAFixService
+
         return QAFixService._fix_missing_field(issue)
 
     @staticmethod
     def _edit_distance(a: str, b: str) -> int:
         """Delegate to QAFixService."""
         from .qa_fix_service import QAFixService
+
         return QAFixService._edit_distance(a, b)
 
     def _fix_broken_link(
@@ -1317,10 +1321,12 @@ class QAService:
     def _extract_tags_from_schema(kb_schema) -> set[str]:
         """Delegate to QAAnalyticsService."""
         from .qa_analytics_service import QAAnalyticsService
+
         return QAAnalyticsService._extract_tags_from_schema(kb_schema)
 
     @staticmethod
     def _days_since(iso_str: str, now: datetime) -> int:
         """Delegate to QAAnalyticsService."""
         from .qa_analytics_service import QAAnalyticsService
+
         return QAAnalyticsService._days_since(iso_str, now)

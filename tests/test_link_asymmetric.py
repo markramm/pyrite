@@ -40,15 +40,39 @@ def asym_env():
         svc = KBService(config, db)
 
         # Create entries in both KBs
-        svc.create_entry("kb-a", "trust-a", "Trust in Organizations",
-                         body="Trust enables coordination.", entry_type="concept", tags=["trust"])
-        svc.create_entry("kb-b", "trust-b", "Building Trust in Teams",
-                         body="Trust and psychological safety in teams.", entry_type="concept", tags=["trust"])
+        svc.create_entry(
+            "kb-a",
+            "trust-a",
+            "Trust in Organizations",
+            body="Trust enables coordination.",
+            entry_type="concept",
+            tags=["trust"],
+        )
+        svc.create_entry(
+            "kb-b",
+            "trust-b",
+            "Building Trust in Teams",
+            body="Trust and psychological safety in teams.",
+            entry_type="concept",
+            tags=["trust"],
+        )
 
-        svc.create_entry("kb-a", "feedback-a", "Feedback Loops",
-                         body="Feedback loops in systems.", entry_type="concept", tags=["systems"])
-        svc.create_entry("kb-b", "feedback-b", "System Dynamics",
-                         body="System dynamics and feedback.", entry_type="concept", tags=["systems"])
+        svc.create_entry(
+            "kb-a",
+            "feedback-a",
+            "Feedback Loops",
+            body="Feedback loops in systems.",
+            entry_type="concept",
+            tags=["systems"],
+        )
+        svc.create_entry(
+            "kb-b",
+            "feedback-b",
+            "System Dynamics",
+            body="System dynamics and feedback.",
+            entry_type="concept",
+            tags=["systems"],
+        )
 
         # Bidirectional link (should NOT appear as asymmetric)
         svc.add_link("trust-a", "kb-a", "trust-b", target_kb="kb-b", relation="related_to")
@@ -64,8 +88,10 @@ def asym_env():
 class TestFindAsymmetricLinks:
     def test_finds_one_directional_links(self, asym_env):
         results = _find_asymmetric_links(
-            kb_a="kb-a", kb_b="kb-b",
-            config=asym_env["config"], db=asym_env["db"],
+            kb_a="kb-a",
+            kb_b="kb-b",
+            config=asym_env["config"],
+            db=asym_env["db"],
         )
         # feedback-a → feedback-b exists, but feedback-b → feedback-a does not
         pairs = [(r["source_id"], r["target_id"]) for r in results]
@@ -73,8 +99,10 @@ class TestFindAsymmetricLinks:
 
     def test_excludes_bidirectional_links(self, asym_env):
         results = _find_asymmetric_links(
-            kb_a="kb-a", kb_b="kb-b",
-            config=asym_env["config"], db=asym_env["db"],
+            kb_a="kb-a",
+            kb_b="kb-b",
+            config=asym_env["config"],
+            db=asym_env["db"],
         )
         pairs = [(r["source_id"], r["target_id"]) for r in results]
         # trust-a ↔ trust-b is bidirectional, should NOT appear
@@ -83,8 +111,10 @@ class TestFindAsymmetricLinks:
 
     def test_results_have_required_fields(self, asym_env):
         results = _find_asymmetric_links(
-            kb_a="kb-a", kb_b="kb-b",
-            config=asym_env["config"], db=asym_env["db"],
+            kb_a="kb-a",
+            kb_b="kb-b",
+            config=asym_env["config"],
+            db=asym_env["db"],
         )
         if results:
             r = results[0]
@@ -100,8 +130,10 @@ class TestFindAsymmetricLinks:
         # This test verifies the general behavior — all asymmetric results
         # should only come from one-directional links
         results = _find_asymmetric_links(
-            kb_a="kb-a", kb_b="kb-b",
-            config=asym_env["config"], db=asym_env["db"],
+            kb_a="kb-a",
+            kb_b="kb-b",
+            config=asym_env["config"],
+            db=asym_env["db"],
         )
         for r in results:
             assert r["source_id"] != "trust-a" or r["target_id"] != "trust-b"
@@ -116,8 +148,7 @@ class TestAsymmetricCLI:
         asym_env["db"].close = lambda: None
 
         result = runner.invoke(
-            app, ["links", "asymmetric", "--kb-a", "kb-a",
-                  "--kb-b", "kb-b", "--format", "json"]
+            app, ["links", "asymmetric", "--kb-a", "kb-a", "--kb-b", "kb-b", "--format", "json"]
         )
         assert result.exit_code == 0
         data = json.loads(result.output)

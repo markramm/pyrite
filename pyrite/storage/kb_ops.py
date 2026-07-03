@@ -85,8 +85,7 @@ class KBOpsMixin:
         if not rows:
             return 0
         db_kbs = [
-            {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""}
-            for r in rows
+            {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows
         ]
         return config.register_db_kbs(db_kbs)
 

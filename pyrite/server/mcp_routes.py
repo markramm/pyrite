@@ -181,12 +181,11 @@ def mount_mcp_routes(
         mcp_server = _get_mcp_server(tier)
         sdk = mcp_server.build_sdk_server(client_id=client_id)
 
-        async with sse_transport.connect_sse(
-            request.scope, request.receive, request._send
-        ) as (read_stream, write_stream):
-            await sdk.run(
-                read_stream, write_stream, sdk.create_initialization_options()
-            )
+        async with sse_transport.connect_sse(request.scope, request.receive, request._send) as (
+            read_stream,
+            write_stream,
+        ):
+            await sdk.run(read_stream, write_stream, sdk.create_initialization_options())
 
         # Return empty Response to avoid "NoneType not callable" on disconnect
         return Response()

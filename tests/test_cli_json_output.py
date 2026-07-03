@@ -259,9 +259,7 @@ def test_search_no_results_json_is_parseable(cli_env):
     """search -f json with no matches returns valid empty-result JSON on stdout,
     not a human 'No results found.' line that breaks json.load()."""
     with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
-        result = runner.invoke(
-            app, ["search", "zzznomatchquery12345xyz", "--format", "json"]
-        )
+        result = runner.invoke(app, ["search", "zzznomatchquery12345xyz", "--format", "json"])
     # stdout must parse cleanly even though there are no results.
     data = json.loads(result.output)
     assert data["count"] == 0
@@ -292,9 +290,7 @@ def test_search_include_body_populates_body_field(cli_env):
     caught immediately. cli_env seeds one event with body 'Body text.'.
     """
     with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
-        result = runner.invoke(
-            app, ["search", "Test", "--include-body", "--format", "json"]
-        )
+        result = runner.invoke(app, ["search", "Test", "--include-body", "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["count"] >= 1
@@ -315,9 +311,7 @@ def test_search_without_include_body_omits_body_field(cli_env):
     data = json.loads(result.output)
     assert data["count"] >= 1
     for r in data["results"]:
-        assert "body" not in r, (
-            f"Default search must omit body; result has it: {list(r)}"
-        )
+        assert "body" not in r, f"Default search must omit body; result has it: {list(r)}"
 
 
 @pytest.mark.cli
@@ -365,8 +359,7 @@ def test_search_query_syntax_error_uses_canonical_error_shape(cli_env):
     assert data["error_code"] == "QUERY_SYNTAX", data
     assert data["retryable"] is False, data
     assert "error_type" not in data, (
-        "QUERY_SYNTAX errors must use the canonical shape, not the ad-hoc "
-        f"error_type field: {data}"
+        f"QUERY_SYNTAX errors must use the canonical shape, not the ad-hoc error_type field: {data}"
     )
 
 
@@ -387,10 +380,13 @@ def test_search_error_logged_at_debug(cli_env, caplog):
                 runner.invoke(app, ["search", "Test"])  # rich mode → fallback path
     # A log record must carry the original exception with traceback info.
     assert any(
-        rec.exc_info is not None and "simulated index failure" in rec.getMessage() + str(rec.exc_text or "")
+        rec.exc_info is not None
+        and "simulated index failure" in rec.getMessage() + str(rec.exc_text or "")
         or (rec.exc_info and rec.exc_info[1] is boom)
         for rec in caplog.records
-    ), f"expected exception logged; got records: {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+    ), (
+        f"expected exception logged; got records: {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+    )
 
 
 @pytest.mark.cli
@@ -429,10 +425,14 @@ def test_create_refuses_undeclared_type(cli_env):
             app,
             [
                 "create",
-                "-k", "test-events",
-                "-t", "task",  # not declared in kb.yaml; not a core type either
-                "--title", "Conductor-filed task",
-                "--body", "Should be refused",
+                "-k",
+                "test-events",
+                "-t",
+                "task",  # not declared in kb.yaml; not a core type either
+                "--title",
+                "Conductor-filed task",
+                "--body",
+                "Should be refused",
             ],
         )
 
@@ -462,10 +462,14 @@ def test_create_allows_undeclared_with_override(cli_env):
             app,
             [
                 "create",
-                "-k", "test-events",
-                "-t", "task",
-                "--title", "Override case",
-                "--body", "Allowed by override",
+                "-k",
+                "test-events",
+                "-t",
+                "task",
+                "--title",
+                "Override case",
+                "--body",
+                "Allowed by override",
                 "--allow-undeclared",
             ],
         )
@@ -492,10 +496,14 @@ def test_create_allows_core_types_even_without_declaration(cli_env):
             app,
             [
                 "create",
-                "-k", "test-events",
-                "-t", "note",  # core type, not in this KB's kb.yaml — must succeed
-                "--title", "Core type is fine",
-                "--body", "Notes are universal",
+                "-k",
+                "test-events",
+                "-t",
+                "note",  # core type, not in this KB's kb.yaml — must succeed
+                "--title",
+                "Core type is fine",
+                "--body",
+                "Notes are universal",
             ],
         )
 

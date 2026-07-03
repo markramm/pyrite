@@ -38,7 +38,14 @@ class TestProtocolVersions:
 
     def test_six_protocols_registered(self):
         assert len(PROTOCOL_REGISTRY) == 6
-        expected = {"assignable", "temporal", "locatable", "statusable", "prioritizable", "parentable"}
+        expected = {
+            "assignable",
+            "temporal",
+            "locatable",
+            "statusable",
+            "prioritizable",
+            "parentable",
+        }
         assert set(PROTOCOL_REGISTRY.keys()) == expected
 
 
@@ -82,9 +89,7 @@ class TestNominalSatisfaction:
     def test_event_satisfies_all_declared(self):
         from pyrite.models.core_types import EventEntry
 
-        results = check_protocol_satisfaction(
-            EventEntry, ["temporal", "locatable", "statusable"]
-        )
+        results = check_protocol_satisfaction(EventEntry, ["temporal", "locatable", "statusable"])
         assert all(r.satisfied for r in results)
         assert all(r.method == "nominal" for r in results)
 
@@ -213,9 +218,7 @@ class TestMultipleProtocols:
     def test_all_pass(self):
         from pyrite.models.core_types import EventEntry
 
-        results = check_protocol_satisfaction(
-            EventEntry, ["temporal", "locatable", "statusable"]
-        )
+        results = check_protocol_satisfaction(EventEntry, ["temporal", "locatable", "statusable"])
         assert len(results) == 3
         assert all(r.satisfied for r in results)
 

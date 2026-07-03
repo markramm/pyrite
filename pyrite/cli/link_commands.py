@@ -454,12 +454,12 @@ def links_discover(
     ),
     limit: int = typer.Option(10, "--limit", "-n", help="Max results"),
     mode: str = typer.Option(
-        "hybrid", "--mode", "-m",
-        help="Search mode: keyword, semantic, hybrid"
+        "hybrid", "--mode", "-m", help="Search mode: keyword, semantic, hybrid"
     ),
     exclude_linked: bool = typer.Option(
-        True, "--exclude-linked/--include-linked",
-        help="Exclude entries that already have a link to the source"
+        True,
+        "--exclude-linked/--include-linked",
+        help="Exclude entries that already have a link to the source",
     ),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
@@ -496,8 +496,12 @@ def links_discover(
         )
 
     candidates = _discover_neighbors(
-        entry_id, kb_name, target_kb, limit,
-        mode=mode, exclude_linked=exclude_linked,
+        entry_id,
+        kb_name,
+        target_kb,
+        limit,
+        mode=mode,
+        exclude_linked=exclude_linked,
     )
 
     data = {
@@ -584,10 +588,15 @@ def _batch_suggest(
 def links_batch_suggest(
     source_kb: str = typer.Option(..., "--source-kb", help="KB to find connections FROM"),
     target_kb: str = typer.Option(..., "--target-kb", help="KB to find connections TO"),
-    limit_per_entry: int = typer.Option(3, "--limit-per-entry", "-n", help="Max matches per source entry"),
-    mode: str = typer.Option("keyword", "--mode", "-m", help="Search mode: keyword, semantic, hybrid"),
+    limit_per_entry: int = typer.Option(
+        3, "--limit-per-entry", "-n", help="Max matches per source entry"
+    ),
+    mode: str = typer.Option(
+        "keyword", "--mode", "-m", help="Search mode: keyword, semantic, hybrid"
+    ),
     exclude_linked: bool = typer.Option(
-        True, "--exclude-linked/--include-linked",
+        True,
+        "--exclude-linked/--include-linked",
         help="Exclude already-linked pairs",
     ),
     output_format: str = typer.Option(
@@ -813,7 +822,9 @@ def links_asymmetric(
         return
 
     if not results:
-        console.print("[dim]No asymmetric links found — all cross-KB links are bidirectional.[/dim]")
+        console.print(
+            "[dim]No asymmetric links found — all cross-KB links are bidirectional.[/dim]"
+        )
         return
 
     console.print(

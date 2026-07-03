@@ -76,8 +76,7 @@ def discover_env():
             "kb-b",
             "unrelated-entry",
             "Cooking Pasta Recipes",
-            body="Boil water, add salt, cook pasta for 8 minutes. "
-            "Drain and serve with sauce.",
+            body="Boil water, add salt, cook pasta for 8 minutes. Drain and serve with sauce.",
             entry_type="note",
             tags=["cooking", "recipes"],
         )
@@ -238,8 +237,18 @@ class TestDiscoverCLI:
         discover_env["db"].close = lambda: None
 
         result = runner.invoke(
-            app, ["links", "discover", "trust-mechanisms", "-k", "kb-a",
-                  "--target-kb", "kb-b", "--format", "json"]
+            app,
+            [
+                "links",
+                "discover",
+                "trust-mechanisms",
+                "-k",
+                "kb-a",
+                "--target-kb",
+                "kb-b",
+                "--format",
+                "json",
+            ],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)

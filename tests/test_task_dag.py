@@ -30,7 +30,10 @@ def dag_env():
         (tasks_path / "tasks").mkdir()
 
         kb_config = KBConfig(
-            name="test", path=tasks_path, kb_type="task", description="Test",
+            name="test",
+            path=tasks_path,
+            kb_type="task",
+            description="Test",
         )
         config = PyriteConfig(
             knowledge_bases=[kb_config],

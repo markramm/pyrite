@@ -40,26 +40,56 @@ def batch_env():
         svc = KBService(config, db)
 
         # KB-A entries
-        svc.create_entry("kb-a", "trust-concept", "Trust in Organizations",
-                         body="Trust enables coordination without hierarchy.",
-                         entry_type="concept", tags=["trust", "organizations"])
-        svc.create_entry("kb-a", "feedback-loops", "Feedback Loops in Systems",
-                         body="Feedback loops amplify or dampen system behavior.",
-                         entry_type="concept", tags=["systems", "feedback"])
-        svc.create_entry("kb-a", "cooking-tips", "Cooking Tips",
-                         body="Use salt to enhance flavor in pasta dishes.",
-                         entry_type="note", tags=["cooking"])
+        svc.create_entry(
+            "kb-a",
+            "trust-concept",
+            "Trust in Organizations",
+            body="Trust enables coordination without hierarchy.",
+            entry_type="concept",
+            tags=["trust", "organizations"],
+        )
+        svc.create_entry(
+            "kb-a",
+            "feedback-loops",
+            "Feedback Loops in Systems",
+            body="Feedback loops amplify or dampen system behavior.",
+            entry_type="concept",
+            tags=["systems", "feedback"],
+        )
+        svc.create_entry(
+            "kb-a",
+            "cooking-tips",
+            "Cooking Tips",
+            body="Use salt to enhance flavor in pasta dishes.",
+            entry_type="note",
+            tags=["cooking"],
+        )
 
         # KB-B entries (some related to KB-A, some not)
-        svc.create_entry("kb-b", "psychological-safety", "Psychological Safety",
-                         body="Trust and safety enable team coordination without fear.",
-                         entry_type="concept", tags=["trust", "teams"])
-        svc.create_entry("kb-b", "system-dynamics", "System Dynamics Modeling",
-                         body="System dynamics models feedback loops and delays.",
-                         entry_type="concept", tags=["systems", "modeling"])
-        svc.create_entry("kb-b", "gardening-guide", "Gardening for Beginners",
-                         body="Plant tomatoes in spring for best results.",
-                         entry_type="note", tags=["gardening"])
+        svc.create_entry(
+            "kb-b",
+            "psychological-safety",
+            "Psychological Safety",
+            body="Trust and safety enable team coordination without fear.",
+            entry_type="concept",
+            tags=["trust", "teams"],
+        )
+        svc.create_entry(
+            "kb-b",
+            "system-dynamics",
+            "System Dynamics Modeling",
+            body="System dynamics models feedback loops and delays.",
+            entry_type="concept",
+            tags=["systems", "modeling"],
+        )
+        svc.create_entry(
+            "kb-b",
+            "gardening-guide",
+            "Gardening for Beginners",
+            body="Plant tomatoes in spring for best results.",
+            entry_type="note",
+            tags=["gardening"],
+        )
 
         yield {"config": config, "db": db, "svc": svc}
         db.close()
@@ -156,8 +186,17 @@ class TestBatchSuggestCLI:
         batch_env["db"].close = lambda: None
 
         result = runner.invoke(
-            app, ["links", "batch-suggest", "--source-kb", "kb-a",
-                  "--target-kb", "kb-b", "--format", "json"]
+            app,
+            [
+                "links",
+                "batch-suggest",
+                "--source-kb",
+                "kb-a",
+                "--target-kb",
+                "kb-b",
+                "--format",
+                "json",
+            ],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)

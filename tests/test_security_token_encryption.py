@@ -122,9 +122,7 @@ class TestTokenEncryption:
 
         assert token == weird_token
 
-    def test_undecryptable_token_fails_closed_not_returned_as_plaintext(
-        self, auth_env, caplog
-    ):
+    def test_undecryptable_token_fails_closed_not_returned_as_plaintext(self, auth_env, caplog):
         """fail-open-exception-sweep site #5, DECIDED 2026-07-03 (fail
         closed): when an encryption key IS configured but a stored value
         fails to decrypt (corrupted ciphertext, rotated/wrong key, or a
@@ -176,8 +174,6 @@ class TestTokenEncryption:
         with caplog.at_level(logging.WARNING, logger="pyrite.services.auth_service"):
             result = svc.get_user_api_key(1, "anthropic")
 
-        assert result is None, (
-            f"undecryptable stored API key must not be returned, got {result!r}"
-        )
+        assert result is None, f"undecryptable stored API key must not be returned, got {result!r}"
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, "expected a warning-level log when API key decryption fails"

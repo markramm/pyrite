@@ -70,15 +70,17 @@ class TestKBSchemaLoadsFilePattern:
     def test_loads_file_pattern(self):
         from pyrite.schema.kb_schema import KBSchema
 
-        schema = KBSchema.from_dict({
-            "name": "test",
-            "types": {
-                "event": {
-                    "description": "An event",
-                    "file_pattern": "{date}--{slug}.md",
-                }
-            },
-        })
+        schema = KBSchema.from_dict(
+            {
+                "name": "test",
+                "types": {
+                    "event": {
+                        "description": "An event",
+                        "file_pattern": "{date}--{slug}.md",
+                    }
+                },
+            }
+        )
         ts = schema.get_type_schema("event")
         assert ts is not None
         assert ts.file_pattern == "{date}--{slug}.md"

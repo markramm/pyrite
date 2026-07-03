@@ -350,9 +350,7 @@ class QAAnalyticsService:
     # Coverage stats — Tier A r2300
     # =========================================================================
 
-    def coverage_stats(
-        self, kb_name: str, entry_type: str | None = None
-    ) -> dict[str, Any]:
+    def coverage_stats(self, kb_name: str, entry_type: str | None = None) -> dict[str, Any]:
         """Aggregate curation-coverage stats for a KB.
 
         Answers the planning-level questions `pyrite qa validate`
@@ -392,8 +390,7 @@ class QAAnalyticsService:
 
         # 1. Total entries
         total_row = self.db.execute_sql(
-            f"SELECT COUNT(*) AS n FROM entry "
-            f"WHERE kb_name = :kb{type_clause}",
+            f"SELECT COUNT(*) AS n FROM entry WHERE kb_name = :kb{type_clause}",
             params,
         )
         total = int(total_row[0]["n"]) if total_row else 0

@@ -184,7 +184,9 @@ class TestOverlaySearch:
             )
             diff_db._raw_conn.commit()
 
-            _insert_entry(main_db, "e1", "test", "Research on climate", body="Climate research entry")
+            _insert_entry(
+                main_db, "e1", "test", "Research on climate", body="Climate research entry"
+            )
             _insert_entry(diff_db, "e2", "test", "Research on energy", body="Energy research entry")
 
             overlay = OverlaySearchBackend(main_db._backend, diff_db._backend)
@@ -204,38 +206,40 @@ class TestOverlayWrite:
         try:
             _ensure_kb(diff_db, "test")
             overlay = OverlaySearchBackend(main_db._backend, diff_db._backend)
-            overlay.upsert_entry({
-                "id": "new",
-                "kb_name": "test",
-                "entry_type": "note",
-                "title": "Written via overlay",
-                "body": "",
-                "summary": "",
-                "file_path": "/test/new.md",
-                "date": None,
-                "importance": 5,
-                "status": None,
-                "location": None,
-                "assignee": None,
-                "assigned_at": None,
-                "priority": None,
-                "due_date": None,
-                "start_date": None,
-                "end_date": None,
-                "coordinates": None,
-                "lifecycle": "active",
-                "metadata": "{}",
-                "tags": [],
-                "sources": [],
-                "links": [],
-                "entry_refs": [],
-                "blocks": [],
-                "edge_endpoints": [],
-                "created_at": "2026-01-01",
-                "updated_at": "2026-01-01",
-                "created_by": None,
-                "modified_by": None,
-            })
+            overlay.upsert_entry(
+                {
+                    "id": "new",
+                    "kb_name": "test",
+                    "entry_type": "note",
+                    "title": "Written via overlay",
+                    "body": "",
+                    "summary": "",
+                    "file_path": "/test/new.md",
+                    "date": None,
+                    "importance": 5,
+                    "status": None,
+                    "location": None,
+                    "assignee": None,
+                    "assigned_at": None,
+                    "priority": None,
+                    "due_date": None,
+                    "start_date": None,
+                    "end_date": None,
+                    "coordinates": None,
+                    "lifecycle": "active",
+                    "metadata": "{}",
+                    "tags": [],
+                    "sources": [],
+                    "links": [],
+                    "entry_refs": [],
+                    "blocks": [],
+                    "edge_endpoints": [],
+                    "created_at": "2026-01-01",
+                    "updated_at": "2026-01-01",
+                    "created_by": None,
+                    "modified_by": None,
+                }
+            )
 
             # Should be in diff
             assert diff_db._backend.get_entry("new", "test") is not None

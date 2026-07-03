@@ -90,9 +90,7 @@ def test_task_get_reflects_claim_made_before_read(task_cli_env):
     TaskService(config, db).claim_task(task_id, "test-tasks", "agent:cli")
     db.close()
 
-    result = runner.invoke(
-        app, ["task", "get", task_id, "-k", "test-tasks", "-f", "json"]
-    )
+    result = runner.invoke(app, ["task", "get", task_id, "-k", "test-tasks", "-f", "json"])
     assert result.exit_code == 0, result.stdout
     data = json.loads(result.stdout)
     assert data["status"] == "claimed"

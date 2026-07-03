@@ -783,8 +783,7 @@ class PyriteMCPServer:
                         f"flagged by `pyrite index health`)."
                     ),
                     suggestion=(
-                        f"Re-call kb_create with entry_type in "
-                        f"[{', '.join(declared_types)}]."
+                        f"Re-call kb_create with entry_type in [{', '.join(declared_types)}]."
                     ),
                 )
                 err["declared_types"] = declared_types

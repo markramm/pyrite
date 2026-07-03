@@ -314,10 +314,7 @@ def check_orphan_backlog_item(
         return None  # closed items don't need structure
 
     links = entry.get("_links", [])
-    has_parent = any(
-        isinstance(lnk, dict) and lnk.get("relation") == "subtask_of"
-        for lnk in links
-    )
+    has_parent = any(isinstance(lnk, dict) and lnk.get("relation") == "subtask_of" for lnk in links)
     if has_parent:
         return None
 

@@ -102,9 +102,7 @@ class WorktreeService:
                 return Path(result.stdout.strip())
         return None
 
-    def _compute_paths(
-        self, repo_root: Path, username: str
-    ) -> tuple[Path, Path]:
+    def _compute_paths(self, repo_root: Path, username: str) -> tuple[Path, Path]:
         """Compute worktree and diff DB paths for a user.
 
         Returns (worktree_path, diff_db_path).
@@ -114,9 +112,7 @@ class WorktreeService:
         diff_db_path = worktree_path / ".pyrite" / "diff-index.db"
         return worktree_path, diff_db_path
 
-    def _get_worktree_row(
-        self, kb_name: str, user_id: int
-    ) -> dict[str, Any] | None:
+    def _get_worktree_row(self, kb_name: str, user_id: int) -> dict[str, Any] | None:
         """Get worktree record from DB."""
         row = self.db._raw_conn.execute(
             "SELECT * FROM worktree WHERE kb_name = ? AND user_id = ?",
@@ -143,9 +139,7 @@ class WorktreeService:
             created_at=row.get("created_at"),
         )
 
-    def ensure_worktree(
-        self, kb_name: str, user_id: int, username: str
-    ) -> WorktreeInfo:
+    def ensure_worktree(self, kb_name: str, user_id: int, username: str) -> WorktreeInfo:
         """Create a worktree for the user if it doesn't exist.
 
         Args:
@@ -242,16 +236,12 @@ class WorktreeService:
         row = self._get_worktree_row(kb_name, user_id)
         return self._row_to_info(row)
 
-    def get_worktree(
-        self, kb_name: str, user_id: int
-    ) -> WorktreeInfo | None:
+    def get_worktree(self, kb_name: str, user_id: int) -> WorktreeInfo | None:
         """Get an existing worktree for a user, or None."""
         row = self._get_worktree_row(kb_name, user_id)
         return self._row_to_info(row) if row else None
 
-    def list_worktrees(
-        self, kb_name: str | None = None
-    ) -> list[WorktreeInfo]:
+    def list_worktrees(self, kb_name: str | None = None) -> list[WorktreeInfo]:
         """List worktrees, optionally filtered by KB."""
         if kb_name:
             rows = self.db._raw_conn.execute(
@@ -264,9 +254,7 @@ class WorktreeService:
             ).fetchall()
         return [self._row_to_info(dict(r)) for r in rows]
 
-    def get_submissions(
-        self, kb_name: str | None = None
-    ) -> list[WorktreeInfo]:
+    def get_submissions(self, kb_name: str | None = None) -> list[WorktreeInfo]:
         """List worktrees with status 'submitted'."""
         if kb_name:
             rows = self.db._raw_conn.execute(
@@ -315,9 +303,7 @@ class WorktreeService:
         row = self._get_worktree_row(kb_name, user_id)
         return self._row_to_info(row)
 
-    def merge(
-        self, kb_name: str, user_id: int
-    ) -> tuple[bool, str]:
+    def merge(self, kb_name: str, user_id: int) -> tuple[bool, str]:
         """Merge a user's branch into main.
 
         Returns (success, message). On conflict, returns (False, details).
@@ -340,8 +326,7 @@ class WorktreeService:
         # Update status
         now = datetime.now(UTC).isoformat()
         self.db._raw_conn.execute(
-            "UPDATE worktree SET status = 'merged', merged_at = ?, updated_at = ? "
-            "WHERE id = ?",
+            "UPDATE worktree SET status = 'merged', merged_at = ?, updated_at = ? WHERE id = ?",
             (now, now, wt.id),
         )
         self.db._raw_conn.commit()
@@ -354,9 +339,7 @@ class WorktreeService:
         logger.info("Merged worktree %s/%s into main", wt.username, kb_name)
         return True, f"Merged {wt.branch} into main"
 
-    def reject(
-        self, kb_name: str, user_id: int, feedback: str = ""
-    ) -> WorktreeInfo:
+    def reject(self, kb_name: str, user_id: int, feedback: str = "") -> WorktreeInfo:
         """Reject a submission with optional feedback."""
         row = self._get_worktree_row(kb_name, user_id)
         if not row:
@@ -373,9 +356,7 @@ class WorktreeService:
         row = self._get_worktree_row(kb_name, user_id)
         return self._row_to_info(row)
 
-    def reset_to_main(
-        self, kb_name: str, user_id: int
-    ) -> WorktreeInfo:
+    def reset_to_main(self, kb_name: str, user_id: int) -> WorktreeInfo:
         """Reset user's worktree to main branch content.
 
         Discards all user changes, resets branch to main HEAD,
@@ -416,9 +397,7 @@ class WorktreeService:
         row = self._get_worktree_row(kb_name, user_id)
         return self._row_to_info(row)
 
-    def delete_worktree(
-        self, kb_name: str, user_id: int
-    ) -> bool:
+    def delete_worktree(self, kb_name: str, user_id: int) -> bool:
         """Remove a user's worktree entirely."""
         row = self._get_worktree_row(kb_name, user_id)
         if not row:
@@ -444,9 +423,7 @@ class WorktreeService:
         logger.info("Deleted worktree %s/%s", wt.username, kb_name)
         return True
 
-    def get_user_kb_config(
-        self, kb_name: str, user_id: int
-    ) -> KBConfig | None:
+    def get_user_kb_config(self, kb_name: str, user_id: int) -> KBConfig | None:
         """Get a KBConfig clone with path pointing to the user's worktree.
 
         Returns None if the user has no worktree for this KB.
@@ -477,9 +454,7 @@ class WorktreeService:
 
         return dataclasses.replace(kb_config, path=user_kb_path)
 
-    def get_user_diff_db(
-        self, kb_name: str, user_id: int
-    ) -> PyriteDB | None:
+    def get_user_diff_db(self, kb_name: str, user_id: int) -> PyriteDB | None:
         """Get a PyriteDB instance for the user's diff index.
 
         Returns None if the user has no worktree for this KB.

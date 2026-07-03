@@ -79,14 +79,20 @@ class TestMergeRegisteredKBs:
         config = db_with_user_kb["config"]
 
         with patch.object(
-            db.session, "execute", side_effect=OperationalError("SELECT ...", {}, Exception("simulated DB failure"))
+            db.session,
+            "execute",
+            side_effect=OperationalError("SELECT ...", {}, Exception("simulated DB failure")),
         ):
             with caplog.at_level(logging.WARNING, logger="pyrite.storage.kb_ops"):
                 db.merge_registered_kbs(config)
 
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
-        assert warnings, f"expected a warning-level log; got {[(r.levelname, r.getMessage()) for r in caplog.records]}"
-        assert warnings[0].exc_info is not None, "expected the original exception attached via exc_info"
+        assert warnings, (
+            f"expected a warning-level log; got {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+        )
+        assert warnings[0].exc_info is not None, (
+            "expected the original exception attached via exc_info"
+        )
 
     def test_query_failure_does_not_raise(self, db_with_user_kb):
         """Startup must not crash if the kb table doesn't exist yet (first
@@ -96,7 +102,9 @@ class TestMergeRegisteredKBs:
         config = db_with_user_kb["config"]
 
         with patch.object(
-            db.session, "execute", side_effect=OperationalError("SELECT ...", {}, Exception("simulated DB failure"))
+            db.session,
+            "execute",
+            side_effect=OperationalError("SELECT ...", {}, Exception("simulated DB failure")),
         ):
             db.merge_registered_kbs(config)  # must not raise
 

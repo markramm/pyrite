@@ -168,28 +168,12 @@ This is the event body.
         BOM, or any text before the fence means the file lacks a
         frontmatter block."""
         # Leading blank line — fence not at top.
-        leading_blank = (
-            "\n"
-            "---\n"
-            "id: x\n"
-            "title: X\n"
-            "---\n"
-            "\n"
-            "Body\n"
-        )
+        leading_blank = "\n---\nid: x\ntitle: X\n---\n\nBody\n"
         with pytest.raises(FrontmatterError):
             EventEntry.from_markdown(leading_blank)
 
         # Leading prose — fence not at top.
-        leading_text = (
-            "preamble line\n"
-            "---\n"
-            "id: x\n"
-            "title: X\n"
-            "---\n"
-            "\n"
-            "Body\n"
-        )
+        leading_text = "preamble line\n---\nid: x\ntitle: X\n---\n\nBody\n"
         with pytest.raises(FrontmatterError):
             EventEntry.from_markdown(leading_text)
 
@@ -214,11 +198,12 @@ This is the event body.
         errors = bad_event2.validate()
         assert any("importance" in e.lower() for e in errors)
 
-
     def test_event_status_always_written_to_frontmatter(self):
         """Status should always appear in frontmatter, even when 'confirmed' (the default)."""
         event = EventEntry(
-            id="2025-01-20--test", title="Test", date="2025-01-20",
+            id="2025-01-20--test",
+            title="Test",
+            date="2025-01-20",
             status=EventStatus.CONFIRMED,
         )
         fm = event.to_frontmatter()
@@ -228,8 +213,12 @@ This is the event body.
     def test_event_draft_status_round_trip(self):
         """An event created with status='draft' should round-trip through frontmatter."""
         event = EventEntry.from_frontmatter(
-            {"id": "2025-01-20--draft", "title": "Draft Event", "date": "2025-01-20",
-             "status": "draft"},
+            {
+                "id": "2025-01-20--draft",
+                "title": "Draft Event",
+                "date": "2025-01-20",
+                "status": "draft",
+            },
             body="",
         )
         assert event.status == EventStatus.DRAFT
@@ -240,8 +229,12 @@ This is the event body.
         """Every EventStatus value should survive from_frontmatter -> to_frontmatter."""
         for es in EventStatus:
             event = EventEntry.from_frontmatter(
-                {"id": f"2025-01-20--{es.value}", "title": es.value,
-                 "date": "2025-01-20", "status": es.value},
+                {
+                    "id": f"2025-01-20--{es.value}",
+                    "title": es.value,
+                    "date": "2025-01-20",
+                    "status": es.value,
+                },
                 body="",
             )
             assert event.status == es
@@ -375,7 +368,8 @@ class TestPersonResearchStatus:
     def test_person_research_status_stub_always_written(self):
         """research_status=stub (the default) should still appear in frontmatter."""
         person = PersonEntry(
-            id="test-person", title="Test Person",
+            id="test-person",
+            title="Test Person",
             research_status=ResearchStatus.STUB,
         )
         fm = person.to_frontmatter()
@@ -386,8 +380,7 @@ class TestPersonResearchStatus:
         """Every ResearchStatus value should survive from_frontmatter -> to_frontmatter."""
         for rs in ResearchStatus:
             person = PersonEntry.from_frontmatter(
-                {"id": f"test-{rs.value}", "title": rs.value,
-                 "research_status": rs.value},
+                {"id": f"test-{rs.value}", "title": rs.value, "research_status": rs.value},
                 body="",
             )
             assert person.research_status == rs
@@ -401,7 +394,8 @@ class TestOrganizationResearchStatus:
     def test_org_research_status_stub_always_written(self):
         """research_status=stub (the default) should still appear in frontmatter."""
         org = OrganizationEntry(
-            id="test-org", title="Test Org",
+            id="test-org",
+            title="Test Org",
             research_status=ResearchStatus.STUB,
         )
         fm = org.to_frontmatter()
@@ -412,8 +406,7 @@ class TestOrganizationResearchStatus:
         """Every ResearchStatus value should survive from_frontmatter -> to_frontmatter."""
         for rs in ResearchStatus:
             org = OrganizationEntry.from_frontmatter(
-                {"id": f"test-{rs.value}", "title": rs.value,
-                 "research_status": rs.value},
+                {"id": f"test-{rs.value}", "title": rs.value, "research_status": rs.value},
                 body="",
             )
             assert org.research_status == rs
@@ -427,8 +420,10 @@ class TestRelationshipEntry:
     def test_source_target_always_written_even_when_empty(self):
         """source_entity and target_entity should always appear in frontmatter."""
         rel = RelationshipEntry(
-            id="test-rel", title="Test Relationship",
-            source_entity="", target_entity="",
+            id="test-rel",
+            title="Test Relationship",
+            source_entity="",
+            target_entity="",
         )
         fm = rel.to_frontmatter()
         assert "source_entity" in fm, "source_entity='' should still be written"
@@ -437,8 +432,12 @@ class TestRelationshipEntry:
     def test_source_target_round_trip(self):
         """source_entity and target_entity should survive round-trip."""
         rel = RelationshipEntry.from_frontmatter(
-            {"id": "test-rel", "title": "Test",
-             "source_entity": "person-a", "target_entity": "person-b"},
+            {
+                "id": "test-rel",
+                "title": "Test",
+                "source_entity": "person-a",
+                "target_entity": "person-b",
+            },
             body="",
         )
         fm = rel.to_frontmatter()
@@ -448,8 +447,7 @@ class TestRelationshipEntry:
     def test_empty_source_target_round_trip(self):
         """Empty source_entity/target_entity should round-trip without being dropped."""
         rel = RelationshipEntry.from_frontmatter(
-            {"id": "test-rel", "title": "Test",
-             "source_entity": "", "target_entity": ""},
+            {"id": "test-rel", "title": "Test", "source_entity": "", "target_entity": ""},
             body="",
         )
         fm = rel.to_frontmatter()
@@ -463,7 +461,8 @@ class TestQAAssessmentEntry:
     def test_defaults_always_written(self):
         """Default values (tier=1, qa_status=pass, issues_found=0, issues_resolved=0) should appear."""
         qa = QAAssessmentEntry(
-            id="test-qa", title="Test QA",
+            id="test-qa",
+            title="Test QA",
         )
         fm = qa.to_frontmatter()
         assert "tier" in fm, "tier=1 (default) should still be written"
@@ -484,9 +483,14 @@ class TestQAAssessmentEntry:
     def test_qa_status_pass_round_trip(self):
         """qa_status=pass should survive from_frontmatter -> to_frontmatter."""
         qa = QAAssessmentEntry.from_frontmatter(
-            {"id": "test-qa", "title": "Test QA",
-             "qa_status": "pass", "tier": 1,
-             "issues_found": 0, "issues_resolved": 0},
+            {
+                "id": "test-qa",
+                "title": "Test QA",
+                "qa_status": "pass",
+                "tier": 1,
+                "issues_found": 0,
+                "issues_resolved": 0,
+            },
             body="",
         )
         fm = qa.to_frontmatter()
@@ -498,9 +502,14 @@ class TestQAAssessmentEntry:
     def test_nondefault_values_round_trip(self):
         """Non-default values should also round-trip correctly."""
         qa = QAAssessmentEntry.from_frontmatter(
-            {"id": "test-qa", "title": "Test QA",
-             "qa_status": "fail", "tier": 3,
-             "issues_found": 5, "issues_resolved": 2},
+            {
+                "id": "test-qa",
+                "title": "Test QA",
+                "qa_status": "fail",
+                "tier": 3,
+                "issues_found": 5,
+                "issues_resolved": 2,
+            },
             body="",
         )
         fm = qa.to_frontmatter()

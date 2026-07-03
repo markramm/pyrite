@@ -85,7 +85,8 @@ class KBRepository:
                             if key in fm:
                                 logger.debug(
                                     "Stripped duplicated frontmatter field '%s' from body of %s",
-                                    key, file_path,
+                                    key,
+                                    file_path,
                                 )
                                 body = body.split("\n", 1)[1].strip() if "\n" in body else ""
                         fm = self._maybe_migrate(fm)
@@ -242,8 +243,12 @@ class KBRepository:
         # This is slower but catches entries like ADRs where the file is
         # "0025-release-workflow.md" but the ID is "adr-0025"
         from pyrite.utils.yaml import load_yaml
+
         for md_file in self.path.rglob("*.md"):
-            if any(part.startswith(".") or part.startswith("_") for part in md_file.relative_to(self.path).parts):
+            if any(
+                part.startswith(".") or part.startswith("_")
+                for part in md_file.relative_to(self.path).parts
+            ):
                 continue
             try:
                 text = md_file.read_text(encoding="utf-8")
@@ -373,14 +378,11 @@ class KBRepository:
 
         src = self.find_file(old_id)
         if not src or not src.exists():
-            raise EntryNotFoundError(
-                f"Entry '{old_id}' not found in KB '{self.name}'"
-            )
+            raise EntryNotFoundError(f"Entry '{old_id}' not found in KB '{self.name}'")
 
         if self.find_file(new_id):
             raise ValidationError(
-                f"Cannot rename '{old_id}' to '{new_id}': target already exists "
-                f"in KB '{self.name}'"
+                f"Cannot rename '{old_id}' to '{new_id}': target already exists in KB '{self.name}'"
             )
 
         # Plan the link rewrite. We scan every body once and substitute
@@ -413,9 +415,7 @@ class KBRepository:
                 if count == 0:
                     continue
                 new_text = bare.sub(new_bare, text)
-                new_text = aliased.sub(
-                    lambda m, _n=new_id: f"[[{_n}|{m.group(1)}]]", new_text
-                )
+                new_text = aliased.sub(lambda m, _n=new_id: f"[[{_n}|{m.group(1)}]]", new_text)
                 files_rewritten += 1
                 links_rewritten += count
                 body_rewrites.append((md_file, new_text))

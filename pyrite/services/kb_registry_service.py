@@ -130,9 +130,7 @@ class KBRegistryService:
         )
         return self.get_kb(name)  # type: ignore[return-value]
 
-    def _apply_preset(
-        self, kb_path: Path, name: str, kb_type: str, description: str
-    ) -> None:
+    def _apply_preset(self, kb_path: Path, name: str, kb_type: str, description: str) -> None:
         """Materialize a plugin preset into the KB directory.
 
         Writes kb.yaml with type definitions, creates subdirectories,
@@ -218,7 +216,9 @@ class KBRegistryService:
         """Generate an entry template markdown file for a type."""
         lines = ["---"]
         lines.append(f"template_name: {type_name}")
-        lines.append(f"template_description: Create a new {type_info.get('description', type_name)}")
+        lines.append(
+            f"template_description: Create a new {type_info.get('description', type_name)}"
+        )
         lines.append(f"entry_type: {type_name}")
         # Add optional fields as empty frontmatter values
         for field_name in type_info.get("optional", []):

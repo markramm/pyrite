@@ -20,17 +20,13 @@ def version_setup(tmp_path):
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"], cwd=str(kb_path), capture_output=True
     )
-    subprocess.run(
-        ["git", "config", "user.name", "Test"], cwd=str(kb_path), capture_output=True
-    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=str(kb_path), capture_output=True)
 
     # Write and commit an entry
     entry_file = kb_path / "entry-1.md"
     entry_file.write_text("---\nid: entry-1\ntitle: V1\ntype: note\n---\n\nVersion 1")
     subprocess.run(["git", "add", "."], cwd=str(kb_path), capture_output=True)
-    subprocess.run(
-        ["git", "commit", "-m", "v1"], cwd=str(kb_path), capture_output=True
-    )
+    subprocess.run(["git", "commit", "-m", "v1"], cwd=str(kb_path), capture_output=True)
 
     # Get commit hash
     result = subprocess.run(
@@ -41,9 +37,7 @@ def version_setup(tmp_path):
     # Update and commit again
     entry_file.write_text("---\nid: entry-1\ntitle: V2\ntype: note\n---\n\nVersion 2")
     subprocess.run(["git", "add", "."], cwd=str(kb_path), capture_output=True)
-    subprocess.run(
-        ["git", "commit", "-m", "v2"], cwd=str(kb_path), capture_output=True
-    )
+    subprocess.run(["git", "commit", "-m", "v2"], cwd=str(kb_path), capture_output=True)
 
     config = PyriteConfig(
         knowledge_bases=[KBConfig(name="test-kb", path=kb_path)],

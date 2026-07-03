@@ -219,9 +219,7 @@ class TestOAuthStateStore:
         stale = service.create_oauth_state(flow="login", ttl_seconds=-1)
 
         # Force the probabilistic branch to fire on the next call.
-        monkeypatch.setattr(
-            "pyrite.services.auth_service.secrets.randbelow", lambda _n: 0
-        )
+        monkeypatch.setattr("pyrite.services.auth_service.secrets.randbelow", lambda _n: 0)
         service.create_oauth_state(flow="login")
 
         rows = db.execute_sql("SELECT state FROM oauth_state WHERE state = :s", {"s": stale})

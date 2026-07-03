@@ -284,15 +284,11 @@ def validate_status_change(
         # declared table; reason is required only for transitions that
         # opt in via `requires_reason: True`.
         if not can_transition(workflow, old_status, new_status, user_role):
-            allowed = [
-                t["to"]
-                for t in get_allowed_transitions(workflow, old_status, user_role)
-            ]
+            allowed = [t["to"] for t in get_allowed_transitions(workflow, old_status, user_role)]
             allowed_msg = ", ".join(allowed) if allowed else "(none — terminal state)"
             return (
                 False,
-                f"Cannot move from '{old_status}' to '{new_status}'. "
-                f"Allowed next: {allowed_msg}.",
+                f"Cannot move from '{old_status}' to '{new_status}'. Allowed next: {allowed_msg}.",
             )
         if requires_reason(workflow, old_status, new_status) and not status_reason.strip():
             return (

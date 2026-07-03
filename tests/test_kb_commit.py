@@ -56,7 +56,14 @@ def git_kb(tmp_path):
     svc = KBService(config, db)
     export_svc = ExportService(config, db)
 
-    yield {"kb_path": kb_path, "kb": kb, "config": config, "db": db, "svc": svc, "export_svc": export_svc}
+    yield {
+        "kb_path": kb_path,
+        "kb": kb,
+        "config": config,
+        "db": db,
+        "svc": svc,
+        "export_svc": export_svc,
+    }
     db.close()
 
 
@@ -75,7 +82,14 @@ def non_git_kb(tmp_path):
     svc = KBService(config, db)
     export_svc = ExportService(config, db)
 
-    yield {"kb_path": kb_path, "kb": kb, "config": config, "db": db, "svc": svc, "export_svc": export_svc}
+    yield {
+        "kb_path": kb_path,
+        "kb": kb,
+        "config": config,
+        "db": db,
+        "svc": svc,
+        "export_svc": export_svc,
+    }
     db.close()
 
 

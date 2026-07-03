@@ -63,7 +63,8 @@ class TestDependencyAutoUnblocking:
         dep_id = dep["entry_id"]
 
         blocked = svc.create_task(
-            kb_name="test-tasks", title="Blocked task",
+            kb_name="test-tasks",
+            title="Blocked task",
             dependencies=[dep_id],
         )
         blocked_id = blocked["entry_id"]
@@ -82,7 +83,8 @@ class TestDependencyAutoUnblocking:
         dep2 = svc.create_task(kb_name="test-tasks", title="Dep 2")
 
         blocked = svc.create_task(
-            kb_name="test-tasks", title="Blocked task",
+            kb_name="test-tasks",
+            title="Blocked task",
             dependencies=[dep1["entry_id"], dep2["entry_id"]],
         )
         _advance_to_blocked(svc, blocked["entry_id"], "test-tasks")
@@ -107,14 +109,16 @@ class TestEvidenceAggregation:
 
         parent = svc.create_task(kb_name="test-tasks", title="Parent task")
         child = svc.create_task(
-            kb_name="test-tasks", title="Child task",
+            kb_name="test-tasks",
+            title="Child task",
             parent=parent["entry_id"],
         )
 
         # Add evidence to child via checkpoint
         _advance_to_in_progress(svc, child["entry_id"], "test-tasks")
         svc.checkpoint_task(
-            child["entry_id"], "test-tasks",
+            child["entry_id"],
+            "test-tasks",
             message="Found evidence",
             partial_evidence=["evidence-entry-1", "evidence-entry-2"],
         )

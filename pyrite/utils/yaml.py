@@ -43,9 +43,7 @@ def load_yaml(text: str) -> dict[str, Any]:
     if result is None:
         return {}
     if not isinstance(result, Mapping):
-        raise FrontmatterError(
-            f"Frontmatter must be a mapping, got {type(result).__name__}"
-        )
+        raise FrontmatterError(f"Frontmatter must be a mapping, got {type(result).__name__}")
     return result
 
 

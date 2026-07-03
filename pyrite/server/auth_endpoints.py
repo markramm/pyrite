@@ -196,7 +196,9 @@ async def register(
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
 
     try:
-        user = auth_service.register(body.username, body.password, body.display_name, body.invite_code)
+        user = auth_service.register(
+            body.username, body.password, body.display_name, body.invite_code
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

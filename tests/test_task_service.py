@@ -151,8 +151,11 @@ class TestUpdateTask:
         eid = created["entry_id"]
 
         svc.update_task(
-            eid, "test-tasks", status="claimed",
-            comment="claimed for the alpha sweep", by="agent:a",
+            eid,
+            "test-tasks",
+            status="claimed",
+            comment="claimed for the alpha sweep",
+            by="agent:a",
         )
         repo = KBRepository(task_env["kb_config"])
         log = getattr(repo.load(eid), "status_change_log", [])
@@ -684,9 +687,7 @@ class TestMigrateRelaxedMode:
             "enforce_transitions": False,
             "require_reason_on_transition": True,
         }
-        kb_config.kb_schema.types["task"] = TypeSchema(
-            name="task", state_machine=relaxed
-        )
+        kb_config.kb_schema.types["task"] = TypeSchema(name="task", state_machine=relaxed)
 
     def test_strict_mode_kb_migrates_nothing(self, migration_env):
         """A KB whose `task` type has NO state_machine override means

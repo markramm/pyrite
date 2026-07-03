@@ -103,16 +103,12 @@ class WorktreeResolver:
 
         return write_config, write_db
 
-    def get_write_service(
-        self, kb_name: str, auth_user: dict[str, Any]
-    ) -> KBService:
+    def get_write_service(self, kb_name: str, auth_user: dict[str, Any]) -> KBService:
         """Get a KBService configured for writing to the user's worktree."""
         write_config, write_db = self.get_write_context(kb_name, auth_user)
         return KBService(write_config, write_db)
 
-    def get_read_service(
-        self, kb_name: str, auth_user: dict[str, Any] | None
-    ) -> KBService:
+    def get_read_service(self, kb_name: str, auth_user: dict[str, Any] | None) -> KBService:
         """Get a KBService configured for reading with overlay."""
         read_db = self.get_read_db(kb_name, auth_user)
         return KBService(self._config, read_db)

@@ -32,7 +32,9 @@ def git_kb(tmp_path):
 
     # Create and commit an initial entry
     entry_file = kb_path / "hello.md"
-    entry_file.write_text("---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nOriginal body.\n")
+    entry_file.write_text(
+        "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nOriginal body.\n"
+    )
     _git(["add", "."], str(kb_path))
     _git(["commit", "-m", "Initial commit"], str(kb_path))
 
@@ -60,7 +62,9 @@ class TestGetPendingChanges:
     def test_modified_entry_detected(self, git_kb):
         # Modify the existing entry
         entry_file = git_kb["kb_path"] / "hello.md"
-        entry_file.write_text("---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nUpdated body.\n")
+        entry_file.write_text(
+            "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nUpdated body.\n"
+        )
 
         result = git_kb["svc"].get_pending_changes("test-kb")
         assert result["summary"]["total"] == 1
@@ -75,7 +79,9 @@ class TestGetPendingChanges:
     def test_new_entry_detected(self, git_kb):
         # Create a new entry
         new_file = git_kb["kb_path"] / "world.md"
-        new_file.write_text("---\nid: world\ntype: note\ntitle: World\ntags: []\n---\n\nNew entry.\n")
+        new_file.write_text(
+            "---\nid: world\ntype: note\ntitle: World\ntags: []\n---\n\nNew entry.\n"
+        )
 
         result = git_kb["svc"].get_pending_changes("test-kb")
         assert result["summary"]["total"] == 1
@@ -100,7 +106,9 @@ class TestGetPendingChanges:
     def test_multiple_changes(self, git_kb):
         # Modify existing + add new
         entry_file = git_kb["kb_path"] / "hello.md"
-        entry_file.write_text("---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nChanged.\n")
+        entry_file.write_text(
+            "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nChanged.\n"
+        )
         new_file = git_kb["kb_path"] / "new.md"
         new_file.write_text("---\nid: new\ntype: note\ntitle: New One\ntags: []\n---\n\nFresh.\n")
 
@@ -184,9 +192,7 @@ class TestPublishChanges:
         def _raise(*args, **kwargs):
             raise RuntimeError("simulated auth failure")
 
-        monkeypatch.setattr(
-            git_kb["svc"]._export_svc, "push_kb", _raise
-        )
+        monkeypatch.setattr(git_kb["svc"]._export_svc, "push_kb", _raise)
 
         result = git_kb["svc"].publish_changes("test-kb", summary="Test publish")
 

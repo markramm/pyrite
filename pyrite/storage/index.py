@@ -59,6 +59,7 @@ def _strip_code_regions(text: str) -> str:
     Replaces matches with same-length whitespace so any future position-based
     logic stays aligned.
     """
+
     def _blank(m: re.Match) -> str:
         return re.sub(r"[^\n]", " ", m.group(0))
 
@@ -333,12 +334,14 @@ class IndexManager:
                 else:
                     ref_kb, ref_id = kb_name, ref_str
                 if ref_id and ref_id != entry.id and ref_id not in existing_targets:
-                    data["links"].append({
-                        "target": ref_id,
-                        "kb": ref_kb,
-                        "relation": "references",
-                        "note": "",
-                    })
+                    data["links"].append(
+                        {
+                            "target": ref_id,
+                            "kb": ref_kb,
+                            "relation": "references",
+                            "note": "",
+                        }
+                    )
                     existing_targets.add(ref_id)
 
         # Extract transclusions as links with relation="transclusion"
@@ -749,9 +752,7 @@ class IndexManager:
                     logger.warning("Malformed frontmatter in %s: %s", file_path, e)
                     continue
                 except Exception:
-                    logger.warning(
-                        "Health check failed for %s", file_path, exc_info=True
-                    )
+                    logger.warning("Health check failed for %s", file_path, exc_info=True)
                     continue
 
             # Check for missing files
@@ -872,9 +873,7 @@ class IndexManager:
                     file_path = row["file_path"]
                     if file_path:
                         try:
-                            rel = Path(file_path).resolve().relative_to(
-                                kb.path.resolve()
-                            )
+                            rel = Path(file_path).resolve().relative_to(kb.path.resolve())
                             actual_sub = rel.parts[0] if len(rel.parts) > 1 else ""
                         except ValueError:
                             actual_sub = ""
@@ -1029,12 +1028,8 @@ class IndexManager:
                         except FrontmatterError as e:
                             # Malformed frontmatter is content drift, not a
                             # Pyrite bug. Surface in the summary; log one-line.
-                            results["malformed"].append(
-                                {"path": str(file_path), "error": str(e)}
-                            )
-                            logger.warning(
-                                "Malformed frontmatter in %s: %s", file_path, e
-                            )
+                            results["malformed"].append({"path": str(file_path), "error": str(e)})
+                            logger.warning("Malformed frontmatter in %s: %s", file_path, e)
                         except Exception:
                             logger.warning(
                                 "Stale check/re-index failed for %s", entry_id, exc_info=True
@@ -1054,12 +1049,8 @@ class IndexManager:
                             results["added"] += 1
                     except FrontmatterError as e:
                         # Same: malformed-frontmatter content drift, not a bug.
-                        results["malformed"].append(
-                            {"path": str(file_path), "error": str(e)}
-                        )
-                        logger.warning(
-                            "Malformed frontmatter in %s: %s", file_path, e
-                        )
+                        results["malformed"].append({"path": str(file_path), "error": str(e)})
+                        logger.warning("Malformed frontmatter in %s: %s", file_path, e)
                     except Exception:
                         logger.warning("Could not parse new file %s", file_path, exc_info=True)
 

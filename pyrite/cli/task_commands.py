@@ -75,8 +75,7 @@ def task_create(
     """
     if title_arg and title_opt:
         console.print(
-            "[red]Error:[/red] Provide the title either positionally or with "
-            "--title, not both."
+            "[red]Error:[/red] Provide the title either positionally or with --title, not both."
         )
         raise typer.Exit(1)
     title = title_arg or title_opt
@@ -389,10 +388,7 @@ def task_reset(
             typer.echo(formatted)
             return
 
-        console.print(
-            f"[green]Reset:[/green] {task_id} "
-            f"({result['prior_status']} → open)"
-        )
+        console.print(f"[green]Reset:[/green] {task_id} ({result['prior_status']} → open)")
         console.print(f"  Reason: {result['reason']}")
     except (PyriteError, ValueError) as e:
         _task_error(e, fmt)
@@ -434,9 +430,7 @@ def task_decompose(
 @task_app.command("migrate-relaxed-mode")
 def task_migrate_relaxed_mode(
     kb_name: str = typer.Argument(..., help="Knowledge base to migrate"),
-    dry_run: bool = typer.Option(
-        False, "--dry-run", help="Show the plan without writing"
-    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show the plan without writing"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Backfill status_reason='pre-relaxed-mode' for tasks of types

@@ -485,15 +485,12 @@ class BaseBackend(ABC):
 
     def get_entries_for_indexing(self, kb_name: str) -> list[dict[str, Any]]:
         rows = (
-            self._session.query(
-                Entry.id, Entry.file_path, Entry.indexed_at, Entry.content_hash
-            )
+            self._session.query(Entry.id, Entry.file_path, Entry.indexed_at, Entry.content_hash)
             .filter_by(kb_name=kb_name)
             .all()
         )
         return [
-            {"id": r[0], "file_path": r[1], "indexed_at": r[2], "content_hash": r[3]}
-            for r in rows
+            {"id": r[0], "file_path": r[1], "indexed_at": r[2], "content_hash": r[3]} for r in rows
         ]
 
     # =====================================================================
@@ -523,8 +520,7 @@ class BaseBackend(ABC):
     @abstractmethod
     def search_by_tag(
         self, tag: str, kb_name: str | None = None, limit: int = 50
-    ) -> list[dict[str, Any]]:
-        ...
+    ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
     def search_by_date_range(
@@ -533,22 +529,19 @@ class BaseBackend(ABC):
         date_to: str,
         kb_name: str | None = None,
         limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        ...
+    ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
     def search_by_tag_prefix(
         self, prefix: str, kb_name: str | None = None, limit: int = 50
-    ) -> list[dict[str, Any]]:
-        ...
+    ) -> list[dict[str, Any]]: ...
 
     # =====================================================================
     # Semantic search — subclasses must override
     # =====================================================================
 
     @abstractmethod
-    def upsert_embedding(self, entry_id: str, kb_name: str, embedding: list[float]) -> bool:
-        ...
+    def upsert_embedding(self, entry_id: str, kb_name: str, embedding: list[float]) -> bool: ...
 
     @abstractmethod
     def search_semantic(
@@ -557,28 +550,22 @@ class BaseBackend(ABC):
         kb_name: str | None = None,
         limit: int = 20,
         max_distance: float = 1.3,
-    ) -> list[dict[str, Any]]:
-        ...
+    ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
-    def has_embeddings(self) -> bool:
-        ...
+    def has_embeddings(self) -> bool: ...
 
     @abstractmethod
-    def embedding_stats(self) -> dict[str, Any]:
-        ...
+    def embedding_stats(self) -> dict[str, Any]: ...
 
     @abstractmethod
-    def get_embedded_rowids(self) -> set[int]:
-        ...
+    def get_embedded_rowids(self) -> set[int]: ...
 
     @abstractmethod
-    def get_entries_for_embedding(self, kb_name: str | None = None) -> list[dict[str, Any]]:
-        ...
+    def get_entries_for_embedding(self, kb_name: str | None = None) -> list[dict[str, Any]]: ...
 
     @abstractmethod
-    def delete_embedding(self, entry_id: str, kb_name: str) -> None:
-        ...
+    def delete_embedding(self, entry_id: str, kb_name: str) -> None: ...
 
     # =====================================================================
     # Graph queries (links) — shared via _exec helpers

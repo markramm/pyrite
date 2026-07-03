@@ -40,8 +40,14 @@ class AuthService:
         self.db.execute_write_sql(
             """INSERT INTO invite_code (code, created_by, created_at, expires_at, role, note)
             VALUES (:code, :created_by, :now, :expires_at, :role, :note)""",
-            {"code": code, "created_by": created_by, "now": now,
-             "expires_at": expires_at, "role": role, "note": note},
+            {
+                "code": code,
+                "created_by": created_by,
+                "now": now,
+                "expires_at": expires_at,
+                "role": role,
+                "note": note,
+            },
         )
         return {"code": code, "role": role, "expires_at": expires_at, "note": note}
 
@@ -53,9 +59,7 @@ class AuthService:
 
     def validate_invite_code(self, code: str) -> dict | None:
         """Validate an invite code. Returns code info or None if invalid."""
-        rows = self.db.execute_sql(
-            "SELECT * FROM invite_code WHERE code = :code", {"code": code}
-        )
+        rows = self.db.execute_sql("SELECT * FROM invite_code WHERE code = :code", {"code": code})
         if not rows:
             return None
         row = rows[0]
@@ -91,9 +95,7 @@ class AuthService:
             return False
         if rows[0].get("used_by"):
             raise ValueError("Cannot delete a used invite code")
-        self.db.execute_write_sql(
-            "DELETE FROM invite_code WHERE code = :code", {"code": code}
-        )
+        self.db.execute_write_sql("DELETE FROM invite_code WHERE code = :code", {"code": code})
         return True
 
     # ── OAuth CSRF state ──────────────────────────────────────────
@@ -153,9 +155,7 @@ class AuthService:
         )
         if not rows:
             return None
-        self.db.execute_write_sql(
-            "DELETE FROM oauth_state WHERE state = :state", {"state": state}
-        )
+        self.db.execute_write_sql("DELETE FROM oauth_state WHERE state = :state", {"state": state})
         row = rows[0]
         if datetime.now(UTC).isoformat() >= row["expires_at"]:
             return None
@@ -170,8 +170,13 @@ class AuthService:
 
     # ── Registration ──────────────────────────────────────────────
 
-    def register(self, username: str, password: str, display_name: str | None = None,
-                 invite_code: str | None = None) -> dict:
+    def register(
+        self,
+        username: str,
+        password: str,
+        display_name: str | None = None,
+        invite_code: str | None = None,
+    ) -> dict:
         """Create a new local user.
 
         First registered user gets 'admin' role; subsequent users get role from
@@ -765,7 +770,9 @@ class AuthService:
     # Per-User API Key Management (BYOK)
     # =====================================================================
 
-    def store_user_api_key(self, user_id: int, provider: str, api_key: str, model: str = "") -> dict:
+    def store_user_api_key(
+        self, user_id: int, provider: str, api_key: str, model: str = ""
+    ) -> dict:
         """Store or update a user's API key (encrypted) for an LLM provider."""
         key = self._get_encryption_key()
         stored_value = self._encrypt_token(api_key, key) if key else api_key
@@ -852,7 +859,9 @@ class AuthService:
             {"user_id": user_id},
         )
 
-    def create_user_ephemeral_kb(self, user_id: int, ephemeral_service, name: str | None = None) -> dict:
+    def create_user_ephemeral_kb(
+        self, user_id: int, ephemeral_service, name: str | None = None
+    ) -> dict:
         """Create an ephemeral KB for a user with per-KB admin grant.
 
         Checks ephemeral_min_tier, ephemeral_max_per_user limits.
@@ -903,8 +912,7 @@ class AuthService:
 
         # Increment ephemeral_kb_count
         self.db.execute_write_sql(
-            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1"
-            " WHERE id = :user_id",
+            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1 WHERE id = :user_id",
             {"user_id": user_id},
         )
 

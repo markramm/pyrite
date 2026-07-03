@@ -582,9 +582,7 @@ class KBService:
             raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
         repo = KBRepository(kb_config)
-        result = repo.rename(
-            old_id, new_id, update_links=update_links, dry_run=dry_run
-        )
+        result = repo.rename(old_id, new_id, update_links=update_links, dry_run=dry_run)
 
         # Re-sync the index so old_id resolves to None and new_id
         # resolves to the renamed entry, then read back to confirm it

@@ -219,9 +219,7 @@ class TestSearchService:
             "colon-term-plus-and-operator",
         ],
     )
-    def test_search_raises_query_syntax_error_not_raw_db_error(
-        self, test_db, test_config, query
-    ):
+    def test_search_raises_query_syntax_error_not_raw_db_error(self, test_db, test_config, query):
         """The sanitizer bypasses special-char quoting when a query contains
         an FTS5 operator or an existing quote (sanitize_fts_query's "user
         knows what they're doing" guard). A bare special-char token like
@@ -320,9 +318,7 @@ class TestSearchService:
         # Implicit-AND: this exact phrase with an absent term ("quarterly")
         # would normally zero out. With OR-relaxation it should still find the
         # entry on a 0-hit retry.
-        results = service.search(
-            "orange county florida quarterly absent", mode="keyword"
-        )
+        results = service.search("orange county florida quarterly absent", mode="keyword")
         assert any(r["id"] == "orange-county-igsa" for r in results), (
             "OR-relaxation should surface the near-miss entry on 0 AND-hits"
         )
@@ -569,9 +565,7 @@ class TestKBService:
         assert entry is not None
         assert entry["title"] == "Get Test"
 
-    def test_get_entry_projects_well_known_metadata_fields_to_top_level(
-        self, test_db, test_config
-    ):
+    def test_get_entry_projects_well_known_metadata_fields_to_top_level(self, test_db, test_config):
         """The read projection lifts well-known software-kb metadata fields
         (rank, effort, kind) to the top level. Regression for Tier A 1200:
         `pyrite get` silently omitted `rank` from JSON even though it was in
@@ -597,8 +591,7 @@ class TestKBService:
         assert entry is not None
         # Lifted fields — primary regression assertions.
         assert entry.get("rank") == 1200, (
-            f"rank missing from get_entry projection (Tier A 1200); "
-            f"got keys {sorted(entry.keys())}"
+            f"rank missing from get_entry projection (Tier A 1200); got keys {sorted(entry.keys())}"
         )
         assert entry.get("effort") == "S", "effort missing from projection"
         assert entry.get("kind") == "bug", "kind missing from projection"

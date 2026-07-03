@@ -59,7 +59,9 @@ class TestExportKBToDirectory:
         with pytest.raises(KBNotFoundError):
             export_svc.export_kb_to_directory("nonexistent", tmp_path / "out")
 
-    def test_yaml_special_chars_in_title_are_quoted(self, export_svc, mock_config, mock_db, tmp_path):
+    def test_yaml_special_chars_in_title_are_quoted(
+        self, export_svc, mock_config, mock_db, tmp_path
+    ):
         """Titles with YAML-special characters must be properly quoted."""
         kb_cfg = MagicMock()
         kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
@@ -82,11 +84,14 @@ class TestExportKBToDirectory:
         content = (target / "note" / "tricky.md").read_text()
         # The frontmatter should be parseable YAML
         import yaml
+
         parts = content.split("---")
         fm = yaml.safe_load(parts[1])
         assert fm["title"] == 'Value with: colon and "quotes"'
 
-    def test_title_with_newline_does_not_inject_fields(self, export_svc, mock_config, mock_db, tmp_path):
+    def test_title_with_newline_does_not_inject_fields(
+        self, export_svc, mock_config, mock_db, tmp_path
+    ):
         """Newlines in title must not inject additional YAML fields."""
         kb_cfg = MagicMock()
         kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
@@ -108,6 +113,7 @@ class TestExportKBToDirectory:
 
         content = (target / "note" / "inject.md").read_text()
         import yaml
+
         parts = content.split("---")
         fm = yaml.safe_load(parts[1])
         # The evil_field should NOT appear as a separate key
@@ -188,9 +194,7 @@ class TestPathTraversalPrevention:
         # The file must be inside the note_dir (resolved path is under target)
         assert files[0].resolve().is_relative_to(target.resolve())
 
-    def test_entry_id_with_backslash_traversal(
-        self, export_svc, mock_config, mock_db, tmp_path
-    ):
+    def test_entry_id_with_backslash_traversal(self, export_svc, mock_config, mock_db, tmp_path):
         kb_cfg = MagicMock()
         kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
         kb_cfg.kb_yaml_path.write_text("name: test")

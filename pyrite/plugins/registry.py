@@ -79,6 +79,7 @@ def _plugin_declares(plugin: PyritePlugin, method_name: str) -> bool:
     declared = getattr(plugin, "capabilities", set()) or set()
     return cap in declared
 
+
 # Core relationship types (platform-level, not plugin-provided)
 CORE_RELATIONSHIP_TYPES: dict[str, dict] = {
     "subtask_of": {
@@ -229,7 +230,10 @@ class PluginRegistry:
             except Exception as e:
                 logger.error(
                     "Plugin %s %s failed: %s — %s data from this plugin is missing",
-                    plugin.name, method_name, e, kind,
+                    plugin.name,
+                    method_name,
+                    e,
+                    kind,
                 )
                 continue
             if not items:
@@ -240,7 +244,9 @@ class PluginRegistry:
                     "declare the %s capability; dropping the return. "
                     "Add the capability to the plugin's declared set, "
                     "or remove the method.",
-                    plugin.name, method_name, _METHOD_CAPABILITIES.get(method_name),
+                    plugin.name,
+                    method_name,
+                    _METHOD_CAPABILITIES.get(method_name),
                 )
                 continue
             self._merge_dict(result, items, plugin.name, kind)
@@ -264,7 +270,9 @@ class PluginRegistry:
             except Exception as e:
                 logger.error(
                     "Plugin %s %s failed: %s — data from this plugin is missing",
-                    plugin.name, method_name, e,
+                    plugin.name,
+                    method_name,
+                    e,
                 )
                 continue
             if not items:
@@ -273,7 +281,9 @@ class PluginRegistry:
                 logger.warning(
                     "Plugin '%s' returned non-empty from %s but did not "
                     "declare the %s capability; dropping the return.",
-                    plugin.name, method_name, _METHOD_CAPABILITIES.get(method_name),
+                    plugin.name,
+                    method_name,
+                    _METHOD_CAPABILITIES.get(method_name),
                 )
                 continue
             result.extend(items)
@@ -296,7 +306,9 @@ class PluginRegistry:
             except Exception as e:
                 logger.error(
                     "Plugin %s %s failed: %s — data from this plugin is missing",
-                    plugin.name, method_name, e,
+                    plugin.name,
+                    method_name,
+                    e,
                 )
                 continue
             if not items:
@@ -305,7 +317,9 @@ class PluginRegistry:
                 logger.warning(
                     "Plugin '%s' returned non-empty from %s but did not "
                     "declare the %s capability; dropping the return.",
-                    plugin.name, method_name, _METHOD_CAPABILITIES.get(method_name),
+                    plugin.name,
+                    method_name,
+                    _METHOD_CAPABILITIES.get(method_name),
                 )
                 continue
             for key, lst in items.items():

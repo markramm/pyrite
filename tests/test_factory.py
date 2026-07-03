@@ -124,9 +124,9 @@ class TestEntryFromFrontmatterMissingType:
 
         # Warning surfaced so the silent fallback is visible.
         warnings = [
-            r for r in caplog.records
-            if r.levelno == logging.WARNING
-            and r.name == "pyrite.models.core_types"
+            r
+            for r in caplog.records
+            if r.levelno == logging.WARNING and r.name == "pyrite.models.core_types"
         ]
         assert warnings, "expected a warning about missing type fallback"
         msg = warnings[0].getMessage().lower()
@@ -142,7 +142,8 @@ class TestEntryFromFrontmatterMissingType:
             entry_from_frontmatter(meta, "body")
 
         fallback_warnings = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno == logging.WARNING
             and r.name == "pyrite.models.core_types"
             and "fallback" in r.getMessage().lower()

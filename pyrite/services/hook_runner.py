@@ -102,7 +102,8 @@ class HookRunner:
                 if is_before:
                     raise
                 logger.warning(
-                    "Core hook %s failed", getattr(hook_fn, "__name__", repr(hook_fn)),
+                    "Core hook %s failed",
+                    getattr(hook_fn, "__name__", repr(hook_fn)),
                     exc_info=True,
                 )
 
@@ -113,7 +114,10 @@ class HookRunner:
         try:
             kb_type = context.get("kb_type", "") if context else ""
             return self._plugin_registry.run_hooks_for_kb(
-                hook_name, entry, context, kb_type=kb_type,
+                hook_name,
+                entry,
+                context,
+                kb_type=kb_type,
             )
         except Exception:
             if is_before:

@@ -67,8 +67,11 @@ class CRUDMixin:
     ) -> int:
         """Count entries, optionally filtered by KB, type, tag, status, importance."""
         return self._backend.count_entries(
-            kb_name=kb_name, entry_type=entry_type, tag=tag,
-            status=status, min_importance=min_importance,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tag=tag,
+            status=status,
+            min_importance=min_importance,
         )
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:

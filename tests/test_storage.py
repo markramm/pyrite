@@ -184,7 +184,9 @@ class TestPyriteDB:
         results = db.search("Test Entry")
         assert len(results) >= 1
         result = results[0]
-        assert "body" in result, "Search results should include body field for --include-body support"
+        assert "body" in result, (
+            "Search results should include body field for --include-body support"
+        )
         assert result["body"] == "This is a long body that should not appear in search results."
         # Should still have other useful fields
         assert result["id"] == "entry-1"
@@ -419,9 +421,9 @@ The body.
         # Assert we do NOT hit the exception path — no warning should be logged.
         with caplog.at_level(logging.WARNING, logger="pyrite.storage.repository"):
             loaded = events_kb.load("2025-01-20--triple-dash-in-value")
-        assert not any(
-            "Entry load failed" in r.message for r in caplog.records
-        ), f"Should not have hit EventEntry fallback. Logs: {[r.message for r in caplog.records]}"
+        assert not any("Entry load failed" in r.message for r in caplog.records), (
+            f"Should not have hit EventEntry fallback. Logs: {[r.message for r in caplog.records]}"
+        )
         assert loaded is not None
         assert loaded.title == "Triple Dash Test"
         assert loaded.body.strip() == "The body."
@@ -700,13 +702,17 @@ Article body referencing events.
         outlinks = setup["db"].get_outlinks("article-1", "test-kb")
         target_ids = {ol["id"] for ol in outlinks}
 
-        assert "target-event-1" in target_ids, f"Expected target-event-1 in outlinks, got {target_ids}"
-        assert "target-event-2" in target_ids, f"Expected target-event-2 in outlinks, got {target_ids}"
-        assert "same-kb-target" in target_ids, f"Expected same-kb-target in outlinks, got {target_ids}"
+        assert "target-event-1" in target_ids, (
+            f"Expected target-event-1 in outlinks, got {target_ids}"
+        )
+        assert "target-event-2" in target_ids, (
+            f"Expected target-event-2 in outlinks, got {target_ids}"
+        )
+        assert "same-kb-target" in target_ids, (
+            f"Expected same-kb-target in outlinks, got {target_ids}"
+        )
 
-    def test_references_extraction_logs_warning_when_to_frontmatter_raises(
-        self, setup, caplog
-    ):
+    def test_references_extraction_logs_warning_when_to_frontmatter_raises(self, setup, caplog):
         """fail-open-exception-sweep site #4: `_entry_to_dict` calls
         `to_frontmatter()` a second time (as a fallback to recover the
         `references` frontmatter field, since typed entries like
@@ -811,9 +817,7 @@ class TestSyncMalformedFileSummary:
             (kb_path / "bad-1.md").write_text(
                 "---\ntitle: Bad One\n*undefined-alias\n---\n\nBody\n"
             )
-            (kb_path / "bad-2.md").write_text(
-                "---\ntitle: Bad Two\n*another-undef\n---\n\nBody\n"
-            )
+            (kb_path / "bad-2.md").write_text("---\ntitle: Bad Two\n*another-undef\n---\n\nBody\n")
 
             config = PyriteConfig(
                 knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
@@ -840,9 +844,7 @@ class TestSyncMalformedFileSummary:
         # Valid files still indexed.
         assert results.get("added", 0) == 2, results
 
-    def test_sync_does_not_log_tracebacks_for_malformed_files(
-        self, setup_with_malformed, caplog
-    ):
+    def test_sync_does_not_log_tracebacks_for_malformed_files(self, setup_with_malformed, caplog):
         """The per-file `exc_info=True` traceback spew is the bug. Logging
         a one-line warning is fine; emitting full stack traces for each
         bad file is what was polluting stderr."""
@@ -855,7 +857,8 @@ class TestSyncMalformedFileSummary:
         # `exc_info=True` spew we want gone for the malformed-frontmatter
         # case.
         records_with_traceback = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.exc_info is not None
             and any(name in str(r.getMessage()) for name in ("bad-1.md", "bad-2.md"))
         ]
@@ -1179,9 +1182,7 @@ class TestUndeclaredTypesInHealth:
         kb_config = KBConfig(
             name=kb_path.name, path=kb_path, kb_type="generic", description="Test KB"
         )
-        config = PyriteConfig(
-            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
-        )
+        config = PyriteConfig(knowledge_bases=[kb_config], settings=Settings(index_path=db_path))
         return db, config
 
     def test_undeclared_type_flagged(self):
@@ -1253,11 +1254,7 @@ class TestUndeclaredTypesInHealth:
             kb_path = tmp / "core-kb"
             kb_path.mkdir()
             (kb_path / "kb.yaml").write_text(
-                "name: core-kb\n"
-                "kb_type: generic\n"
-                "types:\n"
-                "  event:\n"
-                "    description: A thing\n"
+                "name: core-kb\nkb_type: generic\ntypes:\n  event:\n    description: A thing\n"
             )
 
             db, config = self._make_config(tmp, kb_path)
@@ -1276,9 +1273,7 @@ class TestUndeclaredTypesInHealth:
                 index_mgr = IndexManager(db, config)
                 health = index_mgr.check_health()
                 for row in health.get("undeclared_types", []):
-                    assert row["type"] != "note", (
-                        f"core type 'note' must not be flagged: {row}"
-                    )
+                    assert row["type"] != "note", f"core type 'note' must not be flagged: {row}"
             finally:
                 db.close()
 
@@ -1326,18 +1321,14 @@ class TestInvalidStatusInHealth:
     `kb/backlog/enforce-backlog-status-enum-at-index-time.md`.
     """
 
-    def _make_software_config(
-        self, tmpdir: Path, kb_path: Path
-    ) -> tuple[PyriteDB, PyriteConfig]:
+    def _make_software_config(self, tmpdir: Path, kb_path: Path) -> tuple[PyriteDB, PyriteConfig]:
         db_path = tmpdir / "index.db"
         db = PyriteDB(db_path)
         db.register_kb(kb_path.name, "software", str(kb_path), "")
         kb_config = KBConfig(
             name=kb_path.name, path=kb_path, kb_type="software", description="Test KB"
         )
-        config = PyriteConfig(
-            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
-        )
+        config = PyriteConfig(knowledge_bases=[kb_config], settings=Settings(index_path=db_path))
         return db, config
 
     def test_invalid_status_flagged(self):
@@ -1511,9 +1502,7 @@ class TestInvalidStatusInHealth:
                 def _broken_validator(entry_type, fields, ctx=None):
                     raise RuntimeError("simulated validator crash")
 
-                with patch(
-                    "pyrite.plugins.get_registry"
-                ) as mock_get_registry:
+                with patch("pyrite.plugins.get_registry") as mock_get_registry:
                     mock_get_registry.return_value.get_validators_for_kb.return_value = [
                         _broken_validator
                     ]
@@ -1547,9 +1536,7 @@ class TestRequiredFieldValidationInHealth:
         kb_config = KBConfig(
             name=kb_path.name, path=kb_path, kb_type="generic", description="Test KB"
         )
-        config = PyriteConfig(
-            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
-        )
+        config = PyriteConfig(knowledge_bases=[kb_config], settings=Settings(index_path=db_path))
         return db, config
 
     def test_missing_required_field_surfaces_in_health(self):
@@ -1701,9 +1688,7 @@ class TestSubdirectoryMismatchInHealth:
         kb_config = KBConfig(
             name=kb_path.name, path=kb_path, kb_type="generic", description="Test KB"
         )
-        config = PyriteConfig(
-            knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
-        )
+        config = PyriteConfig(knowledge_bases=[kb_config], settings=Settings(index_path=db_path))
         return db, config
 
     def test_subdirectory_mismatch_surfaces_in_health(self):
@@ -1756,9 +1741,7 @@ class TestSubdirectoryMismatchInHealth:
                 )
                 mismatches = health["subdirectory_mismatches"]
                 flagged = [m for m in mismatches if m["id"] == "wrong-place"]
-                assert len(flagged) == 1, (
-                    f"expected wrong-place to be flagged, got {mismatches}"
-                )
+                assert len(flagged) == 1, f"expected wrong-place to be flagged, got {mismatches}"
                 row = flagged[0]
                 assert row["kb"] == kb_path.name
                 assert row["type"] == "timeline_event"

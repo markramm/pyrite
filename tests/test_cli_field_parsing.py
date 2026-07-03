@@ -11,7 +11,7 @@ class TestParseFieldValue:
     # --- JSON arrays and objects ---
 
     def test_json_array(self):
-        assert _parse_field_value('[1, 2, 3]') == [1, 2, 3]
+        assert _parse_field_value("[1, 2, 3]") == [1, 2, 3]
 
     def test_json_string_array(self):
         assert _parse_field_value('["ICE", "Adelanto"]') == ["ICE", "Adelanto"]

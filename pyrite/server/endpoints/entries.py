@@ -84,8 +84,11 @@ def list_entries(
         min_importance=min_importance,
     )
     total = svc.count_entries(
-        kb_name=kb, entry_type=entry_type, tag=tag,
-        status=status, min_importance=min_importance,
+        kb_name=kb,
+        entry_type=entry_type,
+        tag=tag,
+        status=status,
+        min_importance=min_importance,
     )
 
     entries = []
@@ -169,11 +172,19 @@ def list_type_schemas(
             for type_name, type_info in preset_data.get("types", {}).items():
                 if type_name not in result:
                     result[type_name] = {"description": "", "fields": {}, "subdirectory": ""}
-                result[type_name]["description"] = type_info.get("description", result[type_name]["description"])
-                result[type_name]["subdirectory"] = type_info.get("subdirectory", result[type_name]["subdirectory"])
+                result[type_name]["description"] = type_info.get(
+                    "description", result[type_name]["description"]
+                )
+                result[type_name]["subdirectory"] = type_info.get(
+                    "subdirectory", result[type_name]["subdirectory"]
+                )
                 # Add optional fields as field definitions
                 for fname in type_info.get("optional", []):
-                    if fname not in result[type_name]["fields"] and fname not in ("importance", "tags", "links"):
+                    if fname not in result[type_name]["fields"] and fname not in (
+                        "importance",
+                        "tags",
+                        "links",
+                    ):
                         result[type_name]["fields"][fname] = {
                             "type": _guess_field_type(fname),
                             "description": "",
@@ -209,7 +220,11 @@ def list_type_schemas(
                         result[type_name]["fields"][fname]["description"] = fs.description
                 # Optional fields listed in kb.yaml
                 for fname in ts.optional:
-                    if fname not in result[type_name]["fields"] and fname not in ("importance", "tags", "links"):
+                    if fname not in result[type_name]["fields"] and fname not in (
+                        "importance",
+                        "tags",
+                        "links",
+                    ):
                         result[type_name]["fields"][fname] = {
                             "type": _guess_field_type(fname),
                             "description": ts.field_descriptions.get(fname, ""),
@@ -231,7 +246,14 @@ def _python_type_to_field_type(type_str: str) -> str:
 
 def _guess_field_type(field_name: str) -> str:
     """Guess field type from the field name convention."""
-    if field_name in ("date", "opened_date", "closed_date", "acquisition_date", "obtained_date", "founded"):
+    if field_name in (
+        "date",
+        "opened_date",
+        "closed_date",
+        "acquisition_date",
+        "obtained_date",
+        "founded",
+    ):
         return "date"
     if field_name in ("amount", "value", "importance"):
         return "number"

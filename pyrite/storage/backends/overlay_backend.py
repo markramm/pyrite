@@ -111,12 +111,19 @@ class OverlaySearchBackend:
         min_importance: int | None = None,
     ) -> int:
         main_count = self._main.count_entries(
-            kb_name=kb_name, entry_type=entry_type, tag=tag,
-            status=status, min_importance=min_importance,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tag=tag,
+            status=status,
+            min_importance=min_importance,
         )
         diff_entries = self._diff.list_entries(
-            kb_name=kb_name, entry_type=entry_type, tag=tag, limit=10000,
-            status=status, min_importance=min_importance,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tag=tag,
+            limit=10000,
+            status=status,
+            min_importance=min_importance,
         )
         # New entries in diff (not in main) add to count
         # Modified entries in diff don't change count
@@ -126,9 +133,7 @@ class OverlaySearchBackend:
                 kb_name=kb_name, entry_type=entry_type, tag=tag, limit=10000
             )
             main_ids = {(e["id"], e["kb_name"]) for e in main_all}
-        new_in_diff = sum(
-            1 for e in diff_entries if (e["id"], e["kb_name"]) not in main_ids
-        )
+        new_in_diff = sum(1 for e in diff_entries if (e["id"], e["kb_name"]) not in main_ids)
         return main_count + new_in_diff
 
     def get_distinct_types(self, kb_name: str | None = None) -> list[str]:
@@ -264,9 +269,7 @@ class OverlaySearchBackend:
             limit=limit,
         )
 
-    def get_most_linked(
-        self, kb_name: str | None = None, limit: int = 20
-    ) -> list[dict[str, Any]]:
+    def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         return self._main.get_most_linked(kb_name, limit)
 
     def get_orphans(self, kb_name: str | None = None) -> list[dict[str, Any]]:
@@ -290,7 +293,9 @@ class OverlaySearchBackend:
         prefix: str | None = None,
     ) -> list[dict[str, Any]]:
         # Delegate to main for V1 — tag counts from diff are minimal
-        return self._main.get_tags_as_dicts(kb_name=kb_name, limit=limit, offset=offset, prefix=prefix)
+        return self._main.get_tags_as_dicts(
+            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix
+        )
 
     # ── timeline → delegate to main ─────────────────────────────────
 

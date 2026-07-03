@@ -462,7 +462,9 @@ class TestLLMServiceTestConnection:
         svc = LLMService(settings)
         result = svc.test_connection()
         assert result["ok"] is False
-        assert "Cannot reach Ollama" in result["message"] or "Connection failed" in result["message"]
+        assert (
+            "Cannot reach Ollama" in result["message"] or "Connection failed" in result["message"]
+        )
 
     def test_openai_bad_key(self):
         """OpenAI with invalid key should fail."""
@@ -596,9 +598,7 @@ class TestAnthropicPromptCaching:
         with patch("pyrite.services.llm_service._import_anthropic", return_value=anthropic_mod):
             svc = LLMService(settings)
             asyncio.run(
-                svc.complete(
-                    "hi", system="A long detailed system prompt.", cache_system=True
-                )
+                svc.complete("hi", system="A long detailed system prompt.", cache_system=True)
             )
 
         kwargs = client.messages.create.call_args.kwargs
@@ -625,9 +625,7 @@ class TestAnthropicPromptCaching:
             asyncio.run(svc.complete("hi", system=None, cache_system=True))
 
         kwargs = client.messages.create.call_args.kwargs
-        assert "system" not in kwargs, (
-            "no system text means no system kwarg, cached or otherwise"
-        )
+        assert "system" not in kwargs, "no system text means no system kwarg, cached or otherwise"
 
     def test_complete_logs_cache_token_counts_when_returned(self, caplog):
         """When the Anthropic response carries cache_read_input_tokens or
@@ -654,6 +652,5 @@ class TestAnthropicPromptCaching:
 
         messages = [r.getMessage() for r in caplog.records]
         assert any(
-            "cache" in m.lower() and ("80" in m or "creation" in m.lower())
-            for m in messages
+            "cache" in m.lower() and ("80" in m or "creation" in m.lower()) for m in messages
         ), f"expected a cache-token log line; got {messages}"

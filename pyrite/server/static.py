@@ -60,11 +60,19 @@ def mount_site_routes(app: FastAPI) -> None:
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
-        return _serve_site_cached(site_cache_dir, path, "<html><body>Page not yet rendered. Run site cache render.</body></html>")
+        return _serve_site_cached(
+            site_cache_dir,
+            path,
+            "<html><body>Page not yet rendered. Run site cache render.</body></html>",
+        )
 
     @app.get("/site", include_in_schema=False)
     async def site_index(request: Request):
-        return _serve_site_cached(site_cache_dir, "", "<html><body>Site not yet rendered. Run site cache render.</body></html>")
+        return _serve_site_cached(
+            site_cache_dir,
+            "",
+            "<html><body>Site not yet rendered. Run site cache render.</body></html>",
+        )
 
 
 def mount_static(app: FastAPI, dist_dir: Path) -> None:
@@ -95,7 +103,9 @@ def mount_static(app: FastAPI, dist_dir: Path) -> None:
     # SPA fallback — catch all non-API, non-site, non-viewer routes
     @app.get("/{path:path}", include_in_schema=False)
     async def spa_fallback(request: Request, path: str):
-        if path.startswith(("api/", "docs", "redoc", "openapi.json", "health", "auth/", "site", "viewer")):
+        if path.startswith(
+            ("api/", "docs", "redoc", "openapi.json", "health", "auth/", "site", "viewer")
+        ):
             return HTMLResponse(status_code=404)
 
         file_path = dist_dir / path
@@ -147,7 +157,9 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
 
     # Landing page
     if (cache_dir / "index.html").exists():
-        urls.append(f"  <url>\n    <loc>{base_url}/site</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>")
+        urls.append(
+            f"  <url>\n    <loc>{base_url}/site</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>"
+        )
 
     # Walk KB directories
     for kb_dir in sorted(cache_dir.iterdir()):
@@ -157,7 +169,9 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
 
         # KB index
         if (kb_dir / "index.html").exists():
-            urls.append(f"  <url>\n    <loc>{base_url}/site/{kb_name}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>")
+            urls.append(
+                f"  <url>\n    <loc>{base_url}/site/{kb_name}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>"
+            )
 
         # Entry pages
         for html_file in sorted(kb_dir.glob("*.html")):
@@ -181,6 +195,7 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
 def _serve_search_page(cache_dir: Path) -> HTMLResponse:
     """Serve a dedicated search page for the /site/search route."""
     from ..services.site_cache import _render_template
+
     try:
         html = _render_template(
             "search.html",
@@ -194,6 +209,7 @@ def _serve_search_page(cache_dir: Path) -> HTMLResponse:
     except Exception:
         # Fallback to legacy module
         from .static_search_page import SEARCH_PAGE_HTML
+
         html = SEARCH_PAGE_HTML
     return HTMLResponse(
         content=html,

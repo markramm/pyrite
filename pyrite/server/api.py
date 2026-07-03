@@ -656,9 +656,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             def _ws_progress(job_id: str, current: int, total: int):
                 from .websocket import broadcast_event
 
-                broadcast_event(
-                    "index_progress", job_id=job_id, current=current, total=total
-                )
+                broadcast_event("index_progress", job_id=job_id, current=current, total=total)
 
             worker.on_progress = _ws_progress
             application.state.pyrite_index_worker = worker

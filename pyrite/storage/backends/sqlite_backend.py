@@ -82,6 +82,7 @@ class SQLiteBackend(BaseBackend):
         import re
 
         param_list: list[Any] = []
+
         # Match :word_chars but not ::double-colon (Postgres cast)
         def _replacer(m):
             name = m.group(1)

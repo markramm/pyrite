@@ -251,17 +251,11 @@ class TestKBValidateContentDrift:
             assert len(kbs) == 1
             kb_result = kbs[0]
             assert "undeclared_types" in kb_result
-            assert any(
-                r["type"] == "timeline_event" for r in kb_result["undeclared_types"]
-            )
+            assert any(r["type"] == "timeline_event" for r in kb_result["undeclared_types"])
             assert "missing_required_fields" in kb_result
-            assert any(
-                r["id"] == "ev-missing-date" for r in kb_result["missing_required_fields"]
-            )
+            assert any(r["id"] == "ev-missing-date" for r in kb_result["missing_required_fields"])
             assert "subdirectory_mismatches" in kb_result
-            assert any(
-                r["id"] == "ev-wrong-dir" for r in kb_result["subdirectory_mismatches"]
-            )
+            assert any(r["id"] == "ev-wrong-dir" for r in kb_result["subdirectory_mismatches"])
 
     def test_clean_kb_exits_zero(self, admin_env):
         """A KB with no content drift and valid kb.yaml should exit 0."""

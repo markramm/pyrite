@@ -298,5 +298,7 @@ class TestSchemaValidateCLI:
         assert errors == []
         entry_errors = validate_entry(f, fm)
         # importance: "very-high" is non-numeric — should produce a warning
-        assert any(e["check"] == "protocol_field_type" for e in entry_errors) or len(entry_errors) == 0
+        assert (
+            any(e["check"] == "protocol_field_type" for e in entry_errors) or len(entry_errors) == 0
+        )
         # Note: safe_int silently converts to default, so validation may pass

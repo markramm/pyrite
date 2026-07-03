@@ -40,30 +40,56 @@ def orphan_env():
         svc = KBService(config, db)
 
         # High-importance entry WITH cross-KB link (not orphan)
-        svc.create_entry("kb-a", "linked-concept", "Linked Concept",
-                         body="This concept about trust is well-connected.",
-                         entry_type="concept", tags=["trust"])
+        svc.create_entry(
+            "kb-a",
+            "linked-concept",
+            "Linked Concept",
+            body="This concept about trust is well-connected.",
+            entry_type="concept",
+            tags=["trust"],
+        )
         svc.update_entry("linked-concept", "kb-a", importance=9)
-        svc.create_entry("kb-b", "linked-target", "Linked Target",
-                         body="Trust and coordination in organizations.",
-                         entry_type="concept", tags=["trust"])
-        svc.add_link("linked-concept", "kb-a", "linked-target",
-                     target_kb="kb-b", relation="related_to")
+        svc.create_entry(
+            "kb-b",
+            "linked-target",
+            "Linked Target",
+            body="Trust and coordination in organizations.",
+            entry_type="concept",
+            tags=["trust"],
+        )
+        svc.add_link(
+            "linked-concept", "kb-a", "linked-target", target_kb="kb-b", relation="related_to"
+        )
 
         # High-importance entry WITHOUT cross-KB link (orphan candidate)
-        svc.create_entry("kb-a", "orphan-concept", "Orphan Concept",
-                         body="Feedback loops and systems thinking patterns.",
-                         entry_type="concept", tags=["systems", "feedback"])
+        svc.create_entry(
+            "kb-a",
+            "orphan-concept",
+            "Orphan Concept",
+            body="Feedback loops and systems thinking patterns.",
+            entry_type="concept",
+            tags=["systems", "feedback"],
+        )
         svc.update_entry("orphan-concept", "kb-a", importance=8)
         # Create a matching entry in kb-b that COULD be linked
-        svc.create_entry("kb-b", "systems-match", "System Dynamics",
-                         body="System dynamics models feedback loops and delays.",
-                         entry_type="concept", tags=["systems", "feedback"])
+        svc.create_entry(
+            "kb-b",
+            "systems-match",
+            "System Dynamics",
+            body="System dynamics models feedback loops and delays.",
+            entry_type="concept",
+            tags=["systems", "feedback"],
+        )
 
         # Low-importance entry (should be filtered out)
-        svc.create_entry("kb-a", "low-importance", "Low Importance Note",
-                         body="Just a casual note about cooking.",
-                         entry_type="note", tags=["cooking"])
+        svc.create_entry(
+            "kb-a",
+            "low-importance",
+            "Low Importance Note",
+            body="Just a casual note about cooking.",
+            entry_type="note",
+            tags=["cooking"],
+        )
 
         yield {"config": config, "db": db, "svc": svc}
         db.close()
@@ -142,9 +168,7 @@ class TestOrphansCLI:
         )
         orphan_env["db"].close = lambda: None
 
-        result = runner.invoke(
-            app, ["links", "orphans", "--kb", "kb-a", "--format", "json"]
-        )
+        result = runner.invoke(app, ["links", "orphans", "--kb", "kb-a", "--format", "json"])
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "orphans" in data

@@ -306,12 +306,7 @@ class TestWikilinkExtraction:
         )
         mgr = IndexManager(PyriteDB(config.settings.index_path), config)
 
-        body = (
-            "Real transclusion: ![[real-target]]\n\n"
-            "```\n"
-            "Example: ![[bug:123]]\n"
-            "```\n"
-        )
+        body = "Real transclusion: ![[real-target]]\n\n```\nExample: ![[bug:123]]\n```\n"
         entry = NoteEntry(id="src", title="S", body=body)
         data = mgr._entry_to_dict(entry, "test-kb", tmp_path / "src.md")
         targets = {l["target"] for l in data["links"]}

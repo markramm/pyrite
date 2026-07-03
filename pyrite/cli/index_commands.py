@@ -166,9 +166,7 @@ def index_sync(
     # per-file ScannerError tracebacks pollute stderr. Tier A 1080.
     malformed = results.get("malformed", [])
     if malformed:
-        console.print(
-            f"  [yellow]Malformed: {len(malformed)} file(s) skipped[/yellow]"
-        )
+        console.print(f"  [yellow]Malformed: {len(malformed)} file(s) skipped[/yellow]")
         for entry in malformed[:5]:
             console.print(f"    [dim]• {entry['path']}[/dim]")
         if len(malformed) > 5:
@@ -379,9 +377,7 @@ def index_health(
             f" across {total} entries — not in kb.yaml:[/yellow]"
         )
         for row in undeclared_types[:10]:
-            console.print(
-                f"  • {row['kb']}: type='{row['type']}' ({row['count']} entries)"
-            )
+            console.print(f"  • {row['kb']}: type='{row['type']}' ({row['count']} entries)")
         if len(undeclared_types) > 10:
             console.print(f"  ... and {len(undeclared_types) - 10} more")
 

@@ -52,9 +52,7 @@ def _check_url_safe(url: str) -> None:
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
-        raise ClipperBlockedHostError(
-            f"Could not resolve host {host!r}: {exc}"
-        ) from exc
+        raise ClipperBlockedHostError(f"Could not resolve host {host!r}: {exc}") from exc
 
     seen: set[str] = set()
     for info in infos:
@@ -69,9 +67,7 @@ def _check_url_safe(url: str) -> None:
         _reject_if_blocked(ip, host)
 
 
-def _reject_if_blocked(
-    ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: str
-) -> None:
+def _reject_if_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: str) -> None:
     """Raise ClipperBlockedHostError if `ip` is on the SSRF blocklist."""
     # The stdlib classifiers cover loopback (127.0.0.0/8, ::1/128),
     # link-local (169.254.0.0/16 incl. AWS metadata, fe80::/10),

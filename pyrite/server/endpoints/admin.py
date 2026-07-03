@@ -70,7 +70,9 @@ def sync_index(
                 from ...services.site_cache import SiteCacheService
 
                 cache_svc = SiteCacheService(
-                    config=request.app.state.config if hasattr(request.app.state, "config") else None,
+                    config=request.app.state.config
+                    if hasattr(request.app.state, "config")
+                    else None,
                     db=index_mgr.db,
                 )
                 if cache_svc.config:

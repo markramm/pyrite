@@ -113,9 +113,7 @@ def protocol_check(
         for r in results:
             if r.satisfied:
                 total_pass += 1
-                console.print(
-                    f"  [green]✓[/green] {tn} satisfies '{r.protocol_name}' ({r.method})"
-                )
+                console.print(f"  [green]✓[/green] {tn} satisfies '{r.protocol_name}' ({r.method})")
             else:
                 total_fail += 1
                 console.print(

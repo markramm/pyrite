@@ -58,8 +58,12 @@ def register_search_command(app: typer.Typer):
         tag: str | None = typer.Option(None, "--tag", help="Filter by tag"),
         date_from: str | None = typer.Option(None, "--from", help="Events from date (YYYY-MM-DD)"),
         date_to: str | None = typer.Option(None, "--to", help="Events until date (YYYY-MM-DD)"),
-        fips: str | None = typer.Option(None, "--fips", help="Filter by county FIPS code (e.g. 12086)"),
-        state_filter: str | None = typer.Option(None, "--state", help="Filter by US state (e.g. FL, TX)"),
+        fips: str | None = typer.Option(
+            None, "--fips", help="Filter by county FIPS code (e.g. 12086)"
+        ),
+        state_filter: str | None = typer.Option(
+            None, "--state", help="Filter by US state (e.g. FL, TX)"
+        ),
         status: str | None = typer.Option(
             None,
             "--status",
@@ -265,13 +269,17 @@ def register_search_command(app: typer.Typer):
             if output_format != "rich":
                 import json
 
-                typer.echo(json.dumps({
-                    "query": query,
-                    "count": 0,
-                    "results": [],
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                }))
+                typer.echo(
+                    json.dumps(
+                        {
+                            "query": query,
+                            "count": 0,
+                            "results": [],
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                        }
+                    )
+                )
                 raise typer.Exit(1)
             console.print(f"[red]Search error ({type(e).__name__}):[/red] {e}")
             console.print("[dim]Falling back to file search...[/dim]")

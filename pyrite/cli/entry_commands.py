@@ -259,11 +259,7 @@ def register_entry_commands(app: typer.Typer) -> None:
                 kb_config_check = config.get_kb(kb_name)
                 if kb_config_check is not None:
                     schema = kb_config_check.kb_schema
-                    declared_types = (
-                        sorted(schema.types.keys())
-                        if schema and schema.types
-                        else []
-                    )
+                    declared_types = sorted(schema.types.keys()) if schema and schema.types else []
                     if (
                         declared_types
                         and entry_type not in CORE_TYPES
@@ -377,9 +373,7 @@ def register_entry_commands(app: typer.Typer) -> None:
             body = sys.stdin.read()
         elif body_file:
             if not body_file.exists():
-                _cli_error(
-                    f"Body file not found: {body_file}", output_format, "NOT_FOUND"
-                )
+                _cli_error(f"Body file not found: {body_file}", output_format, "NOT_FOUND")
             body = body_file.read_text(encoding="utf-8")
 
         updates: dict[str, Any] = {}
@@ -455,9 +449,7 @@ def register_entry_commands(app: typer.Typer) -> None:
             "--dry-run",
             help="Show the rename + link-rewrite plan without executing",
         ),
-        output_format: str = typer.Option(
-            "json", "--format", help="Output format: json or rich"
-        ),
+        output_format: str = typer.Option("json", "--format", help="Output format: json or rich"),
     ):
         """Rename an entry, rewrite frontmatter id, and update wikilinks.
 

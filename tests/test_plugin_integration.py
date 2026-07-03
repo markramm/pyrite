@@ -1197,9 +1197,10 @@ class TestPluginRegistryFailureVisibility:
         # Error visibility: ERROR-level log naming plugin AND method.
         errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
         assert any(
-            "bad-plugin" in r.getMessage() and "get_entry_types" in r.getMessage()
-            for r in errors
-        ), f"expected ERROR mentioning bad-plugin and get_entry_types; got {[r.getMessage() for r in errors]}"
+            "bad-plugin" in r.getMessage() and "get_entry_types" in r.getMessage() for r in errors
+        ), (
+            f"expected ERROR mentioning bad-plugin and get_entry_types; got {[r.getMessage() for r in errors]}"
+        )
 
     def test_crashing_get_validators_logs_error_with_plugin_and_method(self, caplog):
         """Same contract for get_validators (list-aggregation path)."""
@@ -1214,7 +1215,9 @@ class TestPluginRegistryFailureVisibility:
         assert any(
             "bad-validators" in r.getMessage() and "get_validators" in r.getMessage()
             for r in errors
-        ), f"expected ERROR mentioning bad-validators and get_validators; got {[r.getMessage() for r in errors]}"
+        ), (
+            f"expected ERROR mentioning bad-validators and get_validators; got {[r.getMessage() for r in errors]}"
+        )
 
     def test_crashing_plugin_does_not_break_registry_for_other_plugins(self, caplog):
         """The partial-aggregation contract: one bad plugin must not
@@ -1379,8 +1382,7 @@ class TestRegistryDispatchSkip:
         reg.register(_LegacyPlugin())
         result = reg.get_all_entry_types()
         assert "legacy_type" not in result, (
-            "plugin without declared capabilities must be skipped; "
-            f"got {result}"
+            f"plugin without declared capabilities must be skipped; got {result}"
         )
 
     def test_plugin_with_capability_is_called(self):
@@ -1445,6 +1447,6 @@ class TestRegistryDispatchSkip:
         )
         # Warning surfaces both the plugin and the method.
         msgs = [r.getMessage() for r in caplog.records if r.levelno >= _logging.WARNING]
-        assert any(
-            "drift-plugin" in m and "get_db_columns" in m for m in msgs
-        ), f"expected WARNING naming plugin + method; got {msgs}"
+        assert any("drift-plugin" in m and "get_db_columns" in m for m in msgs), (
+            f"expected WARNING naming plugin + method; got {msgs}"
+        )

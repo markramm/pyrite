@@ -74,9 +74,7 @@ class TestRunHooksPropagation:
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
             with pytest.raises(KBReadOnlyError):
-                KBService(config=MagicMock(), db=MagicMock())._run_hooks(
-                    "before_save", entry, {}
-                )
+                KBService(config=MagicMock(), db=MagicMock())._run_hooks("before_save", entry, {})
 
     def test_permission_error_propagated_in_before_hooks(self):
         """PermissionError in before_save hooks should propagate (hook atomicity)."""
@@ -89,9 +87,7 @@ class TestRunHooksPropagation:
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
             with pytest.raises(PermissionError, match="denied"):
-                KBService(config=MagicMock(), db=MagicMock())._run_hooks(
-                    "before_save", entry, {}
-                )
+                KBService(config=MagicMock(), db=MagicMock())._run_hooks("before_save", entry, {})
 
     def test_generic_exception_propagated_in_before_hooks(self):
         """Generic exceptions in before_save hooks should propagate (hook atomicity)."""
@@ -104,9 +100,7 @@ class TestRunHooksPropagation:
         with patch("pyrite.plugins.get_registry", return_value=mock_registry):
             entry = NoteEntry(id="test", title="Test")
             with pytest.raises(RuntimeError, match="boom"):
-                KBService(config=MagicMock(), db=MagicMock())._run_hooks(
-                    "before_save", entry, {}
-                )
+                KBService(config=MagicMock(), db=MagicMock())._run_hooks("before_save", entry, {})
 
     def test_successful_hook_returns_result(self):
         """Successful hooks return the modified entry."""

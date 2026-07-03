@@ -57,9 +57,7 @@ def cli_error(
         ERROR [KB_NOT_FOUND]: KB not found: x
             hint: run `pyrite kb list`
     """
-    payload = build_error(
-        message, error_code, suggestion=suggestion, retryable=retryable
-    )
+    payload = build_error(message, error_code, suggestion=suggestion, retryable=retryable)
     if output_format != "rich":
         typer.echo(json.dumps(payload))
     else:

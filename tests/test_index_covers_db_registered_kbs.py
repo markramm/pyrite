@@ -84,9 +84,7 @@ class TestIndexManagerCoversDbRegisteredKBs:
         mgr = IndexManager(db_kb_env["db"], db_kb_env["config"])
         assert mgr.index_kb("some-kb") == 1
         stats = mgr.get_index_stats()
-        assert "some-kb" in stats["kbs"], (
-            "get_index_stats() must enumerate DB-registered KBs"
-        )
+        assert "some-kb" in stats["kbs"], "get_index_stats() must enumerate DB-registered KBs"
 
     def test_check_health_flags_unindexed_file_in_db_registered_kb(self, db_kb_env):
         """A file on disk but not in the index must show as unindexed."""
@@ -100,16 +98,15 @@ class TestIndexManagerCoversDbRegisteredKBs:
     def test_check_health_flags_undeclared_type_in_db_registered_kb(self, db_kb_env):
         """With a kb.yaml present, an off-schema entry_type must be flagged."""
         kb_path = db_kb_env["kb_path"]
-        (kb_path / "kb.yaml").write_text("name: some-kb\ntypes:\n  note:\n    description: A note\n")
-        (kb_path / "weird.md").write_text(
-            "---\ntitle: Weird\ntype: mystery_type\n---\n\nBody.\n"
+        (kb_path / "kb.yaml").write_text(
+            "name: some-kb\ntypes:\n  note:\n    description: A note\n"
         )
+        (kb_path / "weird.md").write_text("---\ntitle: Weird\ntype: mystery_type\n---\n\nBody.\n")
         mgr = IndexManager(db_kb_env["db"], db_kb_env["config"])
         mgr.index_kb("some-kb")
         health = mgr.check_health()
         assert any(
-            u["kb"] == "some-kb" and u["type"] == "mystery_type"
-            for u in health["undeclared_types"]
+            u["kb"] == "some-kb" and u["type"] == "mystery_type" for u in health["undeclared_types"]
         ), "check_health() undeclared-type sweep must cover DB-registered KBs"
 
 
@@ -135,9 +132,7 @@ class TestMCPListEdgeTypesCoversDbRegisteredKBs:
             )
             db.close()
 
-            config = PyriteConfig(
-                knowledge_bases=[], settings=Settings(index_path=db_path)
-            )
+            config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=db_path))
             server = PyriteMCPServer(config=config, tier="read")
             try:
                 result = server._list_edge_types({})

@@ -155,9 +155,7 @@ class QAFixService:
                             "SELECT metadata FROM entry WHERE id = :eid AND kb_name = :kb",
                             {"eid": entry_id, "kb": kb_name},
                         )
-                        current_meta = parse_metadata(
-                            rows[0]["metadata"] if rows else None
-                        )
+                        current_meta = parse_metadata(rows[0]["metadata"] if rows else None)
                         current_meta.update(meta_extra)
                         updates["metadata"] = current_meta
 

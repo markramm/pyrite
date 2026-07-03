@@ -175,9 +175,7 @@ class TestPerTypeFilter:
     """The `entry_type=` filter restricts the report to one type."""
 
     def test_filter_to_note_only(self, analytics_setup):
-        stats = analytics_setup["analytics"].coverage_stats(
-            "test-kb", entry_type="note"
-        )
+        stats = analytics_setup["analytics"].coverage_stats("test-kb", entry_type="note")
         assert stats["total_entries"] == 4
         assert stats["by_type"] == {"note": 4}
         # 2 of the 4 notes have bodies (note-a, note-c); 2 are empty.
@@ -187,9 +185,7 @@ class TestPerTypeFilter:
         assert bc["total"] == 4
 
     def test_filter_to_unknown_type_returns_empty(self, analytics_setup):
-        stats = analytics_setup["analytics"].coverage_stats(
-            "test-kb", entry_type="nonexistent"
-        )
+        stats = analytics_setup["analytics"].coverage_stats("test-kb", entry_type="nonexistent")
         assert stats["total_entries"] == 0
 
 

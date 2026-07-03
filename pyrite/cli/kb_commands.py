@@ -357,9 +357,7 @@ def kb_validate(
                 "entries missing required fields:[/yellow]"
             )
             for row in kb_res["missing_required_fields"][:10]:
-                console.print(
-                    f"    • {row['id']} (type={row['type']}): missing {row['missing']}"
-                )
+                console.print(f"    • {row['id']} (type={row['type']}): missing {row['missing']}")
         if kb_res["subdirectory_mismatches"]:
             console.print(
                 f"  [yellow]⚠ {len(kb_res['subdirectory_mismatches'])} "
