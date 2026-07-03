@@ -11,6 +11,24 @@ effort: M
 rank: 2350
 ---
 
+## Final resolution 2026-07-03 (Mark): removed, not adopted
+
+Answered the open question below: this is not a supported general-
+purpose "Edit entry" feature. Mark's call -- unused, not core, and
+Amy's workflow genuinely runs through Google Docs, so the in-Pyrite
+review UI never had a real user. Removed in commit 74a2cb1: web UI
+(CommentsPanel.svelte, SubmitForReview.svelte, comment-anchor.ts,
+/review route, plus the Sidebar/entries-store/ui-store/entry-page
+wiring from 26b3c9a) and its e2e test
+(tests/test_review_flow_e2e.py) deleted. The generic worktree/
+metadata-merge backend machinery (WorktreeResolver, KBService's
+metadata shallow-merge) stays -- it's real infrastructure other
+things depend on, not specific to this feature. If an in-Pyrite edit
+UI is wanted later, start fresh rather than resurrecting this.
+
+Status back to done -- this time meaning "resolved: removed," not
+"shipped."
+
 ## Update 2026-07-03: shipped, not shelved
 
 The stashed WIP described below was applied and committed in `26b3c9a`
