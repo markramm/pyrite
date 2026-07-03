@@ -354,6 +354,92 @@ class TestLLMServiceAnthropicMocked:
         assert call_kwargs["system"] == "Be helpful"
 
 
+class TestLLMServiceUsageTracking:
+    """llm-usage-tracking-and-quotas: LLMService records usage via an
+    injected LLMUsageService + user_id, when both are provided. No
+    usage_service configured (the default) is a silent no-op -- MCP/CLI
+    callers that don't wire tracking must not break."""
+
+    def test_complete_records_usage_when_tracking_configured(self):
+        from unittest.mock import MagicMock
+
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="anthropic", ai_api_key="sk-test", ai_model="claude-sonnet-4-20250514"
+        )
+        usage_service = MagicMock()
+        svc = LLMService(settings, usage_service=usage_service, user_id=42)
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Hello back!")]
+        mock_response.usage.input_tokens = 12
+        mock_response.usage.output_tokens = 7
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.usage.cache_read_input_tokens = 0
+        mock_client.messages.create = MagicMock(return_value=mock_response)
+
+        mock_module = MagicMock()
+        mock_module.Anthropic.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=mock_module):
+            asyncio.run(svc.complete("Hello"))
+
+        usage_service.record_usage.assert_called_once()
+        call_kwargs = usage_service.record_usage.call_args.kwargs
+        assert call_kwargs["user_id"] == 42
+        assert call_kwargs["provider"] == "anthropic"
+        assert call_kwargs["model"] == "claude-sonnet-4-20250514"
+        assert call_kwargs["input_tokens"] == 12
+        assert call_kwargs["output_tokens"] == 7
+
+    def test_complete_without_usage_service_does_not_raise(self):
+        """Default construction (no usage tracking wired) must behave
+        exactly as before -- MCP/CLI callers that don't pass
+        usage_service shouldn't break or silently need updating."""
+        from unittest.mock import MagicMock
+
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(
+            ai_provider="anthropic", ai_api_key="sk-test", ai_model="claude-sonnet-4-20250514"
+        )
+        svc = LLMService(settings)
+
+        mock_client = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Hello back!")]
+        mock_response.usage.input_tokens = 12
+        mock_response.usage.output_tokens = 7
+        mock_client.messages.create = MagicMock(return_value=mock_response)
+
+        mock_module = MagicMock()
+        mock_module.Anthropic.return_value = mock_client
+
+        with patch("pyrite.services.llm_service._import_anthropic", return_value=mock_module):
+            result = asyncio.run(svc.complete("Hello"))
+
+        assert result == "Hello back!"
+
+    def test_with_user_key_preserves_usage_tracking_context(self):
+        """with_user_key() (BYOK override) must carry the usage_service
+        and user_id forward -- otherwise a BYOK user's usage silently
+        stops being tracked the moment they use their own key."""
+        from unittest.mock import MagicMock
+
+        from pyrite.services.llm_service import LLMService
+
+        settings = Settings(ai_provider="anthropic")
+        usage_service = MagicMock()
+        svc = LLMService(settings, usage_service=usage_service, user_id=42)
+
+        byok_svc = svc.with_user_key(api_key="sk-user-key")
+
+        assert byok_svc._usage_service is usage_service
+        assert byok_svc._user_id == 42
+
+
 class TestLLMServiceOpenAIMocked:
     """Test OpenAI provider with mocked SDK."""
 

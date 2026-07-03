@@ -236,9 +236,15 @@ class PyriteMCPServer:
     def qa_svc(self):
         if not hasattr(self, "_qa_svc_cache"):
             from ..services.llm_service import LLMService
+            from ..services.llm_usage_service import LLMUsageService
             from ..services.qa_service import QAService
 
-            llm_service = LLMService(self.config.settings)
+            # llm-usage-tracking-and-quotas: MCP has no per-request user
+            # identity today (server-wide tier, not per-user auth), so
+            # usage is recorded with user_id=None -- still gives platform-
+            # key cost visibility even without per-user attribution.
+            usage_service = LLMUsageService(self.db)
+            llm_service = LLMService(self.config.settings, usage_service=usage_service)
             self._qa_svc_cache = QAService(self.config, self.db, llm_service=llm_service)
         return self._qa_svc_cache
 

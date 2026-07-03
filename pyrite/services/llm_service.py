@@ -63,11 +63,21 @@ class LLMService:
     # Providers that use the OpenAI SDK under the hood
     _OPENAI_COMPAT_PROVIDERS = ("openai", "gemini", "openrouter", "ollama", "local")
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        usage_service: Any = None,
+        user_id: int | None = None,
+    ) -> None:
         self._settings = settings
         self._provider = settings.ai_provider or "stub"
         if self._provider in ("none", ""):
             self._provider = "stub"
+        # llm-usage-tracking-and-quotas: optional injected recorder, so
+        # MCP/CLI callers that don't wire tracking keep working exactly
+        # as before (no-op when unset).
+        self._usage_service = usage_service
+        self._user_id = user_id
 
     # -- public helpers -----------------------------------------------------
 
@@ -117,7 +127,7 @@ class LLMService:
         # Apply default base URL for Gemini when switching provider
         if settings.ai_provider == "gemini" and not settings.ai_api_base:
             settings.ai_api_base = "https://generativelanguage.googleapis.com/v1beta/openai/"
-        return LLMService(settings)
+        return LLMService(settings, usage_service=self._usage_service, user_id=self._user_id)
 
     async def complete(
         self,
@@ -233,6 +243,25 @@ class LLMService:
                 getattr(usage, "output_tokens", 0) or 0,
             )
 
+    def _record_anthropic_usage(self, response) -> None:
+        """Record token usage via the injected usage_service, if configured.
+        No-op when usage_service is unset (default) -- callers that don't
+        wire tracking keep working exactly as before."""
+        if self._usage_service is None:
+            return
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        self._usage_service.record_usage(
+            user_id=self._user_id,
+            provider=self._provider,
+            model=self._settings.ai_model,
+            input_tokens=getattr(usage, "input_tokens", 0) or 0,
+            output_tokens=getattr(usage, "output_tokens", 0) or 0,
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )
+
     def _anthropic_complete(
         self,
         prompt: str,
@@ -250,6 +279,7 @@ class LLMService:
             kwargs["system"] = self._anthropic_system_arg(system, cache_system)
         response = client.messages.create(**kwargs)
         self._log_anthropic_cache_usage(response)
+        self._record_anthropic_usage(response)
         return response.content[0].text
 
     def _anthropic_stream(

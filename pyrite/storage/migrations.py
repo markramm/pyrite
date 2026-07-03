@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 22
+CURRENT_VERSION = 23
 
 
 @dataclass
@@ -454,6 +454,29 @@ MIGRATIONS: list[Migration] = [
         """,
         down="""
         DROP TABLE IF EXISTS oauth_state;
+        """,
+    ),
+    Migration(
+        version=23,
+        description="Add llm_usage table for per-user LLM cost/token tracking and quotas",
+        up="""
+        CREATE TABLE IF NOT EXISTS llm_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'chat',
+            input_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+            cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
+            estimated_cost_usd REAL NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_llm_usage_user ON llm_usage(user_id, created_at);
+        """,
+        down="""
+        DROP TABLE IF EXISTS llm_usage;
         """,
     ),
 ]

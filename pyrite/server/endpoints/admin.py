@@ -11,6 +11,7 @@ from ...services.ephemeral_service import EphemeralKBService
 from ...services.index_worker import IndexWorker
 from ...services.kb_registry_service import KBRegistryService
 from ...services.llm_service import LLMService
+from ...services.llm_usage_service import LLMUsageService
 from ...storage.database import PyriteDB
 from ...storage.index import IndexManager
 from ..api import (
@@ -21,6 +22,7 @@ from ..api import (
     get_index_worker,
     get_kb_registry,
     get_llm_service,
+    get_llm_usage_service,
     limiter,
     requires_tier,
     resolve_kb_default_role,
@@ -130,6 +132,29 @@ def ai_status(request: Request, llm: LLMService = Depends(get_llm_service)):
 def ai_test_connection(request: Request, llm: LLMService = Depends(get_llm_service)):
     """Actually test the AI connection by pinging the provider."""
     return llm.test_connection()
+
+
+@router.get("/usage/me")
+@limiter.limit("60/minute")
+def get_my_usage(
+    request: Request,
+    usage_svc: LLMUsageService = Depends(get_llm_usage_service),
+):
+    """Current user's LLM usage totals. Anonymous (auth disabled) users
+    get the user_id=None bucket."""
+    auth_user = getattr(request.state, "auth_user", None)
+    user_id = auth_user["id"] if auth_user else None
+    return usage_svc.get_usage(user_id)
+
+
+@router.get("/admin/usage", dependencies=[Depends(requires_tier("admin"))])
+@limiter.limit("60/minute")
+def get_all_usage(
+    request: Request,
+    usage_svc: LLMUsageService = Depends(get_llm_usage_service),
+):
+    """Per-user LLM usage totals across all users (admin only)."""
+    return {"users": usage_svc.get_all_usage()}
 
 
 @router.post("/site/render", dependencies=[Depends(requires_tier("admin"))])

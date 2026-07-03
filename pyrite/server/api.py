@@ -44,6 +44,7 @@ from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
 from ..services.link_discovery_service import LinkDiscoveryService
 from ..services.llm_service import LLMService
+from ..services.llm_usage_service import LLMUsageService
 from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
 from ..services.starred_service import StarredService
@@ -198,11 +199,25 @@ def get_worktree_resolver(
     return WorktreeResolver(config, db, cache)
 
 
+def get_llm_usage_service(
+    db: PyriteDB = Depends(get_db),
+) -> LLMUsageService:
+    """Get or create LLMUsageService via DI."""
+    return LLMUsageService(db)
+
+
 def get_llm_service(
+    request: Request,
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
 ) -> LLMService:
-    """Get or create LLM service, using DB settings with config file fallback."""
+    """Get or create LLM service, using DB settings with config file fallback.
+
+    Wires the per-user usage-tracking context (llm-usage-tracking-and-
+    quotas) when a request is authenticated -- anonymous access (auth
+    disabled) records usage rows with user_id=None rather than skipping
+    tracking entirely.
+    """
     provider = db.get_setting("ai.provider") or config.settings.ai_provider
     api_key = db.get_setting("ai.apiKey") or config.settings.ai_api_key
     model = db.get_setting("ai.model") or config.settings.ai_model
@@ -216,7 +231,10 @@ def get_llm_service(
         ai_model=model,
         ai_api_base=base_url,
     )
-    return LLMService(settings)
+    auth_user = getattr(request.state, "auth_user", None)
+    user_id = auth_user["id"] if auth_user else None
+    usage_service = LLMUsageService(db)
+    return LLMService(settings, usage_service=usage_service, user_id=user_id)
 
 
 def get_user_llm_context(
