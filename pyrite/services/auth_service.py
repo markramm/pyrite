@@ -733,8 +733,23 @@ class AuthService:
             try:
                 return self._decrypt_token(raw_token, key), scopes
             except Exception:
-                # Token may be stored as plaintext from before encryption was enabled
-                return raw_token, scopes
+                # DECIDED 2026-07-03 (fail-open-exception-sweep site #5):
+                # fail closed. An undecryptable value here is either
+                # corrupted ciphertext / a rotated key, or a legacy
+                # pre-encryption plaintext row -- Fernet.decrypt raises
+                # InvalidToken for both, indistinguishably. Returning the
+                # raw bytes as if they were a valid token means silently
+                # authenticating with corrupt-key material. Treat it as
+                # no token: the caller re-auths via GitHub connect, which
+                # re-stores (and properly encrypts) a fresh token -- a
+                # forced reconnect is the migration path for legacy rows.
+                logger.warning(
+                    "GitHub token for user %s could not be decrypted; "
+                    "treating as absent (user must reconnect)",
+                    user_id,
+                    exc_info=True,
+                )
+                return None, scopes
         return raw_token, scopes
 
     def clear_github_token(self, user_id: int) -> bool:
@@ -799,7 +814,19 @@ class AuthService:
             try:
                 decrypted = self._decrypt_token(raw_key, enc_key)
             except Exception:
-                decrypted = raw_key  # May be stored as plaintext
+                # DECIDED 2026-07-03 (fail-open-exception-sweep site #5):
+                # fail closed, same rationale as get_github_token_for_user.
+                # Never hand back undecryptable bytes as if they were a
+                # valid API key -- the caller must re-store the key
+                # (forced re-entry is the migration path for legacy rows).
+                logger.warning(
+                    "API key for user %s provider %s could not be decrypted; "
+                    "treating as absent (user must re-enter key)",
+                    user_id,
+                    row["provider"],
+                    exc_info=True,
+                )
+                return None
         else:
             decrypted = raw_key
 
