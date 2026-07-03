@@ -19,6 +19,7 @@ from ..exceptions import (
     EntryNotFoundError,
     KBNotFoundError,
     KBReadOnlyError,
+    StorageError,
     ValidationError,
 )
 from ..models import Entry
@@ -586,19 +587,33 @@ class KBService:
         )
 
         # Re-sync the index so old_id resolves to None and new_id
-        # resolves to the renamed entry. Skip on dry_run.
+        # resolves to the renamed entry, then read back to confirm it
+        # actually worked. Skip on dry_run (nothing was written).
+        #
+        # The file rename already succeeded on disk by this point — that
+        # part is never rolled back. A degraded index is recovered by the
+        # next `pyrite index sync`, but the caller must be told the write
+        # is degraded, not given a silent-success response while old_id
+        # keeps resolving and new_id stays invisible
+        # (verify-after-write-on-the-index-path).
         if not dry_run and result.get("renamed"):
             try:
                 self._index_mgr.sync_incremental(kb_name)
             except Exception as e:
-                # Don't fail the rename if reindex hiccups — the file
-                # operation already succeeded.
-                logger.warning(
-                    "Index sync after rename %s -> %s failed: %s",
-                    old_id,
-                    new_id,
-                    e,
+                raise StorageError(
+                    f"Renamed {old_id!r} -> {new_id!r} on disk, but the index "
+                    f"sync failed ({e}). Run `pyrite index sync` to recover — "
+                    f"until then, search/lookups may resolve the old id and "
+                    f"miss the new one."
+                ) from e
+
+            if self.db.get_entry(new_id, kb_name) is None:
+                raise StorageError(
+                    f"Renamed {old_id!r} -> {new_id!r} on disk, but {new_id!r} "
+                    f"did not resolve in the index after sync. Run "
+                    f"`pyrite index sync` to recover."
                 )
+            result["index_verified"] = True
 
         return result
 
