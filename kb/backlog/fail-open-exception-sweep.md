@@ -62,6 +62,14 @@ degraded-state result) where the site guards an invariant. Follow the
 plugin-registry policy shape. Add ruff BLE001 (or a review-checklist
 rule): no bare pass / fail-open without a log line and a WHY comment.
 
+**Amendment (2026-07-03, Mark):** log-at-warning is necessary but NOT
+sufficient where the degradation changes user-visible behavior —
+"logs are not available to agents using the CLI." Those sites also
+need an in-band signal (stderr line + `warnings` array on JSON/MCP)
+per [[in-band-degradation-signaling]]. Sites already closed log-only
+(1, 2, 3) get their in-band signal retrofitted under that ticket —
+no need to reopen them here.
+
 ## Progress
 
 - [x] **Site #1 — mcp_server.py DB-registered-KB merge** (37a37c9,
@@ -110,7 +118,12 @@ rule): no bare pass / fail-open without a log line and a WHY comment.
   KB type) is the real design question, not a missing log line. Needs
   a decision on whether fail-open or fail-closed is correct here
   before touching it -- worth a standalone note, not a
-  fault-injection-test fix like the others.
+  fault-injection-test fix like the others. **DECIDED 2026-07-03:
+  fail closed** — skip the plugin for that KB, warn in-band; decision
+  + rationale recorded in [[plugin-type-resolution-scoping]]. The
+  mechanical fix (flip `return True` → `return False` + in-band
+  warning per [[in-band-degradation-signaling]]) can land in this
+  sweep; the scoping ticket owns the broader semantics.
 - [ ] Low-stakes site #7 (repository.py, document_manager.py, alembic
   4x pass)
 - [ ] CLI-consistency-review items: search_commands.py silent

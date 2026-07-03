@@ -39,6 +39,20 @@ extension vocabulary (`sender`, `funder`, `claim_status`) into core.
 Tolerable with 6 first-party extensions; not tolerable the day a
 third party writes one — a prerequisite for [[extension-registry]].
 
+## Decision (2026-07-03, Mark): compat-check failures FAIL CLOSED
+
+From the fail-open sweep's site #6 investigation:
+`_plugin_matches_kb_type` (registry.py:508-521) already logs its
+failure — the open question was the `return True` fail-open. Decided:
+**fail closed** — a plugin whose compatibility check errors is
+SKIPPED for that KB. Rationale: the check reads static plugin
+declarations (errors are structural, not transient), while the blast
+radius of a wrongly-applied plugin is global type remapping (the
+person→actor tutorial-KB failure). Additionally, per
+[[in-band-degradation-signaling]]: the skip must surface in-band
+(warnings array / stderr), not log-only — logs are invisible to
+CLI/MCP agents.
+
 ## Fix
 
 1. Wire the existing KB-type scoping into entry-type resolution:
