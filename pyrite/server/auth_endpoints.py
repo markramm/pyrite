@@ -6,8 +6,6 @@ Provides register, login, logout, session introspection, and OAuth flows.
 """
 
 import logging
-import secrets
-import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
@@ -102,39 +100,10 @@ def _clear_session_cookie(response: Response) -> None:
 
 
 # ---------------------------------------------------------------------------
-# CSRF state store (in-memory, single-process — fine for Phase 1)
+# CSRF state store — DB-backed via AuthService.{create,verify}_oauth_state
+# (oauth_state table, migration v22). Survives process restarts and works
+# across replicas; see oauth-state-store-persistence.
 # ---------------------------------------------------------------------------
-
-_oauth_states: dict[str, dict] = {}  # {state: {"expiry": float, "flow": str, "user_id": int|None}}
-_OAUTH_STATE_TTL = 300  # 5 minutes
-
-
-def _create_oauth_state(flow: str = "login", user_id: int | None = None) -> str:
-    """Generate a CSRF state token and store it with flow metadata."""
-    # Probabilistic cleanup (1 in 10 calls)
-    if secrets.randbelow(10) == 0:
-        now = time.time()
-        expired = [k for k, v in _oauth_states.items() if v["expiry"] < now]
-        for k in expired:
-            del _oauth_states[k]
-
-    state = secrets.token_urlsafe(32)
-    _oauth_states[state] = {
-        "expiry": time.time() + _OAUTH_STATE_TTL,
-        "flow": flow,
-        "user_id": user_id,
-    }
-    return state
-
-
-def _verify_oauth_state(state: str) -> dict | None:
-    """Verify and consume a CSRF state token. Returns state metadata or None."""
-    state_data = _oauth_states.pop(state, None)
-    if state_data is None:
-        return None
-    if time.time() >= state_data["expiry"]:
-        return None
-    return state_data
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +272,7 @@ async def get_current_user(
 async def github_oauth_start(
     request: Request,
     config: PyriteConfig = Depends(get_config),
+    auth_service: AuthService = Depends(get_auth_service),
 ) -> RedirectResponse:
     """Redirect user to GitHub for authorization."""
     gh_config = config.settings.auth.providers.get("github")
@@ -310,7 +280,7 @@ async def github_oauth_start(
         raise HTTPException(status_code=404, detail="GitHub OAuth is not configured")
 
     provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
-    state = _create_oauth_state()
+    state = auth_service.create_oauth_state()
 
     # Build callback URL from request
     callback_url = str(request.url_for("github_oauth_callback"))
@@ -333,7 +303,7 @@ async def github_oauth_callback(
         logger.warning("GitHub OAuth error: %s", error or "no code")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
-    state_data = _verify_oauth_state(state)
+    state_data = auth_service.verify_oauth_state(state)
     if not state_data:
         logger.warning("GitHub OAuth invalid/expired state")
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
@@ -409,7 +379,7 @@ async def github_connect_start(
         raise HTTPException(status_code=401, detail="Session expired")
 
     provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
-    state = _create_oauth_state(flow="connect", user_id=user["id"])
+    state = auth_service.create_oauth_state(flow="connect", user_id=user["id"])
 
     callback_url = str(request.url_for("github_oauth_callback"))
     # Build authorize URL with elevated scopes

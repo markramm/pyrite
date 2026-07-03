@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 21
+CURRENT_VERSION = 22
 
 
 @dataclass
@@ -437,6 +437,23 @@ MIGRATIONS: list[Migration] = [
         up="",
         down="""
         -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
+    Migration(
+        version=22,
+        description="Add oauth_state table for DB-backed OAuth CSRF state (survives restarts)",
+        up="""
+        CREATE TABLE IF NOT EXISTS oauth_state (
+            state TEXT PRIMARY KEY,
+            flow TEXT NOT NULL DEFAULT 'login',
+            user_id INTEGER,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            expires_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_oauth_state_expires ON oauth_state(expires_at);
+        """,
+        down="""
+        DROP TABLE IF EXISTS oauth_state;
         """,
     ),
 ]

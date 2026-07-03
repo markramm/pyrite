@@ -96,6 +96,78 @@ class AuthService:
         )
         return True
 
+    # ── OAuth CSRF state ──────────────────────────────────────────
+    #
+    # DB-backed (oauth_state table, migration v22) rather than an
+    # in-memory dict, so state survives a process restart between the
+    # redirect-to-provider and callback legs of the OAuth flow, and works
+    # correctly if the hosted instance ever runs multiple replicas behind
+    # a load balancer (oauth-state-store-persistence).
+
+    _OAUTH_STATE_TTL_SECONDS = 300  # 5 minutes, matches the prior in-memory TTL
+
+    def create_oauth_state(
+        self,
+        flow: str = "login",
+        user_id: int | None = None,
+        ttl_seconds: int | None = None,
+    ) -> str:
+        """Generate a CSRF state token and persist it with flow metadata.
+
+        ``ttl_seconds`` defaults to 5 minutes; pass a negative value in
+        tests to create an already-expired token.
+        """
+        # Probabilistic cleanup (1 in 10 calls) — same pattern as session
+        # cleanup in verify_session, avoids a dedicated background task.
+        if secrets.randbelow(10) == 0:
+            self.cleanup_expired_oauth_states()
+
+        ttl = self._OAUTH_STATE_TTL_SECONDS if ttl_seconds is None else ttl_seconds
+        state = secrets.token_urlsafe(32)
+        now = datetime.now(UTC)
+        expires_at = (now + timedelta(seconds=ttl)).isoformat()
+        self.db.execute_write_sql(
+            """INSERT INTO oauth_state (state, flow, user_id, created_at, expires_at)
+            VALUES (:state, :flow, :user_id, :now, :expires_at)""",
+            {
+                "state": state,
+                "flow": flow,
+                "user_id": user_id,
+                "now": now.isoformat(),
+                "expires_at": expires_at,
+            },
+        )
+        return state
+
+    def verify_oauth_state(self, state: str) -> dict | None:
+        """Verify and consume a CSRF state token. Returns
+        ``{"flow": ..., "user_id": ...}`` or ``None`` if the token is
+        unknown, already consumed, or expired.
+
+        Single-use: the row is deleted whether or not it was expired, so a
+        replayed token always fails on the second attempt.
+        """
+        rows = self.db.execute_sql(
+            "SELECT flow, user_id, expires_at FROM oauth_state WHERE state = :state",
+            {"state": state},
+        )
+        if not rows:
+            return None
+        self.db.execute_write_sql(
+            "DELETE FROM oauth_state WHERE state = :state", {"state": state}
+        )
+        row = rows[0]
+        if datetime.now(UTC).isoformat() >= row["expires_at"]:
+            return None
+        return {"flow": row["flow"], "user_id": row["user_id"]}
+
+    def cleanup_expired_oauth_states(self) -> int:
+        """Delete all expired OAuth state rows. Returns the count removed."""
+        now = datetime.now(UTC).isoformat()
+        return self.db.execute_write_sql(
+            "DELETE FROM oauth_state WHERE expires_at < :now", {"now": now}
+        )
+
     # ── Registration ──────────────────────────────────────────────
 
     def register(self, username: str, password: str, display_name: str | None = None,

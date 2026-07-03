@@ -157,3 +157,88 @@ class TestRoles:
         reg = service.register("alice", "password123")
         with pytest.raises(ValueError, match="Invalid role"):
             service.set_role(reg["id"], "superadmin")
+
+
+class TestOAuthStateStore:
+    """oauth-state-store-persistence: CSRF state moved from an in-memory
+    dict to the DB (oauth_state table, migration v22) so a process restart
+    or multi-replica deploy doesn't invalidate an in-flight OAuth login."""
+
+    def test_create_and_verify_roundtrip(self, auth_env):
+        service, _ = auth_env
+        state = service.create_oauth_state(flow="login")
+        assert isinstance(state, str) and len(state) > 20
+
+        data = service.verify_oauth_state(state)
+        assert data is not None
+        assert data["flow"] == "login"
+        assert data["user_id"] is None
+
+    def test_verify_consumes_state(self, auth_env):
+        """A state token is single-use: verifying it once succeeds, a
+        second verify of the same token must fail (already consumed)."""
+        service, _ = auth_env
+        state = service.create_oauth_state(flow="login")
+        assert service.verify_oauth_state(state) is not None
+        assert service.verify_oauth_state(state) is None
+
+    def test_verify_unknown_state_returns_none(self, auth_env):
+        service, _ = auth_env
+        assert service.verify_oauth_state("nonexistent-state-token") is None
+
+    def test_verify_expired_state_returns_none(self, auth_env):
+        service, _ = auth_env
+        state = service.create_oauth_state(flow="login", ttl_seconds=-1)
+        assert service.verify_oauth_state(state) is None
+
+    def test_create_stores_user_id_for_connect_flow(self, auth_env):
+        service, _ = auth_env
+        state = service.create_oauth_state(flow="connect", user_id=42)
+        data = service.verify_oauth_state(state)
+        assert data["flow"] == "connect"
+        assert data["user_id"] == 42
+
+    def test_cleanup_expired_states_removes_only_expired(self, auth_env):
+        service, db = auth_env
+        fresh = service.create_oauth_state(flow="login")
+        stale = service.create_oauth_state(flow="login", ttl_seconds=-1)
+
+        removed = service.cleanup_expired_oauth_states()
+        assert removed >= 1
+
+        rows = db.execute_sql("SELECT state FROM oauth_state")
+        remaining = {r["state"] for r in rows}
+        assert fresh in remaining
+        assert stale not in remaining
+
+    def test_create_probabilistically_sweeps_expired_states(self, auth_env, monkeypatch):
+        """create_oauth_state does opportunistic cleanup on a 1-in-10 draw
+        (same pattern as verify_session's session cleanup), so expired rows
+        don't accumulate forever without a dedicated background task."""
+        service, db = auth_env
+        stale = service.create_oauth_state(flow="login", ttl_seconds=-1)
+
+        # Force the probabilistic branch to fire on the next call.
+        monkeypatch.setattr(
+            "pyrite.services.auth_service.secrets.randbelow", lambda _n: 0
+        )
+        service.create_oauth_state(flow="login")
+
+        rows = db.execute_sql("SELECT state FROM oauth_state WHERE state = :s", {"s": stale})
+        assert rows == [], "expired state should have been swept by the probabilistic cleanup"
+
+    def test_state_persists_across_service_instances_same_db(self, auth_env):
+        """The whole point of the DB-backed store: state created on one
+        AuthService instance must be verifiable from a second, independent
+        instance backed by the same DB — simulating a process restart or
+        a second replica reading the same DB."""
+        service_a, db = auth_env
+        state = service_a.create_oauth_state(flow="login")
+
+        from pyrite.config import AuthConfig
+        from pyrite.services.auth_service import AuthService
+
+        service_b = AuthService(db, AuthConfig(enabled=True))
+        data = service_b.verify_oauth_state(state)
+        assert data is not None
+        assert data["flow"] == "login"

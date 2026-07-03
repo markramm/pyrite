@@ -341,6 +341,78 @@ class TestOAuthEndpoints:
         data = r.json()
         assert data["providers"] == []
 
+    def test_oauth_state_survives_process_restart(self, tmpdir):
+        """oauth-state-store-persistence: OAuth CSRF state must be stored
+        in the DB, not an in-memory dict, so a process restart between
+        /auth/github and /auth/github/callback doesn't fail the login.
+
+        A real process restart can't be simulated within one pytest
+        process — a module-level dict would trivially "survive" here
+        because it's the same Python process regardless of which DB file
+        backs each client. So this test explicitly clears any in-memory
+        state store between the two client constructions (imitating what
+        a process restart does to module globals) to prove the state was
+        actually persisted to the DB, not merely still sitting in memory."""
+        providers = {
+            "github": OAuthProviderConfig(
+                client_id="test-client-id",
+                client_secret="test-client-secret",
+            )
+        }
+        client_a, _config_a, db_a = _make_client(tmpdir, providers=providers)
+
+        r = client_a.get("/auth/github", follow_redirects=False)
+        assert r.status_code == 302
+        import urllib.parse
+
+        parsed = urllib.parse.urlparse(r.headers["location"])
+        state = urllib.parse.parse_qs(parsed.query)["state"][0]
+        db_a.close()
+
+        # Simulate a process restart: wipe any in-memory state store (what
+        # a real restart does to module globals) before the fresh instance.
+        import pyrite.server.auth_endpoints as auth_endpoints_module
+
+        if hasattr(auth_endpoints_module, "_oauth_states"):
+            auth_endpoints_module._oauth_states.clear()
+
+        client_b, _config_b, db_b = _make_client(tmpdir, providers=providers)
+
+        mock_token = OAuthToken(access_token="gho_test")
+        mock_profile = OAuthProfile(
+            provider="github",
+            provider_id="12345",
+            username="testuser",
+            display_name="Test User",
+            email="test@example.com",
+            avatar_url="https://example.com/avatar.png",
+            orgs=[],
+        )
+        with (
+            patch(
+                "pyrite.server.auth_endpoints.GitHubOAuthProvider.exchange_code",
+                new_callable=AsyncMock,
+                return_value=mock_token,
+            ),
+            patch(
+                "pyrite.server.auth_endpoints.GitHubOAuthProvider.get_user_profile",
+                new_callable=AsyncMock,
+                return_value=mock_profile,
+            ),
+        ):
+            r = client_b.get(
+                f"/auth/github/callback?code=testcode&state={state}",
+                follow_redirects=False,
+            )
+
+        assert r.status_code == 302
+        assert r.headers["location"] == "/", (
+            f"expected successful login redirect, got {r.headers.get('location')} "
+            "-- state did not survive the simulated restart"
+        )
+        assert "pyrite_session" in r.cookies
+        db_b.close()
+
     def test_me_includes_kb_permissions(self, tmpdir):
         client, config, db = _make_client(tmpdir)
         # Register and login as admin
