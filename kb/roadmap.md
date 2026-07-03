@@ -299,6 +299,7 @@ known crash bugs reachable from the read surface.
 | [[obsidian-migration]] | M | planned |
 | [[pkm-capture-plugin]] | L | planned |
 | [[plugin-repo-extraction]] | M | deferred |
+| FtM/Aleph interop — revive from the JI spike ([[ji-spike-findings]]); working mapping + tested import/export already exist | L | gated: a pilot peer asks for claims/evidence or Aleph import by name |
 
 ### Agent Swarm Infrastructure
 

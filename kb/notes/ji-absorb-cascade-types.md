@@ -9,11 +9,17 @@ links:
   kb: pyrite
 importance: 5
 kind: feature
-status: proposed
-priority: high
+status: retired
+priority: low
 effort: M
 rank: 100
 ---
+
+> **Retired 2026-07-04** — written from the product reading of JI
+> (make JI the canonical schema home for journalism types). The
+> spike reframe inverts the direction: cascade owns the production
+> types; JI keeps only the load-bearing base class until its fields
+> migrate to cascade or core EventEntry. See [[ji-spike-findings]].
 
 ## Scope
 
