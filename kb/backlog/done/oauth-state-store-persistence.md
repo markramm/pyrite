@@ -1,17 +1,18 @@
 ---
 id: oauth-state-store-persistence
-type: backlog_item
 title: "Persist OAuth CSRF state across process restarts and replicas"
-kind: improvement
-status: proposed
-priority: high
-effort: S
+type: backlog_item
 tags: [security, oauth, hosting, multi-process]
-epic: shared-instance-readiness
 links:
 - target: epic-shared-instance-readiness
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: improvement
+status: done
+priority: high
+effort: S
+rank: 0
 ---
 
 > Re-prioritized low → high 2026-07-02: prerequisite for the
