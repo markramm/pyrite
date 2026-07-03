@@ -108,22 +108,21 @@ no need to reopen them here.
 - [ ] Site #4 — index.py frontmatter `references` dropped silently
 - [ ] Site #5 — auth_service.py decryption failure silently falls
   back to plaintext (security-relevant, at minimum warning-log)
-- [~] Site #6 — plugins/registry.py `_plugin_matches_kb_type`
-  (:508-521) — **investigated, not yet fixed.** This one is *not*
-  silent: it already does `logger.warning("Failed to check KB type
-  compatibility for plugin", exc_info=True)` before `return True`.
-  The remaining issue is narrower than the ticket's original framing:
-  the fail-*open* authorization behavior itself (a broken
-  compatibility check makes every plugin look compatible with every
-  KB type) is the real design question, not a missing log line. Needs
-  a decision on whether fail-open or fail-closed is correct here
-  before touching it -- worth a standalone note, not a
-  fault-injection-test fix like the others. **DECIDED 2026-07-03:
-  fail closed** — skip the plugin for that KB, warn in-band; decision
-  + rationale recorded in [[plugin-type-resolution-scoping]]. The
-  mechanical fix (flip `return True` → `return False` + in-band
-  warning per [[in-band-degradation-signaling]]) can land in this
-  sweep; the scoping ticket owns the broader semantics.
+- [x] **Site #6 — plugins/registry.py `_plugin_matches_kb_type` fail
+  closed** (a7e0b82, 2026-07-03) — mechanical flip per the operator
+  decision: `except Exception: return True` → `return False`, warning
+  message now names the excluded plugin and KB type. This site was
+  never silent (already logged at warning) -- the fix is the fail-open
+  *behavior*, not visibility. New test in TestValidatorScoping: a
+  plugin whose `get_kb_types()` raises must be excluded from
+  `get_validators_for_kb`, not included; failed before the fix
+  (validator was incorrectly returned). Broader semantics (wiring
+  KB-type scoping into entry-type resolution itself, deterministic
+  same-scope conflict handling) stay with
+  [[plugin-type-resolution-scoping]] -- out of scope for the sweep.
+  In-band signaling for this exclusion is tracked under
+  [[in-band-degradation-signaling]], not retrofitted here per the
+  operator's explicit split.
 - [ ] Low-stakes site #7 (repository.py, document_manager.py, alembic
   4x pass)
 - [ ] CLI-consistency-review items: search_commands.py silent
@@ -136,6 +135,4 @@ no need to reopen them here.
 - Sites 1-6 fixed with a test each where feasible (fault-inject the
   swallowed exception, assert the failure is now visible).
 - A lint or documented checklist rule prevents new fail-open sites.
-
-
 
