@@ -116,19 +116,42 @@ Consequences for the hosted instance:
   already supports and could back a `pyrite usage --all` command
   fairly easily) — deferred rather than force a design decision in
   this pass.
-- [ ] **`QuotaService.check_llm_quota()` NOT added** — `check_quota()`
-  already exists on the new `LLMUsageService` (arguably the more
-  natural home, since it needs the usage table this service owns) but
-  the ticket specifically asks for it on the existing `QuotaService`
-  (currently pure config-driven, no DB dependency at all). Not wired
-  as a pre-request gate anywhere yet — no endpoint currently calls
-  `check_quota()` before dispatching to the LLM. This is the most
-  load-bearing remaining piece (recording without enforcing means the
-  data exists but nothing is actually gated) and the natural next
-  step, deliberately left for a follow-up rather than bolted on
-  without deciding where the check belongs (per-endpoint in
-  `ai_ep.py`? A shared dependency? What are sane default daily
-  limits per tier?).
+- [x] **`QuotaService.check_llm_quota()` added** (2026-07-04) —
+  new `UsageTierConfig.daily_llm_requests: int | None = None` field
+  (auto-parsed via the existing `UsageTierConfig(**tdata)` YAML
+  loading, no config-loader change needed) and
+  `QuotaService.check_llm_quota(user_id, kind, user_tier,
+  usage_service)`, matching the exact fail-open-on-config-gap
+  convention `check_kb_creation_allowed`/`check_entry_creation_allowed`
+  already establish: no tiers configured, an unknown tier, or a tier
+  that doesn't set `daily_llm_requests` (the default) are all
+  unlimited. Delegates the actual counting to
+  `LLMUsageService.check_quota` (already had the DB query; this method
+  is the tier-config lookup layer in front of it). 5 new tests, all
+  passing.
+
+  **NOT wired into any live request path** — and after investigating,
+  this surfaced a real, pre-existing design gap wider than this
+  ticket: `check_llm_quota`'s `user_tier` parameter has no source of
+  truth to read from. `local_user.role` is an auth-permission tier
+  (read/write/admin), not a resource/billing tier
+  (free/pro/enterprise) — there is no column or lookup anywhere that
+  maps a user to a `usage_tiers` key. This isn't new to the LLM
+  quota specifically: `check_kb_creation_allowed` and
+  `check_entry_creation_allowed` have the exact same unresolved
+  `user_tier` parameter and are ALSO never called anywhere in
+  production code (confirmed via a repo-wide grep for
+  `QuotaService(` — zero call sites outside the test file, for any
+  of its three check methods). `QuotaService` has existed as
+  dead/unwired code for all three of its methods, not just the new
+  one. Wiring `check_llm_quota` into `ai_ep.py`'s summarize/auto-tag/
+  suggest-links/chat endpoints would require first deciding how a
+  user's usage tier is determined and stored — a real design
+  question (a new `local_user` column? An admin-set per-user
+  override? Derived from `role`?) that deserves its own scoping pass,
+  not a guess bolted onto this ticket. Filed as a separate, more
+  precisely-scoped follow-up:
+  [[wire-user-usage-tier-resolution-for-quota-enforcement]].
 
 ## Acceptance criteria
 
@@ -139,13 +162,15 @@ Consequences for the hosted instance:
 - Cost estimates use a model→price config (versioned, easy to
   update). **Met** — `PRICING` dict in `llm_usage_service.py`.
 - Quota check fires before the provider call and returns a useful
-  error. **Not met** — `check_quota()` exists but isn't called from
-  any request path yet.
+  error. **Partially met** — `QuotaService.check_llm_quota()` exists,
+  is tested, and returns a clear message on denial, but isn't called
+  from any request path yet (blocked on the user-tier-resolution gap
+  above, tracked separately).
 - Admin endpoint shows per-user totals. **Met** —
   `GET /api/admin/usage`.
 - Tests cover: usage record creation, quota enforcement (over and
   under), cost estimation arithmetic, cache-token tracking. **Met** —
-  15 service-level tests + 2 endpoint tests + 3 LLMService-integration
+  20 service-level tests (15 usage + 5 quota) + 2 endpoint tests + 3 LLMService-integration
   tests cover all four areas named.
 
 ## Related

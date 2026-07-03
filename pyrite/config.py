@@ -282,6 +282,10 @@ class UsageTierConfig:
     allow_private_repos: bool = False
     rate_limit_read: str = "100/minute"
     rate_limit_write: str = "30/minute"
+    # llm-usage-tracking-and-quotas: per-kind daily LLM request limit.
+    # None (the default) means unlimited -- self-hosted instances don't
+    # get a quota unless the operator opts in by setting this.
+    daily_llm_requests: int | None = None
 
 
 @dataclass
