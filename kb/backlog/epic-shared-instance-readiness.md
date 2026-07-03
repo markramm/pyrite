@@ -40,6 +40,24 @@ links:
 - target: fail-open-exception-sweep
   relation: has_subtask
   kb: pyrite
+- target: web-kb-context-single-authority
+  relation: has_subtask
+  kb: pyrite
+- target: web-fix-dropped-kb-seams
+  relation: has_subtask
+  kb: pyrite
+- target: web-sidebar-ia-regroup
+  relation: has_subtask
+  kb: pyrite
+- target: web-graph-default-scope-and-guards
+  relation: has_subtask
+  kb: pyrite
+- target: web-search-results-never-render
+  relation: has_subtask
+  kb: pyrite
+- target: web-daily-notes-view-side-effect
+  relation: has_subtask
+  kb: pyrite
 - target: security-audit-trail
   relation: related
   kb: pyrite
@@ -108,7 +126,21 @@ later epic, gated on provenance/source-tier enforcement.
    won't have tcp-skills or Mark's memory notes; the operational
    contracts (index-after-write, claim semantics, error shape, search
    quoting rule) must ship in `orient`/help/docs. (M)
-9. Hosting-security Phase 1 (static analysis audit from
+9. Web UX for the pilot — the web UI is the peers' primary surface,
+   and the 2026-07-03 UX review found the three reported new-user
+   confusions have concrete code causes:
+   [[web-kb-context-single-authority]] (M) +
+   [[web-fix-dropped-kb-seams]] (S, quick wins) +
+   [[web-sidebar-ia-regroup]] (M) +
+   [[web-graph-default-scope-and-guards]] (M). A peer who can't
+   answer "which KB am I in" will not trust the corpus in front of
+   them. Two pilot-blocking bugs from the live walkthrough:
+   [[web-search-results-never-render]] (S — the flagship flow shows
+   permanent skeletons on the demo, likely anonymous/read-session
+   specific, i.e. exactly the peer's condition) and
+   [[web-daily-notes-view-side-effect]] (S — navigation performs a
+   WRITE; a read-tier peer browsing must never create entries).
+10. Hosting-security Phase 1 (static analysis audit from
    [[hosting-security-hardening]]) run against the pilot deployment
    config — audit only, fixes triaged by tier. (S)
 

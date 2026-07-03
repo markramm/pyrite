@@ -212,7 +212,47 @@ first two items are epic subtasks:
   hand-rolled frontmatter splitters; fix the divergent
   journalism-investigation copy (drops `_schema_version`).
 
-### Workstream 4 — Bookkeeping
+### Workstream 4 — Web UX (from the 2026-07-03 UX review)
+
+The reported new-user confusions (KB navigation, graph view, left
+panel) all trace to code-level causes; the web UI is the pilot
+peers' primary surface, so the first four are epic subtasks:
+
+- [[web-kb-context-single-authority]] (high, M) — four coexisting
+  KB-scoping regimes; store resets to `guide` on reload; switcher
+  dead-zones on `?kb=` pages. URL becomes the single authority.
+- [[web-fix-dropped-kb-seams]] (high, S) — three verified
+  dropped-param bugs (orient→graph, graph node tap, orient links).
+- [[web-sidebar-ia-regroup]] (high, M) — 14 flat nav items across 4
+  scopes, system-vocabulary labels, anonymous KB switcher.
+- [[web-graph-default-scope-and-guards]] (high, M) — whole-corpus
+  default with no limit; inert Depth slider; unexplained centrality;
+  always-dark canvas; node search is a no-op; grey-on-grey type
+  colors.
+- [[web-search-results-never-render]] (high, S) — flagship flow
+  shows permanent skeletons on the demo while the API returns
+  perfect data; two console 401s suspected.
+- [[web-daily-notes-view-side-effect]] (high, S) — navigating to
+  Daily Notes silently CREATES today's note (observed 4796→4797);
+  GET-with-side-effects violates the read tier.
+- [[web-zero-state-onboarding]] (medium, M) — landing dead-ends with
+  zero KBs; CLI punts; no in-app KB creation.
+- [[web-light-mode-chrome-repair]] (medium, S) — invisible text in
+  light-mode sidebar chrome.
+- [[web-brand-tokens-implementation]] (medium, M) — declared brand
+  fonts not loaded; blue-600 does the accent work; white-labeling
+  is cosmetic. Needs an operator decision: DM Serif Display (per
+  milestone) or ratify DM Sans.
+- [[web-test-confusion-surfaces]] (medium, M) — zero tests on the
+  confusion surfaces; promote e2e into CI.
+- [[web-user-vocabulary-and-trust-copy-pass]] (medium, M) — raw enum
+  tokens in filters; server file paths shown to readers (hosted-
+  instance leak); contradictory counts; wikilink-truncated snippets.
+- [[web-read-vs-app-door-labeling]] (medium, S) — "Read" vs
+  "Explore in app" doors unexplained, no cross-navigation between
+  the static site and the workspace.
+
+### Workstream 5 — Bookkeeping
 
 - Backfill CHANGELOG 0.21–0.24; keep it current through 0.25.
 - [[links-asymmetric-intra-kb-mode]] (medium, S) — unblocks the
