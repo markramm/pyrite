@@ -55,3 +55,8 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: fix-commit-has-tests
+        name: "fix: commits must touch tests/"
+        entry: bash -c 'source .venv/bin/activate && python scripts/check_fix_commit_has_tests.py "$1"' --
+        language: system
+        stages: [commit-msg]

@@ -35,7 +35,25 @@ class IndexWorker:
         # Called from worker THREADS, not the main thread — callers must
         # handle cross-thread concerns (e.g. asyncio bridge).
         self.on_progress: Callable[[str, int, int], None] | None = None
+        # Tracks every spawned thread so wait_for_idle() (test fixtures,
+        # or any caller needing a sync point before tearing down the
+        # directory a job might still be writing to) can join them all —
+        # threads were previously fire-and-forget with no join mechanism
+        # anywhere, a full-suite-only flaky-test root cause (a background
+        # sync thread outliving its test's tmpdir fixture teardown).
+        self._threads: list[threading.Thread] = []
         self._ensure_table()
+
+    def wait_for_idle(self, timeout: float = 10.0) -> None:
+        """Block until every spawned thread has finished (or timeout).
+
+        Safe to call with no active jobs (no-op). Threads that already
+        finished are skipped without blocking.
+        """
+        with self._lock:
+            threads = list(self._threads)
+        for thread in threads:
+            thread.join(timeout=timeout)
 
     def _ensure_table(self):
         """Create the index_job table if it doesn't exist."""
@@ -81,6 +99,8 @@ class IndexWorker:
             self.db._raw_conn.commit()
 
         thread = threading.Thread(target=self._run_sync, args=(job_id, kb_name), daemon=True)
+        with self._lock:
+            self._threads.append(thread)
         thread.start()
         return job_id
 
@@ -103,6 +123,8 @@ class IndexWorker:
             self.db._raw_conn.commit()
 
         thread = threading.Thread(target=self._run_rebuild, args=(job_id, kb_name), daemon=True)
+        with self._lock:
+            self._threads.append(thread)
         thread.start()
         return job_id
 

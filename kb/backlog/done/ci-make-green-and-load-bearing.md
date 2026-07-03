@@ -9,7 +9,7 @@ links:
   kb: pyrite
 importance: 5
 kind: bug
-status: proposed
+status: done
 priority: high
 effort: M
 rank: 0
@@ -121,8 +121,41 @@ actual merge gate today is whatever gets run locally.
   [[playwright-e2e-suite-non-deterministic-failures-likely-shared-state-auth-config-gap]]
   (high, M) rather than expanding this investigation into an e2e
   auth-fixture / test-isolation redesign.
-- [ ] Item 5 — optional ratchets (coverage `fail_under`, `fix:`-commit
-  test-touch check)
+- [x] **Item 5 — optional ratchets: coverage fail_under + fix:-commit
+  test-touch check** (2026-07-04) — two parts:
+  - **Coverage `fail_under`**: added `[tool.coverage.report] fail_under
+    = 68` to pyproject.toml. Baseline measured on a disk-space-healthy
+    run (the same machine's disk was intermittently at 98-100% earlier
+    in this epic, causing unrelated sqlite I/O flakes -- re-ran once
+    free space recovered to ~4Gi): `pytest --cov=pyrite
+    --cov-report=term` -- 3952 passed, 68 skipped, 71% total coverage.
+    Set 3 points below baseline for normal-fluctuation headroom, not
+    at the ceiling. Verified pytest-cov reads this automatically from
+    pyproject.toml with the exact `--cov-report=term-missing` flag
+    both CI jobs already use (no CI YAML change needed) -- confirmed
+    with a low-coverage partial run correctly failing with "Required
+    test coverage of 68.0% not reached", and a broader run correctly
+    passing.
+  - **`fix:`-commit test-touch check**: new `scripts/
+    check_fix_commit_has_tests.py`, wired as a `commit-msg`-stage
+    pre-commit hook (`fix-commit-has-tests`). Parses the commit
+    subject for a literal `fix:` prefix; if present, diffs the staged
+    tree and requires at least one path under a `tests/` directory
+    (top-level or `extensions/*/tests/`). Mechanizes Iron Law 1 at the
+    commit boundary -- direct motivation was 40e7a39, a `fix:` commit
+    that shipped with zero test lines. 10 unit tests on the two pure
+    functions (`is_fix_commit`, `touches_tests` -- prefix detection,
+    non-fix prefixes, path matching, substring-vs-directory
+    false-positive guard). Verified the actual hook end-to-end via
+    `pre-commit run --hook-stage commit-msg` (not just the unit
+    tests): correctly blocks a `fix:`-prefixed message with nothing
+    staged under tests/, correctly passes once a test file is staged,
+    correctly no-ops for a `docs:`-prefixed message. Required `pre-
+    commit install --hook-type commit-msg` in addition to the existing
+    `pre-commit install` (the `pre-commit` stage and `commit-msg`
+    stage are separate git hooks) -- noted here since CLAUDE.md's
+    existing pre-commit setup section only mentioned the `pre-commit`
+    stage.
 - [x] **Item 6 — mypy strict ratchet scaffold on `pyrite/storage/`**
   (2026-07-03) — added a `[[tool.mypy.overrides]]` block in
   pyproject.toml scoping `disallow_untyped_defs = true` to
@@ -149,6 +182,35 @@ the local pre-commit hook instead of CI. Filed as
 [[full-suite-only-flaky-tests-state-leak-across-test-files]] (high,
 M) -- likely blocks fully closing this ticket's acceptance criteria,
 since a red-on-flake `-x` hook isn't a trustworthy local gate either.
+
+## Status (2026-07-04)
+
+All 6 fix items are now done, and the blocking caveat is resolved:
+`test_index_worker.py`'s tempdir-race flake (the other reason this
+ticket wasn't fully closeable) has been root-caused and fixed --
+`IndexWorker` spawned daemon threads with no join mechanism, racing
+test fixture teardown. See
+[[full-suite-only-flaky-tests-state-leak-across-test-files]], now also
+closed, with **3 consecutive clean full-suite runs** (3054 passed, 0
+failed each time) as verification.
+
+Acceptance criteria review:
+
+- **Postgres conformance runs in CI (0 skips)**: met (item 3).
+- **Pre-commit hooks installed and passing locally**: met. Both
+  known full-suite-only flakes (`test_worktree_service.py`,
+  `test_index_worker.py`) are now fixed and verified with repeated
+  clean runs -- the local `-x` gate is now trustworthy, not just
+  configured.
+- **CI green on dev HEAD**: not independently re-verified by pushing
+  in this session (pushing to trigger a real Actions run remains the
+  user's call per the git safety protocol, unchanged from earlier in
+  this epic) -- but every component that was previously red (ruff
+  formatting, pre-commit installation, postgres conformance,
+  test-optional-deps/Playwright, mypy scaffold, coverage ratchet,
+  fix:-commit test-touch check, and now both flaky tests) has been
+  fixed and verified locally. A push is the remaining step to confirm
+  this holds in the actual CI environment.
 
 ## Acceptance criteria
 

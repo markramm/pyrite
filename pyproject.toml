@@ -121,6 +121,15 @@ ignore_missing_imports = true
 module = "pyrite.storage.*"
 disallow_untyped_defs = true
 
+# ci-make-green-and-load-bearing item 5: ratchet coverage instead of just
+# measuring it. Baseline as of 2026-07-04 (full suite, disk-space-healthy
+# run): 71% (`pytest --cov=pyrite --cov-report=term`, 3952 passed). Set a
+# few points below to tolerate normal fluctuation while still catching a
+# real regression; ratchet up over time rather than setting it at the
+# ceiling immediately.
+[tool.coverage.report]
+fail_under = 68
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

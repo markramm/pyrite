@@ -9,8 +9,16 @@ from pyrite.services.index_worker import IndexWorker
 
 @pytest.fixture
 def worker(pyrite_db, pyrite_config):
-    """IndexWorker instance."""
-    return IndexWorker(pyrite_db, pyrite_config)
+    """IndexWorker instance. Joins all spawned threads at teardown so a
+    background sync/rebuild thread never outlives the pyrite_db/
+    pyrite_config fixtures' own teardown (tmp_kb_dir's TemporaryDirectory
+    rmtree) -- the root cause of a full-suite-only flaky test (a
+    background thread still writing when its tmpdir gets deleted out
+    from under it -- see full-suite-only-flaky-tests-state-leak-across-
+    test-files)."""
+    w = IndexWorker(pyrite_db, pyrite_config)
+    yield w
+    w.wait_for_idle(timeout=10)
 
 
 class TestJobTable:
@@ -83,6 +91,38 @@ class TestSubmitRebuild:
             time.sleep(0.1)
         assert job["status"] == "completed"
         assert job["added"] >= 0
+
+
+class TestThreadCleanup:
+    """Regression coverage for full-suite-only-flaky-tests-state-leak-
+    across-test-files: test_different_kbs_get_different_jobs (and other
+    tests using the `worker` fixture) fail intermittently under a
+    full-suite run with `OSError: [Errno 66] Directory not empty` at
+    teardown, never in isolation.
+
+    Root cause: submit_sync/submit_rebuild spawn daemon threads with no
+    join/wait mechanism anywhere. A test that submits a sync and returns
+    immediately (as test_different_kbs_get_different_jobs does -- it only
+    asserts job_id inequality, never waits for completion) leaves a
+    background thread racing the next test's tmp_kb_dir fixture teardown,
+    which rmtree()s the same directory the thread may still be writing to.
+    """
+
+    def test_wait_for_idle_blocks_until_background_threads_finish(self, worker, sample_events):
+        """IndexWorker must expose a way to block until every spawned
+        thread has finished, so test fixtures (and any other caller that
+        needs a deterministic point after which no background write is
+        still in flight) can synchronize before tearing down the
+        directory a sync thread might still be touching."""
+        job_id = worker.submit_sync(kb_name="test-events")
+
+        worker.wait_for_idle(timeout=5)
+
+        job = worker.get_job(job_id)
+        assert job["status"] in ("completed", "failed"), (
+            f"expected the job to have finished by the time wait_for_idle() "
+            f"returns; got status={job['status']!r}"
+        )
 
 
 class TestConcurrency:

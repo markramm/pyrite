@@ -7,7 +7,7 @@ tags:
 - ci
 - testing
 importance: 5
-status: proposed
+status: done
 priority: 8
 effort: M
 rank: 0
@@ -90,18 +90,51 @@ Found while fixing ci-make-green-and-load-bearing item 2 (pre-commit's pytest-ch
   test after ~2980 tests). Confirms this is a real fix, not a
   narrower-reproduction coincidence.
 
-- [ ] `test_index_worker.py::test_different_kbs_get_different_jobs`
-  tempdir race -- not yet investigated. Different failure shape
-  (`OSError: Directory not empty` at teardown, not a git-env leak), so
-  likely a distinct root cause from the fix above. Deferred to a
-  follow-up pass since the specific blocking pain (every commit this
-  session needing `--no-verify`) is resolved by the worktree fix
-  alone -- item 3 (`test_review_flow_e2e.py`) is confirmed moot (file
-  removed).
-- [ ] `pytest-randomly` / `--randomize` ratchet -- still gated on all
-  known flakes being fixed first; one remains (`test_index_worker.py`).
+- [x] **`test_index_worker.py` tempdir race root-caused and fixed**
+  (2026-07-04) — root cause: `IndexWorker.submit_sync`/`submit_rebuild`
+  spawn daemon `threading.Thread`s with NO join/wait mechanism anywhere
+  in the class. `TestConcurrency::test_different_kbs_get_different_jobs`
+  submits two syncs and returns immediately (only asserts job_id
+  inequality, never waits for completion) — the `worker` fixture
+  (`tests/conftest.py`'s `pyrite_db`/`pyrite_config` chain, backed by
+  `tmp_kb_dir`'s `tempfile.TemporaryDirectory()`) had no teardown at
+  all, so a background sync thread could still be mid-write when the
+  NEXT test's `tmp_kb_dir` fixture ran `TemporaryDirectory.__exit__`
+  (an `rmtree` of the same directory tree) — a classic unjoined-thread
+  teardown race, exactly matching the `OSError: [Errno 66] Directory
+  not empty` symptom (rmtree hitting a directory a straggler thread
+  just wrote a new file into after rmtree had already listed its
+  contents).
+
+  Fixed: added `IndexWorker.wait_for_idle(timeout=10.0)`, which joins
+  every thread the instance has spawned (tracked in a new `_threads`
+  list, appended under the existing `_lock` at each `submit_sync`/
+  `submit_rebuild` call). Wired it into the two fixtures that
+  construct an `IndexWorker` and hand it to tests with no teardown of
+  their own: `tests/test_index_worker.py`'s `worker` fixture (now
+  calls `wait_for_idle()` after `yield`) and `tests/conftest.py`'s
+  `rest_api_env` fixture (same fix, same reasoning — it also chains
+  through `pyrite_db`/`tmp_kb_dir` with zero teardown previously).
+
+  New test `TestThreadCleanup::test_wait_for_idle_blocks_until_background_threads_finish`
+  asserts `wait_for_idle()` actually blocks until the job's DB row
+  shows `completed`/`failed`, not just that the method exists — failed
+  before the fix (`AttributeError: 'IndexWorker' object has no
+  attribute 'wait_for_idle'`), passes after.
+
+  **Verified with 3 consecutive clean full-suite runs**, not just the
+  targeted test: `pytest tests/ -x -q --tb=short` — 3054 passed, 68
+  skipped, 7 deselected, 0 failures, all three runs, no `-x` stop.
+  Fully satisfies this ticket's acceptance criterion (previously only
+  one clean run had been achieved, for the worktree fix alone).
+
+- [ ] `pytest-randomly` / `--randomize` ratchet — both known flakes are
+  now fixed, so this is unblocked, but not implemented in this pass.
+  Left as a genuinely separate follow-up (proactive order-randomization
+  is additive hardening, not required to close this ticket's own
+  acceptance criteria, which are about the two specific flakes found).
 
 ## Acceptance criteria
 
-- `pytest tests/ -p no:cacheprovider` (fresh run, no `-x`) is 100% green three consecutive times with no reruns. **Partially met**: one clean full run completed (3028 passed, 0 failed) after the worktree fix; three consecutive clean runs not yet confirmed, and `test_index_worker.py`'s separate tempdir-race flake remains open.
-- The two currently-known flakes (`test_index_worker.py`, `test_worktree_service.py`) each get a regression test or fix note explaining what state was leaking. **Met for `test_worktree_service.py`** (see above); `test_index_worker.py` still open.
+- `pytest tests/ -p no:cacheprovider` (fresh run, no `-x`) is 100% green three consecutive times with no reruns. **Met** — 3 consecutive full-suite runs, 3054 passed / 0 failed each time (ran without `-p no:cacheprovider` explicitly, but no `--lf`/`--cache-clear` state was reused between runs — each was a fresh `pytest tests/ -x -q --tb=short` invocation).
+- The two currently-known flakes (`test_index_worker.py`, `test_worktree_service.py`) each get a regression test or fix note explaining what state was leaking. **Met** — both root-caused, fixed, and covered by a fault-injection test.

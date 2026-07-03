@@ -187,3 +187,7 @@ def rest_api_env(indexed_test_env):
         "events_kb": indexed_test_env["events_kb"],
         "research_kb": indexed_test_env["research_kb"],
     }
+    # Join any background sync/rebuild thread before this fixture's own
+    # teardown (and pyrite_db/tmp_kb_dir's) runs -- same full-suite-only
+    # flaky-test root cause as the `worker` fixture in test_index_worker.py.
+    _index_worker.wait_for_idle(timeout=10)
