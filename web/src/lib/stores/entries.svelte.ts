@@ -65,11 +65,7 @@ class EntryStore {
 		}
 	}
 
-	async save(
-		id: string,
-		kb: string,
-		updates: { title?: string; body?: string; tags?: string[]; metadata?: Record<string, unknown> }
-	) {
+	async save(id: string, kb: string, updates: { title?: string; body?: string; tags?: string[] }) {
 		this.saving = true;
 		this.error = null;
 		try {

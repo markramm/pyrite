@@ -44,7 +44,7 @@ repos:
         files: '\.py$'
       - id: pyrite-schema-validate
         name: Validate KB entries
-        entry: bash -c 'source .venv/bin/activate && python -m pyrite schema validate --changed'
+        entry: bash -c 'source .venv/bin/activate && pyrite schema validate --changed'
         language: system
         pass_filenames: false
         stages: [pre-commit]

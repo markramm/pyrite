@@ -399,8 +399,15 @@ def _collect_md_files(paths: list[Path]) -> list[Path]:
     return result
 
 
-def _get_git_changed_md_files() -> list[Path]:
-    """Get .md files changed in the current git working tree."""
+def _get_git_changed_md_files(kbs: list | None = None) -> list[Path]:
+    """Get .md files changed in the current git working tree.
+
+    When ``kbs`` (a list of ``KBConfig``, e.g. from ``config.all_kbs()``) is
+    given, results are filtered to paths under one of those KBs -- a
+    changed .md file outside every configured KB (a doc, a skill file) is
+    not a KB entry and must not be validated as one. An empty/None ``kbs``
+    preserves the old unfiltered behavior.
+    """
     try:
         output = subprocess.run(
             ["git", "diff", "--name-only", "--cached", "--diff-filter=ACMR"],
@@ -427,7 +434,18 @@ def _get_git_changed_md_files() -> list[Path]:
         untracked = output.stdout.strip().splitlines()
 
         all_files = set(staged + unstaged + untracked)
-        return [Path(f) for f in all_files if f.endswith(".md") and Path(f).exists()]
+        md_files = [Path(f) for f in all_files if f.endswith(".md") and Path(f).exists()]
+
+        if not kbs:
+            return md_files
+
+        kb_roots = [kb.path.resolve() for kb in kbs]
+
+        def _under_a_kb(p: Path) -> bool:
+            resolved = p.resolve()
+            return any(resolved == root or root in resolved.parents for root in kb_roots)
+
+        return [f for f in md_files if _under_a_kb(f)]
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
 
@@ -462,7 +480,7 @@ def schema_validate(
         md_files = _collect_md_files([kb_config.path])
         schema = kb_config.kb_schema
     elif changed:
-        md_files = _get_git_changed_md_files()
+        md_files = _get_git_changed_md_files(config.all_kbs())
         # Try to find a schema from the first file's KB
         if md_files:
             for kb in config.knowledge_bases:

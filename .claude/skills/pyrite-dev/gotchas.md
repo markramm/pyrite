@@ -328,3 +328,24 @@ local (lazy) imports starts raising `UnboundLocalError` on a name you just impor
 the whole function body (not just nearby) for another `import` of that name.
 
 **Status:** ticketed — backlog item `new-adr-writes-to-cwd-without-kb-flag`.
+
+## `pre-commit run --all-files` Is Repo-Wide, Not Scoped to a Backlog Item's Files
+
+Hit while fixing `ci-make-green-and-load-bearing`: CI's lint step only checks `ruff check
+pyrite/ tests/` and `ruff format --check pyrite/ tests/` — so I fixed formatting drift there,
+confirmed CI's exact lint step passes, and committed. Then, separately, ran `pre-commit run
+--all-files` to verify the newly-installed hooks work. That command has **no directory scope**
+— `.pre-commit-config.yaml`'s hooks apply to the whole repo by default (`extensions/`,
+`scripts/`, `benchmarks/`, `deploy/`, `kb/*.md`, `ui_streamlit.py`, ...), not just what CI
+lints or what the current ticket touches. It auto-fixed 76 ruff errors (some behavioral —
+unused-variable removal, not just formatting) and reformatted 66 more files across the repo,
+producing an 85-file, 3000+-line diff far outside the ticket's scope, mixed with real (if
+minor) behavioral changes I hadn't reviewed.
+
+**Fix:** `git checkout -- <files>` to revert everything the stray run touched, keep only the
+intentional change (`pyproject.toml`'s new dependency).
+
+**How to avoid:** when verifying a newly-installed pre-commit hook works, either scope it to
+specific files (`pre-commit run --files <paths>`) or just trust `pre-commit install` succeeding
+— don't run `--all-files` unless the task is explicitly "clean up the whole repo's pre-commit
+compliance." A repo-wide hook run is a different, larger task than a CI-lint-scoped fix.

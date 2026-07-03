@@ -16,7 +16,6 @@ class UIStore {
 	versionHistoryPanelOpen = $state(false);
 	chatPanelOpen = $state(false);
 	localGraphPanelOpen = $state(false);
-	commentsPanelOpen = $state(false);
 	editorMode = $state<'source' | 'wysiwyg'>('source');
 	toasts = $state<Toast[]>([]);
 
@@ -67,10 +66,6 @@ class UIStore {
 
 	toggleLocalGraphPanel() {
 		this.localGraphPanelOpen = !this.localGraphPanelOpen;
-	}
-
-	toggleCommentsPanel() {
-		this.commentsPanelOpen = !this.commentsPanelOpen;
 	}
 
 	toggleEditorMode() {
