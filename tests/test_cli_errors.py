@@ -81,3 +81,34 @@ def test_search_unregistered_kb_returns_kb_not_found():
     parsed = json.loads(result.stdout)
     assert parsed["error_code"] == "KB_NOT_FOUND"
     assert "definitely-not-a-real-kb" in parsed["error"]
+
+
+def test_search_kb_not_found_suggestion_includes_db_only_kb(tmp_path, monkeypatch):
+    """The 'known KBs' suggestion on KB_NOT_FOUND must include KBs
+    registered only via `pyrite kb add` (DB-only, not in config.yaml's
+    knowledge_bases) -- collapse-kb-registry-to-one-source-of-truth's
+    all_kbs() sweep. Previously iterated knowledge_bases directly, so a
+    DB-only KB was invisible in the typo-suggestion even though it's a
+    real, searchable KB."""
+    from unittest.mock import patch
+
+    from typer.testing import CliRunner
+
+    from pyrite.cli import app
+    from pyrite.config import KBConfig, PyriteConfig, Settings
+
+    kb_path = tmp_path / "db-only-kb"
+    kb_path.mkdir()
+    db_only_kb = KBConfig(name="db-only-kb", path=kb_path, kb_type="generic")
+    config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=tmp_path / "index.db"))
+    config._db_kb_cache["db-only-kb"] = db_only_kb
+
+    runner = CliRunner()
+    with patch("pyrite.cli.search_commands.load_config", return_value=config):
+        result = runner.invoke(app, ["search", "anything", "-k", "typo-kb", "--format", "json"])
+
+    assert result.exit_code == 1
+    parsed = json.loads(result.stdout)
+    assert "db-only-kb" in parsed["suggestion"], (
+        f"expected DB-only KB in the known-KBs suggestion; got {parsed['suggestion']!r}"
+    )

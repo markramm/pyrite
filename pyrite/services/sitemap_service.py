@@ -39,8 +39,15 @@ class SitemapService:
         self.db = db
 
     def _public_kb_names(self) -> list[str]:
-        """Return the names of KBs considered public for sitemap purposes."""
-        return [kb.name for kb in self.config.knowledge_bases if kb.default_role == "read"]
+        """Return the names of KBs considered public for sitemap purposes.
+
+        Uses all_kbs() (config.yaml + DB-registered `kb add` KBs), not
+        knowledge_bases directly -- a KB added via `pyrite kb add` with
+        default_role='read' must be as publicly discoverable as an
+        equivalent config.yaml KB (collapse-kb-registry-to-one-source-of-
+        truth: the all_kbs() sweep).
+        """
+        return [kb.name for kb in self.config.all_kbs() if kb.default_role == "read"]
 
     def entries(self, site_url: str) -> list[SitemapEntry]:
         """Collect all public-KB entries as SitemapEntry objects.

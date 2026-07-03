@@ -434,6 +434,7 @@ class PyriteConfig:
                 path=Path(path),
                 kb_type=kb_data.get("kb_type", "generic"),
                 description=kb_data.get("description", ""),
+                default_role=kb_data.get("default_role"),
             )
             added += 1
         return added

@@ -123,7 +123,7 @@ def register_search_command(app: typer.Typer):
         if kb_name and config.get_kb(kb_name) is None:
             from ..utils.errors import cli_error
 
-            known = ", ".join(sorted(kb.name for kb in config.knowledge_bases)) or "none"
+            known = ", ".join(sorted(kb.name for kb in config.all_kbs())) or "none"
             cli_error(
                 f"KB not found: {kb_name}",
                 output_format,

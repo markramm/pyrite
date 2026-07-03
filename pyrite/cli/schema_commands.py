@@ -483,7 +483,7 @@ def schema_validate(
         md_files = _get_git_changed_md_files(config.all_kbs())
         # Try to find a schema from the first file's KB
         if md_files:
-            for kb in config.knowledge_bases:
+            for kb in config.all_kbs():
                 try:
                     for f in md_files:
                         f.resolve().relative_to(kb.path.resolve())
@@ -494,7 +494,7 @@ def schema_validate(
     elif files:
         md_files = _collect_md_files(files)
         # Try to detect KB for schema
-        for kb in config.knowledge_bases:
+        for kb in config.all_kbs():
             try:
                 for f in md_files:
                     f.resolve().relative_to(kb.path.resolve())

@@ -473,6 +473,23 @@ class TestKBService:
             assert "indexed" in kb
             assert "type" in kb
 
+    def test_list_kbs_includes_db_only_kb_when_no_registry(self, test_db, test_config, temp_dir):
+        """A KB registered only via `pyrite kb add` (DB-only, not in
+        config.yaml's knowledge_bases) must appear in list_kbs() even when
+        KBService has no registry -- collapse-kb-registry-to-one-source-
+        of-truth's all_kbs() sweep. list_kbs()'s non-registry fallback
+        path previously iterated config.knowledge_bases directly."""
+        kb_path = temp_dir / "db-only-kb"
+        kb_path.mkdir()
+        test_db.register_kb("db-only-kb", "generic", str(kb_path), "", source="user")
+        test_db.merge_registered_kbs(test_config)
+
+        service = KBService(test_config, test_db)  # no registry passed
+        kbs = service.list_kbs()
+
+        names = {kb["name"] for kb in kbs}
+        assert "db-only-kb" in names, f"expected DB-only KB in list_kbs(); got {names}"
+
     def test_get_kb_found(self, test_db, test_config):
         """get_kb returns config for existing KB."""
         service = KBService(test_config, test_db)
@@ -614,6 +631,30 @@ class TestKBService:
 
         assert entry is not None
         assert entry["title"] == "Search All Test"
+
+    def test_get_entry_searches_db_only_kb(self, test_db, test_config, temp_dir):
+        """get_entry() without kb_name must also search KBs registered only
+        via `pyrite kb add` (DB-only, not in config.yaml's
+        knowledge_bases) -- collapse-kb-registry-to-one-source-of-truth's
+        all_kbs() sweep. The "search all KBs" fallback previously iterated
+        config.knowledge_bases directly, silently skipping DB-only KBs."""
+        kb_path = temp_dir / "db-only-kb"
+        kb_path.mkdir()
+        test_db.register_kb("db-only-kb", "generic", str(kb_path), "", source="user")
+        test_db.merge_registered_kbs(test_config)
+
+        service = KBService(test_config, test_db)
+        service.create_entry(
+            kb_name="db-only-kb",
+            entry_id="db-only-search-test",
+            title="DB-only Search Test",
+            entry_type="note",
+        )
+
+        entry = service.get_entry("db-only-search-test")
+
+        assert entry is not None, "expected the entry to be found via the all-KBs fallback"
+        assert entry["title"] == "DB-only Search Test"
 
     def test_delete_entry(self, test_db, test_config):
         """delete_entry removes entry from file and index."""

@@ -134,6 +134,49 @@ class TestSitemapXml:
         locs = [u.findtext(f"{SITEMAP_NS}loc") for u in root.findall(f"{SITEMAP_NS}url")]
         assert locs == []
 
+    def test_includes_db_only_public_kb(self, tmp_path):
+        """A KB registered only via `pyrite kb add` (DB-only, not in
+        config.yaml's knowledge_bases) with default_role='read' must be as
+        publicly discoverable as an equivalent config.yaml KB --
+        collapse-kb-registry-to-one-source-of-truth's all_kbs() sweep.
+        _public_kb_names() previously iterated config.knowledge_bases
+        directly, silently excluding DB-only KBs regardless of their
+        default_role."""
+        db_path = tmp_path / "index.db"
+        kb_path = tmp_path / "db-only-kb"
+        kb_path.mkdir()
+
+        # NOT passed to PyriteConfig(knowledge_bases=...) -- DB-only.
+        config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=db_path))
+
+        db = PyriteDB(db_path)
+        db.register_kb(
+            "db-only-kb", "generic", str(kb_path), "", source="user", default_role="read"
+        )
+        db.upsert_entry(
+            {
+                "id": "db-only-entry",
+                "kb_name": "db-only-kb",
+                "title": "DB-only Entry",
+                "entry_type": "note",
+                "body": "",
+                "summary": "",
+                "tags": [],
+                "sources": [],
+                "links": [],
+                "metadata": {},
+            }
+        )
+        db.close()
+
+        client = TestClient(create_app(config=config))
+        r = client.get("/sitemap.xml")
+        root = ET.fromstring(r.text)
+        locs = [u.findtext(f"{SITEMAP_NS}loc") for u in root.findall(f"{SITEMAP_NS}url")]
+        assert any("/entries/db-only-entry" in loc for loc in locs if loc), (
+            f"expected DB-only public KB's entry in sitemap; got {locs}"
+        )
+
     def test_uses_branding_site_url_when_set(self, tmp_path):
         branding_dir = tmp_path / "branding"
         branding_dir.mkdir()

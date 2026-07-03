@@ -332,6 +332,29 @@ class TestValidationScope:
         assert "test-events" in kb_names
         assert "test-research" in kb_names
 
+    def test_validate_all_includes_db_only_kb(self, tmp_path):
+        """A KB registered only via `pyrite kb add` (DB-only, not in
+        config.yaml's knowledge_bases) must be validated too --
+        collapse-kb-registry-to-one-source-of-truth's all_kbs() sweep.
+        validate_all() previously iterated config.knowledge_bases
+        directly, silently excluding DB-only KBs from QA validation."""
+        db_path = tmp_path / "index.db"
+        kb_path = tmp_path / "db-only-kb"
+        kb_path.mkdir()
+
+        # NOT passed to PyriteConfig(knowledge_bases=...) -- DB-only.
+        config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=db_path))
+        db = PyriteDB(db_path)
+        db.register_kb("db-only-kb", "generic", str(kb_path), "A DB-only KB", source="user")
+        db.merge_registered_kbs(config)
+
+        qa = QAService(config, db)
+        result = qa.validate_all()
+        db.close()
+
+        kb_names = [kb["kb_name"] for kb in result["kbs"]]
+        assert "db-only-kb" in kb_names, f"expected DB-only KB in validate_all; got {kb_names}"
+
 
 # =========================================================================
 # Status tests

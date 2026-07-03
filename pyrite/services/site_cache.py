@@ -64,7 +64,7 @@ class SiteCacheService:
 
         kbs = [
             {"name": kb.name, "description": getattr(kb, "description", ""), "entry_count": 0}
-            for kb in self.config.knowledge_bases
+            for kb in self.config.all_kbs()
         ]
         stats = {"kbs": 0, "entries": 0, "errors": 0}
 

@@ -123,7 +123,7 @@ class KBService:
         if self._registry:
             return self._registry.list_kbs()
         kbs = []
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             stats = self.db.get_kb_stats(kb.name)
             kbs.append(
                 {
@@ -170,7 +170,7 @@ class KBService:
             return result
 
         # Search all KBs
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             result = self.db.get_entry(entry_id, kb.name)
             if result:
                 result["outlinks"] = self.db.get_outlinks(entry_id, kb.name)

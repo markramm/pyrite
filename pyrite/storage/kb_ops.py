@@ -72,7 +72,10 @@ class KBOpsMixin:
         """
         try:
             rows = self.session.execute(
-                text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
+                text(
+                    "SELECT name, path, kb_type, description, default_role "
+                    "FROM kb WHERE source = 'user'"
+                )
             ).fetchall()
         except SQLAlchemyError:
             logger.warning(
@@ -85,7 +88,14 @@ class KBOpsMixin:
         if not rows:
             return 0
         db_kbs = [
-            {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""} for r in rows
+            {
+                "name": r[0],
+                "path": r[1],
+                "kb_type": r[2],
+                "description": r[3] or "",
+                "default_role": r[4],
+            }
+            for r in rows
         ]
         return config.register_db_kbs(db_kbs)
 

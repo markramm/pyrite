@@ -154,7 +154,7 @@ class QAService:
     def validate_all(self) -> dict[str, Any]:
         """Validate all KBs. Returns {kbs: [{kb_name, total, checked, issues}]}."""
         kbs = []
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             result = self.validate_kb(kb.name)
             kbs.append(result)
         return {"kbs": kbs}

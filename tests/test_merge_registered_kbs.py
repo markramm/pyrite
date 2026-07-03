@@ -57,6 +57,25 @@ class TestMergeRegisteredKBs:
         assert config.get_kb("some-kb") is not None
         assert "some-kb" in [kb.name for kb in config.all_kbs()]
 
+    def test_merges_default_role_from_db(self, db_with_user_kb):
+        """default_role is a real DB column (per-KB public/private access
+        control, e.g. sitemap_service.py's "is this KB public" signal) but
+        the raw SQL SELECT here never fetched it, so a DB-registered KB's
+        default_role was silently dropped on every merge -- a KB added via
+        `pyrite kb add` with default_role='read' could never appear in the
+        public sitemap, unlike an equivalent config.yaml KB."""
+        db = db_with_user_kb["db"]
+        config = db_with_user_kb["config"]
+        db.update_kb_default_role("some-kb", "read")
+
+        db.merge_registered_kbs(config)
+
+        kb = config.get_kb("some-kb")
+        assert kb is not None
+        assert kb.default_role == "read", (
+            f"expected default_role='read' to survive the merge, got {kb.default_role!r}"
+        )
+
     def test_no_db_registered_kbs_is_a_noop(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir = Path(tmpdir)

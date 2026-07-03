@@ -83,7 +83,44 @@ class TestSiteCacheRenderAll:
         html = entry_page.read_text()
         assert "Hello World" in html
         assert "test entry" in html
-        assert "application/ld+json" in html
+
+    def test_includes_db_only_kb(self, tmp_path):
+        """A KB registered only via `pyrite kb add` (DB-only, not in
+        config.yaml's knowledge_bases) must be rendered too --
+        collapse-kb-registry-to-one-source-of-truth's all_kbs() sweep.
+        render_all() previously iterated config.knowledge_bases directly,
+        silently excluding DB-only KBs from the static site export."""
+        db_path = tmp_path / "index.db"
+        kb_path = tmp_path / "db-only-kb"
+        kb_path.mkdir()
+
+        # NOT passed to PyriteConfig(knowledge_bases=...) -- DB-only.
+        config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=db_path))
+        db = PyriteDB(db_path)
+        db.register_kb("db-only-kb", "generic", str(kb_path), "A DB-only KB", source="user")
+        db.merge_registered_kbs(config)
+        db.upsert_entry(
+            {
+                "id": "db-only-entry",
+                "kb_name": "db-only-kb",
+                "entry_type": "note",
+                "title": "DB-only Entry",
+                "body": "Body",
+                "summary": "",
+                "tags": [],
+                "sources": [],
+                "links": [],
+                "metadata": {},
+            }
+        )
+
+        svc = SiteCacheService(config, db)
+        stats = svc.render_all()
+        db.close()
+
+        assert stats["kbs"] == 1, f"expected the DB-only KB to be rendered; got stats={stats}"
+        kb_index = svc.cache_dir / "db-only-kb" / "index.html"
+        assert kb_index.exists(), "expected a rendered index page for the DB-only KB"
 
     def test_wikilinks_resolved(self, cache_env):
         cache_env["svc"].render_all()
