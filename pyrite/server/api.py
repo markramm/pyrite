@@ -42,10 +42,12 @@ from ..services.graph_service import GraphService
 from ..services.index_worker import IndexWorker
 from ..services.kb_registry_service import KBRegistryService
 from ..services.kb_service import KBService
+from ..services.link_discovery_service import LinkDiscoveryService
 from ..services.llm_service import LLMService
 from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
 from ..services.starred_service import StarredService
+from ..services.task_service import TaskService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
@@ -173,6 +175,14 @@ def get_kb_service(
 ) -> KBService:
     """Get or create KB service via DI."""
     return KBService(config, db)
+
+
+def get_task_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> TaskService:
+    """Get or create TaskService via DI."""
+    return TaskService(config, db)
 
 
 def get_worktree_resolver(
@@ -309,6 +319,14 @@ def get_search_service(
 ) -> SearchService:
     """Get SearchService instance via DI."""
     return SearchService(db, settings=config.settings)
+
+
+def get_link_discovery_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> LinkDiscoveryService:
+    """Get LinkDiscoveryService instance via DI."""
+    return LinkDiscoveryService(config, db)
 
 
 def get_starred_service(
