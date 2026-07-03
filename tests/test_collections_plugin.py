@@ -120,7 +120,12 @@ class TestCollectionTypesEndpoint:
         from pyrite.server.api import create_app
 
         app = create_app()
-        routes = [r.path for r in app.routes]
+        # Walking app.routes directly is not reliable across FastAPI
+        # versions -- 0.139 introduced internal _IncludedRouter wrapper
+        # objects that defer route materialization and aren't reachable
+        # by a straightforward .routes walk. app.openapi()["paths"] is
+        # FastAPI's public, stable view of every route actually served.
+        routes = app.openapi()["paths"].keys()
         assert "/api/collections/types" in routes
 
 

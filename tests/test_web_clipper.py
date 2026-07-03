@@ -56,7 +56,12 @@ class TestClipperEndpoint:
         from pyrite.server.api import create_app
 
         app = create_app()
-        route_paths = [r.path for r in app.routes]
+        # Walking app.routes directly is not reliable across FastAPI
+        # versions -- 0.139 introduced internal _IncludedRouter wrapper
+        # objects that defer route materialization and aren't reachable
+        # by a straightforward .routes walk. app.openapi()["paths"] is
+        # FastAPI's public, stable view of every route actually served.
+        route_paths = app.openapi()["paths"].keys()
         assert "/api/clip" in route_paths
 
 

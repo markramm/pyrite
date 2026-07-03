@@ -3,7 +3,12 @@ import { test, expect } from '@playwright/test';
 test.describe('Dashboard', () => {
 	test('loads and shows Pyrite branding', async ({ page }) => {
 		await page.goto('/');
-		await expect(page.getByRole('link', { name: /Pyrite/ })).toBeVisible();
+		// Scoped by href to the sidebar logo link specifically -- a plain
+		// name-matches-/Pyrite/ locator also matches the footer's "Pyrite"
+		// link to pyrite.wiki (a distinct, later-added element), causing a
+		// strict-mode violation. The logo link's href is "/"; the footer
+		// link's href is the external pyrite.wiki URL.
+		await expect(page.locator('a[href="/"]').filter({ hasText: 'Pyrite' })).toBeVisible();
 	});
 
 	test('shows dashboard heading', async ({ page }) => {
