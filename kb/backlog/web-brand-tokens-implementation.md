@@ -54,6 +54,18 @@ update that record. Keep JetBrains Mono as the code face (it's
 better for code than Plex Mono); revisit only if family purism
 starts to matter. DM Sans and the Inter declaration both go.
 
+**Implementation references (2026-07-03):** the full executable spec
+is [[web-design-system-spec]] (kb/designs/) — includes the decided
+entry-type categorical palette (dark + light variants) for the
+constants.ts single-source item, and four canonized patterns (type
+badge, epistemic callout, verification status line, wikilink roles).
+The visual reference of record is the approved Claude Design file
+`Pyrite Design System.dc.html` (project
+dcf16160-dc3f-419f-9861-d55f3161d4c4 on claude.ai/design); the
+spec's §4b lists the amendments where the canvas demo must NOT be
+copied (flat sidebar, load-triggered glint, CDN fonts, off-spec
+radii). Implement from the spec; use the canvas for visual QA.
+
 ## Fix
 
 1. Load IBM Plex Serif 600 + IBM Plex Sans 400/600 (latin subsets,

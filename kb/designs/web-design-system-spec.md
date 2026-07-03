@@ -137,15 +137,31 @@ Rules:
 (Warn is deliberately shifted toward amber-brown so it never reads
 as the brand gold.)
 
-### Entry-type colors
+### Entry-type colors (categorical axis — decided)
 
 One source of truth: the hex map in `constants.ts`; the Tailwind
 class map is **generated** from it (today they're parallel and
-already drifted — `concept`/`project` exist in one only). Type
-colors must be distinguishable in both themes; the graph currently
-renders 4 near-identical greys — re-derive the type palette with a
-categorical-palette method (distinct hues, similar lightness) and
-verify on the graph legend specifically.
+already drifted — `concept`/`project` exist in one only).
+
+The core-type palette (from the approved Claude Design reference,
+2026-07-03 — distinct hues at matched lightness, darkened variants
+for light-mode contrast):
+
+| Type | Dark | Light |
+|---|---|---|
+| person | `#6E9BD6` | `#3F6FB0` |
+| event | `#6DBE8E` | `#3E8A5E` |
+| note | `#B58BD6` | `#7E52A8` |
+| concept | `#5FC0C0` | `#2E8E8E` |
+| project | `#D69A5F` | `#A86A2E` |
+| source | `#D67F9B` | `#A84E6C` |
+
+Extension/plugin types extend this palette with the same method
+(distinct hue, matched lightness, darkened light variant). Blue is
+legal HERE because this is the data axis, not the interactive axis —
+the no-blue rule in §3 applies to actions and links only. Verify the
+palette on the graph legend specifically (the current greys decode
+nothing there).
 
 ## 4. Component treatment rules
 
@@ -170,6 +186,41 @@ verify on the graph legend specifically.
   with light and dark verified; the known dark-hardcoded list is in
   [[web-light-mode-chrome-repair]]. Respect
   `prefers-reduced-motion` on all transitions.
+
+## 4b. Patterns canonized from the Claude Design reference (2026-07-03)
+
+The visual reference of record is the Claude Design project **"Web
+design system spec"**, file `Pyrite Design System.dc.html`
+(claude.ai/design project `dcf16160-dc3f-419f-9861-d55f3161d4c4`) —
+reviewed against this spec and approved. Four patterns from it are
+now spec, with roles:
+
+1. **Type badge** — pill with 16% tint of the type color as
+   background, a solid type-color dot, and type-color text (e.g.
+   `background: color-mix(in srgb, var(--t-source) 16%, transparent)`).
+   This is also the display answer for raw enum tokens: badges show
+   humanized names ("source"), never `backlog_item`-style tokens.
+2. **Epistemic callout** — a block with a 2px `--warn` left border
+   and muted text for unconfirmed/pending-corroboration content
+   ("Unconfirmed: … corroboration pending"). Evidentiary status as
+   visual grammar; use for anything below the piece's verification
+   bar. A `--ok` variant may mark corroborated-update callouts.
+3. **Verification status line** — entry byline row carries a small
+   semantic dot + label ("● verified source") on the semantic axis,
+   never gold.
+4. **Wikilink roles** — in prose: gold text with a 40%-alpha gold
+   bottom-border underline. In LISTS (backlinks panel, "Links to"
+   rows): the gold-bordered chip form. Never both in the same
+   context; never the chip form inside prose.
+
+Amendments to the reference (do NOT copy these from the canvas):
+the demo's flat sidebar predates [[web-sidebar-ia-regroup]] — take
+sidebar STRUCTURE from that ticket, treatment (gold inset tick +
+`--surface-2` active fill) from the reference; the monogram glint
+binds to first-load-per-session or hover in product, not every
+navigation; fonts are self-hosted in product, not Google CDN; radius
+stays on the 6/10 rule (the canvas's 8px swatches and 14px outer
+frames are demo chrome).
 
 ## 5. The flair budget (deliberate, dial-able, additive)
 
@@ -206,7 +257,7 @@ themes (spot-check `--ink-muted` on `--surface-2` in light);
 | Token block (this spec's §3 palette, both themes) | `web/src/app.css` `@theme` |
 | `.page-title` applied on every route | all `routes/*/+page.svelte` |
 | blue-600 → `--brand-primary`/`--brand-fill` sweep | `entries/[id]/+page.svelte:379`, `overview:61`, `orient:77`, `CommentsPanel:69`, `EmptyState:25`, `app.css:144` (wikilinks), tag pills, + grep for `blue-600\|blue-500` |
-| Type-color single source (generate class map from hex map) | `web/src/lib/constants.ts:4-64` |
+| Type-color single source (generate class map from hex map) — adopt the §3 categorical palette (dark + light variants) as the new hex map | `web/src/lib/constants.ts:4-64` |
 | Graph theme-aware + brand hover | `GraphView.svelte:119,171-180,271-275` |
 | EmptyState theme fix + adoption pass | `common/EmptyState.svelte:19` + rolled-own empty states in overview/landing/comments |
 | Milestone record correction (DM Serif Display → superseded) | `kb/roadmap.md` 0.8 note |
