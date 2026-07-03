@@ -72,15 +72,32 @@ rule): no bare pass / fail-open without a log line and a WHY comment.
   `PyriteDB.merge_registered_kbs(config)` (storage/kb_ops.py), narrowed
   to `SQLAlchemyError`, logs at warning with `exc_info`. Fault-injection
   test in tests/test_merge_registered_kbs.py. Net -60 LOC.
-- [ ] Site #2 — index.py invalid-status drift detector swallows and
-  self-disables
+- [x] **Site #2 — index.py invalid-status drift detector** (30af0dd,
+  2026-07-03) — two swallowed-exception paths, both fixed: (a) the
+  `get_registry().get_validators_for_kb()` lookup wrapped in bare
+  `except Exception: kb_validators = []`, disabling the check for the
+  whole KB with no log; (b) each per-entry validator call (both the
+  3-arg and 2-arg-fallback forms) wrapped in bare `except Exception:
+  continue`. Both now log at warning with `exc_info` before degrading.
+  The `TypeError` signature-compatibility fallback between validator
+  call forms is unchanged -- legitimate boundary, not a swallow. Two
+  fault-injection tests in test_storage.py::TestInvalidStatusInHealth.
 - [ ] Site #3 — kb_service.py push_error masks auth/network failures
   as "no remote configured"
 - [ ] Site #4 — index.py frontmatter `references` dropped silently
 - [ ] Site #5 — auth_service.py decryption failure silently falls
   back to plaintext (security-relevant, at minimum warning-log)
-- [ ] Site #6 — plugins/registry.py KB-type check fail-open (`return
-  True` on error — fail-open authorization)
+- [~] Site #6 — plugins/registry.py `_plugin_matches_kb_type`
+  (:508-521) — **investigated, not yet fixed.** This one is *not*
+  silent: it already does `logger.warning("Failed to check KB type
+  compatibility for plugin", exc_info=True)` before `return True`.
+  The remaining issue is narrower than the ticket's original framing:
+  the fail-*open* authorization behavior itself (a broken
+  compatibility check makes every plugin look compatible with every
+  KB type) is the real design question, not a missing log line. Needs
+  a decision on whether fail-open or fail-closed is correct here
+  before touching it -- worth a standalone note, not a
+  fault-injection-test fix like the others.
 - [ ] Low-stakes site #7 (repository.py, document_manager.py, alembic
   4x pass)
 - [ ] CLI-consistency-review items: search_commands.py silent
@@ -93,4 +110,5 @@ rule): no bare pass / fail-open without a log line and a WHY comment.
 - Sites 1-6 fixed with a test each where feasible (fault-inject the
   swallowed exception, assert the failure is now visible).
 - A lint or documented checklist rule prevents new fail-open sites.
+
 
