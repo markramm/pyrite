@@ -241,8 +241,9 @@ peers' primary surface, so the first four are epic subtasks:
   light-mode sidebar chrome.
 - [[web-brand-tokens-implementation]] (medium, M) — declared brand
   fonts not loaded; blue-600 does the accent work; white-labeling
-  is cosmetic. Needs an operator decision: DM Serif Display (per
-  milestone) or ratify DM Sans.
+  is cosmetic. DECIDED 2026-07-03: IBM Plex Serif 600 display +
+  IBM Plex Sans body (supersedes 0.8's DM Serif Display);
+  JetBrains Mono stays; flair budget lives in the accent layer.
 - [[web-test-confusion-surfaces]] (medium, M) — zero tests on the
   confusion surfaces; promote e2e into CI.
 - [[web-user-vocabulary-and-trust-copy-pass]] (medium, M) — raw enum

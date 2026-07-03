@@ -37,11 +37,30 @@ monogram") is not what the code ships:
 The design system is one 9-line `@theme` block — the debt is
 shallow, so this is a mechanical consolidation, not a redesign.
 
+## Decision (2026-07-03, Mark)
+
+**IBM Plex Serif 600 (display) + IBM Plex Sans 400/600 (body).**
+Chosen from a four-candidate comparison rendered on the real chrome
+(DM Serif Display+DM Sans / DM Sans solo / Fraunces+DM Sans / IBM
+Plex pair). Rationale: the Plex family's cohesion reads
+records-and-systems, which fits pyrite's institutional target users;
+personality lives in the accent layer (gold, Py monogram,
+empty-state copy, micro-interactions), which can be dialed up later
+without re-fonting — "add a little flair elsewhere to keep the
+default from being too institutional."
+
+Notes: this supersedes the 0.8 milestone's "DM Serif Display" —
+update that record. Keep JetBrains Mono as the code face (it's
+better for code than Plex Mono); revisit only if family purism
+starts to matter. DM Sans and the Inter declaration both go.
+
 ## Fix
 
-1. DECIDE the brand (operator call): DM Serif Display per the
-   milestone, or ratify DM Sans and update the milestone record.
-   Load whatever is decided; delete or load Inter.
+1. Load IBM Plex Serif 600 + IBM Plex Sans 400/600 (latin subsets,
+   ~53 KB total woff2); remove DM Sans and the phantom Inter
+   declaration from `app.css:8-10` and `app.html:10`; update the
+   0.8 milestone note in the roadmap/CHANGELOG to record the
+   supersession.
 2. Route all primary actions and interactive accents through
    `--brand-primary` (making white-labeling real); reserve gold per
    the brand decision.
@@ -57,5 +76,7 @@ shallow, so this is a mechanical consolidation, not a redesign.
 
 - Zero blue-600 primary buttons; changing `--brand-primary` visibly
   rebrands the app.
-- Declared fonts are loaded fonts; page titles share one treatment.
+- Declared fonts are loaded fonts (Plex Serif/Sans + JetBrains
+  Mono, nothing else); page titles share one treatment in Plex
+  Serif 600.
 - One type-color source of truth.
