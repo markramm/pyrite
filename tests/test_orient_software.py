@@ -138,6 +138,42 @@ def test_orient_no_software_for_generic_kb(tmp_path, monkeypatch):
         db.close()
 
 
+def test_orient_includes_operational_contracts(tmp_path):
+    """docs-operational-contracts-travel-with-tool item 1: orient must
+    surface the operational contracts a cold agent needs -- unindexed
+    entries are unsearchable, run `index sync` after direct-file writes,
+    the JSON error contract shape, and the search auto-quote rule --
+    from the tool itself, not from tcp-skills SKILL.md files or the
+    operator's memory. Every field is required so a client can rely on
+    the contract without a KeyError."""
+    kb_dir = tmp_path / "generic-kb"
+    kb_dir.mkdir()
+    db_path = tmp_path / "index.db"
+    kb_config = KBConfig(
+        name="test-generic",
+        path=kb_dir,
+        kb_type="generic",
+        description="Generic KB",
+    )
+    config = PyriteConfig(
+        knowledge_bases=[kb_config],
+        settings=Settings(index_path=db_path),
+    )
+    db = PyriteDB(db_path)
+    svc = KBService(config, db)
+    try:
+        result = svc.orient("test-generic")
+        assert "operational_contracts" in result
+        contracts = result["operational_contracts"]
+        assert "indexing" in contracts
+        assert "error_contract" in contracts
+        assert "error_code" in contracts["error_contract"]
+        assert "retryable" in contracts["error_contract"]
+        assert "search_quoting" in contracts
+    finally:
+        db.close()
+
+
 def test_software_supplement_board_summary(software_kb_setup):
     """Board summary has lane data with counts."""
     svc = software_kb_setup["svc"]

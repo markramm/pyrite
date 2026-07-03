@@ -102,6 +102,15 @@ Instead, launch agents without isolation. They work directly on the current bran
 
 **Read `.claude/skills/pyrite-dev/parallel-agents.md` before launching parallel agents.** It has the full protocol: wave planning, file footprint validation, agent prompt templates, and merge steps.
 
+## Multi-Session Git Hazard
+
+Two or more Claude sessions (a cron job, a manual session, a concurrent worktree agent) can commit to `dev` concurrently — observed 2026-07-02: a backlog regroom session and a 0.25 implementation session interleaving commits on the same branch. There's no lock; the only protection is discipline:
+
+- **Stage explicit paths only.** Never `git add -A` or `git add .` — another session's in-progress edit can be sitting unstaged in the same working tree and get swept into your commit.
+- **Check `git status` before staging.** If you see files you didn't touch, another session is active — don't silently include or discard them.
+- **Re-read files before editing** if there's any chance the tree moved since you last read them (a concurrent session's commit, or the Edit tool reporting "modified since read"). Don't blind-retry an Edit against stale content.
+- **Never assume you're the only writer.** A clean `git status` at the start of your turn doesn't guarantee it stays clean mid-task.
+
 ## Pre-commit Hooks
 
 One-time setup on a fresh clone: `.venv/bin/pip install -e ".[dev]"` (installs `pre-commit`), then `.venv/bin/pre-commit install`. If that fails with "Cowardly refusing to install hooks with core.hooksPath set", run `git config --unset-all core.hooksPath` first — some environments set it to a directory of unused `.sample` files, which blocks installation.

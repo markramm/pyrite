@@ -869,6 +869,46 @@ class KBService:
         """Search entries by tag prefix (includes child tags)."""
         return self.db.search_by_tag_prefix(prefix, kb_name=kb_name, limit=limit)
 
+    @staticmethod
+    def _operational_contracts() -> dict[str, Any]:
+        """Operational contracts a cold agent needs to use pyrite correctly,
+        surfaced from the tool itself rather than left to external skill
+        docs or an operator's memory (docs-operational-contracts-travel-
+        with-tool). Kept in sync with the canonical wording in
+        pyrite/utils/errors.py (error contract) and
+        pyrite/server/tool_schemas.py's kb_search description (auto-quote
+        rule) -- update all three together if either changes."""
+        return {
+            "indexing": (
+                "Entries are only searchable once indexed. Direct file "
+                "writes under a KB's path (not via `pyrite create`/`update`) "
+                "need `pyrite index sync` afterward -- it's incremental "
+                "and cheap, safe to run after every batch of writes."
+            ),
+            "error_contract": {
+                "shape": "{error, error_code, suggestion?, retryable}",
+                "error": "human-readable message",
+                "error_code": "machine-readable code, e.g. QUERY_SYNTAX, KB_NOT_FOUND",
+                "suggestion": "optional fix hint, omitted when not applicable",
+                "retryable": "bool -- whether retrying the same request could succeed",
+            },
+            "search_quoting": (
+                "Special-char tokens (hyphens, dots, colons) are "
+                "auto-quoted ONLY when the query has no AND/OR/NOT operator "
+                "and no existing quote. Once you use an operator or a "
+                "phrase quote, quote special-char tokens yourself (e.g. "
+                '\'"family separation" "cross-link"\') or the query can '
+                "fail with error_code QUERY_SYNTAX (deterministic, not "
+                "retryable)."
+            ),
+            "task_claims": (
+                "Task claims are atomic; a lost race means the task is "
+                "already claimed by someone else. On conflict, do NOT "
+                "override the claim -- re-run the task list and pick a "
+                "different item."
+            ),
+        }
+
     def orient(self, kb_name: str, recent_limit: int = 5) -> dict[str, Any]:
         """One-shot KB orientation summary for agents entering a new KB."""
         kb_config = self.config.get_kb(kb_name)
@@ -927,6 +967,7 @@ class KBService:
             "top_tags": top_tags,
             "recent": recent_slim,
             "schema": schema_info,
+            "operational_contracts": self._operational_contracts(),
         }
 
         # Plugin orient supplements

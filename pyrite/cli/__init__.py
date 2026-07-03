@@ -59,6 +59,8 @@ app = typer.Typer(
     name="pyrite",
     help="Multi-KB research infrastructure for citizen journalists and AI agents",
     no_args_is_help=True,
+    epilog="New to a KB? Run `pyrite orient -k <kb-name>` first -- it summarizes "
+    "types, tags, recent changes, and schema in one call.",
 )
 console = Console()
 
@@ -640,7 +642,32 @@ def auth_github_setup():
 # =============================================================================
 
 
-@app.command("mcp")
+def _mcp_command_help() -> str:
+    """Tool counts derived from tool_schemas.py so this can't drift the way
+    the old fixed enumeration did (claimed 8 read tools; actual count grew
+    to 29 as orient/batch_read/task_* etc. were added over time)."""
+    from ..server.tool_schemas import ADMIN_TOOLS, READ_TOOLS, WRITE_TOOLS
+
+    return (
+        "Start the MCP (Model Context Protocol) server.\n\n"
+        "Runs the server over stdio for integration with Claude Code and "
+        "other MCP-compatible AI agents. Tier controls which tools are "
+        "exposed:\n\n"
+        f"- read: {len(READ_TOOLS)} tools (kb_orient, kb_search, kb_get, "
+        "kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema, task_*, "
+        "and more)\n"
+        f"- write: read tier + {len(WRITE_TOOLS)} more (kb_create, "
+        "kb_update, kb_delete, kb_link, task_claim, and more)\n"
+        f"- admin: write tier + {len(ADMIN_TOOLS)} more (kb_registry_*, "
+        "kb_commit, kb_push, and more)"
+    )
+
+
+@app.command(
+    "mcp",
+    help=_mcp_command_help(),
+    epilog="orient (kb_orient) is the recommended first call in any session.",
+)
 def mcp_server(
     tier: str = typer.Option(
         "write",
@@ -648,16 +675,6 @@ def mcp_server(
         help="Tool tier to expose: read, write, or admin",
     ),
 ):
-    """
-    Start the MCP (Model Context Protocol) server.
-
-    Runs the server over stdio for integration with Claude Code and other
-    MCP-compatible AI agents. Tier controls which tools are exposed:
-
-    - read: kb_list, kb_search, kb_get, kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema
-    - write: read tier + kb_create, kb_update, kb_delete
-    - admin: write tier + KB management and user administration tools
-    """
     from ..server.mcp_server import PyriteMCPServer
 
     if tier not in PyriteMCPServer.VALID_TIERS:

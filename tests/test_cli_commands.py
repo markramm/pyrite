@@ -512,6 +512,32 @@ class TestTyperConfigCommand:
 
 
 @pytest.mark.cli
+class TestTopLevelHelpAdvertisesOrient:
+    """docs-operational-contracts-travel-with-tool item 1: nothing at the
+    top-level `pyrite --help` currently tells a cold agent that `orient`
+    exists -- it's buried as one command among ~20 in the command list,
+    with no hint that it's the recommended starting point (unlike the MCP
+    `kb_orient` tool description, which already says "Use this first")."""
+
+    def test_top_level_help_mentions_orient_as_starting_point(self):
+        """`orient` merely appearing in the auto-generated command list
+        doesn't count -- every one of ~20 commands appears there, and
+        `serve`/`mcp`'s own descriptions happen to contain "Start" too,
+        which would make a loose substring check pass for the wrong
+        reason. The bar is an explicit "run orient first" pointer, the
+        way the MCP kb_orient tool description already says "Use this
+        first". Look for the phrase in the epilog specifically, not
+        anywhere in the full help text."""
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        assert (
+            "run" in result.output.lower()
+            and "orient" in result.output.lower()
+            and ("first" in result.output.lower())
+        )
+
+
+@pytest.mark.cli
 class TestMcpCommandTier:
     """docs-onboarding-fiction-sweep item 2: `pyrite mcp --tier read` is
     documented in README/getting-started/both MCP integration docs (the
@@ -565,3 +591,25 @@ class TestMcpCommandTier:
 
         assert result.exit_code != 0
         assert "bogus" in result.output.lower() or "invalid" in result.output.lower()
+
+    def test_help_tool_inventory_matches_actual_tool_counts(self):
+        """docs-operational-contracts-travel-with-tool item 5: `pyrite mcp
+        --help` claimed the read tier exposes 8 named tools and the write
+        tier adds 3 -- both drastically stale (actual: 29 read tools, 11
+        write-tier additions, 8 admin-tier additions, currently 48 total
+        before any plugin tools). Refresh --help text to state real counts
+        per tier instead of a fixed enumeration that goes stale."""
+        from pyrite.server.tool_schemas import ADMIN_TOOLS, READ_TOOLS, WRITE_TOOLS
+
+        result = runner.invoke(app, ["mcp", "--help"])
+        assert result.exit_code == 0
+
+        assert str(len(READ_TOOLS)) in result.output, (
+            f"expected read tool count ({len(READ_TOOLS)}) in --help output"
+        )
+        assert str(len(WRITE_TOOLS)) in result.output, (
+            f"expected write tool count ({len(WRITE_TOOLS)}) in --help output"
+        )
+        assert str(len(ADMIN_TOOLS)) in result.output, (
+            f"expected admin tool count ({len(ADMIN_TOOLS)}) in --help output"
+        )
