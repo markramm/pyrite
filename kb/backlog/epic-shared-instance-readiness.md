@@ -34,6 +34,12 @@ links:
 - target: docs-operational-contracts-travel-with-tool
   relation: has_subtask
   kb: pyrite
+- target: ci-make-green-and-load-bearing
+  relation: has_subtask
+  kb: pyrite
+- target: fail-open-exception-sweep
+  relation: has_subtask
+  kb: pyrite
 - target: security-audit-trail
   relation: related
   kb: pyrite
@@ -73,6 +79,11 @@ later epic, gated on provenance/source-tier enforcement.
 
 ## Scope (in order)
 
+0. [[ci-make-green-and-load-bearing]] + [[fail-open-exception-sweep]]
+   — prerequisites for trusting anything else on this list: CI has
+   been red 100/100 runs for three months (the real gate is local
+   memory), and ~10 fail-open excepts sit at exactly the trust
+   boundaries a hosted instance exposes. (M + S)
 1. [[verify-after-write-on-the-index-path]] — prerequisite. Peers must
    never hit the silent-index class. (M)
 2. [[collapse-kb-registry-to-one-source-of-truth]] — the sibling

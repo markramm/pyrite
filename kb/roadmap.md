@@ -144,12 +144,27 @@ nothing else.
 
 ### Workstream 1 — Derived-state reliability (prerequisite)
 
+- [[ci-make-green-and-load-bearing]] (high, M) — CI red 100/100 runs
+  for three months; pre-commit configured but never installed;
+  postgres conformance never runs in CI. Highest leverage-to-cost in
+  the 2026-07-03 audit; everything else on this list needs a working
+  gate to stay fixed.
 - [[verify-after-write-on-the-index-path]] (high, M) — read-back
   verification on every indexing write; hard errors, not warnings;
-  hash-based staleness so same-second edits re-index.
+  hash-based staleness so same-second edits re-index. (Content-hash
+  half landed: caa3902.)
 - [[collapse-kb-registry-to-one-source-of-truth]] (medium, M) — finish
   the `all_kbs()` sweep, pick one registry owner, ADR the decision,
   make user-side config drift structurally impossible.
+- [[fail-open-exception-sweep]] (high, S) — ~10 broad excepts convert
+  failure to false success at trust boundaries (MCP registry merge,
+  status-drift detector self-disable, mislabeled push failures);
+  the incubator for the next field-bug class.
+- [[task-claim-concurrency-test]] (high, S) — the fleet's one
+  concurrency guard has never been executed concurrently; N-process
+  race, exactly one winner.
+- [[regression-test-links-fts-quoting]] (high, XS) — the missing
+  40e7a39 regression lock (the one open Iron Law 1 violation).
 
 ### Workstream 2 — Shared-instance pilot (read-only)
 
@@ -190,6 +205,12 @@ first two items are epic subtasks:
 - [[qa-validate-enforce-type-rubrics]] (medium, M) — make kb.yaml
   rubrics enforced rather than decorative; reconcile the ADR rubric;
   fix kind-enum errors and broken ADR wikilinks.
+- [[dirty-world-fixtures-and-adversarial-corpus]] (medium, M) — make
+  the five escaped field-bug classes representable in tests: real
+  config loading, out-of-band edits, adversarial strings by default.
+- [[shared-frontmatter-split-utility]] (medium, S) — retire 8+
+  hand-rolled frontmatter splitters; fix the divergent
+  journalism-investigation copy (drops `_schema_version`).
 
 ### Workstream 4 — Bookkeeping
 
@@ -207,8 +228,10 @@ first two items are epic subtasks:
 [[ji-ui-investigation-dashboard]] and [[ji-ui-timeline-visualization]]
 (build after a second person actually uses the instance), write access
 for peers (needs tool-enforced source-tier provenance +
-[[per-user-fork-directories]]), Canvas/extension-registry/ecosystem
-items.
+[[per-user-fork-directories]]), [[plugin-type-resolution-scoping]]
+(medium, L — real, but it's an extension-registry prerequisite, not a
+pilot blocker; the pilot ships with first-party extensions only),
+Canvas/extension-registry/ecosystem items.
 
 ### Definition of done
 
