@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 
-vi.mock('$lib/api/client', () => ({
-	api: {
-		getDailyNote: vi.fn(),
-		updateEntry: vi.fn()
-	}
-}));
+vi.mock('$lib/api/client', async () => {
+	const actual = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
+	return {
+		ApiError: actual.ApiError,
+		api: {
+			getDailyNote: vi.fn(),
+			updateEntry: vi.fn(),
+			createDailyNote: vi.fn()
+		}
+	};
+});
 vi.mock('$lib/stores/kbs.svelte', () => ({
 	kbStore: { activeKB: 'test-kb' }
 }));
@@ -20,11 +25,12 @@ vi.mock('marked', () => ({
 	marked: { parse: vi.fn((md: string) => `<p>${md}</p>`) }
 }));
 
-import { api } from '$lib/api/client';
+import { api, ApiError } from '$lib/api/client';
 import DailyNote from './DailyNote.svelte';
 
 const mockGetDailyNote = vi.mocked(api.getDailyNote);
 const mockUpdateEntry = vi.mocked(api.updateEntry);
+const mockCreateDailyNote = vi.mocked(api.createDailyNote);
 
 afterEach(() => {
 	cleanup();
@@ -135,6 +141,43 @@ describe('DailyNote', () => {
 		});
 		await waitFor(() => {
 			expect(screen.getByText('Network error')).toBeInTheDocument();
+		});
+	});
+
+	it('shows an empty state (not a scary error) when no note exists yet (404)', async () => {
+		mockGetDailyNote.mockRejectedValue(new ApiError(404, 'not found'));
+		render(DailyNote, {
+			props: { selectedDate: '2026-03-15', onnavigate: vi.fn() }
+		});
+		await waitFor(() => {
+			expect(screen.getByText(/Start today.s note/i)).toBeInTheDocument();
+		});
+		expect(screen.queryByText(/not found/i)).not.toBeInTheDocument();
+	});
+
+	it('viewing a date with no note yet performs no write (only fetches, never creates)', async () => {
+		mockGetDailyNote.mockRejectedValue(new ApiError(404, 'not found'));
+		render(DailyNote, {
+			props: { selectedDate: '2026-03-15', onnavigate: vi.fn() }
+		});
+		await waitFor(() => {
+			expect(screen.getByText(/Start today.s note/i)).toBeInTheDocument();
+		});
+		expect(mockCreateDailyNote).not.toHaveBeenCalled();
+	});
+
+	it('clicking "Start today\'s note" creates the note via the API', async () => {
+		mockGetDailyNote.mockRejectedValue(new ApiError(404, 'not found'));
+		mockCreateDailyNote.mockResolvedValue(sampleEntry as never);
+		render(DailyNote, {
+			props: { selectedDate: '2026-03-15', onnavigate: vi.fn() }
+		});
+		await waitFor(() => {
+			expect(screen.getByText(/Start today.s note/i)).toBeInTheDocument();
+		});
+		await fireEvent.click(screen.getByText(/Start today.s note/i));
+		await waitFor(() => {
+			expect(mockCreateDailyNote).toHaveBeenCalledWith('2026-03-15', 'test-kb');
 		});
 	});
 

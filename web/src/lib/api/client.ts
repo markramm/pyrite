@@ -479,6 +479,12 @@ class ApiClient {
 		return this.request(`/api/daily/${date}?kb=${encodeURIComponent(kb)}`);
 	}
 
+	async createDailyNote(date: string, kb: string): Promise<EntryResponse> {
+		return this.request(`/api/daily/${date}?kb=${encodeURIComponent(kb)}`, {
+			method: 'POST'
+		});
+	}
+
 	async getDailyDates(kb: string, month?: string): Promise<DailyDatesResponse> {
 		const params = new URLSearchParams({ kb });
 		if (month) params.set('month', month);

@@ -514,6 +514,47 @@ def resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, kb_name: str) ->
     return row[0] if row else None
 
 
+async def resolve_effective_kb_role(
+    request: Request, config: PyriteConfig, db: PyriteDB, kb_name: str | None = None
+) -> str | None:
+    """Resolve the caller's effective role for a KB, without raising.
+
+    Resolution chain:
+    1. Global admins always pass (returns "admin")
+    2. No authenticated user (API key mode) → global `request.state.api_role`
+    3. Explicit KB grant → KB default_role → user global role → anonymous tier
+
+    Returns None only if no role could be determined at all (e.g. no
+    `api_role` set on the request, which normally means auth failed
+    upstream). Callers that need a hard 401/403 should still use
+    `requires_tier`/`requires_kb_tier`; this helper is for call sites
+    that need to check permissions inline without failing the request
+    (e.g. deciding whether a GET is allowed to have a write side effect).
+    """
+    role = getattr(request.state, "api_role", None)
+    if role is None:
+        return None
+
+    if role == "admin":
+        return "admin"
+
+    auth_user = getattr(request.state, "auth_user", None)
+    if not auth_user:
+        return role
+
+    if kb_name is None:
+        kb_name = await _resolve_kb_name(request)
+    if not kb_name:
+        return role
+
+    kb_default_role = resolve_kb_default_role(config, db, kb_name)
+
+    from ..services.auth_service import AuthService
+
+    auth_service = AuthService(db, config.settings.auth)
+    return auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
+
+
 def requires_kb_tier(tier: str):
     """FastAPI dependency factory: enforce minimum tier on a per-KB basis.
 
@@ -533,45 +574,18 @@ def requires_kb_tier(tier: str):
         if role is None:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-        # Global admins always pass
-        if role == "admin":
-            return
-
-        # If no authenticated user (API key mode), fall back to global role check
-        auth_user = getattr(request.state, "auth_user", None)
-        if not auth_user:
-            if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
-                )
-            return
-
-        # Resolve KB name from request
-        kb_name = await _resolve_kb_name(request)
-        if not kb_name:
-            # Fall back to global tier check
-            if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
-                )
-            return
-
-        kb_default_role = resolve_kb_default_role(config, db, kb_name)
-
-        from ..services.auth_service import AuthService
-
-        auth_service = AuthService(db, config.settings.auth)
-        effective_role = auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
+        effective_role = await resolve_effective_kb_role(request, config, db)
 
         if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(
             tier, 99
         ):
-            raise HTTPException(
-                status_code=403,
-                detail=f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier",
+            kb_name = await _resolve_kb_name(request)
+            detail = (
+                f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier"
+                if kb_name
+                else f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'"
             )
+            raise HTTPException(status_code=403, detail=detail)
 
     return _check_kb_tier
 

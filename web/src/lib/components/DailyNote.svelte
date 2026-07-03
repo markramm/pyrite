@@ -1,6 +1,6 @@
 <script lang="ts">
 	import Editor from '$lib/editor/Editor.svelte';
-	import { api } from '$lib/api/client';
+	import { api, ApiError } from '$lib/api/client';
 	import { kbStore } from '$lib/stores/kbs.svelte';
 	import { uiStore } from '$lib/stores/ui.svelte';
 	import type { EntryResponse } from '$lib/api/types';
@@ -16,7 +16,9 @@
 	let entry = $state<EntryResponse | null>(null);
 	let loading = $state(false);
 	let saving = $state(false);
+	let creating = $state(false);
 	let error = $state<string | null>(null);
+	let noNoteYet = $state(false);
 	let editing = $state(false);
 	let editorContent = $state('');
 
@@ -64,14 +66,34 @@
 		}
 		loading = true;
 		error = null;
+		noNoteYet = false;
 		try {
 			entry = await api.getDailyNote(selectedDate, kb);
 			editorContent = entry.body ?? '';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load daily note';
+			if (e instanceof ApiError && e.status === 404) {
+				noNoteYet = true;
+			} else {
+				error = e instanceof Error ? e.message : 'Failed to load daily note';
+			}
 			entry = null;
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function startTodaysNote() {
+		const kb = kbStore.activeKB;
+		if (!kb) return;
+		creating = true;
+		try {
+			entry = await api.createDailyNote(selectedDate, kb);
+			editorContent = entry.body ?? '';
+			noNoteYet = false;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create daily note';
+		} finally {
+			creating = false;
 		}
 	}
 
@@ -182,6 +204,17 @@
 			</div>
 		{:else if error}
 			<div class="flex h-full items-center justify-center text-red-500">{error}</div>
+		{:else if noNoteYet}
+			<div class="flex h-full flex-col items-center justify-center gap-3 text-zinc-400">
+				<span>No note for this date yet.</span>
+				<button
+					onclick={startTodaysNote}
+					disabled={creating}
+					class="rounded-md bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+				>
+					{creating ? 'Starting...' : "Start today's note"}
+				</button>
+			</div>
 		{:else if entry}
 			<div class="h-full p-6">
 				{#if editing}
