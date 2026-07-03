@@ -7,6 +7,11 @@ status: proposed
 priority: medium
 effort: M
 tags: [ai, llm, quotas, cost, hosting]
+epic: shared-instance-readiness
+links:
+- target: epic-shared-instance-readiness
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem

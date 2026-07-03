@@ -118,6 +118,83 @@ KBService decomposition (extracted GraphService, EphemeralKBService, QuotaServic
 
 ---
 
+## 0.21–0.24 — Shipped between milestones (reconciliation note, 2026-07-02)
+
+Versions 0.21.0 through 0.24.0 were tagged without roadmap or CHANGELOG
+entries (CHANGELOG stops at 0.20.0). Highlights recoverable from git:
+Tier-A agent-CLI features (`pyrite rename` + wikilink rewrite, `qa
+coverage` curation stats), the CLI error-shape consistency sweep (0
+ad-hoc sites CLI-wide), `task reset` for stale claims, FTS5 term quoting
+in links suggest/discover (fixed the `links orphans` crash), and the
+`all_kbs()` enumeration fix for DB-registered KBs. Backfill CHANGELOG as
+part of 0.25.
+
+---
+
+## 0.25 — Field Hardening & Shared-Instance Pilot (next)
+
+**Theme:** Retire the derived-state bug class, then put a second human on
+the instance. No speculative architecture, no new UI surface. Epic:
+[[epic-shared-instance-readiness]].
+
+The prioritization rule for this milestone: the tool's job for the next
+quarter is to be *boring* for its operator and *trustworthy* for one or
+two invited peers — every candidate item is tested against that and
+nothing else.
+
+### Workstream 1 — Derived-state reliability (prerequisite)
+
+- [[verify-after-write-on-the-index-path]] (high, M) — read-back
+  verification on every indexing write; hard errors, not warnings;
+  hash-based staleness so same-second edits re-index.
+- [[collapse-kb-registry-to-one-source-of-truth]] (medium, M) — finish
+  the `all_kbs()` sweep, pick one registry owner, ADR the decision,
+  make user-side config drift structurally impossible.
+
+### Workstream 2 — Shared-instance pilot (read-only)
+
+- [[oauth-state-store-persistence]] (high, S) — login survives restarts.
+- [[mcp-rest-tool-parity]] (medium, M) — the web UI peers see must match
+  agent capability.
+- Query-construction audit (S) — one deliberate pass over every
+  MATCH/tsquery site that touches entry-derived terms (the 40e7a39
+  bug class), since the surface becomes hosted and logged-in.
+- Hosting-security Phase 1 static audit from
+  [[hosting-security-hardening]] run against the pilot deploy config —
+  audit only; fixes triaged by tier.
+- [[llm-usage-tracking-and-quotas]] (medium, M) — only if hosted AI is
+  enabled for peers; otherwise slips to 0.26.
+- Ship: 1–2 trusted peers (candidates: Drey Dossier, The Pugilist) with
+  read access to cascade-research + cascade-timeline + actors, plus a
+  written invite doc (what they see, what's logged, what's not).
+
+### Workstream 3 — Bookkeeping
+
+- Backfill CHANGELOG 0.21–0.24; keep it current through 0.25.
+- [[links-asymmetric-intra-kb-mode]] (medium, S) — unblocks the
+  intra-KB cross-linking-debt audit on cascade-research.
+- KNOWN-ISSUES.md stays a thin pointer file; field bugs get backlog
+  items same-day.
+
+### Deliberately frozen for 0.25
+
+[[backend-agnostic-query-dsl]] and
+[[split-backend-protocol-entitystore-searchengine-embeddingstore]]
+(re-prioritized to medium — no forcing function),
+[[ji-ui-investigation-dashboard]] and [[ji-ui-timeline-visualization]]
+(build after a second person actually uses the instance), write access
+for peers (needs tool-enforced source-tier provenance +
+[[per-user-fork-directories]]), Canvas/extension-registry/ecosystem
+items.
+
+### Definition of done
+
+One peer, logged in, searching the corpus read-only for two weeks with
+zero operator interventions caused by index/registry drift, and zero
+known crash bugs reachable from the read surface.
+
+---
+
 ## Future (1.0+)
 
 ### Ecosystem (open from 0.18)
@@ -129,8 +206,6 @@ KBService decomposition (extracted GraphService, EphemeralKBService, QuotaServic
 | [[obsidian-migration]] | M | planned |
 | [[pkm-capture-plugin]] | L | planned |
 | [[plugin-repo-extraction]] | M | deferred |
-
-### Agent Swarm Infrastructure
 
 ### Agent Swarm Infrastructure
 

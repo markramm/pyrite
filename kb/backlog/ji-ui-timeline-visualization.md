@@ -14,9 +14,14 @@ links:
   kb: pyrite
 kind: feature
 status: proposed
-priority: high
+priority: medium
 effort: L
 ---
+
+> Re-prioritized high → medium 2026-07-02: speculative UI — no user is
+> blocked on it; capturecascade.org already serves the public timeline
+> need. Revisit after the shared-instance pilot
+> ([[epic-shared-instance-readiness]]) shows what peers actually reach for.
 
 ## Problem
 

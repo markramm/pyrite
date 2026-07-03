@@ -16,6 +16,7 @@ links:
   relation: related
 kind: feature
 status: planned
+priority: medium
 effort: M
 ---
 

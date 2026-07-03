@@ -12,6 +12,11 @@ status: proposed
 priority: high
 effort: M
 rank: 0
+epic: shared-instance-readiness
+links:
+- target: epic-shared-instance-readiness
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem
@@ -29,3 +34,7 @@ After any write that triggers indexing (create/update/rename/delete), read the i
 ## Notes
 
 This is the second half of the derived-state-synchronization fix; the first half (registry enumeration via all_kbs()) landed with tests/test_index_covers_db_registered_kbs.py. See also [[collapse-kb-registry-to-one-source-of-truth]].
+
+Adjacent gap, same seam (fold in or split out): staleness detection is mtime-only, so a same-second double-edit is never re-indexed. Storing a content hash per indexed row and comparing hash (not just mtime) in `check_staleness` closes it; the read-back verification above needs the hash column anyway.
+
+Prerequisite for [[epic-shared-instance-readiness]]: invited peers must never hit the silent-index class the operator works around from muscle memory.

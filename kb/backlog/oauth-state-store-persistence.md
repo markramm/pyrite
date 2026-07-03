@@ -4,10 +4,19 @@ type: backlog_item
 title: "Persist OAuth CSRF state across process restarts and replicas"
 kind: improvement
 status: proposed
-priority: low
+priority: high
 effort: S
 tags: [security, oauth, hosting, multi-process]
+epic: shared-instance-readiness
+links:
+- target: epic-shared-instance-readiness
+  relation: subtask_of
+  kb: pyrite
 ---
+
+> Re-prioritized low → high 2026-07-02: prerequisite for the
+> trusted-peer read-only pilot ([[epic-shared-instance-readiness]]) —
+> a login failure in a peer's first session is a trust-killer.
 
 ## Problem
 

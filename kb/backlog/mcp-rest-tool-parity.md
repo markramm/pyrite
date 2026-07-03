@@ -7,6 +7,11 @@ status: proposed
 priority: medium
 effort: M
 tags: [api, mcp, parity, web-ui, refactor]
+epic: shared-instance-readiness
+links:
+- target: epic-shared-instance-readiness
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem

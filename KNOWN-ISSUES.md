@@ -13,3 +13,5 @@ Bugs found in field use, pending fix.
 **Requested:** an intra-KB mode, e.g. `links asymmetric -k cascade-research` (single `-k`, report A→B links where B→A is absent within that KB).
 
 **Impact:** the "sources don't link back to the synthesis hub" debt (observed repeatedly in cascade-research) can't be found with built-in tooling; needs `links suggest` per-entry or a custom script.
+
+**Tracked:** promoted to the backlog 2026-07-02 as `links-asymmetric-intra-kb-mode` (`pyrite get links-asymmetric-intra-kb-mode -k pyrite`). This file should stay a thin pointer — the backlog is the source of truth.

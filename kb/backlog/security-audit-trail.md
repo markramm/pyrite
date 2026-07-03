@@ -12,6 +12,9 @@ links:
 - target: hosting-security-hardening
   relation: subtask_of
   kb: pyrite
+- target: epic-shared-instance-readiness
+  relation: related
+  kb: pyrite
 ---
 
 ## Problem

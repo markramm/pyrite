@@ -5,9 +5,15 @@ title: "Backend-agnostic query DSL: parse → AST → compile per backend"
 tags: [search, dsl, backend, architecture, agents]
 kind: feature
 status: proposed
-priority: high
+priority: medium
 effort: L
 ---
+
+> Re-prioritized high → medium 2026-07-02: preparatory architecture with
+> no second consumer forcing it yet — SQLite FTS5 leakage is a real
+> wart, but nothing operational is blocked on it. Revisit when a
+> Postgres-first deployment (or the shared-instance pilot's web search)
+> hits the syntax mismatch in practice.
 
 ## Problem
 

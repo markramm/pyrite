@@ -14,9 +14,14 @@ links:
   kb: pyrite
 kind: feature
 status: proposed
-priority: high
+priority: medium
 effort: M
 ---
+
+> Re-prioritized high → medium 2026-07-02: speculative UI — no user is
+> blocked on it. The operational priority for the same audience is the
+> shared-instance pilot ([[epic-shared-instance-readiness]]); build
+> dashboards after a second person is actually using the instance.
 
 ## Problem
 

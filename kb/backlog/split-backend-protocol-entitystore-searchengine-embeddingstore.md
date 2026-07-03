@@ -6,10 +6,15 @@ tags: [architecture, storage, backends, postgres, sqlite, protocol, modularity, 
 importance: 5
 kind: improvement
 status: proposed
-priority: high
+priority: medium
 effort: L
 rank: 1400
 ---
+
+> Re-prioritized high → medium 2026-07-02: clean-refactor work with no
+> operational forcing function. Both backends pass conformance; the
+> 39-method protocol is ugly but not causing field bugs. Do it when a
+> third backend or the query-DSL work actually needs the seam.
 
 ## Problem
 

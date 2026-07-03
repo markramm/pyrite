@@ -12,6 +12,11 @@ status: proposed
 priority: medium
 effort: M
 rank: 0
+epic: shared-instance-readiness
+links:
+- target: epic-shared-instance-readiness
+  relation: subtask_of
+  kb: pyrite
 ---
 
 ## Problem
@@ -40,3 +45,5 @@ The index/MCP sites were fixed (index.py get_index_stats/check_staleness/check_h
 ## Notes
 
 Sibling of [[verify-after-write-on-the-index-path]]; together they retire the derived-state-synchronization bug class.
+
+The same dual-registry class also exists one level up in the primary deployment: `~/kb/config.yaml` and `~/.pyrite/config.yaml` disagree on paths for ~25 KBs (biography KBs point at `pyrite-kb-demo/` in one and `tcp-kb-internal/` in the other; `~/.pyrite` still registers stale `/private/tmp/test-release-kb` and `test-tasks`). Whatever single-source design lands here should either make that drift structurally impossible or auto-reconcile it with a warning. Decision deserves an ADR — see [[file-missing-adrs-for-session-arc-decisions]] (index-health drift checks).

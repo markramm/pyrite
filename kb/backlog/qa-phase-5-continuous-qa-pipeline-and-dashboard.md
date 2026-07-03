@@ -7,6 +7,8 @@ tags:
 - quality
 - ai
 kind: feature
+status: proposed
+priority: low
 effort: L
 links:
 - target: qa-agent-workflows
