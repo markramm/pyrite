@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
-from pyrite.exceptions import KBReadOnlyError
+from pyrite.exceptions import KBReadOnlyError, QuerySyntaxError
 from pyrite.services import KBService, QueryExpansionService, SearchMode, SearchService
 from pyrite.services.query_expansion_service import is_available
 from pyrite.storage.database import PyriteDB
@@ -205,6 +205,39 @@ class TestSearchService:
         trace: dict = {}
         service.search("orange county absentterm", mode="keyword", trace=trace)
         assert trace.get("relaxed") is True
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            '"family separation" cross-link',  # hyphen term + phrase quote
+            "cross-link NOT foo",  # hyphen term + NOT operator
+            "a:b AND foo",  # colon term + AND operator
+        ],
+        ids=[
+            "hyphen-term-plus-phrase-quote",
+            "hyphen-term-plus-not-operator",
+            "colon-term-plus-and-operator",
+        ],
+    )
+    def test_search_raises_query_syntax_error_not_raw_db_error(
+        self, test_db, test_config, query
+    ):
+        """The sanitizer bypasses special-char quoting when a query contains
+        an FTS5 operator or an existing quote (sanitize_fts_query's "user
+        knows what they're doing" guard). A bare special-char token like
+        `cross-link` then reaches FTS5 unquoted and SQLite raises a raw
+        OperationalError ("no such column: ..."), because the hyphen/colon
+        is parsed as column-filter syntax.
+
+        Mixed literal+operator queries are exactly what agents write. The
+        service must classify this as QuerySyntaxError (retryable=False),
+        not let the raw sqlite3 exception escape — search-query-syntax-
+        error-contract, same family as the fixed `links orphans` crash
+        (40e7a39)."""
+        test_db.register_kb("research", "generic", "/tmp/research", "")
+        service = SearchService(test_db)
+        with pytest.raises(QuerySyntaxError):
+            service.search(query, kb_name="research", mode="keyword")
 
     def test_search_mode_enum(self):
         """SearchMode enum has expected values."""

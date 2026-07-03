@@ -7,10 +7,12 @@ Used by API, CLI, and UI layers.
 
 import logging
 import re
+import sqlite3
 import time
 from enum import StrEnum
 from typing import Any
 
+from ..exceptions import QuerySyntaxError
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
@@ -95,6 +97,27 @@ class SearchService:
         # Matches tokens with at least one non-alphanumeric, non-space, non-underscore char
         sanitized = re.sub(r"(\S*[^\w\s]\S*)", r'"\1"', query)
         return sanitized
+
+    def _db_search(self, **kwargs: Any) -> list[dict[str, Any]]:
+        """Call ``self.db.search`` and reclassify a raw FTS5 syntax error.
+
+        ``sanitize_fts_query`` skips quoting when the query already contains
+        an FTS5 operator (AND/OR/NOT) or a quote — it assumes the caller
+        knows what they're doing. A bare special-char token like
+        `cross-link` mixed into such a query then reaches SQLite's MATCH
+        unquoted and raises ``sqlite3.OperationalError`` (e.g. "no such
+        column: link"), because the hyphen/colon is parsed as column-filter
+        syntax. That's a deterministic, non-retryable query problem, not an
+        internal error — reclassify it before it escapes to CLI/MCP/REST.
+        """
+        try:
+            return self.db.search(**kwargs)
+        except sqlite3.OperationalError as e:
+            raise QuerySyntaxError(
+                f"Query could not be parsed: {e}. If your query uses AND/OR/NOT "
+                "or phrase quotes, quote any tokens containing - : . yourself "
+                "(sanitization is skipped once you use operators or quotes)."
+            ) from e
 
     @staticmethod
     def _relax_to_or(query: str) -> str | None:
@@ -229,7 +252,7 @@ class SearchService:
                     kw_query = self.sanitize_fts_query(kw_query)
 
                 def _run(q: str) -> list[dict[str, Any]]:
-                    return self.db.search(
+                    return self._db_search(
                         query=q,
                         kb_name=kb_name,
                         entry_type=entry_type,
@@ -346,7 +369,7 @@ class SearchService:
         fetch_size = max(limit * 2, offset + limit)
         fts_query = expanded_query if expanded_query else query
         kw_query = self.sanitize_fts_query(fts_query) if sanitize else fts_query
-        keyword_results = self.db.search(
+        keyword_results = self._db_search(
             query=kw_query,
             kb_name=kb_name,
             entry_type=entry_type,

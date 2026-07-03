@@ -342,6 +342,35 @@ def test_search_error_json_is_clean_structured_error(cli_env):
 
 
 @pytest.mark.cli
+def test_search_query_syntax_error_uses_canonical_error_shape(cli_env):
+    """A QuerySyntaxError (mixed literal+operator query that the FTS5
+    sanitizer bypass lets through unquoted, e.g. `"phrase" cross-link`)
+    must emit the canonical error contract (error_code=QUERY_SYNTAX,
+    retryable=False via cli_error/build_error) — not the ad-hoc
+    {error, error_type} shape genuinely-internal errors still use.
+    search-query-syntax-error-contract."""
+    from pyrite.exceptions import QuerySyntaxError
+
+    boom = QuerySyntaxError("Query could not be parsed: no such column: link")
+    with _patch_config("pyrite.cli.search_commands.load_config", cli_env):
+        with patch(
+            "pyrite.services.search_service.SearchService.search",
+            side_effect=boom,
+        ):
+            result = runner.invoke(
+                app, ["search", '"family separation" cross-link', "--format", "json"]
+            )
+    assert result.exit_code == 1, result.output
+    data = json.loads(result.output)
+    assert data["error_code"] == "QUERY_SYNTAX", data
+    assert data["retryable"] is False, data
+    assert "error_type" not in data, (
+        "QUERY_SYNTAX errors must use the canonical shape, not the ad-hoc "
+        f"error_type field: {data}"
+    )
+
+
+@pytest.mark.cli
 def test_search_error_logged_at_debug(cli_env, caplog):
     """The full exception must be logged (with traceback) when index search
     fails, so operators can troubleshoot — not just shown as a one-line

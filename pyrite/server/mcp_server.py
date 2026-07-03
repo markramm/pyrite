@@ -17,7 +17,13 @@ from typing import Any
 from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
-from ..exceptions import ConfigError, KBNotFoundError, KBProtectedError, PyriteError
+from ..exceptions import (
+    ConfigError,
+    KBNotFoundError,
+    KBProtectedError,
+    PyriteError,
+    QuerySyntaxError,
+)
 from ..schema import generate_entry_id
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
@@ -293,21 +299,36 @@ class PyriteMCPServer:
         limit = args.get("limit", 20)
         fields = args.get("fields")
         include_body = args.get("include_body", False)
-        results = self.search_svc.search(
-            query=query,
-            kb_name=args.get("kb_name"),
-            entry_type=args.get("entry_type"),
-            tags=args.get("tags"),
-            date_from=args.get("date_from"),
-            date_to=args.get("date_to"),
-            limit=limit,
-            offset=args.get("offset", 0),
-            mode=args.get("mode", "hybrid"),
-            expand=args.get("expand", False),
-            fips=args.get("fips"),
-            state=args.get("state"),
-            status=args.get("status"),
-        )
+        try:
+            results = self.search_svc.search(
+                query=query,
+                kb_name=args.get("kb_name"),
+                entry_type=args.get("entry_type"),
+                tags=args.get("tags"),
+                date_from=args.get("date_from"),
+                date_to=args.get("date_to"),
+                limit=limit,
+                offset=args.get("offset", 0),
+                mode=args.get("mode", "hybrid"),
+                expand=args.get("expand", False),
+                fips=args.get("fips"),
+                state=args.get("state"),
+                status=args.get("status"),
+            )
+        except QuerySyntaxError as e:
+            # Deterministic, not retryable — _dispatch_tool's catch-all
+            # would otherwise map this to INTERNAL/retryable=True, sending
+            # agents into pointless retry loops on a query that will fail
+            # identically every time. search-query-syntax-error-contract.
+            return _error(
+                "QUERY_SYNTAX",
+                str(e),
+                suggestion=(
+                    "quote tokens containing - : . yourself when your query "
+                    "uses AND/OR/NOT or phrase quotes"
+                ),
+                retryable=False,
+            )
 
         if fields:
             results = [_project_fields(r, fields) for r in results]

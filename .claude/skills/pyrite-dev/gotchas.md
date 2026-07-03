@@ -303,4 +303,28 @@ Two traps in one command:
 **Always pass `-k pyrite`.** If you forget, `mv ./adrs/<file> kb/adrs/`, remove the stray
 `./adrs/`, then `pyrite index sync`.
 
+## A `from ... import X` Anywhere Inside a Function Makes `X` Local for the Whole Function
+
+Hit while fixing `search-query-syntax-error-contract`: added `from ..utils.errors import
+cli_error` at module level in `search_commands.py`, then added a new `except` branch that
+called `cli_error(...)`. Got `UnboundLocalError: cannot access local variable 'cli_error'
+where it is not associated with a value` — even though the module-level import should have
+made it a global.
+
+Root cause: the `search()` function already had a *local* `from ..utils.errors import
+cli_error` inside an earlier `if` branch (a deliberate lazy-import pattern used elsewhere in
+this file). Python's scoping is lexical and whole-function: any assignment (including an
+`import`) to a name anywhere in a function body makes that name local for the **entire**
+function, from its first line — even before the local import statement executes. The
+module-level import at the top of the file is shadowed for the whole `search()` function
+body, not just after the local import line.
+
+**Fix:** either import at module level only (remove all local imports of that name in the
+function), or match the existing lazy-import pattern and add a local import at your new call
+site too. Don't mix module-level and local imports of the same name within one function.
+
+**How to catch this:** if you add a module-level import and a function that already does
+local (lazy) imports starts raising `UnboundLocalError` on a name you just imported, search
+the whole function body (not just nearby) for another `import` of that name.
+
 **Status:** ticketed — backlog item `new-adr-writes-to-cwd-without-kb-flag`.

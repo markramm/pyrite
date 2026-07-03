@@ -11,7 +11,7 @@ READ_TOOLS = {
         "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
     "kb_search": {
-        "description": "Full-text search across knowledge bases. Supports FTS5 query syntax (AND, OR, NOT, phrases in quotes). Returns entries with snippets ranked by relevance.",
+        "description": "Full-text search across knowledge bases. Supports FTS5 query syntax (AND, OR, NOT, phrases in quotes). Returns entries with snippets ranked by relevance. Auto-quote rule: special-char tokens (hyphens, dots, colons) are auto-quoted ONLY when the query has no AND/OR/NOT operator and no existing quote. Once you use an operator or a phrase quote, quote special-char tokens yourself (e.g. '\"family separation\" \"cross-link\"') or the query can fail with error_code QUERY_SYNTAX (deterministic, not retryable).",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -67,7 +67,7 @@ READ_TOOLS = {
                 },
                 "status": {
                     "type": "string",
-                    "description": "Filter by entry status (e.g. 'unprocessed', 'draft', 'done'). Works across all KBs and entry types.",
+                    "description": "Filter by the indexed 'status' frontmatter field (e.g. 'unprocessed', 'draft', 'done'). Works across all KBs and entry types. Other metadata fields (e.g. 'readiness') are NOT reachable via this parameter.",
                 },
                 "include_body": {
                     "type": "boolean",

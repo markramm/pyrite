@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import load_config
+from ..exceptions import QuerySyntaxError
 from ..storage.repository import KBRepository
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,13 @@ def register_search_command(app: typer.Typer):
         fips: str | None = typer.Option(None, "--fips", help="Filter by county FIPS code (e.g. 12086)"),
         state_filter: str | None = typer.Option(None, "--state", help="Filter by US state (e.g. FL, TX)"),
         status: str | None = typer.Option(
-            None, "--status", help="Filter by entry status (e.g. unprocessed, draft, done)"
+            None,
+            "--status",
+            help=(
+                "Filter by the indexed 'status' frontmatter field (e.g. "
+                "unprocessed, draft, done). Other metadata fields (e.g. "
+                "'readiness') are NOT reachable via this flag."
+            ),
         ),
         limit: int = typer.Option(20, "--limit", "-n", help="Max results"),
         mode: str = typer.Option(
@@ -92,7 +99,17 @@ def register_search_command(app: typer.Typer):
         - Phrases: "family separation"
         - Boolean: miller AND immigration
         - Prefix: immigr*
-        - Exclude: miller -bannon
+        - Exclude: miller NOT bannon
+
+        Auto-quote rule: special-char tokens (hyphens, dots, colons, etc.)
+        are quoted automatically ONLY when the query has no AND/OR/NOT
+        operator and no existing quote — e.g. "cross-link" alone becomes
+        "cross-link" as a literal. Once you use AND/OR/NOT or a phrase
+        quote, auto-quoting is skipped (the query is assumed intentional),
+        so quote special-char tokens yourself: '"family separation"
+        "cross-link"' NOT 'miller -bannon' (a bare hyphen there is parsed
+        as the NOT operator, not a literal exclude — matching Bannon
+        entries, not excluding them).
         """
         config = load_config()
 
@@ -222,6 +239,24 @@ def register_search_command(app: typer.Typer):
 
             console.print(table)
 
+        except QuerySyntaxError as e:
+            # Deterministic, not retryable — falling back to file search
+            # would not help (the query itself is the problem) and the
+            # generic {error, error_type} shape below is off-contract for
+            # a classified error. Use the canonical shape via cli_error.
+            logger.debug("Query syntax error for query %r", query, exc_info=True)
+            from ..utils.errors import cli_error
+
+            cli_error(
+                str(e),
+                output_format,
+                error_code="QUERY_SYNTAX",
+                suggestion=(
+                    "quote tokens containing - : . yourself when your query "
+                    "uses AND/OR/NOT or phrase quotes"
+                ),
+                retryable=False,
+            )
         except Exception as e:
             # Log the full exception (with traceback) so operators can tell a
             # corrupt index from a bad query from a locked DB — the one-line

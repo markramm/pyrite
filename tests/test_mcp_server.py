@@ -162,6 +162,21 @@ class TestPyriteMCPServer:
         assert "results" in result
         assert result["count"] >= 1
 
+    def test_kb_search_query_syntax_error_is_not_internal(self, mcp_admin_server):
+        """A mixed literal+operator query (e.g. a phrase-quoted term next to
+        a bare hyphenated token) reaches SQLite's FTS5 unquoted because
+        sanitize_fts_query bypasses quoting once a query has an operator or
+        quote — the token is then parsed as column-filter syntax and SQLite
+        raises OperationalError. Before the fix, _dispatch_tool's catch-all
+        mapped this to error_code=INTERNAL, retryable=True, sending agents
+        into pointless retry loops on a deterministic syntax error.
+        search-query-syntax-error-contract."""
+        result = mcp_admin_server["server"]._dispatch_tool(
+            "kb_search", {"query": '"family separation" cross-link'}
+        )
+        assert result.get("error_code") == "QUERY_SYNTAX", result
+        assert result.get("retryable") is False, result
+
     def test_kb_search_with_filters(self, mcp_admin_server):
         """Test search with filters."""
         result = mcp_admin_server["server"]._dispatch_tool(

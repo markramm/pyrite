@@ -50,6 +50,20 @@ class ConfigError(PyriteError):
     """Raised when configuration is invalid."""
 
 
+class QuerySyntaxError(PyriteError):
+    """Raised when a search query cannot be parsed by the backend's query
+    engine (e.g. SQLite FTS5's ``no such column: ...`` when a bare
+    special-char token reaches MATCH unquoted).
+
+    Deterministic and not retryable — the query needs to change, retrying
+    unchanged will fail identically. Carries an ``error_code`` attribute
+    (``QUERY_SYNTAX``) so REST/MCP/CLI handlers can surface a stable
+    identifier instead of falling through to a generic internal error.
+    """
+
+    error_code = "QUERY_SYNTAX"
+
+
 class ClipperBlockedHostError(PyriteError):
     """Raised when the web clipper refuses to fetch a URL because the
     resolved host is on the SSRF blocklist (loopback, link-local,

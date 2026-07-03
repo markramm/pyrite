@@ -490,12 +490,15 @@ class TestFTS5EdgeCases:
         assert len(results) == 1
 
     def test_empty_query(self, integration_env):
-        """Empty query raises OperationalError from FTS5."""
-        import sqlite3
+        """Empty query raises the classified QuerySyntaxError, not a raw
+        sqlite3.OperationalError — search-query-syntax-error-contract
+        reclassifies FTS5 syntax failures so CLI/MCP/REST can surface a
+        stable QUERY_SYNTAX code instead of leaking the backend exception."""
+        from pyrite.exceptions import QuerySyntaxError
 
         env = integration_env
 
-        with pytest.raises(sqlite3.OperationalError):
+        with pytest.raises(QuerySyntaxError):
             env["search_service"].search("")
 
     def test_unicode_search(self, integration_env):
