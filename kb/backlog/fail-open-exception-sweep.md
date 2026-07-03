@@ -105,7 +105,25 @@ no need to reopen them here.
   error (passed immediately -- documents existing correct behavior);
   one fault-injects `push_kb` raising and asserts the real message
   surfaces (failed before the fix, proving the swallow was reachable).
-- [ ] Site #4 — index.py frontmatter `references` dropped silently
+- [x] **Site #4 — index.py references-extraction swallow** (b2a220b,
+  2026-07-03) — the `to_frontmatter()` fallback (recovering
+  `references` when `entry.metadata` doesn't carry it) now logs at
+  warning with `exc_info` instead of a bare `except: pass`. Test
+  isolates this specific call site (there's an earlier, already-
+  correct `to_frontmatter()` call for metadata extraction in the same
+  method) via a `side_effect` that lets the first call succeed and only
+  the second fail. Failed before the fix (zero warnings), confirming
+  the swallow was reachable. **Deeper structural finding, filed
+  separately:** `references:` never actually reaches typed entries
+  (EventEntry, PersonEntry, etc.) in the first place — their
+  `from_frontmatter` only reads specific known fields, unlike
+  GenericEntry which collects all unknown keys into `.metadata`. So
+  this site's fallback can only ever recover `references` for
+  GenericEntry; for typed entries there's structurally nothing to
+  recover. See
+  [[typed-entries-silently-drop-the-references-frontmatter-field]]
+  (medium, M) — out of scope for this sweep, which is about swallow
+  visibility, not the underlying recall gap.
 - [ ] Site #5 — auth_service.py decryption failure silently falls
   back to plaintext. **DECIDED 2026-07-03 (Mark): fail closed** — a
   token that fails decryption is rejected with a clear re-auth error
