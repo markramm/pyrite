@@ -302,13 +302,26 @@ class IndexManager:
         fm_refs = getattr(entry, "_raw_frontmatter", {}) or {}
         if not refs and isinstance(fm_refs, dict):
             refs = fm_refs.get("references", [])
-        # Also check to_frontmatter output
+        # Also check to_frontmatter output -- the fallback for typed
+        # entries (EventEntry, PersonEntry, etc.) whose from_frontmatter
+        # doesn't preserve unknown frontmatter keys in .metadata the way
+        # GenericEntry does.
         if not refs:
             try:
                 fm = entry.to_frontmatter()
                 refs = fm.get("references", [])
             except Exception:
-                pass
+                # A crash here silently drops the entry's cross-KB
+                # `references` links from indexing with no trace --
+                # the recall-bug class (fail-open-exception-sweep site
+                # #4). Log it; the entry itself still indexes, just
+                # without these links.
+                logger.warning(
+                    "references extraction failed for %s; cross-KB "
+                    "references links will be missing from this entry",
+                    entry.id,
+                    exc_info=True,
+                )
         if isinstance(refs, list):
             existing_targets = {l.get("target") for l in data["links"]}
             for ref in refs:

@@ -704,6 +704,59 @@ Article body referencing events.
         assert "target-event-2" in target_ids, f"Expected target-event-2 in outlinks, got {target_ids}"
         assert "same-kb-target" in target_ids, f"Expected same-kb-target in outlinks, got {target_ids}"
 
+    def test_references_extraction_logs_warning_when_to_frontmatter_raises(
+        self, setup, caplog
+    ):
+        """fail-open-exception-sweep site #4: `_entry_to_dict` calls
+        `to_frontmatter()` a second time (as a fallback to recover the
+        `references` frontmatter field, since typed entries like
+        EventEntry don't preserve unknown frontmatter keys in
+        `.metadata` the way GenericEntry does), wrapped in a bare
+        `except Exception: pass`. If THIS SECOND call raises, the
+        entry's cross-KB `references` links are silently dropped from
+        indexing with zero trace -- the recall-bug class named in the
+        ticket. The failure must be logged at warning, not swallowed.
+
+        Note: to_frontmatter() is also called earlier in _entry_to_dict
+        for metadata extraction (already correctly logs+falls back on
+        failure) -- side_effect lets that first call succeed normally
+        and only the second (references-extraction) call fail, so this
+        test isolates the specific site the ticket names."""
+        kb_path = setup["kb_path"]
+        target = next(kb_path.rglob("*.md"))
+        entry = KBRepository(setup["config"].get_kb("test-kb"))._load_entry(target)
+
+        real_to_frontmatter = entry.to_frontmatter
+        call_count = {"n": 0}
+
+        def _fail_second_call():
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return real_to_frontmatter()
+            raise RuntimeError("simulated to_frontmatter crash on references lookup")
+
+        entry.to_frontmatter = _fail_second_call
+
+        with caplog.at_level(logging.WARNING, logger="pyrite.storage.index"):
+            data = setup["index_mgr"]._entry_to_dict(entry, "test-kb", target)
+
+        assert call_count["n"] == 2, (
+            "expected to_frontmatter() called twice (metadata extraction, "
+            f"then references fallback); got {call_count['n']} calls"
+        )
+        # The entry itself must still be indexed (degraded, not blocked) --
+        # only the references extraction is affected.
+        assert data["id"] == entry.id
+
+        # The first to_frontmatter() call (metadata extraction) succeeded,
+        # so its own warning path does not fire -- the only warning
+        # expected here is from the second (references-extraction) call.
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings, (
+            "expected a warning-level log when to_frontmatter() raises during "
+            f"references extraction; got {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+        )
+
     def test_check_health_no_false_stale(self, setup):
         """Health check should not report entries as stale immediately after indexing.
 
