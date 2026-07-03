@@ -3,11 +3,21 @@ id: adr-0003
 type: adr
 title: "Two-Tier Data Durability Model"
 adr_number: 3
-status: accepted
+status: superseded
 deciders: ["markr"]
 date: "2025-10-15"
 tags: [architecture, storage, data-model]
+links:
+- target: adr-0029
+  relation: superseded_by
+  kb: pyrite
 ---
+
+> **Superseded by [[adr-0029]]** (2026-07-03) — absorbed, not
+> reversed: the content tier generalized to "every KB, one physics,
+> two lifecycles (durable / ephemeral)"; the engagement tier was the
+> first instance of ADR-0029's *runtime state* category (leases,
+> grants, quotas, engagement counters as declared machinery tables).
 
 ## Context
 
