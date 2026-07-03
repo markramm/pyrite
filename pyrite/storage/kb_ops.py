@@ -4,12 +4,19 @@ KB registration and statistics.
 Mixin class for KB management operations.
 """
 
+import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from .models import KB
+
+if TYPE_CHECKING:
+    from ..config import PyriteConfig
+
+logger = logging.getLogger(__name__)
 
 
 class KBOpsMixin:
@@ -45,6 +52,43 @@ class KBOpsMixin:
             )
             self.session.add(kb)
         self.session.commit()
+
+    def merge_registered_kbs(self, config: "PyriteConfig") -> int:
+        """Merge DB-registered KBs (from ``pyrite kb add``) into ``config``.
+
+        Consolidates three near-identical copies of this raw-SQL merge that
+        previously lived in cli/context.py, server/mcp_server.py, and
+        server/api.py -- the latter two swallowed query failures with a
+        bare ``except Exception: pass``, silently disappearing
+        DB-registered KBs from the MCP/REST surfaces on any DB hiccup
+        (fail-open-exception-sweep site #1, the dual-registry class again).
+
+        Query failure (e.g. the ``kb`` table not existing yet on first
+        run) is expected and non-fatal -- logged at warning so it's
+        visible, but does not raise, since callers run this during
+        construction and must not crash on a transient/first-run issue.
+
+        Returns the number of KBs merged (0 on failure or none pending).
+        """
+        try:
+            rows = self.session.execute(
+                text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
+            ).fetchall()
+        except SQLAlchemyError:
+            logger.warning(
+                "Could not query DB-registered KBs to merge into config "
+                "(kb table may not exist yet on first run)",
+                exc_info=True,
+            )
+            return 0
+
+        if not rows:
+            return 0
+        db_kbs = [
+            {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""}
+            for r in rows
+        ]
+        return config.register_db_kbs(db_kbs)
 
     def update_kb_default_role(self, name: str, default_role: str | None) -> bool:
         """Update a KB's default_role. Returns True if KB was found."""

@@ -149,21 +149,7 @@ class PyriteMCPServer:
         self.config = config or load_config()
         self.tier = tier
         self.db = PyriteDB(self.config.settings.index_path)
-        # Merge DB-registered KBs into config
-        try:
-            from sqlalchemy import text
-
-            rows = self.db.session.execute(
-                text("SELECT name, path, kb_type, description FROM kb WHERE source = 'user'")
-            ).fetchall()
-            if rows:
-                db_kbs = [
-                    {"name": r[0], "path": r[1], "kb_type": r[2], "description": r[3] or ""}
-                    for r in rows
-                ]
-                self.config.register_db_kbs(db_kbs)
-        except Exception:
-            pass
+        self.db.merge_registered_kbs(self.config)
         self.index_mgr = IndexManager(self.db, self.config)
         self.svc = KBService(self.config, self.db)
         self.graph_svc = GraphService(self.db)
