@@ -1,18 +1,18 @@
 ---
 id: search-query-syntax-error-contract
-type: backlog_item
 title: "Search: sanitizer bypass crash → QUERY_SYNTAX error code; document the auto-quote rule on every surface"
-kind: bug
-status: proposed
-priority: high
-effort: S
-created: "2026-07-02"
+type: backlog_item
 tags: [search, fts, errors, mcp, agent-dx, field-reported]
-epic: shared-instance-readiness
 links:
 - target: epic-shared-instance-readiness
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: bug
+status: done
+priority: high
+effort: S
+rank: 0
 ---
 
 ## Problem
