@@ -185,6 +185,38 @@ entries. The social plugin's disposition: **extract, don't delete**
 (first candidate for plugin-repo-extraction; unused today; live use
 case recorded in `kb/positioning/support-docs-platform.md`).
 
+### 6. Worktrees are user-leased ephemerals (unifies ADR-0024)
+
+The multi-user editing model (ADR-0024: worktree per user, branch
+`user/{name}`, submit → admin merge queue) is an instance of this
+ADR's ephemeral lifecycle, not a parallel system:
+
+- A user worktree is an **ephemeral KB leased to a user session**
+  (local branch, no upstream, per-worktree diff index via
+  OverlaySearchBackend). Its exits map exactly: **promote** = admin
+  merge (the in-app "pull request"), **reap** = worktree GC for
+  inactive users (ADR-0024 Phase 3 — implement it AS the 0.26 lease
+  reaper with a user-session lease-holder type, not as bespoke
+  machinery), **reset** = explicit discard. `submitted_at` and queue
+  state are runtime state (machinery).
+- **Coordination KBs and runtime state are exempt from worktree
+  routing** — always shared, never overlaid. Tasks are shared state;
+  a claim made in one user's diff DB would be invisible to another
+  user's CAS, silently breaking the one concurrency guard. Worktree
+  write-routing applies to canon content KBs only.
+- **Invariant: no user commit is ever unreachable** after any
+  merge/reject/reset path (branch refs must survive worktree
+  resets). Tracked: [[worktree-no-lost-commits-invariant]].
+- **Write-phase gates** (post-pilot; the 0.25 pilot is read-only):
+  MCP/CLI writes do not route through worktrees today (the resolver
+  is server-side only) — "peer agents get worktree-routed writes
+  over MCP" is the real multi-user milestone (0.27-shaped; belongs
+  in the parity matrix). Overlay V1 limits (no delete tombstones —
+  deleted entries reappear from main; graph/tags/semantic served
+  from main only) must be closed before peers write. Merge/reject
+  outcomes surface as events per
+  [[notifications-condition-ledger]].
+
 ## Consequences
 
 - The "silently skips DB-registered KBs" bug class dies structurally:

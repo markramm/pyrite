@@ -157,6 +157,13 @@ once + ledger; warning → ledger only; job completion → toast only if
 you started the job this session. A condition toasts at most once
 per appearance; recurrence increments the count silently.
 
+**Canonical events (kind: event — instant-resolve conditions):**
+worktree submission outcomes are the archetype — "your changes were
+merged" / "your submission was returned with feedback" (ADR-0029 §6;
+a peer who submits and hears nothing concludes the product ignored
+them). Also: background job completions, review comments on your
+submission.
+
 ## Copy rules
 
 Effect first, cause second, action last ("Search may miss entries
