@@ -123,7 +123,19 @@ actual merge gate today is whatever gets run locally.
   auth-fixture / test-isolation redesign.
 - [ ] Item 5 — optional ratchets (coverage `fail_under`, `fix:`-commit
   test-touch check)
-- [ ] Item 6 — mypy strict ratchet on `pyrite/storage/`
+- [x] **Item 6 — mypy strict ratchet scaffold on `pyrite/storage/`**
+  (2026-07-03) — added a `[[tool.mypy.overrides]]` block in
+  pyproject.toml scoping `disallow_untyped_defs = true` to
+  `pyrite.storage.*`, with the current error baseline documented
+  inline (281 errors, 15 files, category breakdown in the comment).
+  Deliberately scoped to config scaffolding only, NOT a burn-down of
+  the 281 existing errors — CI's mypy step stays
+  `continue-on-error: true` and its invocation doesn't pass
+  `--disallow-untyped-defs`, so this override isn't load-bearing yet;
+  it documents the target and gives future work a concrete stop-adding
+  new-violations line to hold once burn-down starts. Filed
+  [[mypy-strict-ratchet-burn-down-pyrite-storage-errors]] (medium, M)
+  for the incremental fix + eventual CI gate flip.
 
 **Related finding, filed separately:** fixing item 2 (the pytest-check
 hook now actually runs the full suite with `-x`) surfaced three
@@ -144,6 +156,3 @@ since a red-on-flake `-x` hook isn't a trustworthy local gate either.
   rather than being ambient.
 - Postgres conformance runs in CI (0 skips for the postgres param).
 - Pre-commit hooks installed and passing locally.
-
-
-

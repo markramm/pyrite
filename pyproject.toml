@@ -105,6 +105,22 @@ warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 
+# ci-make-green-and-load-bearing item 6: ratchet mypy strict on the storage
+# layer specifically -- 280-error field-bug history samples concentrate
+# there (dual-registry drift, silent index desync). Not repo-wide --scope
+# is deliberately narrow so this is achievable incrementally.
+#
+# Baseline as of 2026-07-03 (`mypy pyrite/storage/ --ignore-missing-imports
+# --follow-imports=silent --disallow-untyped-defs`): 281 errors in 15
+# files. This override does NOT fail CI yet -- mypy stays
+# continue-on-error in ci.yml until the count is burned down (tracked in
+# mypy-strict-ratchet-burn-down-storage-layer-errors). Turning this on
+# is step 1: enforce no NEW untyped defs in storage/ going forward,
+# without yet requiring the existing 281 to be fixed.
+[[tool.mypy.overrides]]
+module = "pyrite.storage.*"
+disallow_untyped_defs = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
