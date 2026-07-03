@@ -213,14 +213,24 @@ now spec, with roles:
    rows): the gold-bordered chip form. Never both in the same
    context; never the chip form inside prose.
 
-Amendments to the reference (do NOT copy these from the canvas):
-the demo's flat sidebar predates [[web-sidebar-ia-regroup]] — take
-sidebar STRUCTURE from that ticket, treatment (gold inset tick +
-`--surface-2` active fill) from the reference; the monogram glint
-binds to first-load-per-session or hover in product, not every
-navigation; fonts are self-hosted in product, not Google CDN; radius
-stays on the 6/10 rule (the canvas's 8px swatches and 14px outer
-frames are demo chrome).
+Reference revision (turn 2, 2026-07-03): the canvas now encodes the
+review notes as props-panel controls — wikilink "Role-correct"
+(default), sidebar "Grouped (Browse / Analyze / Review)" (default,
+flat labeled "legacy"), glint trigger (load / hover /
+first-load-per-session / off, Web Animations API + sessionStorage +
+reduced-motion), and font delivery ("Self-hosted (production)"
+default). Remaining amendments when implementing:
+
+- Ship the glint as **first-load-per-session** (the canvas default
+  is still "On load" — use its "First load / session"
+  implementation, which is already written in the canvas script).
+- Sidebar group MEMBERSHIPS come from [[web-sidebar-ia-regroup]]
+  (Collections belongs in Browse; the canvas's placements are demo
+  shorthand). Take the grouping structure/treatment from the canvas.
+- Radius stays on the 6/10 rule (canvas's 8px swatches and 14px
+  outer frames are demo chrome); the canvas itself loads fonts from
+  Google CDN regardless of the toggle — the toggle records intent,
+  production self-hosts.
 
 ## 5. The flair budget (deliberate, dial-able, additive)
 
