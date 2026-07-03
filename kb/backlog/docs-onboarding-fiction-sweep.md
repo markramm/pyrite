@@ -1,18 +1,18 @@
 ---
 id: docs-onboarding-fiction-sweep
-type: backlog_item
 title: "Docs fiction sweep: every documented onboarding command must actually work on v0.24"
-kind: bug
-status: proposed
-priority: high
-effort: S
-created: "2026-07-02"
+type: backlog_item
 tags: [docs, onboarding, trust, field-reported]
-epic: shared-instance-readiness
 links:
 - target: epic-shared-instance-readiness
   relation: subtask_of
   kb: pyrite
+importance: 5
+kind: bug
+status: proposed
+priority: high
+effort: S
+rank: 0
 ---
 
 ## Problem
@@ -69,6 +69,41 @@ failure at literally the first command. Verified fiction:
     target user needs, absent from all docs), `pyrite orient`,
     `pyrite rename`, `--debug` search tracing.
 
+## Progress
+
+- [x] **Item 2 — `pyrite mcp --tier` flag implemented** (594d392,
+  2026-07-03) — added `--tier` (default `write`, preserving existing
+  behavior) validated against `PyriteMCPServer.VALID_TIERS`, with a
+  structured `INVALID_TIER` error via `cli_error` on a bad value.
+  Surfaced and fixed an adjacent pre-existing bug in the same
+  function while adding the first real test coverage for this
+  command: the startup message used `console.print(..., err=True)`
+  — a `click.echo` idiom, not a valid `rich.Console.print()` kwarg —
+  which would have raised `TypeError` on every invocation. Replaced
+  with a dedicated stderr `Console`, matching the `err_console`
+  pattern in `search_commands.py`. Manually verified end-to-end:
+  `pyrite mcp --tier read` starts cleanly, `--tier bogus` exits 1
+  with a clear message, `--help` documents all three tiers. No doc
+  changes needed — README/openai-mcp-integration.md already
+  correctly documented `--tier read` as intended behavior; the CLI
+  just hadn't caught up.
+- [x] **Item 5 — `search --help` inverted example** — fixed as part
+  of [[search-query-syntax-error-contract]] (commit 6039a83); see
+  that ticket for the auto-quote-rule documentation added to both
+  CLI help and the MCP tool schema.
+- [ ] Item 1 — source + Docker install rewrite (**DECIDED**, not yet
+  executed)
+- [ ] Item 3 — `pip install pyrite-mcp` PyPI-404 references
+- [ ] Item 4 — storage-model fabrication (git-init claim, `.pyrite/`
+  location claim)
+- [ ] Item 6 — `pyrite serve --mcp` doesn't exist
+- [ ] Item 7 — dead `extensions/task` references
+- [ ] Item 8 — README search example returns 0 results as written
+- [ ] Item 9 — `white-labeling.md` says `pyrite server`
+- [ ] Item 10 — stale tool/test counts, CHANGELOG gaps
+- [ ] Item 11 — undocumented good stuff (`mcp-setup`, `orient`,
+  `rename`, `--debug` tracing) not yet surfaced in docs
+
 ## Acceptance criteria
 
 - Every code block in README, docs/getting-started.md, and both MCP
@@ -78,3 +113,4 @@ failure at literally the first command. Verified fiction:
 - No doc references `pyrite-mcp`, `extensions/task`, `--tier` (unless
   implemented), `serve --mcp`, or `pyrite server`.
 - `mcp-setup` documented in the Claude section of getting-started.
+
