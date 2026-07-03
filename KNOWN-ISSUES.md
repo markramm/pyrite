@@ -2,22 +2,6 @@
 
 Bugs found in field use, pending fix.
 
-## `pyrite links orphans` crashes with `OperationalError: no such column: legalism`
-
-**Found:** 2026-06-15 (running `kb links orphans -k cascade-research`).
-
-**Symptom:** `pyrite links orphans -k <kb>` raises `sqlite3.OperationalError: no such column: legalism` from `pyrite/storage/backends/sqlite_backend.py:208` (the `search()` method's `ORDER BY rank LIMIT ? OFFSET ?` query).
-
-**Likely cause:** the orphans command appears to run an FTS5 search whose query text contains a bare word (e.g. derived from an entry titled/tagged with "legalism" — the corpus has `comparative-model-scheppele-autocratic-legalism-...`) that is being interpolated into the SQL as a column reference rather than passed as an FTS match string / bound parameter. A token like `legalism` is being parsed by SQLite as a column name. Suspect unescaped/unquoted FTS query construction or a MATCH expression being built without quoting the user/term string.
-
-**Impact:** `links orphans` (find high-importance entries lacking cross-KB connections) is unusable on cascade-research. This is the command most useful for the cross-linking-debt audit.
-
-**Workaround:** none for orphans; use `links suggest <entry-id>` per-entry instead. `links check` (broken-link detection) works fine.
-
-**Repro:** `~/kb/kb links orphans -k cascade-research`
-
----
-
 ## `pyrite links asymmetric` is cross-KB only — no intra-KB one-directional-link detection
 
 **Found:** 2026-06-15.

@@ -528,7 +528,7 @@ class IndexManager:
             "total_links": 0,
         }
 
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             kb_stats = self.db.get_kb_stats(kb.name)
             if kb_stats:
                 stats["kbs"][kb.name] = kb_stats
@@ -579,7 +579,7 @@ class IndexManager:
         """
         stale: list[dict[str, Any]] = []
 
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             if not kb.path.exists():
                 continue
 
@@ -660,7 +660,7 @@ class IndexManager:
             "invalid_statuses": [],
         }
 
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             if not kb.path.exists():
                 continue
 
@@ -730,7 +730,7 @@ class IndexManager:
         # what isn't configured.
         from ..schema.core_types import CORE_TYPES
 
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             if not kb.path.exists() or not kb.kb_yaml_path.exists():
                 continue
 
@@ -754,7 +754,7 @@ class IndexManager:
         # Required-field + subdirectory checks. Per KB with a kb.yaml,
         # compare each entry against its type's `required:` list (default
         # ["title"]) and its `subdirectory:` hint. Skip KBs with no kb.yaml.
-        for kb in self.config.knowledge_bases:
+        for kb in self.config.all_kbs():
             if not kb.path.exists() or not kb.kb_yaml_path.exists():
                 continue
             kb_schema = kb.kb_schema

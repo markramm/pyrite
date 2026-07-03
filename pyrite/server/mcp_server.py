@@ -688,7 +688,7 @@ class PyriteMCPServer:
 
         edge_types = []
 
-        for kb_config in self.config.knowledge_bases:
+        for kb_config in self.config.all_kbs():
             if kb_name and kb_config.name != kb_name:
                 continue
 
