@@ -77,8 +77,22 @@ actual merge gate today is whatever gets run locally.
   a scoping bug that fix exposed (`--changed` validated non-KB
   markdown as KB entries; added KB-path filtering, two new tests).
   Documented setup + a flaky-test caveat in CLAUDE.md.
-- [ ] Item 3 — postgres service container + `PYRITE_TEST_PG_URL` in
-  CI (0 skips for the 71 conformance params)
+- [x] **Item 3 — postgres service container in CI** (fc241bf,
+  2026-07-03) — three compounding gaps, all fixed: no service
+  container; `PYRITE_TEST_PG_URL` never set; the `test` matrix job
+  never installed the `postgres` extra (psycopg2-binary, pgvector) at
+  all, so even a live DB would have skipped via the driver-import
+  fallback in `tests/backends/conftest.py`. Added a `postgres`
+  service using `pgvector/pgvector:pg16` (not plain `postgres:*` --
+  `ensure_schema()` runs `CREATE EXTENSION vector`, which needs the
+  extension installed in the image). `test-optional-deps` left alone;
+  `test` now covers postgres conformance across all 3 Python
+  versions. Verified against the real image locally (Docker, not just
+  YAML inspection): `tests/backends/` -- 138 passed (67 conformance x2
+  backends + 4 exec-error + sqlite half). Full suite with
+  `PYRITE_TEST_PG_URL` set: 3086 passed, 1 skipped (up from 3019 with
+  postgres disabled), no cross-backend interaction failures, no flaky-
+  test recurrence.
 - [ ] Item 4 — triage `test-optional-deps` and Playwright CI
   failures (separate from the local flaky-test finding below --
   these are the actual CI jobs, not yet re-run against green ruff)
@@ -105,4 +119,5 @@ since a red-on-flake `-x` hook isn't a trustworthy local gate either.
   rather than being ambient.
 - Postgres conformance runs in CI (0 skips for the postgres param).
 - Pre-commit hooks installed and passing locally.
+
 
