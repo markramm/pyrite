@@ -203,6 +203,36 @@ class TestReindexKB:
         with pytest.raises(KBNotFoundError):
             registry.reindex_kb("nonexistent")
 
+    def test_reindex_reports_malformed_files(self, registry, tmp_kb_path):
+        """A file that fails to parse during reindex must be visible in the
+        result, not silently dropped from index coverage."""
+        (tmp_kb_path / "broken.md").write_text(
+            "---\ntitle: Broken\n*undefined-alias\n---\n\nBody\n"
+        )
+        registry.seed_from_config()
+
+        result = registry.reindex_kb("test-kb")
+        assert "malformed" in result, f"expected 'malformed' key in result; got {result.keys()}"
+        paths = [m.get("path") if isinstance(m, dict) else str(m) for m in result["malformed"]]
+        assert any("broken.md" in p for p in paths)
+
+    def test_reindex_response_schema_carries_malformed(self, registry, tmp_kb_path):
+        """The REST endpoint's KBReindexResponse must not silently drop the
+        malformed-files list -- a Pydantic model missing the field would
+        ignore it during **result unpacking, re-introducing exactly the
+        silent-index-coverage-loss failure this fix targets."""
+        from pyrite.server.schemas import KBReindexResponse
+
+        (tmp_kb_path / "broken.md").write_text(
+            "---\ntitle: Broken\n*undefined-alias\n---\n\nBody\n"
+        )
+        registry.seed_from_config()
+        result = registry.reindex_kb("test-kb")
+
+        response = KBReindexResponse(name="test-kb", **result)
+        assert response.malformed, "malformed list must survive into the API response schema"
+        assert any("broken.md" in m["path"] for m in response.malformed)
+
 
 class TestHealthKB:
     def test_health_reports_healthy(self, registry, tmp_kb_path):

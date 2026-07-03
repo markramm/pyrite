@@ -59,4 +59,3 @@ enable repo-wide. Options, in order of preference:
   documentation exists in CLAUDE.md / pyrite-dev skill as an interim
   measure.
 - Closes the last open item of fail-open-exception-sweep.
-

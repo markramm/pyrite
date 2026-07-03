@@ -56,6 +56,7 @@ class KBReindexResponse(BaseModel):
     added: int
     updated: int
     removed: int
+    malformed: list[dict[str, str]] = Field(default_factory=list)
 
 
 # =============================================================================

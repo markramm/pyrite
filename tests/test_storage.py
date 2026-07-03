@@ -886,6 +886,53 @@ class TestSyncMalformedFileSummary:
         )
 
 
+class TestSyncKbMalformedFileSummary:
+    """`sync_kb` (the DB-only-KB sibling of `sync_incremental`, used by
+    KBRegistryService) goes through `repo.list_entries()`, which silently
+    skips unparseable files with only a log warning and no result-level
+    signal at all — unlike `sync_incremental`, which already tracks a
+    `malformed` list. This is the verify-after-write-on-the-index-path gap:
+    a file dropped from index coverage here is invisible to any caller
+    inspecting the sync result.
+    """
+
+    @pytest.fixture
+    def setup_with_malformed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            db = PyriteDB(db_path)
+            kb_path = tmpdir / "test-kb"
+            kb_path.mkdir()
+            kb_config = KBConfig(
+                name="test-kb", path=kb_path, kb_type="events", description="Test KB"
+            )
+            repo = KBRepository(kb_config)
+            event = EventEntry.create(date="2025-01-10", title="Event 0", body="Body 0.")
+            repo.save(event)
+            (kb_path / "bad-1.md").write_text(
+                "---\ntitle: Bad One\n*undefined-alias\n---\n\nBody\n"
+            )
+
+            config = PyriteConfig(
+                knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+            )
+            index_mgr = IndexManager(db, config)
+            yield {"db": db, "config": config, "index_mgr": index_mgr, "kb_config": kb_config}
+            db.close()
+
+    def test_sync_kb_returns_malformed_files_in_result(self, setup_with_malformed):
+        results = setup_with_malformed["index_mgr"].sync_kb(setup_with_malformed["kb_config"])
+        assert "malformed" in results, (
+            f"expected 'malformed' key in sync_kb result; got keys {list(results.keys())}"
+        )
+        malformed = results["malformed"]
+        assert len(malformed) == 1, f"expected 1 malformed file, got {malformed}"
+        paths = [m.get("path") if isinstance(m, dict) else str(m) for m in malformed]
+        assert any("bad-1.md" in p for p in paths)
+        assert results.get("added", 0) == 1, results
+
+
 class TestParseIndexedAt:
     """Tests for _parse_indexed_at() helper in index.py."""
 

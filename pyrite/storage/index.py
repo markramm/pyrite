@@ -1073,9 +1073,16 @@ class IndexManager:
 
         return results
 
-    def sync_kb(self, kb_config: KBConfig) -> dict[str, int]:
-        """Sync a single KB given its config. Used by KBRegistryService for DB-only KBs."""
-        results = {"added": 0, "updated": 0, "removed": 0}
+    def sync_kb(self, kb_config: KBConfig) -> dict[str, Any]:
+        """Sync a single KB given its config. Used by KBRegistryService for DB-only KBs.
+
+        Mirrors ``sync_incremental``'s malformed-file tracking: a file that
+        fails to parse is recorded in ``results["malformed"]`` rather than
+        silently dropped from index coverage with only a log line (the
+        verify-after-write-on-the-index-path gap — ``list_entries()``'s
+        generator swallows parse errors with no result-level signal).
+        """
+        results: dict[str, Any] = {"added": 0, "updated": 0, "removed": 0, "malformed": []}
 
         if not kb_config.path.exists():
             return results
@@ -1092,7 +1099,18 @@ class IndexManager:
         indexed = self._load_indexed_state(kb_config.name)
         seen_ids = set()
 
-        for entry, file_path in repo.list_entries():
+        for file_path in repo.list_all_files():
+            try:
+                entry = repo.load_entry_from_file(file_path)
+            except FrontmatterError as e:
+                results["malformed"].append({"path": str(file_path), "error": str(e)})
+                logger.warning("Malformed frontmatter in %s: %s", file_path, e)
+                continue
+            except Exception as e:
+                results["malformed"].append({"path": str(file_path), "error": str(e)})
+                logger.warning("Could not parse %s", file_path, exc_info=True)
+                continue
+
             seen_ids.add(entry.id)
 
             if entry.id not in indexed:
