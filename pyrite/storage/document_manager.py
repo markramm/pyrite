@@ -84,7 +84,12 @@ class DocumentManager:
         try:
             schema = repo.config.kb_schema
             type_schema = schema.get_type_schema(entry.entry_type)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Schema lookup failed for entry type %r, assuming non-templated subdirectory: %s",
+                entry.entry_type,
+                e,
+            )
             return False
         sub = getattr(type_schema, "subdirectory", None) if type_schema else None
         return bool(sub) and "{" in sub

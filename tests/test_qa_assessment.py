@@ -492,6 +492,25 @@ class TestTaskIntegration:
                 "test-entry", "test-kb", "qa-test-123", [{"severity": "error"}]
             )
 
+    def test_maybe_create_task_logs_warning_on_failure(self, qa_env, caplog):
+        """A failed follow-up task creation should be visible at warning
+        level, not silently swallowed at debug -- the QA assessment itself
+        still succeeds, but an operator should be able to tell a broken
+        auto-task-creation path apart from one that's just quiet."""
+        import logging
+
+        with patch("pyrite.services.task_service.TaskService.create_task") as mock_create:
+            mock_create.side_effect = RuntimeError("task db unavailable")
+            with caplog.at_level(logging.WARNING):
+                qa_env["qa"]._maybe_create_task(
+                    "test-entry", "test-kb", "qa-test-123", [{"severity": "error"}]
+                )
+
+        assert any(
+            record.levelno >= logging.WARNING and "test-entry" in record.message
+            for record in caplog.records
+        )
+
 
 # =========================================================================
 # Phase E: CLI commands

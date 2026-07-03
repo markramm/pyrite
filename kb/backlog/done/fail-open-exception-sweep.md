@@ -12,7 +12,7 @@ links:
   kb: pyrite
 importance: 5
 kind: tech_debt
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 0
@@ -159,17 +159,65 @@ no need to reopen them here.
   In-band signaling for this exclusion is tracked under
   [[in-band-degradation-signaling]], not retrofitted here per the
   operator's explicit split.
-- [ ] Low-stakes site #7 (repository.py, document_manager.py, alembic
-  4x pass)
-- [ ] CLI-consistency-review items: search_commands.py silent
-  file-search fallback, qa_service.py/kb_service.py debug-level write
-  failures
-- [ ] Lint/checklist rule preventing new fail-open sites
+- [x] **Site #7 — low-stakes unlogged swallows** (2026-07-03) — two
+  of the three fixed, one left as-is on inspection:
+  - `repository.py`'s `find_file` frontmatter-scan fallback (`except
+    Exception: continue` while scanning `*.md` for a matching
+    frontmatter ID) now logs a warning naming the unreadable file
+    before continuing the scan. Fault-injection test: a file with
+    unterminated-YAML frontmatter in the scan path; asserts the
+    warning names the file and the scan still returns None gracefully
+    (not raising) — failed before the fix (zero warnings).
+  - `document_manager.py`'s `_uses_templated_subdir` schema-lookup
+    fallback (`except Exception: return False`) now logs a warning
+    naming the entry type before returning the same safe default.
+    Fault-injection test: mocks `repo.config.kb_schema` to raise;
+    asserts the entry type appears in a warning log — failed before
+    the fix.
+  - alembic `002_collaboration_tables.py`'s 4× `except Exception:
+    pass` around `ALTER TABLE ADD COLUMN` were NOT touched — inspected
+    and confirmed legitimate: the code comment already documents these
+    as deliberately idempotent (fail only when the column already
+    exists, from a prior `create_all()`). Logging here would just add
+    warning noise on every normal idempotent re-run without
+    identifying any real failure mode. This is the sweep's own
+    documented "~30% legitimate boundary" category, not a swallow.
+- [x] **CLI-consistency-review items** (2026-07-03) —
+  `search_commands.py`'s index-search-fails-fall-back-to-file-search
+  path was inspected and found already correctly surfaced, not
+  masked: it prints `[red]Search error...[/red]` /
+  `[dim]Falling back to file search...[/dim]` to the console in rich
+  mode, and returns a proper `{error, error_type}` JSON payload with
+  exit code 1 in non-rich mode (both landed via the earlier
+  `QuerySyntaxError`/`cli_error` work this session). The ticket's
+  "masks index corruption as degraded search" framing was accurate at
+  audit time but stale by the time this item was picked up — left
+  unchanged. `qa_service.py:_maybe_create_task` and
+  `kb_service.py:_auto_embed` both bumped `logger.debug` →
+  `logger.warning` (with `exc_info`) — both are optional side effects
+  (a follow-up task, a search-index embed) whose failure doesn't
+  affect the primary write, but silent debug-level failure would hide
+  a broken auto-task or auto-embed pipeline from operators. Two new
+  fault-injection tests, both failed before the level bump (warning
+  assertion found nothing at debug level).
+- [x] **Lint/checklist rule preventing new fail-open sites** (2026-07-03)
+  — evaluated ruff's `BLE001` (blind-except) as the mechanical gate.
+  Found 153 pre-existing violations repo-wide (index.py 13,
+  registry.py 12, kb_service.py 10, admin.py 10, github_auth.py 8,
+  ...) — enabling it repo-wide today would either fail CI immediately
+  or require blanket per-file-ignores that defeat the purpose, same
+  shape as the mypy strict-ratchet decision on
+  [[mypy-strict-ratchet-burn-down-pyrite-storage-errors]]. Filed
+  [[add-ruff-ble001-blind-except-lint-gate-for-fail-open-prevention]]
+  (medium, M) to scope a per-file-ignore ratchet or diff-scoped check
+  rather than adding it unscoped in this pass.
 
 ## Acceptance criteria
 
 - Sites 1-6 fixed with a test each where feasible (fault-inject the
-  swallowed exception, assert the failure is now visible).
+  swallowed exception, assert the failure is now visible). **Met** —
+  sites 1-7 all fixed (site 7 added beyond the original 1-6 scope).
 - A lint or documented checklist rule prevents new fail-open sites.
-
-
+  **Deferred** — evaluated and scoped as a follow-up ticket rather
+  than implemented, since a naive rollout would be either broken (CI
+  fails on 153 pre-existing sites) or toothless (blanket-ignored).

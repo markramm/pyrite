@@ -55,4 +55,3 @@ that history is why this layer was picked over a repo-wide ratchet.
   --disallow-untyped-defs` returns 0 errors.
 - CI actually gates on this (not continue-on-error) for the storage
   scope.
-

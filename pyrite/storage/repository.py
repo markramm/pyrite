@@ -258,7 +258,10 @@ class KBRepository:
                         fm = load_yaml(text[3:end])
                         if isinstance(fm, dict) and fm.get("id") == entry_id:
                             return md_file
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    "Skipping unreadable file during find_file scan: %s (%s)", md_file, e
+                )
                 continue
 
         return None

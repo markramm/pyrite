@@ -268,6 +268,31 @@ class TestKBServiceQueueIntegration:
         # Should have called embed_entry directly
         mock_embed_svc.embed_entry.assert_called_once_with("entry-1", "test-kb")
 
+    def test_auto_embed_logs_warning_on_sync_failure(self, tmp_db, caplog):
+        """A failed synchronous embed should be visible at warning level --
+        an entry saves fine either way, but silent embed failures explain
+        why semantic search can't find something later."""
+        import logging
+
+        from pyrite.services.kb_service import KBService
+
+        db, config, _ = tmp_db
+        svc = KBService(config, db)
+
+        mock_embed_svc = MagicMock()
+        mock_embed_svc.embed_entry.side_effect = RuntimeError("embedding backend down")
+        svc._embedding_svc = mock_embed_svc
+        svc._embedding_checked = True
+        svc._embedding_worker = None
+
+        with caplog.at_level(logging.WARNING):
+            svc._auto_embed("entry-1", "test-kb")
+
+        assert any(
+            record.levelno >= logging.WARNING and "entry-1" in record.message
+            for record in caplog.records
+        )
+
 
 # =============================================================================
 # REST API status endpoint

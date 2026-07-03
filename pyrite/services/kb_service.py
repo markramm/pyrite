@@ -105,7 +105,7 @@ class KBService:
             try:
                 svc.embed_entry(entry_id, kb_name)
             except Exception as e:
-                logger.debug("Auto-embed failed for %s: %s", entry_id, e)
+                logger.warning("Auto-embed failed for %s: %s", entry_id, e, exc_info=True)
 
     @property
     def wikilinks(self) -> WikilinkService:

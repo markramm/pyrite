@@ -375,7 +375,7 @@ class QAService:
                 tags=["qa", "auto-generated"],
             )
         except Exception as e:
-            logger.debug("Task creation failed: %s", e)
+            logger.warning("Task creation failed for %s: %s", entry_id, e, exc_info=True)
 
     # =========================================================================
     # Query API

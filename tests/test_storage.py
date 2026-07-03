@@ -369,6 +369,24 @@ Some content.
         assert entry is not None
         assert entry.title == "Test ADR"
 
+    def test_find_file_logs_warning_on_unreadable_file_during_scan(self, events_kb, caplog):
+        """A file that raises during the frontmatter scan (bad YAML, bad
+        encoding, etc.) should log a warning naming the file, not vanish
+        silently -- the scan should still find other matching entries."""
+        import logging
+
+        bad_dir = events_kb.config.path / "adrs"
+        bad_dir.mkdir(exist_ok=True)
+        # Invalid YAML frontmatter (unterminated block collection) raises
+        # during load_yaml, exercising the swallowed except.
+        (bad_dir / "0100-bad-adr.md").write_text("---\nid: [unterminated\n---\nbody\n")
+
+        with caplog.at_level(logging.WARNING):
+            found = events_kb.find_file("nonexistent-id-xyz")
+
+        assert found is None
+        assert any("0100-bad-adr.md" in record.message for record in caplog.records)
+
     def test_load_strips_duplicated_frontmatter_from_body(self, events_kb):
         """Frontmatter field duplicated in body should be stripped on load."""
         # Write a file with 'type: event' leaked into body (migration error pattern)

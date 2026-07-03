@@ -150,6 +150,28 @@ def template_setup(tmp_path):
     db.close()
 
 
+def test_uses_templated_subdir_logs_warning_on_schema_lookup_failure(setup, caplog):
+    """If schema lookup raises (e.g. corrupt kb_schema), _uses_templated_subdir
+    should log a warning naming the entry type before falling back to False,
+    not swallow the error silently."""
+    import logging
+    from unittest.mock import PropertyMock, patch
+
+    entry = build_entry("note", entry_id="warn-test", title="Warn Test", body="b")
+    kb = setup["kb"]
+    from pyrite.storage.repository import KBRepository
+
+    repo = KBRepository(kb)
+
+    with patch.object(type(repo.config), "kb_schema", new_callable=PropertyMock) as mock_schema:
+        mock_schema.side_effect = RuntimeError("corrupt schema")
+        with caplog.at_level(logging.WARNING):
+            result = DocumentManager._uses_templated_subdir(repo, entry)
+
+    assert result is False
+    assert any("note" in record.message for record in caplog.records)
+
+
 def test_save_entry_moves_file_on_field_change(template_setup):
     """When a templated field changes, saving moves the file to the new path."""
     doc_mgr = template_setup["doc_mgr"]
