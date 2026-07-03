@@ -25,6 +25,15 @@ links:
 - target: llm-usage-tracking-and-quotas
   relation: has_subtask
   kb: pyrite
+- target: search-query-syntax-error-contract
+  relation: has_subtask
+  kb: pyrite
+- target: docs-onboarding-fiction-sweep
+  relation: has_subtask
+  kb: pyrite
+- target: docs-operational-contracts-travel-with-tool
+  relation: has_subtask
+  kb: pyrite
 - target: security-audit-trail
   relation: related
   kb: pyrite
@@ -77,11 +86,18 @@ later epic, gated on provenance/source-tier enforcement.
    citizen. (M)
 5. [[llm-usage-tracking-and-quotas]] — only if hosted AI features are
    enabled for peers; can ship after invite if AI is off at launch. (M)
-6. Fuzz/audit entry-derived-term handling in query construction —
-   the `links orphans` FTS crash class is fixed (40e7a39 quotes FTS5
-   terms in suggest/discover), but a hosted, logged-in surface deserves
-   one deliberate pass over every MATCH/tsquery construction site. (S)
-7. Hosting-security Phase 1 (static analysis audit from
+6. [[search-query-syntax-error-contract]] — the remaining live member
+   of the 40e7a39 crash class (sanitizer bypass on operator/quoted
+   queries) plus QUERY_SYNTAX error classification; includes the
+   deliberate pass over every MATCH/tsquery construction site. (S)
+7. [[docs-onboarding-fiction-sweep]] — a peer's first hour IS the
+   onboarding funnel; every documented command they'd run must work
+   (`pip install`, `--tier read`, MCP setup). (S)
+8. [[docs-operational-contracts-travel-with-tool]] — peers' agents
+   won't have tcp-skills or Mark's memory notes; the operational
+   contracts (index-after-write, claim semantics, error shape, search
+   quoting rule) must ship in `orient`/help/docs. (M)
+9. Hosting-security Phase 1 (static analysis audit from
    [[hosting-security-hardening]]) run against the pilot deployment
    config — audit only, fixes triaged by tier. (S)
 

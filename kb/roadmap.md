@@ -156,9 +156,10 @@ nothing else.
 - [[oauth-state-store-persistence]] (high, S) — login survives restarts.
 - [[mcp-rest-tool-parity]] (medium, M) — the web UI peers see must match
   agent capability.
-- Query-construction audit (S) — one deliberate pass over every
-  MATCH/tsquery site that touches entry-derived terms (the 40e7a39
-  bug class), since the surface becomes hosted and logged-in.
+- [[search-query-syntax-error-contract]] (high, S) — fix the sanitizer
+  bypass on operator/quoted queries (live crash, 40e7a39 class),
+  return QUERY_SYNTAX instead of INTERNAL/retryable, and audit every
+  MATCH/tsquery site that touches entry-derived terms.
 - Hosting-security Phase 1 static audit from
   [[hosting-security-hardening]] run against the pilot deploy config —
   audit only; fixes triaged by tier.
@@ -168,7 +169,29 @@ nothing else.
   read access to cascade-research + cascade-timeline + actors, plus a
   written invite doc (what they see, what's logged, what's not).
 
-### Workstream 3 — Bookkeeping
+### Workstream 3 — Documentation (from the 2026-07-02 docs audit)
+
+Finding: docs are excellent wherever an agent loop exercises them
+daily (CLAUDE.md, pyrite-dev skill, MCP truncation docs) and fictional
+wherever never executed (`pip install pyrite` is DOA on PyPI,
+`mcp --tier read` doesn't exist, getting-started's git-init claim is
+false). A pilot peer's first hour is the onboarding funnel, so the
+first two items are epic subtasks:
+
+- [[docs-onboarding-fiction-sweep]] (high, S) — every documented
+  onboarding command must work on the current build; settle the PyPI
+  vs source-install story; implement or un-document `--tier`.
+- [[docs-operational-contracts-travel-with-tool]] (high, M) — move the
+  operational contracts out of tcp-skills/memory into
+  `orient`/help/docs; JSON-contracts page; un-stale api-design.md;
+  multi-session git discipline into CLAUDE.md; AGENTS.md.
+- [[ci-run-getting-started-tutorial]] (medium, S) — docs-as-tests so
+  the fiction class can't re-ship.
+- [[qa-validate-enforce-type-rubrics]] (medium, M) — make kb.yaml
+  rubrics enforced rather than decorative; reconcile the ADR rubric;
+  fix kind-enum errors and broken ADR wikilinks.
+
+### Workstream 4 — Bookkeeping
 
 - Backfill CHANGELOG 0.21–0.24; keep it current through 0.25.
 - [[links-asymmetric-intra-kb-mode]] (medium, S) — unblocks the
