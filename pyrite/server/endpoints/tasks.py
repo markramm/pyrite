@@ -15,6 +15,26 @@ from ..api import get_task_service, limiter, requires_kb_tier
 router = APIRouter(tags=["Tasks"])
 
 
+@router.get("/tasks")
+@limiter.limit("120/minute")
+def list_tasks(
+    request: Request,
+    kb: str | None = Query(None, description="KB name; omit to span all KBs"),
+    status: str | None = Query(None, description="Filter by status ('open' also matches unset)"),
+    assignee: str | None = Query(None, description="Filter by assignee, e.g. 'mark'"),
+    parent: str | None = Query(None, description="Filter by parent task id"),
+    svc: TaskService = Depends(get_task_service),
+):
+    """List tasks across one KB or all of them.
+
+    Exists so the human worklist board can ask one question -- "what is
+    assigned to Mark, everywhere?" -- in a single call. TaskService.list_tasks
+    already did this for the CLI; only the REST surface was missing.
+    """
+    tasks = svc.list_tasks(kb_name=kb, status=status, assignee=assignee, parent=parent)
+    return {"count": len(tasks), "tasks": tasks}
+
+
 class TaskClaimRequest(BaseModel):
     """Request body for claiming a task."""
 

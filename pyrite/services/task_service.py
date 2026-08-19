@@ -256,7 +256,7 @@ class TaskService:
         parent: str | None = None,
     ) -> list[dict[str, Any]]:
         """List tasks with optional filters."""
-        query = "SELECT id, title, kb_name, status, assignee, priority, metadata FROM entry WHERE entry_type = 'task'"
+        query = "SELECT id, title, kb_name, status, assignee, priority, metadata, updated_at FROM entry WHERE entry_type = 'task'"
         params: dict[str, str] = {}
         if kb_name:
             query += " AND kb_name = :kb_name"
@@ -288,6 +288,12 @@ class TaskService:
                     "priority": int(row.get("priority") or meta.get("priority", 5)),
                     "parent": meta.get("parent", ""),
                     "kb_name": row["kb_name"],
+                    # Why a task is parked. Drives the human worklist board's
+                    # columns; see kb/scripts/human-worklist-migrate.py for the
+                    # vocabulary (browser-session / decision / foia-response /
+                    # outreach / external-clock).
+                    "parked_awaiting": meta.get("parked_awaiting", ""),
+                    "updated_at": row.get("updated_at") or "",
                 }
             )
         return tasks
