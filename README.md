@@ -343,6 +343,12 @@ pyrite sw standards      # Coding conventions
 
 ## Background
 
+Pyrite was built at [Transparency Cascade Press](https://transparencycascade.org), an independent investigative outfit, because the reporting needed it. Investigations there run on thousands of sourced entries — actors, events, contracts, court filings — that have to stay verifiable months after they were written, and no note-taking tool treated an AI research assistant as a first-class user of that record rather than a chat window bolted onto it.
+
+That constraint shaped the design. Agents are users here: they create and query entries through the CLI and MCP, they get typed errors instead of tracebacks, and they operate under the same schema validation and three-tier permissions a human does. The knowledge base is plain markdown in git precisely so a claim can be traced to the commit that introduced it, which is a journalism requirement before it is a software one.
+
+It is still used in production for that work, and it has since grown past it into a general tool.
+
 Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5 + vector search, REST API with tier enforcement, SvelteKit frontend, service layer, schema-as-config, content negotiation, collections, block references, web clipper, AI integration. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.
 
 ## License
