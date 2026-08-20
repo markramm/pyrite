@@ -292,10 +292,31 @@ class TaskService:
                     # columns; see kb/scripts/human-worklist-migrate.py for the
                     # vocabulary (browser-session / decision / foia-response /
                     # outreach / external-clock).
+                    #
+                    # The index does not persist non-schema frontmatter into
+                    # `metadata`, so this is usually empty here and gets
+                    # hydrated from the entry below. Reading metadata first
+                    # keeps the field working if that ever changes.
                     "parked_awaiting": meta.get("parked_awaiting", ""),
                     "updated_at": row.get("updated_at") or "",
                 }
             )
+
+        # Hydrate parked_awaiting from the entries themselves. Only done when
+        # a caller is looking at a bounded set (a specific assignee, e.g. the
+        # human worklist) -- an unfiltered listing would turn this into an
+        # N+1 across the whole backlog for a field it doesn't use.
+        if assignee:
+            for t in tasks:
+                if t["parked_awaiting"]:
+                    continue
+                try:
+                    entry = self.kb_svc.get_entry(t["id"], t["kb_name"])
+                except Exception:
+                    continue
+                if entry:
+                    t["parked_awaiting"] = (entry.get("parked_awaiting") or "").strip()
+
         return tasks
 
     def claim_task(self, task_id: str, kb_name: str, assignee: str) -> dict[str, Any]:
