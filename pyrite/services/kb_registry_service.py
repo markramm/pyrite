@@ -128,6 +128,27 @@ class KBRegistryService:
             description=description,
             source="user",
         )
+
+        # config._db_kb_cache is only populated once, on first DB access
+        # (create_app()'s _app_get_db() calls db.merge_registered_kbs()
+        # lazily and then never again). Without this, a KB registered here
+        # is invisible to config.get_kb()/all_kbs() -- and therefore to
+        # KBService.get_kb() and entry creation -- for the rest of this
+        # process's life, even though it's already committed to the DB.
+        # Update the in-memory cache immediately so it's usable in the same
+        # request/process, not just after a restart.
+        self.config.register_db_kbs(
+            [
+                {
+                    "name": name,
+                    "path": str(resolved),
+                    "kb_type": kb_type,
+                    "description": description,
+                    "default_role": None,
+                }
+            ]
+        )
+
         return self.get_kb(name)  # type: ignore[return-value]
 
     def _apply_preset(self, kb_path: Path, name: str, kb_type: str, description: str) -> None:
