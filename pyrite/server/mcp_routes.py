@@ -137,9 +137,12 @@ def mount_mcp_routes(
 
     from .mcp_server import PyriteMCPServer
 
-    # The SSE transport expects a relative path for the message endpoint.
-    # Clients POST to this path with a session_id query parameter.
-    sse_transport = SseServerTransport("/mcp/messages/")
+    # SseServerTransport prepends scope["root_path"] (which is "/mcp" here,
+    # since this whole app is nested under Mount("/mcp", ...) below) to this
+    # endpoint to build the client-facing POST path. Passing "/mcp/messages/"
+    # here double-prefixes it to "/mcp/mcp/messages/", which 404s — the
+    # endpoint must be relative to the mount point, i.e. just "/messages/".
+    sse_transport = SseServerTransport("/messages/")
 
     # Cache MCP server instances per tier to avoid repeated heavy init.
     _mcp_servers: dict[str, PyriteMCPServer] = {}
