@@ -727,13 +727,32 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     except Exception:
         logger.warning("Failed to seed KB registry from config", exc_info=True)
 
-    # Set up embedding service for prewarm (actual prewarm happens in lifespan)
+    # Set up embedding service for prewarm and actually pre-warm it on startup.
+    # This used to only construct the EmbeddingService and stop -- the comment
+    # said "actual prewarm happens in lifespan" but no lifespan/startup hook
+    # ever called .prewarm(), so /health's embeddings.ready stayed false
+    # forever and the first real search/embed request always paid the full
+    # cold-start cost this feature exists to avoid. Runs in a thread since
+    # prewarm() is a blocking sentence-transformers model load.
     if config.settings.prewarm_embeddings:
         from ..services.embedding_service import EmbeddingService
 
         application.state.pyrite_embedding_svc = EmbeddingService(
             _app_get_db(), model_name=config.settings.embedding_model
         )
+
+        @application.on_event("startup")
+        async def _prewarm_embedding_model() -> None:
+            from starlette.concurrency import run_in_threadpool
+
+            warmed = await run_in_threadpool(application.state.pyrite_embedding_svc.prewarm)
+            if warmed:
+                logger.info("Embedding model pre-warmed on startup")
+            else:
+                logger.warning(
+                    "Embedding model pre-warm failed or unavailable "
+                    "(sentence-transformers not installed?)"
+                )
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins
