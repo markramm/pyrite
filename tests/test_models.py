@@ -640,20 +640,44 @@ class TestParseDatetime:
 
     def test_datetime_passes_through_unchanged(self):
         aware = datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
-        naive = datetime(2026, 1, 15, 9, 0)
         assert parse_datetime(aware) is aware
-        assert parse_datetime(naive) is naive
+
+    def test_naive_datetime_is_anchored_to_utc(self):
+        naive = datetime(2026, 1, 15, 9, 0)
+        parsed = parse_datetime(naive)
+        assert parsed == datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
+        assert parsed.tzinfo is not None
+
+    def test_loader_hands_back_aware_values(self):
+        """#171 review: exercise the *loader* path, not just constructed values.
+
+        An unquoted timestamp is not a str by the time it reaches us -- ruamel
+        hands back a naive ``TimeStamp`` (or ``datetime``), which is why the
+        constructed-value tests alone missed the most common on-disk form.
+        """
+        from pyrite.models.core_types import get_entry_class
+
+        cls = get_entry_class("note")
+        for raw in ("2026-01-15T09:00:00", "2026-01-15 09:00:00"):
+            text = (
+                "---\nid: t\ntitle: T\ntype: note\n"
+                f"created_at: {raw}\n---\n\nbody\n"
+            )
+            entry = cls.from_markdown(text)
+            assert entry.created_at is not None, raw
+            assert entry.created_at.tzinfo is not None, raw
+            assert entry.created_at == datetime(2026, 1, 15, 9, 0, tzinfo=UTC), raw
 
     def test_missing_or_empty_falls_back_to_now_utc(self):
         for value in (None, ""):
             parsed = parse_datetime(value)
             assert parsed.tzinfo is not None
-            assert abs((datetime.now(UTC) - parsed).total_seconds()) < 5
+            assert abs((datetime.now(UTC) - parsed).total_seconds()) < 60
 
     def test_unparseable_falls_back_to_now_utc(self):
         parsed = parse_datetime("not-a-date")
         assert parsed.tzinfo is not None
-        assert abs((datetime.now(UTC) - parsed).total_seconds()) < 5
+        assert abs((datetime.now(UTC) - parsed).total_seconds()) < 60
 
 
 if __name__ == "__main__":

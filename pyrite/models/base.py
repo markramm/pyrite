@@ -592,7 +592,10 @@ def parse_datetime(s: Any) -> datetime:
 
     Accepted forms:
 
-    * ``datetime`` -- returned unchanged (a tz offset, if any, is kept).
+    * ``datetime`` -- an aware value is returned unchanged (its offset kept);
+      a naive one (e.g. an unquoted ``created_at: 2026-01-15T09:00:00``, which
+      ruamel hands back as a naive ``TimeStamp``) is anchored to UTC, so
+      comparisons against ``_utcnow()`` cannot raise ``TypeError``.
     * ``datetime.date`` -- a bare YAML date (``created_at: 2026-01-15``) is
       loaded by the YAML parser as a ``date``, not a ``str``. Anchored to
       midnight **UTC**: every timestamp the model itself *creates* is UTC
@@ -604,7 +607,7 @@ def parse_datetime(s: Any) -> datetime:
     * anything else (missing/empty/unparseable) -- "now" in UTC.
     """
     if isinstance(s, datetime):
-        return s
+        return s if s.tzinfo is not None else s.replace(tzinfo=UTC)
     if isinstance(s, date):
         return datetime(s.year, s.month, s.day, tzinfo=UTC)
     if not s:
@@ -612,7 +615,7 @@ def parse_datetime(s: Any) -> datetime:
     try:
         # Try ISO format
         if isinstance(s, str):
-            s = s.replace("Z", "+00:00")
+            s = re.sub(r"Z$", "+00:00", s)
             parsed = datetime.fromisoformat(s)
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=UTC)
