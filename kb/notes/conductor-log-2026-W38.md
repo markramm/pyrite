@@ -1751,3 +1751,39 @@ host at the tick's open), 1 in review (#81, rebased, auto-merge armed), 1
 building (#82), 1 redispatched by a peer (#69). Issues filed by this conductor:
 #86, #103, #104, #107, #109. Issues filed by its workers: #88, #89, #117, #118.
 First cold read of the loop dispatched, and it changed the outcome.**
+
+### Post-tick: the maintainer's decision on #97's two outside PRs
+
+Two outside contributors filed independently for #97 within ~an hour. The
+maintainer read both and chose **#116** (YaoSong808) as the fix, on the single
+technical point that decides it: #116 validates the target against
+`KBRepository.load` (the filesystem), #108 against `self.db.get_entry` (the
+SQLite index). An entry on disk but not yet `index sync`'d is invisible to the
+index, so #108 rejects links whose target genuinely exists — on the common
+`pyrite create` → `pyrite link` agent path.
+
+The maintainer's framing is worth keeping: **"both PRs are valuable and both
+contributions made the product better."** #108 is the stronger PR in two
+respects — `allow_dangling` + a `resolved` flag is a real design that #116 has
+no answer to, and its test set is broader. So the disposition is not
+winner/loser:
+
+- Commented on #116 with the decision and three non-blocking points (a
+  `KBNotFoundError` that returns `retryable: true` when it should not; the
+  exception ordering; the missing forward-reference hatch).
+- Commented on #108 naming exactly what it does better and why it is not
+  merging, and inviting the author to carry `allow_dangling` forward as its own
+  PR with their name on it.
+- Filed **#124** for `allow_dangling` + `resolved`, crediting #108, blocked on
+  #116 landing, including the defect where its duplicate-link early return
+  reports `resolved: True` without re-checking the existing target.
+
+Neither PR has run CI (`action_required`, held on first-time contributors); the
+maintainer is approving. Nothing merges until #116 is green — with #121 fresh,
+an author-reported green is not evidence.
+
+Process note for the retro: closing a first contribution with silence is how a
+project loses a contributor. The cost of writing #108's author a specific,
+technical "here is what you did better, here is the one thing that decided it,
+please come back" is a few minutes; the value chain's input here is people, not
+just diffs.
