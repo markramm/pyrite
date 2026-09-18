@@ -82,9 +82,8 @@ def _build_client(work_dir, api_key="", api_keys=None):
 class TestResolveAPIKeyRole:
     """Test the key → role resolution logic."""
 
-    @classmethod
     @pytest.fixture(scope="class")
-    def configs(cls, tmp_path_factory):
+    def configs(self, tmp_path_factory):
         """Create configs once for all role resolution tests."""
         tmpdir = tmp_path_factory.mktemp("resolve_api_key_role")
         c1, no_auth_config, db1, w1 = _build_client(tmpdir / "no-auth", api_key="", api_keys=[])
@@ -187,9 +186,8 @@ class TestResolveAPIKeyRole:
 class TestTierHierarchy:
     """Test that tier hierarchy (admin > write > read) is enforced correctly."""
 
-    @classmethod
     @pytest.fixture(scope="class")
-    def three_key_client(cls, tmp_path_factory):
+    def three_key_client(self, tmp_path_factory):
         """One client with read, write, admin keys — shared across all tests."""
         tmpdir = tmp_path_factory.mktemp("tier_hierarchy")
         keys = [
@@ -277,9 +275,8 @@ class TestTierHierarchy:
 class TestBackwardsCompatibility:
     """Existing behavior must not break."""
 
-    @classmethod
     @pytest.fixture(scope="class")
-    def no_auth_client(cls, tmp_path_factory):
+    def no_auth_client(self, tmp_path_factory):
         """Client with no auth configured."""
         tmpdir = tmp_path_factory.mktemp("no_auth")
         client, _, db, index_worker = _build_client(tmpdir, api_key="")
@@ -290,9 +287,8 @@ class TestBackwardsCompatibility:
             index_worker.wait_for_idle(timeout=10)
             db.close()
 
-    @classmethod
     @pytest.fixture(scope="class")
-    def single_key_client(cls, tmp_path_factory):
+    def single_key_client(self, tmp_path_factory):
         """Client with legacy single api_key."""
         tmpdir = tmp_path_factory.mktemp("single_key")
         client, _, db, index_worker = _build_client(tmpdir, api_key="my-key")
@@ -339,9 +335,8 @@ class TestBackwardsCompatibility:
 class TestTierErrorResponses:
     """Test that tier enforcement returns clear error messages."""
 
-    @classmethod
     @pytest.fixture(scope="class")
-    def read_only_client(cls, tmp_path_factory):
+    def read_only_client(self, tmp_path_factory):
         """Client with only a read-tier key."""
         tmpdir = tmp_path_factory.mktemp("read_only")
         keys = [{"key_hash": _hash_key("read-key"), "role": "read", "label": "R"}]
