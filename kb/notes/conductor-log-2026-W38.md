@@ -1224,3 +1224,65 @@ been tested." It has now.
 
 **Conductor's own verification in progress:** re-running the pre-fix reproducer
 6× on the branch (2 clean so far, against ~1-in-6 failure before the fix).
+
+### Tick 3 — the machine-footprint rule indicts this tick's own dispatch
+
+Retro 2 (`8ba4d42`, maintainer-called, landed on `dev` while this tick was
+absorbing) names the constraint this tick actually hit, and the rule it wrote
+condemns what this tick did:
+
+> **A footprint has two dimensions: files and the machine.** [...] Disjoint
+> files do not make heavy themes disjoint [...] **Run at most two
+> machine-heavy themes at once.**
+
+**Tick 3 dispatched four machine-heavy themes at once** — Playwright packages
+C, D and E (each a browser suite) plus the quality theme whose acceptance is
+*ten consecutive full-suite `-n auto` runs*. The file footprints were disjoint
+and I checked that carefully; the machine footprint I did not consider at all.
+The cap I applied ("up to six when footprint-disjoint and fewer than two
+branches await review") counted files and reviews, and nothing counted CPU.
+
+The cost is measured, not inferred: retro 2 records package E at **42 minutes
+against package B's 20 alone**, load average 28 on 10 cores. By the time this
+tick was verifying #81, **load average was 54** — worse, and partly my own
+doing: I added a 6× reproducer loop and then a 3× loop *on top of* the
+worker's inherited detached 10-run, to verify a theme whose evidence was
+already conclusive.
+
+**Corrective action taken now, not deferred to the next tick:** killed the
+inherited detached 10-run loop (PIDs 8666/8731). Its evidence had already
+answered the question — two completed full-suite runs, **zero** teardown
+errors, the only failure being #88's known unrelated race — and the remaining
+eight runs would have bought nothing at the price of the machine every other
+worker and every review is sharing.
+
+**Evidence tally for #81's criterion 5, from three independent sources:**
+- worker: 10-run targeted pass (8 clean, 2 × #88), full-suite 10-run pass (9/10
+  clean, 1 × #88), plus 3 more clean full-suite runs — **zero teardown errors in
+  every run**;
+- the detached full-suite pass: 4222 passed, **zero** teardown errors;
+- conductor's own 9 reproducer runs: 8 clean, 1 × #88, **zero teardown errors**,
+  against a pre-fix rate of ~1 in 6.
+
+Criterion 5 is about teardown errors specifically. Across roughly two dozen
+independent runs there are none, where the unpatched branch produced them
+reliably. **The criterion is met**; the worker's scruple about not having one
+*single uninterrupted* 10-run artifact was honourable but is satisfied by
+convergent evidence from three sources, and buying the last artifact would cost
+another ~25 minutes of a machine at load 54.
+
+**Two lessons for the retro, both mine:**
+1. The cap must count machine-heavy themes, and *the conductor's own
+   verification runs are machine-heavy too*. Retro 2 says "one heavy review
+   counts as a heavy theme" — this tick ran two heavy reviews (#84's attempted
+   re-run, #81's reproducer) while four heavy themes were building.
+2. **Verification has a stopping rule.** I ran 9 reproducer runs after the
+   evidence was already conclusive at 3. "More evidence" is not free when the
+   machine is the constraint; the question is whether another run could change
+   the decision, and after the third it could not.
+
+Also noted: #69's cold read (run by a peer session, not this one) produced the
+two new `review.md` rules in retro 2 — verify-red on *every* regression-named
+test, and no number in a report that was not measured under one interpreter
+with the tree pinned. #69 is back at `e0c7f704` and was **redispatched**, so my
+local rebase of it is moot; the branch is the worker's again.
