@@ -75,5 +75,20 @@ empty-branch-plus-draft-PR claim from the skill needs something to sit on.
 was accepted from inside a subagent; the `general-purpose` fallback in
 `dispatch.md` was not needed. The conductor loop can therefore run nested.
 
-**Blocked / for the maintainer.** Nothing blocking a worker. Two harness
-permission gaps and one skill contradiction filed as `process` issues (below).
+**Blocked / for the maintainer.** Nothing blocking a worker. Three `process`
+issues filed from this tick's own friction:
+
+- **#71** — the skill says to commit this log on `dev` directly; the ruleset
+  forbids it. Worked around with the weekly branch and PR #70.
+- **#72** — the permission classifier refuses read-only `gh pr view --json
+  body` (intermittently) and the merged-branch cleanup step 1 of the tick
+  specifies. Both need a maintainer decision on `.claude/settings.json`.
+- **#73** — `gh pr create` refuses the empty branch the claim protocol is
+  written around; worked around by committing the spec as `.claude/THEME.md`,
+  which turned out to have a benefit worth keeping (the worker can re-read its
+  own authority after losing context).
+
+Also for the maintainer: seven Dependabot PRs for `web/` (#23–#29) are still
+open and were not taken this tick — they are pull-forward-pool-shaped work and
+rule 4 says definition-of-done comes first. They are the obvious first theme
+once a slot frees up, landed as one PR rather than seven.
