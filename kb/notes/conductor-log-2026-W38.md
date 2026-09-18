@@ -1709,3 +1709,45 @@ left alone.
 Breaker tripped, tick cron deleted, maintainer has the report. The
 second-redispatch worker on #69 runs to completion; its result is reviewed when
 the maintainer restarts the loop, not before. No further dispatch from me.
+
+### Tick 3 final — #83 merged, #81 in review, #82 still building
+
+**PR #83 (Package D) merged** at 07:38:42Z; dev push green in 1m48s. Content
+verified on `dev` (the `saving || !kb` guard and the backlog item in `done/`)
+before removing the worktree and branch.
+
+**PR #81 (quality theme) flipped to ready, rebased, auto-merge armed.** Final
+full suite on the branch: **4225 passed, 68 skipped, 7m15s, zero teardown
+errors** — and the count rising from the worker's 4223 by exactly two is the
+check that the two new context-manager tests are the only additions and nothing
+was dropped. Five commits: the worker's fix, then four from this conductor
+closing the cold read's findings (app-state connection tracked, teardown loops
+guarded, the regression test with verify-red, the three unconverted sites), then
+the KB item closed with both acceptance boxes ticked.
+
+The PR body carries the four known trade-offs the cold read surfaced and this
+theme deliberately did not fix — `close()` not being terminal, `__exit__` not
+guarding re-entry, `IndexWorker._threads` never pruned, and the new context
+manager having zero adoption in `pyrite/` while `cli/context.py` hand-rolls the
+same `try/finally` three times. Each is a real follow-up; none is this theme,
+and a reviewer should see them rather than discover them.
+
+**Package C (#82) is still building** and was left strictly alone: five live
+processes, uncommitted edits to `auth.spec.ts`, `playwright.config.ts` and
+`login/+page.svelte` — the shape of someone implementing option (a), the
+auth-enabled second Playwright project. Per #109's lesson, the branch is the
+worker's until its report arrives.
+
+**Two pushes died silently at the 120 s foreground timeout** before the
+pre-push suite (~4 min) could finish — once on #69, once on #81 — each time
+leaving the remote unchanged with no error visible until the tip was checked.
+A conductor that did not re-check would believe it had pushed. Worth folding
+into the push guidance: **a `git push` on a code branch needs a timeout longer
+than the pre-push suite, and its result is the remote tip, not the command's
+exit.**
+
+**Tick 3 close: 3 merged (#84 Package E, #83 Package D, plus #74 absorbed by the
+host at the tick's open), 1 in review (#81, rebased, auto-merge armed), 1
+building (#82), 1 redispatched by a peer (#69). Issues filed by this conductor:
+#86, #103, #104, #107, #109. Issues filed by its workers: #88, #89, #117, #118.
+First cold read of the loop dispatched, and it changed the outcome.**
