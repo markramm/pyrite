@@ -194,7 +194,8 @@ class SearchService:
             tags: Filter by tags (AND logic)
             date_from: Filter from date (YYYY-MM-DD)
             date_to: Filter to date (YYYY-MM-DD)
-            limit: Max results
+            limit: Max results. A positive integer; anything else raises
+                ``ValueError`` naming the value.
             offset: Pagination offset
             sanitize: Whether to sanitize query for FTS5 (default True)
             mode: Search mode - keyword, semantic, or hybrid
@@ -235,6 +236,17 @@ class SearchService:
         # (not on self) because the service instance is shared across requests
         # on the server/MCP side.
         tr: dict[str, Any] = trace if trace is not None else {}
+
+        # Validate `limit` once, here, rather than letting whatever arithmetic
+        # reaches it first decide the error. `limit=None` used to surface as a
+        # bare TypeError from `limit * 3` deep inside the hybrid leg -- and,
+        # with a filter active, the old dropped-leg rescue caught it and
+        # reported "this backend cannot filter". `limit=-1` reached SQLite and
+        # came back as OperationalError, which the REST layer turns into HTTP
+        # 400 SEARCH_FAILED. Both are the caller's mistake; say so, and name
+        # the value (#56).
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError(f"limit must be a positive integer, got {limit!r}")
 
         # Normalize mode
         if isinstance(mode, str):

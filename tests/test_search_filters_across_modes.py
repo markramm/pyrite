@@ -17,6 +17,7 @@ real and returns *every* entry as a candidate — which is exactly the condition
 that made the unfiltered vector leg leak wrong-typed entries into the fused set.
 """
 
+import re
 import tempfile
 from pathlib import Path
 
@@ -616,3 +617,32 @@ def test_semantic_leg_alone_excludes_archived(archived_svc):
 
     rows = backend.search_semantic(embedding, kb_name="test-kb", limit=10, include_archived=True)
     assert {r["id"] for r in rows} == {"live-one", "gone-one"}
+
+
+# =========================================================================
+# limit validation at the service boundary
+# =========================================================================
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("bad_limit", [None, -1, 0, "ten"], ids=["none", "negative", "zero", "str"])
+def test_a_bad_limit_is_rejected_by_name(svc, mode, bad_limit):
+    """``limit`` is validated once, at the service boundary, not by whatever
+    arithmetic happens to hit it first.
+
+    ``limit=None`` used to reach ``limit * 3`` and raise a bare ``TypeError``
+    from deep inside the hybrid leg — which, with a filter active, the
+    dropped-leg rescue then mislabelled as "this backend cannot filter".
+    ``limit=-1`` reached SQLite and raised ``OperationalError``, surfacing as
+    HTTP 400 SEARCH_FAILED. Both are the caller's mistake and should say so,
+    naming the value.
+    """
+    with pytest.raises(ValueError, match=re.escape(repr(bad_limit))):
+        svc.search("detention", kb_name="test-kb", mode=mode, limit=bad_limit)
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_a_good_limit_is_honoured(svc, mode):
+    """Guard against over-validation: a normal limit still works everywhere."""
+    results = svc.search("detention", kb_name="test-kb", mode=mode, limit=2)
+    assert 0 < len(results) <= 2
