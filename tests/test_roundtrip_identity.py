@@ -332,12 +332,12 @@ class TestRealKBRoundTrip:
         The actual `xfail(strict=True)` cases per #146's acceptance
         criterion 4 are the per-id cases below
         (`test_known_residual_id_fails_roundtrip`) and the fixture-level
-        ones in TestAdversarialFixtures
-        (`test_created_updated_at_fixtures_document_the_drop_bug` documents
-        #151 with a plain assertion instead, since a fixture asserting on a
-        known-buggy CURRENT behavior is clearer as "this will fail loudly
-        the moment it's fixed" than as an xfail that silently flips to
-        XPASS).
+        ones in TestAdversarialFixtures. Two of them,
+        `created_as_date.md` / `created_as_string.md`, keep a dedicated
+        test there rather than the blanket assertion: they pin #151 (a
+        timestamp key dropped on save) and also carry `backlog_item`
+        fields that hit the separate `metadata:`-duplication residual, so
+        a full byte-identity assertion is not reachable for them yet.
         """
         _elapsed, all_diffs = real_kb_walk
         residual_ids = {entry_id for entry_id, *_ in all_diffs}
@@ -410,13 +410,13 @@ class TestAdversarialFixtures:
     #     matching #46/#86/#87's pattern -- so it's asserted on its actual,
     #     documented (non-identical) behavior instead.
     #   - created_as_date.md / created_as_string.md: `created_at`/
-    #     `updated_at` are read from frontmatter but never written back
-    #     (issue #151) -- a real, separate bug this fixture set caught. No
-    #     real kb/ file uses these keys today (they use `created:` instead),
-    #     so it doesn't appear in KNOWN_RESIDUAL_IDS, but the fixture-level
-    #     test pins the CURRENT (buggy) behavior so it fails loudly -- as a
-    #     fixture assertion needing an update, not silently -- the moment
-    #     #151 is fixed.
+    #     `updated_at` used to be read from frontmatter but never written
+    #     back (issue #151). The fix keeps them, preserving the source
+    #     text -- but both fixtures also carry the `backlog_item` fields
+    #     that hit the separate `metadata:`-duplication residual (see
+    #     GENERIC_METADATA_DUP_IDS), so they still can't pass the blanket
+    #     byte-identity assertion. Their dedicated test asserts the
+    #     timestamp lines survive byte for byte instead.
     #
     # The "missing trailing newline" / "several trailing blank lines" cases
     # are NOT committed files under tests/fixtures/roundtrip/: this repo's
@@ -566,20 +566,21 @@ class TestAdversarialFixtures:
         assert "priority: low" in after
 
     @pytest.mark.parametrize("fixture_name", ["created_as_date.md", "created_as_string.md"])
-    def test_created_updated_at_fixtures_document_the_drop_bug(self, tmp_path, fixture_name):
-        """Issue #151: `created_at`/`updated_at` are read from frontmatter in
+    def test_created_updated_at_fixtures_keep_their_timestamps(self, tmp_path, fixture_name):
+        """Issue #151: `created_at`/`updated_at` were read from frontmatter in
 
-        `Entry._base_kwargs` but never written back by any `to_frontmatter`.
-        A file with an explicit `created_at:`/`updated_at:` key silently
-        loses both on a no-op save. No real kb/ file uses these exact keys
-        today (the corpus uses `created:` instead, an undeclared key that
-        survives via extra_frontmatter), so this is latent rather than live
-        corruption -- but it is a real bug, not a design choice, so this
-        pins the CURRENT behavior with a comment pointing at the issue
-        rather than silently accepting it as correct. The moment #151 is
-        fixed this test starts failing (not xfail: a fixture assertion
-        failing is exactly the signal that it needs to be flipped to assert
-        byte-identity instead).
+        `Entry._base_kwargs` but never written back by any `to_frontmatter`,
+        so a file with an explicit `created_at:`/`updated_at:` key silently
+        lost both on a no-op save. They now survive with their original text:
+        a bare date stays a bare date and a quoted ISO string keeps its
+        quotes, because the write path reuses the source node whenever the
+        parsed value still means what the file said.
+
+        These two fixtures stay out of the blanket byte-identity assertion
+        because they also carry the `backlog_item` fields that hit the
+        separate `metadata:`-duplication residual (`GENERIC_METADATA_DUP_IDS`)
+        -- not something #151 touches -- so what is asserted here is the
+        timestamp lines, byte for byte.
         """
         src = FIXTURES_DIR / fixture_name
         dest = tmp_path / fixture_name
@@ -591,14 +592,17 @@ class TestAdversarialFixtures:
         entry.save(dest)
         after = dest.read_text(encoding="utf-8")
 
-        assert "created_at:" in before
-        assert "updated_at:" in before
-        assert "created_at:" not in after, (
-            "created_at now survives the round trip -- issue #151 looks "
-            "fixed; flip this fixture's expectation to byte-identity and "
-            "move it out of _DEDICATED_TEST_FIXTURES"
-        )
-        assert "updated_at:" not in after
+        timestamp_lines = [
+            line
+            for line in before.splitlines()
+            if line.startswith(("created_at:", "updated_at:"))
+        ]
+        assert len(timestamp_lines) == 2, "fixture no longer carries both timestamp keys"
+        after_lines = after.splitlines()
+        for line in timestamp_lines:
+            assert line in after_lines, (
+                f"{line!r} did not survive the round trip -- #151 regressed"
+            )
 
 
 class TestPristineProbeIsolation:

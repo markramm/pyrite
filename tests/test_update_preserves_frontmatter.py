@@ -14,6 +14,8 @@ frontmatter grows a `body:` key is silently wrong everywhere that reads
 frontmatter, and the file doubles in size on every update.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
@@ -727,6 +729,16 @@ updated_at: 2020-01-02T00:00:00+00:00
 Body.
 """
 
+KB_ONLY_CREATED_AT = """---
+id: created-only
+type: note
+title: Only one timestamp
+created_at: 2020-01-01T00:00:00+00:00
+---
+
+Body.
+"""
+
 
 class TestRepositorySaveDoesNotInventTimestamps:
     """#151, repository path: ``KBRepository.save()`` stamps ``updated_at`` on
@@ -735,7 +747,12 @@ class TestRepositorySaveDoesNotInventTimestamps:
     That stamp is internal bookkeeping, not a user editing the field, so it
     must not turn a file that never carried the key into one that does -- the
     #46 corruption arriving through the repository instead of KBService. A
-    file that *does* carry the key is still refreshed and written back.
+    file that *does* carry the key keeps it (and its original style).
+
+    ``KBRepository.save()`` infers a subdirectory from the entry and returns
+    the path it actually wrote, so every assertion here runs against that
+    path. The first version of these tests asserted on the source file, which
+    ``save()`` had not touched -- they passed with the fix reverted.
     """
 
     def _repo(self, tmp_path, name="repo151"):
@@ -749,14 +766,16 @@ class TestRepositorySaveDoesNotInventTimestamps:
         repo, kb_path = self._repo(tmp_path)
         path = kb_path / "no-ts.md"
         path.write_text(KB_NO_TIMESTAMPS, encoding="utf-8")
+        before = path.read_text(encoding="utf-8")
 
         entry = repo.load_entry_from_file(path)
         assert entry.updated_at is not None  # stamped in memory regardless
-        repo.save(entry)
+        out = repo.save(entry)
 
-        after = _read_frontmatter(path)
-        assert set(after) == {"id", "type", "title"}, (
-            f"the repository save invented {sorted(set(after) - {'id', 'type', 'title'})}"
+        after = out.read_text(encoding="utf-8")
+        assert after == before, "the repository save rewrote a file it had no reason to change"
+        assert set(_read_frontmatter(out)) == {"id", "type", "title"}, (
+            f"the repository save invented {sorted(set(_read_frontmatter(out)) - {'id', 'type', 'title'})}"
         )
 
     def test_a_file_with_timestamps_is_still_written_back(self, tmp_path):
@@ -765,9 +784,22 @@ class TestRepositorySaveDoesNotInventTimestamps:
         path.write_text(KB_WITH_TIMESTAMPS, encoding="utf-8")
 
         entry = repo.load_entry_from_file(path)
-        repo.save(entry)
+        out = repo.save(entry)
 
-        after = _read_frontmatter(path)
+        after = _read_frontmatter(out)
         assert "updated_at" in after, "a key the file carried was dropped"
-        assert "created_at" in after
-        assert str(after["created_at"]).startswith("2020-01-01")
+        assert after["created_at"] == datetime(2020, 1, 1, tzinfo=UTC), (
+            "KeyError on dev: the created_at the file carried was dropped"
+        )
+
+    def test_a_file_with_only_created_at_does_not_grow_updated_at(self, tmp_path):
+        repo, kb_path = self._repo(tmp_path, "repo151c")
+        path = kb_path / "created-only.md"
+        path.write_text(KB_ONLY_CREATED_AT, encoding="utf-8")
+
+        entry = repo.load_entry_from_file(path)
+        out = repo.save(entry)
+
+        after = _read_frontmatter(out)
+        assert after["created_at"] == datetime(2020, 1, 1, tzinfo=UTC)
+        assert "updated_at" not in after, "a half-stamped file grew the key it never had"

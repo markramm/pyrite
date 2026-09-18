@@ -592,6 +592,14 @@ which Pyrite stops being one person's experiment.
   KB may hold both `2026-01-15T09:00:00` and `2026-01-15T09:00:00+00:00` for
   unchanged files until a full `pyrite index build` makes them uniform;
   ordering and date filters are unaffected ("+" sorts before digits) (#151).
+- **`created_at`/`updated_at`: a file that carried them keeps them, a file
+  that did not never grows them.** `_base_frontmatter` re-emits the two keys
+  (as ISO strings) only for entries loaded from a file that had them; the
+  internal `updated_at` stamp now goes through `Entry.touch_updated_at()` so
+  bookkeeping is not mistaken for a user edit; and the write path keeps the
+  source node when the parsed value still means what the file said, so a bare
+  `2026-01-15` stays a bare date instead of being rewritten as a timestamp
+  (#151).
 - **Two worktrees running the Playwright e2e suite at once collided on the
   same four ports (8088/5173 base, 8189/5274 auth) and could end up talking
   to each other's world.** Ports and data directories are now derived per
