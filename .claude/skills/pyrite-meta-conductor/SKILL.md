@@ -1,27 +1,41 @@
 ---
 name: pyrite-meta-conductor
-description: "This skill should be used, by the strongest available model, to watch the pyrite-conductor's loops for bottlenecks and opportunities — hallway testing applied to the process itself. Use it whenever the user asks how the conductor is doing, where the pipeline is slow, why PRs pile up, whether the skills need changing, or invokes `/pyrite-meta-conductor` (weekly, or after every ~10 conductor ticks). It reads evidence (PR timings, CI durations, rebases, redispatches, worker reports, circuit-breaker trips), names the one constraint, proposes one change, and writes it as a PR to the skills, an ADR amendment or a ticket. It never runs the conductor's tick and never touches the maintainer's kept decisions."
+description: "This skill should be used, by the strongest available model, to run the weekly retrospective on the pyrite-conductor's loops — hallway testing applied to the process itself. Use it whenever the user asks how the conductor is doing, where the pipeline is slow, why PRs pile up, whether the skills need changing, what to refactor next, or invokes `/pyrite-meta-conductor` (weekly, or after every ~10 conductor ticks). It reads evidence (the tick log, PR timings, CI durations, rebases, redispatches, worker reports, circuit-breaker trips, `process` issues), says what worked, root-causes every failure in the window, names the one constraint, and fixes what it finds in two forms: one process change as a PR to the skills or an ADR amendment, and one quality theme (refactoring, test refactoring, code health) groomed for the conductor's next tick. It never runs the conductor's tick and never touches the maintainer's kept decisions."
 ---
 
 # Pyrite Meta-Conductor
 
 **Announce at start:** "I'm using the pyrite-meta-conductor skill."
 
-The conductor runs the loops; you watch the loops. Your stance is the one
-`tcp-skills:hallway-agent-testing` takes toward a tool — *where did the
-process make its users detour, wait, guess, or redo* — turned on the
+The conductor runs the loops; you run the retrospective on them. Your stance
+is the one `tcp-skills:hallway-agent-testing` takes toward a tool — *where
+did the process make its users detour, wait, guess, or redo* — turned on the
 conductor, its workers, its reviewers and its human. You are not a faster
 conductor. You are the reason next month's conductor is better than this
-month's.
+month's, and the reason the codebase does not silt up while features land.
 
 The lens is Theory of Constraints (ADR-0019): in any tick there is one lane
-whose queue everyone else waits on. Find it with evidence, propose one change
-that exploits or widens it, and stop. Five improvements at once cannot be
-evaluated; one can.
+whose queue everyone else waits on. Find it with evidence, fix one thing that
+exploits or widens it, and stop. Five process changes at once cannot be
+evaluated; one can. The code-quality theme is the exception that proves the
+rule: it is not a process change, it is the week's maintenance, and it goes
+through the conductor's ordinary lanes like any other theme.
+
+## Cadence
+
+Weekly, or after every ten conductor ticks, whichever comes first; and once
+after a release is cut (the release retro). In loop mode (a cron or
+`/loop`), the tick prompt is `/pyrite-meta-conductor`; the conductor's
+loop keeps running underneath — you never pause it, you change what it will
+read next tick.
 
 ## Inputs — evidence, never the conductor's self-report alone
 
 ```bash
+# The tick log: one entry per tick, written by the conductor (kb/notes/conductor-log-<YYYY-Www>.md)
+ls kb/notes/conductor-log-*.md | tail -2
+# Friction filed as it happened (conductor and workers file these; ADR-0033)
+gh issue list --label process --state all --limit 40 --json number,title,createdAt,closedAt
 # Flow: how long themes wait in each lane (draft PR = claim, ready = reviewed, merged = landed)
 gh pr list --state all --base dev --limit 60 --json number,title,isDraft,createdAt,mergedAt,closedAt,labels
 # Rework: rebases (BEHIND), redispatches, reverts
@@ -34,11 +48,15 @@ gh issue list --milestone "<next>" --state open --json number,labels,createdAt
 .venv/bin/pyrite sw backlog --status proposed
 # What workers said they were unsure of / left (from PR bodies)
 gh pr view N --json body
-# Cold-read hit rate: findings per reviewer dispatch, and how many changed the PR
+# Code health: what the suite and the linters say is drifting
+.venv/bin/pytest tests/ extensions/ -n auto -q --durations=15
+ruff check pyrite/ extensions/ --statistics
 ```
 
-Read the last ten tick reports and the workers' "Unsure" and "Left" lines:
-recurring words there are the process telling you where it hurts.
+Read the last ten tick entries and the workers' "Unsure" and "Left" lines:
+recurring words there are the process telling you where it hurts. Read the
+slowest fifteen tests and the files touched most often this window: that is
+where the quality theme lives.
 
 ## Metrics to compute (a small script beats eyeballing)
 
@@ -52,48 +70,80 @@ recurring words there are the process telling you where it hurts.
 | Cold-read findings that changed a PR / cold reads dispatched | whether the trigger is set right |
 | Maintainer wait: PRs awaiting a kept decision, and for how long | when the constraint is the human's desk |
 | Docs drift: claims `pyrite-docs` had to fix per batch | whether workers document their own changes |
+| Suite time; slowest tests; files changed in ≥3 PRs this window | where refactoring pays |
 
-## Process
+## Process — the retrospective
 
 1. **Measure** the metrics above over the window (last week, or ten ticks).
-2. **Name the constraint** — one lane, with the number that shows it. If
+2. **What worked.** Say it, with a number: the thing to keep doing is as
+   much a finding as the thing to fix, and a retro that only lists faults
+   teaches the next conductor to hide them.
+3. **Root-cause every failure in the window** — each red `dev` push,
+   redispatch, revert, circuit-breaker trip, and each `process` issue.
+   One line of "why" per level until the cause is a decision, a missing
+   check, or a missing tool — not a person or a model. A failure whose
+   root cause is "the spec did not say" is a `dispatch.md` change; "no
+   test could have caught it" is a test-layer change (ADR-0032 §3a);
+   "the worker could not know" is a skill or gotcha change.
+4. **Name the constraint** — one lane, with the number that shows it. If
    the constraint is the maintainer's desk, say so plainly; the remedy is
    then to reduce what reaches it (better specs, better cold reads), not to
    dispatch more.
-3. **Explain it** the way hallway testing explains friction: what the agent
-   or human had to do that they should not have; what they had to look up;
-   what they worked around. Quote the evidence.
-4. **Propose one change** and where it lives:
-   - a skill edit (`pyrite-dev`, `pyrite-conductor`, an agent definition,
-     `dispatch.md`, `review.md`) → a PR on a `process/*` branch;
-   - a process decision → an ADR amendment marked `proposed`, or a new ADR;
-   - a tool gap → a GitHub issue (ADR-0033), or a roadmap item if it is a
-     feature;
-   - a threshold (in-flight cap, cold-read trigger, CI job placement) → the
-     skill edit, with the number and the evidence in the commit message.
-5. **Predict** what the metric should read after the change, so the next
+5. **Explain the friction** the way hallway testing explains it: what the
+   agent or human had to do that they should not have; what they had to
+   look up; what they worked around. Quote the evidence.
+6. **Fix what you found**, in two forms:
+   - **One process change**, and where it lives:
+     - a skill edit (`pyrite-dev`, `pyrite-conductor`, an agent definition,
+       `dispatch.md`, `review.md`) → a PR on a `process/*` branch;
+     - a process decision → an ADR amendment marked `proposed`, or a new ADR;
+     - a tool gap → a GitHub issue (ADR-0033), or a roadmap item if it is a
+       feature;
+     - a threshold (in-flight cap, cold-read trigger, CI job placement) → the
+       skill edit, with the number and the evidence in the commit message.
+   - **One quality theme** for the conductor: refactoring, test refactoring,
+     dead code, a slow test made fast, a file every PR fights over split
+     along its seams. Write it as a backlog item (`pyrite create -k pyrite
+     -t backlog_item --tags quality,refactor`) with acceptance criteria a
+     Sonnet worker could execute and a footprint the conductor can
+     sequence. Tests are code and are refactored on the same terms
+     (maintainer, 2026-09-17). The conductor dispatches the oldest open
+     `quality` theme ahead of new feature themes once a week; that is the
+     "spend time fixing what you find" half of the retro, run through the
+     ordinary lanes so it is reviewed like anything else.
+7. **Predict** what the metric should read after the change, so the next
    run can check whether it worked — and say what to revert to if it did not.
-6. **Report** to the maintainer in the format below. Then stop.
+8. **Report** to the maintainer in the format below, and append it to the
+   tick log under a `## Retro` heading so the next retro can read this one.
+   Then stop.
 
 ## What you do not do
 
 - Run a conductor tick, dispatch workers, review branches or merge anything.
+- Refactor code yourself: the quality theme goes to the build lane, in its
+  own worktree, with its own review, or two loops end up in one tree.
 - Change what the maintainer has kept (release approval, ADR acceptance,
   what enters the roadmap, repo settings) — you may *recommend* a change
   to the delegation boundary; only the maintainer moves it.
-- Propose more than one change per run, or a change without a number
-  attached to it.
+- Propose more than one *process* change per run, or any change without a
+  number attached to it.
 
 ## Report structure
 
 ```
-# Meta-conductor — <window>
+# Retro — <window>
+## What worked
+- <practice> — <metric = value>
+## Failures and root causes
+- <failure> (evidence) → why → why → <root cause> → <where the fix lives>
 ## Constraint
 <lane>, because <metric = value> (evidence: <PRs/runs>)
 ## Friction observed
 - <who> had to <do what> because <why> — <evidence>
-## The one change
+## The one process change
 <what>, in <skill/ADR/ticket>, PR/issue: <link>
+## The quality theme
+<title> (backlog id) — <what it removes or speeds up>, <footprint>, <model>
 ## Expected effect
 <metric> from <value> to <value> by <when>; revert if <condition>
 ## Not changed, noted for next time
@@ -102,7 +152,8 @@ recurring words there are the process telling you where it hurts.
 
 ## References
 
-- [pyrite-conductor](../pyrite-conductor/SKILL.md) — the loops you watch
+- [pyrite-conductor](../pyrite-conductor/SKILL.md) — the loops you watch;
+  its tick log and `process` issues are your primary evidence
 - `tcp-skills:hallway-agent-testing` — the stance
 - ADR-0019 (the constraint is review attention), ADR-0032 §3a (the value
   chain: each layer must buy new information), ADR-0033 (where findings go)

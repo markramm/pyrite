@@ -131,8 +131,12 @@ written down. Default to the Agent tool and this tick otherwise.
 5. Report      what merged, what is in review, what was dispatched, what is blocked
 ```
 
-One-shot (`/pyrite-conductor`): one tick. Loop (`/loop 20m /pyrite-conductor`):
-one tick per invocation; state lives in git, GitHub and `kb/`, not in the loop.
+One-shot (`/pyrite-conductor`): one tick. Loop (`/loop 45m /pyrite-conductor`,
+or a session cron with the same prompt): one tick per invocation; state lives
+in git, GitHub and `kb/`, not in the loop. A Claude Code cron is session-bound
+and expires after seven days, and a session can crash: the loop is resumed,
+not rebuilt, by running the same command in a fresh session — the draft PRs,
+the claims on the board and the tick log are the whole state.
 
 ### 1. Health
 
@@ -184,7 +188,13 @@ touch. Themes that overlap in files run in sequence, not in parallel
 
 Order by the value chain (ADR-0032 §3a): fix what blocks other themes first
 (a red `dev`, a data-loss bug, a security gap), then what the release's
-definition of done requires, then the rest.
+definition of done requires, then the rest. **Once a week, the oldest open
+`quality` theme** (`pyrite sw backlog --status proposed` filtered on the
+`quality` tag; written by the retro, [pyrite-meta-conductor](../pyrite-meta-conductor/SKILL.md))
+goes ahead of new feature themes. Refactoring, test refactoring and code
+health are maintenance the release owes as much as its features; skipping
+the week's quality theme because features are waiting is how a codebase
+silts up.
 
 ### 4. Dispatch
 
@@ -206,12 +216,29 @@ ten consecutive green ticks; fewer when PRs are queued.
 Never `isolation: "worktree"` on the Agent tool — the script makes the
 worktree, and the agent is told where it is.
 
-### 5. Report
+### 5. Report, and leave the record
 
 What merged (PR numbers, what they closed), what is in review and why it is
 waiting, what was dispatched (theme, worker, model), what is blocked and on
 whom. If the bottleneck has moved to the maintainer's desk (a decision, a
 setting only they can change), say so and stop rather than ticking idle.
+
+**Append the same report to the tick log** — `kb/notes/conductor-log-<YYYY-Www>.md`
+(one note per ISO week; create it with `pyrite create -k pyrite -t note
+--title "Conductor log <YYYY-Www>"` on the week's first tick, then append a
+`## Tick <timestamp>` section and `pyrite index sync`). The retro reads this
+log, not your memory; a tick that leaves no entry did not happen. Commit it
+on `dev` directly with the KB fast path — it is a record, not a change.
+
+**File friction as it happens.** When you, a worker or a reviewer had to
+detour, wait, guess, look something up or redo work because of the
+*process* (a skill that did not say, a script that assumed, a tool that was
+not registered, a check that fired late) — not the product — file it in
+the moment: `gh issue create --label process --title "<what had to be done
+that should not have>"`, one paragraph, with the tick and PR. Workers file
+their own from their report's "Unsure" and "Left" lines. Product bugs still
+go to ordinary issues (ADR-0033). The retro root-causes every `process`
+issue in its window; an unfiled friction is one the process keeps.
 
 ## Releasing and deploying
 
@@ -222,6 +249,12 @@ install-from-tag, Docker and artifact checks before the tag exists.
 ## Stop conditions
 
 Judgment stops:
+- **The release's definition of done is met** (the milestone is empty, the
+  roadmap section's items are `done`): prepare the release per
+  [release-runbook.md](release-runbook.md) up to the plan — version,
+  changelog date, release-layer checks run — present the plan, and stop.
+  The loop's terminal state is the plan on the maintainer's desk, not the
+  tag; cutting it is kept.
 - No dispatchable themes (everything open is blocked on a human) → report, stop.
 - `dev` red and the fix needs a decision → report, stop.
 - The maintainer's queue (PRs awaiting them) is longer than the agents' → stop dispatching.

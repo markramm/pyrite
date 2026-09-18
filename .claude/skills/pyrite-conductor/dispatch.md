@@ -59,6 +59,13 @@ Then launch the worker with the Agent tool. Never use the tool's
 merge ceremony is what the script replaces); the worker is *told* its
 worktree.
 
+Agent types under `.claude/agents/` register when a session starts, so a
+session that created or merged `pyrite-worker.md` will not have it (observed
+2026-09-18). If `subagent_type="pyrite-worker"` is refused, dispatch
+`subagent_type="general-purpose"` with the same `model` and paste the body of
+`.claude/agents/pyrite-worker.md` at the top of the prompt; the next session
+has the type.
+
 ```
 Agent(
   subagent_type="pyrite-worker",

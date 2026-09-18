@@ -35,6 +35,12 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Process
 
+- The weekly retrospective: `pyrite-meta-conductor` now says what worked,
+  root-causes every failure in its window and fixes what it finds as one
+  process change plus one `quality` theme (refactoring, test refactoring) the
+  conductor dispatches ahead of features once a week. The conductor leaves a
+  tick log in `kb/notes/conductor-log-<week>.md`, files process friction as
+  `process` issues as it happens, and stops at the release plan.
 - Three skills replace one: `pyrite-dev` is the worker (one theme, one branch,
   one worktree, TDD, a report), `pyrite-conductor` picks work from GitHub
   issues and the roadmap, composes reviewable themes, dispatches a
