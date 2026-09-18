@@ -14,7 +14,9 @@ frontmatter grows a `body:` key is silently wrong everywhere that reads
 frontmatter, and the file doubles in size on every update.
 """
 
+import re
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -739,6 +741,15 @@ created_at: 2020-01-01T00:00:00+00:00
 Body.
 """
 
+KB_NUMERIC_TITLE = """---
+id: numeric-title
+type: note
+title: "2026-01-15"
+---
+
+Body.
+"""
+
 
 class TestRepositorySaveDoesNotInventTimestamps:
     """#151, repository path: ``KBRepository.save()`` stamps ``updated_at`` on
@@ -803,3 +814,66 @@ class TestRepositorySaveDoesNotInventTimestamps:
         after = _read_frontmatter(out)
         assert after["created_at"] == datetime(2020, 1, 1, tzinfo=UTC)
         assert "updated_at" not in after, "a half-stamped file grew the key it never had"
+
+
+def test_no_module_assigns_entry_updated_at_directly():
+    """`Entry.touch_updated_at()` is the only stamping path.
+
+    A plain `entry.updated_at = …` counts as an explicit user edit for
+    `__setattr__`, clears the key from `_absent_default_keys`, and makes the
+    write path grow `updated_at` on a file that never had it -- exactly the
+    regression #151's fix closes. Model-layer assignments read as
+    `entry.`/`self.`/`e.`, which is what this scans for; the storage layer
+    assigns ORM rows (`existing.updated_at = …`), a different object, and is
+    out of scope.
+    """
+    import pyrite as _pyrite
+
+    root = Path(_pyrite.__file__).resolve().parent
+    pattern = re.compile(r"\b(?:entry|self|e)\.updated_at\s*=[^=]")
+    offenders = [
+        f"{path.relative_to(root)}:{lineno}: {line.strip()}"
+        for path in sorted(root.rglob("*.py"))
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert not offenders, (
+        "assign updated_at through Entry.touch_updated_at(), not directly (see #151): "
+        + "; ".join(offenders)
+    )
+
+
+def test_a_timestamp_looking_title_edit_reaches_the_file(tmp_path):
+    """#173 review: the same-instant comparison must only run for timestamps.
+
+    Applied to every key it kept the old node when a title was edited from
+    `"2026-01-15"` to `"2026-01-15T00:00:00Z"` -- the CLI reported success and
+    the file never changed, so the next index sync silently reverted the edit.
+    """
+    from pyrite.storage.repository import KBRepository
+
+    kb_path = tmp_path / "repo151d"
+    kb_path.mkdir(parents=True)
+    path = kb_path / "numeric-title.md"
+    path.write_text(KB_NUMERIC_TITLE, encoding="utf-8")
+    repo = KBRepository(KBConfig(name="repo151d", path=kb_path))
+
+    entry = repo.load_entry_from_file(path)
+    entry.title = "2026-01-15T00:00:00Z"
+    out = repo.save(entry)
+
+    assert "2026-01-15T00:00:00Z" in out.read_text(encoding="utf-8"), (
+        "the title edit was swallowed -- the write path kept the old node"
+    )
+
+
+def test_an_explicit_updated_at_update_keeps_the_callers_value(swkb_env):
+    """#173 review: `update_entry` must not stamp over a caller-supplied
+    `updated_at` -- before the guard it printed "Updated:" and wrote "now"."""
+    path = swkb_env["note_file"]
+    explicit = datetime(2001, 2, 3, 4, 5, 6, tzinfo=UTC)
+
+    swkb_env["service"].update_entry("sample-note", "swkb", updated_at=explicit)
+
+    after = _read_frontmatter(path)
+    assert after["updated_at"] == explicit

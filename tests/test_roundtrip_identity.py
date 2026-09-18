@@ -332,12 +332,10 @@ class TestRealKBRoundTrip:
         The actual `xfail(strict=True)` cases per #146's acceptance
         criterion 4 are the per-id cases below
         (`test_known_residual_id_fails_roundtrip`) and the fixture-level
-        ones in TestAdversarialFixtures. Two of them,
-        `created_as_date.md` / `created_as_string.md`, keep a dedicated
-        test there rather than the blanket assertion: they pin #151 (a
-        timestamp key dropped on save) and also carry `backlog_item`
-        fields that hit the separate `metadata:`-duplication residual, so
-        a full byte-identity assertion is not reachable for them yet.
+        ones in TestAdversarialFixtures. (`created_as_date.md` /
+        `created_as_string.md` were pinned here as sentinels for #151's
+        drop bug while it was open; with #151 fixed they are back in the
+        blanket byte-identity assertion.)
         """
         _elapsed, all_diffs = real_kb_walk
         residual_ids = {entry_id for entry_id, *_ in all_diffs}
@@ -411,12 +409,10 @@ class TestAdversarialFixtures:
     #     documented (non-identical) behavior instead.
     #   - created_as_date.md / created_as_string.md: `created_at`/
     #     `updated_at` used to be read from frontmatter but never written
-    #     back (issue #151). The fix keeps them, preserving the source
-    #     text -- but both fixtures also carry the `backlog_item` fields
-    #     that hit the separate `metadata:`-duplication residual (see
-    #     GENERIC_METADATA_DUP_IDS), so they still can't pass the blanket
-    #     byte-identity assertion. Their dedicated test asserts the
-    #     timestamp lines survive byte for byte instead.
+    #     back (issue #151) -- a real, separate bug this fixture set
+    #     caught. The fix keeps them and preserves the source text, so
+    #     both fixtures are now part of the blanket byte-identity
+    #     assertion below rather than carrying dedicated tests.
     #
     # The "missing trailing newline" / "several trailing blank lines" cases
     # are NOT committed files under tests/fixtures/roundtrip/: this repo's
@@ -430,8 +426,6 @@ class TestAdversarialFixtures:
         {
             "bare_string_links.md",
             "anchors_and_merge_keys.md",
-            "created_as_date.md",
-            "created_as_string.md",
         }
     )
 
@@ -564,41 +558,6 @@ class TestAdversarialFixtures:
         # merge-key syntax itself does not.
         assert "kind: feature" in after
         assert "priority: low" in after
-
-    @pytest.mark.parametrize("fixture_name", ["created_as_date.md", "created_as_string.md"])
-    def test_created_updated_at_fixtures_keep_their_timestamps(self, tmp_path, fixture_name):
-        """Issue #151: `created_at`/`updated_at` were read from frontmatter in
-
-        `Entry._base_kwargs` but never written back by any `to_frontmatter`,
-        so a file with an explicit `created_at:`/`updated_at:` key silently
-        lost both on a no-op save. They now survive with their original text:
-        a bare date stays a bare date and a quoted ISO string keeps its
-        quotes, because the write path reuses the source node whenever the
-        parsed value still means what the file said.
-
-        These two fixtures stay out of the blanket byte-identity assertion
-        because they also carry the `backlog_item` fields that hit the
-        separate `metadata:`-duplication residual (`GENERIC_METADATA_DUP_IDS`)
-        -- not something #151 touches -- so what is asserted here is the
-        timestamp lines, byte for byte.
-        """
-        src = FIXTURES_DIR / fixture_name
-        dest = tmp_path / fixture_name
-        shutil.copyfile(src, dest)
-        repo = _repo_for(tmp_path)
-
-        entry = repo.load_entry_from_file(dest)
-        before = dest.read_text(encoding="utf-8")
-        entry.save(dest)
-        after = dest.read_text(encoding="utf-8")
-
-        timestamp_lines = [
-            line for line in before.splitlines() if line.startswith(("created_at:", "updated_at:"))
-        ]
-        assert len(timestamp_lines) == 2, "fixture no longer carries both timestamp keys"
-        after_lines = after.splitlines()
-        for line in timestamp_lines:
-            assert line in after_lines, f"{line!r} did not survive the round trip -- #151 regressed"
 
 
 class TestPristineProbeIsolation:

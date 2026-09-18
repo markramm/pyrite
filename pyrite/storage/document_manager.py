@@ -30,7 +30,14 @@ class DocumentManager:
         self._db = db
         self._index_mgr = index_mgr
 
-    def save_entry(self, entry: Entry, kb_name: str, kb_config: KBConfig) -> Path:
+    def save_entry(
+        self,
+        entry: Entry,
+        kb_name: str,
+        kb_config: KBConfig,
+        *,
+        touch_updated_at: bool = True,
+    ) -> Path:
         """Save an entry to disk, register the KB, and index it.
 
         If the entry's resolved path has changed (e.g. due to a templated
@@ -40,6 +47,8 @@ class DocumentManager:
             entry: The entry to save.
             kb_name: Name of the knowledge base.
             kb_config: KB configuration (provides path, type, description).
+            touch_updated_at: Passed through to ``KBRepository.save``; ``False``
+                keeps a caller-supplied ``updated_at`` (#151).
 
         Returns:
             Path to the saved file.
@@ -61,7 +70,7 @@ class DocumentManager:
             if existing_subdir is not None:
                 subdir = existing_subdir
 
-        file_path = repo.save(entry, subdir=subdir)
+        file_path = repo.save(entry, subdir=subdir, touch_updated_at=touch_updated_at)
 
         # Clean up old file if path changed (template-driven move)
         if old_path and old_path.resolve() != file_path.resolve() and old_path.exists():

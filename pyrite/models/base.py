@@ -209,39 +209,37 @@ def _timestamp_same_instant(old: Any, new: Any) -> bool:
     source node, so the source node (and its style) can be kept.
 
     ``#151`` normalises a bare YAML date to a ``datetime`` on load, and the
-    write path re-emits timestamps as ISO strings, so the plain equality check
+    write path hands ruamel a ``datetime`` back, so the plain equality check
     in ``_restyle_like_source`` no longer sees them as "unchanged" and would
-    replace `created_at: 2026-01-15` with `2026-01-15T00:00:00+00:00`.
-    Comparing the parsed instants instead keeps the original node whenever the
-    value still means what the file said; a genuinely changed timestamp (a
-    refreshed `updated_at`, say) still falls through and is written in the new
-    form. Naive values are read as UTC, matching ``parse_datetime``.
-    """
-    n = _plain(new)
-    if not isinstance(n, str):
-        return False
-    try:
-        parsed_new = datetime.fromisoformat(n.replace("Z", "+00:00"))
-    except ValueError:
-        return False
-    if parsed_new.tzinfo is None:
-        parsed_new = parsed_new.replace(tzinfo=UTC)
+    replace `created_at: 2026-01-15` with a full timestamp. Comparing the
+    parsed instants instead keeps the original node whenever the value still
+    means what the file said; a genuinely changed timestamp (a refreshed
+    `updated_at`, say) still falls through and is written in the new form.
+    Naive values are read as UTC, matching ``parse_datetime``.
 
-    o = _plain(old)
-    if isinstance(o, datetime):
-        parsed_old = o if o.tzinfo is not None else o.replace(tzinfo=UTC)
-    elif isinstance(o, date):
-        parsed_old = datetime(o.year, o.month, o.day, tzinfo=UTC)
-    elif isinstance(o, str):
-        try:
-            parsed_old = datetime.fromisoformat(o.replace("Z", "+00:00"))
-        except ValueError:
-            return False
-        if parsed_old.tzinfo is None:
-            parsed_old = parsed_old.replace(tzinfo=UTC)
-    else:
-        return False
-    return parsed_old == parsed_new
+    Only timestamps take this path -- see the ``key in _TIMESTAMP_KEYS``
+    guard in ``_restyle_like_source``. Applying it to every key would let an
+    edit of a title from `"2026-01-15"` to `"2026-01-15T00:00:00Z"` keep the
+    old node: the CLI would report success and the file would never change.
+    """
+
+    def _as_utc(value: Any) -> datetime | None:
+        value = _plain(value)
+        if isinstance(value, datetime):
+            return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        if isinstance(value, date):
+            return datetime(value.year, value.month, value.day, tzinfo=UTC)
+        if isinstance(value, str):
+            try:
+                parsed = datetime.fromisoformat(re.sub(r"Z$", "+00:00", value))
+            except ValueError:
+                return None
+            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+        return None
+
+    parsed_old = _as_utc(old)
+    parsed_new = _as_utc(new)
+    return parsed_old is not None and parsed_new is not None and parsed_old == parsed_new
 
 
 def _restyle_like_source(meta: dict[str, Any], source: Any) -> dict[str, Any]:
@@ -284,7 +282,9 @@ def _restyle_like_source(meta: dict[str, Any], source: Any) -> dict[str, Any]:
         if key not in meta:
             continue
         new = meta[key]
-        unchanged = _plain(old) == _plain(new) or _timestamp_same_instant(old, new)
+        unchanged = _plain(old) == _plain(new) or (
+            key in _TIMESTAMP_KEYS and _timestamp_same_instant(old, new)
+        )
         restyled[key] = old if unchanged else _keep_sequence_style(old, new)
 
     for key, value in meta.items():
@@ -366,7 +366,7 @@ class Entry(ABC):
             super().__setattr__("_absent_default_keys", self._absent_default_keys - {name})
         super().__setattr__(name, value)
 
-    def touch_updated_at(self, value: datetime | None = None) -> None:
+    def touch_updated_at(self) -> None:
         """Refresh ``updated_at`` as *bookkeeping*, without inventing the key.
 
         ``KBRepository.save``, ``KBService.update_entry`` and ``sw link`` all
@@ -382,7 +382,7 @@ class Entry(ABC):
         value stays fresh, while the key's file-presence remains whatever the
         source file had.
         """
-        object.__setattr__(self, "updated_at", value if value is not None else _utcnow())
+        object.__setattr__(self, "updated_at", _utcnow())
 
     # The frontmatter mapping this entry was parsed from, as ruamel returned it
     # (a CommentedMap carrying key order, quoting and flow/block style). The
@@ -489,9 +489,10 @@ class Entry(ABC):
         # construction time -- so a file that never had the keys must not grow
         # them, and neither must a newly created entry (#46).
         #
-        # Serialised with isoformat(): datetime's own str() form is a
-        # space-separated "2026-01-15 00:00:00+00:00" that nothing else in the
-        # project writes, and a value the source file already had is restored
+        # Emitted as a datetime (second precision), not as an isoformat()
+        # string: ruamel writes a str *quoted* and keeps the microseconds,
+        # while a datetime becomes a plain YAML timestamp -- the shape such
+        # files already use. A value the source file already had is restored
         # to its original node (and therefore its original style) by
         # _restyle_like_source, so this only decides the shape of a *changed*
         # value.
@@ -499,7 +500,9 @@ class Entry(ABC):
             for ts_key in _TIMESTAMP_KEYS:
                 if ts_key not in self._absent_default_keys:
                     value = getattr(self, ts_key)
-                    meta[ts_key] = value.isoformat() if isinstance(value, datetime) else value
+                    meta[ts_key] = (
+                        value.replace(microsecond=0) if isinstance(value, datetime) else value
+                    )
         if self.lifecycle != "active":
             meta["lifecycle"] = self.lifecycle
         if self.metadata:

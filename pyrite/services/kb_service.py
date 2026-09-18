@@ -666,7 +666,12 @@ class KBService:
             else:
                 setattr(entry, key, value)
 
-        entry.touch_updated_at()
+        # An explicit `updated_at` in the update is the caller's value; only
+        # stamp the bookkeeping time when they did not supply one, and tell the
+        # repository below not to stamp over a supplied one either (#151).
+        explicit_updated_at = "updated_at" in updates
+        if not explicit_updated_at:
+            entry.touch_updated_at()
 
         # Refuse before anything is written: the file must stay exactly as it was.
         self._validate_write(entry, kb_name, kb_config)
@@ -685,7 +690,9 @@ class KBService:
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
         # Save to file, register KB, and re-index
-        self._doc_mgr.save_entry(entry, kb_name, kb_config)
+        self._doc_mgr.save_entry(
+            entry, kb_name, kb_config, touch_updated_at=not explicit_updated_at
+        )
 
         # Auto-embed for semantic search
         self._auto_embed(entry.id, kb_name)
