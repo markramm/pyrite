@@ -250,3 +250,82 @@ Themes dispatched per tick 1 → ≥1.5; `process` issues about claim/log 3 → 
 - Raising the cap above three — 2 green ticks of the 10 the skill requires.
 - Cold reads: 0 dispatched, 0 needed (no server/storage/schema diffs yet); the trigger has not been tested.
 - Dependabot #23–#29 — land before or after the Playwright fan-out, not during (tick 2's ordering risk).
+
+### Absorb addendum — package B came back inside the same tick
+
+Package B's worker reported ~16 minutes after dispatch, so the absorb happened
+in this tick rather than the next. Reviewed per `review.md`, verifying with the
+diff and the suite rather than the report.
+
+**The diff.** `git diff origin/dev..HEAD --stat` at first looked alarming — it
+listed `.claude/agents/pyrite-spike.md` deleted, the conductor SKILL.md and
+`dispatch.md` rewritten, `CLAUDE.md`, two KB backlog files gone. None of it was
+the worker's: `origin/dev` had moved two commits during the tick (the peer
+session's `skills:`/`agents:` work), and a `--stat` against a moved ref shows
+the drift as if it were the branch's. `git show --stat <worker's sha>` is the
+honest question, and the answer was **exactly the three files the spec named**:
+the two spec files and a two-attribute diff in `settings/+page.svelte`.
+Footprint discipline was exact. Worth putting in `review.md`: *diff the
+worker's commits, not `base..HEAD`, when base has moved.*
+
+**The evidence, re-run.** 26 passed / 1 skipped in isolation; 388/388 unit
+tests; and the thing the worker explicitly could not claim — its third
+"Unsure", that it had not proven non-interference in the **full** suite — now
+proven: 36/36 across `app.spec` + `settings.spec` + `seed.spec` inside a full
+run, with the run's 9 failures confined to `auth`/`collections`/`entry-crud`/
+`qa`/`search`, i.e. precisely the specs packages C, D, E and G still own. The
+fan-out's disjointness assumption holds in practice, not just on paper. That is
+the single most useful fact this tick produced for the next one: C–G can go out
+in parallel with confidence.
+
+**The falsification check, and the trap in it.** The skill says to spot-check
+that a new test fails with the fix stashed. Done the obvious way it gave the
+**wrong answer twice over**: `git stash pop` resurrected a months-old
+`WIP on feature/journalism-investigation-kb` stash (the stash stack is shared
+across worktrees through the common git dir), conflicted into two unrelated
+`kb/backlog/done/*.md` files, and meanwhile the tests "passed with the fix
+stashed" — which reads as *vacuous assertions*. They are not: deleting the
+attribute directly and re-running failed exactly as it should. A flawed
+instrument produced a false negative on the one check whose entire purpose is
+catching vacuous tests. Filed as **#80**; the fix is to falsify by editing the
+line directly, never through the shared stash stack. The unrelated stash was
+restored, not dropped, and the worktree left clean.
+
+**Cold read: not dispatched, deliberately.** The worker's "Unsure" was
+non-empty, which is a stated trigger — but all three items were verifiable
+directly and were verified (the `/` drift, the `toHaveCount` judgment, the
+full-suite question). The diff touches no server, storage, schema, auth or
+public shape; it is 200 lines of test code plus two HTML attributes. A cold
+read here would have bought nothing the re-run did not. The trade-offs went
+into the PR body instead, which is where a reviewer will actually meet them.
+
+**Two judgment calls accepted.** (1) The `/` describe changed *meaning*: it
+asserted a `Dashboard` heading and stat cards, but `/` is now the landing page
+and the stats view moved to `/overview`. The old spec missed the move because
+its or-either-way assertions passed regardless — the exact pathology this
+package exists to end. Rewriting it was right; the coverage hole it exposes is
+**#79**. (2) Two `expect(...).toHaveCount(1)` waits are *not* `.first()` in
+disguise — both are documented double-render races (the layout's
+`{#key}` fade; #45's empty-state flash) where the assertion waits for the race
+to resolve to the one real element rather than grabbing whichever won. Criterion
+3 is met in substance, not just in letter.
+
+**One product bug preserved rather than papered over.** `sets the document
+title` is `test.fixme`'d against **#49** with the correct assertion intact
+(live: `toHaveTitle` got `"Pyrite"`, not `"Settings — Pyrite"`). Criterion 6
+worked as designed — the worker had every incentive to weaken the assertion to
+green and did not. **Un-fixme when #49 lands.**
+
+Rebased onto the moved `dev`, re-verified green after the rebase, body written,
+flipped to ready, auto-merge armed. **PR #74 is in review with its gate
+running.**
+
+**Issues filed this tick:** #79 (product: `/overview` has no e2e coverage after
+the landing-page split — no package in the current plan owns it), #80
+(process: the stash-based spot-check is unsafe in a worktree and gave a false
+negative).
+
+**In flight at tick end: 2** — #69 (CLI correctness, worker still running) and
+#74 (package B, gate running). A slot is free; the next tick should spend it on
+packages C–G, now that disjointness is proven rather than assumed, with C the
+one that may want Opus for the auth decision A deferred.
