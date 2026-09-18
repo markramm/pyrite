@@ -2153,3 +2153,44 @@ The round-trip identity gate waits for #69 to merge (next tick). Claims: the bac
 **Friction.** Tick 5 reported creating the A.1 backlog item; it was not on `dev` (created in a worktree and never pushed, or on the log branch) — the record a tick leaves must be pushed to be a record (filed). The skill loaded from the main checkout was stale (behind `origin/dev` by retro 3): fast-forwarded before running.
 
 **Blocked / needs the maintainer.** Nothing. The next kept item is the release plan, several themes away.
+
+## Retro 2026-09-18T09:25Z (retro 4 — window 08:20Z–09:20Z; five themes landed: #82, #116, #108, #126, #69)
+
+### What worked, with numbers
+- **Outside PRs, end to end.** First loop review 9–28 min after arrival (#116 at +9, #108 at +24, #126 at +28); every one cold-read; all three merged under their authors' names within 61–105 min; the competing pair for #97 landed as a sequence (#116's disk lookup first, #108's design on top) with cross-credit in both directions. A fourth contributor's PR (#126) arrived 37 min after its `good first issue` label.
+- **The breaker held and released cleanly.** #69 landed on its third pass after two conductors' verification and the host's re-check on the rebased branch; three consecutive green `dev` pushes (6d97774, 4e34b80, 47ea84c) and a green full matrix on demand.
+- **One conductor at a time, in practice.** Tick 6 ran host-side under retro 3's rules; zero collisions, zero duplicate reviews, tick length 25 min including three dispatches and the architect.
+- **The record kept up.** The architect's breakdown was pushed to the log branch in the same tick (#141's rule applied before it was written into the skill); `verify-red.sh` (#125) was used in every review this window and gave one exit-2 that was correct.
+- **Green-first evidence discipline held**: the #108 worker measured its own "speedup" and reported none (163 ms unchanged; root cause filed as #135) rather than let the comment over-claim.
+
+### Failures and root causes
+| Failure | Evidence | Why → root | Fix lives |
+|---|---|---|---|
+| 6 approval clicks for 3 outside PRs; #116 needed 3, #108 3 (one on a superseded head) | run ids 35323518166, 35324810356, 35325939964, 35326165584… | every push by a non-owner to a first-time contributor's fork re-arms GitHub's gate → our cleanup was rebase, fixup, then a trailer amend: three pushes where one would do; the maintainer's "Update branch" pushed a fourth head under a worker mid-amend → **no protocol for how many times, and when, a maintainer touches a contributor's branch** | review.md: one push per outside PR, everything squashed into it, only while the maintainer is present; `in-review` is the lock against Update-branch |
+| Co-author trailers on #116's fixup (now on `dev` as 4b209f6) credit nobody | `gh api …/commits/4b209f6` resolves no co-author | the `<login>@users.noreply.github.com` form links only for pre-2017 accounts → the spec gave the form from memory | review.md: take the address from the contributor's own commit (`git log --format=%ae`) |
+| The sweep re-flagged reviewed PRs | 08:48Z sweep: "loop reviews: 0" on #116/#108 | detection by comment-heading regex; the reviews used other headings → `reviewed` label (fixed in-window) | done |
+| `verify-red.sh` popped a stale stash into a fresh review worktree | #126 review report | the branch under review predated #125, so the *branch's* old script ran; the stash stack is repo-global (`feature/journalism-investigation-kb`) → sweep now runs `dev`'s script (fixed in-window); the stale stash entry is still there | maintainer: `git stash drop` when convenient |
+| A.1's backlog item, reported created at tick 5, did not exist | #141 | created somewhere never pushed → the skill said "leave the record" but not where | SKILL.md: tick artefacts outside a theme branch go on the log branch in the same tick |
+| Two `dev` runs `cancelled` with `gate: failure` (3dc04f8, 4b209f6) | run list | merges 1–3 min apart; concurrency cancels the older run → harmless, but the breaker's "two consecutive red pushes" could count a cancelled run | SKILL.md: the breaker counts `failure` on a completed run, never `cancelled` |
+| CHANGELOG conflicted twice on #116 alone, each costing a push and a click | #116's two rebases | every theme appends to the same `### Fixed` block | quality: `changelog-fragments…` (nominated) |
+
+### Waste, in the seven
+Dominant: **delays** at the maintainer's desk — six approval clicks, three merges and one Update-branch, all serial, roughly half of each outside PR's lead time; and **handoffs** — three pushes to #116 where one would do, each a fresh gate. **Relearning** fell (one review per PR this window, none duplicated). Defects: none reached `dev` (three green pushes).
+
+### Constraint
+The maintainer's desk, for the first time — and correctly so: merging outside work is kept. The remedy is to reduce what reaches it: one push per outside PR, and (a recommendation, kept) GitHub's fork policy "require approval for first-time contributors *who are new to GitHub*" would have run all six of this window's runs without a click — every contributor this window had an account older than a year.
+
+### The one process change
+**The outside-PR cleanup protocol** in review.md: prepare everything locally (rebase, fixup, trailers taken from the contributor's own commit address), verify, then **one push**, timed when the maintainer is present to click; `in-review` on the PR is the lock — the maintainer does not press Update-branch on a claimed PR. With it, as root-cause fixes: #141's log-branch rule and the breaker's `cancelled` clarification in SKILL.md. PR `process/retro-4-outside-pr-cleanup`.
+
+### The quality theme
+`changelog-fragments-one-file-per-pr-under-changelog-d-assembled-by-the-release` (existing stock; sonnet) — dispatch immediately after `scripts/release.py` (#140) merges; the release.py worker has been told to isolate `release_notes_for(version)` so the fragments theme swaps its input. Evidence: 2 CHANGELOG conflicts on one outside PR; every parallel theme pays it.
+
+### Expected effect
+Approval clicks per outside PR 2–3 → 1; outside-PR lead time 60–105 min → < 60; CHANGELOG conflicts per merged PR 2/9 this window → 0 after fragments. Revert the one-push rule if it delays a contributor's fix by more than a tick waiting for the maintainer.
+
+### Not changed, noted for next time
+- Recommend (kept): fork-PR approval policy → "first-time contributors new to GitHub". The maintainer decides.
+- The seven Dependabot `web/` PRs sat `BEHIND` all day by design; dispatched this window as one theme (chore/web-dependency-bumps) before F/G.
+- 24-hour reservation of `good first issue` items for outside contributors is a host rule, not yet in the skill; the architect honoured it from the brief. Write it down next retro if it survives.
+- The stale repo-global stash (`feature/journalism-investigation-kb`) still trips tools that use `git stash`; the maintainer's to drop.
