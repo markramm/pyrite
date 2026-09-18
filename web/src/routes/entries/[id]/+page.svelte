@@ -397,7 +397,10 @@
 							</details>
 						</div>
 					{/if}
-					<aside class="hidden w-64 shrink-0 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800 lg:block">
+					<aside
+						class="hidden w-64 shrink-0 overflow-y-auto border-l border-zinc-200 p-4 dark:border-zinc-800 lg:block"
+						data-testid="entry-meta-desktop"
+					>
 						{#if entryStore.current}
 							<EntryMeta entry={entryStore.current} />
 						{/if}

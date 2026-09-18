@@ -137,6 +137,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **The New Entry page's Create button could submit before the target KB was
+  known.** `kbStore.activeKB` resolves asynchronously on mount; nothing
+  disabled Create while it was still empty, so a fast click sent `kb: ''` and
+  silently failed (a toast that dismisses in 3s, no navigation) instead of
+  creating the entry. The button is now disabled until the KB has resolved,
+  same as it already was while saving. Found while rewriting the e2e suite's
+  entry-creation coverage against a real, seeded backend.
 - **Typed entries no longer drop frontmatter they do not declare.** A load ->
   save through any typed class (core or plugin) deleted unknown keys —
   `pyrite update -f status=done` stripped `milestone:` and `created:`. The
