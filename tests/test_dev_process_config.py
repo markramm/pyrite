@@ -227,3 +227,25 @@ class TestSessionSetupScript:
         # worktree's venv breaks every checkout's hooks when that worktree is
         # removed; the script must install from the main checkout's venv.
         assert '"$repo_root/.venv/bin/pre-commit"' in text
+
+
+class TestGateJob:
+    """One required check that always reports (ADR-0032 §2).
+
+    A skipped matrix job reports as `test`, not `test (3.12)`, so a docs-only
+    PR whose classifier skipped the matrix could never satisfy a required
+    `test (3.12)` and hung BLOCKED (PR #36, 2026-09-18). `gate` needs every
+    job, runs `if: always()`, fails only on a real failure or cancellation,
+    and is the only required check on dev and main.
+    """
+
+    def test_gate_needs_every_gating_job_and_always_runs(self, ci):
+        job = ci["jobs"]["gate"]
+        assert set(job["needs"]) >= {"changes", "kb", "test", "frontend"}
+        assert str(job.get("if", "")).strip() == "always()"
+
+    def test_gate_fails_on_failure_or_cancellation_only(self, ci):
+        run = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["gate"]["steps"])
+        pattern = next(line for line in run.splitlines() if "grep" in line)
+        assert "failure" in pattern and "cancelled" in pattern
+        assert "skipped" not in pattern, "skipped must count as passing"

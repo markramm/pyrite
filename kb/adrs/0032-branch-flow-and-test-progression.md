@@ -142,15 +142,17 @@ is waste; a step that could tell us something new and does not is a gap.
 |---|---|---|
 | commit hook | seconds | the change is well-formed (lint, format, schema) |
 | local pre-push | ~1 min | the change passes the suite on *my* interpreter |
-| **PR → `dev`** (required: `test (3.12)`, `frontend`, `kb`) | ~3 min | the change passes on top of *current `dev`*, on the primary interpreter |
+| **PR → `dev`** (required check: `gate`, which needs `test (3.12)`, `frontend`, `kb`; skipped = pass) | ~3 min | the change passes on top of *current `dev`*, on the primary interpreter |
 | **push to `dev`** (after merge) | ~5 min, not a merge gate | **breadth**: every supported Python, Postgres conformance; a red `dev` blocks every PR |
 | **push to `main`** (release) | minutes, once per release | **depth**: what a user gets — install from the tag, Quick Start, live server over REST/MCP/stdio, Docker image, e2e once deterministic |
 | pre-release, by hand or script | minutes | the release notes are true; the UI works in a browser; the runbook's clean-venv check |
 
 Consequences: the Python matrix runs one interpreter on pull requests and all
-three on pushes (`ci.yml`); `dev`'s required checks are `test (3.12)`,
-`frontend`, `kb`; `main`'s stay the full set, satisfied because `main` only
-fast-forwards to a commit the `dev` push already proved. Coverage and e2e are
+three on pushes (`ci.yml`). The single required check on `dev` and `main` is
+`gate`, a job that needs every gating job and fails only on a failure or
+cancellation — a skipped job (the classifier's "nothing to test here") passes.
+Requiring matrix legs by name hung docs-only PRs, because a skipped matrix
+reports as `test`, not `test (3.12)`. Coverage and e2e are
 manual until each has something to say.
 
 ### 4. What does not change

@@ -71,6 +71,8 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   importing torch (~3 s) and calling the Hugging Face hub for metadata; under
   `-n auto` ten workers doing that at once thrashed the machine, and unrelated
   tests showed up at 50+ s.
+- CI has one required check, `gate`, so a docs-only PR (matrix skipped) can
+  merge; requiring matrix legs by name hung the first such PR.
 - CI installs with `uv` (80-130 s of pip resolving per job → ~20 s). A change
   classifier skips the heavy jobs for docs/KB-only pushes and gives KB changes
   a 30 s schema check. Coverage runs in its own job, by manual dispatch only until there is a

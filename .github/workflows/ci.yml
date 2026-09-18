@@ -348,3 +348,26 @@ jobs:
           name: playwright-report
           path: web/playwright-report/
           retention-days: 14
+
+  # ===========================================================================
+  # The one required check. A skipped matrix job reports as `test`, not
+  # `test (3.12)`, so requiring the matrix legs by name hangs every docs-only
+  # PR (the classifier skipped the matrix, the required context never
+  # arrived: PR #36). `gate` needs every gating job, always runs, and fails
+  # only when one of them failed or was cancelled -- skipped is a pass, which
+  # is what the classifier means by it.
+  # ===========================================================================
+  gate:
+    needs: [changes, kb, test, frontend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any gating job failed or was cancelled
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS"
+          if echo "$RESULTS" | grep -Eq '"result": *"(failure|cancelled)"'; then
+            echo "a gating job failed or was cancelled"; exit 1
+          fi
+          echo "gate: all gating jobs succeeded or were skipped"

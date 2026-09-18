@@ -151,8 +151,9 @@ process-spawning tests.
 - Branch from `dev`, open the PR against `dev`. Rebase is the default merge
   method (it keeps your commits and their messages); squash is fine for a
   branch whose history is noise.
-- A PR merges when its checks are green **on top of current `dev`** — the
-  three Python jobs and `frontend` are required, and the branch must be up to
+- A PR merges when its checks are green **on top of current `dev`** — one
+  required check, `gate`, summarizes the Python suite, the frontend build and
+  KB validation (whichever the change needs), and the branch must be up to
   date. If `dev` is broken, nothing merges until it is fixed.
 
 **Git hooks** — `pre-commit install` installs all three:
