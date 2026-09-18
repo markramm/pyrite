@@ -1517,3 +1517,131 @@ failure. Carried into #104's acceptance: a port collision must fail loudly, not
 fall back.
 
 **Load is down to 9.76** from 54 after killing the redundant 10-run loop.
+
+## Tick 2026-09-18T07:36Z (tick 5 — relaunched after the killed attempt; verification tick)
+
+Load 26 at start (peak 41), 21 at end. `dev` green (3 successful runs). Ports
+8088/5173 free at 07:36Z. The killed attempt's `in-review` claims on #69 and
+#108 had been released; nothing was half-done on disk.
+
+### PR #69 — verified myself, redispatched a second time (circuit-breaker threshold)
+
+No third cold read, as instructed. I verified the three named defects by hand
+in an isolated KB built from this branch's `.venv`.
+
+**Fixed, confirmed:**
+- `update -i 5` / `-f rank=0` now persist. The `__setattr__` interception is
+  the right mechanism — it catches CLI, REST, MCP and `sw reorder` rather than
+  one service method.
+- Anchors/merge keys survive: `_restyle_like_source` carries unchanged nodes by
+  reference instead of deep-copying.
+- **#87 is genuinely fixed, and was catastrophic at the merge base.** On
+  `8ba4d42`, `pyrite link` on an entry whose body contains `|---|---|` wrote the
+  entire body into frontmatter as a `body:` key *and* leaked an absolute
+  `file_path:` into the file. On the branch the body is untouched. That fix
+  alone justifies the theme.
+- Full suite in the worktree: 4262 passed, 68 skipped, 113s, `-n auto`.
+
+**Two blockers sent back:**
+
+1. **`priority: medium` is invented on every write.** `entry_types.py:318`
+   writes it unconditionally, three lines above the correctly-guarded `rank`.
+   The worker fixed the key the cold read named and missed its sibling in the
+   same method. And it is not one type: probing all 49 registered entry types,
+   **32 invent at least one key** they were not loaded with — `ADREntry` invents
+   `adr_number: 0`, `ZettelEntry` invents `maturity`, `QAAssessmentEntry` invents
+   four. The generic machinery already computes the right answer
+   (`_absent_default_keys` contains `priority`); only the write path fails to
+   consult it. I did **not** patch this inline: at 32 types it is a design call
+   (central filter vs 32 guards), not a small sure edit.
+
+2. **Nine of twelve regression-named tests pass without the fix.** Including
+   both tests named for the cold-read data-loss defects and the entire
+   `TestStructuralYamlSurvivesAWrite` class written in response to cold read 2.
+   The fixes are real — I verified them by hand — but the suite is not what
+   proves them. Root cause is the fixture: `BACKLOG_ITEM` already carries
+   `priority: high`, so no test ever loads a backlog item *lacking* the key,
+   which is also exactly how the `priority` regression got through. This is the
+   **second occurrence on this same PR** of the failure mode review.md already
+   records.
+
+Redispatched (Opus) with the central-fix preference stated and the per-test
+red-at-base table required. **This is the second redispatch of one theme — the
+circuit-breaker threshold — so it is flagged to the maintainer rather than
+dispatched a third time on my own authority.**
+
+### The verify-red harness verified nothing (issue #121)
+
+Worth recording as the tick's most dangerous finding. `scripts/verify-red.sh`
+reverts the implementation with `git stash push`. This worktree had **unmerged
+paths** — left by a stale stash belonging to an unrelated branch
+(`feature/journalism-investigation-kb`) that my own `stash pop` had partially
+applied — and `git stash push` then fails while the script carries on. The
+implementation was never reverted, every test ran against the full fix, and the
+script reported `PASSED without the fix` for **all twelve**.
+
+I only caught it because twelve of twelve was implausible and
+`grep -c _absent_default_keys` still returned 6 with the stash supposedly
+applied. The symmetric failure — reporting an untested fix as verified — is the
+one that would actually land bad code. Filed #121; workaround is
+`git checkout $(git merge-base origin/dev HEAD) -- <impl>` with an assertion
+that the revert took. **A conductor that trusts a green verify-red without
+checking the revert took effect is not verifying anything**, and the same stale
+stash is presumably sitting in other long-lived worktrees.
+
+I restored the worktree to a clean HEAD and left the unrelated stash entry
+untouched.
+
+### #106: the THEME.md problem is on `dev`, not on the branch (issue #122)
+
+`.claude/THEME.md` is tracked on the branch — but `git ls-tree origin/dev`
+shows it is tracked on `dev` too. `.gitignore:89` stops new adds but never
+untracked the file committed in 22619c9, so every branch inherits it and the
+add/add conflicts can still recur. Not #69's defect; filed separately.
+
+### Outside PRs #108 and #116 — partial review, handed off
+
+Two outside contributors have now filed for #97: #108 (fathirramadhan-web) and
+#116 (YaoSong808). Mid-review, the host launched dedicated review agents, so I
+posted what I had and released my claims.
+
+**Neither has ever run CI**: both workflow runs are `conclusion:
+action_required`, held pending maintainer approval for first-time contributors.
+Every "suite green" claim on both is author-reported only. Only the maintainer
+can approve those runs.
+
+The substantive difference, verified: #108 validates the target with
+`self.db.get_entry` — the **SQLite index** (`storage/crud.py:22`) — while #116
+uses `KBRepository.load`, the **disk**. #116's description is right that this
+matters: an entry created but not yet `index sync`'d is invisible to the index,
+so #108 rejects links to targets that really exist, on the common
+`pyrite create` → `pyrite link` agent path. #108 is ahead on design
+(`allow_dangling` + a `resolved` flag) and on test breadth, and carries a stray
+`.gitignore` hunk ("Auto-added by github-engineer", including `nem_stats.c`)
+that belongs to another project.
+
+### Playwright: the fault the footprint could not see (#118)
+
+Per the host: `playwright.config.ts` hardcodes 8088/5173, so concurrent
+worktrees test against each other's servers. Consequences recorded for the next
+tick: **no F/G/H dispatch until #118 lands**; Playwright is one-at-a-time, not
+two; #82 and #83's five-run evidence may be contaminated and must be re-run with
+`lsof -i :8088 -i :5173` empty, treating `trying another one` / `already used` /
+`ECONNREFUSED` / `was not able to start` as **invalid runs, not failures**.
+
+Created `playwright-package-a-1-per-worktree-ports-and-data-dir` (Sonnet,
+milestone 0.24.2) at the head of the next queue, allowed to touch package A's
+four files. **Retro 2's "machine-heavy" cap named the symptom; the shared fixed
+ports were the fault.** Two themes can be footprint-disjoint in git and still
+collide on a port — a footprint dimension the dispatch rules do not model.
+
+### Dispatched / not dispatched
+
+Only the #69 redispatch. I did **not** take the free code-only slot for the MCP
+read-tier theme (#57/#58/#64–#68): with #69 sent back for a second time, the
+review queue is the constraint and the circuit breaker is at its threshold — the
+right move is to let the maintainer weigh in, not to add a branch. A.1 waits for
+C and D to finish so the fix is not itself contaminated.
+
+#81's worker has five commits and has not reported; left unreviewed per the
+host (heavy, waits for #69).
