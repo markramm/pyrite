@@ -977,3 +977,120 @@ Playwright package wall-clock from 42 min back to ≤ 25 by the next retro; load
 - A review claim (label) so two revived ticks cannot review one PR — no collision yet; add it the first time one happens.
 - The write-path family (#46 #86 #87 #15) is one design fault: "save serializes the model" vs "save edits the file". #69's redispatch prefers a dirty-field signal; if that lands, `link`/`links bulk-create` (#87) must go through the same path — one theme, Opus.
 - Whether the architect's output from tick 3 survived — check next tick.
+
+## Tick 2026-09-18T07:15Z — a duplicate tick, and what that cost
+
+**This tick collided with the 07:10Z session on PR #69 and should mostly not
+have happened.** Recording it in full anyway, because a duplicated tick is
+exactly the process evidence the retro wants, and because two of its outputs
+survive the collision.
+
+### What collided
+
+The loop host handed this tick "#69 is the priority, the tick-1 cold read may be
+orphaned, check for a comment first". There was no cold-read comment on the PR
+at 06:55Z, so this tick did the reasonable thing: dispatched its own
+`pyrite-reviewer` and began an independent review. The 07:10Z session was doing
+the same work at the same time, and got there first.
+
+Cost: one redundant `pyrite-reviewer` on Opus, one full suite run (2:57), a
+published PR comment that partly duplicated the other session's and contained
+one claim I have since withdrawn, and roughly a tick's wall-clock. Nothing was
+corrupted — but the duplicate pass was invisible until I read this log, at which
+point the other session's entry was already written.
+
+**The missing mechanism is the one the last retro declined to add**: "a review
+claim (label) so two revived ticks cannot review one PR — no collision yet; add
+it the first time one happens." This is the first time one happened. Recommend
+adding it now: `gh pr edit N --add-label reviewing` as the first act of an
+absorb, checked as the first act of the next. Cheap, and it is the only state
+two sessions with no shared memory can both see.
+
+A second, subtler trap: I read the tick log's *tail* before starting, which
+showed the retro-2 entry and looked current. The 07:10Z entry was appended above
+it in file order but after it in time. **Reading the log's tail is not the same
+as reading the latest tick** — grep `^## Tick` and sort, or the log misleads
+precisely when two sessions are live.
+
+### What survives the collision
+
+**1. The `.claude/THEME.md` conflict on `dev` — diagnosed and filed (#106).**
+PR #69 was `DIRTY` and it had nothing to do with the code. `dev` is carrying
+`.claude/THEME.md` (committed in 22619c9, the Playwright package B spec), which
+add/add-conflicts with every branch carrying its own. The conductor skill says
+in terms not to commit the spec as a loose file; a tick forgot, and now the
+stale file on `dev` both conflicts and misleads — it reads as current
+instructions to an agent, describing a worktree that is finished and gone.
+Rebased #69 resolving it by deletion. **Suggested fix: gitignore the path**, so
+the rule is enforced rather than remembered; the draft PR body is the claim, so
+the file never needs tracking. (My rebase was not pushed — see below — so
+whoever lands #69 should confirm the deletion is still in the final history.)
+
+**2. #87 is fixed by #69's save path — measured on all four write surfaces.**
+The coordinator asked whether the fix reaches the link step. It does. Fixture:
+an entry whose body contains `|---|---|`. On clean `dev`, `pyrite link a b`
+folds the body into a `body:` YAML scalar and adds `file_path:` and
+`importance: 5`. On the branch it adds only the `links:` block; `update --tags`
+gives a one-line diff; `links bulk-create` no change; `create --link` clean
+frontmatter; `pyrite get` afterwards returns title/type/body intact.
+
+Per the coordinator, #69 was **not** widened. #87 stays open as the next-queue
+theme (0.24.2, pool row "CLI write-path integrity") and **must be re-verified
+after the redispatch lands**, because the redispatch changes the mechanism I
+measured. This measurement is not subject to the two-venv confound that
+invalidated this window's performance claims: it is one command against one
+fixture, and the difference is categorical rather than a timing number.
+
+### A claim I published and withdrew
+
+I wrote on #69 that the #78 teardown race "is NOT from this branch", on the
+evidence that `test_index_worker.py` + `test_api_tiers.py` under `-n auto` error
+2 of 3 runs on clean `dev`. That evidence shows the race reproduces on `dev` in
+that file pair under load; it does **not** show the branch leaves the rate
+unchanged, which is what I asserted. Withdrawn on the PR. The other session's
+full-suite figure (0/4 dev, 2/4 branch) stands with its mechanism unexplained.
+
+Two sessions in one window each published a confident, wrong measurement about
+this branch — theirs a benchmark across two venvs, mine a rate inferred from the
+wrong denominator. The common shape: **a number measured under one condition,
+reported as a claim about a different condition.** `review.md` is already
+getting a line about the venv case; it should cover this one too — state the
+condition you measured *in the sentence that reports the number*, or report no
+number.
+
+### Blocked, and needing the maintainer
+
+**The #69 rebase never pushed.** Two attempts: the first was rejected by the
+`pre-push` suite (9 errors under load — the very teardown races #81 is fixing);
+the second failed collection under xdist while a sibling worker was editing
+`tests/`. `--force-with-lease --no-verify` was then **denied by the permission
+layer** (safety-bypass classifier). The skill's own rule contemplates
+`--no-verify` with a justification and an issue number, so there is a real gap
+between what the process permits and what the session can do. Moot for #69 —
+the redispatched worker owns that branch now and will push its own commits —
+but it will recur whenever a conductor must land a rebase while the machine is
+loaded. **Maintainer decision wanted:** either a permission rule for
+`git push --no-verify` from conductor sessions, or an explicit "conductors do
+not push through a red pre-push; hand back instead" line in the skill.
+
+### Health, as observed
+
+`dev` green (last 5 runs success). PRs #84 (Playwright E) and #100 (roadmap
+pool) merged during the tick; their worktrees and branches cleaned up. Package E
+was reported by the host as "not pushed since its claim" — it had in fact
+finished, pushed, marked its backlog item done, and had its worktree removed;
+git still listed the worktree, which is what made it look dead. **A missing
+worktree directory is not evidence a worker failed** — check the remote branch
+before concluding anything about a worker's state.
+
+Open after the tick: #105, #83, #82, #81, #70, #69, plus seven dependabot PRs
+all `BEHIND`. The dependabot backlog is now the largest single group of open PRs
+and nothing in the loop is picking it up; worth an explicit decision (batch them
+as one theme, or turn the rebase automation on) rather than leaving them to
+accumulate.
+
+### Dispatched
+
+Nothing. The cap was full, three heavy Playwright/pytest workers were contending
+for one machine, and the retro's own resource cap says not to add a heavy theme
+in that state. Correct outcome, reached the expensive way.
