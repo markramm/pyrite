@@ -42,10 +42,15 @@ def db_backup(
         )
 
     if output is None:
+        # Beside the database being backed up, not in whatever directory the
+        # command happened to be run from. A bare relative filename here put
+        # 125 backup files (58 MB) into the repo root, gitignored so nobody
+        # noticed (#21). An explicit --output keeps its usual meaning,
+        # including relative-to-cwd.
         timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-        output = f"pyrite-backup-{timestamp}.db"
-
-    output_path = Path(output)
+        output_path = db_path.parent / "backups" / f"pyrite-backup-{timestamp}.db"
+    else:
+        output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Use SQLite's backup API for safe, consistent backups
@@ -57,7 +62,10 @@ def db_backup(
         dest_conn.close()
         source_conn.close()
 
-    console.print(f"Backup created: {output_path}")
+    # soft_wrap: a long path must stay copy-pasteable. Rich's default wrapping
+    # breaks it across lines at the console width, so the one thing the
+    # operator needs from this output cannot be pasted back into a shell.
+    console.print(f"Backup created: {output_path}", soft_wrap=True)
 
 
 @db_app.command("restore")
