@@ -333,6 +333,8 @@ pytest tests/ extensions/ -n auto
 
 # Frontend
 cd web && npm install && npm run dev
+# Port 5173 must be free -- strictPort is on, so a taken port is a startup
+# error, not a silent move to 5174.
 
 # Linting
 ruff check pyrite/

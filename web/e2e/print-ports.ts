@@ -15,6 +15,17 @@
  * support resolves relative imports like plain ESM and needs the extension;
  * Vite/Vitest (which run every other e2e module) resolve extensionless
  * imports themselves, so this is the one file in e2e/ that needs it.
+ *
+ * Passes `{}`, not `process.env`, as `derivePorts`'s override source. This
+ * file's only job is to record THIS worktree's derived ports; if the caller's
+ * shell happened to have `PLAYWRIGHT_E2E_PORT` set (e.g. exported from a
+ * DIFFERENT worktree's `.pyrite/e2e-ports` still sourced in this shell),
+ * `process.env` would record that worktree's base pair mixed with this one's
+ * derived auth pair — a file named after and meant to represent one
+ * worktree, containing a hybrid of two. `playwright.config.ts` itself still
+ * reads `process.env` (a real override there is the caller's deliberate
+ * choice for THIS run); this script's only purpose is the unconditional
+ * derivation.
  */
 import { derivePorts } from './ports.ts';
 
@@ -24,13 +35,17 @@ if (!repoRoot) {
 	process.exit(1);
 }
 
-const ports = derivePorts(repoRoot, process.env);
+const ports = derivePorts(repoRoot, {});
 
-for (const [key, value] of Object.entries({
-	PLAYWRIGHT_E2E_PORT: ports.backend,
-	PLAYWRIGHT_E2E_VITE_PORT: ports.vite,
-	PLAYWRIGHT_E2E_AUTH_PORT: ports.authBackend,
-	PLAYWRIGHT_E2E_AUTH_VITE_PORT: ports.authVite
-})) {
-	console.log(`${key}=${value}`);
-}
+// PLAYWRIGHT_E2E_PORT / PLAYWRIGHT_E2E_VITE_PORT are real overrides
+// `derivePorts` reads from the environment (see ports.ts) — printing them
+// here documents the base pair a human could export to pin it. The two
+// PLAYWRIGHT_E2E_AUTH_* lines below are NOT read as overrides by anything;
+// they are informational only (there is no override for the auth pair, by
+// design — see ports.ts), so they are named accordingly rather than as
+// PLAYWRIGHT_E2E_*_PORT env-var lookalikes nothing consumes.
+console.log(`PLAYWRIGHT_E2E_PORT=${ports.backend}`);
+console.log(`PLAYWRIGHT_E2E_VITE_PORT=${ports.vite}`);
+console.log(`# informational only — not read as an override by anything:`);
+console.log(`DERIVED_E2E_AUTH_BACKEND_PORT=${ports.authBackend}`);
+console.log(`DERIVED_E2E_AUTH_VITE_PORT=${ports.authVite}`);

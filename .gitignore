@@ -36,10 +36,17 @@ web/test-results/
 web/playwright-report/
 # The seeded world the e2e suite builds (web/e2e/global-setup.ts); rebuilt each
 # run. Suffixed per worktree with its derived backend port (web/e2e/ports.ts,
-# Package A.1, #118) so two worktrees never share a data directory.
+# Package A.1, #118) so two worktrees never share a data directory. The bare
+# (unsuffixed) lines stay alongside the globs: every worktree that ran the
+# suite before this branch has an unsuffixed web/.e2e-data/ on disk already,
+# and dropping the bare line would turn it into untracked noise in `git
+# status` rather than something the suite ever reads or writes again.
+web/.e2e-data/
 web/.e2e-data-*/
 # The auth-enabled world (web/e2e/auth-setup.ts, Package C); likewise rebuilt
-# each run, likewise suffixed per worktree.
+# each run, likewise suffixed per worktree, likewise keeping its pre-existing
+# bare line.
+web/.e2e-auth-data/
 web/.e2e-auth-data-*/
 
 # Playwright MCP (browser automation logs/screenshots)

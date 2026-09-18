@@ -86,36 +86,55 @@ const PYRITE_BIN = join(REPO_ROOT, '.venv', 'bin', 'pyrite');
  * this worktree already holds `port`. Without this, Playwright's own
  * `webServer` retry/health-check loop is the only signal, and its error
  * ("Timed out waiting ... for the server to start") does not say WHY — a
- * human has to already know to run `lsof` themselves. `lsof -i :<port>` is
- * exactly what acceptance criterion #2 asks the error to name.
+ * human has to already know to run `lsof` themselves. `lsof -sTCP:LISTEN -i
+ * :<port>` is exactly what acceptance criterion #2 asks the error to name;
+ * the `-sTCP:LISTEN` filter matters — plain `-i :<port>` also matches an
+ * ESTABLISHED client socket that happens to be using that port as its local
+ * (ephemeral) port, which is not a listener and not a conflict.
  *
  * A backend this worktree itself started in a previous, still-running
  * `playwright test` invocation is not "outside this worktree" in spirit —
  * but `reuseExistingServer: false` (set unconditionally, see
  * playwright.config.ts) means this project never intends to share a server
- * across invocations either, so any holder of the port is treated as
- * foreign and the preflight fails regardless of whose process it is.
+ * across invocations either, so any listener on the port is treated as
+ * foreign and the preflight fails regardless of whose process it is. In
+ * practice the most common trip is a lingering uvicorn from THIS worktree's
+ * own previous run that a crashed or Ctrl-C'd `playwright test` failed to
+ * clean up — not necessarily another worktree, and not necessarily user
+ * error; the message below says that.
+ *
+ * Best-effort: if `lsof` itself is missing or errors for a reason other than
+ * "no listener found" (both look identical here — a non-zero exit with no
+ * stdout), this fails OPEN rather than blocking the run. Playwright's own
+ * `webServer` health check remains the backstop signal in that case, just
+ * without this function's more specific error.
  */
 export function preflightPort(port: number, label: string): void {
 	let output: string;
 	try {
-		output = execSync(`lsof -i :${port}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+		output = execSync(`lsof -sTCP:LISTEN -i :${port}`, {
+			encoding: 'utf8',
+			stdio: ['ignore', 'pipe', 'ignore']
+		});
 	} catch {
-		// lsof exits non-zero (and prints nothing) when nothing holds the port
-		// — that is the success case.
+		// Non-zero exit with no stdout here means either "nothing is listening"
+		// (the success case) or "lsof itself is unavailable/errored" (best-effort
+		// fail-open — see the doc comment above). Both look the same from here.
 		return;
 	}
 	if (!output.trim()) {
 		return;
 	}
 	throw new Error(
-		`e2e preflight: port ${port} (${label}) is already in use by another process — ` +
+		`e2e preflight: port ${port} (${label}) already has a listener — ` +
 			`this worktree's e2e suite refuses to reuse a server it did not start.\n\n` +
 			`${output}\n` +
-			`Kill the process above if it is stale, or if it is a sibling worktree's ` +
-			`Playwright/uvicorn/vite still running, let it finish first. ` +
-			`(Ports are derived per worktree — see web/e2e/ports.ts — so this should ` +
-			`only happen when a previous run of THIS worktree's suite was not cleaned up.)`
+			`This is often a lingering uvicorn/vite from THIS worktree's own previous ` +
+			`run that didn't get cleaned up (a crash, or Ctrl-C at the wrong moment) — ` +
+			`kill the process above if so. It can also be a sibling worktree's run ` +
+			`still in flight; ports are derived per worktree (see web/e2e/ports.ts), ` +
+			`so that would mean two worktrees happen to hash to the same port, or one ` +
+			`is using a PLAYWRIGHT_E2E_PORT override that collides with another's.`
 	);
 }
 

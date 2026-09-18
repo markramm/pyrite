@@ -177,7 +177,11 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `global-setup.ts`/`auth-setup.ts` fails fast — naming the port and the
   owning process — if something outside this worktree already holds it.
   `scripts/new-worktree.sh` records the chosen ports in `.pyrite/e2e-ports`
-  for a human running the suite by hand.
+  for a human running the suite by hand. Side effect worth knowing: `vite dev`
+  (including plain `npm run dev`, not just the e2e suite) now also has
+  `strictPort: true` — a taken 5173 is a startup error instead of silently
+  moving to 5174, which is the same silent-fallback problem this fix exists
+  to close, just visible outside the e2e path too.
 - **The New Entry page's Create button could submit before the target KB was
   known.** `kbStore.activeKB` resolves asynchronously on mount; nothing
   disabled Create while it was still empty, so a fast click sent `kb: ''` and

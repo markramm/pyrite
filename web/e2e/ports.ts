@@ -63,6 +63,25 @@ function hashPortInBand(path: string, slot: number, slotCount: number): number {
 }
 
 /**
+ * Parse a port override, rejecting anything that is not a usable TCP port
+ * rather than letting it flow through as `NaN`. An unguarded `Number(...)` on
+ * a typo'd or empty override (`PLAYWRIGHT_E2E_PORT=808A`, or a shell that
+ * exported the variable name with no value) previously produced `NaN`
+ * everywhere it was used — `uvicorn --port NaN` failing opaquely, and
+ * `web/.e2e-data-NaN` silently becoming the actual, repeatedly-wiped data
+ * directory two different broken worktrees could even share by accident.
+ */
+function parsePortOverride(varName: string, raw: string): number {
+	const n = Number(raw);
+	if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+		throw new Error(
+			`${varName}=${JSON.stringify(raw)} is not a valid TCP port (expected an integer 1024-65535).`
+		);
+	}
+	return n;
+}
+
+/**
  * Derive this worktree's four e2e ports and data-dir suffix.
  *
  * @param worktreePath Absolute path identifying the worktree (its repo root).
@@ -70,7 +89,7 @@ function hashPortInBand(path: string, slot: number, slotCount: number): number {
  *   worktree always derives the same ones.
  * @param env The environment to read overrides from — pass `process.env` in
  *   real use. A parameter (not a direct `process.env` read) so this stays a
- *   pure function the RED test above can exercise without env leakage between
+ *   pure function the tests above can exercise without env leakage between
  *   cases.
  */
 export function derivePorts(
@@ -78,10 +97,10 @@ export function derivePorts(
 	env: Record<string, string | undefined>
 ): E2EPorts {
 	const backend = env.PLAYWRIGHT_E2E_PORT
-		? Number(env.PLAYWRIGHT_E2E_PORT)
+		? parsePortOverride('PLAYWRIGHT_E2E_PORT', env.PLAYWRIGHT_E2E_PORT)
 		: hashPortInBand(worktreePath, 0, 4);
 	const vite = env.PLAYWRIGHT_E2E_VITE_PORT
-		? Number(env.PLAYWRIGHT_E2E_VITE_PORT)
+		? parsePortOverride('PLAYWRIGHT_E2E_VITE_PORT', env.PLAYWRIGHT_E2E_VITE_PORT)
 		: hashPortInBand(worktreePath, 1, 4);
 	// The auth pair has no override of its own: nothing outside this module
 	// depends on a fixed auth port, and deriving it from bands 2/3 keeps it
