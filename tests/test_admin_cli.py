@@ -218,7 +218,7 @@ def drift_env(tmp_path):
     )
     db.close()
 
-    yield {"config": config, "tmpdir": tmp_path, "kb_config": kb_config, "kb_path": kb_path}
+    return {"config": config, "tmpdir": tmp_path, "kb_config": kb_config, "kb_path": kb_path}
 
 
 @pytest.mark.cli

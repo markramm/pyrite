@@ -100,7 +100,7 @@ class TestMigrationV13:
 class TestKBDefaultRole:
     """Tests for default_role on KB registration and updates."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def db(self, tmp_path):
         db_path = tmp_path / "test.db"
         db = PyriteDB(str(db_path))
@@ -146,7 +146,7 @@ class TestKBDefaultRole:
 class TestRegistryDefaultRole:
     """Tests for KBRegistryService handling of default_role."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def setup(self, tmp_path):
         db_path = tmp_path / "test.db"
         db = PyriteDB(str(db_path))
@@ -227,7 +227,7 @@ class TestRegistryDefaultRole:
 class TestListUsers:
     """Tests for AuthService.list_users."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def setup(self, tmp_path):
         db_path = tmp_path / "test.db"
         db = PyriteDB(str(db_path))
@@ -297,7 +297,7 @@ class TestListUsers:
 class TestEphemeralKBAdmin:
     """Tests for ephemeral KB listing and force-expire."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def setup(self, tmp_path):
         from pyrite.services.ephemeral_service import EphemeralKBService
 

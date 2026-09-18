@@ -76,7 +76,7 @@ class TestUsageTierConfig:
 class TestUsageTierEnforcement:
     """Tests for usage tier limit checking."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def quota_service(self, tmp_path):
         """Create a QuotaService for tier testing."""
         config = PyriteConfig(
@@ -149,7 +149,7 @@ class TestUsageTierEnforcement:
 class TestKBExport:
     """Tests for KB export to directory."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def kb_with_entries(self, tmp_path):
         """Create a KBService with a KB containing entries."""
         db_path = tmp_path / "test.db"

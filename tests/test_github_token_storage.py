@@ -31,7 +31,7 @@ def auth_env(tmpdir):
     db = PyriteDB(db_path)
     config = AuthConfig(enabled=True)
     service = AuthService(db, config)
-    yield service, db
+    return service, db
 
 
 def _make_github_client(tmpdir, github_configured=True):

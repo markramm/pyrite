@@ -49,7 +49,7 @@ def ai_env(indexed_test_env):
     app.dependency_overrides[get_index_mgr] = lambda: index_mgr
     client = TestClient(app)
 
-    yield {
+    return {
         "client": client,
         "app": app,
         "config": config,

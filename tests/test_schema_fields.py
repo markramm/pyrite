@@ -262,7 +262,7 @@ class TestKBSchemaFieldParsing:
 class TestFieldValidation:
     """Test field-level validation via KBSchema.validate_entry()."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def schema_with_fields(self):
         return KBSchema.from_dict(
             {

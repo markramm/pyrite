@@ -58,7 +58,7 @@ class TestSearchService:
     """Tests for SearchService."""
 
     @pytest.mark.parametrize(
-        "input_query, expected",
+        ("input_query", "expected"),
         [
             ("hello world", "hello world"),
             ("alex-jones", '"alex-jones"'),
@@ -107,7 +107,7 @@ class TestSearchService:
         assert SearchService.sanitize_fts_query(input_query) == expected
 
     @pytest.mark.parametrize(
-        "input_query, expected",
+        ("input_query", "expected"),
         [
             ("orange county florida", "orange OR county OR florida"),
             ("single", None),  # one term: nothing to relax

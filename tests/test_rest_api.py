@@ -144,7 +144,7 @@ class TestCentralExceptionHandler:
         return TestClient(app, raise_server_exceptions=False)
 
     @pytest.mark.parametrize(
-        "name,status,code",
+        ("name", "status", "code"),
         [
             ("entry_not_found", 404, "ENTRY_NOT_FOUND"),
             ("kb_not_found", 404, "KB_NOT_FOUND"),
