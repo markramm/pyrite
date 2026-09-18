@@ -75,9 +75,13 @@ if workers are still running, groom and review still have work.
 
 **Groom lane.** Dispatch the **architect** (`pyrite-architect`, strongest
 model, read-only) on the open issues, `pyrite sw backlog`, the roadmap's next
-release section and the last tick's report. It returns the breakdown: themes,
-file footprints, sequencing, Sonnet or Opus, and what is design-shaped enough
-to want an ADR first. **Dispatch it on any tick where the ready queue —
+release section and the last tick's report. It writes the breakdown **into the
+tickets** — a `## Groom <date>` section on the backlog item or the GitHub
+issue with acceptance, touches, sequence, model, `heavy`, cold read and out
+of scope — and returns an index of what it groomed; the board, not the
+architect's reply, is the source of truth for what is dispatchable
+(maintainer, 2026-09-18). Point it at the log-branch worktree so its item
+edits are committed and pushed in the same tick. **Dispatch it on any tick where the ready queue —
 themes that already have acceptance criteria, a footprint and a model — holds
 fewer than twice the worker cap.** It is read-only and runs beside the
 builds, so it costs the tick nothing but tokens, and a tick that dispatches
@@ -336,6 +340,11 @@ branch: `scripts/new-worktree.sh kb/conductor-log-<YYYY-Www>` on the first
 tick, one draft PR held open for the week, each tick commits and pushes
 there; the retro flips it to ready. Never a PR per tick — each merge puts
 every other open PR `BEHIND`.
+
+**The dispatch spec is the groomed ticket.** The draft PR's body is the
+backlog item's body (its `## Groom` section included), not a spec written
+from memory; an item without a `## Groom` section is not ready, and a
+theme composed from titles is a groom-lane defect (retro 1).
 
 **Anything a tick creates in `kb/` outside a theme branch goes on the log
 branch in the same tick** — a backlog item groomed for later, a note, a
