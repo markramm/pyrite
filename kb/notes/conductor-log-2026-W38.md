@@ -2331,3 +2331,13 @@ Redispatch rate from 2/7 (29%) this window to ≤1/10 over the next ten dispatch
 - `#158`/`#161`/`#145` are `DIRTY` on CHANGELOG now — the conductor rebases them next tick; the fragments theme ends the class.
 - `web/**/*.test.ts` in the fix-commit hook (#159): fold into 6F's CI step (in flight) or a one-line follow-up.
 - Kept decisions outstanding (no wait on them yet): API-key hashing (dismiss + mint command vs keyed hash), CodeQL required check, the private-repo existence oracle.
+
+## Incident 2026-09-18T11:19Z — tick 11 crashed the machine (OOM); the loop is stopped
+
+Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` review suites (#161, #140), a Playwright run (#160), two cold reads and an outside-PR review (#164); the outside-PR sweep then launched two more review agents (#166, #167), each told to run the full suite; two workers (#145 redispatch, #163) were running theirs. Up to eight concurrent suites on a 16 GB / 10-core machine. It went down at ~11:10Z; the session and all three session crons died with it.
+
+**Nothing was lost.** Every worktree was clean. #145: six fix commits committed locally, unpushed (`c3f5659`..`7ff5704` — k clamp at 4096, declared `FILTERED_SEMANTIC` capability, REST omits `warnings`, archived exclusion on the vector leg, `limit` validated, PG `max_distance` in SQL). #163: pushed complete at `7c81923`, worker never reported. #158 merged 11:05Z (the eight `actions/missing-workflow-permissions` alerts are closed: 0 of 8 open). #157 merged; Dependabot #154–#156 closed themselves. #167 was closed by its author at 11:09Z; #164 (same fix) stays open, unreviewed; #166 unreviewed. Dead `in-review` claims released on #140, #160, #161, #164. dev green at 28fc380.
+
+**Root cause:** the machine budget counts dispatched workers only — not the conductor's own review suites, not review agents (each told to run the suite), not the pre-push hook inside every worker; nothing serialises suites across worktrees and `-n auto` sizes to cores, not to what else is running. The tick log had recorded load 8–14 for three ticks and nothing acted on it.
+
+**State of the loop:** stopped. No crons armed. Not re-armed without the maintainer. Interim rule when it restarts: one full suite on the machine at a time (the conductor's included), review suites `-n 4`, outside-PR review agents do not run the suite themselves, ≤2 workers, Playwright never beside a suite. First theme on restart: a machine-wide suite lock + memory-bounded xdist count, used by the pre-push hook, the workers and the conductor.
