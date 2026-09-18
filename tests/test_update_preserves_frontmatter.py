@@ -705,3 +705,69 @@ class TestLoadDoesNotCaptureInternalsAsExtras:
         meta = entry.to_frontmatter()
         for key in NEVER_IN_FRONTMATTER:
             assert key not in meta
+
+
+KB_NO_TIMESTAMPS = """---
+id: no-ts
+type: note
+title: No timestamps
+---
+
+Body.
+"""
+
+KB_WITH_TIMESTAMPS = """---
+id: with-ts
+type: note
+title: Has timestamps
+created_at: 2020-01-01T00:00:00+00:00
+updated_at: 2020-01-02T00:00:00+00:00
+---
+
+Body.
+"""
+
+
+class TestRepositorySaveDoesNotInventTimestamps:
+    """#151, repository path: ``KBRepository.save()`` stamps ``updated_at`` on
+    every write (and ``KBService.update_entry`` / ``sw link`` do the same).
+
+    That stamp is internal bookkeeping, not a user editing the field, so it
+    must not turn a file that never carried the key into one that does -- the
+    #46 corruption arriving through the repository instead of KBService. A
+    file that *does* carry the key is still refreshed and written back.
+    """
+
+    def _repo(self, tmp_path, name="repo151"):
+        from pyrite.storage.repository import KBRepository
+
+        kb_path = tmp_path / name
+        kb_path.mkdir(parents=True, exist_ok=True)
+        return KBRepository(KBConfig(name=name, path=kb_path)), kb_path
+
+    def test_a_file_without_timestamps_does_not_gain_them_on_save(self, tmp_path):
+        repo, kb_path = self._repo(tmp_path)
+        path = kb_path / "no-ts.md"
+        path.write_text(KB_NO_TIMESTAMPS, encoding="utf-8")
+
+        entry = repo.load_entry_from_file(path)
+        assert entry.updated_at is not None  # stamped in memory regardless
+        repo.save(entry)
+
+        after = _read_frontmatter(path)
+        assert set(after) == {"id", "type", "title"}, (
+            f"the repository save invented {sorted(set(after) - {'id', 'type', 'title'})}"
+        )
+
+    def test_a_file_with_timestamps_is_still_written_back(self, tmp_path):
+        repo, kb_path = self._repo(tmp_path, "repo151b")
+        path = kb_path / "with-ts.md"
+        path.write_text(KB_WITH_TIMESTAMPS, encoding="utf-8")
+
+        entry = repo.load_entry_from_file(path)
+        repo.save(entry)
+
+        after = _read_frontmatter(path)
+        assert "updated_at" in after, "a key the file carried was dropped"
+        assert "created_at" in after
+        assert str(after["created_at"]).startswith("2020-01-01")
