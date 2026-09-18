@@ -77,7 +77,18 @@ if workers are still running, groom and review still have work.
 model, read-only) on the open issues, `pyrite sw backlog`, the roadmap's next
 release section and the last tick's report. It returns the breakdown: themes,
 file footprints, sequencing, Sonnet or Opus, and what is design-shaped enough
-to want an ADR first. The conductor supplies the ordering itself from the
+to want an ADR first. **Dispatch it on any tick where the ready queue —
+themes that already have acceptance criteria, a footprint and a model — holds
+fewer than twice the worker cap.** It is read-only and runs beside the
+builds, so it costs the tick nothing but tokens, and a tick that dispatches
+from titles is how two workers end up assigned rows of one table (retro 1).
+When the architect cannot write acceptance criteria because a question is
+open — a root cause unknown, two designs plausible, a dependency's behaviour
+unverified — it names a **spike** instead: dispatch `pyrite-spike` (one
+tick, its own throwaway worktree, no PR) and its only deliverable is the
+ticket changed: acceptance criteria that did not exist, an ADR draft marked
+`proposed`, or "not feasible, because". A spike that returns prose and no
+changed ticket is redispatched with the question sharpened, once. The conductor supplies the ordering itself from the
 roadmap's definition of done (what unblocks what, what the release owes) and
 turns the result into specs ([dispatch.md](dispatch.md)). Add a separate PM
 read only when a tick demonstrably chose the wrong thing; until then it is
@@ -180,7 +191,9 @@ For each worker that reported done — protocol in [review.md](review.md):
 
 ### 3. Choose: compose themes
 
-Read both surfaces, in this order:
+If the ready queue is shorter than twice the worker cap, dispatch the
+architect first (groom lane above) and compose from its breakdown; compose
+by hand only what it already groomed. Read both surfaces, in this order:
 
 ```bash
 gh issue list --milestone "<next>" --state open --json number,title,labels
@@ -217,12 +230,17 @@ The spec names: the worktree path, the ticket(s) and acceptance criteria, the
 files expected to change (new vs existing), what is out of scope, and the
 report format. **Sonnet 5** for well-specified, mechanical work with clear
 acceptance; **Opus 5** for anything design-shaped, cross-cutting, or touching
-auth/storage/server. **Three workers in flight** to start — the constraint is
-this conductor's attention and context, not runner capacity — raised only
-after ten consecutive green ticks; fewer when PRs are queued. The cap counts
-*workers*: the week's tick-log PR and other record-only KB PRs are not in
-flight and do not take a slot (retro 1, 2026-09-18: the log PR was counted,
-and the loop ran at two workers while believing it was at three).
+auth/storage/server. **The cap is the review queue, not a number.** Three
+workers when footprints overlap or a review is waiting; up to six when the
+themes are footprint-disjoint (new files, separate spec files, separate
+modules — the Playwright fan-out, an extension each) and fewer than two
+branches await review. The constraint is this conductor's attention:
+every worker returns a diff that needs 10–15 minutes of reading and a
+suite run, so dispatch what the next tick can absorb, and stop dispatching
+when the review queue is longer than that. The cap counts *workers*: the
+week's tick-log PR and other record-only KB PRs are not in flight and do not
+take a slot (retro 1, 2026-09-18: the log PR was counted, and the loop ran
+at two workers while believing it was at three). Spikes count as workers.
 
 Never `isolation: "worktree"` on the Agent tool — the script makes the
 worktree, and the agent is told where it is.

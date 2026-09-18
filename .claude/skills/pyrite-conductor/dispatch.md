@@ -43,9 +43,11 @@ dispatch the second when the first's PR has merged, from a fresh
 to save time by running both and rebasing later — the rebase is where the
 semantic conflict hides.
 
-Cap: **4–6 workers** in flight, fewer when PRs are already queued. Each merge
-puts the other open PRs `BEHIND` and each rebase re-runs a ~3-minute gate; past
-four or five in flight you spend the tick rebasing.
+Cap: three workers when footprints overlap or a branch awaits review; **up to
+six** when the themes are footprint-disjoint and fewer than two branches
+await review (SKILL.md, "The cap is the review queue"). Each merge puts the
+other open PRs `BEHIND`; a disjoint rebase is conflict-free but still re-runs
+a ~3-minute gate, so past five or six in flight the tick is spent rebasing.
 
 ## 3. Create the worktree, then dispatch
 
@@ -104,6 +106,7 @@ Agent(
 |---|---|---|
 | Well-specified, mechanical, clear acceptance (a slug fix, an exit code, a path default, a docs correction) | **sonnet** | the spec carries the judgment; speed and cost win |
 | Design-shaped or cross-cutting (touches the base class, the service layer, auth, storage, a public interface; needs a root-cause investigation) | **opus** | the judgment is the work |
+| A spike — the architect could not write acceptance criteria because a question is open (root cause unknown, two designs plausible, a dependency unverified) | **opus** (`pyrite-spike`) | the deliverable is a decision-ready ticket, not code; one tick, no PR |
 | The conductor itself, and cold reads | the strongest available | reviewing is judgment |
 
 When unsure, the tell is the ticket: if its acceptance criteria could be
