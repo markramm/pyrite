@@ -49,6 +49,26 @@ four or five in flight you spend the tick rebasing.
 
 ## 3. Create the worktree, then dispatch
 
+Once per machine: the conductor's state lives in draft PR bodies and issue
+threads, and the permission classifier refuses read-only `gh pr view --json
+body` and merged-branch cleanup from inside an agent unless allowed (#72).
+`.claude/settings.json` is gitignored here, so add this block to
+`.claude/settings.local.json` on a fresh clone (maintainer-approved
+2026-09-18):
+
+```json
+"Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)",
+"Bash(gh issue view:*)", "Bash(gh issue list:*)",
+"Bash(gh run view:*)", "Bash(gh run list:*)",
+"Bash(git worktree list:*)", "Bash(git worktree remove:*)", "Bash(git worktree prune:*)",
+"Bash(git branch -d:*)", "Bash(git branch -D:*)"
+```
+
+Write PR and issue bodies to a file and pass `--body-file`: a body passed
+inline through `"$(cat <<'EOF' … )"` breaks on backticks and apostrophes in
+the shell's eval (twice on 2026-09-18), and the failure looks like a
+half-run command.
+
 ```bash
 cd /Users/markr/pyrite && scripts/new-worktree.sh fix/<theme-slug>
 #  -> /Users/markr/pyrite-wt/fix-<theme-slug>  with its own .venv and hooks

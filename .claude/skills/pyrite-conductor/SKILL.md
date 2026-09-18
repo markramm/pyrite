@@ -85,11 +85,19 @@ cost without evidence. Never dispatch a theme the architect flagged as
 needing a decision the maintainer has kept.
 
 **Build lane.** Workers in their own worktrees. **The draft PR is the
-claim**: at dispatch, push the empty branch and `gh pr create --draft --base
-dev` with the theme spec as the body; the worker's report is appended to that
-body; review flips it to ready (`gh pr ready`). One place, visible to anyone
-with `gh pr list`, readable by the next tick with no agent's memory. Backlog
-items also get `pyrite sw claim` so the board agrees.
+claim**, and the claim's first commit is the backlog item for the theme:
+`gh pr create` refuses an empty branch (#73), so at dispatch the conductor
+claims the item (`pyrite update <id> -k pyrite -f status=in_progress -f
+assignee=agent:<worker>`; create one first with `pyrite create -k pyrite -t
+backlog_item` when the theme is a group of GitHub issues with no item — the
+theme *is* an item, and `pyrite sw backlog` should show it in flight),
+commits that on the branch, pushes, and opens `gh pr create --draft --base
+dev --body-file <spec>` with the theme spec as the body. The worker's report
+is appended to that body; review flips it to ready (`gh pr ready`). One
+place, visible to anyone with `gh pr list`, readable by the next tick with
+no agent's memory, and the board agrees with it. Do not commit the spec as
+a loose file (`.claude/THEME.md`): it has to be removed before the PR goes
+ready, which a tick forgets.
 
 **Review lane.** [review.md](review.md), including the cold read.
 
@@ -209,9 +217,12 @@ The spec names: the worktree path, the ticket(s) and acceptance criteria, the
 files expected to change (new vs existing), what is out of scope, and the
 report format. **Sonnet 5** for well-specified, mechanical work with clear
 acceptance; **Opus 5** for anything design-shaped, cross-cutting, or touching
-auth/storage/server. **Three in flight** to start — the constraint is this
-conductor's attention and context, not runner capacity — raised only after
-ten consecutive green ticks; fewer when PRs are queued.
+auth/storage/server. **Three workers in flight** to start — the constraint is
+this conductor's attention and context, not runner capacity — raised only
+after ten consecutive green ticks; fewer when PRs are queued. The cap counts
+*workers*: the week's tick-log PR and other record-only KB PRs are not in
+flight and do not take a slot (retro 1, 2026-09-18: the log PR was counted,
+and the loop ran at two workers while believing it was at three).
 
 Never `isolation: "worktree"` on the Agent tool — the script makes the
 worktree, and the agent is told where it is.
@@ -227,8 +238,12 @@ setting only they can change), say so and stop rather than ticking idle.
 (one note per ISO week; create it with `pyrite create -k pyrite -t note
 --title "Conductor log <YYYY-Www>"` on the week's first tick, then append a
 `## Tick <timestamp>` section and `pyrite index sync`). The retro reads this
-log, not your memory; a tick that leaves no entry did not happen. Commit it
-on `dev` directly with the KB fast path — it is a record, not a change.
+log, not your memory; a tick that leaves no entry did not happen. The `dev`
+ruleset takes nothing without a PR (#71), so the log lives on a weekly
+branch: `scripts/new-worktree.sh kb/conductor-log-<YYYY-Www>` on the first
+tick, one draft PR held open for the week, each tick commits and pushes
+there; the retro flips it to ready. Never a PR per tick — each merge puts
+every other open PR `BEHIND`.
 
 **File friction as it happens.** When you, a worker or a reviewer had to
 detour, wait, guess, look something up or redo work because of the
