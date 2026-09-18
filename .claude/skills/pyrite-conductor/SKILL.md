@@ -108,6 +108,14 @@ items also get `pyrite sw claim` so the board agrees.
   changes into a checklist a human can run in ten minutes, when the change is
   one a browser test cannot judge (layout, wording, feel).
 
+**Docs lane, every few ticks and before every release:** `pyrite-docs`
+(Sonnet) takes the PRs merged since the last docs pass and brings the
+README, `docs/`, the CHANGELOG wording, the KB component entries and the
+skills' own commands back in line — verifying each claim by running it, and
+adding a test where a number can be generated instead of asserted. A worker
+documents its own change; this lane owns the drift between changes. One docs
+PR per batch, reviewed like any other.
+
 **Deterministic pipelines.** When the maintainer opts into it ("use a
 workflow"), the `Workflow` tool runs the fan-out as a script — groom, then
 parallel builds, then reviews — with the same agents; it is the loop of loops

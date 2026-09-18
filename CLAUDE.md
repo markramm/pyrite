@@ -119,6 +119,7 @@ ruff check pyrite/
 
 - **pyrite-dev** — for an agent writing Pyrite code: one theme, one branch, one worktree, TDD, evidence, a report. It does not choose work or open PRs.
 - **pyrite-conductor** — for orchestrating: reads GitHub issues and the roadmap, composes **reviewable themes**, creates a worktree and dispatches a `pyrite-worker` per theme (Sonnet 5 for well-specified work, Opus 5 for design-shaped work), reviews each branch (diff, suite, a `pyrite-reviewer` cold read for risky changes), opens the PR, shepherds it, keeps the repo healthy. Also releases and deploys.
+- Dispatchable agents (`.claude/agents/`): `pyrite-worker`, `pyrite-reviewer` (cold read), `pyrite-architect` (breakdown), `pyrite-explorer` (browser, exploratory), `pyrite-docs` (documentation drift).
 - A session with a single agent is both: do the work under pyrite-dev, then load pyrite-conductor for review and the PR.
 
 **A PR is a unit a reviewer can hold in their head:** complete on one theme, as many commits as the idea needs, never a small piece of a thing. Batch by default. A follow-up that belongs to work already in flight goes onto that PR's branch, not into a new one.
