@@ -352,3 +352,164 @@ in parallel safely.
 
 **Final state this tick: 1 merged (#74), 1 in flight (#69, worker running), 2
 issues filed (#79, #80), smoke green on its first dev push.**
+
+---
+
+## Tick 2026-09-18T06:10Z (tick 3 — the fan-out tick)
+
+Run by a separate Opus session on the loop host's behalf; the :07 cron firing
+was missed because the host was mid-turn. Tick 2 was still closing as this one
+opened, so the two overlap in the record: #74's merge and worktree cleanup are
+tick 2's, written up above by the host, and the worktrees the host noticed
+"created by other sessions at close" are this tick's.
+
+**Health.** `dev` green — Package B's push (35314099398) went green in 1m52s,
+the third consecutive green push. Six worktrees at open, all live. One
+surprise, worth writing down because it looked like a failure and was not: the
+`feature-playwright-package-b` worktree **disappeared mid-tick** while this
+session was reading it. It had not been lost; the loop host had reviewed,
+flipped, merged and cleaned it up inside its own tick. A conductor reading
+`git worktree list` while a peer session absorbs the same work sees a directory
+vanish under it, and the only durable signal is `gh pr view` — which said
+`MERGED`, `headRefOid` matching the rebased tip. **State lives in GitHub, not
+in the filesystem**, exactly as the skill claims; this tick got to test that
+claim by accident.
+
+**Absorb.** Nothing absorbed. One candidate and it was correctly left alone:
+PR #69's branch has four commits, a clean tree and a docs/changelog commit
+last — the "done-shaped last commit" the host's note says to review on. Before
+touching it, `ps` showed five `.venv/bin/python` xdist workers running in that
+worktree at 50% CPU each: the worker is running its full suite this minute, not
+finished. Reviewing a branch whose owner is mid-verification would have meant
+reading a tree about to change. **Left running; not rebased** (the draft-claim
+rule from tick 2). Its diff, previewed for sizing only: 989 insertions across
+14 files, all three issues covered with a test file each, touching
+`pyrite/models/base.py` (+144), `pyrite/storage/`, `pyrite/schema/reserved.py`
+and a software-kb extension type. That footprint is three separate cold-read
+triggers (storage, schema, public shape), so **#69's review must include a
+`pyrite-reviewer` cold read** — the first one this loop will have dispatched.
+
+**Groom.** `pyrite-architect` (Opus, read-only) dispatched over the ~23
+ungroomed open issues — #56–#68 (the MCP read-tier hallway-test findings) and
+#43–#45, #48, #51–#54 (worker and peer findings) — with everything in flight
+excluded by number and by file, and with packages F/G/H excluded as already
+well-specified by the parent ticket. The skill's trigger is mechanical: the
+ready queue held fewer than twice the worker cap. It is read-only and runs
+beside the builds, so it costs the tick nothing but tokens, and tick 2 already
+named this as the cheapest high-value dispatch available.
+
+**Choose.** Five themes, ordered by the value chain, one of them the quality
+theme that was due:
+
+1. **The quality theme, taken ahead of features.** Retro 1 groomed it and the
+   skill's every-~fifth-theme rule made it due. `tests-leak-open-pyritedb-
+   connections-into-temporarydirectory-teardown` (the nine test files holding
+   SQLite connections open in WAL mode inside a `TemporaryDirectory`) merged
+   with **#55** (the `IndexWorker` thread writing into the same directory as
+   `rmtree` walks it) — the same failure shape from two directions, so fixing
+   either alone leaves the suite flaky and nobody can tell which. It is the one
+   known intermittent red on `dev`, and a suite that fails one run in three
+   teaches every future agent to ignore a red. The spec forbids the four ways
+   out that are not fixes (`ignore_cleanup_errors`, a sleep, an `rmtree` retry,
+   a flaky marker) and says that production code which starts a thread its
+   owner cannot join is a product bug, not a test bug.
+2–4. **Playwright packages C, D and E**, in parallel. Disjointness is now
+   proven rather than assumed (tick 2's full-suite evidence), and each package
+   owns its own spec files.
+
+**Dispatch — five workers, the first time the raised cap has been used.** The
+new rule (up to six when footprints are disjoint and fewer than two branches
+await review) applied exactly: zero branches awaited review at dispatch, and
+the four new themes touch four disjoint file sets, none overlapping #69's.
+
+| Theme | PR | Model | Why that model |
+|---|---|---|---|
+| quality: test teardown races (#55 + the connection-leak item) | **#81** | sonnet | the fix is named in the item (a shared `make_client` fixture in `conftest.py`); the expensive part is 10 consecutive `-n auto` runs, which is patience, not judgment |
+| Playwright **C** — `auth.spec.ts` + the auth-enabled project decision | **#82** | **opus** | the one package of six that carries a design decision A deferred: skip the auth specs, or stand up a second Playwright project with its own backend, port, data dir and seeded user. Also the only package permitted to touch the shared `playwright.config.ts` |
+| Playwright **D** — `entry-crud` + `entry-features` | **#83** | sonnet | mechanical against an existing contract |
+| Playwright **E** — `collections` + `daily` | **#84** | sonnet | mechanical against an existing contract |
+
+Each spec pins what a worker would otherwise guess at, and two pins are
+package-specific because the trap is package-specific:
+
+- **D is the only pair that writes.** The seeded world resets per run, but a
+  writing spec shares the world with its siblings *inside* a run and with
+  itself on a re-run. So: `uniqueTitle()` for everything it creates,
+  `idForTitle()` rather than a hand-written slug, never a title another spec
+  asserts on, and a delete test deletes only what it created. The spec names
+  the failure mode so it is recognised rather than debugged: a spec that passes
+  on run 1 and fails on run 2 has a collision, not a flake.
+- **E's daily route writes on a GET.** With auth disabled every caller has
+  write tier, so `GET /daily/{date}` *creates* a note for a date that has none;
+  A pre-seeded a fixed date plus offsets −3..+2 precisely so those GETs are
+  reads. E must navigate only inside `SEEDED_DAILY_DATES` — counting the
+  prev/next clicks, not assuming — or it silently mutates the world its
+  siblings assert on.
+- **C is additive-only on the shared config.** Every other spec runs under
+  `playwright.config.ts`, so it is the one file in this fan-out whose edit can
+  break four other branches. The spec forbids changing the existing `chromium`
+  project, the `webServer` entries, `retries: 0` and
+  `reuseExistingServer: false`, and requires C to run the *whole* suite 5× (not
+  just its own file) because it changed what everyone runs under.
+
+All four specs restate B's two hard style rules (zero `text=` locators, no
+`.first()` to dodge strict mode) and B's criterion 6, which earned its keep
+last tick: a real product bug gets `test.fixme` with the bug named, never a
+weakened assertion. B found **#49** that way, and the specs cite it as the
+precedent so the next worker knows the rule is real and not decorative.
+
+**The claim protocol, exercised as amended.** All four claims are a backlog
+item as the first commit (PR #75's change), and three of the four items had to
+be **written by hand** rather than created with `pyrite create` — see below.
+The quality theme's item was claimed with `pyrite update`, which is how this
+tick reproduced #46 first-hand.
+
+**#46 reproduced while claiming, with a new asymmetry.** `pyrite update <id>
+-f status=in_progress -f assignee=...` on a well-formed `backlog_item` leaked
+`body:` (the entire body as a YAML string) and `file_path:` (an absolute path
+into *this worktree*, which would have been committed) — but `kind`, `priority`
+and `effort` **survived**, where #46 as filed reports them dropped. So the
+"leaks model internals" half and the "drops declared fields" half of #46 are
+separable and reproduce differently per entry. Posted to PR #69 as a comment
+rather than a scope change: its spec already asks the worker to explain the
+`--title`/`-b` asymmetry, and this is a second asymmetry along the same seam.
+The leaked keys were stripped by hand before committing the claim.
+
+**Issue filed: #86** — the same class on the *create* path. `pyrite create -t
+backlog_item` emits `importance` and `rank` (model internals) and omits `kind`
+and `effort` (declared fields that `pyrite sw backlog` reads), with no flags to
+supply them, so **every agent that creates a backlog item must hand-edit the
+file afterwards to make it well-formed**. This tick did that three times, which
+is how it was found. Suggested acceptance includes the test that would have
+caught both this and half of #46: create each software-kb type through the CLI
+and assert the on-disk frontmatter against the type's declared fields. Product
+bug, not process — so an ordinary issue, per ADR-0033.
+
+**Friction.** No new `process` issues. The three standing ones (#71, #72, #73)
+are fixed in the skills as of PR #75 and this tick executed the amended
+protocol without improvising — `.claude/THEME.md` was not created for any of
+the four new themes; the spec lives in the draft PR body, which is what the
+workers are told to re-read. That is the retro's change working on its first
+use. Two observations for the next retro, neither worth an issue yet:
+
+- **Reading the main checkout is still wrong and still necessary.** Every file
+  this tick read came from `origin/dev:<path>`; the working tree was stale
+  again (`web/e2e/global-setup.ts` did not exist in it although Package A had
+  merged). Tick 2 recommended the skill say so explicitly. Third tick running.
+- **A peer session absorbing your work while you hold a reference to it.** The
+  vanishing worktree above. No harm done, and arguably the system working, but
+  a conductor that had `cd`'d into that directory would have failed mid-command
+  with a confusing error rather than a clear "someone merged this".
+
+**Blocked / for the maintainer.** Nothing blocking a worker; nothing awaiting a
+kept decision. No release plan is due — 0.24.2's definition of done still wants
+the web surface (C–H in flight or queued), `scripts/release.py` and the
+packaged web UI. The seven Dependabot PRs (#23–#29) remain deliberately
+untaken: they touch `web/` lockfiles while four workers rewrite `web/e2e/`
+specs, and a `@sveltejs/kit` bump landing mid-fan-out would move the DOM those
+new specs assert on. They land as one PR **after** the fan-out, per tick 2's
+ordering call.
+
+**Final state this tick: 0 merged (tick 2 took #74), 5 in flight (#69 verifying,
+#81/#82/#83/#84 dispatched), 1 architect grooming ~23 issues, 1 issue filed
+(#86), 1 root-cause data point posted to #69.**
