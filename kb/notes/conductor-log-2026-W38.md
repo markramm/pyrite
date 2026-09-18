@@ -2367,3 +2367,15 @@ Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` rev
 **Retro note.** Three outside reviews in a row found the same shape: tests that exercise a function with hand-built inputs while the bug lives in what the real caller passes (#164's tests read a path `save()` never writes; #166's #95 test never reaches the schema; #171's tests never go through the YAML loader). The `Regimes:` rule is for our workers; the `good first issue` template could ask for "one test through the real entry point" in its acceptance line.
 
 **Needs the maintainer:** approval click for #171's CI; merge decisions on #169 (after the re-check), #171, #164, #166 per the posted reviews; ADR-0034 (PR #170); the kept decisions listed in the serial-queue note.
+
+## Tick 2026-09-18T13:23Z (tick 14 — WIP = 1)
+
+**Pre-check** 13:19Z: load 5.5 (not Pyrite's — no suite, server or browser of ours running), 74% free, dev green. One thing: the outside PR whose head moved after its review.
+
+**Outside PR #169, re-check at `e8c8d3c`** (the author pushed the two requested changes ~25 min after the tick-12 review). Delta read in full (~30 production lines: `entries` must be a list; each item a dict with non-empty string `entry_id`/`kb_name`; the error names `entries[i]`; an 11-shape parametrized test + an index test). Suite at `-n 4`: 4322 passed (102 s). The tick-12 regime probe re-run through the dispatcher on the new head: 19 malformed shapes → all `VALIDATION_FAILED`/non-retryable; **no `INTERNAL` path left**. No second cold read: the first one covered the PR, and the delta is the change it asked for, verified by its own probe. **Recommendation posted: merge as is.** CI green; no approval click needed. Labelled `reviewed`.
+
+**Noticed:** #171's author also pushed after review (`86dc83a`, 12:59Z) — its re-check is the next tick's one thing. Review → fix turnaround from both contributors today: 25–60 min.
+
+**Still waiting behind the outside PRs:** the loop's own five finished branches (#163, #145, #140, #161, #160 — the architect's order). They have now waited ~2.5 h; at one task per 30-min tick, with outside PRs pre-empting, the queue drains only when contributors pause. Not a problem to fix — outside work first is the maintainer's rule — but the 30-min cadence, not the machine, is now the pacing item: a review takes ~10 min of machine time. Worth the maintainer's eye: whether a tick may take the *next* item when its one thing finishes early, still strictly one at a time.
+
+**Needs the maintainer:** **#169 — merge as is.** #171 (after its re-check; CI still wants the approval click), #164, #166 per the posted reviews; ADR-0034 (PR #170).
