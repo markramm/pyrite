@@ -39,7 +39,7 @@
 				{/if}
 			{/each}
 			{#if title && breadcrumbs.length === 0}
-				<span class="font-medium">{title}</span>
+				<span class="font-medium" data-testid="page-title">{title}</span>
 			{/if}
 		</nav>
 	</div>

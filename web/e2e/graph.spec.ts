@@ -5,25 +5,23 @@ import { E2E_BACKEND_URL } from './global-setup';
 test.describe('Graph Page', () => {
 	test('navigates to graph page and shows title', async ({ page }) => {
 		await page.goto('/graph');
-		await expect(page.locator('text=Knowledge Graph')).toBeVisible();
+		// The Topbar's title has no heading role (it's a <span>, shared across
+		// every route) — data-testid="page-title" added to
+		// web/src/lib/components/layout/Topbar.svelte.
+		await expect(page.getByTestId('page-title')).toHaveText('Knowledge Graph');
 	});
 
 	test('shows graph controls', async ({ page }) => {
 		await page.goto('/graph');
-		// KB dropdown
-		await expect(page.locator('label:has-text("KB") select')).toBeVisible();
-		// Type dropdown
-		await expect(page.locator('label:has-text("Type") select')).toBeVisible();
-		// Depth slider
+		await expect(page.getByLabel('KB')).toBeVisible();
+		await expect(page.getByLabel('Type')).toBeVisible();
 		await expect(page.locator('input[type="range"]')).toBeVisible();
-		// Layout dropdown
-		await expect(page.locator('label:has-text("Layout") select')).toBeVisible();
-		// Fit and Reset buttons
+		await expect(page.getByLabel('Layout')).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Fit' })).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Reset Layout' })).toBeVisible();
 	});
 
-	test('graph API endpoint responds with nodes/edges shape', async ({ request }) => {
+	test('graph API endpoint responds with nodes/edges shape for the seeded world', async ({ request }) => {
 		// Per-worktree, not a hardcoded 8088 — see E2E_BACKEND_URL's own doc (#118).
 		const response = await request.get(`${E2E_BACKEND_URL}/api/graph`);
 		expect(response.ok()).toBeTruthy();
@@ -32,18 +30,18 @@ test.describe('Graph Page', () => {
 		expect(data).toHaveProperty('edges');
 		expect(Array.isArray(data.nodes)).toBeTruthy();
 		expect(Array.isArray(data.edges)).toBeTruthy();
+		// The seeded world (global-setup.ts) creates no `--link`s between entries
+		// and no wikilinks in entry bodies, so the graph is empty by construction —
+		// see the report filed against this ticket for restoring seeded links.
+		expect(data.nodes).toEqual([]);
+		expect(data.edges).toEqual([]);
 	});
 
-	test('shows graph content after loading', async ({ page }) => {
+	test('shows the empty-graph state because the seeded world has no linked entries', async ({ page }) => {
 		await page.goto('/graph');
-		// Wait for loading to finish — shows count, empty state, or error
-		await expect(
-			page.locator('text=/\\d+ nodes, \\d+ edges/').or(
-				page.locator('text=No linked entries found')
-			).or(
-				page.locator('text=/Error|error/')
-			)
-		).toBeVisible({ timeout: 10000 });
+		// Deterministic, not a dodge: the seed creates zero links (confirmed via
+		// /api/graph above), so this is the only state the page can reach today.
+		await expect(page.getByText('No linked entries found.')).toBeVisible({ timeout: 10000 });
 	});
 
 	test('has search input', async ({ page }) => {
@@ -58,12 +56,17 @@ test.describe('Graph Page', () => {
 		await expect(searchInput).toHaveValue('test query');
 	});
 
-	test('layout selector has options', async ({ page }) => {
+	test('layout selector has the four seeded layout options', async ({ page }) => {
 		await page.goto('/graph');
-		const layoutSelect = page.locator('label:has-text("Layout") select');
+		const layoutSelect = page.getByLabel('Layout');
 		await expect(layoutSelect).toBeVisible();
-		// Check that it has the expected layout options
 		await expect(layoutSelect.locator('option')).toHaveCount(4);
+		await expect(layoutSelect.locator('option')).toHaveText([
+			'Force-directed',
+			'Circle',
+			'Grid',
+			'Concentric'
+		]);
 	});
 
 	test('depth slider is interactive', async ({ page }) => {
@@ -74,57 +77,61 @@ test.describe('Graph Page', () => {
 		await expect(slider).toHaveAttribute('max', '3');
 	});
 
-	test('type filter dropdown exists with All option', async ({ page }) => {
+	test('type filter dropdown has All plus the seeded world entry types', async ({ page }) => {
 		await page.goto('/graph');
-		const typeSelect = page.locator('label:has-text("Type") select');
+		const typeSelect = page.getByLabel('Type');
 		await expect(typeSelect).toBeVisible();
-		// The select should have "All" as the default value
+		// Default value is "All" (empty option value).
 		await expect(typeSelect).toHaveValue('');
+		// The seeded world (global-setup.ts) creates exactly these five entry
+		// types — collection, event, note, organization, person — confirmed
+		// against GET /api/entries/types.
+		await expect(typeSelect.locator('option')).toHaveText([
+			'All',
+			'collection',
+			'event',
+			'note',
+			'organization',
+			'person'
+		]);
 	});
 
-	test('entry types API endpoint responds', async ({ request }) => {
+	test('entry types API endpoint returns the seeded world types', async ({ request }) => {
 		const response = await request.get(`${E2E_BACKEND_URL}/api/entries/types`);
 		expect(response.ok()).toBeTruthy();
 		const data = await response.json();
 		expect(data).toHaveProperty('types');
-		expect(Array.isArray(data.types)).toBeTruthy();
+		expect(data.types.sort()).toEqual(['collection', 'event', 'note', 'organization', 'person']);
 	});
 });
 
 test.describe('Local Graph Panel', () => {
-	test('entry page has Graph toggle button', async ({ page }) => {
-		await page.goto('/entries');
-		const firstEntry = page.locator('a[href^="/entries/"]').first();
-		const hasEntries = await firstEntry.isVisible({ timeout: 3000 }).catch(() => false);
+	// Navigate straight to a seeded person entry rather than through the
+	// /entries list — the list view is out of this package's scope and its
+	// default rendering doesn't guarantee a stable `a[href^="/entries/"]`
+	// target. e2e-person-ada-lovelace is seeded by global-setup.ts.
+	const SEEDED_ENTRY_PATH = '/entries/e2e-person-ada-lovelace';
 
-		if (!hasEntries) {
-			test.skip(true, 'No entries available to test');
-			return;
-		}
-
-		await firstEntry.click();
-		await expect(page.getByRole('button', { name: 'Graph' })).toBeVisible();
+	test('entry page has a local-graph toggle button', async ({ page }) => {
+		await page.goto(SEEDED_ENTRY_PATH);
+		await expect(page.getByRole('button', { name: 'Toggle local graph' })).toBeVisible();
 	});
 
-	test('Graph button toggles local graph panel visibility', async ({ page }) => {
-		await page.goto('/entries');
-		const firstEntry = page.locator('a[href^="/entries/"]').first();
-		const hasEntries = await firstEntry.isVisible({ timeout: 3000 }).catch(() => false);
-
-		if (!hasEntries) {
-			test.skip(true, 'No entries available to test');
-			return;
-		}
-
-		await firstEntry.click();
-		const graphBtn = page.getByRole('button', { name: 'Graph' });
+	test('local-graph toggle opens and closes the panel, which shows no linked entries', async ({ page }) => {
+		await page.goto(SEEDED_ENTRY_PATH);
+		const graphBtn = page.getByRole('button', { name: 'Toggle local graph' });
 		await expect(graphBtn).toBeVisible();
 
-		// Click to open graph panel
+		// Closed state: not the active/open styling.
+		await expect(graphBtn).not.toHaveClass(/border-blue-500/);
+
 		await graphBtn.click();
 		await expect(graphBtn).toHaveClass(/border-blue-500/);
+		await expect(page.getByRole('heading', { name: 'Local Graph' })).toBeVisible();
+		// Deterministic given the seeded world has no links (see the graph API
+		// assertions above) — not a "some data or empty state" dodge.
+		await expect(page.getByText('No linked entries')).toBeVisible();
 
-		// Click again to close
 		await graphBtn.click();
 		await expect(graphBtn).not.toHaveClass(/border-blue-500/);
 	});
