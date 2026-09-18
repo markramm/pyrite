@@ -80,7 +80,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        # Value chain (ADR-0032 §3): a pull request proves the change on one
+        # interpreter, fast; the push to dev that follows the merge proves
+        # breadth (every supported Python, Postgres). main only fast-forwards
+        # to a commit dev already proved. Each step costs more only where it
+        # tells us something the previous one could not.
+        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
 
     # pgvector/pgvector ships the postgres server with the pgvector
     # extension pre-installed (plain postgres:* images don't have it, and

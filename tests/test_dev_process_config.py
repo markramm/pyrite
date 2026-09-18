@@ -99,10 +99,13 @@ class TestCIWorkflow:
     def test_no_duplicate_full_suite_job(self, ci):
         assert "test-optional-deps" not in ci["jobs"]
 
-    def test_python_312_always_runs(self, ci):
-        # `test (3.12)` is the required status check on main (ADR-0025).
+    def test_matrix_is_one_interpreter_on_pull_requests_and_all_on_pushes(self, ci):
+        # `test (3.12)` is the required check for PRs; dev and main pushes run
+        # the whole matrix (ADR-0032 §3 value chain).
         matrix = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
-        assert "3.12" in matrix
+        assert "github.event_name == 'pull_request'" in matrix
+        assert '["3.12"]' in matrix
+        assert '["3.11", "3.12", "3.13"]' in matrix
 
 
 class TestPrePushStage:

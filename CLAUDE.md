@@ -100,7 +100,7 @@ gh pr update-branch --rebase            #   rebase onto dev; checks re-run; auto
 Auto-merge does not rebase for you: with "up to date" required, a PR goes
 `BEHIND` the moment another one merges, and sits there until updated.
 
-CI on a PR: ~30 s for docs/KB-only changes, ~4-5 min for code. If `dev` is red, no PR merges until it is fixed — that is the point. `rebase` is the default merge method; `squash` for a branch whose history is noise.
+CI on a PR: ~30 s for docs/KB-only changes, ~3 min for code (one interpreter; the full matrix runs on `dev` after the merge). If `dev` is red, no PR merges until it is fixed — that is the point. `rebase` is the default merge method; `squash` for a branch whose history is noise.
 
 ## Testing
 
