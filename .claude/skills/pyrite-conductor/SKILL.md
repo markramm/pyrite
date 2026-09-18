@@ -193,7 +193,7 @@ definition of done requires, then the rest. **Every ~fifth theme, the oldest ope
 `quality` tag; written by the retro, [pyrite-meta-conductor](../pyrite-meta-conductor/SKILL.md))
 goes ahead of new feature themes. Refactoring, test refactoring and code
 health are maintenance the release owes as much as its features; skipping
-the week's quality theme because features are waiting is how a codebase
+the quality theme because features are waiting is how a codebase
 silts up.
 
 ### 4. Dispatch
