@@ -64,11 +64,12 @@ dispatch the second when the first's PR has merged, from a fresh
 to save time by running both and rebasing later — the rebase is where the
 semantic conflict hides.
 
-Cap: three workers when footprints overlap or a branch awaits review; **up to
-six** when the themes are footprint-disjoint and fewer than two branches
-await review (SKILL.md, "The cap is the review queue"). Each merge puts the
-other open PRs `BEHIND`; a disjoint rebase is conflict-free but still re-runs
-a ~3-minute gate, so past five or six in flight the tick is spent rebasing.
+Cap: **one task at a time** — one worker *or* one review, never both
+(SKILL.md, "WIP limit: one Pyrite task at a time"; #168). The earlier cap
+(three workers, up to six when footprint-disjoint) crashed the maintainer's
+machine on 2026-09-18 and returns only when they say so. With one task in
+flight the sequencing rules above still decide *order*; they no longer
+decide parallelism.
 
 **A footprint has two dimensions: files and the machine.** A theme is
 *machine-heavy* when its acceptance runs a browser suite, loops the full
@@ -77,10 +78,16 @@ suite, starts servers, or loads a model — Playwright packages, "N consecutive
 heavy themes disjoint: on 2026-09-18 three Playwright packages plus one
 20-run pytest loop shared a 10-core machine at load average 28, each
 Playwright package took 42 min against package B's 20 alone, and every
-review's suite re-run paid the same tax. **Run at most two machine-heavy
-themes at once**, fill the remaining slots with code-only themes (a CLI fix,
-an MCP tool, docs), and say `heavy: yes|no` in the spec so the next tick can
-count. Reviews re-run suites too: one heavy review counts as a heavy theme.
+review's suite re-run paid the same tax. Later the same day up to eight
+`-n auto` suites ran at once and the machine went down (#168): the count had
+covered dispatched workers, not the conductor's own review suites, not
+review agents told to run the suite, not the pre-push hook inside each
+worker. **Everything that runs the suite, a browser, a server or a model is
+the one task** — say `heavy: yes|no` in the spec anyway, so the record shows
+what a theme costs when the limit is raised. Every worker prompt says: run
+the suite with `-n 4`, once per verification, never in a loop beside another
+process; every reviewer and outside-review prompt says: run no suite, the
+conductor has run it and here is the result.
 
 ## 3. Create the worktree, then dispatch
 

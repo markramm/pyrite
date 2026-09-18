@@ -303,17 +303,41 @@ The spec names: the worktree path, the ticket(s) and acceptance criteria, the
 files expected to change (new vs existing), what is out of scope, and the
 report format. **Sonnet 5** for well-specified, mechanical work with clear
 acceptance; **Opus 5** for anything design-shaped, cross-cutting, or touching
-auth/storage/server. **The cap is the review queue, not a number.** Three
-workers when footprints overlap or a review is waiting; up to six when the
-themes are footprint-disjoint (new files, separate spec files, separate
-modules — the Playwright fan-out, an extension each) and fewer than two
-branches await review. The constraint is this conductor's attention:
-every worker returns a diff that needs 10–15 minutes of reading and a
-suite run, so dispatch what the next tick can absorb, and stop dispatching
-when the review queue is longer than that. The cap counts *workers*: the
-week's tick-log PR and other record-only KB PRs are not in flight and do not
-take a slot (retro 1, 2026-09-18: the log PR was counted, and the loop ran
-at two workers while believing it was at three). Spikes count as workers.
+auth/storage/server.
+
+**WIP limit: one Pyrite task at a time** (maintainer, 2026-09-18, after the
+loop ran their machine out of memory — #168). A *task* is anything that runs
+the suite, a browser, a server or a model: a worker building, a review's
+suite run, a Playwright run, an outside-PR review. Exactly one may be in
+progress on the machine, the conductor's own included. A tick therefore does
+**one** of these, in this order of preference, and then stops:
+
+1. a worker is still running → nothing heavy; health, reading a diff, the
+   log — then stop;
+2. an outside PR is unreviewed → review that one;
+3. a branch awaits review → review the oldest one, to merged or sent back;
+4. nothing is waiting → dispatch **one** worker, on the smallest groomed
+   theme that advances the release.
+
+Stop starting, start finishing: no dispatch while anything awaits review.
+Themes are groomed *small* for this — a theme that needs more than one
+suite-and-review cycle is split before it is dispatched. Read-only agents
+(the architect, a cold read) may run beside the one task **only** under an
+explicit instruction to run no suite, no `-n` flag, no server and no
+browser; an agent told to "run the full suite" is a task and takes the
+slot. Review suites run `-n 4`, never `-n auto`: on a 10-core / 16 GB
+machine `-n auto` is ten processes per suite, and on 2026-09-18 up to eight
+suites ran at once — three the conductor started for reviews, three inside
+outside-PR review agents, two inside workers — none of which the old
+"≤2 machine-heavy" cap counted, because it counted dispatched workers only.
+The health step reads `uptime` and `memory_pressure` and starts nothing
+heavy above load 8 or below 30% free memory. The maintainer raises this
+limit, not the conductor; the earlier cap (three workers, six when
+disjoint) is what to return to only when a machine-wide suite lock exists
+and they say so.
+
+The cap counts *tasks*: the week's tick-log PR and other record-only KB PRs
+are not in flight and do not take the slot. Spikes are tasks.
 
 Never `isolation: "worktree"` on the Agent tool — the script makes the
 worktree, and the agent is told where it is.
