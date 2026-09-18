@@ -74,6 +74,17 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `dev`, no bypass; `main` fast-forwards to CI-verified commits; `v*` tags are
   immutable. Rebase is the default merge. ADR-0033: bugs and requests live in
   GitHub issues, the roadmap in `kb/`.
+- The test runner is pinned exactly (`pytest==9.1.1`, `pytest-cov==7.1.0`,
+  `pytest-xdist==3.8.0` in the `dev` extra), so every worktree venv and every
+  CI leg run the identical version — an unbounded `pytest>=8.0.0` had
+  resolved 9.1.1 on 3.12 and 9.0.2 on 3.13, and #81's fixtures passed the
+  one-interpreter PR gate under 9.1.1 and broke `dev` on 3.13 under 9.0.2.
+  `tests/test_dev_process_config.py` asserts the pins stay `==`. Ruff's `PT`
+  (flake8-pytest-style) rule set is now enabled for `tests/` and fixed 14
+  mechanical findings (fixture-parentheses, useless-yield, parametrize-tuple);
+  the four remaining rule codes need per-call-site judgment and are ignored
+  with reasons in `pyproject.toml`. Refresh a worktree venv after this with
+  `uv pip install --python .venv/bin/python -e ".[all,dev]"`.
 
 ### Documentation
 

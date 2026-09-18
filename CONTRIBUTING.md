@@ -132,6 +132,21 @@ state, a fixed wall-clock timeout, an unclosed database), not a reason to run
 serially — `tests/test_task_claim_concurrency.py` shows the pattern for
 process-spawning tests.
 
+**The runner itself is pinned.** `pytest`, `pytest-cov` and `pytest-xdist`
+are exact `==` pins in the `dev` extra (#128) — not a floor like the rest of
+the project's dependencies — so every worktree venv and every CI leg run the
+identical version. An unbounded `pytest>=8.0.0` once resolved 9.1.1 on one
+interpreter and 9.0.2 on another; a change that passed the PR gate under one
+version broke `dev` under the other. `tests/test_dev_process_config.py`
+asserts the pins stay exact, so loosening one is a visible diff, not a silent
+drift on the next `uv pip install`. After changing a pin, refresh your
+worktree's venv and confirm it took:
+
+```bash
+uv pip install --python .venv/bin/python -e ".[all,dev]"
+.venv/bin/python -m pytest --version
+```
+
 ### Writing Tests
 
 - Tests live in `tests/`; extension tests in `extensions/<name>/tests/`
