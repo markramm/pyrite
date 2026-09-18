@@ -85,3 +85,14 @@ set).
 The README numbers were corrected by hand in the docs pass (33 ADRs, ~4100
 tests, eleven built-in types, ~40 services, protocol method names). They will
 drift again; this ticket is still the fix (assert or generate them).
+
+## Groom 2026-09-18 (serial)
+
+One theme with the remainder of [[single-source-of-truth-for-the-version-asserted-by-a-test]] (tick 6's advice, kept): "docs facts and version discipline are asserted by a test". Closes both items.
+
+**Acceptance:** this item's four criteria, verbatim, with two scopings. (1) "A single version source; the test fails on disagreement" covers `pyrite.__version__`, `pyproject.toml` and `.claude-plugin/plugin.json`; `web/package.json` and `pyrite-mcp/pyproject.toml` stay out — both wait on the ADR-0031 packaging question (the version item's own "Still open" note). (2) From the version item: the top `CHANGELOG.md` version is either `Unreleased` or has a matching git tag. The pyrite.wiki stat tiles live outside this repo: not this theme.
+**Regimes:** a shallow clone with no tags (CI's default `fetch-depth: 1`) — the tag assertion must skip with a named reason, not fail and not silently pass; `[Unreleased]` present but empty (the state the changelog-fragments theme creates on `dev`); a relative link with an anchor, a link into `kb/`, and a link inside a fenced code block (not a link); an extension directory without a `pyproject.toml`; a fact stated in two places in the README.
+**Touches** — existing: `README.md`, `kb/positioning/README.md`, `UPSTREAM_CHANGES.md`, `CLAUDE.md`, `tests/test_version_consistency.py`, `.claude-plugin/plugin.json`, both backlog items. New: `tests/test_docs_facts.py`.
+**Sequence:** after the changelog-fragments theme (it redefines what `[Unreleased]` holds) and after packaged-web-ui-3 (`README.md` — that theme changes the install facts this one asserts). Before the README reposition.
+**Model:** sonnet. **heavy:** no. **Cold read:** no. **Size:** M, ~300 lines (test ~180, doc corrections ~120) — at the ceiling; if it grows, the link checker is the piece that splits off.
+**Out of scope:** the README's opening (the reposition item); asserting test counts (rule 1: do not state what drifts); `web/package.json`/`pyrite-mcp` versions.

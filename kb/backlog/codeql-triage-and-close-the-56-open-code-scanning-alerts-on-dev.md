@@ -577,3 +577,33 @@ Two decisions, both stated as recommendations only:
   folding into Theme A.
 - The `tests/e2e/conftest.py` suite writes into `~/.pyrite/repos/` (there are ~2400 stale
   `ephemeral/` dirs there). Unrelated test-hygiene issue, no alert, not chased.
+
+## Groom 2026-09-18 (serial)
+
+Re-cut after #168 (one Pyrite task at a time; each theme one worker pass and one review). Theme B is done (PR #161, awaiting review) and the eight `actions/missing-workflow-permissions` alerts landed in 28fc380. What remains, in order; the acceptance criteria under "2. Themes" above stand verbatim and are not repeated — this section adds the fields they lacked.
+
+### A — `fix/search-query-length-cap` (the ReDoS; the one exploitable finding)
+
+**Acceptance:** Theme A's seven criteria above, verbatim. One correction: criterion 3's "MCP `search` tool" is `kb_search` (`pyrite/server/tool_schemas.py:13`).
+**Regimes:** a query of exactly 512, 513 and 100,000 characters; an empty and a whitespace-only query (today's behaviour unchanged); a 600-character query over **MCP**, where there is no 422 — say what the caller gets (truncate-and-search with a `warnings` entry, or a `VALIDATION_FAILED`; pick one, and it must not be a silent truncation that returns confident results for a query the caller did not send); multi-byte input (the cap counts characters, and a 512-character CJK query must not be cut mid-codepoint or exceed a byte limit downstream); the operator short-circuit path (`AND`/`OR`/quotes) with an over-long input — it returns before the `re.sub`, so prove the cap is applied before the short-circuit, not after; both call sites (`search_service.py` ~:270 and ~:388 — re-locate after #145) reached from REST, MCP and the CLI.
+**Touches** — existing: `pyrite/services/search_service.py`, `pyrite/server/endpoints/search.py`, `pyrite/server/tool_schemas.py`, `CHANGELOG.md`. New: `tests/test_search_query_length_cap.py`.
+**Sequence:** after PR #145 merges — hard conflict on all three existing files. Then first: it is the only remotely exploitable finding, on the read tier, and the alert page is public.
+**Model:** opus. **heavy:** no. **Cold read:** yes. **Size:** S, ~120 lines (≈15 production).
+**Out of scope:** rewriting the regex (criterion 7 — a reviewer seeing a regex change rejects the branch); a general request-size limit; rate limiting.
+
+### C1 — `fix/github-token-host-equality` (the code half of Theme C)
+
+**Acceptance:** Theme C's criteria 1 and 2, verbatim, plus the comment at `mcp_routes.py:182`. The PR body lists the alert numbers it makes dismissible (criterion 3).
+**Regimes:** `https://github.com.evil.tld/a/b`, `https://evil.tld/github.com/a/b`, `https://user@github.com/a/b`, `git@github.com:a/b` (rewritten at `github_auth.py:355` before the check — still gets the token), `http://` (say whether a token is ever injected over plain HTTP), an empty/None URL, a GitHub Enterprise host (not supported today — must not get the github.com token).
+**Touches** — existing: `pyrite/github_auth.py` (:363), `pyrite/services/user_service.py` (:83, comment), `pyrite/config.py` (:155 `is_github`, comment), `pyrite/server/mcp_routes.py` (:182, comment), `CHANGELOG.md`. New: a test beside the existing `github_auth` tests. `GitService._github_repo_path` (`git_service.py:434`) is **called, not edited**.
+**Sequence:** after A and after #161 (Theme B) have merged — so both true positives are fixed before anything is dismissed — and #161 owns `git_service.py` until then.
+**Model:** opus (auth; a token goes where this check says). **heavy:** no. **Cold read:** yes. **Size:** S, ~80 lines.
+**Out of scope:** the dismissals (C2); making `config.py`/`user_service.py` use host equality (lookup-only uses — comments, per criterion 2).
+
+### C2 — the 43 dismissals (not a worker theme, not a PR)
+
+API calls the conductor makes from the dismissal table in section 3, each with the recorded reason, **after C1 merges and the next CodeQL run on `dev` has finished** (so alerts C1 fixed close themselves and are not dismissed by hand). Takes no machine slot. Afterwards: the open count on `dev` is the one maintainer-decision alert, and this item closes once D is decided.
+
+### D — `docs/api-key-entropy` + `pyrite key new` — BLOCKED on the maintainer
+
+Unchanged from Theme D above: dispatchable only if the maintainer's decision on `py/weak-sensitive-data-hashing` is "dismiss: sha256 of a high-entropy random key is sound". If the decision is "keyed hash", this theme is replaced (a breaking `config.yaml` change, its own ADR). **Regimes when it unblocks:** `--role` absent/invalid; stdout not a TTY (the key is still printed once, nothing is logged); two successive invocations differ. **Model:** sonnet. **heavy:** no. **Cold read:** yes (auth-adjacent CLI surface). **Size:** S, ~150 lines.
