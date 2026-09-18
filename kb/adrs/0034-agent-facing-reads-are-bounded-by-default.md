@@ -3,7 +3,7 @@ id: adr-0034
 type: adr
 title: "Agent-facing reads are bounded by default"
 adr_number: 34
-status: proposed
+status: accepted
 date: 2026-09-18
 ---
 
@@ -150,12 +150,14 @@ reviewer could argue against it in good faith:
 Agreed in direction: the defaults in rule 4 "perhaps make sense" and must be
 configurable by environment variable (now in rule 4); the CLI serves agents,
 scripts and the maintainer at a terminal, so its default stays complete with
-the bound one switch away (rule 5). Status stays `proposed` until the
-maintainer accepts it.
+the bound one switch away (rule 5).
 
-## Open questions for the maintainer
+**Accepted by the maintainer, 2026-09-18** ("I have accepted 170"), with the
+shipped defaults 8,000 / 20,000 / 40,000 tunable by the environment variables
+in rule 4. The five implementation themes (`adr-0034-i` … `adr-0034-v` in the
+backlog) are unblocked, sequenced as the serial queue says.
 
-1. Whether 8,000 / 20,000 / 40,000 are the shipped defaults (they are
-   tunable either way).
-2. Whether the web UI should itself request bounded bodies for read-only
+## Open question
+
+1. Whether the web UI should itself request bounded bodies for read-only
    views (entry cards, search results) while the editor asks for the whole.
