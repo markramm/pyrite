@@ -584,6 +584,36 @@ class TestNoRegisteredTypeInventsFrontmatter:
             f"never had -- the #46 corruption: {offenders}"
         )
 
+    def test_the_pristine_probe_is_not_shared_into_any_entry(self, swkb_env):
+        """The cached probe is per-class and shared; nothing may mutate it.
+
+        `_pristine_frontmatter` is `@cache`d, so one dict backs every entry of
+        a type. The write path only compares against it -- but if a value from
+        it were ever carried into an entry's frontmatter, a mutation anywhere
+        would corrupt every subsequent save of that type. Pinned here because
+        the failure would be silent and global.
+        """
+        from pyrite.models.base import _pristine_frontmatter, capture_extra_frontmatter
+        from pyrite.models.core_types import get_entry_class
+
+        cls = get_entry_class("backlog_item")
+        probe = _pristine_frontmatter(cls)
+        snapshot = dict(probe)
+
+        meta = {"id": "probe", "title": "Probe", "type": "backlog_item"}
+        entry = cls.from_frontmatter(dict(meta), body="b")
+        capture_extra_frontmatter(entry, dict(meta))
+        entry.to_markdown()
+        entry.status = "done"
+        entry.to_markdown()
+
+        assert _pristine_frontmatter(cls) == snapshot
+        # And no value object is shared between the probe and a live entry.
+        emitted = entry.to_frontmatter()
+        for key in set(probe) & set(emitted):
+            if isinstance(probe[key], (dict, list)):
+                assert probe[key] is not emitted[key], f"{key} shares a mutable with the probe"
+
     def test_a_minimal_backlog_item_survives_a_real_cli_shaped_update(self, swkb_env):
         """The end-to-end shape of the reported bug, on a file that can fail.
 

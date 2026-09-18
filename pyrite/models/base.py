@@ -87,8 +87,12 @@ def _pristine_frontmatter(cls: type) -> dict[str, Any]:
 
     Used by the write path to tell "this key still holds the value the class
     would have invented" from "the user set it to something". Depends only on
-    the class, so it is computed once per type rather than per save; the
-    returned mapping is shared and must be treated as read-only.
+    the class, so it is computed once per type rather than per save.
+
+    The returned mapping is SHARED by every entry of the class and must be
+    treated as read-only. It is only ever compared against, never copied into
+    an entry's frontmatter, so no pristine value can reach a file; a caller
+    that mutated it would corrupt the write path for every entry of that type.
     """
     try:
         return dict(cls(id="probe", title="probe").to_frontmatter())
