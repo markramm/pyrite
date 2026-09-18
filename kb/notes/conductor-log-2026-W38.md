@@ -1675,3 +1675,37 @@ already running (Opus) because the worker can be working while the maintainer
 decides; if they would rather take a different route, it can be stopped.
 
 Nothing was merged this tick. #69 stays draft with `in-review` removed.
+
+### Correction to this tick's #121 root cause (recorded by the host)
+
+I got the root cause wrong and the correction matters more than the original
+finding, so it goes in the log rather than only on the issue.
+
+I blamed unmerged paths making `git stash push` fail. The real hole:
+**on a review-lane branch the fix is already committed**, so
+`git stash push -- <files>` has nothing to save, exits **0 having stashed
+nothing**, and every test runs against the fix. `verify-red.sh` only ever
+worked for *uncommitted* fixes — which the review lane never has, by
+construction.
+
+So every stash-check run in the review lane has been vacuous, including the
+ones that reported success. "verify-red green" on previously merged PRs is
+**not** evidence those tests were ever red at base. The unmerged paths I hit
+were incidental noise on top of a script that could not have worked here.
+
+The lesson for this lane: my workaround (`git checkout <merge-base> -- <impl>`)
+was only safe because I checked `grep -c _absent_default_keys` returned 0 while
+reverted. **The assertion that the revert took effect is the load-bearing
+step**, not the revert mechanism. A verification tool that cannot fail loudly is
+worse than no tool, because it launders absent evidence into apparent evidence.
+
+Host is fixing the script (revert to merge base, assert the tree changed,
+restore from HEAD) with a test. The stale stash is repo-global (stash refs live
+in the shared `.git`) and belongs to `feature/journalism-investigation-kb` —
+left alone.
+
+### Tick 5 closed
+
+Breaker tripped, tick cron deleted, maintainer has the report. The
+second-redispatch worker on #69 runs to completion; its result is reviewed when
+the maintainer restarts the loop, not before. No further dispatch from me.
