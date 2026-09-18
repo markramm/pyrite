@@ -2260,3 +2260,25 @@ Not dispatched: Theme A (ReDoS cap — hard conflict with #145; after it merges)
 3. Private-repo existence oracle via `POST /api/repos/subscribe` (write tier learns whether a private repo exists through the operator's token) — no alert, not ticketed, needs a design decision.
 
 **Process notes for the retro.** (a) Two of three Opus branches came back with must-fix findings from the cold read that the worker's own evidence did not surface — both in the regime the tests never entered (N>4096; a retry after a failed publish). "Tests prove the fix is real" and "tests cover the failure regime" are different claims; the dispatch spec could ask for the second explicitly. (b) The 10 s wall-clock test is the third load-sensitive timeout this week (#55, #88, now #146); the pre-push hook runs alone, the conductor's parallel suites do not. (c) A GitHub push failed once on a 75 s connect timeout mid-tick; retried fine — a tick must re-check `git ls-remote` after any push, not trust the exit of a pipeline. (d) Tick length ~57 min against the "thirty minutes is long" line: three absorbs with two cold reads plus four dispatches is more than one tick should carry; the queue had built up because ticks 7–8 dispatched five themes.
+
+## Tick 2026-09-18 10:33Z–10:41Z (tick 10)
+
+**Health.** dev green (b5514c1); #146 merged during the tick (34fbf29 → dev run e547800 in progress at the end). Load 3.7 → 10.8 during the parallel suites. GitHub API had TLS-handshake timeouts for ~2 min: the first `gh pr edit --add-label` calls silently failed and my "claimed" echo printed anyway — re-checked and re-claimed. Tick 9's end stamp corrected (I wrote 11:05Z by estimate; `date -u` said 10:31Z).
+
+**Absorbed** (review worktrees on the pushed heads; both removed at the end):
+- **#158** CI job permissions (sonnet) → **ready, auto-merge, rebased**. `tests/test_dev_process_config.py` 40 passed; with `ci.yml` reverted to dev's, 3 failed — the tests pin the change. The only steps that could want more than `contents: read` are two `upload-artifact` uses, which need nothing. The PR's own checks passed under the narrowed token.
+- **#157** web security alerts (sonnet) → **ready, auto-merge, rebased**. From a deleted `node_modules`: `npm ci` clean, build ok, unit 388/388; resolved vite 7.3.6 / svelte 5.57.0 / postcss 8.5.28 / picomatch 4.0.7 / esbuild 0.28.2; audit `{low: 4}` = exactly the `cookie` chain. Dependabot's #154/#155/#156 bump to the same versions — expected to close themselves on merge; a waiter checks, and next tick runs Playwright once against dev for the svelte bump.
+
+**Dispatched** (5 workers; footprints disjoint; 0 branches await review):
+- **CI parity 6F** (#163, sonnet) — `extensions/` lint (54 errors today) + ci.yml ruff scope + fix-needs-a-test on PRs. Told to rebase onto #158 before touching `ci.yml`. The item now carries its `## Groom` (copied from the tick-6 note into the ticket, per the groom-into-ticket rule). `pyrite update -f status=…` produced a two-line diff — #69's fix holds.
+- Still running from tick 9: Playwright F (#160), #140 redispatch, #145 redispatch, CodeQL Theme B (#161).
+
+**Not dispatched:** Playwright G (waits for F's report — one heavy at a time until the derived ports are proven under two suites); H after F+G; 6E packaged UI after #140; CodeQL A after #145, C after A+B, D kept; index sync (7B) inside #44/#47's reservation window until 2026-09-19 08:45Z.
+
+**Groom lane:** ready queue ≥ 8 groomed themes (> 2× cap) — no architect this tick. `good first issue` pool: 14 open.
+
+**Kept (unchanged from tick 9):** the hashing decision (dismiss + Theme D vs keyed hash/ADR); CodeQL as a required check (44/48 noise); the private-repo existence oracle.
+
+**Retro notes.** (a) The estimated-timestamp error recurred one tick after the rule was written (tick 8 → tick 9); the fix is mechanical — stamp the heading with `$(date -u)` in the same command that appends it, never by hand. (b) `gh` label edits during an API blip failed silently behind `>/dev/null`; the claim must be verified by reading the label back, which the sweep already does — the conductor should too. (c) Two tiny sonnet absorbs took ~15 min including a clean `npm ci`; that is the floor for a review, and it bounds the cap at ~4 absorbs per tick.
+
+**Reported mid-tick (absorb at tick 11):** CodeQL Theme B (#161, opus) — `a9a19ad`; 17 new tests red-then-green; the report is on the PR body; cold read required (server + services; `_ABS_PATH_RE` breadth and the two-statics shape are design points).
