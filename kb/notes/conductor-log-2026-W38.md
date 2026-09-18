@@ -2194,3 +2194,22 @@ Approval clicks per outside PR 2–3 → 1; outside-PR lead time 60–105 min �
 - The seven Dependabot `web/` PRs sat `BEHIND` all day by design; dispatched this window as one theme (chore/web-dependency-bumps) before F/G.
 - 24-hour reservation of `good first issue` items for outside contributors is a host rule, not yet in the skill; the architect honoured it from the brief. Write it down next retro if it survives.
 - The stale repo-global stash (`feature/journalism-investigation-kb`) still trips tools that use `git stash`; the maintainer's to drop.
+
+## Tick 2026-09-18T09:40Z (tick 7 — host-run, scheduled)
+
+**Health.** `dev` at 1226312 (retro 4 merged), run in progress; previous three pushes green. Load 10. Open loop PRs: #138 A.1, #139 pin, #140 release.py, #142 web deps (all draft, workers running; each branch at its claim commit only — none reported), #70 log. Outside PRs: 0. Good-first-issue pool: 14 open. Worktrees: the four workers' + the log.
+
+**Absorb.** Nothing had reported before the tick began.
+
+**Groom.** The architect's tick-6 breakdown is on the log branch (`groom-2026-09-18-tick6`); ready queue is long — no architect this tick. Good-first-issue count ≥ 5.
+
+**Dispatched (2; cap: 0 awaiting review, 1 heavy in flight, footprints disjoint from everything running):**
+| Theme | PR | Model | heavy |
+|---|---|---|---|
+| Filters are honoured on every search leg (#56, closes #53) | #145 | opus (cold read expected) | no |
+| The round-trip identity gate (quality; after #69) | #146 | sonnet | no |
+Six workers in flight. Held for later ticks per the breakdown: F/G (after A.1), H (after F/G), packaged web UI (after #140 or with the runbook edit assigned), CI parity (after #139 — both touch `test_dev_process_config.py`), 7B index-sync (after the reservation window on #44/#47), #13+#43 (opus, heavy — when a heavy slot frees), #9 spike.
+
+**Observed.** The first claim through `pyrite update` since #69 landed is a two-line diff (status, assignee) — #46 fixed in practice. The Dependabot batch dispatched last tick will close #23–#29 on review.
+
+**Blocked / needs the maintainer.** Nothing.
