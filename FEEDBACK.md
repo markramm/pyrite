@@ -471,3 +471,52 @@ hidden one.
 carrying zero wikilinks in either direction, which is the analytical spine of a brief commissioned
 the same day. The brief does not cite it either. So the gap is not legacy debt; **the pipeline is
 generating disconnected entries right now**, and `qa gaps` is the only thing that can see it.
+
+## 2026-09-18 · write-path sweep in a sandbox KB · claude-opus-5
+
+Built a throwaway KB (`pyrite init --template research --path /tmp/pyrite-cli-sandbox --name
+cli-sandbox`), git-initialised it, seeded 5 entries shaped like real corpus content (markdown
+tables, wikilinks, a 78-char id, a near-duplicate pair), and swept the write commands from a
+restorable baseline. Recommended setup — it paid for itself immediately and no live corpus was
+touched.
+
+**Friction 1 — the corrupting path is reachable from four commands, and one of them is `update`.
+Severity: blocked. (#87, three comments.)**
+
+Isolated the trigger to **a body line matching `^[-|\s]+$`** — a markdown table separator
+`|---|---|` or a bare `---` horizontal rule. Six single-construct probes: double quotes, colons,
+trailing backslashes, wikilinks and inline pipes all survive; only that line breaks it. Serialized
+into a double-quoted YAML scalar it terminates the frontmatter block early.
+
+The sharpest result was a one-flag A/B: `pyrite create --body-file <table-bearing>` writes a
+**clean** entry; the same command plus `--link` writes an **unparseable** one. So entry persistence
+is fine and the defect is in the link-application step. Same signature from `link`, `update` and
+`links bulk-create`.
+
+**Had to figure out:** that `update` was affected at all. I was testing `link`, and only tried
+`update` because the round-trip hypothesis predicted it. `update` is the command every workflow
+reaches for to change a tag or a status — far higher blast radius than `link`. GH #46/#47 (update
+dropping/blocking frontmatter fields) are plausibly the same root cause seen from another angle.
+
+**Would have helped:** `--dry-run` on `link` and `update`. `rename`, `links bulk-create` and
+`qa fix` all have one; the two commands that silently corrupt do not.
+
+**Friction 2 — `links bulk-create` is the batch path and shares the defect. Severity: blocked.**
+
+One invocation against a YAML spec file could corrupt every entry it touches. It *does* have
+`--dry-run`, but dry-run shows the intended links, not the frontmatter damage — so it gives false
+assurance here.
+
+**Worked well — specifically:**
+
+- **`rename` is the model, and the fix already lives in it.** It renamed the file, rewrote the
+  frontmatter `id`, updated an inbound `[[wikilink]]` in a *different* entry, reported
+  `links_rewritten: 1` and `index_verified: true`, and has `--dry-run`. Critically the third-party
+  file it edited came out **clean** — no `body:` key — because that path is a targeted textual edit.
+  Only the subject entry goes through the broken save. Whatever `rename`'s link-rewriting does,
+  `link` and `update` should do.
+- **`qa fix` is the best-behaved destructive command in the CLI.** Dry-run by request, honest "No
+  fixable issues found" instead of inventing work, and a separate `not_auto_fixable` bucket with
+  reasons (`orphan_entry … not_auto_fixable`) rather than guessing. All entries parsed afterward.
+- **`pyrite init` is friction-free.** One command, zero prompts, registered and indexed, usable
+  sandbox in seconds. The reason this session could test destructive commands at all.
