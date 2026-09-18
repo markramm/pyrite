@@ -4,13 +4,13 @@ Base Entry Model
 Abstract base for all KB entry types.
 """
 
-import copy
 import logging
 import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -78,12 +78,26 @@ def _default_valued_keys_absent_from(entry: "Entry", meta: dict[str, Any]) -> fr
     empirically means a plugin type gets the behaviour without declaring
     anything, matching how ``capture_extra_frontmatter`` decides "unknown".
     """
+    return frozenset(k for k in _always_written_keys(type(entry)) if k not in meta)
+
+
+@cache
+def _always_written_keys(cls: type) -> frozenset[str]:
+    """Frontmatter keys ``cls`` emits for a default-constructed instance.
+
+    Depends only on the class, so it is computed once rather than on every load
+    of every entry -- this runs in the hot path of a full index sync, and only
+    a couple of the ~48 registered types have an always-written default for it
+    to find.
+    """
     try:
-        pristine = type(entry)(id=entry.id, title=entry.title)
-        always_written = set(pristine.to_frontmatter())
-    except Exception:  # a class needing more constructor args opts out
+        return frozenset(cls(id="probe", title="probe").to_frontmatter())
+    except Exception:
+        # A class needing more constructor arguments opts out of the mechanism
+        # (it will simply keep writing its defaults). Logged rather than
+        # swallowed, so an opted-out type is discoverable.
+        logger.debug("no always-written-key probe for %s", cls.__name__, exc_info=True)
         return frozenset()
-    return frozenset(k for k in always_written if k not in meta)
 
 
 def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
@@ -98,10 +112,21 @@ def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
     # `emitted` below must reflect the decisions the write path will make.
     entry._absent_default_keys = _default_valued_keys_absent_from(entry, meta)
     # Keep the mapping as ruamel parsed it, for style on the way back out.
+    # Stored by reference, not copied: copying is what mangled anchors and
+    # merge keys, and the write path only ever READS this. Two entries loaded
+    # from one `meta` dict therefore share it -- safe while it stays read-only,
+    # so do not mutate it here or in _restyle_like_source.
     entry._source_frontmatter = meta
     try:
         emitted = entry.to_frontmatter()
-    except Exception:  # a class that cannot serialize is not this helper's problem
+    except Exception:
+        # A class that cannot serialize is not this helper's problem, but a type
+        # silently losing its unknown-key protection should be discoverable.
+        logger.debug(
+            "no extra-frontmatter capture for %s: to_frontmatter failed",
+            type(entry).__name__,
+            exc_info=True,
+        )
         return
     extras = {
         k: v
@@ -113,7 +138,14 @@ def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
 
 
 def _plain(value: Any) -> Any:
-    """Strip ruamel node types so two values can be compared by content."""
+    """Strip ruamel node types so two values can be compared by content.
+
+    Booleans are tagged, because `1 == True` and `0 == False` in Python: a bool
+    written over an equal int (or the reverse) would otherwise compare equal,
+    be judged "unchanged", and the old value silently kept.
+    """
+    if isinstance(value, bool):
+        return ("bool", value)
     if isinstance(value, Mapping):
         return {k: _plain(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -138,7 +170,7 @@ def _keep_sequence_style(old: Any, new: Any) -> Any:
             seq.fa.set_flow_style()
             return seq
     except Exception:  # style is a nicety; never fail a save for it
-        pass
+        logger.debug("could not carry sequence style", exc_info=True)
     return new
 
 
@@ -152,25 +184,37 @@ def _restyle_like_source(meta: dict[str, Any], source: Any) -> dict[str, Any]:
     invisible in review.
 
     For each key ``source`` had and ``meta`` still has, the source node is
-    reused when the value is unchanged (keeping `tags: [a, b]` inline and
-    `"2026-07-03"` quoted) and replaced when it is not. Keys dropped from
-    ``meta`` are dropped here too, and keys ``meta`` added are appended in its
-    own order. With no source -- a newly created entry -- ``meta`` is returned
-    untouched.
+    reused *by reference* when the value is unchanged (keeping `tags: [a, b]`
+    inline, `"2026-07-03"` quoted, and any anchor or merge key intact) and
+    replaced when it is not. Keys dropped from ``meta`` are dropped here too,
+    and keys ``meta`` added are appended in its own order. With no source -- a
+    newly created entry -- ``meta`` is returned untouched.
     """
     if not isinstance(source, Mapping):
         return meta
 
     try:
-        restyled = copy.deepcopy(source)
-    except Exception:  # a source we cannot copy is not worth failing a save over
-        return meta
+        from ruamel.yaml.comments import CommentedMap
 
-    for key in list(restyled.keys()):
+        restyled: Any = CommentedMap()
+    except Exception:  # no ruamel: order still helps, style is a nicety
+        logger.debug("restyle: ruamel CommentedMap unavailable", exc_info=True)
+        restyled = {}
+
+    # Source order first, then whatever `meta` added, in its own order.
+    #
+    # Unchanged values are carried over BY REFERENCE, never copied. An earlier
+    # version deep-copied the whole source mapping to inherit its style, which
+    # also resolved YAML anchors and merge keys: `<<: *anch` came back as a
+    # literal `<<:` key whose value was the merged mapping, and the merged keys
+    # were then emitted a second time as siblings -- a duplicate key in a file
+    # that had none. Referencing the original node keeps its anchor, alias,
+    # merge and comment attachments exactly as ruamel parsed them.
+    for key, old in source.items():
         if key not in meta:
-            del restyled[key]
-        elif _plain(restyled[key]) != _plain(meta[key]):
-            restyled[key] = _keep_sequence_style(restyled[key], meta[key])
+            continue
+        new = meta[key]
+        restyled[key] = old if _plain(old) == _plain(new) else _keep_sequence_style(old, new)
 
     for key, value in meta.items():
         if key not in restyled:
@@ -230,6 +274,26 @@ class Entry(ABC):
     _absent_default_keys: frozenset[str] = field(
         default=frozenset(), init=False, repr=False, compare=False
     )
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Assigning a field makes it explicit, whatever value it is given.
+
+        `_absent_default_keys` records what the SOURCE FILE lacked. Without
+        this, that load-time fact was also read as the user's intent forever
+        after, so setting `importance = 5` (or `rank = 0`) on a file that had
+        no such key wrote nothing and still reported success -- the data loss
+        of commit 7783335 through a new door, and the mirror image of #46.
+
+        Intercepting assignment rather than clearing the set inside
+        KBService.update_entry covers every writer: the CLI, REST
+        PUT/PATCH /api/entries, MCP entry_update, and software-kb's `sw
+        reorder` (which legitimately computes rank=0) all assign attributes,
+        but only one of them goes through that service method.
+        """
+        if name in self._absent_default_keys:
+            # frozenset, so rebind rather than mutate a shared instance.
+            super().__setattr__("_absent_default_keys", self._absent_default_keys - {name})
+        super().__setattr__(name, value)
 
     def _omit_default(self, key: str) -> bool:
         """True when ``key`` holds its default and the source file lacked it."""

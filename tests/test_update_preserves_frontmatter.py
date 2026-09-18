@@ -275,6 +275,62 @@ class TestAlwaysWrittenDefaultsStillWork:
 
         assert BacklogItemEntry(id="t", title="T", rank=0).to_frontmatter()["rank"] == 0
 
+    def test_setting_importance_to_the_default_is_not_a_silent_no_op(self, swkb_env):
+        """The case the #46 narrowing must not swallow.
+
+        A file with no `importance:` key, and a user who explicitly asks for
+        `importance = 5`. "Absent at load" must not be read as "the user does
+        not want this written" once the user has assigned it -- that is the
+        data loss commit 7783335 fixed, arriving through a new door.
+
+        The mirror image of #46 itself: there, a write changed something nobody
+        asked for; here, a write silently does not change something that was
+        explicitly asked for. Both report success.
+        """
+        path = swkb_env["note_file"]
+        assert "importance" not in _read_frontmatter(path)
+
+        swkb_env["service"].update_entry("sample-note", "swkb", importance=5)
+
+        assert _read_frontmatter(path).get("importance") == 5
+
+    def test_setting_a_non_default_importance_still_works(self, swkb_env):
+        """The control: this path never broke and must keep working."""
+        swkb_env["service"].update_entry("sample-note", "swkb", importance=8)
+
+        assert _read_frontmatter(swkb_env["note_file"])["importance"] == 8
+
+    def test_setting_rank_to_zero_is_not_a_silent_no_op(self, swkb_env):
+        """Same bug on the extension type. `sw reorder` legitimately computes
+        rank=0 for the first item, through this same update_entry path."""
+        path = swkb_env["backlog_file"]
+        assert "rank" not in _read_frontmatter(path)
+
+        swkb_env["service"].update_entry("sample-backlog-item", "swkb", rank=0)
+
+        assert _read_frontmatter(path).get("rank") == 0
+
+    def test_assigning_the_attribute_directly_also_counts_as_explicit(self):
+        """update_entry is not the only caller: REST, MCP and the software-kb
+        reorder reach the model differently. The signal has to live on the
+        model, not in one service method."""
+        from pyrite.models.core_types import NoteEntry
+
+        note = NoteEntry(id="t", title="T")
+        note._absent_default_keys = frozenset({"importance"})  # as a load would
+        assert "importance" not in note.to_frontmatter()
+
+        note.importance = 5  # explicit assignment, value equal to the default
+
+        assert note.to_frontmatter().get("importance") == 5
+
+    def test_an_untouched_default_key_is_still_not_invented(self, swkb_env):
+        """The #46 guarantee restated: assigning ANOTHER field must not drag
+        `importance:` into a file that never carried it."""
+        swkb_env["service"].update_entry("sample-note", "swkb", tags=["q"])
+
+        assert "importance" not in _read_frontmatter(swkb_env["note_file"])
+
     def test_a_file_that_has_the_key_keeps_it_through_an_update(self, swkb_env, tmp_path):
         """Explicit `importance: 5` in the file survives a tags update."""
         path = swkb_env["backlog_file"]
@@ -288,6 +344,86 @@ class TestAlwaysWrittenDefaultsStillWork:
         after = _read_frontmatter(path)
         assert after["importance"] == 5
         assert after["rank"] == 0
+
+
+ANCHOR_NOTE = """---
+id: anchor-note
+type: note
+title: A note whose frontmatter uses YAML anchors
+metadata:
+  base: &anch
+    x: 1
+  derived:
+    <<: *anch
+    y: 2
+tags: [a]
+---
+
+Body.
+"""
+
+
+class TestStructuralYamlSurvivesAWrite:
+    """Carrying style from the source mapping must not mangle its structure.
+
+    The restyle exists to keep a one-field update to a one-line diff. Copying
+    the source node graph to get that also drags YAML anchors, aliases and
+    merge keys along -- and a deep copy of a ruamel CommentedMap resolves a
+    `<<:` merge into a literal key whose value is the merged mapping, emitting
+    the merged keys twice.
+    """
+
+    @pytest.fixture
+    def anchor_env(self, swkb_env):
+        path = swkb_env["note_file"].parent / "anchor-note.md"
+        path.write_text(ANCHOR_NOTE, encoding="utf-8")
+        return {**swkb_env, "anchor_file": path}
+
+    def test_merge_key_is_not_expanded_into_a_literal_key(self, anchor_env):
+        anchor_env["service"].update_entry("anchor-note", "swkb", tags=["z"])
+
+        text = anchor_env["anchor_file"].read_text(encoding="utf-8")
+        derived = _read_frontmatter(anchor_env["anchor_file"])["metadata"]["derived"]
+        assert dict(derived) == {"x": 1, "y": 2}, text
+        # `<<:` must still be a merge, not a mapping-valued key of its own.
+        assert "<<:\n" not in text, text
+
+    def test_no_duplicate_key_is_emitted(self, anchor_env):
+        anchor_env["service"].update_entry("anchor-note", "swkb", tags=["z"])
+
+        text = anchor_env["anchor_file"].read_text(encoding="utf-8")
+        derived_block = text.split("derived:", 1)[1]
+        assert derived_block.count("x: 1") <= 1, text
+
+    def test_the_written_file_round_trips_through_the_loader(self, anchor_env):
+        """Whatever we emit has to be readable again, unchanged in meaning."""
+        anchor_env["service"].update_entry("anchor-note", "swkb", tags=["z"])
+        first = _read_frontmatter(anchor_env["anchor_file"])
+
+        anchor_env["service"].update_entry("anchor-note", "swkb", tags=["z2"])
+        second = _read_frontmatter(anchor_env["anchor_file"])
+
+        first.pop("tags")
+        second.pop("tags")
+        assert dict(second["metadata"]["derived"]) == dict(first["metadata"]["derived"])
+
+
+class TestValuesAreComparedByTypeNotTruthiness:
+    """`1 == True` and `0 == False` in Python. Comparing a new value to the
+    source value with plain `==` therefore treats a bool set over an int (or
+    vice versa) as 'unchanged' and silently keeps the old one -- the same
+    'write reports success and does nothing' shape as the importance bug."""
+
+    def test_bool_replacing_an_equal_int_is_written(self, swkb_env):
+        path = swkb_env["note_file"]
+        text = path.read_text(encoding="utf-8").replace("tags: [alpha]", "flag: 1\ntags: [alpha]")
+        path.write_text(text, encoding="utf-8")
+
+        entry = swkb_env["service"].update_entry("sample-note", "swkb", tags=["t"])
+        entry.extra_frontmatter["flag"] = True
+        entry.save()
+
+        assert _read_frontmatter(path)["flag"] is True
 
 
 class TestLoadDoesNotCaptureInternalsAsExtras:
