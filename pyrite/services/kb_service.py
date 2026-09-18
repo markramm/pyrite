@@ -666,7 +666,7 @@ class KBService:
             else:
                 setattr(entry, key, value)
 
-        entry.updated_at = datetime.now(UTC)
+        entry.touch_updated_at()
 
         # Refuse before anything is written: the file must stay exactly as it was.
         self._validate_write(entry, kb_name, kb_config)
@@ -887,7 +887,7 @@ class KBService:
             raise EntryNotFoundError(f"Entry not found: {target_id}")
 
         entry.add_link(target=target_id, relation=relation, note=note, kb=tkb)
-        entry.updated_at = datetime.now(UTC)
+        entry.touch_updated_at()
         self._doc_mgr.save_entry(entry, source_kb, kb_config)
         return {"resolved": resolved}
 

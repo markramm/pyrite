@@ -7,7 +7,6 @@ Each KB is a directory of markdown files with YAML frontmatter.
 
 import logging
 from collections.abc import Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 
 from ..config import KBConfig
@@ -358,7 +357,7 @@ class KBRepository:
             if type_schema and type_schema.version > 0:
                 entry._schema_version = type_schema.version
 
-        entry.updated_at = datetime.now(UTC)
+        entry.touch_updated_at()
         entry.save(file_path)
         entry.kb_name = self.name
         entry.file_path = file_path

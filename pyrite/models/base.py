@@ -309,6 +309,24 @@ class Entry(ABC):
             super().__setattr__("_absent_default_keys", self._absent_default_keys - {name})
         super().__setattr__(name, value)
 
+    def touch_updated_at(self, value: datetime | None = None) -> None:
+        """Refresh ``updated_at`` as *bookkeeping*, without inventing the key.
+
+        ``KBRepository.save``, ``KBService.update_entry`` and ``sw link`` all
+        stamp ``updated_at`` on every write. That is internal housekeeping,
+        not a user edit, so a file that never carried the key must not grow
+        one (#151) -- while a file that *does* carry it is refreshed and
+        written back as before.
+
+        A plain assignment cannot express that: ``__setattr__`` treats any
+        assignment as explicit and clears the key from
+        ``_absent_default_keys``, which is exactly how the repository stamp
+        re-invented ``updated_at`` on every save. ``object.__setattr__``
+        bypasses that hook, so the in-memory value stays fresh while the
+        key's file-presence remains whatever the source file had.
+        """
+        object.__setattr__(self, "updated_at", value if value is not None else _utcnow())
+
     # The frontmatter mapping this entry was parsed from, as ruamel returned it
     # (a CommentedMap carrying key order, quoting and flow/block style). The
     # write path uses it to re-emit unchanged keys exactly as they were, so a
@@ -405,6 +423,19 @@ class Entry(ABC):
         # whether the key reaches the FILE is decided once, centrally, in
         # _frontmatter_for_file.
         meta["importance"] = self.importance
+        # created_at/updated_at: from_frontmatter() reads them off the file but
+        # _base_frontmatter() never re-emitted them, so an explicit key in the
+        # source was silently dropped on the next save (#151). Emitted only for
+        # entries whose file actually carried the key: unlike `importance`
+        # there is no meaningful default to compare against -- a pristine
+        # instance's timestamp is just its construction time, so the
+        # _frontmatter_for_file value guard could not tell "still the default"
+        # from "read from the file", and a file that never had the keys would
+        # grow them (#46). An explicit assignment clears the key from
+        # _absent_default_keys (see __setattr__) and is written from then on.
+        for ts_key in ("created_at", "updated_at"):
+            if ts_key not in self._absent_default_keys:
+                meta[ts_key] = getattr(self, ts_key)
         if self.lifecycle != "active":
             meta["lifecycle"] = self.lifecycle
         if self.metadata:
