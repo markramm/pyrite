@@ -5,6 +5,15 @@ minutes. Everything here happens **before** `gh pr create`.
 
 ## The checklist
 
+**Claim the review first.** More than one conductor can be alive at once —
+a tick revived by its worker's hand-back, the scheduled tick, the host — and
+on 2026-09-18 two of them cold-read PR #69 in parallel and a third rebased
+it (#111). Before reading a diff: `gh pr view N --json labels`; if
+`in-review` is set, skip the PR this tick. Otherwise `gh pr edit N
+--add-label in-review`, and remove the label when you flip it to ready,
+redispatch it, or stop reviewing it. A label older than an hour with no
+comment from its owner is stale: take it over and say so on the PR.
+
 In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 
 ```
@@ -14,8 +23,10 @@ In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 - [ ] fix stashed, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...` — EVERY test
       named for a regression or a "still works" case, not one at random (PR #69: a class named for the
       exact regression it reintroduced covered only cases that already passed, and read as tested)
-- [ ] any number in the report (faster, slower, N% fewer rewrites) was measured under ONE interpreter with
-      the source tree pinned — each worktree has its own .venv and they resolve different Pythons; "run it
+- [ ] any number in the report (faster, slower, N% fewer rewrites, a flake rate) was measured against the
+      MERGE BASE, under ONE interpreter with the source tree pinned, and the sentence that reports it states
+      the condition — two sessions each published a confident wrong number about #69 in one window (one
+      across two venvs, one against dev instead of the merge base) — each worktree has its own .venv and they resolve different Pythons; "run it
       here, then there" compares environments (PR #69: a published "not slower" and a cold read's "+71%"
       were both 3.11-vs-3.13 artefacts) — or the number is struck from the PR
 - [ ] ruff check . && ruff format --check .

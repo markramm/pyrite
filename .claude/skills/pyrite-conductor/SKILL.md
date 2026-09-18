@@ -107,8 +107,9 @@ dev --body-file <spec>` with the theme spec as the body. The worker's report
 is appended to that body; review flips it to ready (`gh pr ready`). One
 place, visible to anyone with `gh pr list`, readable by the next tick with
 no agent's memory, and the board agrees with it. Do not commit the spec as
-a loose file (`.claude/THEME.md`): it has to be removed before the PR goes
-ready, which a tick forgets.
+a loose file (`.claude/THEME.md`): one reached `dev` in 22619c9 and
+add/add-conflicted with every branch carrying its own (#106); the path is
+now gitignored.
 
 **Review lane.** [review.md](review.md), including the cold read.
 
@@ -251,6 +252,11 @@ What merged (PR numbers, what they closed), what is in review and why it is
 waiting, what was dispatched (theme, worker, model), what is blocked and on
 whom. If the bottleneck has moved to the maintainer's desk (a decision, a
 setting only they can change), say so and stop rather than ticking idle.
+
+**Read the tick log by timestamp, not by position.** Entries are appended
+by whichever conductor finishes first, so the newest tick can sit above an
+older retro; before absorbing anything, `grep -n "^## " kb/notes/conductor-log-*.md`
+and read the latest *timestamp*.
 
 **Append the same report to the tick log** — `kb/notes/conductor-log-<YYYY-Www>.md`
 (one note per ISO week; create it with `pyrite create -k pyrite -t note
