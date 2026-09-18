@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-passlib = pytest.importorskip("passlib", reason="passlib not installed")
 
 from pyrite.config import AuthConfig
 from pyrite.services.auth_service import AuthService

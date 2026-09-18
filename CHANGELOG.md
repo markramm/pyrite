@@ -57,6 +57,12 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Changed
 
+- 100 auth tests (`test_auth_endpoints`, `test_auth_service`,
+  `test_github_token_storage`, `test_daily_endpoints`, `test_repo_endpoints`,
+  `test_ai_quota_enforcement`) now run in CI. Each module carried a stale
+  `pytest.importorskip("passlib")` although nothing imports passlib; a fresh
+  install never has it, so CI had been reporting those six modules as "1
+  skipped" each on every green run.
 - The embedding model is loaded once per process and shared by every
   `EmbeddingService` instance (it was loaded per instance; the service is
   constructed in nine places).

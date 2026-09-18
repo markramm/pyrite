@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
-passlib = pytest.importorskip("passlib", reason="passlib not installed")
 
 from fastapi.testclient import TestClient
 
