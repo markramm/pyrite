@@ -93,7 +93,12 @@ cd ../pyrite-wt/fix-what-it-fixes
 git push -u origin "$(git branch --show-current)"
 gh pr create --base dev --fill          # Fixes #N in the body for a bug
 gh pr merge --auto --rebase             # merges itself when checks are green
+gh pr view --json mergeStateStatus      # BEHIND? another PR landed first:
+gh pr update-branch --rebase            #   rebase onto dev; checks re-run; auto-merge still armed
 ```
+
+Auto-merge does not rebase for you: with "up to date" required, a PR goes
+`BEHIND` the moment another one merges, and sits there until updated.
 
 CI on a PR: ~30 s for docs/KB-only changes, ~4-5 min for code. If `dev` is red, no PR merges until it is fixed — that is the point. `rebase` is the default merge method; `squash` for a branch whose history is noise.
 

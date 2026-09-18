@@ -72,6 +72,7 @@ venv:     $wt_dir/.venv
   ... work, commit ...
   git push -u origin "$branch"
   gh pr create --base dev --fill && gh pr merge --auto --rebase
+  # if another PR merges first the PR goes BEHIND: gh pr update-branch --rebase
 
 When merged (the branch is deleted on GitHub automatically):
   git -C "$repo_root" worktree remove "$wt_dir" && git -C "$repo_root" branch -d "$branch"
