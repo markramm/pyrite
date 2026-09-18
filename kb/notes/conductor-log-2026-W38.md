@@ -2213,3 +2213,22 @@ Six workers in flight. Held for later ticks per the breakdown: F/G (after A.1), 
 **Observed.** The first claim through `pyrite update` since #69 landed is a two-line diff (status, assignee) — #46 fixed in practice. The Dependabot batch dispatched last tick will close #23–#29 on review.
 
 **Blocked / needs the maintainer.** Nothing.
+
+## Tick 2026-09-18T10:05Z (tick 8 — host-run, scheduled; the first absorb tick under retro 3's rules)
+
+**Health.** `dev` green at 35ea097 (groom-into-the-ticket merged); load 8 → 16 during the reviews. Outside PRs: 0. Good-first-issue pool: 14.
+
+**Absorbed — three branches that had reported before the tick began**, each reviewed from its own `review/pr-N` worktree on the pushed head (never the worker's tree), claimed with `in-review`:
+- **#139 pin the test runner** (`9f725ed`): venv reinstalled from the pins → pytest 9.1.1; 4240 passed; `PT` clean. Reproduced the worker's unmet-criterion finding — a `@classmethod` fixture under the pinned runner is neither a lint finding nor a failure; the criterion's premise was wrong, #144 tracks the deprecated instance-method fixtures. Ready, auto-merge; rebased once after #142 landed. Post-merge: the matrix must show 9.1.1 on all three legs.
+- **#142 web dependency bumps** (`387ab4f`): clean `npm ci` (npm 11.5.1's arborist crash reproduces; 11.19.1 works), build/unit (388)/check (0 errors) green; **one Playwright run on the branch fails exactly the #49 pair** — the kit 2.53→2.70 bump moved nothing the specs assert on. **Merged (86feee3)**; **#23–#29 closed** against it; worker worktree removed.
+- **#138 Playwright A.1** (`4f2585b`): vitest 393 passed, check clean, derived ports 22440/23849/25031/28143, one full run 125/3 — the #49 pair plus `entry-features.spec.ts:167`, not in any of the worker's sets. Re-ran that spec alone ×3: run 1 failed 167 and 144 at ~170 ms (instant, first run after the servers start), runs 2–3 clean → a first-request race, filed **#153** (`needs-repro`), not A.1's defect. Cold read dispatched (mandatory: the Unsure names two design decisions — the five spec-file edits and `strictPort` on the shared Vite config); verdict when it returns.
+
+**Reported mid-tick (next tick's absorb), reports appended to their PRs:** #140 `scripts/release.py` (opus; 85 tests, dry-run transcript, named-check CI wait, `release_notes_for` seam; four Unsure incl. no `.dev0` bump and step e's local commit) · #145 search filters (opus; option 1 — filters on the vector leg on all backends; 4348 passed; Postgres unexercised locally; three design decisions in Unsure → cold read) · #146 round-trip gate (sonnet; 70 residual ids in 5 groups, 774/774 fail on a scratch revert of #46's fix; filed #148 #149 #150 #151).
+
+**Groom.** No architect this tick (ready queue long). Reserved good-first-issues untouched.
+
+**Dispatched.** Nothing — six branches in absorb/review this tick and next; the review queue is the cap.
+
+**Friction.** `node web/e2e/print-ports.ts` needs the repo root as an argument (the usage line says so; the review's first call omitted it) — fine, but `scripts/new-worktree.sh` must pass it; check in the cold read. Three suites sharing the machine during review produced one spurious failure (the #153 flake) — reviews of heavy branches should run one at a time, same rule as builds.
+
+**Needs the maintainer.** Nothing.
