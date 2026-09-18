@@ -323,7 +323,20 @@ class PostgresBackend(BaseBackend):
         kb_name: str | None = None,
         limit: int = 20,
         max_distance: float = 1.3,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
+        """KNN over pgvector, honouring the same filters as ``search`` (#56).
+
+        Unlike sqlite-vec there is no separate KNN budget to escalate: the
+        predicates go into the same ``WHERE`` as the distance ordering, so
+        ``LIMIT`` applies after filtering and cannot under-return.
+        """
         vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
         sql = """
             SELECT e.*, (e.embedding <=> CAST(:vec AS vector)) as distance
@@ -334,6 +347,40 @@ class PostgresBackend(BaseBackend):
         if kb_name:
             sql += " AND e.kb_name = :kb_name"
             params["kb_name"] = kb_name
+        if entry_type:
+            sql += " AND e.entry_type = :entry_type"
+            params["entry_type"] = entry_type
+        if date_from:
+            sql += " AND e.date >= :date_from"
+            params["date_from"] = date_from
+        if date_to:
+            sql += " AND e.date <= :date_to"
+            params["date_to"] = date_to
+        if tags:
+            tag_keys = []
+            for i, tag in enumerate(tags):
+                key = f"sem_tag_{i}"
+                tag_keys.append(f":{key}")
+                params[key] = tag
+            sql += f"""
+                AND e.id IN (
+                    SELECT et.entry_id FROM entry_tag et
+                    JOIN tag t ON et.tag_id = t.id
+                    WHERE t.name IN ({",".join(tag_keys)})
+                    GROUP BY et.entry_id, et.kb_name
+                    HAVING COUNT(DISTINCT t.name) = :sem_tag_count
+                )
+            """
+            params["sem_tag_count"] = len(tags)
+        if fips:
+            sql += " AND e.fips = :fips"
+            params["fips"] = fips
+        if state:
+            sql += " AND e.state = :state"
+            params["state"] = state
+        if status:
+            sql += " AND e.status = :status"
+            params["status"] = status
         sql += " ORDER BY e.embedding <=> CAST(:vec2 AS vector) LIMIT :limit"
         params["vec2"] = vec_str
         params["limit"] = limit

@@ -182,6 +182,7 @@ class SearchService:
         status: str | None = None,
         trace: dict[str, Any] | None = None,
         kb_names: set[str] | list[str] | None = None,
+        warnings: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -199,8 +200,21 @@ class SearchService:
             mode: Search mode - keyword, semantic, or hybrid
             expand: Whether to use AI query expansion for additional terms
             status: Filter to entries with this lifecycle status (e.g.
-                "unprocessed"). Applies to keyword and hybrid modes; the
-                semantic leg does not filter.
+                "unprocessed").
+            warnings: Optional list the caller passes in to receive
+                human-readable notes about anything the search could not do
+                as asked — today, a filter a backend's vector leg cannot
+                honour, which costs the semantic leg entirely rather than
+                returning rows that violate the filter. An empty list (or a
+                list the search leaves untouched) means every filter was
+                applied on every leg that ran. Never populated on the happy
+                path; a caller that ignores it still gets correctly filtered
+                results, just without knowing a leg was dropped.
+
+        Every filter — ``entry_type``, ``tags``, ``date_from``/``date_to``,
+        ``fips``, ``state``, ``status`` — is applied on **every** leg of
+        every mode. Before #56 the vector leg ran unfiltered and the fused
+        result silently contained entries the filter excluded.
 
         Returns:
             List of matching entries with snippets and rank
@@ -239,7 +253,22 @@ class SearchService:
             if mode == SearchMode.SEMANTIC:
                 # Semantic uses original natural language query, not expanded
                 fetch = limit * 4 if kb_names is not None else limit
-                results = self._semantic_search(query, kb_name, fetch, offset=offset)
+                results = self._semantic_search(
+                    query,
+                    kb_name,
+                    fetch,
+                    offset=offset,
+                    filters={
+                        "entry_type": entry_type,
+                        "tags": tags,
+                        "date_from": date_from,
+                        "date_to": date_to,
+                        "fips": fips,
+                        "state": state,
+                        "status": status,
+                    },
+                    warnings=warnings,
+                )
                 results = self._restrict(results, kb_names, limit)
                 if not results:
                     # Semantic returned nothing (commonly: no embeddings).
@@ -261,6 +290,7 @@ class SearchService:
                     state=state,
                     status=status,
                     trace=tr,
+                    warnings=warnings,
                 )
                 results = self._restrict(results, kb_names, limit)
             else:
@@ -340,8 +370,18 @@ class SearchService:
         limit: int = 50,
         max_distance: float = 1.3,
         offset: int = 0,
+        filters: dict[str, Any] | None = None,
+        warnings: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Pure semantic vector search."""
+        """Pure semantic vector search, with the keyword leg's filters applied.
+
+        ``filters`` goes to the backend's ``search_semantic``, which applies it
+        inside the KNN query. A backend whose vector leg cannot take a filter
+        raises ``TypeError``; rather than return rows that violate the caller's
+        filter, we drop the semantic leg entirely and name the offending
+        filters in ``warnings`` (#56 — a filter is honoured or reported, never
+        silently dropped).
+        """
         from .embedding_service import EmbeddingService, is_available
 
         if not is_available() or not self.db.vec_available:
@@ -351,11 +391,29 @@ class SearchService:
         if not svc.has_embeddings():
             return []
 
+        active = {k: v for k, v in (filters or {}).items() if v}
+
         # sqlite-vec KNN doesn't support SQL OFFSET, so fetch limit+offset
         # and slice in Python
-        results = svc.search_similar(
-            query, kb_name=kb_name, limit=limit + offset, max_distance=max_distance
-        )
+        try:
+            results = svc.search_similar(
+                query,
+                kb_name=kb_name,
+                limit=limit + offset,
+                max_distance=max_distance,
+                **active,
+            )
+        except TypeError:
+            if not active:
+                raise
+            if warnings is not None:
+                warnings.append(
+                    "semantic leg dropped: this backend cannot filter vector search by "
+                    + ", ".join(sorted(active))
+                    + "; results come from the keyword leg only"
+                )
+            logger.warning("semantic leg dropped — backend cannot filter by %s", sorted(active))
+            return []
         return results[offset:]
 
     def _hybrid_search(
@@ -374,12 +432,16 @@ class SearchService:
         state: str | None = None,
         status: str | None = None,
         trace: dict[str, Any] | None = None,
+        warnings: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Hybrid search using Reciprocal Rank Fusion (RRF).
 
         Combines FTS5 keyword results with vector similarity results.
         Falls back to keyword-only if no embeddings exist.
+
+        Both legs take the same filter set: the fused result is only as
+        trustworthy as its least-filtered leg (#56).
         """
         # Get keyword results — use expanded query for FTS5 leg if available
         # Fetch enough candidates from each leg to cover offset + limit after fusion
@@ -400,14 +462,23 @@ class SearchService:
             status=status,
         )
 
-        # Try to get semantic results
-        semantic_results = self._semantic_search(query, kb_name, limit=fetch_size)
-
-        # The semantic leg can't filter by status, so a wrong-status entry could
-        # enter the fused set via the vector side. Drop those to keep the hybrid
-        # result consistent with the keyword leg's status filter.
-        if status:
-            semantic_results = [r for r in semantic_results if r.get("status") == status]
+        # Try to get semantic results — filtered on the vector leg itself, so
+        # the fused set can never contain an entry the caller's filter excluded.
+        semantic_results = self._semantic_search(
+            query,
+            kb_name,
+            limit=fetch_size,
+            filters={
+                "entry_type": entry_type,
+                "tags": tags,
+                "date_from": date_from,
+                "date_to": date_to,
+                "fips": fips,
+                "state": state,
+                "status": status,
+            },
+            warnings=warnings,
+        )
 
         if not semantic_results:
             # No embeddings — fall back to keyword only

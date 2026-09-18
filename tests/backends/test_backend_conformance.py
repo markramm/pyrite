@@ -701,3 +701,113 @@ class TestEmbeddingInterface:
         # With no embeddings, should return empty list
         result = backend.search_semantic([0.0] * 384)
         assert isinstance(result, list)
+
+
+# =========================================================================
+# Semantic filters — the vector leg takes the keyword leg's filter set (#56)
+# =========================================================================
+
+
+def _near_vector(nudge: int = 0) -> list[float]:
+    """A 384-dim vector. All of them are near-identical, so every embedded row
+    is a KNN candidate: filtering, not ranking, is what these tests pin."""
+    vec = [0.05] * 384
+    vec[nudge % 384] += 0.001
+    return vec
+
+
+@pytest.fixture
+def embedded_backend(backend):
+    """A backend holding three entries that differ only in filterable columns.
+
+    Skips cleanly when the backend cannot store an embedding (e.g. SQLite built
+    without the sqlite-vec extension), so the suite stays green where vectors
+    are unavailable.
+    """
+    specs = [
+        {
+            "entry_id": "mech",
+            "entry_type": "mechanism",
+            "tags": ["oversight"],
+            "state": "MI",
+            "fips": "26163",
+            "status": "unprocessed",
+            "date": "2026-01-10",
+        },
+        {
+            "entry_id": "theme",
+            "entry_type": "theme",
+            "tags": ["capture"],
+            "state": "LA",
+            "fips": "22071",
+            "status": "processed",
+            "date": "2026-02-20",
+        },
+        {
+            "entry_id": "task",
+            "entry_type": "task",
+            "tags": ["workflow"],
+            "state": None,
+            "fips": None,
+            "status": "unprocessed",
+            "date": "2026-03-30",
+        },
+    ]
+    for i, spec in enumerate(specs):
+        entry_id = spec.pop("entry_id")
+        backend.upsert_entry(_make_entry(entry_id, **spec))
+        if not backend.upsert_embedding(entry_id, "test", _near_vector(i)):
+            pytest.skip("backend cannot store embeddings (no vector support)")
+    if not backend.has_embeddings():
+        pytest.skip("backend cannot store embeddings (no vector support)")
+    return backend
+
+
+class TestSemanticFilterConformance:
+    """``search_semantic`` must honour every filter ``search`` honours.
+
+    Hybrid mode fuses the two legs, so a filter applied on only one of them
+    silently returns entries the caller excluded (#56). A backend that returns
+    unfiltered rows here is not conformant.
+    """
+
+    @pytest.mark.parametrize(
+        "kwargs,expected",
+        [
+            ({"entry_type": "mechanism"}, {"mech"}),
+            ({"entry_type": "zzz-not-a-real-type"}, set()),
+            ({"tags": ["capture"]}, {"theme"}),
+            ({"tags": ["zzz-no-such-tag"]}, set()),
+            ({"state": "MI"}, {"mech"}),
+            ({"state": "ZZ"}, set()),
+            ({"fips": "26163"}, {"mech"}),
+            ({"fips": "99999"}, set()),
+            ({"status": "processed"}, {"theme"}),
+            ({"status": "zzz-bogus-status"}, set()),
+            ({"date_from": "2026-02-01"}, {"theme", "task"}),
+            ({"date_to": "2026-01-31"}, {"mech"}),
+            ({"date_from": "2026-02-01", "date_to": "2026-02-28"}, {"theme"}),
+            ({"entry_type": "mechanism", "state": "MI"}, {"mech"}),
+            ({"entry_type": "mechanism", "state": "LA"}, set()),
+        ],
+    )
+    def test_search_semantic_honours_filter(self, embedded_backend, kwargs, expected):
+        rows = embedded_backend.search_semantic(_near_vector(), kb_name="test", limit=10, **kwargs)
+        assert {r["id"] for r in rows} == expected
+
+    def test_search_semantic_unfiltered_returns_all(self, embedded_backend):
+        """Guard against over-filtering: no filter means every entry."""
+        rows = embedded_backend.search_semantic(_near_vector(), kb_name="test", limit=10)
+        assert {r["id"] for r in rows} == {"mech", "theme", "task"}
+
+    def test_search_semantic_fills_limit_despite_selective_filter(self, embedded_backend):
+        """A selective filter must not cost recall.
+
+        sqlite-vec applies its ``k`` budget before any join predicate, so an
+        implementation that filters the k nearest afterwards silently
+        under-returns. Two entries share a status; asking for two must get two.
+        """
+        rows = embedded_backend.search_semantic(
+            _near_vector(), kb_name="test", limit=2, status="unprocessed"
+        )
+        assert {r["id"] for r in rows} == {"mech", "task"}

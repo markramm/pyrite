@@ -330,9 +330,29 @@ class OverlaySearchBackend:
         kb_name: str | None = None,
         limit: int = 20,
         max_distance: float = 1.3,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
-        # For V1, semantic search from main only
-        return self._main.search_semantic(embedding, kb_name, limit, max_distance)
+        # For V1, semantic search from main only. Filters pass straight through
+        # so the overlay honours them exactly as main does (#56).
+        return self._main.search_semantic(
+            embedding,
+            kb_name,
+            limit,
+            max_distance,
+            entry_type=entry_type,
+            tags=tags,
+            date_from=date_from,
+            date_to=date_to,
+            fips=fips,
+            state=state,
+            status=status,
+        )
 
     def has_embeddings(self) -> bool:
         return self._main.has_embeddings()

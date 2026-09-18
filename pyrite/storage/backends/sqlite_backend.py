@@ -317,33 +317,122 @@ class SQLiteBackend(BaseBackend):
         kb_name: str | None = None,
         limit: int = 20,
         max_distance: float = 1.3,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
+        """KNN over ``vec_entry``, filtered by the same predicates as ``search``.
+
+        sqlite-vec's ``MATCH`` needs a literal ``k`` (the number of nearest
+        neighbours to consider) and applies it *before* any join predicate, so
+        a filter cannot be pushed into the KNN itself. Filtering the k rows
+        afterwards would silently under-return whenever the k nearest happen
+        not to match the filter. Instead we over-fetch and escalate ``k`` until
+        ``limit`` rows survive the filter or ``k`` covers the whole table —
+        correct at any selectivity, and no more work than the old code when
+        nothing is filtered.
+        """
         if not self.vec_available:
             return []
         blob = self._embedding_to_blob(embedding)
-        fetch_limit = limit * 3 if kb_name else limit * 2
-        rows = self._raw_conn.execute(
+
+        where, params = self._semantic_filter_sql(
+            kb_name=kb_name,
+            entry_type=entry_type,
+            tags=tags,
+            date_from=date_from,
+            date_to=date_to,
+            fips=fips,
+            state=state,
+            status=status,
+        )
+
+        total = self._raw_conn.execute("SELECT COUNT(*) FROM vec_entry").fetchone()[0]
+        k = limit * 3 if (kb_name or where) else limit * 2
+        results: list[dict[str, Any]] = []
+        while True:
+            k = min(k, total) if total else k
+            sql = """
+                SELECT v.rowid, v.distance, e.*
+                FROM vec_entry v
+                JOIN entry e ON v.rowid = e.rowid
+                WHERE v.embedding MATCH ? AND k = ?
             """
-            SELECT v.rowid, v.distance, e.*
-            FROM vec_entry v
-            JOIN entry e ON v.rowid = e.rowid
-            WHERE v.embedding MATCH ? AND k = ?
-            ORDER BY v.distance
-            """,
-            (blob, fetch_limit),
-        ).fetchall()
-        results = []
-        for row in rows:
-            entry = dict(row)
-            distance = entry.get("distance", 0)
-            if distance > max_distance:
-                continue
-            if kb_name and entry.get("kb_name") != kb_name:
-                continue
-            results.append(entry)
-            if len(results) >= limit:
+            sql += where
+            sql += " ORDER BY v.distance"
+            rows = self._raw_conn.execute(sql, [blob, k, *params]).fetchall()
+            results = []
+            for row in rows:
+                entry = dict(row)
+                if entry.get("distance", 0) > max_distance:
+                    continue
+                results.append(entry)
+                if len(results) >= limit:
+                    break
+            # Enough survivors, or k already covers every embedded row.
+            if len(results) >= limit or not total or k >= total:
                 break
+            k = min(k * 4, total)
         return results
+
+    @staticmethod
+    def _semantic_filter_sql(
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
+    ) -> tuple[str, list[Any]]:
+        """Build the WHERE fragment shared by the semantic leg and ``search``.
+
+        Deliberately mirrors the predicates in :meth:`search` one for one — the
+        two legs are fused, so any divergence is a filter the caller asked for
+        and did not get.
+        """
+        sql = ""
+        params: list[Any] = []
+        if kb_name:
+            sql += " AND e.kb_name = ?"
+            params.append(kb_name)
+        if entry_type:
+            sql += " AND e.entry_type = ?"
+            params.append(entry_type)
+        if date_from:
+            sql += " AND e.date >= ?"
+            params.append(date_from)
+        if date_to:
+            sql += " AND e.date <= ?"
+            params.append(date_to)
+        if tags:
+            placeholders = ",".join(["?"] * len(tags))
+            sql += f"""
+                AND e.id IN (
+                    SELECT et.entry_id FROM entry_tag et
+                    JOIN tag t ON et.tag_id = t.id
+                    WHERE t.name IN ({placeholders})
+                    GROUP BY et.entry_id, et.kb_name
+                    HAVING COUNT(DISTINCT t.name) = ?
+                )
+            """
+            params.extend(tags)
+            params.append(len(tags))
+        if fips:
+            sql += " AND e.fips = ?"
+            params.append(fips)
+        if state:
+            sql += " AND e.state = ?"
+            params.append(state)
+        if status:
+            sql += " AND e.status = ?"
+            params.append(status)
+        return sql, params
 
     def has_embeddings(self) -> bool:
         if not self.vec_available:
