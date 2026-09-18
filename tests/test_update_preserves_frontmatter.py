@@ -26,12 +26,16 @@ from pyrite.utils.yaml import load_yaml
 NEVER_IN_FRONTMATTER = ("body", "file_path", "kb_name", "extra_frontmatter")
 
 
-def _read_frontmatter(path):
-    """Parse the YAML frontmatter block of a KB markdown file."""
-    text = path.read_text(encoding="utf-8")
-    assert text.startswith("---\n"), f"no frontmatter fence in {path}"
+def _read_frontmatter_text(text):
+    """Parse the YAML frontmatter block out of a markdown string."""
+    assert text.startswith("---\n"), f"no frontmatter fence in {text[:40]!r}"
     end = text.index("\n---", 3)
     return load_yaml(text[3:end])
+
+
+def _read_frontmatter(path):
+    """Parse the YAML frontmatter block of a KB markdown file."""
+    return _read_frontmatter_text(path.read_text(encoding="utf-8"))
 
 
 BACKLOG_ITEM = """---
@@ -73,6 +77,30 @@ tags: [alpha]
 Note body.
 """
 
+# The fixture the first two passes of this fix were missing. BACKLOG_ITEM above
+# already carries `status:` and `priority:`, so no test on it could ever catch a
+# write path that INVENTS those keys -- which is exactly how the `priority`
+# regression reached review: `rank` was guarded, `priority` three lines above it
+# was not, and every test still passed. A file holding nothing but the three
+# keys every entry must have is the only shape that can fail.
+MINIMAL_BACKLOG_ITEM = """---
+id: minimal-backlog-item
+type: backlog_item
+title: A backlog item with no status, priority, rank or importance
+---
+
+Minimal body.
+"""
+
+MINIMAL_NOTE = """---
+id: minimal-note
+type: note
+title: A note with no importance key
+---
+
+Minimal body.
+"""
+
 
 @pytest.fixture
 def swkb_env(tmp_path):
@@ -90,6 +118,10 @@ def swkb_env(tmp_path):
     (kb_path / "notes").mkdir(parents=True)
     (kb_path / "backlog" / "sample-backlog-item.md").write_text(BACKLOG_ITEM, encoding="utf-8")
     (kb_path / "notes" / "sample-note.md").write_text(NOTE_ENTRY, encoding="utf-8")
+    (kb_path / "backlog" / "minimal-backlog-item.md").write_text(
+        MINIMAL_BACKLOG_ITEM, encoding="utf-8"
+    )
+    (kb_path / "notes" / "minimal-note.md").write_text(MINIMAL_NOTE, encoding="utf-8")
 
     kb = KBConfig(name="swkb", path=kb_path, kb_type="software", description="test software KB")
     config = PyriteConfig(knowledge_bases=[kb], settings=Settings(index_path=tmp_path / "index.db"))
@@ -100,6 +132,8 @@ def swkb_env(tmp_path):
         "service": KBService(config, db),
         "backlog_file": kb_path / "backlog" / "sample-backlog-item.md",
         "note_file": kb_path / "notes" / "sample-note.md",
+        "minimal_backlog_file": kb_path / "backlog" / "minimal-backlog-item.md",
+        "minimal_note_file": kb_path / "notes" / "minimal-note.md",
     }
     db.close()
 
@@ -286,13 +320,24 @@ class TestAlwaysWrittenDefaultsStillWork:
         The mirror image of #46 itself: there, a write changed something nobody
         asked for; here, a write silently does not change something that was
         explicitly asked for. Both report success.
+
+        Asserted together with the untouched sibling, deliberately. The "is
+        written" half alone passes on the merge base too -- the base writes
+        every default unconditionally -- so on its own it does not test this
+        change at all. The pair does: the assigned key must appear AND the
+        keys nobody touched must not. Run on a backlog item rather than a note
+        because a note has only the one suppressible key, so on a note
+        "assigned" and "untouched" cannot be told apart.
         """
-        path = swkb_env["note_file"]
-        assert "importance" not in _read_frontmatter(path)
+        path = swkb_env["minimal_backlog_file"]
+        assert set(_read_frontmatter(path)) == {"id", "type", "title"}
 
-        swkb_env["service"].update_entry("sample-note", "swkb", importance=5)
+        swkb_env["service"].update_entry("minimal-backlog-item", "swkb", importance=5)
 
-        assert _read_frontmatter(path).get("importance") == 5
+        after = _read_frontmatter(path)
+        expected = {"id", "type", "title", "importance"}
+        assert after.get("importance") == 5
+        assert set(after) == expected, f"the update also invented {sorted(set(after) - expected)}"
 
     def test_setting_a_non_default_importance_still_works(self, swkb_env):
         """The control: this path never broke and must keep working."""
@@ -302,13 +347,23 @@ class TestAlwaysWrittenDefaultsStillWork:
 
     def test_setting_rank_to_zero_is_not_a_silent_no_op(self, swkb_env):
         """Same bug on the extension type. `sw reorder` legitimately computes
-        rank=0 for the first item, through this same update_entry path."""
-        path = swkb_env["backlog_file"]
-        assert "rank" not in _read_frontmatter(path)
+        rank=0 for the first item, through this same update_entry path.
 
-        swkb_env["service"].update_entry("sample-backlog-item", "swkb", rank=0)
+        Paired with the untouched siblings for the same reason as the
+        importance case above, and on the minimal item so the siblings exist
+        to be got wrong: on the merge base this same call also writes
+        `status:`, `priority:` and `importance:` onto a file that had none of
+        them, which is the #46 corruption itself.
+        """
+        path = swkb_env["minimal_backlog_file"]
+        assert set(_read_frontmatter(path)) == {"id", "type", "title"}
 
-        assert _read_frontmatter(path).get("rank") == 0
+        swkb_env["service"].update_entry("minimal-backlog-item", "swkb", rank=0)
+
+        after = _read_frontmatter(path)
+        expected = {"id", "type", "title", "rank"}
+        assert after.get("rank") == 0
+        assert set(after) == expected, f"the update also invented {sorted(set(after) - expected)}"
 
     def test_assigning_the_attribute_directly_also_counts_as_explicit(self):
         """update_entry is not the only caller: REST, MCP and the software-kb
@@ -318,11 +373,14 @@ class TestAlwaysWrittenDefaultsStillWork:
 
         note = NoteEntry(id="t", title="T")
         note._absent_default_keys = frozenset({"importance"})  # as a load would
-        assert "importance" not in note.to_frontmatter()
+        # Checked at the file boundary: `to_frontmatter` deliberately keeps
+        # reporting the real value so the index can see it; only the file drops
+        # a default the source never carried.
+        assert "importance" not in _read_frontmatter_text(note.to_markdown())
 
         note.importance = 5  # explicit assignment, value equal to the default
 
-        assert note.to_frontmatter().get("importance") == 5
+        assert _read_frontmatter_text(note.to_markdown()).get("importance") == 5
 
     def test_an_untouched_default_key_is_still_not_invented(self, swkb_env):
         """The #46 guarantee restated: assigning ANOTHER field must not drag
@@ -331,16 +389,26 @@ class TestAlwaysWrittenDefaultsStillWork:
 
         assert "importance" not in _read_frontmatter(swkb_env["note_file"])
 
-    def test_a_file_that_has_the_key_keeps_it_through_an_update(self, swkb_env, tmp_path):
-        """Explicit `importance: 5` in the file survives a tags update."""
+    def test_the_key_is_kept_where_the_file_has_it_and_not_added_where_it_does_not(self, swkb_env):
+        """Both directions of the same rule, in one update, so it can fail.
+
+        The "kept" half on its own passes on the merge base -- the base writes
+        those keys whatever the file said -- so it proves nothing about this
+        change. What distinguishes the two trees is that the SAME `--tags`
+        update must add the keys to neither file, while keeping them on the
+        one that has them.
+        """
         path = swkb_env["backlog_file"]
         text = path.read_text(encoding="utf-8").replace(
             "effort: XS", "effort: XS\nimportance: 5\nrank: 0"
         )
         path.write_text(text, encoding="utf-8")
+        minimal = swkb_env["minimal_backlog_file"]
 
         swkb_env["service"].update_entry("sample-backlog-item", "swkb", tags=["x"])
+        swkb_env["service"].update_entry("minimal-backlog-item", "swkb", tags=["x"])
 
+        assert set(_read_frontmatter(minimal)) == {"id", "type", "title", "tags"}
         after = _read_frontmatter(path)
         assert after["importance"] == 5
         assert after["rank"] == 0
@@ -424,6 +492,120 @@ class TestValuesAreComparedByTypeNotTruthiness:
         entry.save()
 
         assert _read_frontmatter(path)["flag"] is True
+
+
+class TestNoRegisteredTypeInventsFrontmatter:
+    """The guarantee stated once, over every type, instead of per class.
+
+    #46 was fixed on `importance` and `rank` by guarding two call sites. That
+    left the same defect in 32 of the 48 registered entry types -- `ADREntry`
+    inventing `adr_number: 0` and `status:`, `ZettelEntry` inventing
+    `maturity:`, `QAAssessmentEntry` inventing four keys -- because every one
+    of them writes some field unconditionally at its default.
+
+    Per-type tests could not catch that: a new plugin type ships with no test
+    here at all. So the assertion is made over the registry, and a type added
+    next week is covered the day it registers.
+    """
+
+    @staticmethod
+    def _registered_types():
+        from pyrite.models.core_types import ENTRY_TYPE_REGISTRY
+        from pyrite.plugins import get_registry
+
+        types = dict(ENTRY_TYPE_REGISTRY)
+        types.update(get_registry().get_all_entry_types())
+        return types
+
+    def test_the_registry_is_actually_populated(self, swkb_env):
+        """Guard the guard: an empty registry would make the sweep vacuous."""
+        types = self._registered_types()
+        assert len(types) > 20, f"only {len(types)} types registered; the sweep proves nothing"
+        assert "backlog_item" in types and "adr" in types
+
+    def test_a_minimal_entry_of_any_type_round_trips_without_gaining_keys(self, swkb_env):
+        """Load a file holding only id/title/type, save it, gain nothing.
+
+        Driven through `to_markdown` -- the real file-write path -- rather than
+        `to_frontmatter`, because those two deliberately differ: the index and
+        the renderers must still see the entry's real field values, and only
+        the file must be kept as the author wrote it.
+        """
+        from pyrite.models.base import capture_extra_frontmatter
+
+        offenders = {}
+        for type_name, cls in sorted(self._registered_types().items()):
+            meta = {"id": "probe", "title": "Probe", "type": type_name}
+            try:
+                entry = cls.from_frontmatter(dict(meta), body="Body.")
+                capture_extra_frontmatter(entry, dict(meta))
+                written = _read_frontmatter_text(entry.to_markdown())
+            except Exception as exc:  # a type that cannot round trip at all
+                offenders[type_name] = f"raised {type(exc).__name__}: {exc}"
+                continue
+            invented = sorted(set(written) - set(meta))
+            if invented:
+                offenders[type_name] = invented
+
+        assert not offenders, (
+            f"{len(offenders)} entry type(s) add frontmatter keys the source file "
+            f"never had -- the #46 corruption: {offenders}"
+        )
+
+    def test_a_minimal_backlog_item_survives_a_real_cli_shaped_update(self, swkb_env):
+        """The end-to-end shape of the reported bug, on a file that can fail.
+
+        `pyrite update <id> --tags x` on a backlog item whose file carries no
+        `status:`, `priority:` or `rank:` must not add any of them.
+        """
+        path = swkb_env["minimal_backlog_file"]
+        before = _read_frontmatter(path)
+        assert set(before) == {"id", "type", "title"}, before
+
+        swkb_env["service"].update_entry("minimal-backlog-item", "swkb", tags=["x"])
+
+        after = _read_frontmatter(path)
+        assert set(after) == {"id", "type", "title", "tags"}, (
+            f"update invented {sorted(set(after) - set(before) - {'tags'})}"
+        )
+
+    def test_the_index_still_sees_the_fields_the_file_omits(self, swkb_env):
+        """The other half of the trade, stated so it cannot be quietly lost.
+
+        Suppression is a property of the FILE, not of the entry. `sw backlog`
+        filters on the `status` and `priority` the index holds, so an entry
+        loaded from a file without those keys must still report its defaults
+        to `to_frontmatter` -- only `to_markdown` drops them.
+        """
+        from pyrite.models.base import capture_extra_frontmatter
+        from pyrite.models.core_types import get_entry_class
+
+        meta = {"id": "probe", "title": "Probe", "type": "backlog_item"}
+        cls = get_entry_class("backlog_item")
+        entry = cls.from_frontmatter(dict(meta), body="b")
+        capture_extra_frontmatter(entry, dict(meta))
+
+        assert entry.to_frontmatter()["status"] == "proposed"
+        assert entry.to_frontmatter()["priority"] == "medium"
+        assert "status" not in _read_frontmatter_text(entry.to_markdown())
+        assert "priority" not in _read_frontmatter_text(entry.to_markdown())
+
+    def test_an_explicit_assignment_still_reaches_the_file(self, swkb_env):
+        """The `__setattr__` rule, checked on a type other than the two the
+        original fix guarded by hand -- the suppression is now central, so the
+        escape hatch has to be central too."""
+        from pyrite.models.base import capture_extra_frontmatter
+        from pyrite.models.core_types import get_entry_class
+
+        meta = {"id": "probe", "title": "Probe", "type": "adr"}
+        cls = get_entry_class("adr")
+        entry = cls.from_frontmatter(dict(meta), body="b")
+        capture_extra_frontmatter(entry, dict(meta))
+        assert "status" not in _read_frontmatter_text(entry.to_markdown())
+
+        entry.status = "proposed"  # explicit, and equal to the default
+
+        assert _read_frontmatter_text(entry.to_markdown())["status"] == "proposed"
 
 
 class TestLoadDoesNotCaptureInternalsAsExtras:

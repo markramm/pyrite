@@ -82,22 +82,32 @@ def _default_valued_keys_absent_from(entry: "Entry", meta: dict[str, Any]) -> fr
 
 
 @cache
+def _pristine_frontmatter(cls: type) -> dict[str, Any]:
+    """The frontmatter a default-constructed ``cls`` emits, as a plain dict.
+
+    Used by the write path to tell "this key still holds the value the class
+    would have invented" from "the user set it to something". Depends only on
+    the class, so it is computed once per type rather than per save; the
+    returned mapping is shared and must be treated as read-only.
+    """
+    try:
+        return dict(cls(id="probe", title="probe").to_frontmatter())
+    except Exception:
+        logger.debug("no pristine-frontmatter probe for %s", cls.__name__, exc_info=True)
+        return {}
+
+
 def _always_written_keys(cls: type) -> frozenset[str]:
     """Frontmatter keys ``cls`` emits for a default-constructed instance.
 
-    Depends only on the class, so it is computed once rather than on every load
-    of every entry -- this runs in the hot path of a full index sync, and only
-    a couple of the ~48 registered types have an always-written default for it
-    to find.
+    Derived from the same cached probe as ``_pristine_frontmatter`` so that a
+    class is instantiated once, not twice: this runs in the hot path of a full
+    index sync. A class needing more constructor arguments opts out of the
+    mechanism (its probe is empty, so it simply keeps writing its defaults);
+    the failure is logged there rather than swallowed, so an opted-out type is
+    discoverable.
     """
-    try:
-        return frozenset(cls(id="probe", title="probe").to_frontmatter())
-    except Exception:
-        # A class needing more constructor arguments opts out of the mechanism
-        # (it will simply keep writing its defaults). Logged rather than
-        # swallowed, so an opted-out type is discoverable.
-        logger.debug("no always-written-key probe for %s", cls.__name__, exc_info=True)
-        return frozenset()
+    return frozenset(_pristine_frontmatter(cls))
 
 
 def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
@@ -295,10 +305,6 @@ class Entry(ABC):
             super().__setattr__("_absent_default_keys", self._absent_default_keys - {name})
         super().__setattr__(name, value)
 
-    def _omit_default(self, key: str) -> bool:
-        """True when ``key`` holds its default and the source file lacked it."""
-        return key in self._absent_default_keys
-
     # The frontmatter mapping this entry was parsed from, as ruamel returned it
     # (a CommentedMap carrying key order, quoting and flow/block style). The
     # write path uses it to re-emit unchanged keys exactly as they were, so a
@@ -389,10 +395,12 @@ class Entry(ABC):
             prov = self.provenance.to_dict()
             if prov:
                 meta["provenance"] = prov
-        # An explicit importance is always written (commit 7783335); a default
-        # one is written unless the file this entry came from had no such key.
-        if self.importance != DEFAULT_IMPORTANCE or not self._omit_default("importance"):
-            meta["importance"] = self.importance
+        # Always reported, including at its default (commit 7783335: dropping
+        # an explicit `importance: 5` was itself silent data loss). Keeping it
+        # here means the index and the renderers see the entry's real value;
+        # whether the key reaches the FILE is decided once, centrally, in
+        # _frontmatter_for_file.
+        meta["importance"] = self.importance
         if self.lifecycle != "active":
             meta["lifecycle"] = self.lifecycle
         if self.metadata:
@@ -416,9 +424,51 @@ class Entry(ABC):
             "metadata": self.metadata,
         }
 
+    def _frontmatter_for_file(self) -> dict[str, Any]:
+        """``to_frontmatter`` minus the default-valued keys the source lacked.
+
+        Why this is not done inside ``to_frontmatter``: that method has two
+        consumers wanting opposite things. The FILE must keep the shape its
+        author gave it -- a backlog item written without a `status:` line does
+        not grow one because something else was updated (#46). But the INDEX
+        is built from ``to_frontmatter`` too (storage/index.py stores whatever
+        it does not have a column for into the metadata column), and `sw
+        backlog` filters on the `status` and `priority` it finds there. An
+        entry loaded from a file with no `status:` key genuinely IS
+        `proposed`; suppressing that everywhere would make it invisible to
+        every status filter. So suppression is a property of the file, and
+        this is the only place it applies.
+
+        Doing it here rather than at each call site is what makes the
+        guarantee general: 32 of the 48 registered entry types emit some field
+        unconditionally at its default (`ADREntry` its `adr_number` and
+        `status`, `ZettelEntry` its `maturity`, `QAAssessmentEntry` four
+        keys), and guarding them one by one both misses types and leaves every
+        future plugin type unprotected -- which is exactly how `priority` on
+        BacklogItemEntry survived the first fix while `rank`, three lines
+        below it, was guarded.
+
+        A key is dropped only when the source file lacked it AND its value is
+        still the one a pristine instance would emit. An explicit assignment
+        clears the key from ``_absent_default_keys`` (see ``__setattr__``), so
+        deliberately setting `rank = 0` or `status = "proposed"` still
+        reaches the file; the value check is a second guard for any writer
+        that reaches the field without going through attribute assignment.
+        """
+        meta = self.to_frontmatter()
+        absent = self._absent_default_keys
+        if not absent:
+            return meta
+        pristine = _pristine_frontmatter(type(self))
+        return {
+            k: v
+            for k, v in meta.items()
+            if not (k in absent and k in pristine and _plain(pristine[k]) == _plain(v))
+        }
+
     def to_markdown(self) -> str:
         """Convert to markdown string with YAML frontmatter."""
-        meta = _restyle_like_source(self.to_frontmatter(), self._source_frontmatter)
+        meta = _restyle_like_source(self._frontmatter_for_file(), self._source_frontmatter)
         yaml_front = dump_yaml(meta)
         # Exactly one trailing newline: the loader strips the body anyway, and a
         # body that already ended in newlines produced a blank last line that

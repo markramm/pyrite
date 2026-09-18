@@ -320,12 +320,14 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
             meta["assignee"] = self.assignee
         if self.effort:
             meta["effort"] = self.effort
-        # rank 0 ("unranked") is written even though it is the default, because
-        # it is a valid explicit choice -- but not onto a file that never had
-        # the key, which made `pyrite update --tags` add a `rank: 0` line to
-        # every backlog item it touched (#46).
-        if self.rank or not self._omit_default("rank"):
-            meta["rank"] = self.rank
+        # rank 0 ("unranked") is reported even at its default, because it is a
+        # valid explicit choice and `sw backlog --sort rank` reads it out of
+        # the index. Whether the key reaches the FILE is decided centrally, in
+        # Entry._frontmatter_for_file -- which is also what now keeps `status`
+        # and `priority` above off a file that never had them. Guarding `rank`
+        # here by hand while `priority` two lines up went unguarded is exactly
+        # the defect that made the guard central (#46).
+        meta["rank"] = self.rank
         return meta
 
     @classmethod
