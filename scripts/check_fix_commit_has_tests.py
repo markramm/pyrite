@@ -6,10 +6,18 @@ the commit boundary -- a `fix:` commit with zero test lines is exactly the
 class of regression the Iron Law exists to prevent (see 40e7a39, the fix
 that shipped with zero test lines and this ticket's own motivation).
 
-Used as a pre-commit `commit-msg` stage hook: receives the commit message
-file path as argv[1], diffs the staged tree against HEAD, and exits
-non-zero if the message starts with `fix:` but no staged file lives under
-a tests/ directory.
+Two modes:
+
+- Local commit-msg hook (default): receives the commit message file path as
+  argv[1], diffs the staged tree against HEAD, and exits non-zero if the
+  message starts with `fix:` but no staged file lives under a tests/
+  directory.
+- CI range mode (`--range BASE HEAD`): walks every commit in BASE..HEAD (a
+  pull request's own commits) and applies the same rule to each commit's own
+  message and own changed paths -- not the range's cumulative diff, so an
+  earlier offending commit isn't hidden by a later, unrelated commit that
+  happens to touch tests/. Used because outside contributors' PRs never run
+  the local commit-msg hook, so the rule has to be enforced again in CI.
 """
 
 from __future__ import annotations
@@ -42,7 +50,77 @@ def get_staged_paths() -> list[str]:
     return [line for line in result.stdout.splitlines() if line]
 
 
+def get_commit_message(sha: str) -> str:
+    """The full commit message (subject + body) for a single commit."""
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%B", sha],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout
+
+
+def get_commit_paths(sha: str) -> list[str]:
+    """Paths that commit `sha` itself changed (not the cumulative diff of a
+    range -- each commit is judged on what it, individually, touched)."""
+    result = subprocess.run(
+        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def get_range_commits(base: str, head: str) -> list[str]:
+    """Commit SHAs in base..head, oldest first."""
+    result = subprocess.run(
+        ["git", "rev-list", "--reverse", f"{base}..{head}"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line for line in result.stdout.splitlines() if line]
+
+
+_NO_TEST_MESSAGE = (
+    "no {what} is under a tests/ directory.\n"
+    "  Iron Law 1: no production code without a failing test first.\n"
+    "  If this fix genuinely has no testable behavior change (e.g. a\n"
+    "  pure docs/config fix), reword the subject to drop the 'fix:'\n"
+    "  prefix, or add the regression test the fix should have shipped\n"
+    "  with."
+)
+
+
+def check_range(base: str, head: str) -> int:
+    """CI mode: apply the rule to every commit in base..head individually.
+
+    Returns 0 if every `fix:` commit in the range touches tests/, 1 if any
+    does not (each offender is reported, not just the first).
+    """
+    failed = False
+    for sha in get_range_commits(base, head):
+        message = get_commit_message(sha)
+        if not is_fix_commit(message):
+            continue
+        if touches_tests(get_commit_paths(sha)):
+            continue
+        subject = message.strip().splitlines()[0] if message.strip() else ""
+        print(
+            f"ERROR: {sha[:12]} '{subject}' starts with 'fix:' but "
+            + _NO_TEST_MESSAGE.format(what="changed file"),
+            file=sys.stderr,
+        )
+        failed = True
+    return 1 if failed else 0
+
+
 def main() -> int:
+    if len(sys.argv) >= 3 and sys.argv[1] == "--range":
+        return check_range(sys.argv[2], sys.argv[3])
+
     if len(sys.argv) < 2:
         print("check_fix_commit_has_tests: missing commit-msg file argument", file=sys.stderr)
         return 1
@@ -56,13 +134,8 @@ def main() -> int:
         return 0
 
     print(
-        "ERROR: commit message starts with 'fix:' but no staged file is "
-        "under a tests/ directory.\n"
-        "  Iron Law 1: no production code without a failing test first.\n"
-        "  If this fix genuinely has no testable behavior change (e.g. a\n"
-        "  pure docs/config fix), reword the subject to drop the 'fix:'\n"
-        "  prefix, or add the regression test the fix should have shipped\n"
-        "  with.",
+        "ERROR: commit message starts with 'fix:' but "
+        + _NO_TEST_MESSAGE.format(what="staged file"),
         file=sys.stderr,
     )
     return 1
