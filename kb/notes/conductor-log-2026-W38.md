@@ -1881,3 +1881,44 @@ Verdict unchanged: theme holds, #69 stays draft on red `dev` + tripped breaker.
 Noted without a causal claim: the red-`dev` 3.13 `fixture 'configs' not found`
 is in the same file as #127 but is a different failure; no evidence they are
 related.
+
+### Amendment: retro item 1 was framed wrong — the lesson is scope-invisibility, not deference
+
+I filed the revert-set disagreement as "conductor doubts worker, worker turns
+out right — watch that asymmetry." The worker pushed back on that framing and
+is right, so the earlier entry should be read with this correction.
+
+**Doubting a worker's red/green table is correct behaviour and should not be
+discouraged.** The table *is* model output, and this entire third pass exists
+because an earlier one produced a table that looked like coverage and was not.
+A retro item that reads "the conductor doubted and was wrong" teaches the next
+conductor to doubt less, which is precisely backwards.
+
+The actual defect: **the verification used a narrower revert than the claim it
+was testing, and neither party could see that from the artifact.** It would have
+failed identically in reverse — had I reverted all four files and the worker
+one, the worker would have been the one confidently wrong. Nothing about the
+outcome depended on which of us held which check.
+
+So the thing to watch is **a check whose scope is invisible in its output**, not
+who was doubting whom. That also makes `git diff --quiet $BASE -- $IMPL` (now
+on #121) the real remedy rather than a nicety: it fails loudly instead of
+silently narrowing, which is the property the sentinel grep lacked.
+
+What survives unchanged from item 1: I asserted a general principle ("a
+worker's table is model output") in the same breath as a specific conclusion my
+own method could not support. The principle was fine; pairing it with an
+unverified conclusion is what made it deflection. The fix is not less doubt, it
+is doubt that states its own scope.
+
+Retro item 2 stands, in the worker's sharper form: **before changing what a
+method returns, list its callers and check whether any of them wants the old
+answer.** Cheap enough to be unconditional — here it was one read
+(`storage/index.py:250`) and it prevented a silent index regression.
+
+Worker stood down. Worktree verified by me: `c1c9c93`, no uncommitted edits
+under `pyrite/`, `extensions/` or the theme's test file, the unrelated
+`feature/journalism-investigation-kb` stash still at `stash@{0}` untouched. The
+unrelated modified files (conductor skill edits, `.gitignore`, `FEEDBACK.md`,
+`kb/roadmap.md`, untracked `kb/designs/`, `kb/tasks/`, `tests/usability/`) are
+still there and still need an owner before anyone pushes from that tree.
