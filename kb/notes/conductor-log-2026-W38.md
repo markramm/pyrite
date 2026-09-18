@@ -2379,3 +2379,15 @@ Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` rev
 **Still waiting behind the outside PRs:** the loop's own five finished branches (#163, #145, #140, #161, #160 — the architect's order). They have now waited ~2.5 h; at one task per 30-min tick, with outside PRs pre-empting, the queue drains only when contributors pause. Not a problem to fix — outside work first is the maintainer's rule — but the 30-min cadence, not the machine, is now the pacing item: a review takes ~10 min of machine time. Worth the maintainer's eye: whether a tick may take the *next* item when its one thing finishes early, still strictly one at a time.
 
 **Needs the maintainer:** **#169 — merge as is.** #171 (after its re-check; CI still wants the approval click), #164, #166 per the posted reviews; ADR-0034 (PR #170).
+
+## Tick 2026-09-18T13:46Z (tick 15 — WIP = 1)
+
+**Pre-check** 13:42Z: load 1.2, 74% free, nothing heavy, dev green. One thing: the outside PR whose head moved after its review, oldest first (#171 pushed 12:59Z; the new #173 arrived 13:39Z and builds on the same file).
+
+**Outside PR #171, re-check at `86dc83a`.** Delta read in full: naive `datetime`/`TimeStamp` anchored to UTC (one line), the `is naive` assertion replaced, a loader-path test through `from_markdown` with both unquoted forms, the changelog corrected with the index note, budgets 5 s → 60 s, `Z` replaced only at end of string. Suite at `-n 4`: 4316 passed (109 s). The tick-13 loader probe re-run on the new head: all six forms timezone-aware, none raises against `_utcnow()`. **Recommendation posted: merge as is.** CI is still `action_required` — **the maintainer's approval click is the only thing between this PR and its required check.** Labelled `reviewed`.
+
+**New:** outside PR #173 (zhongxiao-chang, "write created_at/updated_at back only for files that carry them", stacked on #164's commit) — a rework of #164 after its review. Next tick's one thing; #164 is presumably superseded by it (the author did the same with #167 → #164).
+
+**Flow, for the retro:** five outside reviews and two re-checks since the incident, each one suite at `-n 4` (59–109 s), load never above 6.5. Both contributors turned review findings around in under an hour and both re-checks came back "merge as is" — the review comments were specific enough to act on without a second round. The loop's own five branches have not moved since 11:10Z.
+
+**Needs the maintainer:** #169 — merge as is. #171 — approve the CI run, then merge as is. #164/#166 per the posted reviews. ADR-0034 (PR #170). Whether a tick may take the next queued item when its one thing finishes early (still one at a time) — asked at tick 14, unanswered, not assumed.
