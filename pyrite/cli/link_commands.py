@@ -152,7 +152,6 @@ def links_bulk_create(
     Each spec requires 'source' and 'target'. Optional fields:
     'relation' (default: related_to), 'target_kb' (default: source KB), 'note'.
     """
-    from datetime import UTC, datetime
 
     from ..storage.repository import KBRepository
 
@@ -275,7 +274,7 @@ def links_bulk_create(
 
                 # Add the link and save the file (no per-entry index)
                 entry.add_link(target=target_id, relation=relation, note=note, kb=target_kb)
-                entry.updated_at = datetime.now(UTC)
+                entry.touch_updated_at()
                 repo.save(entry)
                 created += 1
 
