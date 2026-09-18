@@ -90,6 +90,15 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Process
 
+- CI parity: the `ruff check` / `ruff format --check` step now covers
+  `extensions/` (54 pre-existing findings fixed: import sorting, unused
+  imports/variables, a loop variable, two UP rules), matching the commit-stage
+  hook that already lints it — a PR could otherwise go green with lint debt a
+  local commit would have blocked. A new `pull_request`-only CI step runs
+  `check_fix_commit_has_tests.py --range` over the PR's own commit range, so a
+  `fix:` commit without a `tests/` change fails CI even for contributors who
+  never ran the local commit-msg hook (all three outside PRs so far were
+  fixes without tests). `tests/test_dev_process_config.py` pins both.
 - The weekly retrospective: `pyrite-meta-conductor` now says what worked,
   root-causes every failure in its window and fixes what it finds as one
   process change plus one `quality` theme (refactoring, test refactoring) the
