@@ -164,6 +164,48 @@ class TestCIInstall:
         assert any("setup-uv" in str(s.get("uses", "")) for s in job["steps"])
 
 
+class TestPinnedTestRunner:
+    """One pytest and xdist version for every venv and every CI leg (#128).
+
+    CI resolved pytest 9.1.1 on 3.12 and 9.0.2 on 3.13 from an unbounded
+    `pytest>=8.0.0`; every worktree venv got 9.1.1, the main checkout 9.0.2.
+    #81's `@classmethod` fixtures passed the one-interpreter PR gate on
+    whichever pytest resolved there and broke `dev` twice on 3.13 (fixed in
+    #129). Pinning `==` makes the runner identical on every interpreter and
+    every venv, and makes loosening the pin a visible diff instead of a
+    silent `uv pip install` drift.
+    """
+
+    _PINNED = {"pytest", "pytest-cov", "pytest-xdist"}
+
+    def _dev_extra(self, pyproject: dict) -> list[str]:
+        return pyproject["project"]["optional-dependencies"]["dev"]
+
+    def test_dev_extra_pins_the_test_runner_exactly(self, pyproject):
+        specs = self._dev_extra(pyproject)
+        pinned = {}
+        for spec in specs:
+            for name in self._PINNED:
+                if spec == name or spec.startswith(name + "=="):
+                    pinned[name] = spec
+
+        missing = self._PINNED - set(pinned)
+        assert not missing, f"not pinned at all in dev extras: {missing}"
+
+        loose = [spec for spec in pinned.values() if "==" not in spec]
+        assert not loose, f"pinned package without an exact '==' pin: {loose}"
+
+    def test_no_other_version_operator_survives_for_pinned_packages(self, pyproject):
+        # >=, <=, ~=, != on a pinned package would defeat the point silently.
+        specs = self._dev_extra(pyproject)
+        for spec in specs:
+            for name in self._PINNED:
+                if spec.split("=")[0].split(">")[0].split("<")[0].split("~")[0].strip() == name:
+                    assert spec.count("==") == 1 and not any(
+                        op in spec for op in (">=", "<=", "~=", "!=")
+                    ), spec
+
+
 class TestChangeClassifier:
     """Docs/KB-only pushes must not wait for the Python suite (ADR-0032 §2).
 

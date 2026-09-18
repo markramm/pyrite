@@ -65,11 +65,19 @@ postgres = [
     "pgvector>=0.3.0",
 ]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
+    # Pinned exactly (#128): CI resolved pytest 9.1.1 on 3.12 and 9.0.2 on
+    # 3.13 from an unbounded `>=8.0.0` -- every worktree venv got 9.1.1, the
+    # main checkout 9.0.2. #81's `@classmethod` fixtures passed the
+    # one-interpreter PR gate under whichever version resolved there and
+    # broke `dev` twice on 3.13 (fixed in #129). All three are pure-Python
+    # wheels with no interpreter-specific build, so one version installs
+    # identically on 3.11/3.12/3.13; `tests/test_dev_process_config.py`
+    # (TestPinnedTestRunner) asserts the pin stays exact.
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pytest-xdist==3.8.0",
     "mypy>=1.9.0",
     "ruff>=0.15.0,<0.16",
-    "pytest-xdist>=3.0.0",
     "build>=1.0.0",
     "pre-commit>=3.6.0",
 ]
@@ -147,7 +155,14 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+# PT (flake8-pytest-style, #128) is enabled here in `select` but effectively
+# scoped to tests/: ruff has no per-file *select*, only per-file *ignore*, so
+# it is turned back off for every non-test path below. It is also a no-op in
+# practice for the rest of the repo -- no pyrite/, extensions/*/pyrite_*/ or
+# scripts/ file uses a pytest construct (fixture/parametrize/raises) that PT
+# matches -- but the per-file-ignore makes "PT applies to tests/ only" true
+# by construction, not by accident of what the code happens to contain.
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "PT"]
 ignore = [
     "E501",  # Line too long (handled by formatter)
     "B008",  # Function call in argument defaults (standard Typer pattern)
@@ -158,5 +173,16 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Test files: unused imports (fixtures, side effects), unused assignments,
-# import order, and module-level imports not at top (importorskip pattern)
-"tests/*" = ["F401", "F841", "E402", "I001"]
+# import order, and module-level imports not at top (importorskip pattern).
+# Four PT (#128) rules ignored here, each judgment-required rather than
+# mechanical (14 mechanical PT001/PT006/PT022 findings were fixed instead,
+# not ignored):
+#   PT011 -- pytest.raises(ValueError) needs a match= chosen per call site
+#   PT012 -- raises-block-is-one-statement needs restructuring per call site
+#   PT018 -- splitting a compound assert changes its failure message; needs
+#            a human picking the message, not a mechanical split
+#   PT019 -- converting `_fixture` params to @pytest.mark.usefixtures touches
+#            every call site's signature; no autofix exists even unsafely
+"tests/*" = ["F401", "F841", "E402", "I001", "PT011", "PT012", "PT018", "PT019"]
+# PT is pytest-only style; turn it off everywhere that isn't a test file.
+"!tests/**" = ["PT"]
