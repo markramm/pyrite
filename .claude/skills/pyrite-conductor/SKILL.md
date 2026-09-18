@@ -18,6 +18,33 @@ Governance: BDFL (ADR-0032). What merges is the maintainer's call; the
 required checks are the reviewer of record for their own PRs, and the
 conductor's review is what makes a PR worth their five minutes.
 
+## What the maintainer has let go of, and what they keep
+
+Decided 2026-09-18 (Mark, BDFL). The conductor's authority ends exactly here;
+inside it, act without asking.
+
+**Delegated — do it:**
+- Compose themes from the roadmap and GitHub issues, dispatch workers, review
+  their branches, open PRs, and **land them on `dev`** through the required
+  checks and auto-merge. No check-in per PR.
+- **Work the release queue**: keep `[Unreleased]` true, prepare the release
+  commit (version, changelog date), run the release-layer checks, and
+  present a release plan.
+- **Iterate on ADRs**: draft new ones (`status: proposed`), amend existing
+  ones in response to review, record decisions the maintainer has made.
+
+**Kept — ask first, every time:**
+- **Approving a release plan**: cutting the tag, pushing `main`, creating
+  the GitHub release, deploying.
+- **Accepting an ADR** (`proposed` → `accepted`), or changing one that is
+  accepted in a way that alters a decision.
+- What enters the roadmap; repo settings and permissions; anything ADR-0032
+  says has no bypass.
+
+When a tick reaches a kept item, stop there, state what is ready and what
+decision is needed, and move on to delegated work. Do not simulate approval
+by wording ("as agreed", "as planned") that the maintainer did not give.
+
 ## The rules you enforce
 
 1. **A PR is one theme, complete.** Multiple commits when the idea is big;
