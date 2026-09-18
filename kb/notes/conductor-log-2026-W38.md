@@ -1836,3 +1836,48 @@ Also flagged on the PR: this worktree still holds unrelated modified files
 `kb/tasks/`, `tests/usability/`). The worker found 12 of them *staged*,
 unstaged them and committed explicit paths only — correct behaviour, #119
 recurring. They need an owner before anyone pushes from that tree.
+
+### Correction: the "two overstated rows" was my error, not the worker's
+
+Retracted on the PR. The worker root-caused it and I reproduced the result:
+**we reverted different file sets and both readings were correct for what each
+reverted.**
+
+The two tests guard the `body:`/`file_path:` leak, fixed in
+`pyrite/storage/repository.py:90-97`, not in `base.py`. Same commit, same
+interpreter:
+
+| revert set | those two tests |
+|---|---|
+| `base.py` only (mine) | 2 passed |
+| all four theme impl files (the worker's) | 2 failed |
+
+My assertion — `grep -c _frontmatter_for_file` → 0 — was *true*, and proved
+only that `base.py` went back. It said nothing about the other three files, and
+these tests happen to be guarded by the one I did not revert.
+
+So this is the adjacent failure mode to #121, and the subtler one: #121 is
+"the revert silently didn't happen"; this is **"the revert happened, to less
+than you meant."** Three files quietly staying at HEAD looks identical to a
+correct run. Added to #121: the replacement must `git diff --quiet $BASE --
+$IMPL` over the whole revert set rather than grep one sentinel in one file, and
+the caller must name the theme's full implementation footprint.
+
+Two process points I want the retro to have:
+
+1. **I wrote "a worker's red/green table is model output like any other" while
+   my own check was the narrower one.** The principle is fine; I applied it to
+   deflect rather than to verify, and the asymmetry — conductor doubts worker,
+   worker re-derives and turns out right — is the failure mode worth watching.
+   It cost nothing here only because the worker pushed back with a reproduction
+   instead of deferring.
+2. Twice in one tick a worker improved on a conductor instruction (the
+   `to_frontmatter` placement, then this). Its own account of why it caught the
+   first is worth adopting verbatim: it grepped the callers of the method
+   before filtering it — `storage/index.py:250` answered it in one read.
+   **Cheap check as habit, not instinct.**
+
+Verdict unchanged: theme holds, #69 stays draft on red `dev` + tripped breaker.
+Noted without a causal claim: the red-`dev` 3.13 `fixture 'configs' not found`
+is in the same file as #127 but is a different failure; no evidence they are
+related.
