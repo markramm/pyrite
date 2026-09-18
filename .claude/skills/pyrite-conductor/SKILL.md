@@ -94,11 +94,13 @@ items also get `pyrite sw claim` so the board agrees.
 **Review lane.** [review.md](review.md), including the cold read.
 
 **Test lanes, dispatched when the review lane or the release asks for them:**
-- **Exploratory UI testing** — an agent with the Playwright MCP tools
-  (`browser_navigate`, `browser_snapshot`, `browser_click`, ...) against a
-  live server in a worktree, given a persona and a goal, not a script. It
-  reports what confused it or broke, with steps; findings become issues or
-  spec additions. This is where a new screen earns its Playwright spec.
+- **Exploratory UI testing** — `pyrite-explorer` drives a real browser
+  (the Playwright MCP tools or the Claude-in-Chrome extension, whichever the
+  session has) against a live server in a worktree, given a persona and a
+  goal, not a script. It reports what confused it or broke, with steps.
+  Findings become GitHub issues, and the flows worth keeping become
+  **Playwright specs** — scripted, repeatable, run in CI on `main`. The two
+  are complementary: exploring finds what to test; Playwright keeps it tested.
 - **Hallway testing with agent users** — the `tcp-skills:hallway-agent-testing`
   skill: an agent uses Pyrite's CLI/MCP to do a real task and files friction.
   Cheap, and it is how the tool got good.
