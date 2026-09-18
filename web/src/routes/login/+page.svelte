@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { ApiError } from '$lib/api/client';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { brandStore } from '$lib/stores/brand.svelte';
 
@@ -25,7 +26,15 @@
 			await authStore.login(username, password);
 			goto('/');
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Login failed';
+			// `ApiError.message` is the developer-facing string ("API Error 401:
+			// Invalid username or password"); `.detail` is the server's own
+			// message, which is what a person mistyping a password should read.
+			// Showing `.message` here leaked the HTTP status into the login form.
+			if (err instanceof ApiError) {
+				error = err.detail;
+			} else {
+				error = err instanceof Error ? err.message : 'Login failed';
+			}
 		} finally {
 			submitting = false;
 		}
@@ -51,7 +60,14 @@
 		</div>
 
 		{#if error}
-			<div class="rounded border border-red-800 bg-red-900/30 px-3 py-2 text-sm text-red-300">
+			<!-- role="alert" so a screen reader announces the failure, and a
+			     data-testid because this element has no stable accessible name
+			     to locate it by (its text is the thing under test). -->
+			<div
+				role="alert"
+				data-testid="login-error"
+				class="rounded border border-red-800 bg-red-900/30 px-3 py-2 text-sm text-red-300"
+			>
 				{error}
 			</div>
 		{/if}

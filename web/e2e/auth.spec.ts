@@ -1,142 +1,258 @@
-import { test, expect } from '@playwright/test';
+/**
+ * The login and registration surface, against a backend where auth is ON.
+ *
+ * # The decision this file records (Package C)
+ *
+ * Package A built the e2e world with `PYRITE_AUTH_ENABLED=false`, which makes
+ * `verify_api_key` resolve every caller to `admin`, and left the auth specs an
+ * explicit choice (`fixtures.ts`): skip them under that world, or run them
+ * under their own auth-enabled project. **This file takes the second option.**
+ *
+ * The reason is that under the auth-disabled world these tests assert nothing.
+ * `/login` still renders — it is a route with a form — but nothing is behind
+ * it: `POST /auth/login` returns `400 "Authentication is not enabled"`
+ * (`auth_endpoints.py`), the root layout's gate
+ * (`authStore.authConfig.enabled && !isAuthenticated` in `+layout.svelte`)
+ * never fires, so no redirect to `/login` ever happens and no redirect away
+ * from it after login ever happens either. A spec there can assert that a
+ * username input exists and that typing into it works — which is a test of
+ * markup, not of the login path. 0.24.2's definition of done is that every
+ * user surface has an end-to-end test, and the surface here is "a real
+ * deployment's users log in", not "the login form has two inputs".
+ *
+ * So the specs below run under the `chromium-auth` project, against a second
+ * backend with `auth.enabled: true`, a second data directory, a second port
+ * and a second Vite dev server. The machinery and the reason each piece is
+ * separate are documented in `e2e/auth-setup.ts`; the user is created by
+ * `e2e/auth.setup.ts`. `playwright.config.ts` was extended additively: the
+ * existing `chromium` project gained a `testIgnore` for this file and nothing
+ * else about it changed.
+ *
+ * What that buys, concretely — every one of these is false under the
+ * auth-disabled world and true here:
+ *
+ *   - an unauthenticated visit to an app route is redirected to `/login`;
+ *   - wrong credentials produce the API's real 401 and a visible error;
+ *   - correct credentials produce a session and land the user in the app;
+ *   - a logged-in user visiting `/login` is redirected out of it;
+ *   - the register link appears because the server says registration is
+ *     allowed, not because the markup always contains it.
+ *
+ * # Locator rules (this package's acceptance criteria)
+ *
+ * No `text=` locators; role, label and href only, plus one `data-testid` where
+ * neither exists (see `login-error`/`register-error` below). No `.first()`.
+ *
+ * # A product bug this project found and fixed
+ *
+ * Asserting on the real error text — which only an auth-enabled world can
+ * produce — showed that both forms rendered `ApiError.message`, the
+ * developer-facing string, so a person mistyping their password read
+ * "API Error 401: Invalid username or password". `ApiError` already carries
+ * `.detail` (the server's own message) for exactly this; both routes now use
+ * it. A one-line fix inside this package's footprint, so it is fixed rather
+ * than `test.fixme`d. Under the auth-disabled world this was unreachable: the
+ * submission never gets far enough to produce a 401.
+ */
+import { test, expect, type Page } from '@playwright/test';
 
-test.describe('Login Page', () => {
-	test('login page loads', async ({ page }) => {
-		await page.goto('/login');
-		await expect(page).toHaveTitle(/Login/);
-		await expect(page.getByRole('heading', { name: 'Pyrite' })).toBeVisible();
-		await expect(page.locator('text=Sign in to your account')).toBeVisible();
-	});
+import { SEEDED_USER, UNKNOWN_USER } from './auth-setup';
 
-	test('login form has username field', async ({ page }) => {
-		await page.goto('/login');
-		const usernameInput = page.locator('input#username');
-		await expect(usernameInput).toBeVisible();
-		await expect(usernameInput).toHaveAttribute('type', 'text');
-		await expect(usernameInput).toHaveAttribute('required', '');
-		// Label is present
-		await expect(page.locator('label[for="username"]')).toContainText('Username');
-	});
+/**
+ * Log in through the form, the way a user does.
+ *
+ * Not an API call with a cookie injected: the point of this project is that
+ * the browser path works, and a helper that bypassed the form would make the
+ * post-login assertions vacuous.
+ */
+async function loginAs(page: Page, username: string, password: string): Promise<void> {
+	await page.goto('/login');
+	await page.getByLabel('Username').fill(username);
+	await page.getByLabel('Password').fill(password);
+	await page.getByRole('button', { name: 'Sign in' }).click();
+}
 
-	test('login form has password field', async ({ page }) => {
-		await page.goto('/login');
-		const passwordInput = page.locator('input#password');
-		await expect(passwordInput).toBeVisible();
-		await expect(passwordInput).toHaveAttribute('type', 'password');
-		await expect(passwordInput).toHaveAttribute('required', '');
-		await expect(page.locator('label[for="password"]')).toContainText('Password');
-	});
-
-	test('login form has submit button', async ({ page }) => {
-		await page.goto('/login');
-		const submitBtn = page.locator('button[type="submit"]');
-		await expect(submitBtn).toBeVisible();
-		await expect(submitBtn).toContainText('Sign in');
-	});
-
-	test('login form fields accept input', async ({ page }) => {
-		await page.goto('/login');
-		const usernameInput = page.locator('input#username');
-		const passwordInput = page.locator('input#password');
-
-		await usernameInput.fill('testuser');
-		await passwordInput.fill('testpassword');
-
-		await expect(usernameInput).toHaveValue('testuser');
-		await expect(passwordInput).toHaveValue('testpassword');
-	});
-
-	test('login page has link to register when registration is allowed', async ({ page }) => {
-		await page.goto('/login');
-		// The register link is conditionally rendered based on authConfig.allow_registration
-		// Check if it exists — it may or may not depending on server config
-		const registerLink = page.locator('a[href="/register"]');
-		const hasRegisterLink = await registerLink.isVisible({ timeout: 3000 }).catch(() => false);
-
-		if (hasRegisterLink) {
-			await expect(registerLink).toContainText('Register');
-		}
-		// If not visible, registration is disabled — that is valid behavior
-	});
-
-	test('login page shows Pyrite branding', async ({ page }) => {
-		await page.goto('/login');
-		await expect(page.locator('h1')).toContainText('Pyrite');
+test.describe('Auth is enabled in this project', () => {
+	// The guard for every other test in the file. If this fails, the project is
+	// pointed at the wrong backend and every assertion below is meaningless
+	// (and several would still pass, which is exactly the failure mode this
+	// package exists to remove).
+	test('the backend this project talks to reports auth enabled', async ({ page }) => {
+		const response = await page.request.get('/auth/config');
+		expect(response.ok()).toBeTruthy();
+		const config = await response.json();
+		expect(config.enabled).toBe(true);
+		expect(config.allow_registration).toBe(true);
+		expect(config.anonymous_tier).toBe('none');
 	});
 });
 
-test.describe('Register Page', () => {
-	test('register page loads', async ({ page }) => {
-		await page.goto('/register');
-		await expect(page).toHaveTitle(/Register/);
-		await expect(page.getByRole('heading', { name: 'Pyrite' })).toBeVisible();
-		await expect(page.locator('text=Create your account')).toBeVisible();
+test.describe('The auth gate', () => {
+	test('an unauthenticated visit to an app route is sent to /login', async ({ page }) => {
+		// `/entries` is an ordinary app route, not an auth route. With auth on
+		// and no session, +layout.svelte's onMount gate redirects.
+		await page.goto('/entries');
+		await expect(page).toHaveURL(/\/login$/);
+		await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 	});
 
-	test('register form has username field', async ({ page }) => {
-		await page.goto('/register');
-		const usernameInput = page.locator('input#username');
-		await expect(usernameInput).toBeVisible();
-		await expect(usernameInput).toHaveAttribute('required', '');
-		await expect(page.locator('label[for="username"]')).toContainText('Username');
+	test('the API refuses an unauthenticated request', async ({ page }) => {
+		// The other half of the same contract: the gate is a convenience, the
+		// 401 is the enforcement. Under the auth-disabled world this is a 200.
+		const response = await page.request.get('/api/kbs');
+		expect(response.status()).toBe(401);
+	});
+});
+
+test.describe('Login page', () => {
+	test.beforeEach(async ({ page }) => {
+		await page.goto('/login');
 	});
 
-	test('register form has display name field (optional)', async ({ page }) => {
-		await page.goto('/register');
-		const displayNameInput = page.locator('input#display-name');
-		await expect(displayNameInput).toBeVisible();
-		// Display name is optional — no required attribute
-		await expect(page.locator('label[for="display-name"]')).toContainText('Display Name');
-		await expect(page.locator('label[for="display-name"]')).toContainText('optional');
+	test('shows the brand heading and the sign-in prompt', async ({ page }) => {
+		// The login route renders outside the app shell (+layout.svelte's
+		// AUTH_ROUTES branch), so its <h1> is the only level-1 heading on the
+		// page — no sidebar logo to collide with, hence no scoping needed and
+		// no `.first()`.
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pyrite');
+		await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 	});
 
-	test('register form has password field', async ({ page }) => {
-		await page.goto('/register');
-		const passwordInput = page.locator('input#password');
-		await expect(passwordInput).toBeVisible();
-		await expect(passwordInput).toHaveAttribute('type', 'password');
-		await expect(passwordInput).toHaveAttribute('required', '');
-		await expect(page.locator('label[for="password"]')).toContainText('Password');
+	test('has a required username field', async ({ page }) => {
+		const username = page.getByLabel('Username');
+		await expect(username).toBeVisible();
+		await expect(username).toHaveAttribute('type', 'text');
+		await expect(username).toHaveAttribute('required', '');
 	});
 
-	test('register form has confirm password field', async ({ page }) => {
-		await page.goto('/register');
-		const confirmInput = page.locator('input#confirm-password');
-		await expect(confirmInput).toBeVisible();
-		await expect(confirmInput).toHaveAttribute('type', 'password');
-		await expect(confirmInput).toHaveAttribute('required', '');
-		await expect(page.locator('label[for="confirm-password"]')).toContainText('Confirm Password');
+	test('has a required password field', async ({ page }) => {
+		const password = page.getByLabel('Password');
+		await expect(password).toBeVisible();
+		await expect(password).toHaveAttribute('type', 'password');
+		await expect(password).toHaveAttribute('required', '');
 	});
 
-	test('register form has submit button', async ({ page }) => {
-		await page.goto('/register');
-		const submitBtn = page.locator('button[type="submit"]');
-		await expect(submitBtn).toBeVisible();
-		await expect(submitBtn).toContainText('Create account');
+	test('links to registration because the server allows it', async ({ page }) => {
+		// The link is rendered only when `authConfig.allow_registration` is
+		// true, and this world's backend sets it true explicitly
+		// (AUTH_E2E_ENV) — so this asserts on the seeded world's contract, not
+		// on "the link may or may not be there".
+		const registerLink = page.getByRole('link', { name: 'Register' });
+		await expect(registerLink).toHaveAttribute('href', '/register');
+	});
+});
+
+test.describe('Signing in', () => {
+	test('wrong credentials leave the user on /login with an error', async ({ page }) => {
+		await loginAs(page, UNKNOWN_USER.username, UNKNOWN_USER.password);
+
+		// The message is the API's own 401 detail, surfaced by the auth store.
+		// Under the auth-disabled world the same submission fails with
+		// "Authentication is not enabled" instead — a different world, a
+		// different message, which is the point.
+		await expect(page.getByTestId('login-error')).toHaveText('Invalid username or password');
+		await expect(page).toHaveURL(/\/login$/);
 	});
 
-	test('register form fields accept input', async ({ page }) => {
-		await page.goto('/register');
-		await page.locator('input#username').fill('newuser');
-		await page.locator('input#display-name').fill('New User');
-		await page.locator('input#password').fill('securepass123');
-		await page.locator('input#confirm-password').fill('securepass123');
+	test('the right credentials sign the user in and land them in the app', async ({ page }) => {
+		await loginAs(page, SEEDED_USER.username, SEEDED_USER.password);
 
-		await expect(page.locator('input#username')).toHaveValue('newuser');
-		await expect(page.locator('input#display-name')).toHaveValue('New User');
-		await expect(page.locator('input#password')).toHaveValue('securepass123');
-		await expect(page.locator('input#confirm-password')).toHaveValue('securepass123');
+		// The login handler navigates to `/` on success; arriving there with the
+		// app shell rendered (rather than being bounced back to /login by the
+		// gate) is the proof that the session cookie was set and accepted.
+		await expect(page).toHaveURL(/localhost:\d+\/$/);
+		await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
 	});
 
-	test('register page has link to login', async ({ page }) => {
-		await page.goto('/register');
-		const loginLink = page.locator('a[href="/login"]');
-		await expect(loginLink).toBeVisible();
-		await expect(loginLink).toContainText('Sign in');
+	test('a signed-in user is redirected away from /login', async ({ page }) => {
+		await loginAs(page, SEEDED_USER.username, SEEDED_USER.password);
+		await expect(page).toHaveURL(/localhost:\d+\/$/);
+
+		// Second half of the gate in +layout.svelte: enabled && authenticated &&
+		// on an auth route -> goto('/').
+		await page.goto('/login');
+		await expect(page).toHaveURL(/localhost:\d+\/$/);
 	});
 
-	test('register page shows Pyrite branding', async ({ page }) => {
+	test('a signed-in user can reach an app route the gate refused before', async ({ page }) => {
+		await loginAs(page, SEEDED_USER.username, SEEDED_USER.password);
+		await expect(page).toHaveURL(/localhost:\d+\/$/);
+
+		await page.goto('/entries');
+		await expect(page).toHaveURL(/\/entries$/);
+		await expect(page.getByRole('heading', { name: 'Entries', level: 1 })).toHaveCount(1);
+	});
+});
+
+test.describe('Register page', () => {
+	test.beforeEach(async ({ page }) => {
 		await page.goto('/register');
-		await expect(page.locator('h1')).toContainText('Pyrite');
+	});
+
+	test('shows the brand heading and the create-account action', async ({ page }) => {
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pyrite');
+		await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible();
+	});
+
+	test('has the four account fields with their required-ness', async ({ page }) => {
+		const username = page.getByLabel('Username');
+		await expect(username).toHaveAttribute('required', '');
+
+		// Display name is the only optional one; its label says so.
+		const displayName = page.getByLabel('Display Name (optional)');
+		await expect(displayName).toBeVisible();
+		await expect(displayName).not.toHaveAttribute('required', '');
+
+		// `Password` and `Confirm Password` are distinct accessible names, so
+		// an exact match keeps each a single element without `.first()`.
+		const password = page.getByLabel('Password', { exact: true });
+		await expect(password).toHaveAttribute('type', 'password');
+		await expect(password).toHaveAttribute('required', '');
+		// The API enforces 8 characters; the form declares the same minimum.
+		await expect(password).toHaveAttribute('minlength', '8');
+
+		const confirm = page.getByLabel('Confirm Password');
+		await expect(confirm).toHaveAttribute('type', 'password');
+		await expect(confirm).toHaveAttribute('required', '');
+	});
+
+	test('does not ask for an invite code, because this world does not require one', async ({
+		page
+	}) => {
+		// Rendered only when `authConfig.require_invite_code`; the seeded world
+		// leaves it at its default of false.
+		await expect(page.getByLabel('Invite Code')).toHaveCount(0);
+	});
+
+	test('links back to the login page', async ({ page }) => {
+		await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
+	});
+
+	test('mismatched passwords are rejected client-side', async ({ page }) => {
+		await page.getByLabel('Username').fill('e2e-mismatch');
+		await page.getByLabel('Password', { exact: true }).fill('e2e-password-123');
+		await page.getByLabel('Confirm Password').fill('e2e-password-456');
+		await page.getByRole('button', { name: 'Create account' }).click();
+
+		await expect(page.getByTestId('register-error')).toHaveText('Passwords do not match');
+		await expect(page).toHaveURL(/\/register$/);
+	});
+
+	test('a duplicate username is rejected by the server', async ({ page }) => {
+		// SEEDED_USER already exists (auth.setup.ts registered it), so this
+		// exercises the real server-side uniqueness check rather than a
+		// client-side guess. It is also why this spec does not register a NEW
+		// user: a successful registration auto-logs-in and mutates the shared
+		// world, and the "first user is admin" invariant the setup depends on
+		// must hold for the whole run.
+		await page.getByLabel('Username').fill(SEEDED_USER.username);
+		await page.getByLabel('Password', { exact: true }).fill('e2e-password-123');
+		await page.getByLabel('Confirm Password').fill('e2e-password-123');
+		await page.getByRole('button', { name: 'Create account' }).click();
+
+		// The server's own message (`AuthService.register`), not a client-side
+		// guess and not the developer-facing "API Error 400: ..." string.
+		await expect(page.getByTestId('register-error')).toHaveText('Username already taken');
+		await expect(page).toHaveURL(/\/register$/);
 	});
 });

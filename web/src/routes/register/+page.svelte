@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { ApiError } from '$lib/api/client';
 	import { authStore } from '$lib/stores/auth.svelte';
 	import { brandStore } from '$lib/stores/brand.svelte';
 	import { onMount } from 'svelte';
@@ -39,7 +40,13 @@
 			await authStore.register(username, password, displayName || undefined, inviteCode || undefined);
 			goto('/');
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Registration failed';
+			// Same as the login page: `.detail` is the server's message,
+			// `.message` is the developer-facing one with the HTTP status in it.
+			if (err instanceof ApiError) {
+				error = err.detail;
+			} else {
+				error = err instanceof Error ? err.message : 'Registration failed';
+			}
 		} finally {
 			submitting = false;
 		}
@@ -66,7 +73,14 @@
 
 		<form onsubmit={handleSubmit} class="space-y-4">
 			{#if error}
-				<div class="rounded border border-red-800 bg-red-900/30 px-3 py-2 text-sm text-red-300">
+				<!-- role="alert" so a screen reader announces the failure, and a
+				     data-testid because this element has no stable accessible
+				     name to locate it by (its text is the thing under test). -->
+				<div
+					role="alert"
+					data-testid="register-error"
+					class="rounded border border-red-800 bg-red-900/30 px-3 py-2 text-sm text-red-300"
+				>
 					{error}
 				</div>
 			{/if}
