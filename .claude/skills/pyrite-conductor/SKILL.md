@@ -57,6 +57,61 @@ by wording ("as agreed", "as planned") that the maintainer did not give.
 4. **Two trackers, one rule** (ADR-0033): bugs and requests in GitHub, the
    roadmap in `kb/`. Read both before choosing anything.
 
+## Three lanes, one tick
+
+The wave model ran one batch at a time and waited. The conductor pipelines
+instead — each tick advances three lanes that are always at different stages:
+
+```
+LANE        who works it                          this tick's output
+GROOM       architect + PM archetypes (dispatched) the NEXT set: themes with acceptance, footprints, model
+BUILD       pyrite-worker per theme (dispatched)   the CURRENT set: branches reaching "done"
+REVIEW      the conductor (+ pyrite-reviewer)      the PREVIOUS set: branches -> PRs -> merged
+```
+
+While workers build set N, the groom lane is breaking down set N+1 and the
+review lane is landing set N-1. A tick therefore rarely waits on anything:
+if workers are still running, groom and review still have work.
+
+**Groom lane.** Dispatch two read-only agents on the same inputs (the open
+issues, `pyrite sw backlog`, the roadmap's next release, the last tick's
+report) and reconcile their outputs yourself:
+- the **architect** (`pyrite-architect`, strongest model) reads the code the
+  candidates touch and produces the breakdown: themes, file footprints,
+  sequencing, which need Opus and which Sonnet, what is design-shaped enough
+  to want an ADR first;
+- the **PM** reads the trackers and the roadmap's definition of done and
+  produces the ordering: what unblocks what, what the release owes, what a
+  user would notice.
+The conductor merges the two into specs ([dispatch.md](dispatch.md)) and
+does not dispatch a theme the architect flagged as needing a decision the
+maintainer has kept.
+
+**Build lane.** Workers in their own worktrees; the kanban carries state
+(`pyrite sw claim` / `sw submit` / `sw review-queue`, or the GitHub issue's
+assignee for issue-driven themes), so a tick can read who holds what without
+a running agent's memory.
+
+**Review lane.** [review.md](review.md), including the cold read.
+
+**Test lanes, dispatched when the review lane or the release asks for them:**
+- **Exploratory UI testing** — an agent with the Playwright MCP tools
+  (`browser_navigate`, `browser_snapshot`, `browser_click`, ...) against a
+  live server in a worktree, given a persona and a goal, not a script. It
+  reports what confused it or broke, with steps; findings become issues or
+  spec additions. This is where a new screen earns its Playwright spec.
+- **Hallway testing with agent users** — the `tcp-skills:hallway-agent-testing`
+  skill: an agent uses Pyrite's CLI/MCP to do a real task and files friction.
+  Cheap, and it is how the tool got good.
+- **Manual-test scripts** — a Sonnet worker turns a release's user-visible
+  changes into a checklist a human can run in ten minutes, when the change is
+  one a browser test cannot judge (layout, wording, feel).
+
+**Deterministic pipelines.** When the maintainer opts into it ("use a
+workflow"), the `Workflow` tool runs the fan-out as a script — groom, then
+parallel builds, then reviews — with the same agents; it is the loop of loops
+written down. Default to the Agent tool and this tick otherwise.
+
 ## The tick
 
 ```
