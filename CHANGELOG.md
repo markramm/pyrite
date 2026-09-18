@@ -204,6 +204,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **A bare YAML date in frontmatter (`created_at: 2026-01-15`) read back as
+  the load time instead of the file's date.** The YAML parser produces a
+  `datetime.date` for a bare date, and `parse_datetime` only handled
+  `datetime`/`str`, so the value fell through to the "now" fallback. Bare
+  dates are now anchored to midnight UTC, and a naive ISO-8601 string is
+  anchored to UTC as well, so comparisons against `_utcnow()` cannot raise
+  `TypeError` (#151).
 - **Two worktrees running the Playwright e2e suite at once collided on the
   same four ports (8088/5173 base, 8189/5274 auth) and could end up talking
   to each other's world.** Ports and data directories are now derived per
