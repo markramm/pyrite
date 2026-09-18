@@ -2133,3 +2133,23 @@ forward, 6 issues filed by this conductor (#86, #103, #104, #107, #109, #133),
 5 by its workers (#88, #89, #117, #118, #130, #131). First cold read of the loop,
 and it changed the outcome twice — once by finding the fixture's false claim,
 once by calling the `@classmethod` risk I then mis-filed as a trade-off.
+
+## Tick 2026-09-18T09:20Z (tick 6 — host-run; the loop restarted by the maintainer as `/loop 20m /pyrite-conductor` after retro 3)
+
+**Health.** `dev` green at 4e34b80 (full matrix, 09:05Z). Load 6.9 (from 51 at the peak). Open loop PRs: #69 (ready, auto-merge armed, gate running after the host's rebase and re-verification: 4285 passed, footprint 13 files, #87 fixture re-run by hand) and #70 (the log). Outside PRs: 0 — #116, #108, #126 all merged by the maintainer this hour; #97 and #57 closed. Milestone 0.24.2 open: #118 #87 #56 #46 #21 #18 #13 #9 (#46 #18 #21 #87 close with #69). Worktrees: only #69's and the log.
+
+**Absorb.** Nothing waiting — every worker report before this tick was absorbed (C merged at 08:22Z by a revived tick; #69 by the host).
+
+**Groom.** Ready queue was under twice the cap → `pyrite-architect` dispatched over: milestone #56/#9/#13, the DoD items without a theme (packaged web UI, README, docs counts, CI parity lint, version single-source, Playwright F/G/H), the pool rows, the worker findings, the quality stock. It was told which issues are `good first issue` and reserved for outside contributors for 24 h.
+
+**Dispatched (3 workers; cap by review queue = 0 awaiting, ≤2 heavy → 1 heavy):**
+| Theme | PR | Model | heavy |
+|---|---|---|---|
+| Playwright package A.1 — per-worktree ports and data dir (#118) | #138 | sonnet | yes — the only Playwright process allowed |
+| Pin the test runner (#128; quality) | #139 | sonnet | no |
+| `scripts/release.py` (0.24.2 DoD) | #140 | opus | no |
+The round-trip identity gate waits for #69 to merge (next tick). Claims: the backlog item as first commit on each branch — two created (`playwright-package-a-1…`, `scripts-release-py…`), one hand-edited to `in_progress` because `pyrite update` is #46 until #69 lands.
+
+**Friction.** Tick 5 reported creating the A.1 backlog item; it was not on `dev` (created in a worktree and never pushed, or on the log branch) — the record a tick leaves must be pushed to be a record (filed). The skill loaded from the main checkout was stale (behind `origin/dev` by retro 3): fast-forwarded before running.
+
+**Blocked / needs the maintainer.** Nothing. The next kept item is the release plan, several themes away.
