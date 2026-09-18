@@ -292,17 +292,24 @@ class TestRealKBRoundTrip:
     def test_walk_is_fast(self, real_kb_walk):
         """The default suite must stay fast: this file's real-corpus walk
 
-        under 10s. Measured directly (not asserted against a fixed file
-        count) so it stays honest if the corpus grows. Shares the single
+        well under a minute. Measured directly (not asserted against a fixed
+        file count) so it stays honest if the corpus grows. Shares the single
         walk in `real_kb_walk` with every other test in this class, so this
         measures the actual cost the default suite pays, not an inflated
         number from walking the corpus once per test.
+
+        The budget is deliberately loose. The walk takes ~2s on an idle
+        machine, but under `-n auto` next to two other full suites it took
+        over 10s and a 10s budget failed on load alone (CLAUDE.md: a fixed
+        wall-clock timeout that fails only under load is a bug in the test).
+        What this guards against is the naive one-walk-per-case shape, which
+        takes minutes; 60s catches that with room for a busy runner.
         """
         elapsed, _all_diffs = real_kb_walk
 
-        assert elapsed < 10.0, (
+        assert elapsed < 60.0, (
             f"load->save walk of the real kb/ took {elapsed:.2f}s, over the "
-            "10s budget for the default suite -- sample deterministically "
+            "60s budget for the default suite -- sample deterministically "
             "instead of walking the full corpus if this regresses"
         )
 
