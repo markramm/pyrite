@@ -83,8 +83,11 @@ class TestInvestigationEventValidation:
 class TestTransactionValidation:
     def test_valid_transaction(self):
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01",
-            sender="A", receiver="B",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            sender="A",
+            receiver="B",
         )
         errors = _validate_investigation_entry(entry)
         assert errors == []
@@ -96,30 +99,45 @@ class TestTransactionValidation:
 
     def test_missing_sender(self):
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01", receiver="B",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            receiver="B",
         )
         errors = _validate_investigation_entry(entry)
         assert any("sender" in e for e in errors)
 
     def test_missing_receiver(self):
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01", sender="A",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            sender="A",
         )
         errors = _validate_investigation_entry(entry)
         assert any("receiver" in e for e in errors)
 
     def test_bribe_requires_amount(self):
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01",
-            sender="A", receiver="B", transaction_type="bribe",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            sender="A",
+            receiver="B",
+            transaction_type="bribe",
         )
         errors = _validate_investigation_entry(entry)
         assert any("amount" in e for e in errors)
 
     def test_bribe_with_amount_valid(self):
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01",
-            sender="A", receiver="B", transaction_type="bribe", amount="500000",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            sender="A",
+            receiver="B",
+            transaction_type="bribe",
+            amount="500000",
         )
         errors = _validate_investigation_entry(entry)
         assert errors == []
@@ -127,16 +145,24 @@ class TestTransactionValidation:
     def test_donation_no_amount_ok(self):
         """Non-payment types don't require amount."""
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01",
-            sender="A", receiver="B", transaction_type="donation",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            sender="A",
+            receiver="B",
+            transaction_type="donation",
         )
         errors = _validate_investigation_entry(entry)
         assert errors == []
 
     def test_invalid_transaction_type(self):
         entry = TransactionEntry(
-            id="test", title="Test", date="2020-01-01",
-            sender="A", receiver="B", transaction_type="teleportation",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            sender="A",
+            receiver="B",
+            transaction_type="teleportation",
         )
         errors = _validate_investigation_entry(entry)
         assert any("transaction_type" in e for e in errors)
@@ -145,45 +171,64 @@ class TestTransactionValidation:
 class TestLegalActionValidation:
     def test_valid_legal_action(self):
         entry = LegalActionEntry(
-            id="test", title="Test", date="2020-01-01",
-            case_type="criminal", jurisdiction="US",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            case_type="criminal",
+            jurisdiction="US",
         )
         errors = _validate_investigation_entry(entry)
         assert errors == []
 
     def test_missing_date(self):
         entry = LegalActionEntry(
-            id="test", title="Test", case_type="criminal", jurisdiction="US",
+            id="test",
+            title="Test",
+            case_type="criminal",
+            jurisdiction="US",
         )
         errors = _validate_investigation_entry(entry)
         assert any("date" in e for e in errors)
 
     def test_missing_case_type(self):
         entry = LegalActionEntry(
-            id="test", title="Test", date="2020-01-01", jurisdiction="US",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            jurisdiction="US",
         )
         errors = _validate_investigation_entry(entry)
         assert any("case_type" in e for e in errors)
 
     def test_missing_jurisdiction(self):
         entry = LegalActionEntry(
-            id="test", title="Test", date="2020-01-01", case_type="criminal",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            case_type="criminal",
         )
         errors = _validate_investigation_entry(entry)
         assert any("jurisdiction" in e for e in errors)
 
     def test_invalid_case_type(self):
         entry = LegalActionEntry(
-            id="test", title="Test", date="2020-01-01",
-            case_type="kangaroo_court", jurisdiction="US",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            case_type="kangaroo_court",
+            jurisdiction="US",
         )
         errors = _validate_investigation_entry(entry)
         assert any("case_type" in e for e in errors)
 
     def test_invalid_case_status(self):
         entry = LegalActionEntry(
-            id="test", title="Test", date="2020-01-01",
-            case_type="criminal", jurisdiction="US", case_status="vibes",
+            id="test",
+            title="Test",
+            date="2020-01-01",
+            case_type="criminal",
+            jurisdiction="US",
+            case_status="vibes",
         )
         errors = _validate_investigation_entry(entry)
         assert any("case_status" in e for e in errors)
@@ -241,7 +286,10 @@ class TestFundingValidation:
 
     def test_invalid_mechanism(self):
         entry = FundingEntry(
-            id="test", title="Test", funder="[[x]]", recipient="[[y]]",
+            id="test",
+            title="Test",
+            funder="[[x]]",
+            recipient="[[y]]",
             mechanism="telepathy",
         )
         errors = _validate_investigation_entry(entry)
@@ -268,7 +316,9 @@ class TestEvidenceValidation:
 class TestClaimValidation:
     def test_valid_claim(self):
         entry = ClaimEntry(
-            id="test", title="Test", assertion="X paid Y",
+            id="test",
+            title="Test",
+            assertion="X paid Y",
         )
         errors = _validate_investigation_entry(entry)
         assert errors == []
@@ -280,7 +330,9 @@ class TestClaimValidation:
 
     def test_invalid_claim_status(self):
         entry = ClaimEntry(
-            id="test", title="Test", assertion="X paid Y",
+            id="test",
+            title="Test",
+            assertion="X paid Y",
             claim_status="bogus",
         )
         errors = _validate_investigation_entry(entry)
@@ -288,7 +340,9 @@ class TestClaimValidation:
 
     def test_invalid_confidence(self):
         entry = ClaimEntry(
-            id="test", title="Test", assertion="X paid Y",
+            id="test",
+            title="Test",
+            assertion="X paid Y",
             confidence="very_high",
         )
         errors = _validate_investigation_entry(entry)

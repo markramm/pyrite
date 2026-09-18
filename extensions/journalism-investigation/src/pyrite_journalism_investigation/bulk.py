@@ -100,13 +100,15 @@ def create_edge_batch(
         validation = validate_edge_batch([edge])
         if validation["invalid"] > 0:
             error_count += 1
-            entries.append({
-                "id": None,
-                "title": None,
-                "type": edge_type,
-                "status": "error",
-                "errors": validation["errors"][0]["errors"],
-            })
+            entries.append(
+                {
+                    "id": None,
+                    "title": None,
+                    "type": edge_type,
+                    "status": "error",
+                    "errors": validation["errors"][0]["errors"],
+                }
+            )
             continue
 
         # Generate title and ID
@@ -114,44 +116,52 @@ def create_edge_batch(
         entry_id = generate_entry_id(title)
 
         if dry_run:
-            entries.append({
-                "id": entry_id,
-                "title": title,
-                "type": edge_type,
-                "status": "would_create",
-            })
+            entries.append(
+                {
+                    "id": entry_id,
+                    "title": title,
+                    "type": edge_type,
+                    "status": "would_create",
+                }
+            )
             continue
 
         # Check for existing entry (duplicate detection)
         existing = db.get_entry(entry_id, kb_name)
         if existing is not None:
             skipped += 1
-            entries.append({
-                "id": entry_id,
-                "title": title,
-                "type": edge_type,
-                "status": "skipped",
-            })
+            entries.append(
+                {
+                    "id": entry_id,
+                    "title": title,
+                    "type": edge_type,
+                    "status": "skipped",
+                }
+            )
             continue
 
         # Build metadata from all fields
         metadata = dict(fields)
 
-        db.upsert_entry({
-            "id": entry_id,
-            "kb_name": kb_name,
-            "title": title,
-            "entry_type": edge_type,
-            "metadata": metadata,
-        })
+        db.upsert_entry(
+            {
+                "id": entry_id,
+                "kb_name": kb_name,
+                "title": title,
+                "entry_type": edge_type,
+                "metadata": metadata,
+            }
+        )
 
         created += 1
-        entries.append({
-            "id": entry_id,
-            "title": title,
-            "type": edge_type,
-            "status": "created",
-        })
+        entries.append(
+            {
+                "id": entry_id,
+                "title": title,
+                "type": edge_type,
+                "status": "created",
+            }
+        )
 
     return {
         "created": created,

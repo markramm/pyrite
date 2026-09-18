@@ -1,14 +1,12 @@
 """Tests for unified cross-KB search with result correlation."""
 
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.cross_kb_search import (
-    cross_kb_search,
     correlate_results,
+    cross_kb_search,
 )
+
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
@@ -29,63 +27,75 @@ def multi_kb_db(tmp_path):
     db.register_kb("known-entities", "known-entities", str(kb3_path))
 
     # KB A: investigation into ACME Corp
-    db.upsert_entry({
-        "id": "john-smith",
-        "kb_name": "investigation-a",
-        "title": "John Smith",
-        "entry_type": "person",
-        "body": "CEO of ACME Corp, suspected of fraud",
-        "importance": 8,
-        "tags": ["ceo", "suspect"],
-    })
-    db.upsert_entry({
-        "id": "acme-corp",
-        "kb_name": "investigation-a",
-        "title": "ACME Corporation",
-        "entry_type": "organization",
-        "body": "Target company under investigation for financial fraud",
-        "importance": 9,
-        "tags": ["company", "target"],
-    })
-    db.upsert_entry({
-        "id": "event-wire",
-        "kb_name": "investigation-a",
-        "title": "Suspicious wire transfer from ACME",
-        "entry_type": "transaction",
-        "body": "Wire transfer to offshore account",
-        "date": "2025-06-15",
-        "importance": 7,
-    })
+    db.upsert_entry(
+        {
+            "id": "john-smith",
+            "kb_name": "investigation-a",
+            "title": "John Smith",
+            "entry_type": "person",
+            "body": "CEO of ACME Corp, suspected of fraud",
+            "importance": 8,
+            "tags": ["ceo", "suspect"],
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "acme-corp",
+            "kb_name": "investigation-a",
+            "title": "ACME Corporation",
+            "entry_type": "organization",
+            "body": "Target company under investigation for financial fraud",
+            "importance": 9,
+            "tags": ["company", "target"],
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "event-wire",
+            "kb_name": "investigation-a",
+            "title": "Suspicious wire transfer from ACME",
+            "entry_type": "transaction",
+            "body": "Wire transfer to offshore account",
+            "date": "2025-06-15",
+            "importance": 7,
+        }
+    )
 
     # KB B: separate investigation also involving John Smith
-    db.upsert_entry({
-        "id": "john-smith-b",
-        "kb_name": "investigation-b",
-        "title": "John Smith",
-        "entry_type": "person",
-        "body": "Board member of BigCo, linked to lobbying",
-        "importance": 6,
-        "tags": ["board-member"],
-    })
-    db.upsert_entry({
-        "id": "bigco-inc",
-        "kb_name": "investigation-b",
-        "title": "BigCo Inc",
-        "entry_type": "organization",
-        "body": "Government contractor under investigation",
-        "importance": 7,
-    })
+    db.upsert_entry(
+        {
+            "id": "john-smith-b",
+            "kb_name": "investigation-b",
+            "title": "John Smith",
+            "entry_type": "person",
+            "body": "Board member of BigCo, linked to lobbying",
+            "importance": 6,
+            "tags": ["board-member"],
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "bigco-inc",
+            "kb_name": "investigation-b",
+            "title": "BigCo Inc",
+            "entry_type": "organization",
+            "body": "Government contractor under investigation",
+            "importance": 7,
+        }
+    )
 
     # Known entities KB: reference entry for John Smith
-    db.upsert_entry({
-        "id": "known-john-smith",
-        "kb_name": "known-entities",
-        "title": "John Smith",
-        "entry_type": "person",
-        "body": "Known entity: CEO of ACME Corp and board member of BigCo",
-        "importance": 5,
-        "metadata": {"aliases": ["J. Smith", "John Q. Smith"]},
-    })
+    db.upsert_entry(
+        {
+            "id": "known-john-smith",
+            "kb_name": "known-entities",
+            "title": "John Smith",
+            "entry_type": "person",
+            "body": "Known entity: CEO of ACME Corp and board member of BigCo",
+            "importance": 5,
+            "metadata": {"aliases": ["J. Smith", "John Q. Smith"]},
+        }
+    )
 
     yield db
     db.close()
@@ -131,7 +141,8 @@ class TestCrossKBSearch:
 
     def test_kb_filter(self, multi_kb_db):
         result = cross_kb_search(
-            multi_kb_db, "John Smith",
+            multi_kb_db,
+            "John Smith",
             kb_names=["investigation-a"],
         )
         kb_names = {g["kb_name"] for g in result["groups"]}
@@ -152,12 +163,27 @@ class TestCorrelateResults:
     def test_correlates_by_title(self, multi_kb_db):
         # Flat results with same title across KBs
         flat_results = [
-            {"id": "john-smith", "kb_name": "investigation-a", "title": "John Smith",
-             "entry_type": "person", "importance": 8},
-            {"id": "john-smith-b", "kb_name": "investigation-b", "title": "John Smith",
-             "entry_type": "person", "importance": 6},
-            {"id": "known-john-smith", "kb_name": "known-entities", "title": "John Smith",
-             "entry_type": "person", "importance": 5},
+            {
+                "id": "john-smith",
+                "kb_name": "investigation-a",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 8,
+            },
+            {
+                "id": "john-smith-b",
+                "kb_name": "investigation-b",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 6,
+            },
+            {
+                "id": "known-john-smith",
+                "kb_name": "known-entities",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 5,
+            },
         ]
         correlated = correlate_results(flat_results)
         assert len(correlated) >= 1
@@ -168,20 +194,40 @@ class TestCorrelateResults:
 
     def test_different_entities_not_correlated(self, multi_kb_db):
         flat_results = [
-            {"id": "john-smith", "kb_name": "investigation-a", "title": "John Smith",
-             "entry_type": "person", "importance": 8},
-            {"id": "acme-corp", "kb_name": "investigation-a", "title": "ACME Corporation",
-             "entry_type": "organization", "importance": 9},
+            {
+                "id": "john-smith",
+                "kb_name": "investigation-a",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 8,
+            },
+            {
+                "id": "acme-corp",
+                "kb_name": "investigation-a",
+                "title": "ACME Corporation",
+                "entry_type": "organization",
+                "importance": 9,
+            },
         ]
         correlated = correlate_results(flat_results)
         assert len(correlated) == 2
 
     def test_correlation_includes_kb_appearances(self, multi_kb_db):
         flat_results = [
-            {"id": "john-smith", "kb_name": "investigation-a", "title": "John Smith",
-             "entry_type": "person", "importance": 8},
-            {"id": "john-smith-b", "kb_name": "investigation-b", "title": "John Smith",
-             "entry_type": "person", "importance": 6},
+            {
+                "id": "john-smith",
+                "kb_name": "investigation-a",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 8,
+            },
+            {
+                "id": "john-smith-b",
+                "kb_name": "investigation-b",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 6,
+            },
         ]
         correlated = correlate_results(flat_results)
         john_group = correlated[0]
@@ -192,12 +238,27 @@ class TestCorrelateResults:
 
     def test_correlated_sorted_by_kb_count(self, multi_kb_db):
         flat_results = [
-            {"id": "john-smith", "kb_name": "investigation-a", "title": "John Smith",
-             "entry_type": "person", "importance": 8},
-            {"id": "john-smith-b", "kb_name": "investigation-b", "title": "John Smith",
-             "entry_type": "person", "importance": 6},
-            {"id": "acme-corp", "kb_name": "investigation-a", "title": "ACME Corporation",
-             "entry_type": "organization", "importance": 9},
+            {
+                "id": "john-smith",
+                "kb_name": "investigation-a",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 8,
+            },
+            {
+                "id": "john-smith-b",
+                "kb_name": "investigation-b",
+                "title": "John Smith",
+                "entry_type": "person",
+                "importance": 6,
+            },
+            {
+                "id": "acme-corp",
+                "kb_name": "investigation-a",
+                "title": "ACME Corporation",
+                "entry_type": "organization",
+                "importance": 9,
+            },
         ]
         correlated = correlate_results(flat_results)
         # John Smith (2 KBs) should rank before ACME Corp (1 KB)

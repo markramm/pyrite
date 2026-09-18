@@ -7,7 +7,7 @@ compatible with the capturecascade.org React viewer.
 import json
 import logging
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,8 +41,11 @@ def export_timeline(
         _backend = getattr(db, "_backend", None)
         if _backend:
             from sqlalchemy import text
+
             rows = _backend._session.execute(
-                text("SELECT entry_id, title, url, outlet, date, verified FROM source WHERE kb_name = :kb"),
+                text(
+                    "SELECT entry_id, title, url, outlet, date, verified FROM source WHERE kb_name = :kb"
+                ),
                 {"kb": kb_name},
             ).fetchall()
             for row in rows:
@@ -82,7 +85,9 @@ def export_timeline(
                 tags = [t.strip() for t in tags.split(",") if t.strip()]
 
             entry_id = r.get("id", "")
-            sources = r.get("sources") or _sources_by_entry.get(entry_id) or meta.get("sources") or []
+            sources = (
+                r.get("sources") or _sources_by_entry.get(entry_id) or meta.get("sources") or []
+            )
 
             event = {
                 "id": r.get("id", ""),
@@ -115,16 +120,10 @@ def export_timeline(
     events.sort(key=lambda e: e.get("date", ""))
 
     # Build actors list sorted by count descending
-    actors_list = [
-        {"name": name, "count": count}
-        for name, count in actor_counter.most_common()
-    ]
+    actors_list = [{"name": name, "count": count} for name, count in actor_counter.most_common()]
 
     # Build tags list sorted by count descending
-    tags_list = [
-        {"name": name, "count": count}
-        for name, count in tag_counter.most_common()
-    ]
+    tags_list = [{"name": name, "count": count} for name, count in tag_counter.most_common()]
 
     # Build stats
     dates = [e["date"] for e in events if e.get("date")]
@@ -139,7 +138,7 @@ def export_timeline(
         },
         "top_actors": actors_list[:20],
         "top_tags": tags_list[:20],
-        "generated": datetime.now(timezone.utc).isoformat(),
+        "generated": datetime.now(UTC).isoformat(),
     }
 
     return {
@@ -164,16 +163,12 @@ def write_export(result: dict[str, Any], output_dir: Path) -> None:
     for e in result["timeline"]:
         light = {k: v for k, v in e.items() if k not in ("body", "sources")}
         index_events.append(light)
-    (output_dir / "timeline-index.json").write_text(
-        json.dumps(index_events, ensure_ascii=False)
-    )
+    (output_dir / "timeline-index.json").write_text(json.dumps(index_events, ensure_ascii=False))
 
     (output_dir / "actors.json").write_text(
         json.dumps(result["actors"], indent=2, ensure_ascii=False)
     )
-    (output_dir / "tags.json").write_text(
-        json.dumps(result["tags"], indent=2, ensure_ascii=False)
-    )
+    (output_dir / "tags.json").write_text(json.dumps(result["tags"], indent=2, ensure_ascii=False))
     (output_dir / "stats.json").write_text(
         json.dumps(result["stats"], indent=2, ensure_ascii=False)
     )

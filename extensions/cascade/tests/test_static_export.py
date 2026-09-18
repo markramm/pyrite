@@ -1,13 +1,12 @@
 """Tests for Cascade timeline static export."""
 
 import json
-from pathlib import Path
 
 import pytest
 
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
+from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.services.kb_service import KBService
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
@@ -23,18 +22,36 @@ def setup(tmp_path):
     db = PyriteDB(tmp_path / "index.db")
     svc = KBService(config, db)
 
-    svc.create_entry("test", "event-1", "First event", "timeline_event",
-                     date="2025-01-20", actors=["Donald Trump", "FBI"],
-                     tags=["executive-power", "judiciary"],
-                     importance=8)
-    svc.create_entry("test", "event-2", "Second event", "timeline_event",
-                     date="2025-02-01", actors=["Donald Trump", "Elon Musk"],
-                     tags=["executive-power"],
-                     importance=7)
-    svc.create_entry("test", "event-3", "Third event", "timeline_event",
-                     date="2025-03-01", actors=["FBI", "Pete Hegseth"],
-                     tags=["judiciary"],
-                     importance=5)
+    svc.create_entry(
+        "test",
+        "event-1",
+        "First event",
+        "timeline_event",
+        date="2025-01-20",
+        actors=["Donald Trump", "FBI"],
+        tags=["executive-power", "judiciary"],
+        importance=8,
+    )
+    svc.create_entry(
+        "test",
+        "event-2",
+        "Second event",
+        "timeline_event",
+        date="2025-02-01",
+        actors=["Donald Trump", "Elon Musk"],
+        tags=["executive-power"],
+        importance=7,
+    )
+    svc.create_entry(
+        "test",
+        "event-3",
+        "Third event",
+        "timeline_event",
+        date="2025-03-01",
+        actors=["FBI", "Pete Hegseth"],
+        tags=["judiciary"],
+        importance=5,
+    )
 
     yield {"db": db, "svc": svc, "config": config, "kb_path": kb_path, "tmp_path": tmp_path}
     db.close()
@@ -125,8 +142,7 @@ class TestStaticExport:
     def test_date_filter(self, setup):
         from pyrite_cascade.static_export import export_timeline
 
-        result = export_timeline(setup["db"], "test",
-                                 from_date="2025-02-01", to_date="2025-02-28")
+        result = export_timeline(setup["db"], "test", from_date="2025-02-01", to_date="2025-02-28")
         assert len(result["timeline"]) == 1
         assert result["timeline"][0]["id"] == "event-2"
 
@@ -136,8 +152,12 @@ class TestStaticExport:
 
         # Create an event with sources via the service layer (which writes to source table)
         setup["svc"].create_entry(
-            "test", "event-sourced", "Sourced Event", "timeline_event",
-            date="2025-04-01", importance=7,
+            "test",
+            "event-sourced",
+            "Sourced Event",
+            "timeline_event",
+            date="2025-04-01",
+            importance=7,
             sources=[
                 {"title": "Washington Post", "url": "https://wapo.com/article", "outlet": "WaPo"},
                 {"title": "NPR Report", "url": "https://npr.org/report", "outlet": "NPR"},

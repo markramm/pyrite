@@ -1,6 +1,5 @@
 """Tests for Cascade entry type inheritance from journalism-investigation base types."""
 
-
 from pyrite_cascade.entry_types import TimelineEventEntry
 from pyrite_journalism_investigation.entry_types import InvestigationEventEntry
 
@@ -19,9 +18,7 @@ class TestTimelineEventInheritance:
 
     def test_entry_type_returns_timeline_event(self):
         """entry_type must still return 'timeline_event', not 'investigation_event'."""
-        entry = TimelineEventEntry(
-            id="te-001", title="Test Event", body=""
-        )
+        entry = TimelineEventEntry(id="te-001", title="Test Event", body="")
         assert entry.entry_type == "timeline_event"
 
 
@@ -78,7 +75,9 @@ class TestTimelineEventBackwardCompat:
 
     def test_actors_field_works_as_list_of_strings(self):
         entry = TimelineEventEntry(
-            id="te-003", title="Test", body="",
+            id="te-003",
+            title="Test",
+            body="",
             actors=["actor-1", "actor-2"],
         )
         assert entry.actors == ["actor-1", "actor-2"]

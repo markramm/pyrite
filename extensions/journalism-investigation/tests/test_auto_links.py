@@ -2,11 +2,9 @@
 
 import pytest
 
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
+from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.services.kb_service import KBService
-
-from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
@@ -31,8 +29,12 @@ class TestOwnershipAutoLinks:
         """Creating an ownership entry should add owns/owned_by links."""
         svc = setup["svc"]
         entry = svc.create_entry(
-            "test", "ownership-doe-shell", "Doe owns Shell Corp", "ownership",
-            owner="[[john-doe]]", asset="[[shell-corp]]",
+            "test",
+            "ownership-doe-shell",
+            "Doe owns Shell Corp",
+            "ownership",
+            owner="[[john-doe]]",
+            asset="[[shell-corp]]",
         )
         # The entry should have links added by the before_save hook
         link_targets = {(l.target, l.relation) for l in entry.links}
@@ -43,8 +45,12 @@ class TestOwnershipAutoLinks:
         """Ownership links should appear in backlinks queries."""
         svc, db = setup["svc"], setup["db"]
         svc.create_entry(
-            "test", "ownership-doe-shell", "Doe owns Shell Corp", "ownership",
-            owner="[[john-doe]]", asset="[[shell-corp]]",
+            "test",
+            "ownership-doe-shell",
+            "Doe owns Shell Corp",
+            "ownership",
+            owner="[[john-doe]]",
+            asset="[[shell-corp]]",
         )
         # Check outlinks from the ownership entry
         outlinks = db.get_outlinks("ownership-doe-shell", "test")
@@ -57,8 +63,12 @@ class TestMembershipAutoLinks:
     def test_membership_generates_links(self, setup):
         svc = setup["svc"]
         entry = svc.create_entry(
-            "test", "membership-doe-acme", "Doe at ACME", "membership",
-            person="[[john-doe]]", organization="[[acme-corp]]",
+            "test",
+            "membership-doe-acme",
+            "Doe at ACME",
+            "membership",
+            person="[[john-doe]]",
+            organization="[[acme-corp]]",
         )
         link_targets = {(l.target, l.relation) for l in entry.links}
         assert ("john-doe", "has_member") in link_targets
@@ -69,8 +79,12 @@ class TestFundingAutoLinks:
     def test_funding_generates_links(self, setup):
         svc = setup["svc"]
         entry = svc.create_entry(
-            "test", "funding-doe-pac", "Doe funds PAC", "funding",
-            funder="[[john-doe]]", recipient="[[super-pac]]",
+            "test",
+            "funding-doe-pac",
+            "Doe funds PAC",
+            "funding",
+            funder="[[john-doe]]",
+            recipient="[[super-pac]]",
         )
         link_targets = {(l.target, l.relation) for l in entry.links}
         assert ("john-doe", "funded_by") in link_targets
@@ -82,8 +96,12 @@ class TestNoDoubleLinks:
         """Updating a connection entry should not duplicate auto-links."""
         svc = setup["svc"]
         entry = svc.create_entry(
-            "test", "ownership-doe-shell", "Doe owns Shell Corp", "ownership",
-            owner="[[john-doe]]", asset="[[shell-corp]]",
+            "test",
+            "ownership-doe-shell",
+            "Doe owns Shell Corp",
+            "ownership",
+            owner="[[john-doe]]",
+            asset="[[shell-corp]]",
         )
         initial_count = len(entry.links)
 
@@ -98,7 +116,10 @@ class TestNonConnectionEntriesUnaffected:
         """Non-connection entry types should not get auto-links."""
         svc = setup["svc"]
         entry = svc.create_entry(
-            "test", "mansion-belgravia", "London Mansion", "asset",
+            "test",
+            "mansion-belgravia",
+            "London Mansion",
+            "asset",
             asset_type="real_estate",
         )
         # Should have no auto-generated links

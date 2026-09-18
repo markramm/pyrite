@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -17,7 +16,7 @@ def suggest_aliases(
     min_confidence: int = typer.Option(
         90, "--min-confidence", "-c", help="Auto-accept threshold (0-100)"
     ),
-    output: Optional[Path] = typer.Option(
+    output: Path | None = typer.Option(
         None, "--output", "-o", help="Write accepted aliases to JSON file"
     ),
     show_all: bool = typer.Option(
@@ -39,7 +38,9 @@ def suggest_aliases(
             typer.echo("No actors found in events.")
             raise typer.Exit()
 
-        typer.echo(f"Found {len(actor_counts)} unique actor names across {sum(actor_counts.values())} references.")
+        typer.echo(
+            f"Found {len(actor_counts)} unique actor names across {sum(actor_counts.values())} references."
+        )
         proposals = run_detection(actor_counts)
 
         if not proposals:
@@ -73,7 +74,7 @@ def extract_actors_cmd(
     dry_run: bool = typer.Option(
         False, "--dry-run", "-n", help="Show what would be created without creating"
     ),
-    alias_file: Optional[Path] = typer.Option(
+    alias_file: Path | None = typer.Option(
         None, "--alias-file", "-a", help="Import alias mappings from JSON file"
     ),
     min_importance: int = typer.Option(
@@ -91,7 +92,8 @@ def extract_actors_cmd(
 
     try:
         result = extract_actors(
-            db, kb_name,
+            db,
+            kb_name,
             config=config,
             alias_file=alias_file,
             dry_run=dry_run,
@@ -145,7 +147,8 @@ def export_cmd(
 
     try:
         result = export_timeline(
-            db, kb_name,
+            db,
+            kb_name,
             from_date=from_date,
             to_date=to_date,
             min_importance=min_importance,
@@ -160,7 +163,9 @@ def export_cmd(
 
         stats = result["stats"]
         typer.echo(f"Exported {stats['total_events']} events to {output_dir}/")
-        typer.echo(f"  {stats['total_actors']} actors, {stats['total_tags']} tags, {stats['total_sources']} sources")
+        typer.echo(
+            f"  {stats['total_actors']} actors, {stats['total_tags']} tags, {stats['total_sources']} sources"
+        )
         typer.echo(f"  Date range: {stats['date_range']['start']} to {stats['date_range']['end']}")
     finally:
         db.close()

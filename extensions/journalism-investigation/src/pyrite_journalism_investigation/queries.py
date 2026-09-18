@@ -8,7 +8,6 @@ from typing import Any
 
 from .utils import parse_meta, strip_wikilink
 
-
 # Map user-facing entity type names to DB-stored types.
 # Core types like "person" and "organization" get resolved to plugin
 # subtypes ("actor", "cascade_org") by KBService._resolve_entry_type.
@@ -54,14 +53,16 @@ def query_timeline(
             actors = meta.get("actors") or []
             if actor_filter and not any(actor_filter in a.lower() for a in actors):
                 continue
-            events.append({
-                "id": r.get("id"),
-                "title": r.get("title"),
-                "type": etype,
-                "date": date,
-                "importance": imp,
-                "actors": actors,
-            })
+            events.append(
+                {
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "type": etype,
+                    "date": date,
+                    "importance": imp,
+                    "actors": actors,
+                }
+            )
             if len(events) >= limit:
                 break
         if len(events) >= limit:
@@ -104,12 +105,14 @@ def query_entities(
             jur = str(meta.get("jurisdiction", "")).lower()
             if jurisdiction_filter and jurisdiction_filter not in jur:
                 continue
-            entities.append({
-                "id": r.get("id"),
-                "title": r.get("title"),
-                "type": etype,
-                "importance": imp,
-            })
+            entities.append(
+                {
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "type": etype,
+                    "importance": imp,
+                }
+            )
     entities.sort(key=lambda e: e["importance"], reverse=True)
     trimmed = entities[:limit]
     type_label = entity_type or "entities"
@@ -163,13 +166,15 @@ def query_sources(
             continue
         if to_date and date > to_date:
             continue
-        sources.append({
-            "id": r.get("id"),
-            "title": r.get("title"),
-            "reliability": rel,
-            "classification": cls,
-            "date": date,
-        })
+        sources.append(
+            {
+                "id": r.get("id"),
+                "title": r.get("title"),
+                "reliability": rel,
+                "classification": cls,
+                "date": date,
+            }
+        )
     sources.sort(key=lambda s: s.get("date", ""))
     trimmed = sources[:limit]
     # Build tier breakdown
@@ -178,7 +183,11 @@ def query_sources(
         rel = s.get("reliability", "unknown")
         tier_counts[rel] = tier_counts.get(rel, 0) + 1
     tier_parts = ", ".join(f"{v} {k}" for k, v in sorted(tier_counts.items()))
-    summary = f"Found {len(trimmed)} sources ({tier_parts})" if tier_parts else f"Found {len(trimmed)} sources"
+    summary = (
+        f"Found {len(trimmed)} sources ({tier_parts})"
+        if tier_parts
+        else f"Found {len(trimmed)} sources"
+    )
     return {"count": len(trimmed), "sources": trimmed, "summary": summary}
 
 
@@ -205,15 +214,17 @@ def query_claims(
         conf = meta.get("confidence", "low")
         if confidence and conf != confidence:
             continue
-        claims.append({
-            "id": r.get("id"),
-            "title": r.get("title"),
-            "assertion": meta.get("assertion", ""),
-            "claim_status": status,
-            "confidence": conf,
-            "importance": imp,
-            "evidence_count": len(meta.get("evidence_refs", []) or []),
-        })
+        claims.append(
+            {
+                "id": r.get("id"),
+                "title": r.get("title"),
+                "assertion": meta.get("assertion", ""),
+                "claim_status": status,
+                "confidence": conf,
+                "importance": imp,
+                "evidence_count": len(meta.get("evidence_refs", []) or []),
+            }
+        )
     claims.sort(key=lambda c: c["importance"], reverse=True)
     trimmed = claims[:limit]
     # Build status breakdown
@@ -222,7 +233,11 @@ def query_claims(
         st = c.get("claim_status", "unverified")
         status_counts[st] = status_counts.get(st, 0) + 1
     status_parts = ", ".join(f"{v} {k}" for k, v in sorted(status_counts.items()))
-    summary = f"Found {len(trimmed)} claims ({status_parts})" if status_parts else f"Found {len(trimmed)} claims"
+    summary = (
+        f"Found {len(trimmed)} claims ({status_parts})"
+        if status_parts
+        else f"Found {len(trimmed)} claims"
+    )
     return {"count": len(trimmed), "claims": trimmed, "summary": summary}
 
 
@@ -273,13 +288,15 @@ def query_evidence_chain(
         else:
             gaps.append(f"Evidence '{eid}' has no source document link")
 
-        chain.append({
-            "evidence_id": eid,
-            "title": evidence.get("title", ""),
-            "evidence_type": emeta.get("evidence_type", ""),
-            "reliability": emeta.get("reliability", "unknown"),
-            "source_document": source_info,
-        })
+        chain.append(
+            {
+                "evidence_id": eid,
+                "title": evidence.get("title", ""),
+                "evidence_type": emeta.get("evidence_type", ""),
+                "reliability": emeta.get("reliability", "unknown"),
+                "source_document": source_info,
+            }
+        )
 
     return {
         "claim": {

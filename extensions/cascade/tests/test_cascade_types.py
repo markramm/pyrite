@@ -1,6 +1,5 @@
 """Round-trip tests for Cascade Series entry types."""
 
-
 from pyrite_cascade.entry_types import (
     ActorEntry,
     CascadeEventEntry,
@@ -125,9 +124,7 @@ class TestTimelineEventEntry:
             "capture_lanes": ["Executive Power Expansion"],
             "capture_type": "institutional_capture",
             "tags": ["project-2025"],
-            "sources": [
-                {"title": "Heritage Announces 2025", "url": "https://example.com"}
-            ],
+            "sources": [{"title": "Heritage Announces 2025", "url": "https://example.com"}],
         }
         entry = TimelineEventEntry.from_frontmatter(meta, "Heritage launched P2025.")
         assert entry.date == "2022-04-01"
@@ -170,9 +167,7 @@ class TestSolidarityEventEntry:
             "outcome": "Published weekly for 35 years. Radicalized northern opinion.",
             "status": "confirmed",
             "tags": ["abolitionist-press", "publication-networks"],
-            "sources": [
-                {"title": "All on Fire: William Lloyd Garrison", "url": ""}
-            ],
+            "sources": [{"title": "All on Fire: William Lloyd Garrison", "url": ""}],
         }
         entry = SolidarityEventEntry.from_frontmatter(meta, "The Liberator body.")
         assert entry.date == "1831-01-01"
@@ -181,7 +176,10 @@ class TestSolidarityEventEntry:
         assert entry.actors == ["William Lloyd Garrison", "Isaac Knapp", "Free Black subscribers"]
         assert entry.location == "Boston, Massachusetts"
         assert entry.lineage == ["1827-03-16--freedoms-journal-first-black-newspaper"]
-        assert entry.lineage_notes == "Built on Freedom's Journal model but with radical immediatist stance"
+        assert (
+            entry.lineage_notes
+            == "Built on Freedom's Journal model but with radical immediatist stance"
+        )
         assert entry.legacy == ["1847-12-03--north-star-launch"]
         assert entry.legacy_notes == "Template for abolitionist press network"
         assert entry.capture_response == ["1830-04-06--indian-removal-act"]

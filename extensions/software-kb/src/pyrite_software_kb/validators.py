@@ -138,7 +138,9 @@ def _validate_development_convention(data: dict[str, Any], errors: list[dict]) -
     _validate_enum(data, "category", CONVENTION_CATEGORIES, errors)
 
 
-def _validate_component(data: dict[str, Any], errors: list[dict], context: dict[str, Any] | None = None) -> None:
+def _validate_component(
+    data: dict[str, Any], errors: list[dict], context: dict[str, Any] | None = None
+) -> None:
     _validate_enum(data, "kind", COMPONENT_KINDS, errors)
 
     component_path = data.get("path")

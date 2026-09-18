@@ -1,14 +1,13 @@
 """Tests for beneficial ownership chain traversal."""
 
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.ownership import (
     aggregate_ownership,
     trace_ownership_chain,
 )
+
+from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.storage.database import PyriteDB
 
 KB_NAME = "test-ownership"
 
@@ -37,37 +36,43 @@ def _upsert_ownership(db, entry_id, owner, asset, percentage, beneficial=False):
     }
     if beneficial:
         meta["beneficial"] = True
-    db.upsert_entry({
-        "id": entry_id,
-        "kb_name": KB_NAME,
-        "title": f"{owner} owns {asset}",
-        "entry_type": "ownership",
-        "metadata": meta,
-    })
+    db.upsert_entry(
+        {
+            "id": entry_id,
+            "kb_name": KB_NAME,
+            "title": f"{owner} owns {asset}",
+            "entry_type": "ownership",
+            "metadata": meta,
+        }
+    )
 
 
 def _upsert_entity(db, entry_id, title, entry_type="organization"):
     """Helper to create an entity entry."""
-    db.upsert_entry({
-        "id": entry_id,
-        "kb_name": KB_NAME,
-        "title": title,
-        "entry_type": entry_type,
-    })
+    db.upsert_entry(
+        {
+            "id": entry_id,
+            "kb_name": KB_NAME,
+            "title": title,
+            "entry_type": entry_type,
+        }
+    )
 
 
 def _upsert_membership(db, entry_id, member, organization):
     """Helper to create a membership entry."""
-    db.upsert_entry({
-        "id": entry_id,
-        "kb_name": KB_NAME,
-        "title": f"{member} member of {organization}",
-        "entry_type": "membership",
-        "metadata": {
-            "member": f"[[{member}]]",
-            "organization": f"[[{organization}]]",
-        },
-    })
+    db.upsert_entry(
+        {
+            "id": entry_id,
+            "kb_name": KB_NAME,
+            "title": f"{member} member of {organization}",
+            "entry_type": "membership",
+            "metadata": {
+                "member": f"[[{member}]]",
+                "organization": f"[[{organization}]]",
+            },
+        }
+    )
 
 
 class TestSimpleDirectOwnership:
@@ -159,8 +164,7 @@ class TestMultipleOwners:
         result = trace_ownership_chain(db, KB_NAME, "company-c")
 
         percentages = {
-            chain["path"][-1]["id"]: chain["effective_percentage"]
-            for chain in result["chains"]
+            chain["path"][-1]["id"]: chain["effective_percentage"] for chain in result["chains"]
         }
         assert percentages["person-a"] == pytest.approx(60.0)
         assert percentages["person-b"] == pytest.approx(40.0)
@@ -224,7 +228,7 @@ class TestMaxDepthLimit:
         for i in range(6):
             _upsert_entity(db, f"ent-{i}", f"Entity {i}")
         for i in range(5):
-            _upsert_ownership(db, f"own-{i}", f"ent-{i+1}", f"ent-{i}", 100)
+            _upsert_ownership(db, f"own-{i}", f"ent-{i + 1}", f"ent-{i}", 100)
 
         result = trace_ownership_chain(db, KB_NAME, "ent-0", max_depth=3)
 
@@ -237,7 +241,7 @@ class TestMaxDepthLimit:
         for i in range(8):
             _upsert_entity(db, f"ent-{i}", f"Entity {i}")
         for i in range(7):
-            _upsert_ownership(db, f"own-{i}", f"ent-{i+1}", f"ent-{i}", 100)
+            _upsert_ownership(db, f"own-{i}", f"ent-{i + 1}", f"ent-{i}", 100)
 
         result = trace_ownership_chain(db, KB_NAME, "ent-0")
 

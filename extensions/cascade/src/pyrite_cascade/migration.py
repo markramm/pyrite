@@ -67,7 +67,7 @@ def inject_ids(kb_path: str | Path) -> dict[str, str]:
             continue
 
         # Inject id after the opening ---
-        new_content = m.group(1) + f"id: {stem}\n" + fm_block + m.group(3) + content[m.end():]
+        new_content = m.group(1) + f"id: {stem}\n" + fm_block + m.group(3) + content[m.end() :]
         md_file.write_text(new_content, encoding="utf-8")
         injected[str(md_file)] = stem
 
@@ -139,7 +139,7 @@ def normalize_research_frontmatter(kb_path: str | Path) -> dict[str, int]:
             continue
 
         fm = m.group(2)
-        body = content[m.end():]
+        body = content[m.end() :]
         changed = False
 
         # essay_type → type
@@ -150,7 +150,9 @@ def normalize_research_frontmatter(kb_path: str | Path) -> dict[str, int]:
             counts["essay_type_to_type"] += n
 
         # event_date → date (only if no date: field already exists)
-        if re.search(r"^event_date:", fm, re.MULTILINE) and not re.search(r"^date:", fm, re.MULTILINE):
+        if re.search(r"^event_date:", fm, re.MULTILINE) and not re.search(
+            r"^date:", fm, re.MULTILINE
+        ):
             new_fm, n = re.subn(r"^event_date:", "date:", fm, flags=re.MULTILINE)
             if n:
                 fm = new_fm
@@ -158,7 +160,9 @@ def normalize_research_frontmatter(kb_path: str | Path) -> dict[str, int]:
                 counts["event_date_to_date"] += n
 
         # type: organization → type: cascade_org
-        new_fm, n = re.subn(r"^type:\s*organization\s*$", "type: cascade_org", fm, flags=re.MULTILINE)
+        new_fm, n = re.subn(
+            r"^type:\s*organization\s*$", "type: cascade_org", fm, flags=re.MULTILINE
+        )
         if n:
             fm = new_fm
             changed = True
@@ -172,7 +176,9 @@ def normalize_research_frontmatter(kb_path: str | Path) -> dict[str, int]:
             has_quotes = bool(rs_match.group(2))
             value_changed = normalized != raw
             if has_quotes or value_changed:
-                fm = fm[:rs_match.start()] + f"research_status: {normalized}" + fm[rs_match.end():]
+                fm = (
+                    fm[: rs_match.start()] + f"research_status: {normalized}" + fm[rs_match.end() :]
+                )
                 changed = True
                 counts["research_status_normalized"] += 1
 
@@ -207,7 +213,7 @@ def normalize_timeline_frontmatter(kb_path: str | Path) -> dict[str, int]:
             continue
 
         fm = m.group(2)
-        body = content[m.end():]
+        body = content[m.end() :]
         changed = False
 
         # Add type: timeline_event if missing
@@ -281,9 +287,7 @@ def audit_ji_compat(db: PyriteDB, kb_name: str) -> dict[str, Any]:
     }
 
 
-def backfill_ji_fields(
-    db: PyriteDB, kb_name: str, *, dry_run: bool = False
-) -> dict[str, Any]:
+def backfill_ji_fields(db: PyriteDB, kb_name: str, *, dry_run: bool = False) -> dict[str, Any]:
     """Backfill JI default fields on timeline_event entries that lack them.
 
     For entries missing ``source_refs`` or ``verification_status`` in their

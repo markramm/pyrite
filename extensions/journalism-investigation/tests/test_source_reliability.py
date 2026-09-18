@@ -1,12 +1,12 @@
 """Tests for source reliability tier system."""
 
+from pyrite_journalism_investigation.entry_types import ClaimEntry
 from pyrite_journalism_investigation.reliability import (
     SOURCE_TIERS,
     reliability_to_tier,
-    tier_label,
     source_tier_distribution,
+    tier_label,
 )
-from pyrite_journalism_investigation.entry_types import ClaimEntry
 
 
 class TestSourceTiers:
@@ -42,7 +42,8 @@ class TestClaimConfidenceWithTiers:
 
     def test_two_same_tier_sources_medium(self):
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]"],
         )
         # Without tier info, 2+ sources = medium
@@ -50,7 +51,8 @@ class TestClaimConfidenceWithTiers:
 
     def test_two_different_tier_sources_high(self):
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]"],
         )
         # With tier info showing cross-corroboration
@@ -59,7 +61,8 @@ class TestClaimConfidenceWithTiers:
 
     def test_two_same_tier_sources_with_tiers_medium(self):
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]"],
         )
         tiers = {"[[doc-1]]": 1, "[[doc-2]]": 1}
@@ -67,7 +70,8 @@ class TestClaimConfidenceWithTiers:
 
     def test_disputed_overrides_tiers(self):
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]"],
             disputed_by=["[[counter-1]]"],
         )
@@ -77,7 +81,8 @@ class TestClaimConfidenceWithTiers:
     def test_missing_tier_info_defaults_to_same_tier(self):
         """Sources not in tiers dict are treated as same tier."""
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]"],
         )
         # Empty tiers dict — all sources same default tier

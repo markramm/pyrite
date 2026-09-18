@@ -71,9 +71,7 @@ def after_save_update_counts(entry: Entry, context: dict[str, Any]) -> None:
             db._raw_conn.commit()
             logger.info("Writeup count incremented for %s in %s", author_id, kb_name)
         except Exception:
-            logger.warning(
-                "Failed to update writeup count for %s", author_id, exc_info=True
-            )
+            logger.warning("Failed to update writeup count for %s", author_id, exc_info=True)
     else:
         logger.info(
             "Writeup created by %s in %s — writeup_count increment skipped (no db)",
@@ -115,12 +113,12 @@ def after_delete_adjust_reputation(entry: Entry, context: dict[str, Any]) -> Non
                 db._raw_conn.commit()
                 logger.info(
                     "Reputation adjusted by %d for %s (writeup %s deleted)",
-                    -vote_total, author_id, entry.id,
+                    -vote_total,
+                    author_id,
+                    entry.id,
                 )
         except Exception:
-            logger.warning(
-                "Failed to adjust reputation for %s", author_id, exc_info=True
-            )
+            logger.warning("Failed to adjust reputation for %s", author_id, exc_info=True)
     else:
         logger.info(
             "Writeup %s by %s deleted — reputation adjustments skipped (no db)",

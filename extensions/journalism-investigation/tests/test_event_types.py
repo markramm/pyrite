@@ -44,9 +44,7 @@ class TestInvestigationEventEntry:
         assert fm["verification_status"] == "verified"
 
     def test_defaults(self):
-        entry = InvestigationEventEntry.from_frontmatter(
-            {"title": "Unknown Event"}, ""
-        )
+        entry = InvestigationEventEntry.from_frontmatter({"title": "Unknown Event"}, "")
         assert entry.actors == []
         assert entry.source_refs == []
         assert entry.verification_status == "unverified"
@@ -125,20 +123,22 @@ class TestTransactionEntry:
     def test_method_values(self):
         valid = ["wire", "cash", "crypto", "check", "other"]
         for m in valid:
-            entry = TransactionEntry.from_frontmatter(
-                {"title": "Test", "method": m}, ""
-            )
+            entry = TransactionEntry.from_frontmatter({"title": "Test", "method": m}, "")
             assert entry.method == m
 
     def test_transaction_type_values(self):
         valid = [
-            "payment", "grant", "donation", "loan",
-            "investment", "bribe", "kickback", "other",
+            "payment",
+            "grant",
+            "donation",
+            "loan",
+            "investment",
+            "bribe",
+            "kickback",
+            "other",
         ]
         for t in valid:
-            entry = TransactionEntry.from_frontmatter(
-                {"title": "Test", "transaction_type": t}, ""
-            )
+            entry = TransactionEntry.from_frontmatter({"title": "Test", "transaction_type": t}, "")
             assert entry.transaction_type == t
 
     def test_to_frontmatter_field_presence(self):
@@ -206,24 +206,29 @@ class TestLegalActionEntry:
 
     def test_case_type_values(self):
         valid = [
-            "criminal", "civil", "regulatory", "sanctions",
-            "indictment", "subpoena", "other",
+            "criminal",
+            "civil",
+            "regulatory",
+            "sanctions",
+            "indictment",
+            "subpoena",
+            "other",
         ]
         for ct in valid:
-            entry = LegalActionEntry.from_frontmatter(
-                {"title": "Test", "case_type": ct}, ""
-            )
+            entry = LegalActionEntry.from_frontmatter({"title": "Test", "case_type": ct}, "")
             assert entry.case_type == ct
 
     def test_case_status_values(self):
         valid = [
-            "filed", "pending", "settled", "dismissed",
-            "convicted", "acquitted",
+            "filed",
+            "pending",
+            "settled",
+            "dismissed",
+            "convicted",
+            "acquitted",
         ]
         for s in valid:
-            entry = LegalActionEntry.from_frontmatter(
-                {"title": "Test", "case_status": s}, ""
-            )
+            entry = LegalActionEntry.from_frontmatter({"title": "Test", "case_status": s}, "")
             assert entry.case_status == s
 
     def test_to_frontmatter_omits_empty(self):

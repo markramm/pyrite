@@ -20,56 +20,149 @@ def populated_db(tmp_path):
     db.register_kb("test", "journalism-investigation", str(kb_path))
 
     # Entities
-    db.upsert_entry({"id": "person-1", "kb_name": "test", "title": "John Doe", "entry_type": "person", "importance": 8})
-    db.upsert_entry({"id": "org-1", "kb_name": "test", "title": "Shell Corp", "entry_type": "organization", "importance": 7})
-    db.upsert_entry({"id": "asset-1", "kb_name": "test", "title": "Yacht Aurora", "entry_type": "asset", "importance": 5})
-    db.upsert_entry({"id": "account-1", "kb_name": "test", "title": "Swiss Account", "entry_type": "account", "importance": 4})
+    db.upsert_entry(
+        {
+            "id": "person-1",
+            "kb_name": "test",
+            "title": "John Doe",
+            "entry_type": "person",
+            "importance": 8,
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "org-1",
+            "kb_name": "test",
+            "title": "Shell Corp",
+            "entry_type": "organization",
+            "importance": 7,
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "asset-1",
+            "kb_name": "test",
+            "title": "Yacht Aurora",
+            "entry_type": "asset",
+            "importance": 5,
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "account-1",
+            "kb_name": "test",
+            "title": "Swiss Account",
+            "entry_type": "account",
+            "importance": 4,
+        }
+    )
 
     # Events (timeline)
-    db.upsert_entry({
-        "id": "event-1", "kb_name": "test", "title": "Meeting", "entry_type": "investigation_event",
-        "date": "2024-01-15", "importance": 6,
-        "metadata": {"actors": ["John Doe"], "verification_status": "verified"},
-    })
-    db.upsert_entry({
-        "id": "txn-1", "kb_name": "test", "title": "Payment", "entry_type": "transaction",
-        "date": "2024-02-01", "importance": 9,
-        "metadata": {"sender": "[[person-1]]", "receiver": "[[org-1]]", "amount": "50000", "currency": "USD"},
-    })
-    db.upsert_entry({
-        "id": "legal-1", "kb_name": "test", "title": "Lawsuit Filed", "entry_type": "legal_action",
-        "date": "2024-03-10", "importance": 7,
-        "metadata": {"parties": ["John Doe", "Shell Corp"], "case_type": "civil"},
-    })
+    db.upsert_entry(
+        {
+            "id": "event-1",
+            "kb_name": "test",
+            "title": "Meeting",
+            "entry_type": "investigation_event",
+            "date": "2024-01-15",
+            "importance": 6,
+            "metadata": {"actors": ["John Doe"], "verification_status": "verified"},
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "txn-1",
+            "kb_name": "test",
+            "title": "Payment",
+            "entry_type": "transaction",
+            "date": "2024-02-01",
+            "importance": 9,
+            "metadata": {
+                "sender": "[[person-1]]",
+                "receiver": "[[org-1]]",
+                "amount": "50000",
+                "currency": "USD",
+            },
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "legal-1",
+            "kb_name": "test",
+            "title": "Lawsuit Filed",
+            "entry_type": "legal_action",
+            "date": "2024-03-10",
+            "importance": 7,
+            "metadata": {"parties": ["John Doe", "Shell Corp"], "case_type": "civil"},
+        }
+    )
 
     # Connections
-    db.upsert_entry({
-        "id": "own-1", "kb_name": "test", "title": "Doe owns Shell Corp", "entry_type": "ownership",
-        "importance": 8,
-        "metadata": {"owner": "[[person-1]]", "asset": "[[org-1]]", "percentage": "100"},
-    })
-    db.upsert_entry({
-        "id": "fund-1", "kb_name": "test", "title": "Shell Corp funding", "entry_type": "funding",
-        "importance": 6,
-        "metadata": {"funder": "[[org-1]]", "recipient": "[[account-1]]"},
-    })
+    db.upsert_entry(
+        {
+            "id": "own-1",
+            "kb_name": "test",
+            "title": "Doe owns Shell Corp",
+            "entry_type": "ownership",
+            "importance": 8,
+            "metadata": {"owner": "[[person-1]]", "asset": "[[org-1]]", "percentage": "100"},
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "fund-1",
+            "kb_name": "test",
+            "title": "Shell Corp funding",
+            "entry_type": "funding",
+            "importance": 6,
+            "metadata": {"funder": "[[org-1]]", "recipient": "[[account-1]]"},
+        }
+    )
 
     # Claim + evidence + source
-    db.upsert_entry({
-        "id": "claim-1", "kb_name": "test", "title": "Corruption claim", "entry_type": "claim",
-        "importance": 8,
-        "metadata": {"assertion": "Doe bribed officials", "claim_status": "partially_verified", "confidence": "medium", "evidence_refs": ["[[evidence-1]]"]},
-    })
-    db.upsert_entry({
-        "id": "evidence-1", "kb_name": "test", "title": "Bank records", "entry_type": "evidence",
-        "importance": 7,
-        "metadata": {"evidence_type": "document", "source_document": "[[source-1]]", "reliability": "high"},
-    })
-    db.upsert_entry({
-        "id": "source-1", "kb_name": "test", "title": "FOIA Response #123", "entry_type": "document_source",
-        "importance": 6,
-        "metadata": {"reliability": "high", "classification": "foia", "url": "https://example.com/foia/123"},
-    })
+    db.upsert_entry(
+        {
+            "id": "claim-1",
+            "kb_name": "test",
+            "title": "Corruption claim",
+            "entry_type": "claim",
+            "importance": 8,
+            "metadata": {
+                "assertion": "Doe bribed officials",
+                "claim_status": "partially_verified",
+                "confidence": "medium",
+                "evidence_refs": ["[[evidence-1]]"],
+            },
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "evidence-1",
+            "kb_name": "test",
+            "title": "Bank records",
+            "entry_type": "evidence",
+            "importance": 7,
+            "metadata": {
+                "evidence_type": "document",
+                "source_document": "[[source-1]]",
+                "reliability": "high",
+            },
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "source-1",
+            "kb_name": "test",
+            "title": "FOIA Response #123",
+            "entry_type": "document_source",
+            "importance": 6,
+            "metadata": {
+                "reliability": "high",
+                "classification": "foia",
+                "url": "https://example.com/foia/123",
+            },
+        }
+    )
 
     yield db
     db.close()

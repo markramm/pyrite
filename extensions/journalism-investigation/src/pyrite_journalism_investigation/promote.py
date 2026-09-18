@@ -6,7 +6,6 @@ from pyrite.schema import generate_entry_id
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
 
-
 PROMOTABLE_STATUSES = {"corroborated", "partially_verified"}
 VALID_EDGE_TYPES = {"ownership", "membership", "funding"}
 

@@ -54,8 +54,11 @@ def _build_actor_lookup(db: Any, kb_name: str, config: Any = None) -> dict[str, 
 
 
 def _load_aliases_for_actor(
-    config: Any, kb_name: str, entry_id: str,
-    actor_dict: dict[str, Any], lookup: dict[str, str],
+    config: Any,
+    kb_name: str,
+    entry_id: str,
+    actor_dict: dict[str, Any],
+    lookup: dict[str, str],
 ) -> None:
     """Load aliases from an actor entry's file and add them to the lookup."""
     try:
@@ -63,11 +66,13 @@ def _load_aliases_for_actor(
         if not file_path:
             return
         from pathlib import Path
+
         path = Path(file_path)
         if not path.exists():
             return
 
         import yaml
+
         content = path.read_text(encoding="utf-8")
         if not content.startswith("---"):
             return
