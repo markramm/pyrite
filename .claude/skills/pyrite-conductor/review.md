@@ -24,7 +24,13 @@ undone (`git rebase --abort` or `git reset --hard origin/<branch>`), or
 wait for the sibling to finish. A conductor that pushes through a red
 pre-push has turned the value chain's first gate off for itself.
 
-In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
+In **your own review worktree** on the pushed head — never the worker's
+(`scripts/new-worktree.sh review/<slug> origin/<branch>`; #119). First:
+`git rev-parse HEAD` equals the SHA in the worker's report and
+`gh pr view N --json headRefOid`; a green check is a claim about a commit,
+so identify the commit before believing the check (#91 — a docs-only
+classification of an unpushed branch once reported `gate: success` for
+code nobody had pushed).
 
 ```
 - [ ] git log dev..HEAD --oneline        commits are focused, messages say why, Fixes #N present
@@ -44,6 +50,8 @@ In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 - [ ] theme complete? nothing in "Left:" that belongs to this PR
 - [ ] CHANGELOG [Unreleased] has a line per user-visible change; KB updated via CLI where the theme touched it
 - [ ] no private material, no absolute home paths (git grep -n "/Users/" -- the branch's new files)
+- [ ] the diff stays inside the theme's footprint: nothing from another theme's out-of-scope list (#119 — 18
+      foreign commits were one push from the wrong PR; the worker caught it, the reviewer must too)
 - [ ] cold read needed? (below)
 ```
 
@@ -66,6 +74,13 @@ for competing PRs on one issue, which one, why, and what the other one got
 right that should be credited or folded in. Two PRs for #97 arrived twenty
 minutes apart on 2026-09-18; that will happen again now that issues carry
 reproductions.
+
+**Bodies go through files, always.** `gh pr comment`, `gh pr edit --body`,
+`gh issue create`, `pyrite create -b`: write the text with the Write tool and
+pass `--body-file` / `"$(cat file)"`. Inline prose in a double-quoted shell
+string executes every backtick as a command — on 2026-09-18 a comment
+describing a recovery ran `git rebase` on `dev` in the main checkout (#123),
+and three of the host's own commands were lost to the same quoting.
 
 ## Outcomes
 

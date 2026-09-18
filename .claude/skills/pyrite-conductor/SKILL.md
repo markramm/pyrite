@@ -183,6 +183,31 @@ written down. Default to the Agent tool and this tick otherwise.
 5. Report      what merged, what is in review, what was dispatched, what is blocked
 ```
 
+**One conductor at a time.** A tick is the *scheduled* one. A worker's
+hand-back revives the tick agent that dispatched it; a revived tick does
+exactly one thing — appends the worker's report to the draft PR body
+(`gh pr edit N --body-file`) — and exits. It does not review, rebase, cold-read,
+flip or redispatch. On 2026-09-18 four conductor agents were alive at once
+(two revived, two scheduled): three reviewed one PR (#111), two published
+contradictory verdicts ten seconds apart, one ran 1 h 46 m absorbing its own
+dispatch (#114), and one did checkouts inside a worktree whose worker was
+mid-pass, leaving 18 foreign commits one push from the wrong PR (#119). The
+process had claims on themes and none on ticks or worktrees; this rule and
+the two below give it both.
+
+**The absorb lane takes only branches that had reported before the tick
+began.** A worker that reports mid-tick is the next tick's absorb (#114). A
+tick therefore has a bounded length — health, absorb what was waiting, groom,
+dispatch, report — and stops; thirty minutes is long.
+
+**A conductor never enters a worker's worktree.** Review from the pushed
+head in your own worktree: `scripts/new-worktree.sh review/<slug>
+origin/<branch>` (a detached checkout of the branch is fine), so the commit
+you read is the commit the PR carries (#91: a green check is a claim about
+a commit) and the worker's tree is never moved under it (#119). The worker's
+report names the pushed SHA; if `origin/<branch>` is behind the report, the
+branch is not reported yet.
+
 One-shot (`/pyrite-conductor`): one tick. Loop (`/loop 45m /pyrite-conductor`,
 or a session cron with the same prompt): one tick per invocation; state lives
 in git, GitHub and `kb/`, not in the loop. A Claude Code cron is session-bound
@@ -199,7 +224,9 @@ git -C /Users/markr/pyrite worktree list; git branch --list 'fix/*' 'feature/*' 
 gh issue list --milestone "<next version>" --state open
 ```
 
-- `dev` red: nothing merges until it is fixed. That is the first theme.
+- `dev` red: nothing merges until it is fixed. That is the first theme —
+  and under a tripped breaker it is the one theme the host may dispatch
+  without the maintainer, because leaving `dev` red is the worse default.
 - A PR `BEHIND`: `gh pr update-branch N --rebase` (auto-merge does not do it).
 - A merged branch with a worktree still present: `git worktree remove`, `git branch -d`.
 - More than ~4 PRs open: stop dispatching; the gate is serialized.
@@ -208,16 +235,25 @@ gh issue list --milestone "<next version>" --state open
 
 For each worker that reported done — protocol in [review.md](review.md):
 
-1. `cd` into its worktree. `git log dev..HEAD --oneline`; read the **diff**, not the report.
+1. Claim it (`in-review`). Check out the **pushed** head in your own review
+   worktree — never the worker's. `git log origin/dev..HEAD --oneline`; read
+   the **diff**, not the report.
 2. Re-run `.venv/bin/pytest tests/ extensions/ -n auto` there yourself.
-3. Spot-check one new test fails with the fix stashed.
+3. `scripts/verify-red.sh` on every regression-named test (exit 2 = no claim).
 4. Is the theme complete? Would a reviewer see one coherent change?
 5. Does it need a **cold read**? Yes if the diff touches `pyrite/server/`,
    `pyrite/storage/`, `pyrite/schema/`, the auth code, or a public shape
    (CLI flag, REST field, MCP tool argument, file format); deletes or
-   weakens a test; or the worker's "Unsure" is non-empty. Dispatch
+   weakens a test; or the worker's "Unsure" names a **design decision** —
+   that last trigger is mandatory, not discretionary, and the reviewer's
+   brief quotes the Unsure verbatim as its first question (#115: the
+   conductor read a class named for the exact regression it reintroduced
+   and was reassured by the name; the cold read was not). Dispatch
    `pyrite-reviewer` with the diff and no other context; triage its
-   findings: fix, redispatch, or note in the PR as a known trade-off.
+   findings: fix, redispatch, or note in the PR as a known trade-off. The
+   reviewer's report is model output too: reproduce a finding before acting
+   on it, and never publish a number you did not measure under one
+   interpreter against the merge base.
 6. Then, and only then: push, `gh pr create --base dev`, body from the
    template in review.md, `gh pr merge --auto --rebase`. Watch it; rebase on
    `BEHIND`; clean up the worktree when it merges.
@@ -334,7 +370,10 @@ Judgment stops:
 consecutive ticks whose `dev` push went red, or any PR reverted, or the same
 theme redispatched twice → stop the loop, report what happened, and do not
 dispatch again until the maintainer says so. Landing on `dev` unattended is
-delegated; landing repeatedly broken things is not.
+delegated; landing repeatedly broken things is not. A breaker trip is a
+retro trigger; the retro says what the theme needed that it did not get
+(on 2026-09-18: a spike — the root cause of #46/#86/#87 was unknown when a
+worker was dispatched to fix it, and the fix took three passes).
 
 ## References
 

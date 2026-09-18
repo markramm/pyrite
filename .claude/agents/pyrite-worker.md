@@ -38,7 +38,7 @@ the CLI, and a report — not a pull request — when the theme is complete.
 End with the pyrite-dev report block, verbatim in shape:
 
 ```
-Branch / Worktree / Commits / Closes / Evidence / Changed / Unsure / Left
+Branch / Worktree / Pushed SHA / Commits / Closes / Evidence / Changed / Unsure / Left
 ```
 
 The conductor reads your diff and re-runs the suite; the report's job is to

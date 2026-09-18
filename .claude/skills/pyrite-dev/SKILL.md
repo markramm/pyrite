@@ -141,10 +141,18 @@ conductor reviews it with the code.
 ## Finishing: the report
 
 You are done when the theme is complete — not a fragment of it — and every
-claim below has evidence. Do **not** open a PR. Report:
+claim below has evidence. Your last three acts, in order: **diff your
+footprint against the theme's out-of-scope list** (`git diff --name-only
+origin/dev...HEAD`; anything on that list means something entered your
+branch that is not yours — on 2026-09-18 a worker found 18 foreign commits
+this way, one push from the wrong PR, #119); **push** (`git push -u origin
+<branch>`; a red pre-push is a stop, never `--no-verify`); **report with the
+pushed SHA** — a conductor reviews only what is on the remote. Do **not**
+open a PR. Report:
 
 ```
 Branch:   fix/what-it-fixes      Worktree: ../pyrite-wt/fix-what-it-fixes
+Pushed:   <sha> == origin/<branch>
 Commits:  <n>, listed with one line each
 Closes:   #N, #M  (or the backlog item ids)
 Evidence: full suite output line; the RED run of each new test; lint

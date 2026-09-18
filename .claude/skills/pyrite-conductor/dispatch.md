@@ -123,6 +123,13 @@ Agent(
 
 When unsure, the tell is the ticket: if its acceptance criteria could be
 handed to a careful junior engineer with no further conversation, sonnet.
+**And if the ticket says what hurts but not why — "data loss", "corrupts",
+"silently", mechanism unknown — it is a spike first, not a worker.** #46/#86/
+#87 were three faces of one serialization fault nobody had named when a
+worker was sent to fix #46; the theme took three passes, two cold reads and
+the circuit breaker to land what a one-tick spike would have written as
+acceptance criteria: "no entry type writes a key its source file did not
+have; a no-op load→save is byte-identical."
 
 ### Prompt hygiene
 
