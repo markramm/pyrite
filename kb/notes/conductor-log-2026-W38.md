@@ -1645,3 +1645,33 @@ C and D to finish so the fix is not itself contaminated.
 
 #81's worker has five commits and has not reported; left unreviewed per the
 host (heavy, waits for #69).
+
+### Circuit breaker: tripped, deliberately
+
+The host offered the alternative of fixing #69 myself under review.md's "fix it
+yourself when it is small and you are sure". I considered it and declined, and
+the reason is worth recording because the offer was reasonable.
+
+It is not small. Guarding `priority` is one line, but `priority` is one of
+**32 entry types** that invent keys; fixing only the instance I happened to
+probe would produce a green PR that still corrupts ADRs (`adr_number: 0`),
+zettels (`maturity`) and QA assessments (four keys). "Land correct rather than
+fast" argues *for* sending it back, not against.
+
+And I am not sure. The central fix — having frontmatter emission consult
+`_absent_default_keys` once — is the right shape, but it has to preserve the
+behaviour commit 7783335 added and the `__setattr__` rule, and getting that
+wrong silently reintroduces exactly the data loss cold read 1 found. That is
+not a conductor's one-line commit; it is the theme's core design, which is what
+a worker is for.
+
+The test rework is also not under an hour: nine tests need a new fixture and
+genuine red-at-base proof, and the fixture change is what surfaces further
+instances of the 32.
+
+**So: second redispatch, breaker tripped, loop stopping for the maintainer.**
+Per SKILL.md I do not dispatch again until they say so. The redispatch is
+already running (Opus) because the worker can be working while the maintainer
+decides; if they would rather take a different route, it can be stopped.
+
+Nothing was merged this tick. #69 stays draft with `in-review` removed.
