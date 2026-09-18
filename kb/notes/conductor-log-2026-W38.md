@@ -1976,3 +1976,103 @@ Conductor agents alive at once: peak 4 → 1 (+ revived ticks that exit within a
 - #69's disposition: three passes verified by two conductors; held as draft only because `dev` was red and the breaker is tripped. The maintainer decides whether it merges when `dev` is green (recommended: yes, then the round-trip gate, then the 32-type follow-up as one Opus theme with #87 re-verified).
 - Retro 1's heading is mis-stamped 06:45Z (ran ~06:00Z); retro 2 is correct at 07:20Z.
 - The main checkout's local `dev` is clean and at `origin/dev` again after #123's accidental fast-forward; the peer session's commits all landed via #105.
+
+### Tick 3 — #81 merged and turned `dev` RED. The cold read had called it.
+
+**This is the tick's most important entry, and it is a failure of mine.**
+
+PR #81 merged at 07:56:31Z with every check green and its push to `dev` went
+**red** at 07:58: `test (3.13)` — `fixture 'read_only_client' not found`, six
+errors in `tests/test_api_tiers.py`. The PR's gate runs **one** interpreter
+(3.12), where the code works; the full matrix runs on the `dev` push, where
+3.13 does not. That is the gate working as designed and me shipping through it.
+
+**The cold read named this exact risk and I filed it as a trade-off:**
+
+> Five fixtures gained `@classmethod` above `@pytest.fixture`, unexplained...
+> **`@classmethod` over `@pytest.fixture` is an ordering pytest does not
+> document as supported**, and the project pins only `pytest>=8.0.0` — I could
+> not confirm the combination on pytest 8. A one-line comment naming the
+> deprecation, or a floor bump, would stop the next reader from "simplifying"
+> it back.
+
+I read that, verified the fixtures ran *on this machine*, and carried it into
+the PR body as a known trade-off. It was not a trade-off. **An unverified claim
+about a decorator contract is an untested assumption**, and the one environment
+I could not test it in is exactly where it broke. On 3.13 the stacking silently
+stops registering the fixture — no error at import, the fixture simply is not
+there, so every test that requests it errors at setup.
+
+The distinction I got wrong, and the rule I would write from it: *a trade-off is
+a cost you have measured and chosen. An unknown is not a trade-off.* When a cold
+read says "I could not confirm X", the options are confirm it, remove the
+dependency on it, or hold the PR — not publish it as an accepted cost. The
+`@classmethod` change was incidental to the theme (it cleared a deprecation
+warning nobody had asked about); the cheapest correct action was to drop it.
+
+**Resolution: a peer session fixed it forward** (`cb7e7fa`, "class-scoped
+fixtures in test_api_tiers are plain methods, not classmethods" — all five
+`@classmethod` decorators removed), and its run is in progress. I did not
+duplicate that work. Had no peer been on it, this was the next theme, ahead of
+everything: `dev` red means nothing merges.
+
+**Circuit-breaker check:** the skill trips the breaker on *two consecutive*
+ticks whose `dev` push went red. This is one, inside tick 3, already fixed
+forward by another session. Not a trip — but it is the loop's **first red `dev`
+push**, after retro 1 recorded "0 red `dev` pushes" across nine merges, so the
+next tick starts with one strike and should treat a second as the breaker.
+
+**What should change (for the retro, not done here):** the PR gate runs one
+interpreter for speed and the matrix runs after the merge, which is a deliberate
+trade. It is correct for most changes and wrong for changes to *test
+infrastructure* — a conftest fixture, a decorator contract, anything pytest
+itself resolves. A rule worth considering: **when a diff changes how fixtures
+are declared or collected, run the matrix on the PR.** This diff would have
+qualified; the cold read's own words would have been the trigger.
+
+### Package C (#82) absorbed — the decision was measured, not argued
+
+Reviewed, rebased, pushed, flipped, auto-merge armed. The worker chose option
+(a), the second auth-enabled project, and **proved it rather than asserting it**:
+pointing the new project's `baseURL` at the auth-disabled world fails **8 of 18
+tests** (gate redirect, the 401, real sign-in, the signed-in redirect, both
+error-message assertions); the other 10 are markup shape and pass either way.
+Those 8 are what the second world buys. That is the best-argued decision any
+worker has returned in this loop.
+
+Config discipline held: the shared `playwright.config.ts` gained exactly one key
+on the existing project (`testIgnore`) and two new projects; name, `use`, both
+original `webServer` entries, `retries: 0` and `reuseExistingServer: false`
+untouched — verified hunk by hunk, because this was the one file in the fan-out
+whose edit could break four sibling branches.
+
+**A real user-facing bug fixed:** both auth forms rendered `ApiError.message`
+(the developer string, `API Error ${status}: ${detail}`) so a mistyped password
+read "API Error 401: Invalid username or password". `.detail` existed all along
+(`client.ts:921-930`, confirmed). Unreachable under the auth-disabled world —
+another argument for (a). Fourth package running to find a real bug through a
+real assertion (B→#49, E→#89, D→the create race, C→this).
+
+**Its force-push needed the conductor.** The worker rebased to pick up Package
+B, which rewrote the claim commit, and its `--force-with-lease` was denied by
+the permission system. It **stopped and reported rather than working around it**
+— correct — and supplied `git range-diff` showing `f0c7516 = 1b170a2`, which I
+verified before pushing: the only remote-only commit was reproduced
+byte-identically, so nothing was at risk.
+
+Its `CHANGELOG.md` conflicted on rebase (#103 again, third occurrence this tick)
+— both sides were new, unrelated entries, so both were kept.
+
+**Filed by C: #130** (`vite.config.ts` has no `strictPort`, so a busy 5173
+silently falls through to 5174 — it caught a sibling's dev server on its own
+world's port; same class as #104/#118 and the reason it chose 8189/5274 rather
+than the fall-through ports) and **#131** (the API returns 500s under concurrent
+load — `sqlalchemy.exc.InvalidRequestError: This session is provisioning a new
+connection`, with a clean correlation: 0 backend errors → 8-10 failures, errors
+present → 12-25). **#131 is a product bug in session provisioning found only
+because the machine was loaded**, and it deserves its own theme.
+
+**Honest evidence, flagged by the worker rather than smoothed over:** its "5x in
+a row" is five *executing* runs; runs blocked before any test ran (siblings
+holding 8088/5173) were discarded and said so. I re-ran the auth project myself
+on the rebased base with the siblings idle: **19 passed (9.4s)**.
