@@ -379,13 +379,36 @@ upward from the cwd (explicit `PYRITE_CONFIG_DIR` still wins), and
 `scripts/new-worktree.sh` writes one per worktree. Verify with `pyrite kb
 list` before the first KB command in any worktree.
 
-## `pyrite update --tags` rewrites the whole frontmatter (#46)
+## What you put in the frontmatter dict is what gets written back (#46, fixed)
 
-On 2026-09-18 `update <backlog-item> --tags a,b` dropped `kind`, `status`,
-`priority`, `effort` and wrote `body:`, `file_path:` and `importance:` into
-the file. The file still parses, so nothing complains; the board just loses
-the item. Until #46 is fixed, change tags with `-f`-free hand edits of the
-`tags:` line (inline or block form) and say so in the commit, or use
-`update -f tags=...` only after checking `git diff` on one file first.
-Related: an entry whose on-disk value is already off-enum (`kind: refactor`)
+On 2026-09-18 `update <backlog-item> --tags a,b` wrote `body:` (the whole body
+as a YAML string), `file_path:`, `importance: 5` and `rank: 0` into the file
+and reordered every other key. The file still parses, so nothing complains.
+
+The mechanism is worth remembering because it will recur. `extra_frontmatter`
+preserves "keys this entry's class did not declare", and it decides what those
+are **empirically**: whatever is in the `meta` dict but not in
+`to_frontmatter()`. `KBRepository._load_entry` was setting `fm["body"]` and
+`fm["file_path"]` on that same dict before handing it over, so two model
+attributes were classified as unknown frontmatter and faithfully preserved
+into the file. The protection was working; it was being fed non-frontmatter.
+
+So: **never put an Entry attribute into a dict that is going to
+`from_frontmatter` / `capture_extra_frontmatter`.** `body` arrives as the
+positional argument and `file_path` is set by the caller. `_BASE_CONSUMED_KEYS`
+now lists the model internals as a backstop.
+
+Two related rules the fix established:
+
+- A field serialized even at its default (`importance: 5`, `rank: 0`) must not
+  be written onto a file that never carried the key. Entries built in memory
+  still emit it — commit 7783335 fixed the loss of an explicit `importance: 5`
+  — but a load records which always-written defaults the source lacked, so a
+  round trip does not invent them.
+- A write re-emits unchanged keys from the ruamel mapping the file was parsed
+  from, so key order, quoting and `tags: [a, b]` flow style survive. Diff noise
+  is not cosmetic: the real corruption above stayed invisible in review because
+  it was buried in a 20-line reformat of a one-word change.
+
+Still open: an entry whose on-disk value is already off-enum (`kind: refactor`)
 cannot be updated at all until hand-repaired (#47).

@@ -175,6 +175,26 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `pyrite update -f status=done` stripped `milestone:` and `created:`. The
   base class now round-trips them; every one of the 48 registered types is
   tested. (#15)
+- **`pyrite update` no longer rewrites frontmatter it was not asked to touch.**
+  Updating one field (`--tags`, `--title`, `-b`) added `body:` (the whole body
+  as a YAML string), `file_path:` (an absolute path), `importance: 5` and
+  `rank: 0` to the file, and reordered and restyled every remaining key; six KB
+  items were corrupted this way in one loop. The loader was injecting two model
+  internals into the frontmatter dict that decides which keys are "unknown and
+  must be preserved", so they were preserved into the file. A one-field update
+  is now a one-line diff, keeping key order, quoting and `tags: [a, b]` flow
+  style. (#46)
+- **`pyrite index health` exits 1 when it reports unhealthy.** It printed
+  `"status": "unhealthy"` and exited 0, so every script, CI step and agent
+  gating on the exit code read a failure as success; the verdict was also
+  skipped entirely on the `--format json` path everyone scripts against.
+  `--no-fail` keeps the old behaviour, and new `-k/--kb` scopes every check to
+  one KB so another KB's problems cannot decide this project's verdict. (#18)
+- **`pyrite db backup` writes beside the index, not into the current
+  directory.** The default path was a bare relative filename, so backups landed
+  wherever the command was run; the repo root had accumulated 125 of them
+  (58 MB), gitignored so nobody noticed. The default is now
+  `<data dir>/backups/`; `--output` is unchanged. (#21)
 - **Writes are validated.** `create` and `update` refuse a value the KB schema
   or a plugin validator rejects (`status=bogus`, `priority=9999`) and name the
   allowed values, on every surface; the file is not touched. Previously only
