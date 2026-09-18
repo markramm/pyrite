@@ -34,6 +34,8 @@ web/build/
 # Test artifacts
 web/test-results/
 web/playwright-report/
+# The seeded world the e2e suite builds (web/e2e/global-setup.ts); rebuilt each run
+web/.e2e-data/
 
 # Playwright MCP (browser automation logs/screenshots)
 .playwright-mcp/
