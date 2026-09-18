@@ -200,13 +200,12 @@ class TestCoverageAndE2EPolicy:
         assert "--cov=pyrite" in runs and "-n auto" in runs
         assert "changes" in job.get("needs", [])
 
-    def test_e2e_runs_only_on_main_or_by_hand(self, ci):
-        # Non-deterministic today; it was burning 7 min per push for a signal
-        # nobody could act on. Back on every push when
-        # playwright-e2e-suite-non-deterministic-failures-... lands.
-        cond = str(ci["jobs"]["e2e"]["if"])
-        assert "refs/heads/main" in cond and "workflow_dispatch" in cond
-        assert "needs.changes.outputs" not in cond
+    def test_e2e_is_manual_only_until_deterministic(self, ci):
+        # Non-deterministic today: a different set of specs fails every run,
+        # so it carries no signal. Manual dispatch only; back on every push
+        # when playwright-e2e-suite-non-deterministic-failures-... lands.
+        cond = str(ci["jobs"]["e2e"]["if"]).strip()
+        assert cond == "github.event_name == 'workflow_dispatch'", cond
         assert "workflow_dispatch" in ci[True] if True in ci else ci["on"]
 
 

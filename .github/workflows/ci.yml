@@ -255,11 +255,13 @@ jobs:
   # vice versa. r1900 web-tests-in-ci.
   # ===========================================================================
   e2e:
-    # Runs on main and by hand only until the suite is deterministic
-    # (playwright-e2e-suite-non-deterministic-failures-...). On every push it
-    # cost 7 min of runner time for a result nobody could act on.
+    # Manual only (Actions -> CI -> Run workflow) until the suite is
+    # deterministic (playwright-e2e-suite-non-deterministic-failures-...). It
+    # fails a different set of specs every run, so it carries no signal; on
+    # every push it cost 7 min of runner time, and on main it flagged every
+    # release as failed. The job is kept so restoring it is a one-line change.
     needs: changes
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # TEMPORARILY NON-BLOCKING (2026-09-16). The suite is non-deterministic:
