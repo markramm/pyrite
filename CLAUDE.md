@@ -77,7 +77,7 @@ Use correct `type` frontmatter so plugin tools can find entries:
 ## Git Workflow (ADR-0025, amended by ADR-0032)
 
 - **`dev`** — the integration branch and default. **Nobody pushes to it directly**, including this session: a ruleset requires a pull request whose checks passed on top of current `dev`, with no bypass.
-- **`main`** — releases only; moves by fast-forward to a commit CI already verified (see the release runbook in `.claude/skills/pyrite-dev/release-runbook.md`).
+- **`main`** — releases only; moves by fast-forward to a commit CI already verified (see the release runbook in `.claude/skills/pyrite-conductor/release-runbook.md`).
 - **Your branch** — every batch of work lives on `feature/*`, `fix/*` or `kb/*`, in **its own worktree**. Commit there at whatever pace the work needs.
 
 **Start of a session** (one command; creates the worktree, branch, venv and hooks):
@@ -115,13 +115,15 @@ cd web && npm run build && npm run test:unit
 ruff check pyrite/
 ```
 
-## Parallel Agents
+## Two skills: worker and conductor
 
-**Do NOT use `isolation: "worktree"` for parallel sub-agents inside one wave.** They share the session's branch and a file-footprint plan; worktree merges between them are fragile and expensive. Launch them without isolation, working on the session's branch in the session's worktree. When agents share a file, the Edit tool's exact-match replacement fails gracefully on conflict and the agent retries.
+- **pyrite-dev** — for an agent writing Pyrite code: one theme, one branch, one worktree, TDD, evidence, a report. It does not choose work or open PRs.
+- **pyrite-conductor** — for orchestrating: reads GitHub issues and the roadmap, composes **reviewable themes**, creates a worktree and dispatches a `pyrite-worker` per theme (Sonnet 5 for well-specified work, Opus 5 for design-shaped work), reviews each branch (diff, suite, a `pyrite-reviewer` cold read for risky changes), opens the PR, shepherds it, keeps the repo healthy. Also releases and deploys.
+- A session with a single agent is both: do the work under pyrite-dev, then load pyrite-conductor for review and the PR.
 
-**Read `.claude/skills/pyrite-dev/parallel-agents.md` before launching parallel agents.**
+**A PR is a unit a reviewer can hold in their head:** complete on one theme, as many commits as the idea needs, never a small piece of a thing. Batch by default. A follow-up that belongs to work already in flight goes onto that PR's branch, not into a new one.
 
-The unit of isolation is the *session's branch*, not the agent: separate sessions get separate worktrees (above); sub-agents of one session share one.
+**Parallel sub-agents inside one worker** share the worker's branch and worktree. Do NOT give them `isolation: "worktree"`; give them disjoint files (footprint rules in `.claude/skills/pyrite-conductor/dispatch.md`).
 
 ## Multiple Sessions
 

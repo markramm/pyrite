@@ -31,7 +31,7 @@ deliberately names **files, not contents**.
   `.claude/skills/extension-builder/SKILL.md`, two `kb/notes/` files, and about
   ten `kb/backlog/` files that reference private repositories and the owner's
   local agent-memory directory.
-- `.claude/skills/pyrite-dev/release-runbook.md` depends on a gitignored deploy
+- `.claude/skills/pyrite-conductor/release-runbook.md` depends on a gitignored deploy
   script and the owner's sites: mark it maintainer-only.
 - `.claude-plugin/plugin.json`: `"author": "markr"`; `plugin.md` still pitches
   "for citizen journalists", which no longer matches the README.

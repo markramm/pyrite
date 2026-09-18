@@ -1,15 +1,18 @@
 ---
 name: pyrite-dev
-description: "This skill should be used when working in the pyrite repo — fixing a bug, adding a feature, writing or running tests, debugging, completing or filing a backlog item, releasing dev→main, or deploying to demo.pyrite.wiki / capturecascade.org / pyrite.ink. Enforces TDD, root-cause debugging, evidence-before-claims verification, and CLI-driven backlog management."
+description: "This skill should be used by an agent developing Pyrite code — fixing a bug, adding a feature, writing or running tests, debugging, or completing a backlog item — on its own branch in its own worktree. Enforces TDD, root-cause debugging and evidence-before-claims, and ends with a report the conductor can review. For picking work, dispatching agents, reviewing branches, opening PRs, releasing or deploying, use pyrite-conductor."
 ---
 
-# Pyrite Development Skill
-
-## Overview
-
-Systematic development workflow for Pyrite. Covers the full cycle: understand → plan → implement (TDD) → verify → complete.
+# Pyrite Development Skill (the worker)
 
 **Announce at start:** "I'm using the pyrite-dev skill."
+
+You develop Pyrite code on **one branch, in one worktree, on one theme**. You
+do not pick the theme, you do not open the pull request, and you never touch
+`dev`. Those belong to [pyrite-conductor](../pyrite-conductor/SKILL.md). If
+you are the only agent in the session — nobody dispatched you — you are also
+the conductor: finish the work here, then load pyrite-conductor for the review
+and PR steps.
 
 ## The Iron Laws
 
@@ -20,334 +23,139 @@ Systematic development workflow for Pyrite. Covers the full cycle: understand �
 4. NO BACKLOG CHANGES WITHOUT USING THE CLI (`pyrite update`, `pyrite create`)
 ```
 
-Thinking "skip this just once"? That's rationalization. These exist because skipping them always costs more time than following them.
+Thinking "skip this just once"? That's rationalization. These exist because
+skipping them always costs more time than following them.
 
 ---
 
-## Git Workflow (ADR-0025, amended by ADR-0032)
+## Where you are
 
-| Branch | Purpose | Moves by |
-|--------|---------|----------|
-| **your branch** (`feature/*`, `fix/*`, `kb/*`) | the work | commits, at any pace |
-| **`dev`** | integration (default branch) | pull requests only, checks green on top of current `dev`, no bypass |
-| **`main`** | releases | fast-forward to a CI-verified commit; tag points at it |
+```bash
+git branch --show-current     # a feature/*, fix/*, kb/* branch -- never dev
+pwd                           # a worktree under ../pyrite-wt/, with its own .venv
+```
 
-**Nobody pushes to `dev`.** A session starts with `scripts/new-worktree.sh <branch>` (worktree + venv + hooks) and ends with `gh pr create --base dev --fill && gh pr merge --auto --rebase`. CLAUDE.md has the commands. Check where you are with `git branch --show-current`; if it says `dev` and you have edits, move them to a branch before doing anything else.
+If either is wrong, stop: `scripts/new-worktree.sh <branch>` from the main
+checkout creates the right place (ADR-0032). Use `.venv/bin/...` from the
+worktree; the main checkout's venv imports the main checkout's code.
 
-### Committing
+Sub-agents you spawn share **your** branch and worktree. Do not give them
+`isolation: "worktree"`; give them disjoint files (see the conductor's
+[dispatch.md](../pyrite-conductor/dispatch.md) for footprint rules).
 
-Commit early and often on your branch. Commit hooks are fast checks only (ruff, import cycles, KB schema); pre-push runs the full suite in ~1 min; CI on the PR is the gate. Small, focused commits, conventional-commit prefixes, `Fixes #N` for a bug.
-
-### Releasing & Deploying
-
-Daily development does not touch `main` or run the deploy script. When the user asks to release (`dev → main`), tag and ship a version, deploy to demo/cascade/pyrite.ink, or hotfix a release, follow [release-runbook.md](release-runbook.md) — it holds the full step-by-step process, the deploy.sh commands, and the site→branch mapping.
-
----
-
-## Development Process
-
-### Before Writing Code
-
-Read the relevant backlog item, ADR, or design doc. Understand the goal and the reason for the work before writing code.
+## Before writing code
 
 ```
-CHECKLIST — before any implementation:
-- [ ] Read the backlog item / design doc / ADR
+- [ ] Read the ticket: the GitHub issue (`gh issue view N`) or the backlog item
+      (`pyrite get <id> -k pyrite`), and its acceptance criteria
+- [ ] `pyrite search "<topic>" -k pyrite` -- ADRs and designs that constrain the change
 - [ ] Check kb/adrs/ for relevant architecture decisions
-- [ ] Identify which files need to change (see Key Source Files)
-- [ ] Check existing tests for the area being modified
-- [ ] `gh issue list --label <area>` — bugs live on GitHub (ADR-0033), not in kb/
+- [ ] Identify which files need to change (see [architecture.md](architecture.md))
+- [ ] Check existing tests for the area; `gh issue list --label <area>` for known bugs
 - [ ] If multi-step: create tasks with TaskCreate, set dependencies
 ```
 
-### Two trackers, one rule (ADR-0033)
+Two trackers, one rule (ADR-0033): **bugs and user requests live in GitHub
+Issues; the roadmap (epics, backlog items, ADRs) lives in `kb/`.** A bug you
+fix in the same PR that found it needs no issue; the commit says `Fixes #N`.
+A bug you find and do not fix: `gh issue create --label bug --label <area>`,
+with placeholders for anything private. New roadmap work: a backlog item via
+the CLI. Never both.
 
-Bugs and user requests live in **GitHub Issues**; the **roadmap** (epics,
-backlog items, ADRs) lives in `kb/`. An item is in exactly one place; the
-other side links to it. So:
+## Test-Driven Development
 
-- Found a bug? `gh issue create --label bug --label <area>` — not a backlog
-  item. Same placeholder rule as the KB: no private subjects or paths. A bug
-  you fix in the same PR that found it needs no issue; the PR is the record.
-- Fixing a bug? The commit or PR says `Fixes #N`.
-- A user request you accept becomes a backlog item with `github_issue: N`;
-  label the issue `roadmap` and leave it open until it ships.
+**RED → GREEN → REFACTOR. No exceptions.** Detailed patterns: [tdd.md](tdd.md).
 
-**Working on the roadmap or toward a release** — read both surfaces before
-choosing or scoping anything:
+1. **RED** — one failing test showing the desired behaviour
+2. **Verify RED** — run it; confirm it fails for the right reason
+3. **GREEN** — the minimal code that passes. Nothing more.
+4. **Verify GREEN** — run it, and the tests around it
+5. **REFACTOR** — clean up while staying green
+6. **Commit** — small, focused, conventional-commit prefix; `Fixes #N` for a bug
 
-```bash
-gh issue list --milestone "<next version>" --state all   # what the release owes
-gh issue list --label bug --state open                   # what is broken
-gh pr list --state open                                  # what is waiting on review
-.venv/bin/pyrite sw backlog --status proposed            # what is planned
-```
-
-`kb/roadmap.md` is the plan; the GitHub milestone is the bug list for that
-plan. A release is not done while its milestone has open issues.
-
-### Test-Driven Development
-
-**RED → GREEN → REFACTOR. No exceptions.**
-
-For detailed TDD patterns and anti-patterns, see [tdd.md](tdd.md).
-
-**Quick version:**
-
-1. **RED** — Write one failing test showing desired behavior
-2. **Verify RED** — Run it. Confirm it fails for the right reason (feature missing, not typo)
-3. **GREEN** — Write minimal code to pass the test. Nothing more.
-4. **Verify GREEN** — Run it. Confirm it passes. Confirm other tests still pass.
-5. **REFACTOR** — Clean up while staying green. Don't add behavior.
-6. **Commit** — Frequent, small commits.
-
-**Wrote code before the test?** Delete it. Start over. Don't keep it as "reference."
+Wrote code before the test? Delete it and start over.
 
 | Rationalization | Reality |
-|-----------------|---------|
-| "Too simple to test" | Simple code breaks. Test takes 30 seconds. |
+|---|---|
+| "Too simple to test" | Simple code breaks. The test takes 30 seconds. |
 | "I'll test after" | Tests passing immediately prove nothing. |
-| "Need to explore first" | Fine. Throw away exploration, start with TDD. |
-| "TDD will slow me down" | TDD is faster than debugging. Always. |
 | "Manual test faster" | Manual doesn't prove edge cases. Can't re-run. |
 
-### Systematic Debugging
+## Systematic Debugging
 
-**When something breaks: investigate root cause before attempting fixes.**
+**Investigate root cause before attempting fixes.** Full process:
+[debugging.md](debugging.md).
 
-For the full 4-phase debugging process and supporting techniques, see [debugging.md](debugging.md).
+1. Read the error carefully — stack trace, line numbers, exact message
+2. Reproduce consistently
+3. Check recent changes (`git log`, `git diff`)
+4. Trace the data flow backward to where the bad value originates
+5. Form a hypothesis, test one variable at a time
+6. Fix at the root cause, not the symptom
 
-**Quick version:**
+**If 3+ fix attempts fail:** stop, question the architecture, say so in your
+report.
 
-1. **Read error messages carefully** — stack traces, line numbers, exact messages
-2. **Reproduce consistently** — exact steps, every time
-3. **Check recent changes** — `git diff`, recent commits, new deps
-4. **Trace data flow** — where does bad value originate? Trace backward through call chain.
-5. **Form hypothesis** — "I think X because Y." Test minimally. One variable at a time.
-6. **Fix at root cause** — not at symptom. Add validation at every layer the data passes through.
+## Verification Before Completion
 
-**If 3+ fix attempts fail:** Stop. Question the architecture. Discuss before attempting more fixes.
+**Evidence before claims. Always.** Identify the command that proves the
+claim, run it in full, read the output, then claim.
 
-| Red Flag | Action |
-|----------|--------|
-| "Quick fix, investigate later" | STOP. Investigate now. |
-| "Just try changing X" | STOP. Form hypothesis first. |
-| "Add multiple changes, see what works" | STOP. One variable at a time. |
-| "I don't fully understand but this might work" | STOP. Understand first. |
+| Claim | Run | Look for |
+|---|---|---|
+| Backend tests pass | `.venv/bin/pytest tests/ extensions/ -n auto` | `N passed, 0 failed` |
+| The fix is real | the new test, with the fix reverted (`git stash`) | it fails |
+| Frontend passes | `cd web && npm run check && npm run test:unit && npm run build` | all green |
+| Lint passes | `.venv/bin/ruff check . && .venv/bin/ruff format --check .` | clean |
+| KB content findable | `.venv/bin/pyrite search "<feature>" -k pyrite` | it appears |
 
-### Verification Before Completion
+Forbidden without evidence: "should work", "looks correct", "probably
+passes", "I'm confident".
 
-**Evidence before claims. Always.**
+The suite runs in parallel. A test that passes alone and fails under
+`-n auto` is a bug in that test (shared state, a fixed timeout, an unclosed
+database), not a reason to run serially.
 
-```
-BEFORE claiming any work is complete:
+## KB bookkeeping for your theme
 
-1. IDENTIFY: What command proves this claim?
-2. RUN: Execute the FULL verification (not partial, not cached)
-3. READ: Check output — exit code, failure count, warnings
-4. VERIFY: Does output confirm the claim?
-   - YES → State claim WITH evidence
-   - NO  → State actual status with evidence
-5. ONLY THEN: Make the claim
-```
+Use the CLI, never hand-edit frontmatter. Do this on your branch; the
+conductor reviews it with the code.
 
-**Pyrite verification commands:**
+- Closed a backlog item?
+  `pyrite update <id> -k pyrite -f status=done && git mv kb/backlog/<id>.md kb/backlog/done/`
+  (`done`, never `completed` — off-enum; see [gotchas.md](gotchas.md))
+- Changed architecture or added a component? `pyrite create -k pyrite -t component ...`
+  or `pyrite sw new-adr "Title" -k pyrite --status proposed`
+- Hit a surprising behaviour? Append to [gotchas.md](gotchas.md).
+- Then `.venv/bin/pyrite index sync` and check `pyrite search` finds it.
+- `CHANGELOG.md` under `## [Unreleased]`: one line per user-visible change.
 
-| Claim | Run | Look For |
-|-------|-----|----------|
-| Backend tests pass | `.venv/bin/pytest tests/ -v` (from the repo root) | `X passed, 0 failed` |
-| Frontend unit tests pass | `cd web && npm run test:unit` | All tests pass |
-| E2E tests pass | `cd web && npm run test:e2e` | All tests pass |
-| Build succeeds | `cd web && npm run build` | `dist/` created, exit 0 |
-| Linting passes | `ruff check pyrite/` | No errors |
-| Type check passes | `cd web && npm run check` | No errors |
-| KB index healthy | `.venv/bin/pyrite index health` | `✓ Index is healthy` |
-| KB content findable | `.venv/bin/pyrite search "<feature>" -k pyrite` | Relevant results appear |
-| Components documented | `.venv/bin/pyrite sw components` | New services listed |
-| Backlog current | `.venv/bin/pyrite sw backlog` | Statuses match reality |
+## Finishing: the report
 
-**Forbidden words without evidence:** "should work", "looks correct", "probably passes", "I'm confident"
-
-### Pre-Commit Checklist: Use the CLI
-
-**Dogfood Pyrite's own tools to manage the KB. Don't hand-edit markdown when the CLI can do it.**
+You are done when the theme is complete — not a fragment of it — and every
+claim below has evidence. Do **not** open a PR. Report:
 
 ```
-⚠️  PRE-COMMIT: KB DOCUMENTATION (use CLI)
-───────────────────────────────────────────
-1. Sync the index to pick up any files changed during this work:
-   .venv/bin/pyrite index sync
-
-2. Search for existing docs that may need updating:
-   .venv/bin/pyrite search "<feature name>" -k pyrite
-
-3. Check current component/ADR/backlog state:
-   .venv/bin/pyrite sw components
-   .venv/bin/pyrite sw adrs
-   .venv/bin/pyrite sw backlog --status proposed
-
-4. Create or update KB entries via CLI:
-   .venv/bin/pyrite create -k pyrite -t component --title "..." -b "..." --tags core,api
-   .venv/bin/pyrite update <entry-id> -k pyrite -b "new body"
-
-5. For new ADRs (TITLE is positional, not --title; always pass -k or the file
-   lands in ./adrs/ in your cwd instead of kb/adrs/ — see gotchas.md):
-   .venv/bin/pyrite sw new-adr "Title Here" -k pyrite --status accepted
-
-6. Verify the new content is findable:
-   .venv/bin/pyrite search "<key terms>" -k pyrite
-
-7. Check index health:
-   .venv/bin/pyrite index health
+Branch:   fix/what-it-fixes      Worktree: ../pyrite-wt/fix-what-it-fixes
+Commits:  <n>, listed with one line each
+Closes:   #N, #M  (or the backlog item ids)
+Evidence: full suite output line; the RED run of each new test; lint
+Changed:  files touched, new vs existing
+Unsure:   anything a reviewer should look at twice, or a decision that could
+          have gone another way
+Left:     anything in the theme you did not finish, and why
 ```
 
-Use the correct `type` frontmatter for KB entries so plugin tools can find them:
-- `type: component` (with `kind`, `path`, `owner`, `dependencies`) → shows in `pyrite sw components`
-- `type: adr` (with `adr_number`, `status`, `date`) → shows in `pyrite sw adrs`
-- `type: backlog_item` (with `kind`, `status`, `priority`, `effort`) → shows in `pyrite sw backlog`
-- `type: standard` → shows in `pyrite sw standards`
-
-```
-⚠️  PRE-COMMIT: UPDATE BACKLOG (use CLI — no BACKLOG.md)
-─────────────────────────────────────────────────────────
-The backlog has no index file. `pyrite sw backlog` is the source of truth.
-
-- Completed an item?
-    .venv/bin/pyrite update <id> -k pyrite -f status=done
-    git mv kb/backlog/<id>.md kb/backlog/done/
-    .venv/bin/pyrite index sync
-  Use `status=done` — never `completed`. `completed` is off-enum for backlog
-  items; it passes silently but drifts the board (it once stranded 75 items on
-  an undetected status). `done` is the canonical value (see gotchas.md).
-- Check current state:
-    .venv/bin/pyrite sw backlog
-- Discovered new work?
-    .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags <tags>
-- Unblocked downstream items? Note it in the item body via `pyrite update -b`.
-
-Ask: "Did this work change the status of any backlog item, or reveal new work?"
-```
-
-```
-⚠️  PRE-COMMIT: UPDATE GOTCHAS
-───────────────────────────────
-- Hit a surprising behavior? → Append to .claude/skills/pyrite-dev/gotchas.md
-- Resolved an existing gotcha? → Update or remove it from gotchas.md
-- Found a new _resolve_entry_type mapping issue? → Document it
-
-Ask: "Did I encounter any non-obvious behavior that would trip up the next agent?"
-```
-
-### Wave Completion Checklist
-
-**Run this at the end of every wave, before the final commit.** This is both process enforcement and dogfooding.
-
-```bash
-# 1. Sync index to pick up all changes from this wave
-.venv/bin/pyrite index sync
-
-# 2. Verify KB health — no orphaned or stale entries
-.venv/bin/pyrite index health
-
-# 3. Search for the wave's key concepts — verify discoverability
-.venv/bin/pyrite search "<wave feature 1>" -k pyrite
-.venv/bin/pyrite search "<wave feature 2>" -k pyrite
-
-# 4. Check component/ADR/backlog consistency
-.venv/bin/pyrite sw components    # New services documented?
-.venv/bin/pyrite sw adrs          # New decisions recorded?
-.venv/bin/pyrite sw backlog       # Items updated?
-
-# 5. Run full test suite
-.venv/bin/pytest tests/ -v
-
-# 6. Then commit
-```
-
-### Completing a Feature
-
-When implementation + verification are done, follow the backlog process:
-
-1. Update the item's status via CLI (validates + syncs index automatically):
-   ```bash
-   .venv/bin/pyrite update <item-id> -k pyrite -f status=done
-   ```
-   **Never hand-edit YAML frontmatter for status changes** — the CLI validates field values and keeps the index in sync. Hand-editing skips validation and leaves the index stale until the next `pyrite index sync`.
-2. Move the file from `kb/backlog/` to `kb/backlog/done/` (`git mv`)
-3. Re-sync the index so the move is reflected: `.venv/bin/pyrite index sync`
-4. If work revealed new tech debt or follow-on features:
-   - Create new backlog items via CLI:
-     ```bash
-     .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags enhancement
-     ```
-   - Move files to `kb/backlog/` (priority) or `kb/backlog/future-ideas/` (low priority)
-5. Verify with `pyrite sw backlog` — it is the source of truth (no BACKLOG.md file exists)
-6. Commit the backlog changes
+A conductor will read the diff and re-run the suite before opening the PR;
+make that cheap by keeping commits focused and the report honest.
 
 ---
 
-## Architecture Quick Reference
+## References
 
-### Key source files
-
-For the canonical file map (plugins, models, schema, CLI, storage, server, all services), see [architecture.md](architecture.md). Consult it when planning a change to know where to look first.
-
-### Architecture decisions
-
-See `kb/adrs/` for full details:
-
-| ADR | Decision |
-|-----|----------|
-| 0001 | Git-native markdown storage |
-| 0002 | Plugin system via entry points |
-| 0003 | Two-tier durability (content: git, engagement: SQLite) |
-| 0006 | MCP three-tier tools (read/write/admin) |
-| 0007 | AI integration: three surfaces, BYOK, Anthropic+OpenAI SDKs |
-| 0008 | Structured data: schema-as-config, field types, object refs |
-| 0017 | Entry protocol mixins (promoted indexed columns) |
-| 0025 | Release workflow: dev branch default, tagged releases, deploy tiers |
-| 0026 | FIPS/state as promoted entry columns |
-
-The list above is a curated subset (the repo is at ADR-0028). Run `pyrite sw adrs`
-for the current full set before relying on a decision being recorded.
-
-### 6 plugin integration points
-
-1. **Entry type resolution** — `get_entry_class()` consults registry before GenericEntry
-2. **CLI commands** — `cli/__init__.py` adds plugin Typer sub-apps
-3. **MCP tools** — `mcp_server.py` merges plugin tools per tier
-4. **Validators** — `schema.py` runs plugin validators always (even for undeclared types)
-5. **Relationship types** — `schema.py` merges plugin relationship types
-6. **PluginContext** — `set_context(ctx)` injects config, db, and services into plugins at startup
-
----
-
-## Parallel Agent Work
-
-For wave planning, agent launch checklists, and the merge protocol, see [parallel-agents.md](parallel-agents.md).
-
-**Critical: Do NOT use `isolation: "worktree"`.** Agents work directly on the current branch (usually `dev`). Edit tool retries on conflict are cheaper than worktree merge ceremonies. See CLAUDE.md and parallel-agents.md.
-
-**Quick rules:**
-- **No worktrees** — agents write directly to the working tree, no isolation parameter
-- Each wave item must list its file footprint — minimize shared modified files
-- When agents share a file, Edit's exact-match fails gracefully on conflict — the agent retries
-- Max 3 parallel agents per wave
-- Commit all pending work before launching agents
-- Run full test suite after all agents complete
-
-## Extension Building
-
-For complete scaffolding recipes, entry type contracts, plugin class templates, and validator/preset patterns, see [extensions.md](extensions.md).
-
-## Testing Conventions
-
-For the 8-section test structure, fixture patterns, and test-specific gotchas, see [testing.md](testing.md).
-
-## Data Pipelines
-
-For the entry lifecycle (create → validate → build → save → index → embed), type resolution behavior, and the build_entry factory, see [data-pipelines.md](data-pipelines.md).
-
-## Gotchas
-
-For known pitfalls with hooks, DB access, entry IDs, validators, and two-tier durability, see [gotchas.md](gotchas.md).
+- [architecture.md](architecture.md) — where things live
+- [tdd.md](tdd.md), [testing.md](testing.md), [debugging.md](debugging.md)
+- [data-pipelines.md](data-pipelines.md) — the entry lifecycle
+- [extensions.md](extensions.md) — building a plugin
+- [gotchas.md](gotchas.md) — known pitfalls; read before touching hooks, DB access, entry ids
+- `kb/adrs/` — run `pyrite sw adrs`; ADR-0032 (branch flow) and ADR-0033 (where work is tracked) govern process
