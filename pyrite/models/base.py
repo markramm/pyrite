@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from ..exceptions import FrontmatterError
 from ..schema import Link, Provenance, Source
@@ -22,6 +22,50 @@ logger = logging.getLogger(__name__)
 def _utcnow() -> datetime:
     """Return current UTC time (timezone-aware)."""
     return datetime.now(UTC)
+
+
+# Base keys every class handles through _base_kwargs / _base_frontmatter even
+# when it does not re-emit them (empty values are omitted on write).
+_BASE_CONSUMED_KEYS = frozenset(
+    {
+        "id",
+        "title",
+        "type",
+        "summary",
+        "tags",
+        "aliases",
+        "sources",
+        "links",
+        "provenance",
+        "metadata",
+        "importance",
+        "lifecycle",
+        "created_at",
+        "updated_at",
+        "_schema_version",
+    }
+)
+
+
+def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
+    """Record the top-level keys ``entry``'s class did not re-emit.
+
+    Called by every load path after ``from_frontmatter``. "Unknown" is decided
+    empirically -- a key is kept if serializing the freshly loaded entry does
+    not produce it -- so no class has to list its own fields, and a plugin
+    type gets the guarantee for free.
+    """
+    try:
+        emitted = entry.to_frontmatter()
+    except Exception:  # a class that cannot serialize is not this helper's problem
+        return
+    extras = {
+        k: v
+        for k, v in meta.items()
+        if k not in emitted and k not in _BASE_CONSUMED_KEYS and k not in entry.FRONTMATTER_ALIASES
+    }
+    if extras:
+        entry.extra_frontmatter = extras
 
 
 @dataclass
@@ -57,6 +101,16 @@ class Entry(ABC):
     kb_name: str = ""
     file_path: Path | None = None
     _schema_version: int = 0
+    # Top-level frontmatter keys this class did not declare, captured at load
+    # and written back at save, so a load -> save through a typed class never
+    # deletes what it does not understand (`milestone:`, `github_issue:`, a
+    # field a plugin added last week). Not indexed, not compared.
+    extra_frontmatter: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    # Legacy frontmatter keys a class reads under another name (e.g. `participants`
+    # -> `actors`). They are consumed, not unknown, so they are not preserved
+    # as extras (which would write the value twice).
+    FRONTMATTER_ALIASES: ClassVar[frozenset[str]] = frozenset()
 
     @property
     @abstractmethod
@@ -110,12 +164,19 @@ class Entry(ABC):
         }
 
     def _base_frontmatter(self) -> dict[str, Any]:
-        """Build common frontmatter fields."""
-        meta: dict[str, Any] = {
-            "id": self.id,
-            "title": self.title,
-            "type": self.entry_type,
-        }
+        """Build common frontmatter fields.
+
+        Starts from the undeclared keys captured at load, so declared fields
+        set below (and in subclasses) always win over a stale extra.
+        """
+        meta: dict[str, Any] = dict(self.extra_frontmatter)
+        meta.update(
+            {
+                "id": self.id,
+                "title": self.title,
+                "type": self.entry_type,
+            }
+        )
 
         if self.tags:
             meta["tags"] = self.tags
@@ -196,6 +257,7 @@ class Entry(ABC):
         # Restore lifecycle from frontmatter (base field, not in subclass constructors)
         if entry is not None:
             entry.lifecycle = meta.get("lifecycle", "active")
+            capture_extra_frontmatter(entry, meta)
         return entry
 
     @classmethod

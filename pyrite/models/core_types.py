@@ -19,7 +19,7 @@ from ..schema import (
     validate_importance,
 )
 from ..utils.parse import safe_int
-from .base import Entry
+from .base import Entry, capture_extra_frontmatter
 from .collection import CollectionEntry
 from .protocols import Locatable, Statusable, Temporal
 
@@ -149,6 +149,8 @@ class EventEntry(Temporal, Locatable, Statusable, Entry):
     @property
     def entry_type(self) -> str:
         return "event"
+
+    FRONTMATTER_ALIASES = frozenset({"participants"})  # legacy name for `actors`
 
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
@@ -284,6 +286,8 @@ class RelationshipEntry(Entry):
     @property
     def entry_type(self) -> str:
         return "relationship"
+
+    FRONTMATTER_ALIASES = frozenset({"source", "target"})  # legacy names
 
     def to_frontmatter(self) -> dict[str, Any]:
         meta = self._base_frontmatter()
@@ -438,4 +442,5 @@ def entry_from_frontmatter(meta: dict[str, Any], body: str) -> Entry:
     entry = cls.from_frontmatter(meta, body)
     # Restore lifecycle from frontmatter (base field, not in subclass constructors)
     entry.lifecycle = meta.get("lifecycle", "active")
+    capture_extra_frontmatter(entry, meta)
     return entry

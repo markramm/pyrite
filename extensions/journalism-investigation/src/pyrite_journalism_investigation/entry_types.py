@@ -11,6 +11,7 @@ from pyrite.schema import EventStatus, Provenance, generate_entry_id
 # Helper: build common kwargs from frontmatter meta dict
 # ---------------------------------------------------------------------------
 
+
 def _parse_event_status(meta: dict[str, Any]) -> "EventStatus":
     """Parse EventStatus from frontmatter, defaulting to CONFIRMED."""
     status_str = meta.get("status", "confirmed")
@@ -58,48 +59,92 @@ def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
 
 # Enum tuples for validation
 ASSET_TYPES = (
-    "real_estate", "vehicle", "vessel", "aircraft",
-    "luxury_good", "intellectual_property", "other",
+    "real_estate",
+    "vehicle",
+    "vessel",
+    "aircraft",
+    "luxury_good",
+    "intellectual_property",
+    "other",
 )
 ACCOUNT_TYPES = (
-    "bank", "brokerage", "crypto_wallet",
-    "shell_company", "trust", "other",
+    "bank",
+    "brokerage",
+    "crypto_wallet",
+    "shell_company",
+    "trust",
+    "other",
 )
 RELIABILITY_LEVELS = ("high", "medium", "low", "unknown")
 CLASSIFICATIONS = (
-    "public", "leaked", "foia", "court_filing",
-    "financial_disclosure", "corporate_registry", "other",
+    "public",
+    "leaked",
+    "foia",
+    "court_filing",
+    "financial_disclosure",
+    "corporate_registry",
+    "other",
 )
 
 # Event enum tuples
 VERIFICATION_STATUSES = ("unverified", "partially_verified", "verified", "disputed")
 TRANSACTION_METHODS = ("wire", "cash", "crypto", "check", "other")
 TRANSACTION_TYPES = (
-    "payment", "grant", "donation", "loan",
-    "investment", "bribe", "kickback", "other",
+    "payment",
+    "grant",
+    "donation",
+    "loan",
+    "investment",
+    "bribe",
+    "kickback",
+    "other",
 )
 CASE_TYPES = (
-    "criminal", "civil", "regulatory", "sanctions",
-    "indictment", "subpoena", "other",
+    "criminal",
+    "civil",
+    "regulatory",
+    "sanctions",
+    "indictment",
+    "subpoena",
+    "other",
 )
 CASE_STATUSES = (
-    "filed", "pending", "settled", "dismissed",
-    "convicted", "acquitted",
+    "filed",
+    "pending",
+    "settled",
+    "dismissed",
+    "convicted",
+    "acquitted",
 )
 
 # Connection enum tuples
 FUNDING_MECHANISMS = (
-    "grant", "donation", "contract", "lobbying", "dark_money", "other",
+    "grant",
+    "donation",
+    "contract",
+    "lobbying",
+    "dark_money",
+    "other",
 )
 
 # Evidence enum tuples
 EVIDENCE_TYPES = (
-    "document", "testimony", "record", "data", "photo", "video", "other",
+    "document",
+    "testimony",
+    "record",
+    "data",
+    "photo",
+    "video",
+    "other",
 )
 
 # Claim enum tuples
 CLAIM_STATUSES = (
-    "unverified", "partially_verified", "corroborated", "disputed", "retracted",
+    "unverified",
+    "partially_verified",
+    "corroborated",
+    "disputed",
+    "retracted",
 )
 CONFIDENCE_LEVELS = ("high", "medium", "low")
 
@@ -255,6 +300,7 @@ class DocumentSourceEntry(DocumentEntry):
 
 @dataclass
 class InvestigationEventEntry(EventEntry):
+    FRONTMATTER_ALIASES = frozenset(["participants"])  # legacy keys read under another name
     """An event in an investigation with actors, source references, and verification status."""
 
     actors: list[str] = field(default_factory=list)
@@ -295,6 +341,7 @@ class InvestigationEventEntry(EventEntry):
 
 @dataclass
 class TransactionEntry(EventEntry):
+    FRONTMATTER_ALIASES = frozenset(["participants"])  # legacy keys read under another name
     """A financial transaction — payment, bribe, grant, etc."""
 
     amount: str = ""
@@ -350,6 +397,7 @@ class TransactionEntry(EventEntry):
 
 @dataclass
 class LegalActionEntry(EventEntry):
+    FRONTMATTER_ALIASES = frozenset(["participants"])  # legacy keys read under another name
     """A legal or regulatory action — case, indictment, sanctions, etc."""
 
     case_type: str = ""

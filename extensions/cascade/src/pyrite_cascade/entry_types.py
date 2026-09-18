@@ -14,6 +14,7 @@ from pyrite.schema import Provenance, generate_entry_id
 # Helper: build common kwargs from frontmatter meta dict
 # ---------------------------------------------------------------------------
 
+
 def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
     """Extract base Entry fields from frontmatter dict."""
     prov_data = meta.get("provenance")
@@ -42,6 +43,7 @@ def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Actor — extends PersonEntry
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ActorEntry(PersonEntry):
@@ -96,6 +98,7 @@ class ActorEntry(PersonEntry):
 # CascadeOrg — extends OrganizationEntry
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CascadeOrgEntry(OrganizationEntry):
     """An organization in the Cascade Series."""
@@ -143,8 +146,12 @@ class CascadeOrgEntry(OrganizationEntry):
 # CascadeEvent — extends EventEntry (research KB events)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CascadeEventEntry(EventEntry):
+    FRONTMATTER_ALIASES = frozenset(
+        ["event_date", "participants"]
+    )  # legacy keys read under another name
     """A research KB event in the Cascade Series."""
 
     era: str = ""
@@ -195,8 +202,10 @@ class CascadeEventEntry(EventEntry):
 # TimelineEvent — extends EventEntry (timeline KB events)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class TimelineEventEntry(InvestigationEventEntry):
+    FRONTMATTER_ALIASES = frozenset(["participants"])  # legacy keys read under another name
     """A timeline event from the Cascade Series timeline KB.
 
     Extends InvestigationEventEntry to inherit actors, source_refs, and
@@ -260,8 +269,10 @@ class TimelineEventEntry(InvestigationEventEntry):
 # SolidarityEvent — extends EventEntry (solidarity KB events)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SolidarityEventEntry(EventEntry):
+    FRONTMATTER_ALIASES = frozenset(["participants"])  # legacy keys read under another name
     """A solidarity/resistance event from the Infrastructure of Solidarity timeline."""
 
     infrastructure_types: list[str] = field(default_factory=list)
@@ -332,6 +343,7 @@ class SolidarityEventEntry(EventEntry):
 # Theme — extends TopicEntry
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class ThemeEntry(TopicEntry):
     """A thematic topic in the Cascade Series."""
@@ -361,6 +373,7 @@ class ThemeEntry(TopicEntry):
 # ---------------------------------------------------------------------------
 # Victim — extends Entry
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class VictimEntry(Locatable, Entry):
@@ -400,6 +413,7 @@ class VictimEntry(Locatable, Entry):
 # ---------------------------------------------------------------------------
 # Statistic — extends Entry
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class StatisticEntry(Entry):
@@ -443,6 +457,7 @@ class StatisticEntry(Entry):
 # ---------------------------------------------------------------------------
 # Mechanism — extends Entry
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class MechanismEntry(Entry):
@@ -491,6 +506,7 @@ class MechanismEntry(Entry):
 # ---------------------------------------------------------------------------
 # Scene — extends Entry
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SceneEntry(Entry):
