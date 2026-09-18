@@ -2214,7 +2214,7 @@ Six workers in flight. Held for later ticks per the breakdown: F/G (after A.1), 
 
 **Blocked / needs the maintainer.** Nothing.
 
-## Tick 2026-09-18T10:05Z (tick 8 — host-run, scheduled; the first absorb tick under retro 3's rules)
+## Tick 2026-09-18T09:42Z (tick 8 — host-run, scheduled; the first absorb tick under retro 3's rules; heading corrected from an estimated 10:05Z — the host stamped by guess; from here on entries are stamped with `date -u`)
 
 **Health.** `dev` green at 35ea097 (groom-into-the-ticket merged); load 8 → 16 during the reviews. Outside PRs: 0. Good-first-issue pool: 14.
 
