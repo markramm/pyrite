@@ -85,6 +85,15 @@ reviewer could argue against it in good faith:
      marker, so the response size is bounded no matter how many entries
      were asked for.
 
+   **All three are configuration, not constants** (maintainer, 2026-09-18):
+   each reads an environment variable at server start and falls back to the
+   default above — `PYRITE_BODY_CHUNK_DEFAULT` (8000),
+   `PYRITE_BODY_CHUNK_MAX` (20000), `PYRITE_BODY_RESPONSE_BUDGET` (40000) —
+   so a deployment whose clients have smaller or larger windows tunes them
+   without a code change. Invalid values (non-integer, ≤ 0, default above
+   max) fail loudly at start rather than silently falling back. Tool
+   descriptions report the effective values, not the compiled-in ones.
+
 5. **CLI: one switch, off by default.** The CLI's default output stays
    complete, because scripts depend on it and a human at a terminal expects
    it. Agents get the bound with one switch rather than a flag per command:
@@ -136,10 +145,17 @@ reviewer could argue against it in good faith:
 - Reviewers — human or agent — have a rule to cite, and "it is documented
   that the bound is skipped" stops being a defence of an unbounded read.
 
+## Maintainer's read, 2026-09-18
+
+Agreed in direction: the defaults in rule 4 "perhaps make sense" and must be
+configurable by environment variable (now in rule 4); the CLI serves agents,
+scripts and the maintainer at a terminal, so its default stays complete with
+the bound one switch away (rule 5). Status stays `proposed` until the
+maintainer accepts it.
+
 ## Open questions for the maintainer
 
-1. The three numbers in rule 4 (8,000 / 20,000 / 40,000).
-2. CLI default: opt-in via `PYRITE_BODY_LIMIT` (proposed) or bounded by
-   default with `--full`.
-3. Whether the web UI should itself request bounded bodies for read-only
+1. Whether 8,000 / 20,000 / 40,000 are the shipped defaults (they are
+   tunable either way).
+2. Whether the web UI should itself request bounded bodies for read-only
    views (entry cards, search results) while the editor asks for the whole.
