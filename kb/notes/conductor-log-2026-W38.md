@@ -2232,3 +2232,31 @@ Six workers in flight. Held for later ticks per the breakdown: F/G (after A.1), 
 **Friction.** `node web/e2e/print-ports.ts` needs the repo root as an argument (the usage line says so; the review's first call omitted it) — fine, but `scripts/new-worktree.sh` must pass it; check in the cold read. Three suites sharing the machine during review produced one spurious failure (the #153 flake) — reviews of heavy branches should run one at a time, same rule as builds.
 
 **Needs the maintainer.** Nothing.
+
+## Tick 2026-09-18 10:08Z–11:05Z (tick 9)
+
+**Health.** dev green (aa024d4, then b5514c1 after #138). #138 merged 10:12Z, #118 closed, its worktree removed. No outside PRs. Load 1.8→8 during the three parallel suites.
+
+**Absorbed** (each from its own `review/pr-N` worktree on the pushed head; all three removed at the end of the tick):
+
+- **#146** round-trip identity gate (sonnet) → **ready, auto-merge armed** (rebased once, BEHIND after #138). Suite 4300 passed / 70 xfailed / 1 failed: `test_walk_is_fast`'s 10 s wall-clock budget under `-n auto` beside two other suites — the load-sensitive-timeout class; fixed by the host in `5811c81` (60 s). Gate bites: both halves of the #46 fix reverted → 7 failed; one half alone stays green (each half prevents the leak). Follow-ups the worker filed: #148 #149 #150 #151.
+- **#140** `scripts/release.py` (opus) → **redispatched** (opus, same branch). Suite green bar #88's load race; verify-red exit 0. Cold read: design sound, but on first use the `release-blocker` gate is inert (label absent → skipped, and the label did not exist — created it this tick), no tag-existence guard so a retry moves `main` then reports "nothing further was attempted", CHANGELOG parsing ignores fences and duplicate headings, `origin` never checked against the hard-coded slug, the tutorial-hook tests pass against a deleted implementation, step e commits on local `dev` naming a branch it never made. Eleven items in the PR body; six must-fix.
+- **#145** search filters on every leg (opus) → **redispatched** (opus, same branch). Suite 4348 passed; the matrix is genuinely red against dev. Cold read found a **regression**: `k` escalation clamps only to the table size, never to sqlite-vec's 4096 cap — semantic and hybrid search raise on any KB above 4096 embedded rows (the maintainer's index: 18,909), incl. unfiltered queries under `max_distance`; confirmed from the source (no `4096` anywhere in the file or `tests/`). Plus: the `TypeError` rescue swallows real bugs as "backend cannot filter" (declare a `FILTERED_SEMANTIC` capability instead); REST serialises `"warnings": null` while MCP omits the key, and the test that should catch it cannot fail; `include_archived` is not applied on the vector leg while the PR's new contract says every filter on every leg. Five must-fix in the body.
+
+**Reported this tick, absorb next:** #157 web security alerts (sonnet; 16 of 19 alerts, `cookie` ×3 stays — kit 3.x prerelease only), #158 CI job permissions (sonnet; checks all green on the PR). Both bodies carry the reports.
+
+**Spike (CodeQL triage) landed its `## Groom`** on the log branch (a785be0, 468 lines): 4 true positives of 48 — one exploitable, `py/polynomial-redos` #43 (`GET /api/search` has no `max_length`; 40k chars → 12 s CPU on the read tier) — 43 noise with the guard named per alert, a 43-row dismissal table, four themes. Spike worktree discarded, no code kept.
+
+**Dispatched** (4 workers, footprints disjoint; 2 small sonnet reviews wait):
+- Playwright **F** graph + timeline (#160, sonnet, heavy) — A.1 landed, one heavy at a time.
+- **#140 redispatch** (opus) — the eleven findings.
+- **#145 redispatch** (opus) — the five findings + the "also" list.
+- CodeQL **Theme B** repo error-message disclosure (#161, opus) — `git_service.py`/`repos.py` quiet; #51 #52 #53.
+Not dispatched: Theme A (ReDoS cap — hard conflict with #145; after it merges), Theme C (after A and B), Theme D (kept decision), Playwright G (next tick; one heavy at a time), CI parity 6F, packaged UI 6E (coordinates with #140's runbook edit — after #140).
+
+**Kept, for the maintainer** (no action taken):
+1. `py/weak-sensitive-data-hashing` ×7: spike recommends *dismiss as won't fix* + Theme D (a `pyrite key new` mint command + docs, so keys are random by construction) rather than a keyed hash that breaks every deployed `config.yaml`. If keyed hash is preferred it needs an ADR.
+2. CodeQL as a required check: 44 of 48 alerts were noise and the one exploitable finding was a `warning`, not an `error` — severity is not a usable filter. Recommendation: not required; Theme C dismissals make the page honest first.
+3. Private-repo existence oracle via `POST /api/repos/subscribe` (write tier learns whether a private repo exists through the operator's token) — no alert, not ticketed, needs a design decision.
+
+**Process notes for the retro.** (a) Two of three Opus branches came back with must-fix findings from the cold read that the worker's own evidence did not surface — both in the regime the tests never entered (N>4096; a retry after a failed publish). "Tests prove the fix is real" and "tests cover the failure regime" are different claims; the dispatch spec could ask for the second explicitly. (b) The 10 s wall-clock test is the third load-sensitive timeout this week (#55, #88, now #146); the pre-push hook runs alone, the conductor's parallel suites do not. (c) A GitHub push failed once on a 75 s connect timeout mid-tick; retried fine — a tick must re-check `git ls-remote` after any push, not trust the exit of a pipeline. (d) Tick length ~57 min against the "thirty minutes is long" line: three absorbs with two cold reads plus four dispatches is more than one tick should carry; the queue had built up because ticks 7–8 dispatched five themes.
