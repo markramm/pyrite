@@ -40,6 +40,18 @@ test.describe('seeded e2e world', () => {
 		expect(body.enabled).toBe(AUTH_ENABLED);
 	});
 
+	test('the read rate limiter is off, so parallel workers do not 429 each other', async ({
+		request
+	}) => {
+		// Five workers share one client IP; with the limiter on they exhaust
+		// rate_limit_read (100/minute) partway through the suite and whichever
+		// page loses the race renders "API Error 429" instead of its content.
+		const codes = await Promise.all(
+			Array.from({ length: 120 }, async () => (await request.get(`${API}/api/kbs`)).status())
+		);
+		expect(codes.filter((c) => c === 429)).toHaveLength(0);
+	});
+
 	test('every seeded entry exists with the id fixtures.ts promises', async ({ request }) => {
 		for (const entry of SEEDED_ENTRIES) {
 			const res = await request.get(`${API}/api/entries/${entry.id}?kb=${E2E_KB}`);

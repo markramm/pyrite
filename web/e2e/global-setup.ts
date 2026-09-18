@@ -63,6 +63,14 @@ const PYRITE_BIN = join(REPO_ROOT, '.venv', 'bin', 'pyrite');
  * - `PYRITE_AUTO_EMBED=0` and `HF_HUB_OFFLINE=1` keep the backend from
  *   downloading or loading a sentence-transformers model on first write, which
  *   is both slow and a network dependency a test suite must not have.
+ * - `RATELIMIT_ENABLED=false` (slowapi's own switch) turns off the read limiter
+ *   for the test backend. Five Playwright workers share one client IP and blow
+ *   through `rate_limit_read: 100/minute` partway through a suite, so a page
+ *   renders "API Error 429" instead of its content — and WHICH page loses the
+ *   race varies run to run. Measured against the seeded backend: 150 reads give
+ *   100x200 + 50x429 with the limiter on, and 150x200 with it off. The limiter
+ *   is a production behaviour with its own backend tests; it is not what these
+ *   specs are asserting.
  */
 export const E2E_ENV: Record<string, string> = {
 	PYRITE_DATA_DIR: E2E_DATA_DIR,
@@ -71,7 +79,8 @@ export const E2E_ENV: Record<string, string> = {
 	PYRITE_AUTO_EMBED: '0',
 	PYRITE_SEARCH_MODE: 'keyword',
 	HF_HUB_OFFLINE: '1',
-	TRANSFORMERS_OFFLINE: '1'
+	TRANSFORMERS_OFFLINE: '1',
+	RATELIMIT_ENABLED: 'false'
 };
 
 function pyrite(args: string[]): string {
