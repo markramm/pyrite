@@ -161,6 +161,9 @@ def register_search_command(app: typer.Typer):
             search_svc = SearchService(db, settings=config.settings)
             search_mode = mode or config.settings.search_mode or "keyword"
             search_trace: dict = {} if debug else None
+            # Anything the search could not do as asked — today, a filter a
+            # backend's vector leg cannot honour (#56).
+            search_warnings: list[str] = []
             results = search_svc.search(
                 query=query,
                 kb_name=kb_name,
@@ -176,7 +179,13 @@ def register_search_command(app: typer.Typer):
                 state=state_filter,
                 status=status,
                 trace=search_trace,
+                warnings=search_warnings,
             )
+
+            for warning in search_warnings:
+                # stderr, like the trace and the staleness notice, so it never
+                # corrupts --format json on stdout.
+                err_console.print(f"[yellow]warning:[/yellow] {warning}")
 
             if debug and search_trace is not None:
                 # Trace goes to stderr so it never corrupts --format json on stdout.

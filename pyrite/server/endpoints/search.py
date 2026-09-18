@@ -58,6 +58,9 @@ def search(
         )
 
     tag_list = tags.split(",") if tags else None
+    # Anything the search could not do as asked (today: a filter a backend's
+    # vector leg cannot honour). Omitted from the response when empty (#56).
+    warnings: list[str] = []
 
     try:
         # When grouping by KB, fetch more results to ensure coverage across KBs
@@ -74,6 +77,7 @@ def search(
             limit=fetch_limit,
             mode=mode,
             expand=expand,
+            warnings=warnings,
         )
 
         # Group by KB: take top N per KB, interleave by best score
@@ -112,11 +116,16 @@ def search(
                 r.pop("body", None)
 
         resp_data = {"query": q, "count": len(results), "results": results}
+        if warnings:
+            resp_data["warnings"] = warnings
         neg = negotiate_response(request, resp_data)
         if neg is not None:
             return neg
         return SearchResponse(
-            query=q, count=len(results), results=[SearchResult(**r) for r in results]
+            query=q,
+            count=len(results),
+            results=[SearchResult(**r) for r in results],
+            warnings=warnings or None,
         )
     except (sqlite3.OperationalError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "SEARCH_FAILED", "message": str(e)})

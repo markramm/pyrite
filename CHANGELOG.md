@@ -338,6 +338,21 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `strictPort: true` — a taken 5173 is a startup error instead of silently
   moving to 5174, which is the same silent-fallback problem this fix exists
   to close, just visible outside the e2e path too.
+- **Search filters were silently ignored in semantic and hybrid modes — and
+  hybrid is the default.** `entry_type`, `tags`, `state`, `fips` and `status`
+  were compiled only into the keyword leg's `WHERE`; the vector leg ran with
+  `kb_name` alone and the two were fused, so a filtered search returned
+  plausible-looking entries the filter excluded (`--type mechanism` returning
+  themes; a bogus type returning a full result set instead of zero). Every
+  filter is now applied on every leg in every mode: `SearchBackend.search_semantic`
+  takes the keyword leg's filter set, and all backends implement it — SQLite
+  escalates sqlite-vec's KNN budget so a selective filter costs no recall,
+  Postgres puts the predicates in the same `WHERE` as the distance ordering.
+  The backend conformance suite gained the semantic-filter cases. When a leg
+  cannot honour a filter it is dropped rather than returning unfiltered rows,
+  and the response carries a `warnings` array naming the filters responsible
+  (`GET /api/search` and MCP `kb_search`; on stderr for the CLI). Fixes #56,
+  #53.
 - **The New Entry page's Create button could submit before the target KB was
   known.** `kbStore.activeKB` resolves asynchronously on mount; nothing
   disabled Create while it was still empty, so a fast click sent `kb: ''` and

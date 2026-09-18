@@ -131,8 +131,24 @@ class SearchBackend(Protocol):
         kb_name: str | None = None,
         limit: int = 20,
         max_distance: float = 1.3,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]:
-        """KNN search over stored embeddings."""
+        """KNN search over stored embeddings, honouring the same filters as
+        :meth:`search`.
+
+        The filter set here is deliberately the keyword leg's filter set. A
+        hybrid search fuses the two legs, so a filter applied on only one of
+        them produces a result set that silently violates the caller's filter
+        (#56). Implementations MUST apply every filter they are given, or raise
+        rather than return unfiltered rows — ``SearchService`` catches that and
+        reports the dropped leg in ``warnings``.
+        """
         ...
 
     def has_embeddings(self) -> bool:

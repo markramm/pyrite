@@ -565,6 +565,13 @@ class BaseBackend(ABC):
         kb_name: str | None = None,
         limit: int = 20,
         max_distance: float = 1.3,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
     ) -> list[dict[str, Any]]: ...
 
     @abstractmethod
