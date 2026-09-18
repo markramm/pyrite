@@ -30,7 +30,8 @@ In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 - [ ] git log dev..HEAD --oneline        commits are focused, messages say why, Fixes #N present
 - [ ] git diff dev...HEAD                 READ IT. Every hunk. The report is not the diff.
 - [ ] .venv/bin/pytest tests/ extensions/ -n auto     green, here, now
-- [ ] fix stashed, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...` — EVERY test
+- [ ] fix reverted to the merge base, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...`
+      (exit 0 = red without the fix; exit 1 = passes anyway; exit 2 = nothing was reverted, NO claim — #121) — EVERY test
       named for a regression or a "still works" case, not one at random (PR #69: a class named for the
       exact regression it reintroduced covered only cases that already passed, and read as tested)
 - [ ] any number in the report (faster, slower, N% fewer rewrites, a flake rate) was measured against the
