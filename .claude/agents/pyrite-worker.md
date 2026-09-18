@@ -41,6 +41,14 @@ End with the pyrite-dev report block, verbatim in shape:
 Branch / Worktree / Pushed SHA / Commits / Closes / Evidence / Changed / Unsure / Left
 ```
 
+`Evidence` ends with **Regimes**: one line per regime the spec named (its
+`Regimes:` field) — the test that enters it and its red line — and a plain
+"not entered: <why>" for any you could not reach. A spec with no `Regimes:`
+field on a change to storage, the server, a repo-mutating script or a bounded
+loop is a gap to name in `Unsure`, not to fill in silently: on 2026-09-18 two
+Opus themes (#140, #145) were redispatched from the cold read for regimes
+their 85 and 44 tests never entered.
+
 The conductor reads your diff and re-runs the suite; the report's job is to
 make that fast and to flag what only you know.
 

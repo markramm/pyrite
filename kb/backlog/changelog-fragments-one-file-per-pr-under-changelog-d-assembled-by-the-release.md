@@ -9,7 +9,7 @@ tags:
 importance: 5
 kind: tech_debt
 status: proposed
-priority: medium
+priority: high
 effort: S
 rank: 0
 ---
@@ -30,3 +30,43 @@ The towncrier pattern, hand-rolled or via towncrier: each PR adds `changelog.d/<
 - pyrite-dev and pyrite-conductor skills say "add a fragment" where they say "add a CHANGELOG line".
 
 Footprint: `CHANGELOG.md`, new `changelog.d/`, `scripts/release.py` (coordinate with the release-script theme if it is in flight — this may be the same PR), `tests/test_dev_process_config.py`, the two skills. Model: sonnet.
+
+## Groom 2026-09-18 (retro 5 — the oldest open `quality` theme; dispatch ahead of new features)
+
+Evidence, 09:25Z–10:42Z: `CHANGELOG.md` was touched by 18 of the PRs merged
+to `dev` since 05:00Z — the most of any file, ahead of the conductor skill
+itself (12) — and at 10:42Z three of the six open loop branches (#145, #158,
+#161) conflicted with `dev` on `CHANGELOG.md` and nothing else; #158 had been
+flipped to ready with auto-merge armed and sat `DIRTY` for it.
+
+Model: sonnet. Cold read: no. heavy: no. **Sequence: after #140 (`scripts/release.py`)
+merges** — the assembly step lands in its `release_notes_for` / `compose_notes`,
+which #140 owns until then; rebase onto it, do not run in parallel.
+
+Acceptance (in addition to the item's own):
+1. `changelog.d/<slug>.<section>.md`, sections `security added changed fixed process docs`;
+   a test rejects an unknown section and an empty fragment.
+2. `scripts/release.py` assembles fragments under the version heading in
+   `compose_notes`, in section order, and deletes them under `--execute`; the
+   dry run prints the assembled section. The existing `check_changelog` "still
+   has entries" rule becomes "no fragments left and `[Unreleased]` empty".
+3. Every existing `[Unreleased]` bullet migrated to a fragment in the same PR;
+   `[Unreleased]` on `dev` holds only the `Target:` line afterwards, and
+   `tests/test_dev_process_config.py` pins that.
+4. A test builds two branches in a temp repo, each adding one fragment, and
+   rebases one onto the other with no conflict.
+5. pyrite-dev SKILL.md, pyrite-worker.md, dispatch.md and review.md say
+   "add a fragment under `changelog.d/`" wherever they say "CHANGELOG line";
+   CONTRIBUTING.md too.
+
+Touches (existing): `CHANGELOG.md`, `scripts/release.py`, `tests/test_release_script.py`,
+`tests/test_dev_process_config.py`, the four skill/agent files, `CONTRIBUTING.md`.
+New: `changelog.d/` (+ a `README.md` in it naming the sections), the migrated
+fragments, `tests/test_changelog_fragments.py`.
+
+Regimes: an `[Unreleased]` that is already empty; a fragment whose section
+is misspelled; two fragments with the same slug; a release with zero fragments
+(the script must refuse, not publish an empty section).
+
+Out of scope: towncrier as a dependency (hand-roll; it is ~60 lines); rewriting
+released sections.

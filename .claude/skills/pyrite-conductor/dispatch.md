@@ -28,11 +28,32 @@ Write each theme down before dispatching, as the worker's spec:
 Theme:       write-path correctness
 Closes:      #15, #14, #16, #17
 Acceptance:  (copied from each ticket, verbatim)
+Regimes:     the boundaries the tests must enter — an index above the backend's
+             hard limit; the retry after a half-finished run; empty, None and
+             oversized inputs; the case where every candidate is filtered out
 Touches:     pyrite/models/base.py (existing), pyrite/services/kb_service.py (existing),
              pyrite/schema/validators.py (existing), tests/ (new files)
 Out of scope: the packaged web UI; anything in web/
 Model:       opus   (cross-cutting; touches the base class and the service layer)
 ```
+
+**`Regimes:` is not optional for anything that touches storage, the server, a
+script that mutates the repo, or a loop with a bound.** A test proves the fix
+is real; it does not prove the change is safe where it was never run. On
+2026-09-18 (retro 5) two of the window's three Opus themes came back from the
+cold read for exactly that: #145 pushed search filters into the KNN with 44
+tests red against `dev`, and every one of them ran below sqlite-vec's 4096-row
+cap — above it the branch raised on every semantic search, including the
+maintainer's 18,909-entry index; #140 built a release script with 85 tests
+and none entered "the tag already exists from an aborted run", the one path
+that moves `main` and then reports nothing happened. Neither spec named the
+regime, so neither worker's evidence could. Write the regimes as one line
+each, from the ticket's Touches: for every hard limit, retry, empty set or
+external state the code depends on, name the case; the worker's report lists
+each regime with the test that enters it (pyrite-worker's `Evidence`), and
+the review checks the list against the diff before the cold read. A regime
+the conductor cannot name is a question for the architect or a spike, not a
+line to leave blank.
 
 ## 2. Footprints and sequencing
 
