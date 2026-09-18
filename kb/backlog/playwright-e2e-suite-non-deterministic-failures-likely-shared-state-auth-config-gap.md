@@ -338,3 +338,32 @@ runs, and in all fifteen runs across the three batches taken during this work.
 - The suite cannot be green while #49 and #45 are open — they are product bugs,
   not test bugs, and packages B/D/G will hit them head-on.
 - H still owns `ci.yml` and the `continue-on-error` line.
+
+## Package A.1 result (2026-09-18): per-worktree ports and data dirs
+
+Delivered: `web/e2e/ports.ts` (+ `ports.test.ts`, `print-ports.ts`), edits to
+`global-setup.ts`, `auth-setup.ts`, `playwright.config.ts`, `vite.config.ts`,
+`scripts/new-worktree.sh`. Branch `feature/playwright-a1-ports`. Full detail
+and evidence: `kb/backlog/done/playwright-package-a-1-per-worktree-ports-and-data-dir-118.md`.
+
+Two worktrees running `playwright test` at once used to collide on the same
+four hardcoded ports (8088/5173 base, 8189/5274 auth) — the reason Playwright
+had been serialized to one worktree at a time since 2026-09-18. All four
+ports and both data directories now derive from a stable hash of the
+worktree's own path (`PLAYWRIGHT_E2E_PORT`/`PLAYWRIGHT_E2E_VITE_PORT`
+override the base pair), `strictPort: true` on Vite defeats its silent
+port-fallback, and a preflight fails fast — naming the port and the owning
+process — when something outside this worktree already holds one.
+
+Evidence: two worktrees ran the suite concurrently on eight fully distinct
+ports (confirmed live via `lsof`), both passed `seed.spec.ts` 10/10 against
+their own separate worlds, and neither run's log contained any of `trying
+another one` / `already used` / `ECONNREFUSED` / `was not able to start`.
+Five sequential runs in one worktree (machine otherwise idle) reproduced the
+same #49-only two-test failing set in four of five; the fifth's one extra
+failure coincided with residual Spotlight-indexing load, not a port issue.
+`~/.pyrite/index.db` and `config.yaml` mtime/size were unchanged throughout.
+
+This package changes ports and data-dir isolation only — #49 and #45 remain
+open, and the "identical failing set" criterion above is still gated on
+those two, exactly as Package A's own result already noted.

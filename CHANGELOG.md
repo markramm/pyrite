@@ -168,6 +168,16 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **Two worktrees running the Playwright e2e suite at once collided on the
+  same four ports (8088/5173 base, 8189/5274 auth) and could end up talking
+  to each other's world.** Ports and data directories are now derived per
+  worktree from a stable hash of its path (`PLAYWRIGHT_E2E_PORT` /
+  `PLAYWRIGHT_E2E_VITE_PORT` still override), `strictPort: true` on Vite
+  defeats its silent fallback to the next free port, and a preflight in
+  `global-setup.ts`/`auth-setup.ts` fails fast — naming the port and the
+  owning process — if something outside this worktree already holds it.
+  `scripts/new-worktree.sh` records the chosen ports in `.pyrite/e2e-ports`
+  for a human running the suite by hand.
 - **The New Entry page's Create button could submit before the target KB was
   known.** `kbStore.activeKB` resolves asynchronously on mount; nothing
   disabled Create while it was still empty, so a fast click sent `kb: ''` and
