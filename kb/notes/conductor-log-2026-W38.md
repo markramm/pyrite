@@ -2353,3 +2353,17 @@ Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` rev
 **Waiting:** outside PR #171 (zhongxiao-chang — the `parse_datetime` split the #164 review suggested; +70/−3) is next tick's one thing. Then the loop's own queue: #163, #161, #140, #160, #145.
 
 **Needs the maintainer:** #169, #164, #166 reviews are on the PRs (none is "merge as is" yet); ADR-0034 acceptance (PR #170); the three kept decisions from tick 9 (API-key hashing, CodeQL required check, the private-repo existence oracle).
+
+## Tick 2026-09-18T12:49Z (tick 13 — WIP = 1)
+
+**Pre-check** 12:42Z: load 2.1, 75% free, nothing heavy, dev green (f977f48). One thing: the unreviewed outside PR.
+
+**Outside PR #171** (zhongxiao-chang — the `parse_datetime` split the #164 review suggested; +70/−3, opened ~1 h after that review). Suite at `-n 4`: 4314 passed in 59 s, alone on the machine. verify-red: red without the fix. Cold read under no-suite, no-edit orders. **Recommendation posted: merge after three changes** — (1) the fix anchors bare dates and *quoted* naive strings, but ruamel hands `parse_datetime` a naive `TimeStamp`/`datetime` for an **unquoted** timestamp, the common form, and the `isinstance(s, datetime)` branch returns it untouched (reproduced by the host: `created_at: 2026-01-15T09:00:00` → tzinfo None); a test pins that with `is naive`; (2) no test goes through the real loader; (3) the index stores `isoformat()` strings and re-index is content-hash gated, so two shapes coexist — ordering stays correct, `pyrite recent --since` is the one string compare that bites; a changelog sentence. The conductor's own #164 review had said "naive strings" — the gap was in the suggestion as much as the PR, and the comment says so. CI `action_required` (first-time contributor): **needs the maintainer's approval click**. Labelled `reviewed`.
+
+**Noticed:** #169's author pushed `e8c8d3c` ("validate kb_batch_read spec types and name the malformed entry") ~25 min after the tick-12 review — the two requested changes, +75/−23 in the same three files. The `reviewed` label described the old head, so it is removed; re-checking #169 is the next tick's one thing (small: the delta, the suite once).
+
+**Architect's serial queue landed** (5f8443e, `kb/notes/serial-queue-2026-09-18.md`): 40 entries, 31 movable, 9 blocked; review order for the five finished branches by what each unblocks: #163, #145, #140, #161, #160. Literal 0.24.2 DoD ≈ 5–7 cycles beyond those reviews; the roadmap's full 0.24.2 list ≈ 20 cycles.
+
+**Retro note.** Three outside reviews in a row found the same shape: tests that exercise a function with hand-built inputs while the bug lives in what the real caller passes (#164's tests read a path `save()` never writes; #166's #95 test never reaches the schema; #171's tests never go through the YAML loader). The `Regimes:` rule is for our workers; the `good first issue` template could ask for "one test through the real entry point" in its acceptance line.
+
+**Needs the maintainer:** approval click for #171's CI; merge decisions on #169 (after the re-check), #171, #164, #166 per the posted reviews; ADR-0034 (PR #170); the kept decisions listed in the serial-queue note.
