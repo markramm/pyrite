@@ -400,8 +400,14 @@ jobs:
           HF_HUB_OFFLINE: "1"
         # -n auto like every other pytest gate: each server fixture binds its
         # own free port under its own temp data dir, so the smoke tests are
-        # xdist-safe by construction and the job stays a couple of minutes.
-        run: pytest tests/e2e -m e2e -n auto
+        # xdist-safe by construction.
+        #
+        # --dist loadfile, though, not the default `load`: the server fixtures
+        # are module-scoped, and xdist re-runs a module-scoped fixture per
+        # worker. Splitting one file across ten workers starts ten servers
+        # instead of one and makes the run SLOWER (46 s vs 22 s locally).
+        # loadfile keeps each file whole on one worker.
+        run: pytest tests/e2e -m e2e -n auto --dist loadfile
 
       - name: Getting-started tutorial (docs-as-tests)
         run: bash scripts/run_tutorial.sh

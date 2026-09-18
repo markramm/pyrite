@@ -298,6 +298,13 @@ class TestSmokeLayer:
         assert "-m e2e" in runs and "tests/e2e" in runs, runs
         assert "run_tutorial.sh" in runs, runs
 
+    def test_smoke_keeps_each_file_on_one_worker(self, ci):
+        # The server fixtures are module-scoped and xdist re-runs those per
+        # worker. Under the default `load` distribution one file's tests scatter
+        # across workers and each starts its own server: 46 s instead of 22 s.
+        runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["smoke"]["steps"])
+        assert "--dist loadfile" in runs, runs
+
     def test_smoke_job_installs_the_full_surface_like_test(self, ci):
         runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["smoke"]["steps"])
         assert "uv pip install" in runs, runs
