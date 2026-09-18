@@ -40,6 +40,38 @@ def generate_event_id(date: str, title: str) -> str:
     return f"{date}--{slug}"
 
 
+_ID_MAX_LEN = 80
+
+
 def generate_entry_id(title: str) -> str:
-    """Generate entry ID from title."""
-    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    """Generate an entry id (and therefore a filename stem) from a title.
+
+    Always non-empty, always matches ``^[a-z0-9][a-z0-9-]{0,79}$``:
+
+    - accents transliterate (``Café résumé`` -> ``cafe-resume``) instead of
+      vanishing;
+    - a title with nothing Latin left (Japanese, emoji, punctuation only) gets
+      a short id derived from a hash of the title, stable across calls, rather
+      than an empty id and a confusing "Entry must have an ID";
+    - the slug is capped at 80 characters, cut at a word boundary, so the
+      filename always fits.
+
+    Plain ASCII titles produce exactly what they always did, so existing ids
+    do not change. Every place that turns a title into a filename must use
+    this function (the ``sw new-adr`` CLI and MCP tool once let ``/`` and
+    ``:`` through).
+    """
+    import hashlib
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", title or "")
+    text = "".join(c for c in text if not unicodedata.combining(c))
+    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    if len(slug) > _ID_MAX_LEN:
+        head = slug[:_ID_MAX_LEN]
+        slug = head.rsplit("-", 1)[0] if "-" in head else head
+        slug = slug.strip("-")
+    if not slug:
+        digest = hashlib.sha1((title or "").encode("utf-8")).hexdigest()[:8]
+        slug = f"entry-{digest}"
+    return slug

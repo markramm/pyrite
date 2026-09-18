@@ -85,6 +85,22 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **Typed entries no longer drop frontmatter they do not declare.** A load ->
+  save through any typed class (core or plugin) deleted unknown keys —
+  `pyrite update -f status=done` stripped `milestone:` and `created:`. The
+  base class now round-trips them; every one of the 48 registered types is
+  tested. (#15)
+- **Writes are validated.** `create` and `update` refuse a value the KB schema
+  or a plugin validator rejects (`status=bogus`, `priority=9999`) and name the
+  allowed values, on every surface; the file is not touched. Previously only
+  `index health` noticed, afterwards. (#14)
+- **Entry ids from any title.** Accents transliterate (`cafe-resume-naive`
+  instead of `caf-r-sum-na-ve`), a title with nothing Latin in it gets a
+  stable `entry-<hash>` id instead of failing with "Entry must have an ID",
+  and ids are capped at 80 characters instead of an `OSError`. ASCII titles
+  are unchanged. `sw new-adr` (CLI and MCP) uses the same function, so `/`
+  and `:` no longer reach the filename. New entries end with one newline, so
+  the end-of-file hook no longer rewrites every freshly created file. (#16, #17)
 - Entry files are written atomically (temp file + `os.replace`), preserving the
   file's mode. A concurrent reader could previously see a truncated or empty
   entry while another process was saving it — two agents on one KB (claim vs

@@ -218,7 +218,11 @@ class Entry(ABC):
         """Convert to markdown string with YAML frontmatter."""
         meta = self.to_frontmatter()
         yaml_front = dump_yaml(meta)
-        return f"---\n{yaml_front}\n---\n\n{self.body}\n"
+        # Exactly one trailing newline: the loader strips the body anyway, and a
+        # body that already ended in newlines produced a blank last line that
+        # failed the end-of-file hook on every freshly created entry.
+        body = self.body.rstrip("\n")
+        return f"---\n{yaml_front}\n---\n" + (f"\n{body}\n" if body else "")
 
     @classmethod
     def from_markdown(cls, text: str) -> "Entry":

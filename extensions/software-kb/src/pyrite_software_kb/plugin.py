@@ -5,6 +5,7 @@ from datetime import UTC
 from typing import Any, ClassVar
 
 from pyrite.plugins.capabilities import Capability
+from pyrite.schema import generate_entry_id
 
 from .entry_types import (
     ADREntry,
@@ -939,9 +940,7 @@ class SoftwareKBPlugin:
             elif sort_by == "created":
                 items.sort(key=lambda c: c["_created"])
             else:  # "priority" default
-                items.sort(
-                    key=lambda c: (priority_rank.get(c["priority"], 2), c["_created"])
-                )
+                items.sort(key=lambda c: (priority_rank.get(c["priority"], 2), c["_created"]))
 
             # Clean internal fields
             for item in items:
@@ -1035,9 +1034,7 @@ class SoftwareKBPlugin:
                 if status_filter and status != status_filter:
                     continue
 
-                progress = self._get_epic_progress(
-                    db, row["id"], row["kb_name"]
-                )
+                progress = self._get_epic_progress(db, row["id"], row["kb_name"])
                 epics.append(
                     {
                         "id": row["id"],
@@ -1323,7 +1320,9 @@ class SoftwareKBPlugin:
                     status_to_lane[s] = i
 
             # Group items into lanes and collect in_progress/review
-            lane_counts: dict[int, int] = dict.fromkeys(range(len(board_config.get("lanes", []))), 0)
+            lane_counts: dict[int, int] = dict.fromkeys(
+                range(len(board_config.get("lanes", []))), 0
+            )
             in_progress_items: list[dict] = []
             review_items: list[dict] = []
 
@@ -1378,12 +1377,14 @@ class SoftwareKBPlugin:
                         meta = json.loads(row["metadata"])
                     except (json.JSONDecodeError, TypeError):
                         pass
-                recent_adrs.append({
-                    "id": row["id"],
-                    "title": row["title"],
-                    "adr_number": meta.get("adr_number"),
-                    "date": meta.get("date"),
-                })
+                recent_adrs.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "adr_number": meta.get("adr_number"),
+                        "date": meta.get("date"),
+                    }
+                )
 
             # Top components (up to 10)
             comp_query = (
@@ -1400,12 +1401,14 @@ class SoftwareKBPlugin:
                         meta = json.loads(row["metadata"])
                     except (json.JSONDecodeError, TypeError):
                         pass
-                top_components.append({
-                    "id": row["id"],
-                    "title": row["title"],
-                    "path": meta.get("path", ""),
-                    "kind": meta.get("kind", ""),
-                })
+                top_components.append(
+                    {
+                        "id": row["id"],
+                        "title": row["title"],
+                        "path": meta.get("path", ""),
+                        "kind": meta.get("kind", ""),
+                    }
+                )
 
             # Recommended next (reuse pull_next logic)
             try:
@@ -1563,7 +1566,7 @@ class SoftwareKBPlugin:
 
             next_num = max_num + 1
             title = args["title"]
-            slug = title.lower().replace(" ", "-")
+            slug = generate_entry_id(title)
             status = args.get("status", "proposed")
 
             # Build structured body
@@ -1850,9 +1853,7 @@ class SoftwareKBPlugin:
             "by_status": by_status,
         }
 
-    def _check_no_open_blockers(
-        self, db, item_id: str, kb_name: str
-    ) -> dict[str, Any] | None:
+    def _check_no_open_blockers(self, db, item_id: str, kb_name: str) -> dict[str, Any] | None:
         """Return a failure dict if the item has unresolved blockers, else None."""
         dep_status = self._get_dependency_status(db, item_id, kb_name)
         if dep_status["is_blocked"]:
@@ -1939,8 +1940,7 @@ class SoftwareKBPlugin:
                     (item_id, kb_name),
                 ).fetchall()
                 entry_dict["_links"] = [
-                    {"target": lr["target_id"], "relation": lr["relation"]}
-                    for lr in link_rows
+                    {"target": lr["target_id"], "relation": lr["relation"]} for lr in link_rows
                 ]
 
             params = criterion.get("params")
@@ -2718,7 +2718,11 @@ class SoftwareKBPlugin:
                 board_config = self._load_board_config_safe(kb_name)
                 gate_result = self._evaluate_gate(db, board_config, "done", row, meta)
                 if gate_result and not gate_result["passed"] and gate_result["policy"] == "enforce":
-                    return {"reviewed": False, "error": "DoD gate check failed", "gate": gate_result}
+                    return {
+                        "reviewed": False,
+                        "error": "DoD gate check failed",
+                        "gate": gate_result,
+                    }
 
             # Use KBService CAS pattern — pass current assignee to preserve it
             from pyrite.config import load_config

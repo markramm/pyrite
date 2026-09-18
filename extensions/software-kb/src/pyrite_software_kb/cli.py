@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from pyrite.config import load_config
+from pyrite.schema import generate_entry_id
 from pyrite.storage.database import PyriteDB
 
 sw_app = typer.Typer(help="Software KB commands (ADRs, backlog, standards, components)")
@@ -172,7 +173,7 @@ def sw_new_adr(
                 max_num = num
         next_num = max_num + 1
 
-        slug = title.lower().replace(" ", "-")
+        slug = generate_entry_id(title)
         filename = f"{next_num:04d}-{slug}.md"
         today = date.today().isoformat()
 
@@ -1310,9 +1311,7 @@ def sw_refine_cmd(
         return
 
     if not_ready > 0:
-        console.print(
-            f"[bold]DoR Gaps[/bold] ({not_ready} with issues, {ready} ready)\n"
-        )
+        console.print(f"[bold]DoR Gaps[/bold] ({not_ready} with issues, {ready} ready)\n")
     else:
         console.print(f"[bold green]All {ready} items ready to claim[/bold green]\n")
 
@@ -1328,17 +1327,15 @@ def sw_refine_cmd(
             for c in gate["criteria"]:
                 if c["passed"]:
                     if c["type"] in ("judgment", "agent_responsibility"):
-                        console.print(
-                            f"    [dim]⚑[/dim] {c['text']} [dim]({c['type']})[/dim]"
-                        )
+                        console.print(f"    [dim]⚑[/dim] {c['text']} [dim]({c['type']})[/dim]")
                 else:
                     msg = c.get("message", "")
-                    console.print(
-                        f"    [red]✗[/red] {c['text']}" + (f" — {msg}" if msg else "")
-                    )
+                    console.print(f"    [red]✗[/red] {c['text']}" + (f" — {msg}" if msg else ""))
 
     if ready > 0:
-        console.print(f"\n  [green]✓[/green] {ready} item{'s' if ready != 1 else ''} ready to claim")
+        console.print(
+            f"\n  [green]✓[/green] {ready} item{'s' if ready != 1 else ''} ready to claim"
+        )
 
 
 @sw_app.command("context-for-item")
@@ -1380,7 +1377,9 @@ def sw_context_for_item(
         console.print("\n[bold]Blocked By:[/bold]")
         for d in deps["blocked_by"]:
             status_style = "[green]" if d.get("status") == "done" else "[red]"
-            console.print(f"  {status_style}{d.get('status', '')!s}[/] {d.get('id', '')} — {d.get('title', '')}")
+            console.print(
+                f"  {status_style}{d.get('status', '')!s}[/] {d.get('id', '')} — {d.get('title', '')}"
+            )
     if deps.get("blocks"):
         console.print("\n[bold]Blocks:[/bold]")
         for d in deps["blocks"]:
@@ -1402,7 +1401,9 @@ def sw_context_for_item(
             console.print(f"\n[bold]{label}:[/bold]")
             for entry in items:
                 relation = f" ({entry['relation']})" if entry.get("relation") else ""
-                console.print(f"  [cyan]{entry.get('id', '')}[/cyan] {entry.get('title', '')}{relation}")
+                console.print(
+                    f"  [cyan]{entry.get('id', '')}[/cyan] {entry.get('title', '')}{relation}"
+                )
                 if entry.get("body_preview"):
                     console.print(f"    [dim]{entry['body_preview']}[/dim]")
 

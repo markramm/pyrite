@@ -1280,9 +1280,7 @@ class TestBacklogTimestampProjection:
                 from pyrite.plugins.context import PluginContext
 
                 plugin = SoftwareKBPlugin()
-                plugin.set_context(
-                    PluginContext(config=MagicMock(), db=db, kb_name="test")
-                )
+                plugin.set_context(PluginContext(config=MagicMock(), db=db, kb_name="test"))
                 result = plugin._mcp_backlog({"kb_name": "test"})
                 items = result.get("items", [])
                 assert len(items) == 1, f"expected 1 item, got {items}"
@@ -1970,6 +1968,46 @@ class TestNewAdrCreatesFile:
             finally:
                 db.close()
 
+    def test_title_punctuation_never_reaches_the_filename(self):
+        """`/` and `:` in a title used to land in the ADR filename (#17):
+        `adrs/0001-use-a/b-testing.md` crashed with FileNotFoundError, and a
+        colon is illegal on Windows. The filename uses the shared slug."""
+        from unittest.mock import patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            kb_path = Path(tmpdir)
+            (kb_path / "adrs").mkdir()
+            db = _make_test_db(tmpdir)
+            try:
+                mock_config = type(
+                    "C",
+                    (),
+                    {
+                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
+                        "get_kb": lambda self, name: (
+                            type("KB", (), {"path": kb_path})() if name else None
+                        ),
+                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
+                    },
+                )()
+                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
+                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
+                        result = runner.invoke(
+                            sw_app,
+                            ["new-adr", "Use A/B testing: now, or later?", "--kb", "test"],
+                        )
+                assert result.exit_code == 0, result.output
+                created = sorted(p.name for p in (kb_path / "adrs").glob("*.md"))
+                assert created == ["0001-use-a-b-testing-now-or-later.md"], created
+                assert not (kb_path / "adrs" / "0001-use-a").exists()
+            finally:
+                db.close()
+
     def test_auto_increments_number(self):
         """sw new-adr should pick the next sequential number."""
         from unittest.mock import patch
@@ -2092,9 +2130,7 @@ class TestNewAdrCreatesFile:
                     "get_kb": lambda self, name: (
                         type("KB", (), {"path": kb_path})() if name else None
                     ),
-                    "knowledge_bases": [
-                        type("KB", (), {"name": "only-kb", "path": kb_path})()
-                    ],
+                    "knowledge_bases": [type("KB", (), {"name": "only-kb", "path": kb_path})()],
                 },
             )()
 
@@ -3659,9 +3695,7 @@ class TestBacklogItemRank:
     def test_from_frontmatter_default_rank(self):
         from pyrite_software_kb.entry_types import BacklogItemEntry
 
-        entry = BacklogItemEntry.from_frontmatter(
-            {"title": "Test", "type": "backlog_item"}, "body"
-        )
+        entry = BacklogItemEntry.from_frontmatter({"title": "Test", "type": "backlog_item"}, "body")
         assert entry.rank == 0
 
     def test_roundtrip_with_rank(self):
@@ -3766,9 +3800,24 @@ class TestEpicProgress:
                     },
                 ],
                 links=[
-                    {"source": "epic-1", "target": "sub-1", "relation": "has_subtask", "inverse": "subtask_of"},
-                    {"source": "epic-1", "target": "sub-2", "relation": "has_subtask", "inverse": "subtask_of"},
-                    {"source": "epic-1", "target": "sub-3", "relation": "has_subtask", "inverse": "subtask_of"},
+                    {
+                        "source": "epic-1",
+                        "target": "sub-1",
+                        "relation": "has_subtask",
+                        "inverse": "subtask_of",
+                    },
+                    {
+                        "source": "epic-1",
+                        "target": "sub-2",
+                        "relation": "has_subtask",
+                        "inverse": "subtask_of",
+                    },
+                    {
+                        "source": "epic-1",
+                        "target": "sub-3",
+                        "relation": "has_subtask",
+                        "inverse": "subtask_of",
+                    },
                 ],
             )
             try:
@@ -3829,7 +3878,12 @@ class TestEpicProgress:
                     },
                 ],
                 links=[
-                    {"source": "child-1", "target": "epic-2", "relation": "subtask_of", "inverse": "has_subtask"},
+                    {
+                        "source": "child-1",
+                        "target": "epic-2",
+                        "relation": "subtask_of",
+                        "inverse": "has_subtask",
+                    },
                 ],
             )
             try:
@@ -3909,7 +3963,12 @@ class TestEpicsMcpTool:
                     },
                 ],
                 links=[
-                    {"source": "epic-det", "target": "sub-det-1", "relation": "has_subtask", "inverse": "subtask_of"},
+                    {
+                        "source": "epic-det",
+                        "target": "sub-det-1",
+                        "relation": "has_subtask",
+                        "inverse": "subtask_of",
+                    },
                 ],
             )
             try:
@@ -3959,7 +4018,12 @@ class TestBacklogSortAndFilter:
                         "entry_type": "backlog_item",
                         "status": "proposed",
                         "priority": "medium",
-                        "meta": {"kind": "feature", "status": "proposed", "priority": "medium", "rank": 200},
+                        "meta": {
+                            "kind": "feature",
+                            "status": "proposed",
+                            "priority": "medium",
+                            "rank": 200,
+                        },
                         "created_at": "2026-01-02T00:00:00",
                     },
                     {
@@ -3968,7 +4032,12 @@ class TestBacklogSortAndFilter:
                         "entry_type": "backlog_item",
                         "status": "proposed",
                         "priority": "medium",
-                        "meta": {"kind": "feature", "status": "proposed", "priority": "medium", "rank": 100},
+                        "meta": {
+                            "kind": "feature",
+                            "status": "proposed",
+                            "priority": "medium",
+                            "rank": 100,
+                        },
                         "created_at": "2026-01-03T00:00:00",
                     },
                 ],
@@ -4010,7 +4079,12 @@ class TestBacklogSortAndFilter:
                     },
                 ],
                 links=[
-                    {"source": "epic-f", "target": "in-epic", "relation": "has_subtask", "inverse": "subtask_of"},
+                    {
+                        "source": "epic-f",
+                        "target": "in-epic",
+                        "relation": "has_subtask",
+                        "inverse": "subtask_of",
+                    },
                 ],
             )
             try:
@@ -4050,7 +4124,12 @@ class TestBacklogSortAndFilter:
                     },
                 ],
                 links=[
-                    {"source": "grouped", "target": "epic-g", "relation": "subtask_of", "inverse": "has_subtask"},
+                    {
+                        "source": "grouped",
+                        "target": "epic-g",
+                        "relation": "subtask_of",
+                        "inverse": "has_subtask",
+                    },
                 ],
             )
             try:
@@ -4091,7 +4170,12 @@ class TestPullNextRankAware:
                         "title": "Ranked Accepted",
                         "status": "accepted",
                         "priority": "medium",
-                        "meta": {"kind": "feature", "status": "accepted", "priority": "medium", "rank": 100},
+                        "meta": {
+                            "kind": "feature",
+                            "status": "accepted",
+                            "priority": "medium",
+                            "rank": 100,
+                        },
                         "created_at": "2026-01-02T00:00:00",
                     },
                 ],
@@ -4236,7 +4320,8 @@ class TestPrioritizeAfterAnchor:
                 # Crucially: anchor-item's rank was never written. mock_svc
                 # records every update_entry call.
                 anchor_calls = [
-                    c for c in mock_svc.update_entry.call_args_list
+                    c
+                    for c in mock_svc.update_entry.call_args_list
                     if c.args[:2] == ("anchor-item", "test")
                 ]
                 assert anchor_calls == [], (
