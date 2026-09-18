@@ -7,7 +7,8 @@ tags:
 - ci
 - testing
 kind: tech_debt
-status: proposed
+status: in_progress
+assignee: agent:pyrite-worker
 priority: high
 effort: S
 ---
