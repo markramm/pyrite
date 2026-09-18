@@ -82,6 +82,24 @@ string executes every backtick as a command — on 2026-09-18 a comment
 describing a recovery ran `git rebase` on `dev` in the main checkout (#123),
 and three of the host's own commands were lost to the same quoting.
 
+**Cleaning up an outside PR: one push.** When the maintainer has said a
+contributor's PR is to be landed and the loop prepares it, do everything
+locally first — rebase onto current `dev`, the single credited fixup, the
+co-author trailers — verify (suite, `verify-red`, lint), and then push
+**once**, `--force-with-lease=<branch>:<their current head>` with the SHA
+read from `gh pr view N --json headRefOid` at that moment. Every push by a
+non-owner to a first-time contributor's fork re-arms GitHub's approval gate,
+so three pushes are three clicks on the maintainer's desk (#116 cost three,
+#108 three, in one hour). Time the push for when the maintainer is present
+to approve the run, and say in the comment that the run needs approval.
+The `in-review` label is the lock: while it is set, nobody — including the
+maintainer via "Update branch" — pushes to that branch; a fourth head
+appeared under a worker mid-amend that way. **Co-author trailers use the
+address from the contributor's own commit** (`git log -1 --format='%an <%ae>'
+<their sha>`), never `<login>@users.noreply.github.com` — that form links
+only for accounts created before mid-2017, and the fixup already on `dev`
+for #116 credits nobody because of it.
+
 ## Outcomes
 
 - **Fix it yourself** when it is small and you are sure: commit on the

@@ -337,6 +337,12 @@ tick, one draft PR held open for the week, each tick commits and pushes
 there; the retro flips it to ready. Never a PR per tick — each merge puts
 every other open PR `BEHIND`.
 
+**Anything a tick creates in `kb/` outside a theme branch goes on the log
+branch in the same tick** — a backlog item groomed for later, a note, a
+spike's ticket change — committed and pushed before the tick reports. A
+record that is not pushed is not a record: tick 5 reported creating the
+Playwright A.1 item and tick 6 found no such file anywhere (#141).
+
 **File friction as it happens.** When you, a worker or a reviewer had to
 detour, wait, guess, look something up or redo work because of the
 *process* (a skill that did not say, a script that assumed, a tool that was
@@ -367,7 +373,9 @@ Judgment stops:
 - The maintainer's queue (PRs awaiting them) is longer than the agents' → stop dispatching.
 
 **Circuit breaker (no judgment involved; loop mode especially):** two
-consecutive ticks whose `dev` push went red, or any PR reverted, or the same
+consecutive ticks whose `dev` push went red (`conclusion: failure` on a
+completed run — a run `cancelled` by the concurrency rule because the next
+merge arrived is not red, even though `gate` reports failure for it), or any PR reverted, or the same
 theme redispatched twice → stop the loop, report what happened, and do not
 dispatch again until the maintainer says so. Landing on `dev` unattended is
 delegated; landing repeatedly broken things is not. A breaker trip is a
