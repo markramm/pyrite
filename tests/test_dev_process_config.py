@@ -300,6 +300,54 @@ class TestGateJob:
         assert "skipped" not in pattern, "skipped must count as passing"
 
 
+class TestJobPermissions:
+    """Least privilege, stated (CodeQL actions/missing-workflow-permissions x8).
+
+    Every job in ci.yml used to run with the repository's default GITHUB_TOKEN
+    scope -- broader than any job here needs. A workflow-level `contents: read`
+    covers checkout; a job gets its own `permissions:` block only when a step
+    needs something more, so a future job that skips this is a silent
+    escalation, not an oversight this suite would have caught.
+    """
+
+    def test_workflow_level_permissions_default_to_read_only(self, ci):
+        assert ci["permissions"] == {"contents": "read"}
+
+    def test_every_job_is_covered_by_a_permissions_block(self, ci):
+        # Workflow-level `contents: read` covers a job with no block of its
+        # own; a job that needs more must say so explicitly so the grant is
+        # visible at the job, not just inherited silently. The classifier
+        # job's dorny/paths-filter step needs to read PR metadata on
+        # pull_request events; every other job's steps (checkout, setup-*,
+        # pytest, npm, upload-artifact) work fine read-only.
+        changes_job = ci["jobs"]["changes"]
+        assert changes_job.get("permissions", {}).get("pull-requests") == "read", (
+            "dorny/paths-filter needs pull-requests: read on pull_request events"
+        )
+        for name, job in ci["jobs"].items():
+            if name == "changes":
+                continue
+            # No other job may claim more than the workflow-level default;
+            # if one does, it must be a job-level block with a comment
+            # justifying it (reviewed by hand, not by this test).
+            assert job.get("permissions", {}).get("contents", "read") == "read", name
+
+    def test_paths_filter_job_permissions_block_is_commented(self):
+        # A grant with no reason attached is indistinguishable from a mistake
+        # six months later. Require the comment live next to the block.
+        text = (REPO / ".github" / "workflows" / "ci.yml").read_text()
+        # Anchor on the step that USES paths-filter, not any prose mentioning
+        # it (a comment above the permissions: block would otherwise match
+        # first and cut the block out of `before`).
+        idx = text.index("uses: dorny/paths-filter")
+        before = text[:idx]
+        changes_idx = before.rindex("\n  changes:")
+        block = text[changes_idx:idx]
+        assert "permissions:" in block
+        assert "pull-requests: read" in block
+        assert "#" in block, "the grant needs a one-line reason in a comment"
+
+
 class TestSmokeLayer:
     """ADR-0032 §3a's "breadth" row: prove the assembled thing, not the units.
 
