@@ -143,8 +143,9 @@ is waste; a step that could tell us something new and does not is a gap.
 | commit hook | seconds | the change is well-formed (lint, format, schema) |
 | local pre-push | ~1 min | the change passes the suite on *my* interpreter |
 | **PR → `dev`** (required check: `gate`, which needs `test (3.12)`, `frontend`, `kb`; skipped = pass) | ~3 min | the change passes on top of *current `dev`*, on the primary interpreter |
-| **push to `dev`** (after merge) | ~5 min, not a merge gate | **breadth**: every supported Python, Postgres conformance; a red `dev` blocks every PR |
-| **push to `main`** (release) | minutes, once per release | **depth**: what a user gets — install from the tag, Quick Start, live server over REST/MCP/stdio, Docker image, Playwright e2e against a seeded world |
+| **push to `dev`** (after merge) | ~5 min, not a merge gate | **breadth**: every supported Python, Postgres conformance; the assembled thing works — a real server process driven over REST, MCP/SSE and MCP/stdio, and the getting-started tutorial run as written (`smoke` job); a red `dev` blocks every PR |
+| **push to `main`** | minutes | **depth in a browser**: Playwright e2e against a seeded world (deterministic since package A) |
+| **release** (tag) | minutes, once per release | **what a user gets**: install from the tag in a clean venv, the Docker image, the published artifacts |
 | pre-release, by hand or script | minutes | the release notes are true; the UI works in a browser; the runbook's clean-venv check |
 
 Consequences: the Python matrix runs one interpreter on pull requests and all
@@ -154,6 +155,22 @@ cancellation — a skipped job (the classifier's "nothing to test here") passes.
 Requiring matrix legs by name hung docs-only PRs, because a skipped matrix
 reports as `test`, not `test (3.12)`. Coverage and e2e are
 manual until each has something to say.
+
+The **smoke** row was empty until 2026-09-18: ~4000 tests proved the code on
+three interpreters and nothing proved the assembled artifact worked at all.
+All three bugs the outside contributor found (PRs #3, #4, #5) lived in that
+gap, and each is structurally invisible to an in-process test — each is a
+property of one long-lived process serving several requests, or of a console
+script started as a subprocess. `tests/e2e` (marker `e2e`, excluded from the
+default run) and `scripts/run_tutorial.sh` fill it, in a `smoke` job gated on
+the push to `dev`. It is deliberately **not** in `gate`'s needs: a minutes-long
+job must never block a pull request, and a break there blocks the release while
+a red `dev` already blocks every PR through the up-to-date rule.
+
+**Not every merge to `main` is a release** (maintainer's decision, 2026-09-18).
+`main` moving and a tag being cut are separate events, so the row that says
+what a *user gets* — install from the tag, the Docker image — belongs to the
+release, not to the push that preceded it.
 
 ### 4. What does not change
 

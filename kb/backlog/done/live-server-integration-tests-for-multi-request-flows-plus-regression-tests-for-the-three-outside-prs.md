@@ -10,7 +10,7 @@ tags:
 - programmatic-validation
 importance: 5
 kind: improvement
-status: in_progress
+status: done
 priority: high
 assignee: agent:conductor
 effort: M

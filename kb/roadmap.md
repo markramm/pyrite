@@ -184,9 +184,13 @@ GitHub — when working toward a release, check `gh issue list --milestone` and
   version, waits for CI on the SHA, fast-forwards `main`, tags, creates the
   GitHub release from the changelog, installs from the tag into a clean venv
   and runs the Quick Start. (v0.24.1 took ten manual steps.)
-- [[live-server-integration-tests-for-multi-request-flows-plus-regression-tests-for-the-three-outside-prs]]
-  (high, M) — the flow run by hand for v0.24.1 becomes a CI job; regression
-  tests for PRs #3, #4, #5.
+- ~~[[live-server-integration-tests-for-multi-request-flows-plus-regression-tests-for-the-three-outside-prs]]~~
+  **done 2026-09-18**: `tests/e2e/` starts `pyrite-server` on a free port
+  against a temp data dir and drives it as a client — REST (create a KB, write
+  into it, find it, no restart), MCP over SSE (the advertised endpoint path,
+  then a full session), MCP over stdio (`pyrite mcp --tier read`), and startup
+  prewarm read from `/health`. Each of PRs #3, #4 and #5, reintroduced by hand,
+  fails its test while the existing 3316 do not notice.
 - Post-tag workflow: install from the tag, run the Quick Start, build the Docker
   image (unverifiable locally on 2026-09-17).
 - [[ci-parity-lint-extensions-and-enforce-the-fix-needs-a-test-rule]] (medium, S).
@@ -195,17 +199,30 @@ GitHub — when working toward a release, check `gh issue list --milestone` and
 - Session setup script (worktree + venv + hooks) so ADR-0032's one-branch-per-
   session rule is one command.
 - **Every interface has an end-to-end test in CI** (added 2026-09-17):
-  - REST and MCP over SSE — the live-server ticket above.
-  - **MCP over stdio** — spawn `pyrite mcp`, `initialize`, `tools/list`, call
-    `kb_search`; this is the transport Claude Desktop and Claude Code use, and
-    nothing exercises it today (the dispatch smoke test is in-process).
-    Folded into the live-server ticket's acceptance.
-  - **CLI** — [[ci-run-getting-started-tutorial]] (medium, S): the Getting
-    Started tutorial runs as a CI job against the installed package.
+  - ~~REST and MCP over SSE~~ **done 2026-09-18** — the live-server ticket
+    above. `tests/e2e/test_rest_flow.py`, `tests/e2e/test_mcp_sse.py`.
+  - ~~**MCP over stdio**~~ **done 2026-09-18** — `tests/e2e/test_mcp_stdio.py`
+    spawns `pyrite mcp --tier read` from the installed package and speaks
+    JSON-RPC on stdin/stdout: `initialize`, `tools/list`, `kb_search`. Its
+    tool list is asserted equal to the SSE one, so the two transports cannot
+    drift.
+  - ~~**CLI** — [[ci-run-getting-started-tutorial]]~~ **done 2026-09-18**:
+    `scripts/run_tutorial.sh` extracts the fenced bash blocks from
+    `docs/getting-started.md` and runs them in order in one shell session in a
+    temp HOME, against the installed package. It found two real bugs on its
+    first run: #43 (semantic search returns 0 on a fresh tutorial KB — nothing
+    embeds on write) and #44 (`index health` reports `subdirectory_mismatches`
+    on every entry of a correct KB; a trailing slash is not stripped). Both
+    are why its assertions are one notch looser than the ticket asked for;
+    the code names the TODO.
   - **Web** — [[playwright-e2e-suite-non-deterministic-failures-likely-shared-state-auth-config-gap]]
     (high, M): make Playwright deterministic and blocking. Root cause still
     unconfirmed; if it proves large it slips to 0.25, and that is the only
     item on this list allowed to.
+
+  All of the above run in the `smoke` CI job, gated on the push to `dev` and
+  on manual dispatch — never on a pull request, and never in `gate`'s needs
+  (ADR-0032 §3a's breadth row).
 
 ### Workstream 2 — Bugs (GitHub milestone `0.24.2`)
 

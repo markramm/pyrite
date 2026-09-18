@@ -28,6 +28,22 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   or any parent is used instead of `~/.pyrite` when no `PYRITE_CONFIG_DIR` /
   `PYRITE_DATA_DIR` is set, so a checkout (or a git worktree) can carry its own
   KB registry and index. `scripts/new-worktree.sh` creates one per worktree.
+- **A smoke layer: every interface has an end-to-end test in CI.** `tests/e2e/`
+  starts `pyrite-server` as a subprocess on a free port against a temp data
+  dir and drives it the way a user's client does — REST (`POST /api/kbs`, then
+  `POST /api/entries` into it with no restart, then `GET /api/search`), MCP
+  over SSE (the advertised `event: endpoint` path, then initialize, tools/list
+  and a `kb_search` call over that session), MCP over stdio (`pyrite mcp
+  --tier read` as a subprocess speaking JSON-RPC, its tool list asserted equal
+  to the SSE one), and embedding prewarm read from `/health` with no write
+  issued. `scripts/run_tutorial.sh` runs `docs/getting-started.md` as a test:
+  its bash blocks, in order, in one shell session in a temp HOME, against the
+  installed package. Each of the three bugs an outside contributor found
+  (PRs #3, #4, #5), reintroduced by hand, fails one of these tests while the
+  existing 3316 pass. Marked `e2e` and excluded from the default run, so pull
+  requests stay at ~3 minutes; a new `smoke` CI job runs it on the push to
+  `dev` and on manual dispatch, and is deliberately not a required check
+  (ADR-0032 §3a's breadth row).
 - `auto_embed` setting (`PYRITE_AUTO_EMBED=0` to disable): embed entries on
   write, on by default. Off means keyword search only, no torch import and no
   model download on the write path; `pyrite index embed` backfills later. The
