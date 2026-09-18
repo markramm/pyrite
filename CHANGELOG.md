@@ -94,6 +94,23 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Changed
 
+- `web/` dependency bumps (supersedes Dependabot PRs #23-#29, one reviewable
+  change): `@sveltejs/kit` 2.53.0→2.70.3 (security fixes — CSRF protection on
+  non-production `NODE_ENV` builds, prototype pollution in file-input
+  deletion, quadratic-backtracking DoS in `Accept` header negotiation, cookie
+  size aligned to RFC 6265bis; also moves `defineEnvVars` to
+  `@sveltejs/kit/env`), `@tiptap/core` 3.20.0→3.31.3 (fixes a `mergeAttributes()`
+  prototype-pollution advisory and a ReDoS in Markdown attribute parsing;
+  pulls `@tiptap/pm` and the prosemirror-* family along in lockstep, and drops
+  now-unused transitive deps `linkify-it`/`markdown-it`/`@remirror/*`), vitest
+  4.0.18→4.1.11 (with `@vitest/mocker` and the rest of the `@vitest/*`
+  family), undici 7.22.0→7.29.1 and nanoid 3.3.11→3.3.19 (both transitive,
+  under `jsdom` and `vite`→`postcss` respectively — no direct `package.json`
+  entry), devalue 5.6.3→5.9.2 (transitive under `@sveltejs/kit`; also fixes a
+  prototype-pollution advisory). `npm audit --omit=dev`: 12 vulnerabilities
+  (2 low, 2 moderate, 8 high) before → 8 (4 low, 1 moderate, 3 high) after.
+  No source changes required; build, 388 unit tests and `svelte-check`
+  (449 files, 0 errors, the 23 pre-existing a11y warnings) all still pass.
 - `web/e2e/collections.spec.ts` and `web/e2e/daily.spec.ts` (Package E of the
   Playwright determinism ticket) now assert on the seeded world instead of
   "a list or an empty state": the collection's membership is exactly the
