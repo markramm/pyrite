@@ -20,6 +20,60 @@ _GITHUB_SSH_PREFIX = "git@github.com:"
 # which git would read as an option.
 _GITHUB_NAME_RE = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_.-]*")
 
+# --- Error disclosure control (CodeQL py/stack-trace-exposure #51/#52/#53) ---
+#
+# git's stderr is written for the operator at a terminal, not for a remote
+# API caller: its very first line is "Cloning into '<absolute dest>'...",
+# which hands a write-tier caller the server's filesystem layout ($HOME, the
+# workspace root). `_sanitize_output` already removed tokens; these remove
+# paths, and `classify_git_error` keeps the message actionable by mapping the
+# three failures a caller can do something about onto stable codes.
+
+# Lines that exist only to narrate local filesystem work.
+_PATH_NARRATION_RE = re.compile(
+    r"^\s*(Cloning into|Checking out files|Updating files|Resolving deltas|"
+    r"Receiving objects|Counting objects|Compressing objects|remote: Enumerating)\b.*$",
+    re.MULTILINE,
+)
+# POSIX absolute paths and Windows drive paths, plus ~ expansions.
+_ABS_PATH_RE = re.compile(r"(?:[A-Za-z]:[\\/]|~?/)[^\s'\"<>|]*")
+_PATH_PLACEHOLDER = "<path>"
+
+# Order is significant: the first match wins, and the branch and auth shapes
+# are the specific ones ("Remote branch X not found in upstream origin" would
+# otherwise be swallowed by a looser "not found" reading).
+_GIT_ERROR_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "BRANCH_NOT_FOUND",
+        re.compile(
+            r"Remote branch .* not found|Could not find remote branch|"
+            r"couldn't find remote ref",
+            re.IGNORECASE,
+        ),
+        "Branch not found in the remote repository",
+    ),
+    (
+        "AUTH_REQUIRED",
+        re.compile(
+            r"Authentication failed|could not read Username|could not read Password|"
+            r"Invalid username or (token|password)|Permission denied \(publickey\)|"
+            r"terminal prompts disabled|HTTP Basic: Access denied",
+            re.IGNORECASE,
+        ),
+        "Authentication required — connect or refresh the GitHub credentials",
+    ),
+    (
+        "REPO_NOT_FOUND",
+        re.compile(
+            r"repository .* not found|Repository not found|"
+            r"remote: Not Found|does not appear to be a git repository",
+            re.IGNORECASE,
+        ),
+        "Repository not found, or the configured credentials cannot see it",
+    ),
+)
+_GIT_ERROR_FALLBACK = ("CLONE_FAILED", "Git operation failed — see the server log for details")
+
 # Env vars a parent git process (e.g. a pre-commit hook, itself a child of
 # `git commit`) sets for its own subprocesses. If a GitService call inherits
 # these while operating on a *different* repository (a different `cwd`), a
@@ -82,13 +136,36 @@ class GitService:
             token: GitHub OAuth token for private repos
 
         Returns:
-            (success, message)
+            (success, message) — the message is caller-safe (no tokens, no
+            filesystem paths). Callers that need to branch on *why* it failed
+            should use `clone_with_code`.
+        """
+        success, _code, message = GitService.clone_with_code(
+            remote_url, local_path, branch=branch, depth=depth, token=token
+        )
+        return success, message
+
+    @staticmethod
+    def clone_with_code(
+        remote_url: str,
+        local_path: Path,
+        branch: str = "main",
+        depth: int | None = 1,
+        token: str | None = None,
+    ) -> tuple[bool, str, str]:
+        """Clone a repository, returning `(success, code, message)`.
+
+        `code` is a stable identifier a caller can branch on (REPO_NOT_FOUND /
+        AUTH_REQUIRED / BRANCH_NOT_FOUND / CLONE_FAILED / CLONE_TIMEOUT), and
+        `message` never carries a filesystem path or a token. The full,
+        unredacted stderr goes to the log at WARNING so the operator loses
+        nothing (CodeQL py/stack-trace-exposure #51).
         """
         # A value beginning with "-" would be parsed by git as an option
         # (--upload-pack=<cmd> is code execution). "--" below covers the
         # positionals; --branch's value is an option argument, so refuse it.
         if remote_url.startswith("-") or branch.startswith("-"):
-            return False, "Clone failed: invalid repository URL or branch"
+            return False, "INVALID_REQUEST", "Invalid repository URL or branch"
 
         url = GitService._inject_token(remote_url, token)
 
@@ -102,13 +179,26 @@ class GitService:
                 cmd, capture_output=True, text=True, timeout=120, env=_git_env()
             )
             if result.returncode == 0:
-                return True, f"Cloned to {local_path}"
-            error = GitService._sanitize_output(result.stderr, token)
-            return False, f"Clone failed: {error}"
+                return True, "OK", f"Cloned to {local_path}"
+            logger.warning(
+                "git clone of %s into %s failed (rc=%s): %s",
+                remote_url,
+                local_path,
+                result.returncode,
+                GitService._sanitize_output(result.stderr, token).strip(),
+            )
+            code, message = GitService.classify_git_error(result.stderr, token)
+            return False, code, message
         except subprocess.TimeoutExpired:
-            return False, "Clone timed out"
+            logger.warning("git clone of %s into %s timed out", remote_url, local_path)
+            return False, "CLONE_TIMEOUT", "Clone timed out"
         except (subprocess.SubprocessError, OSError) as e:
-            return False, f"Clone failed: {e}"
+            logger.warning("git clone of %s into %s raised", remote_url, local_path, exc_info=True)
+            return (
+                False,
+                "CLONE_FAILED",
+                f"Clone failed: {GitService.sanitize_error(str(e), token)}",
+            )
 
     @staticmethod
     def pull(local_path: Path, token: str | None = None) -> tuple[bool, str]:
@@ -131,12 +221,19 @@ class GitService:
             )
             if result.returncode == 0:
                 return True, result.stdout.strip() or "Already up to date"
-            error = GitService._sanitize_output(result.stderr, token)
-            return False, f"Pull failed: {error}"
+            logger.warning(
+                "git pull in %s failed (rc=%s): %s",
+                local_path,
+                result.returncode,
+                GitService._sanitize_output(result.stderr, token).strip(),
+            )
+            _code, message = GitService.classify_git_error(result.stderr, token)
+            return False, f"Pull failed: {message}"
         except subprocess.TimeoutExpired:
             return False, "Pull timed out"
         except (subprocess.SubprocessError, OSError) as e:
-            return False, f"Pull failed: {e}"
+            logger.warning("git pull in %s raised", local_path, exc_info=True)
+            return False, f"Pull failed: {GitService.sanitize_error(str(e), token)}"
 
     @staticmethod
     def get_remote_url(local_path: Path) -> str | None:
@@ -586,12 +683,20 @@ class GitService:
             )
             if result.returncode == 0:
                 return True, result.stderr.strip() or result.stdout.strip() or "Pushed successfully"
-            error = GitService._sanitize_output(result.stderr, token)
-            return False, f"Push failed: {error}"
+            logger.warning(
+                "git push to %s/%s failed (rc=%s): %s",
+                remote,
+                branch,
+                result.returncode,
+                GitService._sanitize_output(result.stderr, token).strip(),
+            )
+            _code, message = GitService.classify_git_error(result.stderr, token)
+            return False, f"Push failed: {message}"
         except subprocess.TimeoutExpired:
             return False, "Push timed out"
         except (subprocess.SubprocessError, OSError) as e:
-            return False, f"Push failed: {e}"
+            logger.warning("git push to %s/%s raised", remote, branch, exc_info=True)
+            return False, f"Push failed: {GitService.sanitize_error(str(e), token)}"
 
     @staticmethod
     def get_status(local_path: Path) -> dict:
@@ -659,6 +764,45 @@ class GitService:
         if token and token in output:
             return output.replace(token, "***")
         return output
+
+    @staticmethod
+    def redact_paths(output: str) -> str:
+        """Replace absolute filesystem paths with a stable placeholder and drop
+        the lines that exist only to narrate local filesystem work.
+
+        git's first clone line is `Cloning into '<absolute dest>'...`, which
+        tells a remote caller the server's `$HOME` and workspace root. Nothing
+        a caller can act on lives in it.
+        """
+        cleaned = _PATH_NARRATION_RE.sub("", output)
+        cleaned = _ABS_PATH_RE.sub(_PATH_PLACEHOLDER, cleaned)
+        # Collapse the blank lines the narration removal leaves behind.
+        return "\n".join(line for line in cleaned.splitlines() if line.strip()).strip()
+
+    @staticmethod
+    def sanitize_error(output: str, token: str | None = None) -> str:
+        """Everything that may be shown to a caller: tokens removed (the
+        existing behaviour) *and* absolute paths redacted (new)."""
+        return GitService.redact_paths(GitService._sanitize_output(output, token))
+
+    @staticmethod
+    def classify_git_error(output: str, token: str | None = None) -> tuple[str, str]:
+        """Map git stderr onto a stable `(code, safe_message)` pair.
+
+        The three failures a write-tier caller can act on -- the repository is
+        not there, the credentials are wrong, the branch is wrong -- each get
+        their own code, so collapsing them into one opaque "Clone failed" is a
+        regression rather than a fix. The message never carries a path; the
+        caller gets the code, and the operator gets the full stderr in the log.
+        """
+        for code, pattern, message in _GIT_ERROR_PATTERNS:
+            if pattern.search(output):
+                return code, message
+        safe = GitService.sanitize_error(output, token)
+        # An unrecognised shape may still embed a URL or a hostname, so only
+        # the fixed fallback text is returned; `safe` is what the caller logs.
+        logger.debug("Unclassified git error: %s", safe)
+        return _GIT_ERROR_FALLBACK
 
     # =========================================================================
     # Git worktree operations

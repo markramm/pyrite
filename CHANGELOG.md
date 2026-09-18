@@ -28,6 +28,15 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `changes` job for `dorny/paths-filter`) instead of running with the
   repository's default `GITHUB_TOKEN` scope. Closes the eight CodeQL
   `actions/missing-workflow-permissions` alerts on `ci.yml`.
+- **Repo endpoints returned raw git stderr, disclosing the server's absolute
+  filesystem paths to any write-tier caller.** `POST /api/repos/subscribe` on a
+  missing repo answered `400 {"message": "Clone failed: Cloning into
+  '/Users/<user>/.pyrite/repos/…'…"}`; `/api/repos/fork` and
+  `/api/repos/{name}/pr` had the same shape. Git errors are now classified
+  server-side into stable codes (`REPO_NOT_FOUND`, `AUTH_REQUIRED`,
+  `BRANCH_NOT_FOUND`, `PATH_EXISTS`, falling back to `CLONE_FAILED`) with
+  path-free messages, while the full stderr is logged at WARNING so the
+  operator loses nothing (CodeQL `py/stack-trace-exposure` #51, #52, #53).
 - **Private KBs were readable by any logged-in user, and by anonymous
   visitors on an auth-enabled instance.** Per-KB roles (`default_role: none`,
   explicit grants) were enforced on write routes only; every read route

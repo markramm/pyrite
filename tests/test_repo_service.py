@@ -153,7 +153,7 @@ class TestSubscribe:
 
     @patch("pyrite.services.repo_service.get_github_token", return_value=None)
     @patch("pyrite.services.repo_service.save_config")
-    @patch.object(GitService, "clone")
+    @patch.object(GitService, "clone_with_code")
     @patch.object(GitService, "get_head_commit", return_value="abc123")
     @patch.object(GitService, "is_git_repo", return_value=False)
     def test_subscribe_success(
@@ -176,7 +176,7 @@ class TestSubscribe:
             (path / "kb.yaml").write_text(
                 "name: test-research\nkb_type: research\ndescription: Test\n"
             )
-            return True, "Cloned"
+            return True, "OK", "Cloned"
 
         mock_clone.side_effect = clone_side_effect
 

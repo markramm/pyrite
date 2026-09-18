@@ -4,11 +4,32 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from ...services.git_service import GitService
 from ...services.repo_service import RepoService
 from ..api import get_repo_service, requires_tier
 from ..schemas import ForkRequest, PRRequest, RepoInfo, RepoListResponse, SubscribeRequest
 
 logger = logging.getLogger(__name__)
+
+
+def _error_detail(result: dict, default_code: str) -> dict:
+    """Build a 400 detail body from a service result without disclosing the
+    server's filesystem layout.
+
+    A service `error` string may still be raw git stderr (an operator-facing
+    message with absolute paths in it), so every one of them goes through
+    `GitService.sanitize_error` on the way out — CodeQL py/stack-trace-exposure
+    #51 (subscribe), #52 (fork), #53 (pr). The raw text is logged, not sent.
+    """
+    raw = result.get("error", "Unknown error")
+    message = GitService.sanitize_error(str(raw))
+    if message != raw:
+        logger.warning("%s (unredacted): %s", default_code, raw)
+    return {
+        "code": result.get("error_code") or default_code,
+        "message": message or "Unknown error",
+    }
+
 
 router = APIRouter(
     tags=["Repos"],
@@ -58,7 +79,7 @@ def get_repo(
     if result.get("error"):
         raise HTTPException(
             status_code=404,
-            detail={"code": "REPO_NOT_FOUND", "message": result["error"]},
+            detail=_error_detail(result, "REPO_NOT_FOUND"),
         )
     return result
 
@@ -74,7 +95,7 @@ def subscribe_to_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail={"code": "SUBSCRIBE_FAILED", "message": result.get("error", "Unknown error")},
+            detail=_error_detail(result, "SUBSCRIBE_FAILED"),
         )
     return result
 
@@ -98,7 +119,7 @@ def fork_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail={"code": "FORK_FAILED", "message": result.get("error", "Unknown error")},
+            detail=_error_detail(result, "FORK_FAILED"),
         )
     return result
 
@@ -114,7 +135,7 @@ def sync_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail={"code": "SYNC_FAILED", "message": result.get("error", "Unknown error")},
+            detail=_error_detail(result, "SYNC_FAILED"),
         )
     return result
 
@@ -131,10 +152,7 @@ def unsubscribe_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail={
-                "code": "UNSUBSCRIBE_FAILED",
-                "message": result.get("error", "Unknown error"),
-            },
+            detail=_error_detail(result, "UNSUBSCRIBE_FAILED"),
         )
     return result
 
@@ -219,6 +237,6 @@ def create_pull_request(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail={"code": "PR_FAILED", "message": result.get("error", "Unknown error")},
+            detail=_error_detail(result, "PR_FAILED"),
         )
     return result

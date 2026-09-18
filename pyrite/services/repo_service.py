@@ -71,17 +71,24 @@ class RepoService:
         # Determine workspace path
         workspace_path = self.config.settings.workspace_path / owner / repo_name
         if workspace_path.exists():
-            return {"success": False, "error": f"Path already exists: {workspace_path}"}
+            # The absolute path is for the operator only (CodeQL #51): a caller
+            # who can name owner/repo learns nothing from "already subscribed".
+            logger.warning("Subscribe refused: %s already exists", workspace_path)
+            return {
+                "success": False,
+                "error_code": "PATH_EXISTS",
+                "error": f"'{owner}/{repo_name}' is already present in the workspace",
+            }
 
         workspace_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Clone (shallow for subscriptions)
         token = self._get_token()
-        success, msg = GitService.clone(
+        success, code, msg = GitService.clone_with_code(
             remote_url, workspace_path, branch=branch, depth=1, token=token
         )
         if not success:
-            return {"success": False, "error": msg}
+            return {"success": False, "error_code": code, "error": msg}
 
         # Discover KBs
         discovered_kbs = self.discover_kbs(workspace_path)
@@ -433,16 +440,21 @@ class RepoService:
         workspace_path = self.config.settings.workspace_path / owner / repo_name
 
         if workspace_path.exists():
-            return {"success": False, "error": f"Path already exists: {workspace_path}"}
+            logger.warning("Clone refused: %s already exists", workspace_path)
+            return {
+                "success": False,
+                "error_code": "PATH_EXISTS",
+                "error": f"'{owner}/{repo_name}' is already present in the workspace",
+            }
 
         workspace_path.parent.mkdir(parents=True, exist_ok=True)
         token = self._get_token()
 
-        success, msg = GitService.clone(
+        success, code, msg = GitService.clone_with_code(
             clone_url, workspace_path, branch=branch, depth=depth, token=token
         )
         if not success:
-            return {"success": False, "error": msg}
+            return {"success": False, "error_code": code, "error": msg}
 
         # Discover and register
         discovered_kbs = self.discover_kbs(workspace_path)
