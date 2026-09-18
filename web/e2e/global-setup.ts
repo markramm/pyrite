@@ -87,8 +87,30 @@ function create(args: string[]): void {
 	pyrite(['create', '-k', E2E_KB, ...args]);
 }
 
-/** Wipe and rebuild the seeded world. Idempotent; safe to call once per run. */
+/**
+ * Marker so the seed runs exactly once per `playwright test` invocation.
+ *
+ * `playwright.config.ts` is evaluated in the main runner process AND again in
+ * every worker process, so an unguarded call wipes and rebuilds the data
+ * directory N+1 times concurrently — workers racing each other into
+ * `rmSync`/`pyrite create` and failing with "Command failed". Observed exactly
+ * that: 118 of 119 tests erroring at 0 ms in the seed call.
+ *
+ * Workers are forked with `{...process.env}` from the main process
+ * (`runner/processHost.js`), so a variable set here on the first evaluation is
+ * inherited by every worker and seen as already-set.
+ */
+const SEED_MARKER = 'PYRITE_E2E_SEEDED';
+
+/** Wipe and rebuild the seeded world. Runs once per test invocation. */
 export function seedE2EWorld(): void {
+	// A worker process never seeds: the main process already did, and the world
+	// it built is the one this worker's backend is serving.
+	if (process.env[SEED_MARKER] === '1' || process.env.TEST_WORKER_INDEX !== undefined) {
+		return;
+	}
+	process.env[SEED_MARKER] = '1';
+
 	if (!existsSync(PYRITE_BIN)) {
 		throw new Error(
 			`Pyrite CLI not found at ${PYRITE_BIN}. Create the venv first ` +
