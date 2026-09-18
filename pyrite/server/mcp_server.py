@@ -86,11 +86,24 @@ _UPDATE_FIELDS = frozenset(
 )
 
 
+# Identity fields every `fields` projection keeps. Agents key on these to
+# re-fetch, link or report an entry afterwards, and `_kb_batch_read` reads
+# them directly while computing `not_found`. Enforced in one place so the
+# schema's promise holds for kb_search, kb_get, kb_list_entries, kb_recent
+# and kb_batch_read alike (kb-fields-identity-pair-contract).
+_IDENTITY_FIELDS: tuple[str, ...] = ("id", "kb_name")
+
+
 def _project_fields(entry: dict, fields: list[str] | None) -> dict:
-    """Project only requested fields from an entry dict."""
+    """Project only requested fields from an entry dict.
+
+    `id` and `kb_name` are always kept when present on the entry, even if the
+    caller's `fields` list omits them.
+    """
     if not fields:
         return entry
-    return {k: entry[k] for k in fields if k in entry}
+    keys = dict.fromkeys((*_IDENTITY_FIELDS, *fields))
+    return {k: entry[k] for k in keys if k in entry}
 
 
 def _chunk_body(entry: dict, offset: int = 0, limit: int = DEFAULT_BODY_CHUNK) -> dict:
@@ -527,21 +540,42 @@ class PyriteMCPServer:
         body_offset = args.get("body_offset", 0)
         body_limit = args.get("body_limit", DEFAULT_BODY_CHUNK)
 
+        if not isinstance(entries_spec, list):
+            return _error(
+                "VALIDATION_FAILED",
+                "entries must be an array of {entry_id, kb_name} objects",
+                suggestion='pass entries as [{"entry_id": ..., "kb_name": ...}]',
+                retryable=False,
+            )
         if not entries_spec:
             return _error("VALIDATION_FAILED", "entries array is required and must not be empty")
         if len(entries_spec) > MAX_BATCH_READ_ENTRIES:
             return _error("VALIDATION_FAILED", f"Maximum {MAX_BATCH_READ_ENTRIES} entries per call")
 
+        # Key presence is not enough: a non-dict item, or a non-string/empty
+        # id, reached the SQL layer or a bare `not_found` and surfaced as
+        # INTERNAL/retryable=True or a plausible-looking miss. All of them are
+        # deterministic client errors (kb-batch-read-spec-validation-contract).
+        for index, spec in enumerate(entries_spec):
+            if (
+                not isinstance(spec, dict)
+                or not isinstance(spec.get("entry_id"), str)
+                or not spec["entry_id"]
+                or not isinstance(spec.get("kb_name"), str)
+                or not spec["kb_name"]
+            ):
+                return _error(
+                    "VALIDATION_FAILED",
+                    f"entries[{index}] must be an object with non-empty string entry_id and kb_name",
+                    suggestion='pass entries as [{"entry_id": ..., "kb_name": ...}]',
+                    retryable=False,
+                )
+
         ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
         results = self.svc.get_entries(ids)
 
         if fields:
-            # `id` and `kb_name` are the identity pair the `not_found` math
-            # below reads; keep them in the projection so a `fields` list that
-            # omits either cannot turn the response into a raw KeyError
-            # reported as INTERNAL/retryable=True
-            # (kb-batch-read-fields-identity-contract).
-            results = [_project_fields(r, ["id", "kb_name", *fields]) for r in results]
+            results = [_project_fields(r, fields) for r in results]
         else:
             results = [_chunk_body(r, offset=body_offset, limit=body_limit) for r in results]
 

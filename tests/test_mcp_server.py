@@ -210,6 +210,95 @@ class TestPyriteMCPServer:
         assert entry["id"] == entry_id
         assert entry["kb_name"] == "test-events"
 
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"entries": 5},
+            {"entries": "abc"},
+            {"entries": [1]},
+            {"entries": [{"kb_name": "test-events"}]},
+            {"entries": [{"entry_id": "abc"}]},
+            {"entries": [{"entry_id": None, "kb_name": "test-events"}]},
+            {"entries": [{"entry_id": "", "kb_name": "test-events"}]},
+            {"entries": [{"entry_id": 42, "kb_name": "test-events"}]},
+            {"entries": [{"entry_id": ["abc"], "kb_name": "test-events"}]},
+            {"entries": [{"entry_id": "abc", "kb_name": ""}]},
+            {"entries": [{"entry_id": "abc", "kb_name": 7}]},
+        ],
+    )
+    def test_kb_batch_read_rejects_malformed_specs(self, mcp_admin_server, payload):
+        """Every malformed `entries` shape is a client error, not INTERNAL.
+
+        Checking key presence was not enough: a non-list `entries`, a non-dict
+        item, or a non-string/empty id still reached `len()` or the SQL layer
+        and surfaced as INTERNAL/retryable=True -- the shape #137 exists to
+        remove -- sometimes leaking a raw SQL statement in the message. All of
+        them are deterministic client errors
+        (kb-batch-read-spec-validation-contract).
+        """
+        result = mcp_admin_server["server"]._dispatch_tool("kb_batch_read", payload)
+        assert result.get("error_code") == "VALIDATION_FAILED", result
+        assert result.get("retryable") is False, result
+        assert "sqlite3" not in str(result.get("error", "")).lower(), result
+
+    def test_kb_batch_read_names_the_malformed_index(self, mcp_admin_server):
+        """With one bad item among good ones the message names its position.
+
+        At the 50-entry maximum an agent's only recovery from a single bad item
+        would otherwise be to bisect (kb-batch-read-spec-validation-contract).
+        """
+        result = mcp_admin_server["server"]._dispatch_tool(
+            "kb_batch_read",
+            {
+                "entries": [
+                    {"entry_id": "a", "kb_name": "test-events"},
+                    {"entry_id": "b", "kb_name": "test-events"},
+                    {"kb_name": "test-events"},
+                ]
+            },
+        )
+        assert result.get("error_code") == "VALIDATION_FAILED", result
+        assert "entries[2]" in result["error"], result
+
+    def test_kb_search_fields_projection_keeps_identity_pair(self, mcp_admin_server):
+        """`fields` never drops id/kb_name, for any projecting tool."""
+        server = mcp_admin_server["server"]
+        result = server._dispatch_tool(
+            "kb_search", {"query": "immigration", "kb_name": "test-events", "fields": ["title"]}
+        )
+        assert result["results"], result
+        for entry in result["results"]:
+            assert entry["id"] and entry["kb_name"], entry
+
+    def test_kb_get_fields_projection_keeps_identity_pair(self, mcp_admin_server):
+        server = mcp_admin_server["server"]
+        found = server._dispatch_tool(
+            "kb_search", {"query": "immigration", "kb_name": "test-events"}
+        )
+        entry_id = found["results"][0]["id"]
+        result = server._dispatch_tool(
+            "kb_get", {"entry_id": entry_id, "kb_name": "test-events", "fields": ["title"]}
+        )
+        entry = result["entry"]
+        assert entry["id"] == entry_id
+        assert entry["kb_name"] == "test-events"
+
+    def test_kb_list_entries_fields_projection_keeps_identity_pair(self, mcp_admin_server):
+        server = mcp_admin_server["server"]
+        result = server._dispatch_tool(
+            "kb_list_entries", {"kb_name": "test-events", "fields": ["title"]}
+        )
+        assert result["entries"], result
+        for entry in result["entries"]:
+            assert entry["id"] and entry["kb_name"], entry
+
+    def test_kb_recent_fields_projection_keeps_identity_pair(self, mcp_admin_server):
+        server = mcp_admin_server["server"]
+        result = server._dispatch_tool("kb_recent", {"kb_name": "test-events", "fields": ["title"]})
+        assert result["entries"], result
+        for entry in result["entries"]:
+            assert entry["id"] and entry["kb_name"], entry
+
     def test_kb_search_with_filters(self, mcp_admin_server):
         """Test search with filters."""
         result = mcp_admin_server["server"]._dispatch_tool(

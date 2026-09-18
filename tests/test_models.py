@@ -659,10 +659,7 @@ class TestParseDatetime:
 
         cls = get_entry_class("note")
         for raw in ("2026-01-15T09:00:00", "2026-01-15 09:00:00"):
-            text = (
-                "---\nid: t\ntitle: T\ntype: note\n"
-                f"created_at: {raw}\n---\n\nbody\n"
-            )
+            text = f"---\nid: t\ntitle: T\ntype: note\ncreated_at: {raw}\n---\n\nbody\n"
             entry = cls.from_markdown(text)
             assert entry.created_at is not None, raw
             assert entry.created_at.tzinfo is not None, raw

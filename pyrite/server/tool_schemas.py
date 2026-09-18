@@ -76,7 +76,7 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields per result (e.g. ['id','title','tags']). Omit for default fields. Overrides include_body.",
+                    "description": "Return only these fields per result (e.g. ['id','title','tags']). Omit for default fields. Overrides include_body. `id` and `kb_name` are always included.",
                 },
             },
             "required": ["query"],
@@ -98,7 +98,7 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields. When specified, body chunking is skipped.",
+                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields. When specified, body chunking is skipped. `id` and `kb_name` are always included.",
                 },
                 "body_offset": {
                     "type": "integer",
@@ -335,7 +335,7 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields per entry. Omit for all fields.",
+                    "description": "Return only these fields per entry. Omit for all fields. `id` and `kb_name` are always included.",
                 },
             },
             "required": [],
@@ -356,7 +356,7 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields per entry. Omit for all fields.",
+                    "description": "Return only these fields per entry. Omit for all fields. `id` and `kb_name` are always included.",
                 },
             },
             "required": [],

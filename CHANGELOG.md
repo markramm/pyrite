@@ -204,6 +204,15 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **`kb_batch_read` no longer crashes on a malformed spec, and every `fields`
+  projection keeps the identity pair.** A non-list `entries`, a non-object item,
+  or a missing, empty or non-string `entry_id`/`kb_name` used to raise a raw
+  `KeyError`, a `TypeError` or a SQL binding error that surfaced as
+  `INTERNAL`/`retryable: true`; each now returns `VALIDATION_FAILED` with
+  `retryable: false`, naming the offending `entries[i]`. `_project_fields` keeps
+  `id` and `kb_name` in every projection (`kb_search`, `kb_get`,
+  `kb_list_entries`, `kb_recent`, `kb_batch_read`), so the schema sentence is
+  true of all five (#126, #137).
 - **A bare YAML date in frontmatter (`created_at: 2026-01-15`) read back as
   the load time instead of the file's date.** The YAML parser produces a
   `datetime.date` for a bare date, and `parse_datetime` only handled
