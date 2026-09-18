@@ -553,6 +553,15 @@ class TestDryRunOverThisRepo:
         for write in ("push", " tag ", "release create", "label create", "uv venv", "uv pip"):
             assert write not in joined, f"dry run ran a write: {write!r} in {joined}"
 
+    def test_gh_release_create_names_the_repo_explicitly(self, dry_run_commands):
+        """`gh` infers the repo from the cwd, which is not necessarily the repo
+        being released. A release cut against the wrong repo is not undoable."""
+        create = [c for c in dry_run_commands if c[:3] == ["gh", "release", "create"]]
+        assert create, "no release create was planned"
+        for cmd in create:
+            assert "--repo" in cmd
+            assert cmd[cmd.index("--repo") + 1] == f"{release.MAINTAINER}/pyrite"
+
     def test_dry_run_planned_every_irreversible_command(self, dry_run_commands):
         planned = [" ".join(c) for c in dry_run_commands]
         assert any(f"push origin {FAKE_SHA}:refs/heads/main" in p for p in planned)

@@ -67,6 +67,7 @@ REPO = Path(__file__).resolve().parent.parent
 REMOTE_URL = "https://github.com/markramm/pyrite"
 MAINTAINER = "markramm"
 BLOCKER_LABEL = "release-blocker"
+REPO_SLUG = f"{MAINTAINER}/pyrite"
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$")
 
@@ -416,7 +417,11 @@ def step_preconditions(ctx: Context) -> None:
     check_changelog(ctx.repo, ctx.version)
     ctx.runner.note(f"CHANGELOG has `## [{ctx.version}] - {date.today().isoformat()}` with content")
 
-    labels = _gh_json(["gh", "label", "list", "--json", "name", "--limit", "200"])
+    # `--repo` on every gh call: it otherwise infers the repo from the cwd,
+    # which is not necessarily the repo being released.
+    labels = _gh_json(
+        ["gh", "label", "list", "--repo", REPO_SLUG, "--json", "name", "--limit", "200"]
+    )
     known = {entry.get("name") for entry in labels} if isinstance(labels, list) else set()
     if BLOCKER_LABEL not in known:
         ctx.runner.note(
@@ -429,6 +434,8 @@ def step_preconditions(ctx: Context) -> None:
                 "label",
                 "create",
                 BLOCKER_LABEL,
+                "--repo",
+                REPO_SLUG,
                 "--description",
                 "Must not ship in the next release",
                 "--color",
@@ -441,6 +448,8 @@ def step_preconditions(ctx: Context) -> None:
                 "gh",
                 "pr",
                 "list",
+                "--repo",
+                REPO_SLUG,
                 "--state",
                 "open",
                 "--label",
@@ -461,7 +470,7 @@ def _checks_for(sha: str) -> list[dict]:
     the workflow as a whole.
     """
     try:
-        payload = _gh_json(["gh", "api", f"repos/{MAINTAINER}/pyrite/commits/{sha}/check-runs"])
+        payload = _gh_json(["gh", "api", f"repos/{REPO_SLUG}/commits/{sha}/check-runs"])
     except ReleaseError as exc:
         # The likeliest real failure is a commit that was never pushed, and the
         # API answers 422 "No commit found". That is exactly CI_MISSING -- the
@@ -616,7 +625,7 @@ def _contributor_logins(since_tag: str | None) -> list[str]:
         [
             "gh",
             "api",
-            f"repos/{MAINTAINER}/pyrite/releases/tags/{since_tag}",
+            f"repos/{REPO_SLUG}/releases/tags/{since_tag}",
             "--jq",
             ".published_at",
         ]
@@ -628,6 +637,8 @@ def _contributor_logins(since_tag: str | None) -> list[str]:
             "gh",
             "pr",
             "list",
+            "--repo",
+            REPO_SLUG,
             "--state",
             "merged",
             "--base",
@@ -691,8 +702,22 @@ def step_publish(ctx: Context) -> None:
 
     notes_file = Path(tempfile.mkdtemp(prefix="pyrite-release-notes-")) / "notes.md"
     notes_file.write_text(ctx.notes)
+    # --repo explicitly: `gh` otherwise infers it from the cwd, which is not
+    # necessarily the repo being released, and a release cut against the wrong
+    # repo is not undoable.
     ctx.runner.run_write(
-        ["gh", "release", "create", tag, "--title", tag, "--notes-file", str(notes_file)]
+        [
+            "gh",
+            "release",
+            "create",
+            tag,
+            "--repo",
+            REPO_SLUG,
+            "--title",
+            tag,
+            "--notes-file",
+            str(notes_file),
+        ]
     )
     ctx.runner.note(f"(notes written to {notes_file})")
 
