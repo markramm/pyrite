@@ -8,7 +8,7 @@ tags:
 - security
 - chore
 kind: task
-status: in_progress
+status: done
 priority: high
 assignee: agent:pyrite-worker
 effort: S
