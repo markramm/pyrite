@@ -2076,3 +2076,60 @@ because the machine was loaded**, and it deserves its own theme.
 a row" is five *executing* runs; runs blocked before any test ran (siblings
 holding 8088/5173) were discarded and said so. I re-ran the auth project myself
 on the rebased base with the siblings idle: **19 passed (9.4s)**.
+
+### Tick 3 close — `dev` is green, and #131 is the fan-out's real blocker
+
+**`dev` recovered.** Run 35324168334 on the current tip `d611dca`: `test (3.11)`,
+`test (3.12)`, **`test (3.13)`**, `frontend`, `smoke`, `coverage`, `kb`, `gate`
+all green, 5m20s. My 3.13 breakage is fixed — verified on the interpreter that
+broke, not merely "the run says success".
+
+One wrinkle worth recording: **both `push` runs were cancelled** by the
+`concurrency` group (`cancel-in-progress: true`, keyed on `github.ref`), so the
+peer's fix commit and Package C's merge each cancelled the previous run and
+neither push was ever verified by its own run. The green evidence comes from a
+manual `workflow_dispatch`. That is the concurrency rule working as designed —
+a newer push makes the older answer irrelevant — but it means **on a busy `dev`
+the last push's run can be cancelled and nothing re-runs it**, so "is `dev`
+green" has to be answered by checking a *completed run against the current tip*,
+not by reading the top of `gh run list`. Two of the three entries there were
+`cancelled`, which is neither success nor failure.
+
+**The `e2e` job failed in that run, and it is not a Package C regression.** It
+is `continue-on-error: true` and manual-only, so it did not gate. Its failures
+are **#131**, the server-side 500s Package C filed — now reproducing **in CI**,
+which removes the "only a loaded dev machine" explanation:
+
+```
+sqlalchemy.exc.InvalidRequestError: This session is in 'prepared' state;
+    no further SQL can be emitted within this transaction.
+IndexError: tuple index out of range
+```
+
+Note it is a *second* illegal state on the same session (the original report was
+"provisioning a new connection; concurrent operations are not permitted"), which
+points at one session object shared across concurrent requests rather than a
+single bad call site. `chromium-auth`'s specs passed in the same run, so C's work
+is sound.
+
+**The consequence for the roadmap, and it is the important one:** the specs that
+fail in that job (`collections`, `qa`, `search`) fail with `element(s) not found`
+— pages that rendered nothing because their API call 500'd. **#131 manufactures
+exactly the "flaky e2e" the Playwright fan-out exists to eliminate, and it will
+keep doing so after every spec is rewritten.** So:
+
+> **Package H cannot succeed while #131 is open.** Flipping `continue-on-error`
+> off the `e2e` job makes `dev` red on a server bug that has nothing to do with
+> the specs. #131 must land before H, and it is a Python/server theme — Opus,
+> cold read, `pyrite/server/` and session/dependency provisioning.
+
+That re-orders the remaining fan-out: **F and G (spec rewrites, parallel-safe),
+then #131, then H.** Recorded here because the tick that dispatches H will not
+otherwise know.
+
+**Tick 3 final: 4 themes dispatched, 4 merged** (#84 Package E, #83 Package D,
+#81 the quality theme, #82 Package C), 1 red `dev` push caused and fixed
+forward, 6 issues filed by this conductor (#86, #103, #104, #107, #109, #133),
+5 by its workers (#88, #89, #117, #118, #130, #131). First cold read of the loop,
+and it changed the outcome twice — once by finding the fixture's false claim,
+once by calling the `@classmethod` risk I then mis-filed as a trade-off.
