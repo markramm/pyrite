@@ -23,6 +23,19 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
+@pytest.fixture
+def reachable_session(sse_session_result):
+    """The session, or a skip when the endpoint itself is unroutable.
+
+    When the advertised endpoint 404s, the two tests below it report that
+    directly; every assertion that needs a working session would otherwise
+    repeat the same failure and bury the cause.
+    """
+    if sse_session_result["unreachable"]:
+        pytest.skip("the advertised MCP endpoint is unroutable; see the endpoint-path tests")
+    return sse_session_result
+
+
 def test_sse_advertises_an_endpoint_that_is_not_double_prefixed(sse_session_result):
     """PR #3's bug, asserted on the wire.
 
@@ -48,11 +61,11 @@ def test_the_advertised_endpoint_is_actually_routable(sse_session_result):
     )
 
 
-def test_sse_session_initializes(sse_session_result):
-    assert "serverInfo" in sse_session_result["server_info"], sse_session_result["server_info"]
+def test_sse_session_initializes(reachable_session):
+    assert "serverInfo" in reachable_session["server_info"], reachable_session["server_info"]
 
 
-def test_sse_exposes_every_declared_read_tool(sse_session_result):
+def test_sse_exposes_every_declared_read_tool(reachable_session):
     """The advertised tool list must contain everything tool_schemas declares.
 
     Superset, not equality: installed extensions contribute their own
@@ -64,10 +77,10 @@ def test_sse_exposes_every_declared_read_tool(sse_session_result):
     """
     from pyrite.server.tool_schemas import READ_TOOLS
 
-    missing = set(READ_TOOLS) - sse_session_result["tool_names"]
+    missing = set(READ_TOOLS) - reachable_session["tool_names"]
     assert not missing, f"declared read tools absent from the SSE tool list: {sorted(missing)}"
 
 
-def test_kb_search_over_sse_returns_the_seeded_entry(sse_session_result):
-    text = sse_session_result["search_text"]
+def test_kb_search_over_sse_returns_the_seeded_entry(reachable_session):
+    text = reachable_session["search_text"]
     assert "Analytical Engine" in text, text

@@ -26,9 +26,12 @@ pytestmark = pytest.mark.e2e
 
 HF_REPO = "sentence-transformers/all-MiniLM-L6-v2"
 
-# Startup prewarm loads the model from disk; on a cold filesystem cache that is
-# slow, and /health answers before it finishes.
-PREWARM_TIMEOUT = 180.0
+# Startup prewarm loads the model from an already-warm HF cache (the fixture
+# skips otherwise), which takes a few seconds; /health answers before it
+# finishes, so this is a poll budget, not an expected duration. Kept tight on
+# purpose: when the startup hook is missing, this timeout IS the failure time,
+# and a generous one turns a clear red into a three-minute wait.
+PREWARM_TIMEOUT = 60.0
 
 
 def model_is_cached() -> bool:

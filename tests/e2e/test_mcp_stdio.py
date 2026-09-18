@@ -196,6 +196,8 @@ def test_stdio_and_sse_advertise_the_same_read_tier_tools(stdio_session, sse_ses
     transport-layer bug (a tier resolved differently, a plugin registered on
     one path only) rather than a difference of intent.
     """
+    if sse_session_result["unreachable"]:
+        pytest.skip("the SSE endpoint is unroutable; test_mcp_sse.py reports why")
     assert stdio_session["tool_names"] == sse_session_result["tool_names"], {
         "stdio_only": sorted(stdio_session["tool_names"] - sse_session_result["tool_names"]),
         "sse_only": sorted(sse_session_result["tool_names"] - stdio_session["tool_names"]),

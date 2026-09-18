@@ -296,6 +296,22 @@ def sse_session_result(read_tier_server) -> dict:
 
     with SSESession(read_tier_server.base_url, api_key=READ_API_KEY) as session:
         endpoint = session.endpoint_path
+
+        # The endpoint's shape is checked HERE, before the handshake, so that a
+        # doubled prefix (PR #3) reports as itself. Left to the handshake, the
+        # same bug surfaces as `initialize -> 404` in fixture setup, which
+        # errors out every test in this module and names none of them.
+        ping_status = session.post({"jsonrpc": "2.0", "id": 0, "method": "ping"}).status_code
+        if ping_status == 404:
+            return {
+                "endpoint": endpoint,
+                "ping_status": ping_status,
+                "server_info": {},
+                "tool_names": set(),
+                "search_text": "",
+                "unreachable": True,
+            }
+
         info = handshake(session)
 
         listed = session.request(2, "tools/list")
@@ -310,14 +326,11 @@ def sse_session_result(read_tier_server) -> dict:
         assert "result" in called, called
         text = "".join(block.get("text", "") for block in called["result"].get("content", []))
 
-        # A POST to the advertised endpoint must route; a 404 here is exactly
-        # what the doubled `/mcp/mcp/messages/` prefix produced.
-        ping_status = session.post({"jsonrpc": "2.0", "id": 4, "method": "ping"}).status_code
-
     return {
         "endpoint": endpoint,
         "server_info": info,
         "tool_names": names,
         "search_text": text,
         "ping_status": ping_status,
+        "unreachable": False,
     }
