@@ -51,6 +51,25 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 - `PyriteDB` is a context manager: `with PyriteDB(path) as db:` closes the
   connection on block exit (and on an exception), so callers no longer have to
   remember a manual `db.close()`.
+- **The round-trip identity gate.** `tests/test_roundtrip_identity.py` loads
+  every entry in a temp copy of the real `kb/` (774 files) through
+  `KBRepository`, saves each back untouched, and asserts the bytes are
+  byte-identical — the class of bug behind #46, #86 and #87 ("save wrote
+  something load did not read") now fails the default suite instead of
+  waiting for a human to notice a huge diff in review. Runs in ~1-2s.
+  `tests/fixtures/roundtrip/` adds hand-built adversarial shapes (inline vs
+  block lists, quoted scalars, a markdown table with `---` dividers, YAML
+  anchors/merge keys, a missing trailing newline). 70 real-corpus ids are
+  `xfail(strict=True)`, individually and by name, across five classified
+  causes: 46 bare-string `links:` items (the residual #69 left, deferred —
+  see the fix's own design notes), 11 block-indented `links:` sequences and
+  1 `GenericEntry` metadata-duplication case (new findings, filed as #148 and
+  #149), 6 files with pre-existing #87 `body:`-fold corruption already
+  committed to `kb/` (#150, a data-cleanup issue, not a code bug), and 6
+  daily notes normalized by `to_markdown`'s one-trailing-newline rule (not a
+  bug). A sixth finding, `created_at`/`updated_at` silently dropped on save
+  (issue #151), is pinned by two fixtures rather than a corpus id, since no
+  real file uses those keys yet.
 
 ### Process
 
