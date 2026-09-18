@@ -138,6 +138,7 @@
 							<p class="text-xs text-zinc-500">Choose your preferred color scheme</p>
 						</div>
 						<select
+							data-testid="settings-theme-select"
 							value={currentTheme}
 							onchange={(e) => setTheme(e.currentTarget.value)}
 							class="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800"
@@ -178,6 +179,7 @@
 						</div>
 						<input
 							type="text"
+							data-testid="settings-default-kb-input"
 							value={defaultKb}
 							onchange={(e) => setSetting('general.defaultKb', e.currentTarget.value)}
 							placeholder="e.g., my-notes"
