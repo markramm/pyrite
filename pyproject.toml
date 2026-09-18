@@ -95,13 +95,19 @@ include = ["pyrite", "pyrite.*"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "extensions"]
 python_files = ["test_*.py"]
-addopts = "-v --tb=short -m 'not slow'"
+addopts = "-v --tb=short -m 'not slow and not e2e'"
 markers = [
     "integration: tests requiring full environment setup (DB, indexing, network)",
     "api: REST API endpoint tests",
     "mcp: MCP server protocol tests",
     "cli: CLI command tests",
     "slow: long-running performance tests (1000+ entries)",
+    # Smoke layer (ADR-0032 §3a "breadth"): starts a real `pyrite-server`
+    # subprocess or a real `pyrite mcp` stdio process and drives it as a
+    # client. Minutes, not seconds -- excluded from the default run (and so
+    # from the pre-push hook and the PR matrix) and gated on the push to dev
+    # in CI. Run it deliberately with `pytest tests/e2e -m e2e`.
+    "e2e: live-process smoke tests (real server subprocess, real client)",
     "embeddings: needs write-time embedding on (loads the sentence-transformers model)",
 ]
 

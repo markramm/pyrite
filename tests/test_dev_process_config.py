@@ -27,6 +27,13 @@ def ci() -> dict:
     return yaml.safe_load((REPO / ".github" / "workflows" / "ci.yml").read_text())
 
 
+@pytest.fixture(scope="module")
+def pyproject() -> dict:
+    import tomllib
+
+    return tomllib.loads((REPO / "pyproject.toml").read_text())
+
+
 def _hooks(config: dict) -> list[dict]:
     return [hook for repo in config["repos"] for hook in repo["hooks"]]
 
@@ -249,3 +256,59 @@ class TestGateJob:
         pattern = next(line for line in run.splitlines() if "grep" in line)
         assert "failure" in pattern and "cancelled" in pattern
         assert "skipped" not in pattern, "skipped must count as passing"
+
+
+class TestSmokeLayer:
+    """ADR-0032 §3a's "breadth" row: prove the assembled thing, not the units.
+
+    The matrix proves the code on three interpreters. Nothing proved a real
+    server process, a real client and the documented CLI worked together --
+    and all three bugs the outside contributor found (PRs #3, #4, #5) lived in
+    exactly that gap. The smoke layer closes it on the push to dev, where it
+    costs minutes that no pull request has to wait for.
+    """
+
+    def test_e2e_marker_is_declared(self, pyproject):
+        markers = pyproject["tool"]["pytest"]["ini_options"]["markers"]
+        assert any(m.startswith("e2e:") for m in markers), markers
+
+    def test_default_run_excludes_e2e(self, pyproject):
+        # tests/e2e lives under testpaths, so without this every `pytest
+        # tests/` -- including the pre-push hook and the PR matrix -- would
+        # start server subprocesses and blow the ~3 min PR budget.
+        addopts = pyproject["tool"]["pytest"]["ini_options"]["addopts"]
+        assert "not e2e" in addopts, addopts
+
+    def test_smoke_job_is_gated_on_dev_or_dispatch(self, ci):
+        cond = str(ci["jobs"]["smoke"]["if"])
+        assert "refs/heads/dev" in cond, cond
+        assert "workflow_dispatch" in cond, cond
+        assert "pull_request" not in cond, "smoke must never run on a PR"
+
+    def test_smoke_job_needs_the_classifier(self, ci):
+        assert "changes" in ci["jobs"]["smoke"]["needs"]
+
+    def test_smoke_is_not_a_required_check(self, ci):
+        # `gate` is the one required check. Adding smoke to its needs would
+        # make a minutes-long job block every PR -- the opposite of the point.
+        assert "smoke" not in ci["jobs"]["gate"]["needs"]
+
+    def test_smoke_job_runs_the_e2e_marker_and_the_tutorial(self, ci):
+        runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["smoke"]["steps"])
+        assert "-m e2e" in runs and "tests/e2e" in runs, runs
+        assert "run_tutorial.sh" in runs, runs
+
+    def test_smoke_job_installs_the_full_surface_like_test(self, ci):
+        runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["smoke"]["steps"])
+        assert "uv pip install" in runs, runs
+        assert ".[all]" in runs, runs
+        assert "extensions/*/" in runs, "extensions are separate distributions"
+
+    def test_tutorial_runner_exists_and_parses(self):
+        import os
+        import subprocess
+
+        script = REPO / "scripts" / "run_tutorial.sh"
+        assert script.exists(), "docs-as-tests runner for docs/getting-started.md"
+        assert os.access(script, os.X_OK), "must be executable"
+        subprocess.run(["bash", "-n", str(script)], check=True)

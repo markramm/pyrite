@@ -350,6 +350,63 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
+  # Smoke: the "breadth" row of ADR-0032 §3a's value chain that had nothing in
+  # it. The matrix proves the CODE on three interpreters; nothing proved the
+  # ASSEMBLED THING -- a real pyrite-server process driven by a real HTTP and
+  # MCP client, and the CLI exactly as docs/getting-started.md documents it.
+  # Every bug the outside contributor found (PRs #3, #4, #5) lived in that gap
+  # and none of them could have been caught by an in-process TestClient test.
+  #
+  # Gated on the push to dev (and manual dispatch), NOT on pull_request, and
+  # deliberately absent from `gate`'s needs: it costs minutes, and a PR must
+  # not wait for it. A break here blocks the RELEASE, and a red dev blocks
+  # every PR through the up-to-date rule anyway.
+  # ===========================================================================
+  smoke:
+    needs: changes
+    if: github.ref == 'refs/heads/dev' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            extensions/*/pyproject.toml
+
+      - name: Install dependencies
+        # Same surface as `test`: the smoke layer drives the installed console
+        # scripts (pyrite, pyrite-server), so the install has to be the one a
+        # user gets, extensions included.
+        run: |
+          uv pip install --system -e ".[all]"
+          for ext in extensions/*/; do
+            if [ -f "$ext/pyproject.toml" ]; then
+              uv pip install --system -e "$ext"
+            fi
+          done
+
+      - name: Live-process smoke tests (REST, MCP over SSE, MCP over stdio)
+        env:
+          # Offline: the smoke layer must not download a ~90 MB model. Tests
+          # that need one skip themselves when it is not already cached.
+          HF_HUB_OFFLINE: "1"
+        # -n auto like every other pytest gate: each server fixture binds its
+        # own free port under its own temp data dir, so the smoke tests are
+        # xdist-safe by construction and the job stays a couple of minutes.
+        run: pytest tests/e2e -m e2e -n auto
+
+      - name: Getting-started tutorial (docs-as-tests)
+        run: bash scripts/run_tutorial.sh
+
+  # ===========================================================================
   # The one required check. A skipped matrix job reports as `test`, not
   # `test (3.12)`, so requiring the matrix legs by name hangs every docs-only
   # PR (the classifier skipped the matrix, the required context never
