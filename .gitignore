@@ -79,3 +79,6 @@ pyrite_deployments/
 
 # pytest-cov output
 .coverage
+
+# Repo-local pyrite config (a worktree's own KB registry and index; see ADR-0032)
+.pyrite/

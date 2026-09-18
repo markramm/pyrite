@@ -9,7 +9,7 @@ config file at all.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PYRITE_CONFIG_DIR` | `~/.pyrite` | Directory holding `config.yaml` |
+| `PYRITE_CONFIG_DIR` | `~/.pyrite` | Directory holding `config.yaml`. When unset, a `.pyrite/config.yaml` found in the current directory or any parent is used instead of `~/.pyrite` — a repo-local registry, so a checkout's `kb/` resolves to that checkout. |
 | `PYRITE_DATA_DIR` | `~/.pyrite` | Directory for the index (`index.db`) and cloned repos (`repos/`). Set this in containers and point a volume at it. |
 | `PYRITE_STATIC_DIR` | `<checkout>/web/dist` | Built web UI to serve at `/`. Needed when the package is installed into site-packages rather than run from a checkout. |
 | `PYRITE_BRANDING_DIR` | built-in | Folder of white-label branding assets (see `deploy/branding-examples/`) |

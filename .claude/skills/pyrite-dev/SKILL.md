@@ -33,7 +33,15 @@ skipping them always costs more time than following them.
 ```bash
 git branch --show-current     # a feature/*, fix/*, kb/* branch -- never dev
 pwd                           # a worktree under ../pyrite-wt/, with its own .venv
+.venv/bin/pyrite kb list      # the `pyrite` KB path must be THIS worktree's kb/
 ```
+
+The last line matters: `pyrite -k pyrite` resolves through a config, and
+without the worktree's own `.pyrite/config.yaml` it resolves through
+`~/.pyrite` to the *main* checkout -- every ticket update you make lands in
+the wrong tree. `scripts/new-worktree.sh` writes the local config; if `kb
+list` shows `/Users/markr/pyrite/kb`, stop and create it before any KB
+command.
 
 If either is wrong, stop: `scripts/new-worktree.sh <branch>` from the main
 checkout creates the right place (ADR-0032). Use `.venv/bin/...` from the

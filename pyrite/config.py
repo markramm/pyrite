@@ -776,12 +776,47 @@ class PyriteConfig:
 
 
 # Global configuration paths
-CONFIG_DIR = (
-    Path(os.environ.get("PYRITE_DATA_DIR", os.environ.get("PYRITE_CONFIG_DIR", "~/.pyrite")))
-    .expanduser()
-    .resolve()
-)
+DEFAULT_CONFIG_DIR = Path("~/.pyrite").expanduser().resolve()
+LOCAL_CONFIG_DIRNAME = ".pyrite"
+
+
+def resolve_config_dir(start: Path | None = None) -> Path:
+    """Where this process reads its config from.
+
+    1. ``PYRITE_DATA_DIR`` or ``PYRITE_CONFIG_DIR`` when set -- explicit wins.
+    2. A repo-local ``.pyrite/config.yaml``, searched upward from ``start``
+       (the cwd). A worktree per session (ADR-0032) needs a KB registry that
+       points at *that* checkout's ``kb/``; through ``~/.pyrite`` every
+       worker's ``pyrite update`` landed in the main checkout instead.
+    3. ``~/.pyrite``.
+    """
+    explicit = os.environ.get("PYRITE_DATA_DIR") or os.environ.get("PYRITE_CONFIG_DIR")
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    here = (start or Path.cwd()).resolve()
+    for candidate in (here, *here.parents):
+        local = candidate / LOCAL_CONFIG_DIRNAME
+        if (local / "config.yaml").is_file():
+            return local.resolve()
+    return Path("~/.pyrite").expanduser().resolve()
+
+
+CONFIG_DIR = resolve_config_dir()
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
+
+
+def current_config_file() -> Path:
+    """The config file for *this call*.
+
+    The module-level CONFIG_DIR is fixed at import. If something pinned it --
+    an env var, or a test monkeypatching it away from ~/.pyrite -- honour
+    that. Otherwise resolve again from the cwd, so a process that started
+    elsewhere and `cd`ed into a worktree still finds that worktree's
+    `.pyrite/config.yaml`.
+    """
+    if CONFIG_DIR != Path("~/.pyrite").expanduser().resolve():
+        return CONFIG_FILE
+    return resolve_config_dir() / "config.yaml"
 
 
 def ensure_config_dir() -> Path:
@@ -842,8 +877,9 @@ def load_config() -> PyriteConfig:
     """
     ensure_config_dir()
 
-    if CONFIG_FILE.exists():
-        data = load_yaml_file(CONFIG_FILE)
+    config_file = current_config_file()
+    if config_file.exists():
+        data = load_yaml_file(config_file)
         config = PyriteConfig.from_dict(data)
     else:
         # Create default config
@@ -863,7 +899,9 @@ def save_config(config: PyriteConfig) -> None:
     """Save configuration to config.yaml."""
     ensure_config_dir()
 
-    dump_yaml_file(config.to_dict(), CONFIG_FILE)
+    config_file = current_config_file()
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    dump_yaml_file(config.to_dict(), config_file)
 
 
 def auto_discover_kbs(search_paths: list[Path] | None = None) -> list[KBConfig]:

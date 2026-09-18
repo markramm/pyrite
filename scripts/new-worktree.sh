@@ -51,6 +51,23 @@ else
   done
 fi
 
+# A repo-local config so `pyrite -k pyrite` in this worktree means THIS
+# worktree's kb/, not the main checkout's (which is what ~/.pyrite registers).
+# pyrite finds ./.pyrite/config.yaml by searching upward from the cwd; an
+# explicit PYRITE_CONFIG_DIR still wins. Gitignored.
+mkdir -p .pyrite
+cat > .pyrite/config.yaml <<CFG
+knowledge_bases:
+- name: pyrite
+  path: $wt_dir/kb
+  kb_type: software
+  description: "Pyrite project KB (worktree $branch)"
+settings:
+  index_path: $wt_dir/.pyrite/index.db
+  auto_embed: false
+CFG
+.venv/bin/pyrite index sync >/dev/null 2>&1 || true
+
 # Hooks live in the shared .git and the installed shim embeds the path of the
 # Python that installed them. Install from the MAIN checkout's venv, which
 # outlives any worktree: hooks installed from a worktree's venv break for
@@ -67,6 +84,7 @@ cat <<EOF
 worktree: $wt_dir
 branch:   $branch (from $start)
 venv:     $wt_dir/.venv
+config:   $wt_dir/.pyrite/config.yaml  (pyrite KB -> this worktree's kb/)
 
   cd "$wt_dir"
   ... work, commit ...

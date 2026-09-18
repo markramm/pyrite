@@ -24,6 +24,10 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Added
 
+- Repo-local configuration: a `.pyrite/config.yaml` in the current directory
+  or any parent is used instead of `~/.pyrite` when no `PYRITE_CONFIG_DIR` /
+  `PYRITE_DATA_DIR` is set, so a checkout (or a git worktree) can carry its own
+  KB registry and index. `scripts/new-worktree.sh` creates one per worktree.
 - `auto_embed` setting (`PYRITE_AUTO_EMBED=0` to disable): embed entries on
   write, on by default. Off means keyword search only, no torch import and no
   model download on the write path; `pyrite index embed` backfills later. The

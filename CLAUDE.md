@@ -80,7 +80,7 @@ Use correct `type` frontmatter so plugin tools can find entries:
 - **`main`** — releases only; moves by fast-forward to a commit CI already verified (see the release runbook in `.claude/skills/pyrite-conductor/release-runbook.md`).
 - **Your branch** — every batch of work lives on `feature/*`, `fix/*` or `kb/*`, in **its own worktree**. Commit there at whatever pace the work needs.
 
-**Start of a session** (one command; creates the worktree, branch, venv and hooks):
+**Start of a session** (one command; creates the worktree, branch, venv, hooks, and a `.pyrite/config.yaml` so `pyrite -k pyrite` means *this* worktree's `kb/` — check with `pyrite kb list`):
 
 ```bash
 scripts/new-worktree.sh fix/what-it-fixes        # from origin/dev
