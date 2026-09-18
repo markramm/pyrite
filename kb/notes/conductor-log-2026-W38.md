@@ -2282,3 +2282,52 @@ Not dispatched: Theme A (ReDoS cap — hard conflict with #145; after it merges)
 **Retro notes.** (a) The estimated-timestamp error recurred one tick after the rule was written (tick 8 → tick 9); the fix is mechanical — stamp the heading with `$(date -u)` in the same command that appends it, never by hand. (b) `gh` label edits during an API blip failed silently behind `>/dev/null`; the claim must be verified by reading the label back, which the sweep already does — the conductor should too. (c) Two tiny sonnet absorbs took ~15 min including a clean `npm ci`; that is the floor for a review, and it bounds the cap at ~4 absorbs per tick.
 
 **Reported mid-tick (absorb at tick 11):** CodeQL Theme B (#161, opus) — `a9a19ad`; 17 new tests red-then-green; the report is on the PR body; cold read required (server + services; `_ABS_PATH_RE` breadth and the two-statics shape are design points).
+
+## Retro 5 — 10:48Z — window 09:25Z–10:42Z (ticks 7–10; five themes landed, two redispatches)
+
+### What worked
+- **dev stayed green through 7 pushes** (1226312 → 36d4b59, 7/7 `success`; gate 2–5 min each). The pinned runner (#139) held: no interpreter skew since.
+- **The cold read earns its cost: 3 of 3 dispatched changed the PR.** #138 → six fixes before merge; #140 → 11 findings, redispatched; #145 → a regression that would have broken every semantic search on the maintainer's index, redispatched. Under retro 3's mandatory trigger (an Unsure that names a design decision) none of the three would have been skipped.
+- **Lead time, claim → merged, for the five landed themes: 30–65 min** (#142 30, #157 36, #139 44, #138 59, #146 65). The two longest waited on a tick boundary, not on work.
+- **The spike model.** The CodeQL spike returned a 468-line groom into the ticket, a 43-row dismissal table and four dispatchable themes; the worktree was discarded. 44 of 48 alerts were noise — knowledge, not code, was the output (amplify-learning), and it settled a kept decision's evidence (CodeQL as required check) without a line of product change.
+- **Groom-into-ticket held**: both new themes this window (6F, Theme B) were dispatched from a `## Groom` section on the item, not from a title.
+
+### Failures and root causes
+- **#145 redispatched** (cold read: `k` escalation with no 4096 cap; raises above that on the maintainer's 18,909-row index) → the worker's 44 tests all ran below the cap → the spec's acceptance named which rows come back, never "at what size" → **the spec has no field for the regimes the tests must enter** → `dispatch.md` (this retro's change).
+- **#140 redispatched** (cold read: no tag-existence guard; `main` moves, then "nothing further was attempted"; the `release-blocker` gate inert when the label is absent) → 85 tests, none for "a tag exists from an aborted run" or "label missing" → same root cause: the spec listed steps, not the states the repo can be in when the script runs → `dispatch.md` (same change). Secondary: the label did not exist in the repo — a repo-state precondition nobody checked; created at tick 9.
+- **#146's `test_walk_is_fast` red under three parallel suites** (10 s wall-clock budget; ~2 s idle) → the worker's pre-push ran alone → the third load-sensitive timeout this week (#55, #88, now this) → the pyrite-dev skill says "fixed wall-clock timeouts under load are a bug in the test" but nothing makes a worker run under load → *not changed this retro*; noted below.
+- **Tick 9's end stamp estimated (11:05Z; measured 10:31Z), one tick after the `date -u` rule** → the rule says "stamp with `date -u`" and the host still typed the heading by hand → the stamp was a habit, not a mechanism → fixed at tick 10 by stamping the heading in the same shell command that appends it. My elapsed-time sense runs ~20 min fast; every "10:40Z–10:55Z" inside tick 9's PR comments is wrong by that much.
+- **`gh pr edit --add-label` failed silently during a TLS blip and the tick printed "claimed"** → `>/dev/null` plus an unconditional echo → a claim that is not read back is not a claim → tick 10 now reads the label back (the sweep already did).
+- **#159** (`process`): the commit-msg hook does not count `web/**/*.test.ts` as tests → a `fix:` commit on the frontend cannot pass the hook honestly → the hook's path rule was written for Python → belongs to 6F (in flight) or a one-line follow-up; not this retro's change.
+
+### Constraint
+**The review lane, and specifically its rework loop.** Tick 9 absorbed three branches and sent two back: a redispatch costs a second Opus pass (~30–45 min), a second cold read and a third review — the review lane's queue this window was 7 items for 5 landings (redispatch rate 2/7 = 29%). WIP: 4–5 workers, 0–3 branches waiting; the gate was never the wait (2–5 min per run, 7/7 green). The maintainer's desk holds three kept decisions but nothing landed is blocked on them.
+
+### Waste, in the seven
+- **Defects (dominant):** two branches that were "done" by their own evidence and unsafe where the evidence never went. Not defects that reached `dev` — the cold read held — but rework of 2 of 7 themes.
+- **Handoffs:** the same two: acceptance criteria copied verbatim from the ticket (the rule) carried the ticket's blind spot verbatim too.
+- **Delays:** `CHANGELOG.md` conflicts — 3 of 6 open branches `DIRTY` on that one file at 10:42Z, incl. #158 with auto-merge armed; 18 PRs touched it since 05:00Z. Each is a manual rebase between "ready" and "merged".
+- **Relearning:** the timestamp estimate (twice); the silent `gh` failure (a pattern the sweep prompt already guarded against).
+- **Partially done work:** none — every branch has a draft PR with its report; the ready queue (≥8 groomed) exceeds 2× cap. **Extra features:** none seen — footprints matched Touches on all five landed themes (three unavoidable extras on #145 were named). **Task switching:** tick 9 ran 23 min with three absorbs interleaved with four dispatches — long, but nothing was dropped.
+
+### Friction observed
+- The conductor had to reproduce the reviewer's blocker from source (`grep 4096` → 0) because the review rule says a reviewer's report is model output — right, and cheap here (2 min); keep.
+- The #146 worker built the scratch-revert proof with both halves of the #46 fix; the conductor's one-half revert stayed green and cost a second attempt — each half alone prevents the leak. A worker's "how I proved it" line is worth copying exactly.
+- The Playwright F worker hit 5 navigation timeouts on the first run after `npm ci` (Vite dependency re-optimization, #153) and spent a cycle proving it was not a product bug — the gotcha is documented; a warm-up run in the dispatch prompt would have saved it.
+- `pyrite sw backlog --status proposed | grep quality` returned nothing at tick 10 though the `quality`-tagged changelog item exists — the CLI's list output does not print tags. The conductor should filter with `pyrite search "quality" -k pyrite` or `--tag`; a tool gap worth a line in the skill, not this retro's change.
+
+### The one process change
+**A theme spec names the regimes its tests must enter, and the worker's Evidence lists each with the test that enters it** — `dispatch.md` (spec template + rule, mandatory for storage/server/repo-mutating scripts/bounded loops) and `pyrite-worker.md` (report format). PR: #165 (`process/retro5-boundary-regimes`, auto-merge).
+
+### The quality theme
+**CHANGELOG fragments** (`changelog-fragments-one-file-per-pr-under-changelog-d-assembled-by-the-release`, oldest open `quality` item; now groomed, priority high) — removes the one file every PR conflicts on (18 touches, 3 of 6 open branches `DIRTY` on it alone). Footprint: `CHANGELOG.md`, `scripts/release.py` (`compose_notes`), new `changelog.d/`, `tests/test_dev_process_config.py`, the skills. Sonnet. **Sequence: after #140 merges** — it owns `release_notes_for` until then.
+
+### Expected effect
+Redispatch rate from 2/7 (29%) this window to ≤1/10 over the next ten dispatched themes, measured at retro 7; cold reads should start returning "accept as-is" on the regime questions rather than blockers. Revert the `Regimes:` rule if it grows specs without moving the rate — or if workers start listing regimes they did not test (check the red lines). Fragments: `DIRTY`-on-CHANGELOG-only events from 3 per six open branches to 0 within two ticks of landing.
+
+### Not changed, noted for next time
+- Load-sensitive timeouts (third this week): a `pytest` invocation in the pre-push hook that runs the changed test files under `-n auto` *while the suite runs* would catch them; or a lint rule against `assert elapsed <`. One change per retro; this is next if a fourth appears.
+- Slowest tests: `test_git_env_isolation` 16 s + 6.5 s (spawns a full suite under a hook), `test_private_kb_read_scoping` setups at 10.9 s and 10.7 s (an app + user fixture per test — a module-scoped app would take the file from ~40 s to ~10 s). A quality theme for a later retro; not the constraint today.
+- `#158`/`#161`/`#145` are `DIRTY` on CHANGELOG now — the conductor rebases them next tick; the fragments theme ends the class.
+- `web/**/*.test.ts` in the fix-commit hook (#159): fold into 6F's CI step (in flight) or a one-line follow-up.
+- Kept decisions outstanding (no wait on them yet): API-key hashing (dismiss + mint command vs keyed hash), CodeQL required check, the private-repo existence oracle.
