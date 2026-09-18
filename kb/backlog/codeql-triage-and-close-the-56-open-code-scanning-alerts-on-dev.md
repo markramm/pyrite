@@ -137,8 +137,9 @@ q = "a" * 20000             200   2838.6 ms
 q = "a" * 40000             200  12254.3 ms
 ```
 
-Direct timing of the regex alone, off the request path: n=50000 → 10.2 s, n=100000 → 41.3 s.
-The growth is quadratic, confirming the rule.
+Direct timing of the regex alone, off the request path: n=50000 → 10.2 s, n=100000 → 40.2 s,
+n=400000 → **773 s** (nearly 13 minutes of CPU for one request). The growth is quadratic,
+confirming the rule.
 
 **Exploit shape.** Tier: **read** — the route is `dependencies=[Depends(requires_kb_read())]`,
 so any read key, or any anonymous caller on a deployment with `default_role: read` or
@@ -149,11 +150,22 @@ The same sanitizer is on the MCP `search` path via `search_service.py:270` and `
 so the MCP read tier reaches it too.
 
 **The fix is a length cap, not a regex rewrite.** I tried the obvious rewrite
-`(?=\S*[^\w\s])(\S+)` — it produces byte-identical output on every sanitizer test case,
-but it is *also* quadratic (n=20000: 26.3 s vs the original's 19.3 s; n=50000: 37.2 s vs
-140.8 s — better constant, same curve). Truncating the query to 512 characters before the
-`re.sub` bounds the worst case at **1.497 ms** and leaves all six sanitizer behaviours
-byte-identical.
+`(?=\S*[^\w\s])(\S+)`. It produces byte-identical output on every sanitizer test case, and
+it is *also* quadratic — **and at the lengths that matter it is far worse than what it
+replaces**:
+
+```
+n        original      lookahead rewrite
+5000       0.11 s       0.10 s
+20000      1.62 s       1.60 s
+100000    40.2 s      295.1 s      <- 7.3x WORSE
+400000   773.1 s     1021.8 s
+```
+
+Below ~20k the two are indistinguishable, which is exactly the trap: a worker who measures
+only short inputs will conclude the rewrite helps. It does not — it makes the attack
+cheaper. Truncating the query to 512 characters before the `re.sub` bounds the worst case
+at **1.497 ms** and leaves all six sanitizer behaviours byte-identical.
 
 #### `py/stack-trace-exposure` ×13 — **1 true positive, 2 partial, 10 noise**
 
@@ -380,8 +392,10 @@ Acceptance criteria:
 6. A `TestClient` test asserts `GET /api/search?q=<600 chars>` returns 422, and
    `?q=<512 chars>` returns 200.
 7. **Do not "fix" the regex.** The rewrite `(?=\S*[^\w\s])(\S+)` is byte-identical on
-   output and still quadratic (measured: n=20000 → 26.3 s). A reviewer seeing a regex
-   change instead of a cap should reject the branch.
+   output, still quadratic, and **7.3x slower than the original at n=100000** (295 s vs
+   40 s) — it makes the attack cheaper, not dearer. It looks equivalent below ~20k, so
+   benchmarking short inputs will mislead you. A reviewer seeing a regex change instead of
+   a cap should reject the branch.
 
 Evidence the worker can copy: the `TestClient` timing repro in section 1 is four lines
 against the `rest_api_env` fixture and belongs in the new test file as criterion 4/6.
