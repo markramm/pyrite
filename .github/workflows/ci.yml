@@ -188,8 +188,11 @@ jobs:
   # check. A --cov-fail-under ratchet is added once the baseline is known.
   # ===========================================================================
   coverage:
+    # Manual only for now: not a required check, nobody reads the report yet,
+    # and it cost a 4 min runner per code PR. Turn back on (with a
+    # --cov-fail-under ratchet) when there is a baseline worth holding.
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

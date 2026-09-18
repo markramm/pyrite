@@ -73,7 +73,8 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   tests showed up at 50+ s.
 - CI installs with `uv` (80-130 s of pip resolving per job → ~20 s). A change
   classifier skips the heavy jobs for docs/KB-only pushes and gives KB changes
-  a 30 s schema check. Coverage runs in its own non-required job. Playwright
+  a 30 s schema check. Coverage runs in its own job, by manual dispatch only until there is a
+  baseline worth enforcing. Playwright
   runs only by manual dispatch until it is deterministic.
 - The test suite runs in parallel (`pytest -n auto`) at pre-push and in CI:
   ~22 min → ~3-5 min. The one xdist-unsafe test (the task-claim race) now uses

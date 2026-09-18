@@ -168,7 +168,7 @@ class TestChangeClassifier:
         assert any("paths-filter" in str(s.get("uses", "")) for s in job["steps"])
         assert set(job["outputs"]) >= {"backend", "web", "kb"}
 
-    @pytest.mark.parametrize("name", ["test", "frontend", "coverage"])
+    @pytest.mark.parametrize("name", ["test", "frontend"])
     def test_heavy_jobs_are_gated_on_the_classifier(self, ci, name):
         job = ci["jobs"][name]
         assert "changes" in job.get("needs", []), f"{name} must need: changes"
@@ -194,11 +194,11 @@ class TestCoverageAndE2EPolicy:
         runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["test"]["steps"])
         assert "--cov" not in runs
 
-    def test_coverage_has_its_own_job(self, ci):
+    def test_coverage_has_its_own_job_and_is_manual_for_now(self, ci):
         job = ci["jobs"]["coverage"]
         runs = "\n".join(str(s.get("run", "")) for s in job["steps"])
         assert "--cov=pyrite" in runs and "-n auto" in runs
-        assert "changes" in job.get("needs", [])
+        assert str(job["if"]).strip() == "github.event_name == 'workflow_dispatch'"
 
     def test_e2e_is_manual_only_until_deterministic(self, ci):
         # Non-deterministic today: a different set of specs fails every run,
