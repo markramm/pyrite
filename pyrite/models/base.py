@@ -4,9 +4,11 @@ Base Entry Model
 Abstract base for all KB entry types.
 """
 
+import copy
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,10 +26,24 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+# The value `importance` takes when frontmatter does not set it. Kept as a name
+# so the write path can tell "unset" from "deliberately 5".
+DEFAULT_IMPORTANCE = 5
+
+
 # Base keys every class handles through _base_kwargs / _base_frontmatter even
 # when it does not re-emit them (empty values are omitted on write).
+#
+# `body`, `file_path`, `kb_name` and `extra_frontmatter` are Entry attributes,
+# never frontmatter. They are listed so that a loader which puts them into the
+# meta dict it passes to capture_extra_frontmatter cannot have them recorded as
+# undeclared frontmatter and written back into the file on the next save (#46).
 _BASE_CONSUMED_KEYS = frozenset(
     {
+        "body",
+        "file_path",
+        "kb_name",
+        "extra_frontmatter",
         "id",
         "title",
         "type",
@@ -47,6 +63,29 @@ _BASE_CONSUMED_KEYS = frozenset(
 )
 
 
+def _default_valued_keys_absent_from(entry: "Entry", meta: dict[str, Any]) -> frozenset[str]:
+    """Keys a pristine instance of ``entry``'s class writes, that ``meta`` lacks.
+
+    Some fields are serialized even at their default value, because the default
+    is a meaningful choice a user may have made (`importance: 5`, `rank: 0`).
+    That is right for an entry built in memory, but on a load -> save round trip
+    it invents keys the file never had, turning a one-field update into a
+    frontmatter rewrite (#46).
+
+    The set is computed by serializing a default-constructed instance of the
+    same class: whatever it emits is an always-written key, and the ones absent
+    from the source frontmatter are the ones to keep absent. Doing it
+    empirically means a plugin type gets the behaviour without declaring
+    anything, matching how ``capture_extra_frontmatter`` decides "unknown".
+    """
+    try:
+        pristine = type(entry)(id=entry.id, title=entry.title)
+        always_written = set(pristine.to_frontmatter())
+    except Exception:  # a class needing more constructor args opts out
+        return frozenset()
+    return frozenset(k for k in always_written if k not in meta)
+
+
 def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
     """Record the top-level keys ``entry``'s class did not re-emit.
 
@@ -55,6 +94,11 @@ def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
     not produce it -- so no class has to list its own fields, and a plugin
     type gets the guarantee for free.
     """
+    # Set before serializing: both influence what to_frontmatter emits, and
+    # `emitted` below must reflect the decisions the write path will make.
+    entry._absent_default_keys = _default_valued_keys_absent_from(entry, meta)
+    # Keep the mapping as ruamel parsed it, for style on the way back out.
+    entry._source_frontmatter = meta
     try:
         emitted = entry.to_frontmatter()
     except Exception:  # a class that cannot serialize is not this helper's problem
@@ -66,6 +110,73 @@ def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
     }
     if extras:
         entry.extra_frontmatter = extras
+
+
+def _plain(value: Any) -> Any:
+    """Strip ruamel node types so two values can be compared by content."""
+    if isinstance(value, Mapping):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    return value
+
+
+def _keep_sequence_style(old: Any, new: Any) -> Any:
+    """Return ``new``, rendered in ``old``'s sequence style where that applies.
+
+    A list whose contents changed still wants the brackets it had:
+    `tags: [a, b]` edited to three tags should stay on one line rather than
+    becoming a four-line block list.
+    """
+    if not isinstance(new, list) or isinstance(new, str):
+        return new
+    try:
+        from ruamel.yaml.comments import CommentedSeq
+
+        if isinstance(old, CommentedSeq) and old.fa.flow_style():
+            seq = CommentedSeq(new)
+            seq.fa.set_flow_style()
+            return seq
+    except Exception:  # style is a nicety; never fail a save for it
+        pass
+    return new
+
+
+def _restyle_like_source(meta: dict[str, Any], source: Any) -> dict[str, Any]:
+    """Re-emit ``meta`` in ``source``'s key order and YAML style.
+
+    ``meta`` is a freshly built plain dict: correct in content, but it has lost
+    the key order, quoting and flow/block style that ruamel preserved when the
+    file was read. Writing it as-is turns a one-field update into a diff that
+    touches every line, which is how the #46 frontmatter corruption stayed
+    invisible in review.
+
+    For each key ``source`` had and ``meta`` still has, the source node is
+    reused when the value is unchanged (keeping `tags: [a, b]` inline and
+    `"2026-07-03"` quoted) and replaced when it is not. Keys dropped from
+    ``meta`` are dropped here too, and keys ``meta`` added are appended in its
+    own order. With no source -- a newly created entry -- ``meta`` is returned
+    untouched.
+    """
+    if not isinstance(source, Mapping):
+        return meta
+
+    try:
+        restyled = copy.deepcopy(source)
+    except Exception:  # a source we cannot copy is not worth failing a save over
+        return meta
+
+    for key in list(restyled.keys()):
+        if key not in meta:
+            del restyled[key]
+        elif _plain(restyled[key]) != _plain(meta[key]):
+            restyled[key] = _keep_sequence_style(restyled[key], meta[key])
+
+    for key, value in meta.items():
+        if key not in restyled:
+            restyled[key] = value
+
+    return restyled
 
 
 @dataclass
@@ -92,7 +203,7 @@ class Entry(ABC):
     sources: list[Source] = field(default_factory=list)
     provenance: Provenance | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    importance: int = 5
+    importance: int = DEFAULT_IMPORTANCE
     lifecycle: str = "active"
     created_at: datetime = field(default_factory=_utcnow)
     updated_at: datetime = field(default_factory=_utcnow)
@@ -106,6 +217,30 @@ class Entry(ABC):
     # deletes what it does not understand (`milestone:`, `github_issue:`, a
     # field a plugin added last week). Not indexed, not compared.
     extra_frontmatter: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+    # Keys whose value equals their default and which this entry was loaded
+    # WITHOUT. `importance: 5` and `rank: 0` are deliberately serialized even at
+    # their defaults -- commit 7783335 fixed the data loss of dropping an
+    # explicit `importance: 5` -- but that rule made a one-field update add
+    # those lines to files that never had them (#46). So the rule now applies
+    # to entries built in memory (the set is empty, everything is written),
+    # while a load records which default-valued keys were absent so re-saving
+    # does not invent them. Not a constructor argument: subclasses build kwargs
+    # from _base_kwargs and would have to thread it through.
+    _absent_default_keys: frozenset[str] = field(
+        default=frozenset(), init=False, repr=False, compare=False
+    )
+
+    def _omit_default(self, key: str) -> bool:
+        """True when ``key`` holds its default and the source file lacked it."""
+        return key in self._absent_default_keys
+
+    # The frontmatter mapping this entry was parsed from, as ruamel returned it
+    # (a CommentedMap carrying key order, quoting and flow/block style). The
+    # write path uses it to re-emit unchanged keys exactly as they were, so a
+    # one-field update produces a one-line diff instead of reordering and
+    # restyling the whole block (#46). Never read as data -- only as style.
+    _source_frontmatter: Any = field(default=None, init=False, repr=False, compare=False)
 
     # Legacy frontmatter keys a class reads under another name (e.g. `participants`
     # -> `actors`). They are consumed, not unknown, so they are not preserved
@@ -190,7 +325,10 @@ class Entry(ABC):
             prov = self.provenance.to_dict()
             if prov:
                 meta["provenance"] = prov
-        meta["importance"] = self.importance
+        # An explicit importance is always written (commit 7783335); a default
+        # one is written unless the file this entry came from had no such key.
+        if self.importance != DEFAULT_IMPORTANCE or not self._omit_default("importance"):
+            meta["importance"] = self.importance
         if self.lifecycle != "active":
             meta["lifecycle"] = self.lifecycle
         if self.metadata:
@@ -216,7 +354,7 @@ class Entry(ABC):
 
     def to_markdown(self) -> str:
         """Convert to markdown string with YAML frontmatter."""
-        meta = self.to_frontmatter()
+        meta = _restyle_like_source(self.to_frontmatter(), self._source_frontmatter)
         yaml_front = dump_yaml(meta)
         # Exactly one trailing newline: the loader strips the body anyway, and a
         # body that already ended in newlines produced a blank last line that

@@ -29,6 +29,8 @@ RESERVED_FIELD_NAMES: frozenset[str] = frozenset(
         "file_path",
         "_schema_version",
         "extra_frontmatter",
+        "_absent_default_keys",
+        "_source_frontmatter",
         # Frontmatter-only keys
         "type",
     }

@@ -320,7 +320,12 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
             meta["assignee"] = self.assignee
         if self.effort:
             meta["effort"] = self.effort
-        meta["rank"] = self.rank
+        # rank 0 ("unranked") is written even though it is the default, because
+        # it is a valid explicit choice -- but not onto a file that never had
+        # the key, which made `pyrite update --tags` add a `rank: 0` line to
+        # every backlog item it touched (#46).
+        if self.rank or not self._omit_default("rank"):
+            meta["rank"] = self.rank
         return meta
 
     @classmethod

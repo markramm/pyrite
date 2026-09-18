@@ -90,8 +90,14 @@ class KBRepository:
                                 )
                                 body = body.split("\n", 1)[1].strip() if "\n" in body else ""
                         fm = self._maybe_migrate(fm)
-                        fm["body"] = body
-                        fm["file_path"] = str(file_path)
+                        # `fm` is the entry's frontmatter and nothing else. It
+                        # used to get `body` and `file_path` injected here, but
+                        # no from_frontmatter reads either (body arrives as the
+                        # positional argument, file_path is set by the caller),
+                        # while capture_extra_frontmatter reads this same dict to
+                        # decide which keys the class did not declare -- so the
+                        # two internals were recorded as "unknown frontmatter"
+                        # and written back into the file on the next save (#46).
                         entry = entry_from_frontmatter(fm, body)
                         # Preserve references in metadata if present in frontmatter
                         # (typed entries drop unknown fields during from_frontmatter)
