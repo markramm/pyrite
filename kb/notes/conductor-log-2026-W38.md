@@ -2233,7 +2233,7 @@ Six workers in flight. Held for later ticks per the breakdown: F/G (after A.1), 
 
 **Needs the maintainer.** Nothing.
 
-## Tick 2026-09-18 10:08Z–11:05Z (tick 9)
+## Tick 2026-09-18 10:08Z–10:31Z (tick 9; end stamp corrected at tick 10 — the host wrote 11:05Z by estimate again, against the `date -u` rule; the review-comment times inside the PR bodies (10:40Z–10:55Z) are estimates too, ~20 min fast)
 
 **Health.** dev green (aa024d4, then b5514c1 after #138). #138 merged 10:12Z, #118 closed, its worktree removed. No outside PRs. Load 1.8→8 during the three parallel suites.
 
