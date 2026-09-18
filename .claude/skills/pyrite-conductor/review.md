@@ -14,6 +14,16 @@ it (#111). Before reading a diff: `gh pr view N --json labels`; if
 redispatch it, or stop reviewing it. A label older than an hour with no
 comment from its owner is stale: take it over and say so on the PR.
 
+**A red pre-push during a rebase is a stop, not a bypass.** The conductor
+rebases branches while workers are editing `tests/` in sibling worktrees,
+which is exactly when the shared pre-push suite is flaky (#112: a teardown
+race, then an xdist collection mismatch). Do not `--no-verify`; the
+permission layer refuses it for a reason. Re-run once; if it is still red,
+say which test and hand the branch back to its worker with the rebase
+undone (`git rebase --abort` or `git reset --hard origin/<branch>`), or
+wait for the sibling to finish. A conductor that pushes through a red
+pre-push has turned the value chain's first gate off for itself.
+
 In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 
 ```
