@@ -1,6 +1,6 @@
 ---
 name: pyrite-meta-conductor
-description: "This skill should be used, by the strongest available model, to run the weekly retrospective on the pyrite-conductor's loops — hallway testing applied to the process itself. Use it whenever the user asks how the conductor is doing, where the pipeline is slow, why PRs pile up, whether the skills need changing, what to refactor next, or invokes `/pyrite-meta-conductor` (weekly, or after every ~10 conductor ticks). It reads evidence (the tick log, PR timings, CI durations, rebases, redispatches, worker reports, circuit-breaker trips, `process` issues), says what worked, root-causes every failure in the window, names the one constraint, and fixes what it finds in two forms: one process change as a PR to the skills or an ADR amendment, and one quality theme (refactoring, test refactoring, code health) groomed for the conductor's next tick. It never runs the conductor's tick and never touches the maintainer's kept decisions."
+description: "This skill should be used, by the strongest available model, to run the retrospective on the pyrite-conductor's loops — hallway testing applied to the process itself. Use it whenever the user asks how the conductor is doing, where the pipeline is slow, why PRs pile up, whether the skills need changing, what to refactor next, or invokes `/pyrite-meta-conductor` (after every ~5 themes merged to dev, a breaker trip, or a release). It reads evidence (the tick log, PR timings, CI durations, rebases, redispatches, worker reports, circuit-breaker trips, `process` issues), says what worked, root-causes every failure in the window, names the one constraint, and fixes what it finds in two forms: one process change as a PR to the skills or an ADR amendment, and one quality theme (refactoring, test refactoring, code health) groomed for the conductor's next tick. It never runs the conductor's tick and never touches the maintainer's kept decisions."
 ---
 
 # Pyrite Meta-Conductor
@@ -21,13 +21,22 @@ evaluated; one can. The code-quality theme is the exception that proves the
 rule: it is not a process change, it is the week's maintenance, and it goes
 through the conductor's ordinary lanes like any other theme.
 
-## Cadence
+## Cadence — counted in landed themes, not days
 
-Weekly, or after every ten conductor ticks, whichever comes first; and once
-after a release is cut (the release retro). In loop mode (a cron or
-`/loop`), the tick prompt is `/pyrite-meta-conductor`; the conductor's
-loop keeps running underneath — you never pause it, you change what it will
-read next tick.
+A human team's weekly retro covers a few features; that is the unit, not
+the week. Run the retro after **about five themes have merged to `dev`**
+since the last one, or immediately after a circuit-breaker trip, a revert
+or a redispatch, and once after a release is cut (the release retro). Wall
+clock is only a floor: if a day passes with fewer than five landed, run it
+anyway, because a stalled loop is itself the finding. When the conductor
+ticks every twenty minutes that can mean several retros a day at first;
+each still makes at most one process change, so the cadence bounds the
+rate of process change to what the next window can evaluate.
+
+In loop mode (a cron or `/loop`), the scheduled prompt first counts what
+merged since the last `## Retro` in the tick log and stops in one line if
+the retro is not due; the conductor's loop keeps running underneath — you
+never pause it, you change what it will read next tick.
 
 ## Inputs — evidence, never the conductor's self-report alone
 
@@ -108,7 +117,7 @@ where the quality theme lives.
      Sonnet worker could execute and a footprint the conductor can
      sequence. Tests are code and are refactored on the same terms
      (maintainer, 2026-09-17). The conductor dispatches the oldest open
-     `quality` theme ahead of new feature themes once a week; that is the
+     `quality` theme ahead of new feature themes every ~fifth theme; that is the
      "spend time fixing what you find" half of the retro, run through the
      ordinary lanes so it is reviewed like anything else.
 7. **Predict** what the metric should read after the change, so the next

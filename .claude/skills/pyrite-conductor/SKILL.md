@@ -188,7 +188,7 @@ touch. Themes that overlap in files run in sequence, not in parallel
 
 Order by the value chain (ADR-0032 §3a): fix what blocks other themes first
 (a red `dev`, a data-loss bug, a security gap), then what the release's
-definition of done requires, then the rest. **Once a week, the oldest open
+definition of done requires, then the rest. **Every ~fifth theme, the oldest open
 `quality` theme** (`pyrite sw backlog --status proposed` filtered on the
 `quality` tag; written by the retro, [pyrite-meta-conductor](../pyrite-meta-conductor/SKILL.md))
 goes ahead of new feature themes. Refactoring, test refactoring and code
