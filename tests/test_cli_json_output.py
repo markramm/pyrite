@@ -155,7 +155,9 @@ def test_index_health_json_reports_content_changed_as_unhealthy(cli_env):
 
     with _patch_config("pyrite.cli.index_commands.load_config", cli_env):
         result = runner.invoke(app, ["index", "health", "--format", "json"])
-    assert result.exit_code == 0, result.output
+    # Exit 1 is the point of #18: an unhealthy index must not read as success
+    # to a script or CI step gating on this command. stdout stays clean JSON.
+    assert result.exit_code == 1, result.output
     data = json.loads(result.output)
     assert data["status"] == "unhealthy", data
     assert data["checks"]["content_changed"], data["checks"]

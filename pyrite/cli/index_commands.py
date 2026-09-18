@@ -303,14 +303,36 @@ def index_health(
     output_format: str = typer.Option(
         "json", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
+    kb_name: str = typer.Option(
+        None, "--kb", "-k", help="Only check this KB (default: every configured KB)"
+    ),
+    fail: bool = typer.Option(
+        True,
+        "--fail/--no-fail",
+        help="Exit 1 when the index is unhealthy (use --no-fail to always exit 0)",
+    ),
 ):
-    """Check index health and consistency."""
+    """Check index health and consistency.
+
+    Exits 1 when the status is `unhealthy`, so a script, CI step or agent can
+    gate on this command. `--no-fail` restores the old always-0 behaviour for
+    callers that only want to read the report.
+    """
     from ..storage import IndexManager
 
     config, db = get_config_and_db()
+    if kb_name is not None and config.get_kb(kb_name) is None:
+        # Reporting a clean bill for a KB that does not exist would be the same
+        # bug as exiting 0 while unhealthy: a non-answer that reads as success.
+        cli_error(
+            f"KB not found: {kb_name}",
+            output_format,
+            error_code="KB_NOT_FOUND",
+            suggestion="run `pyrite kb list` to see configured KBs",
+        )
     index_mgr = IndexManager(db, config)
 
-    health = index_mgr.check_health()
+    health = index_mgr.check_health(kb_name=kb_name)
 
     broken_links = health.get("broken_links", 0)
     undeclared_types = health.get("undeclared_types", [])
@@ -351,6 +373,39 @@ def index_health(
         },
         output_format,
     )
+    # Print the report, then decide the exit code once, so that every output
+    # format gates the same way (#18: the JSON path used to `return` here and
+    # skip the verdict entirely).
+    _report_health(
+        formatted,
+        is_unhealthy=is_unhealthy,
+        has_warning=has_warning,
+        broken_links=broken_links,
+        undeclared_types=undeclared_types,
+        missing_required=missing_required,
+        subdirectory_mismatches=subdirectory_mismatches,
+        malformed_frontmatter=malformed_frontmatter,
+        invalid_statuses=invalid_statuses,
+        health=health,
+    )
+    if is_unhealthy and fail:
+        raise typer.Exit(1)
+
+
+def _report_health(
+    formatted,
+    *,
+    is_unhealthy,
+    has_warning,
+    broken_links,
+    undeclared_types,
+    missing_required,
+    subdirectory_mismatches,
+    malformed_frontmatter,
+    invalid_statuses,
+    health,
+):
+    """Print the health report. Returns nothing; the caller sets the exit code."""
     if formatted is not None:
         typer.echo(formatted)
         return

@@ -658,9 +658,15 @@ class IndexManager:
         index_time = _parse_indexed_at(indexed_at)
         return file_mtime > index_time
 
-    def check_health(self) -> dict[str, Any]:
+    def check_health(self, kb_name: str | None = None) -> dict[str, Any]:
         """
         Check index health and consistency.
+
+        Args:
+            kb_name: restrict every check to this KB. Without it the report
+                covers all configured KBs, which on a machine with many of them
+                is dominated by KBs the caller is not asking about and cannot
+                serve as a per-project gate (#18).
 
         Returns dict with:
         - missing_files: entries in DB but file not found
@@ -699,7 +705,11 @@ class IndexManager:
             "invalid_statuses": [],
         }
 
-        for kb in self.config.all_kbs():
+        # One scoped list drives every check below, so `-k` cannot scope some
+        # of the report and leave the rest global.
+        kbs = [kb for kb in self.config.all_kbs() if kb_name is None or kb.name == kb_name]
+
+        for kb in kbs:
             if not kb.path.exists():
                 continue
 
@@ -768,7 +778,13 @@ class IndexManager:
             LEFT JOIN entry e ON l.target_id = e.id AND l.target_kb = e.kb_name
             WHERE e.id IS NULL
         """
-        rows = self.db.execute_sql(broken_sql, {})
+        broken_params: dict[str, Any] = {}
+        if kb_name is not None:
+            # Links owned by the scoped KB, not links pointing into it: the
+            # report answers "is this KB's index sound".
+            broken_sql += " AND l.source_kb = :kb_name"
+            broken_params["kb_name"] = kb_name
+        rows = self.db.execute_sql(broken_sql, broken_params)
         if rows:
             health["broken_links"] = rows[0]["cnt"]
 
@@ -779,7 +795,7 @@ class IndexManager:
         # what isn't configured.
         from ..schema.core_types import CORE_TYPES
 
-        for kb in self.config.all_kbs():
+        for kb in kbs:
             if not kb.path.exists() or not kb.kb_yaml_path.exists():
                 continue
 
@@ -803,7 +819,7 @@ class IndexManager:
         # Required-field + subdirectory checks. Per KB with a kb.yaml,
         # compare each entry against its type's `required:` list (default
         # ["title"]) and its `subdirectory:` hint. Skip KBs with no kb.yaml.
-        for kb in self.config.all_kbs():
+        for kb in kbs:
             if not kb.path.exists() or not kb.kb_yaml_path.exists():
                 continue
             kb_schema = kb.kb_schema
