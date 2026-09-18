@@ -766,3 +766,69 @@ corrections, and an explicit instruction to push this time. Not a new PR — the
 follow-up belongs to work in flight, so it goes onto that branch. The
 `index health` and `db backup` halves were given explicit clean bills by both
 readings and survive the next pass unchanged.
+
+### Tick 3 close — Package E absorbed, and two structural findings
+
+**PR #84 (Package E) reviewed and flipped to ready.** The worker's report was
+verified rather than taken: full diff read, footprint confirmed against the spec
+(Package A's four files untouched, no sibling's spec touched), style criteria
+checked by `grep` — zero bare `text=` locators (the single hit is inside a
+comment explaining why one was *avoided*, a false positive worth knowing about
+for future reviews), and the one `.first()` is the header row of a genuinely
+repeated `.grid-cols-7` structure, commented as required.
+
+**It exceeded its spec in the right place.** The seeded-date constraint was
+given as a rule to follow; the worker turned it into `assertOffsetSeeded(n)`,
+which *throws* if the offset math would leave the −3..+2 seeded range. The
+constraint is now enforced at test-run time rather than by inspection, so a
+future edit to `daily.spec.ts` cannot silently start writing notes. That is the
+difference between a spec that documents a trap and one that closes it.
+
+**#89 confirmed by reading the code, not by trusting the report.**
+`Calendar.svelte`'s second `$effect` reads `viewYear`/`viewMonth` inside its own
+comparison, making them its own dependencies: `prevMonth()` changes them, the
+effect reruns, sees a mismatch with `selectedDate`'s month, snaps back. On
+`/daily`, `selectedDate` is always set, so month navigation is **permanently
+inert** — a real user-facing bug that the old either-way assertions could never
+have caught. Correctly filed and `test.fixme`'d with the assertion left correct,
+so it self-heals when #89 lands. Criterion 7 has now earned its keep in three
+consecutive packages (B→#49, E→#89).
+
+**Two process issues filed this tick, both structural, neither a worker's fault:**
+
+- **#103 — `CHANGELOG.md` is the one file every theme touches.** PR #69 went
+  `CONFLICTING`, and `git merge-tree` showed **exactly one** conflicting file out
+  of a 989-line, 14-file diff: `CHANGELOG.md`. The important part is the second
+  order effect: a conflicted PR gets **zero checks**, because GitHub stops
+  computing the merge commit —
+  `gh api .../commits/<head>/check-runs` returned `total_count: 0` while the four
+  other in-flight claims all showed 8. #69's worker saw the missing checks and
+  pushed an empty `ci: re-trigger PR checks` commit trying to shake them loose;
+  it could not, because the cause was not a missed event. A worker spent commits
+  on a diagnosis the conductor was better placed to make. **The conflict rate
+  scales with exactly the thing the loop is trying to increase** — five workers
+  in parallel today, six allowed — so retro 1's groomed
+  `changelog-fragments-one-file-per-pr` item should be dispatched, not held as
+  stock, and it pairs naturally with `scripts/release.py` (also 0.24.2 DoD).
+- **#104 — Playwright's hardcoded ports serialize a fan-out built to run in
+  parallel.** `playwright.config.ts` pins 8088/5173 for every worktree with
+  `reuseExistingServer: false` (correctly — a server already on 8088 is somebody's
+  real Pyrite, and this suite writes). Package E's worker hit
+  `port is already used` repeatedly and confirmed Package C's worktree held it.
+  Then the conductor hit it from the other side: **re-running E's suite for review
+  was impossible** while siblings were running (both ports held, 29 live
+  playwright processes). So the one piece of E's evidence that could not be
+  independently verified is its 5× run, and that limitation is stated in the PR
+  body rather than papered over. No package worker can fix this — the config is
+  correctly read-only to all of them, so each rediscovers it and pays the cost
+  again. Belongs to Package H, **before F and G are dispatched**.
+
+**#69 is the next tick's first job and it is not blocked on its worker.** It is
+`CONFLICTING` on `CHANGELOG.md` alone; everything else merges clean. Tick 4:
+rebase it (its worker's tree is quiet), take both sides of `[Unreleased]`, let
+the checks finally run, then review with the **cold read** its footprint demands
+(`pyrite/models/base.py` +144, `pyrite/storage/`, `pyrite/schema/reserved.py`).
+
+**State at close: 1 in review (#84, rebased, auto-merge armed, checks running),
+4 in flight (#69 conflicted/awaiting rebase, #81 running its 10× suite, #82, #83),
+3 issues filed (#89 product via the worker, #103 and #104 process via review).**
