@@ -14,10 +14,14 @@ cannot be undone.
 The order is the point (ADR-0032 §3a). Six steps, and the only two that can
 change the world come after every check:
 
-  a. preconditions  -- clean `dev` at `origin/dev`; the version in
-                       pyproject.toml is <version>; CHANGELOG has a dated
-                       section with content and no stranded `[Unreleased]`
-                       entries; no open PR labelled `release-blocker`
+  a. preconditions  -- clean `dev` at `origin/dev`; `origin` really is the
+                       repo the `gh` calls name; `v<version>` exists nowhere
+                       yet (locally, on origin, or as a GitHub release) and
+                       `origin/main` is an ancestor of the SHA, so step d can
+                       only ever fast-forward; the version in pyproject.toml is
+                       <version>; CHANGELOG has a dated section with content
+                       and no stranded `[Unreleased]` entries; no open PR
+                       labelled `release-blocker`
   b. ci             -- the REQUIRED checks for that exact SHA concluded
                        `success` (default `gate`; `--require-check` to change
                        it). Checks not named are advisory and never block --
@@ -31,7 +35,11 @@ change the world come after every check:
   d. publish        -- IRREVERSIBLE. Fast-forward `main` to the SHA, tag it,
                        push the tag, `gh release create` with the CHANGELOG
                        section plus the contributors line.
-  e. post-release   -- IRREVERSIBLE (a commit on dev). Reopen `[Unreleased]`.
+  e. post-release   -- IRREVERSIBLE (a commit). Reopen `[Unreleased]` on a
+                       fresh `release/reopen-unreleased-<version>` branch cut
+                       from the release commit, and print the push and
+                       `gh pr create` lines. Local `dev` is never committed on:
+                       `dev` takes pull requests only.
   f. handoff        -- what the release does NOT do, said out loud: pyrite.wiki
                        (outside this repo, and it names the version and quotes
                        counts that go stale), the deploys the tag does not
@@ -45,8 +53,10 @@ Safety rules, pinned by tests/test_release_script.py:
     not exactly `origin/dev`.
   * Every irreversible command is printed verbatim before it runs, and printed
     *instead of* running without `--execute`.
-  * `gh` reads are allowed; `gh` writes are dry-run-printed. The
-    `release-blocker` label is a documented prerequisite -- see the runbook.
+  * `gh` reads are allowed; `gh` writes are dry-run-printed. This script never
+    creates labels: the `release-blocker` label is a one-time prerequisite, and
+    a missing one is a hard failure with the `gh label create` line to run --
+    never a note the release then proceeds past. See the runbook.
 """
 
 from __future__ import annotations
@@ -80,6 +90,13 @@ SEMVER = re.compile(r"^\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$")
 # failures, so requiring it requires them. Advisory checks (breadth jobs that
 # run after the gate) are deliberately not here -- see ci_decision.
 DEFAULT_REQUIRED_CHECKS = ("gate",)
+
+# The commonest case is "I just merged to dev, CI is running". Defaulting to no
+# wait made that an immediate failure and a re-run, which teaches the
+# maintainer to retry rather than to trust the check; 15 minutes comfortably
+# covers the full matrix on dev (~3 min for one leg). `--wait-ci 0` still
+# fails immediately for a scripted check.
+DEFAULT_WAIT_CI_MINUTES = 15
 
 CI_PASSED = "passed"
 CI_FAILED = "failed"
@@ -138,6 +155,11 @@ class Runner:
         # safety tests read it back and assert what was composed, not what the
         # source text happens to say.
         self.planned: list[list[str]] = []
+        # Only what actually RAN, and only once it returned. A failure after
+        # the first irreversible command must be able to say which of them
+        # happened -- "nothing further was attempted" is no help when `main`
+        # has already moved.
+        self.performed: list[list[str]] = []
 
     def run_write(self, cmd: list[str], cwd: Path | None = None) -> str | None:
         self.planned.append(list(cmd))
@@ -149,7 +171,9 @@ class Runner:
             print(f"    WOULD RUN: {rendered}")
             return None
         print(f"    RUN: {rendered}")
-        return _check_output(cmd, cwd=cwd)
+        out = _check_output(cmd, cwd=cwd)
+        self.performed.append(list(cmd))
+        return out
 
     def note(self, message: str) -> None:
         print(f"    {message}")
@@ -193,10 +217,29 @@ def normalize_version(version: str) -> str:
 
 
 def read_pyproject_version(repo: Path) -> str:
+    """The declared version, or a ReleaseError naming the file.
+
+    Every failure here is a ReleaseError, not a traceback: on release day the
+    maintainer needs to know which file is wrong and what to do about it, and a
+    `KeyError: 'project'` says neither.
+    """
     path = repo / "pyproject.toml"
     if not path.exists():
         raise ReleaseError(f"no pyproject.toml at {path}")
-    return tomllib.loads(path.read_text())["project"]["version"]
+    try:
+        parsed = tomllib.loads(path.read_text())
+    except (tomllib.TOMLDecodeError, OSError, UnicodeDecodeError) as exc:
+        raise ReleaseError(f"{path} could not be read as TOML: {exc}") from exc
+    project = parsed.get("project")
+    if not isinstance(project, dict):
+        raise ReleaseError(f"{path} has no `[project]` table, so it declares no version.")
+    version = project.get("version")
+    if not isinstance(version, str):
+        raise ReleaseError(
+            f"{path} has no `version` under `[project]`. The release version is "
+            "written there and nowhere else."
+        )
+    return version
 
 
 def check_version_matches(repo: Path, version: str) -> None:
@@ -209,22 +252,90 @@ def check_version_matches(repo: Path, version: str) -> None:
         )
 
 
+def _read_changelog(repo: Path) -> str:
+    """The CHANGELOG text, or a ReleaseError naming the file it wanted."""
+    path = repo / "CHANGELOG.md"
+    try:
+        return path.read_text()
+    except OSError as exc:
+        raise ReleaseError(
+            f"cannot read {path}: {exc}. The release notes come from that file; "
+            "it must exist on the commit being released."
+        ) from exc
+
+
+def mask_fenced_blocks(text: str) -> str:
+    """The same text with fenced code blocks blanked out, offsets preserved.
+
+    A CHANGELOG entry may legitimately quote a heading -- release notes that
+    show CHANGELOG syntax, a runbook excerpt. Scanning raw text for `^##\\s`
+    then truncates the notes at that quoted line and reports a stranded
+    `[Unreleased]` that does not exist. Blanking rather than deleting keeps
+    every offset in the masked copy usable against the original, so the notes
+    are still sliced out of the real text, fences and all.
+
+    Both ``` and ~~~ fences, three characters or more, per CommonMark.
+    """
+    out: list[str] = []
+    fence: str | None = None
+
+    def blanked(line: str) -> str:
+        return " " * (len(line) - 1) + "\n" if line.endswith("\n") else " " * len(line)
+
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        marker = re.match(r"(`{3,}|~{3,})", stripped)
+        if fence is None:
+            if marker:
+                fence = marker.group(1)[0]
+                out.append(blanked(line))
+                continue
+            out.append(line)
+        else:
+            # A closing fence is the same character, at least as long, and
+            # carries no info string after it.
+            closes = (
+                marker
+                and marker.group(1)[0] == fence
+                and not stripped[len(marker.group(1)) :].strip()
+            )
+            if closes:
+                fence = None
+            out.append(blanked(line))
+    return "".join(out)
+
+
 def _section_span(text: str, version: str) -> tuple[re.Match, int]:
-    """Return the heading match for `## [<version>]` and where its body ends."""
-    heading = re.search(rf"^##\s*\[{re.escape(version)}\](?P<rest>[^\n]*)$", text, re.M)
-    if not heading:
+    """Return the heading match for `## [<version>]` and where its body ends.
+
+    Headings are found in a fence-masked copy (`mask_fenced_blocks`), but the
+    offsets index the original text position-for-position, so the body sliced
+    out is verbatim -- fences included.
+    """
+    masked = mask_fenced_blocks(text)
+    pattern = re.compile(rf"^##\s*\[{re.escape(version)}\](?P<rest>[^\n]*)$", re.M)
+    matches = list(pattern.finditer(masked))
+    if not matches:
         raise ReleaseError(
             f"CHANGELOG.md has no `## [{version}]` section. Add one on dev, "
             f"dated today: `## [{version}] - {date.today().isoformat()}`."
         )
-    following = re.compile(r"^##\s", re.M).search(text, heading.end())
+    if len(matches) > 1:
+        lines = ", ".join(str(masked.count("\n", 0, m.start()) + 1) for m in matches)
+        raise ReleaseError(
+            f"CHANGELOG.md has a `## [{version}]` heading twice (lines {lines}). "
+            "The notes would silently be the first one only -- merge them into "
+            "one section on dev before releasing."
+        )
+    heading = matches[0]
+    following = re.compile(r"^##\s", re.M).search(masked, heading.end())
     return heading, following.start() if following else len(text)
 
 
 def check_changelog(repo: Path, version: str) -> None:
     """The section exists, is dated today, has content, and nothing is
     stranded under `[Unreleased]` below it."""
-    text = (repo / "CHANGELOG.md").read_text()
+    text = _read_changelog(repo)
     heading, end = _section_span(text, version)
 
     rest = heading.group("rest")
@@ -248,9 +359,10 @@ def check_changelog(repo: Path, version: str) -> None:
             "users nothing; write the section on dev first."
         )
 
-    unreleased = re.search(r"^##\s*\[Unreleased\][^\n]*$", text, re.M)
+    masked = mask_fenced_blocks(text)
+    unreleased = re.search(r"^##\s*\[Unreleased\][^\n]*$", masked, re.M)
     if unreleased:
-        u_end = re.compile(r"^##\s", re.M).search(text, unreleased.end())
+        u_end = re.compile(r"^##\s", re.M).search(masked, unreleased.end())
         u_body = text[unreleased.end() : u_end.start() if u_end else len(text)].strip()
         if u_body:
             raise ReleaseError(
@@ -269,7 +381,7 @@ def release_notes_for(repo: Path, version: str) -> str:
     body changes and nothing above it needs to. Keep it the only place that
     knows the notes' origin.
     """
-    text = (repo / "CHANGELOG.md").read_text()
+    text = _read_changelog(repo)
     heading, end = _section_span(text, version)
     return text[heading.end() : end].strip() + "\n"
 
@@ -313,6 +425,17 @@ def _matches(check_name: str, required: str) -> bool:
     return check_name == required or check_name.startswith(f"{required} (")
 
 
+def _run_age(check: dict) -> tuple[str, str]:
+    """Sort key for "which run of this check is the newest".
+
+    `started_at` first (a rerun starts later even when it finishes sooner),
+    `completed_at` as the fallback when the API omits it. Both are ISO-8601 in
+    UTC, so string order is time order; a run missing both sorts oldest, which
+    is the conservative reading when the newest run is the one with timestamps.
+    """
+    return (str(check.get("started_at") or ""), str(check.get("completed_at") or ""))
+
+
 def ci_decision(checks: list[dict], required: tuple[str, ...] | None = None) -> str:
     """Verdict over the NAMED checks a release requires, for one SHA.
 
@@ -338,12 +461,20 @@ def ci_decision(checks: list[dict], required: tuple[str, ...] | None = None) -> 
         matching = [c for c in checks if _matches(c.get("name", ""), name)]
         if not matching:
             return CI_MISSING
-        if any(c.get("status") != "completed" for c in matching):
-            verdicts.append(CI_PENDING)
-        elif any(c.get("conclusion") not in ("success", "skipped") for c in matching):
-            verdicts.append(CI_FAILED)
-        else:
-            verdicts.append(CI_PASSED)
+        # Newest run PER CHECK NAME. A rerun of `gate` is a second check run
+        # with the same name, so reading every run and failing on any red one
+        # means a rerun to green can never unblock a release. Per name, not
+        # overall: `test (3.11)` and `test (3.12)` are different names and both
+        # must pass, however long ago each ran.
+        for leg in sorted({c.get("name", "") for c in matching}):
+            runs = [c for c in matching if c.get("name", "") == leg]
+            newest = max(runs, key=_run_age)
+            if newest.get("status") != "completed":
+                verdicts.append(CI_PENDING)
+            elif newest.get("conclusion") not in ("success", "skipped"):
+                verdicts.append(CI_FAILED)
+            else:
+                verdicts.append(CI_PASSED)
 
     if CI_FAILED in verdicts:
         return CI_FAILED
@@ -358,6 +489,93 @@ def check_no_release_blockers(prs: list[dict]) -> None:
         raise ReleaseError(
             f"open PR(s) labelled {BLOCKER_LABEL}: {listed}. Land or unlabel them before releasing."
         )
+
+
+def remote_slug(url: str) -> str | None:
+    """`owner/repo` from a git remote URL, in either spelling, or None.
+
+    Both forms have to be understood because both are in use on the
+    maintainer's machines: `https://github.com/owner/repo(.git)` and
+    `git@github.com:owner/repo.git` (and its `ssh://` spelling).
+    """
+    url = url.strip()
+    if not url:
+        return None
+    match = re.search(r"github\.com[:/](?P<slug>[^/\s]+/[^/\s]+?)(?:\.git)?/?$", url)
+    return match.group("slug") if match else None
+
+
+def check_remote_is_the_release_repo(repo: Path) -> None:
+    """`origin` must be the repo the `gh` calls name.
+
+    Everything irreversible is split between the two: `git push origin ...`
+    moves `main` and pushes the tag, `gh release create --repo <slug>` cuts the
+    release. Nothing checked that they are the same repo, so a fork's checkout
+    would move the fork's `main` and cut the release on the upstream.
+    """
+    url = _check_output(["git", "-C", str(repo), "remote", "get-url", "origin"]).strip()
+    slug = remote_slug(url)
+    if slug != REPO_SLUG:
+        raise ReleaseError(
+            f"`origin` is {url!r} ({slug or 'unrecognised'}), but this script "
+            f"releases {REPO_SLUG}: it would push main and the tag to one repo "
+            "and cut the release on the other. Run it from a checkout of "
+            f"{REPO_SLUG}."
+        )
+
+
+def check_tag_is_free(repo: Path, version: str) -> None:
+    """`v<version>` exists nowhere yet -- locally, on the remote, or as a release.
+
+    Step d pushes `main` BEFORE it tags. Without this, a tag that already
+    exists is discovered after `main` has already moved, which is the one
+    failure mode the ordering was supposed to make impossible.
+    """
+    tag = f"v{version}"
+    local = _check_output(["git", "-C", str(repo), "tag", "-l", tag]).strip()
+    if local:
+        raise ReleaseError(
+            f"the tag {tag} already exists locally. Either this release is "
+            f"already cut, or a stale local tag needs removing by hand "
+            f"(`git tag -d {tag}`) -- this script never deletes refs."
+        )
+    remote = _check_output(
+        ["git", "-C", str(repo), "ls-remote", "--tags", "origin", f"refs/tags/{tag}"]
+    ).strip()
+    if remote:
+        raise ReleaseError(
+            f"the tag {tag} already exists on origin:\n{remote}\n"
+            "That release is cut. Release the next version instead."
+        )
+    try:
+        _check_output(["gh", "release", "view", tag, "--repo", REPO_SLUG, "--json", "tagName"])
+    except ReleaseError:
+        pass  # `gh release view` exits non-zero when there is no such release
+    else:
+        raise ReleaseError(
+            f"a GitHub release for {tag} already exists on {REPO_SLUG}. "
+            "Release the next version instead."
+        )
+
+
+def check_main_can_fast_forward(repo: Path, sha: str) -> None:
+    """`origin/main` must be an ancestor of the commit being released.
+
+    The ruleset on `main` refuses a non-fast-forward push, so divergence would
+    otherwise surface as a rejected push in the middle of step d. It is a
+    precondition: divergence means `main` has commits `dev` lacks (a hotfix
+    never merged back), and that needs a person, not a retry.
+    """
+    _check_output(["git", "-C", str(repo), "fetch", "origin", "main", "--tags"])
+    try:
+        _check_output(["git", "-C", str(repo), "merge-base", "--is-ancestor", "origin/main", sha])
+    except ReleaseError as exc:
+        raise ReleaseError(
+            f"origin/main is not an ancestor of {sha[:12]}: the fast-forward in "
+            "step d would be refused by the ruleset. main has commits dev lacks "
+            "-- a hotfix that was never merged back? Find out why before "
+            f"releasing (`git log --oneline {sha}..origin/main`).\n{exc}"
+        ) from exc
 
 
 def check_clean_checkout(repo: Path) -> str:
@@ -425,6 +643,15 @@ def step_preconditions(ctx: Context) -> None:
     check_changelog(ctx.repo, ctx.version)
     ctx.runner.note(f"CHANGELOG has `## [{ctx.version}] - {date.today().isoformat()}` with content")
 
+    check_remote_is_the_release_repo(ctx.repo)
+    ctx.runner.note(f"origin is {REPO_SLUG}, the repo this releases")
+
+    check_tag_is_free(ctx.repo, ctx.version)
+    ctx.runner.note(f"v{ctx.version} exists neither locally, on origin, nor as a release")
+
+    check_main_can_fast_forward(ctx.repo, ctx.sha)
+    ctx.runner.note(f"origin/main is an ancestor of {ctx.sha[:12]}: step d can fast-forward")
+
     # `--repo` on every gh call: it otherwise infers the repo from the cwd,
     # which is not necessarily the repo being released.
     labels = _gh_json(
@@ -432,42 +659,35 @@ def step_preconditions(ctx: Context) -> None:
     )
     known = {entry.get("name") for entry in labels} if isinstance(labels, list) else set()
     if BLOCKER_LABEL not in known:
-        ctx.runner.note(
-            f"NOTE: the {BLOCKER_LABEL!r} label does not exist in this repo. "
-            "It is a prerequisite, not something this script creates:"
+        # Hard stop, not a note. Skipping the blocker query when the label is
+        # missing makes the precondition inert exactly when it has never been
+        # set up -- the first release, which is the one that most needs it.
+        # This script does not create labels; creating one silently would let a
+        # release invent its own permission to proceed.
+        raise ReleaseError(
+            f"the {BLOCKER_LABEL!r} label does not exist on {REPO_SLUG}, so the "
+            "blocker check cannot be evaluated and the release will not guess. "
+            "It is a one-time prerequisite -- create it and run this again:\n"
+            f"    gh label create {BLOCKER_LABEL} --repo {REPO_SLUG} "
+            "--description 'Must not ship in the next release' --color B60205"
         )
-        ctx.runner.run_write(
-            [
-                "gh",
-                "label",
-                "create",
-                BLOCKER_LABEL,
-                "--repo",
-                REPO_SLUG,
-                "--description",
-                "Must not ship in the next release",
-                "--color",
-                "B60205",
-            ]
-        )
-    else:
-        blockers = _gh_json(
-            [
-                "gh",
-                "pr",
-                "list",
-                "--repo",
-                REPO_SLUG,
-                "--state",
-                "open",
-                "--label",
-                BLOCKER_LABEL,
-                "--json",
-                "number,title",
-            ]
-        )
-        check_no_release_blockers(blockers if isinstance(blockers, list) else [])
-        ctx.runner.note(f"no open PRs labelled {BLOCKER_LABEL}")
+    blockers = _gh_json(
+        [
+            "gh",
+            "pr",
+            "list",
+            "--repo",
+            REPO_SLUG,
+            "--state",
+            "open",
+            "--label",
+            BLOCKER_LABEL,
+            "--json",
+            "number,title",
+        ]
+    )
+    check_no_release_blockers(blockers if isinstance(blockers, list) else [])
+    ctx.runner.note(f"no open PRs labelled {BLOCKER_LABEL}")
 
 
 def _checks_for(sha: str) -> list[dict]:
@@ -536,14 +756,19 @@ def step_ci(ctx: Context) -> None:
                 "a run it started is not the run the merge gate saw."
             )
         # pending
-        if time.monotonic() >= deadline:
+        now = time.monotonic()
+        if now >= deadline:
             raise ReleaseError(
                 f"a required check is still running on {ctx.sha[:12]} after "
                 f"{ctx.wait_ci_minutes} min: {_describe(checks, required)}. "
                 "Re-run with a longer --wait-ci, or wait and try again."
             )
-        ctx.runner.note(f"required check(s) still running on {ctx.sha[:12]}; waiting 30s")
-        time.sleep(30)
+        # Never sleep past the deadline: a fixed 30s against 5s remaining
+        # wastes 25s and reports the timeout later than it was actually reached.
+        remaining = deadline - now
+        nap = min(30.0, remaining)
+        ctx.runner.note(f"required check(s) still running on {ctx.sha[:12]}; waiting {nap:.0f}s")
+        time.sleep(nap)
 
 
 def step_release_layer(ctx: Context) -> None:
@@ -708,30 +933,47 @@ def step_publish(ctx: Context) -> None:
     )
     ctx.runner.run_write(["git", "-C", str(ctx.repo), "push", "origin", tag])
 
-    notes_file = Path(tempfile.mkdtemp(prefix="pyrite-release-notes-")) / "notes.md"
-    notes_file.write_text(ctx.notes)
-    # --repo explicitly: `gh` otherwise infers it from the cwd, which is not
-    # necessarily the repo being released, and a release cut against the wrong
-    # repo is not undoable.
-    ctx.runner.run_write(
-        [
-            "gh",
-            "release",
-            "create",
-            tag,
-            "--repo",
-            REPO_SLUG,
-            "--title",
-            tag,
-            "--notes-file",
-            str(notes_file),
-        ]
-    )
-    ctx.runner.note(f"(notes written to {notes_file})")
+    # A context-managed temp dir, and written only under --execute: a dry run
+    # must change nothing on disk, and the old code wrote a notes file into the
+    # system temp dir outside the Runner choke point and never removed it.
+    with tempfile.TemporaryDirectory(prefix="pyrite-release-notes-") as tmpdir:
+        notes_file = Path(tmpdir) / "notes.md"
+        if ctx.runner.execute:
+            notes_file.write_text(ctx.notes)
+            ctx.runner.note(f"(notes written to {notes_file})")
+        else:
+            ctx.runner.note(f"(would write the notes to {notes_file})")
+        # --repo explicitly: `gh` otherwise infers it from the cwd, which is not
+        # necessarily the repo being released, and a release cut against the wrong
+        # repo is not undoable.
+        ctx.runner.run_write(
+            [
+                "gh",
+                "release",
+                "create",
+                tag,
+                "--repo",
+                REPO_SLUG,
+                "--title",
+                tag,
+                "--notes-file",
+                str(notes_file),
+            ]
+        )
 
 
 def step_post_release(ctx: Context) -> None:
-    """IRREVERSIBLE (a commit on dev). Reopen `[Unreleased]`.
+    """IRREVERSIBLE (a commit, on a fresh branch). Reopen `[Unreleased]`.
+
+    A NO-OP when the CHANGELOG already carries an `## [Unreleased]` heading:
+    the section is reopened on dev by whoever writes the next entry, and a
+    second empty one would only be noise.
+
+    The commit goes on `release/reopen-unreleased-<version>`, cut from the
+    released commit, never on local `dev`. `dev` takes pull requests only (the
+    ruleset refuses a direct push), so a commit on the local branch could not
+    be pushed anyway -- and it would leave the checkout ahead of `origin/dev`,
+    which is exactly the state step a refuses on the next release.
 
     pyproject.toml is deliberately NOT bumped to a `.dev0`: `pyrite.__version__`
     reads it and `tests/test_version_consistency.py` pins it, so dev between
@@ -739,15 +981,18 @@ def step_post_release(ctx: Context) -> None:
     behaviour. The next release's bump is part of its own release commit.
     """
     changelog = ctx.repo / "CHANGELOG.md"
-    text = changelog.read_text()
-    if re.search(r"^##\s*\[Unreleased\]", text, re.M):
+    text = _read_changelog(ctx.repo)
+    if re.search(r"^##\s*\[Unreleased\]", mask_fenced_blocks(text), re.M):
         ctx.runner.note("CHANGELOG already has an `[Unreleased]` section; nothing to do")
         return
 
-    marker = re.search(rf"^##\s*\[{re.escape(ctx.version)}\]", text, re.M)
+    marker = re.search(rf"^##\s*\[{re.escape(ctx.version)}\]", mask_fenced_blocks(text), re.M)
     if not marker:
         raise ReleaseError("cannot reopen [Unreleased]: the released section vanished")
     updated = text[: marker.start()] + "## [Unreleased]\n\n" + text[marker.start() :]
+
+    branch = f"release/reopen-unreleased-{ctx.version}"
+    ctx.runner.run_write(["git", "-C", str(ctx.repo), "checkout", "-b", branch, ctx.sha])
 
     if ctx.runner.execute:
         changelog.write_text(updated)
@@ -767,9 +1012,10 @@ def step_post_release(ctx: Context) -> None:
         ]
     )
     ctx.runner.note(
-        "push it as a PR to dev like any other change (the ruleset refuses a "
-        "direct push): `git push -u origin <branch> && gh pr create --base dev --fill`"
+        f"local dev is untouched; the commit is on {branch}. Open it as a PR like any other change:"
     )
+    ctx.runner.note(f"  git push -u origin {branch}")
+    ctx.runner.note("  gh pr create --base dev --fill")
 
 
 def step_handoff(ctx: Context) -> None:
@@ -803,7 +1049,10 @@ def step_handoff(ctx: Context) -> None:
     print("         ./pyrite_deployments/deploy.sh cascade        # --reseed if KB data changed")
     print("       (demo.pyrite.wiki follows dev HEAD automatically; nothing to do)")
     print()
-    print("    3. The [Unreleased] commit from step e still needs a PR to dev.")
+    print(
+        f"    3. The [Unreleased] commit from step e is on "
+        f"release/reopen-unreleased-{ctx.version} and still needs a PR to dev."
+    )
     print()
     print(f"    4. Announce {tag} wherever the release is announced.")
 
@@ -859,9 +1108,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--wait-ci",
         type=int,
-        default=0,
+        default=DEFAULT_WAIT_CI_MINUTES,
         metavar="MINUTES",
-        help="wait this many minutes for a pending CI run (default: do not wait).",
+        help=f"wait up to this many minutes for a pending required check "
+        f"(default: {DEFAULT_WAIT_CI_MINUTES}; 0 to fail immediately). The "
+        "release never starts a run -- it only waits for the one the merge gate saw.",
     )
     parser.add_argument(
         "--skip-install-check",
@@ -931,7 +1182,23 @@ def run_release(args: argparse.Namespace) -> tuple[int, Runner]:
             # is how it reads in a log or a CI transcript.
             sys.stdout.flush()
             print(f"\nFAIL at {step.key}: {exc}", file=sys.stderr)
-            print("Nothing further was attempted.", file=sys.stderr)
+            if runner.performed:
+                # `main` may already have moved. Saying "nothing further was
+                # attempted" would be true and useless: what the maintainer
+                # needs is which irreversible commands already succeeded, so
+                # they know what state the repo is in before they retry.
+                print(
+                    "\nThese commands ALREADY RAN and their effects stand:",
+                    file=sys.stderr,
+                )
+                for cmd in runner.performed:
+                    print(f"    {shlex.join(cmd)}", file=sys.stderr)
+                print(
+                    "Nothing after them was attempted. Reconcile that state before re-running.",
+                    file=sys.stderr,
+                )
+            else:
+                print("Nothing further was attempted.", file=sys.stderr)
             sys.stderr.flush()
             return 1, runner
         print()

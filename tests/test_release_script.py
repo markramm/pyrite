@@ -73,7 +73,17 @@ FAKE_SHA = "abc1234def5678"
 @pytest.fixture
 def no_network(monkeypatch):
     """Every external call stubbed. Returns the list of commands attempted, so
-    a test can assert that a dry run shells out only to reads."""
+    a test can assert that a dry run shells out only to reads.
+
+    `time.sleep` raises rather than sleeping: `--wait-ci` now defaults to a real
+    wait, and a test that reaches a pending CI verdict must say `--wait-ci 0`
+    rather than spend fifteen minutes of the suite.
+    """
+
+    def no_sleeping(seconds):
+        raise AssertionError(f"a test slept {seconds}s: pass --wait-ci 0 or stub the clock")
+
+    monkeypatch.setattr(release.time, "sleep", no_sleeping)
     calls = []
 
     def fake_check_output(cmd, **kwargs):
@@ -85,6 +95,18 @@ def no_network(monkeypatch):
             return "dev"
         if "rev-parse" in joined:
             return FAKE_SHA
+        if "remote get-url" in joined:
+            return "git@github.com:markramm/pyrite.git\n"
+        if "tag -l" in joined:
+            return ""  # the tag does not exist locally
+        if "ls-remote" in joined:
+            return ""  # nor on origin
+        if cmd[:3] == ["gh", "release", "view"]:
+            raise release.ReleaseError("release not found")  # nor as a release
+        if "fetch" in joined:
+            return ""
+        if "merge-base" in joined:
+            return ""  # origin/main is an ancestor
         if "check-runs" in joined:
             # `gate` green, `e2e` red: the release must proceed anyway.
             return (
@@ -107,18 +129,28 @@ def no_network(monkeypatch):
 
 
 @pytest.fixture
-def dry_run(no_network, monkeypatch):
-    """A complete `--dry-run` pass over this repo with nothing shelling out.
+def dry_run(no_network, monkeypatch, tmp_path_factory):
+    """A complete `--dry-run` pass with nothing shelling out.
+
+    `--repo` points at a throwaway checkout whose CHANGELOG is the state a
+    release actually starts from -- the version's section dated today and NO
+    `[Unreleased]` heading -- so step e runs its whole path instead of taking
+    the "already reopened; nothing to do" exit that this repo's own CHANGELOG
+    would give it.
 
     Returns (exit_code, runner, attempted_commands); `runner.planned` is every
     write the run would have performed.
     """
-    monkeypatch.setattr(release, "read_pyproject_version", lambda repo: "0.24.2")
-    monkeypatch.setattr(release, "check_changelog", lambda repo, v: None)
-    monkeypatch.setattr(release, "release_notes_for", lambda repo, v: "- A release script.\n")
+    fake_repo = tmp_path_factory.mktemp("release-repo")
+    (fake_repo / "CHANGELOG.md").write_text(
+        f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n"
+        "- A release script.\n\n## [0.24.1] - 2026-09-17\n\n- Older.\n"
+    )
+    (fake_repo / "pyproject.toml").write_text(GOOD_PYPROJECT)
 
     def _go(argv=("0.24.2",)):
-        code, runner = release.run_release(release.parse_args(list(argv)))
+        args = release.parse_args([*argv, "--repo", str(fake_repo)])
+        code, runner = release.run_release(args)
         return code, runner, no_network
 
     return _go
@@ -128,6 +160,81 @@ def dry_run(no_network, monkeypatch):
 def dry_run_commands(dry_run):
     _code, runner, _calls = dry_run()
     return runner.planned
+
+
+@pytest.fixture
+def every_composed_command(dry_run, monkeypatch):
+    """Every command the script composes -- planned writes AND attempted reads
+    -- across the happy path and each failure path.
+
+    The safety rules ("never force-pushes", "never starts a CI run", "never
+    deletes a ref") are about what runs, not about what strings appear in the
+    source: a scan for the literal `--delete` misses `git push -d`, and one for
+    `e2e` forbids a word the module legitimately discusses. This collects the
+    real thing.
+    """
+    collected: list[list[str]] = []
+
+    def sweep(argv=("0.24.2",), before=None):
+        undo = pytest.MonkeyPatch()
+        if before is not None:
+            before(undo)
+        try:
+            code, runner, calls = dry_run(argv)
+        finally:
+            undo.undo()
+        collected.extend(list(c) for c in calls)
+        collected.extend(list(c) for c in runner.planned)
+        return code
+
+    sweep()
+    sweep(("0.24.2", "--require-check", "e2e"))
+    sweep(("0.24.2", "--skip-install-check"))
+
+    # `--execute` composes the most commands of any path (step c's real
+    # install, every write in step d and e). `_check_output` is stubbed, so
+    # nothing escapes; `shutil.which` is pinned so the set of composed commands
+    # is the same whether or not this machine has uv and docker.
+    def with_tools(undo):
+        undo.setattr(release.shutil, "which", lambda name: f"/usr/bin/{name}")
+
+    sweep(("0.24.2", "--execute"), before=with_tools)
+
+    # each failure path: a red CI verdict, a missing one, a pending one.
+    # `--wait-ci 0` on the pending sweep: the default is now a real wait.
+    for payload, argv in (
+        (
+            '{"check_runs":[{"name":"gate","status":"completed","conclusion":"failure"}]}',
+            ("0.24.2",),
+        ),
+        ('{"check_runs":[]}', ("0.24.2",)),
+        (
+            '{"check_runs":[{"name":"gate","status":"in_progress","conclusion":null}]}',
+            ("0.24.2", "--wait-ci", "0"),
+        ),
+    ):
+        original = release._check_output
+
+        def ci(undo, _payload=payload, _original=original):
+            def patched(cmd, **kwargs):
+                if "check-runs" in " ".join(cmd):
+                    return _payload
+                return _original(cmd, **kwargs)
+
+            undo.setattr(release, "_check_output", patched)
+
+        sweep(argv=argv, before=ci)
+
+    # a failed precondition
+    def bad_version(undo):
+        undo.setattr(
+            release,
+            "check_version_matches",
+            lambda repo, v: (_ for _ in ()).throw(release.ReleaseError("mismatch")),
+        )
+
+    sweep(before=bad_version)
+    return collected
 
 
 # --------------------------------------------------------------------------
@@ -236,6 +343,88 @@ class TestExtractNotes:
             release.release_notes_for(repo, "9.9.9")
 
 
+class TestChangelogFencedBlocks:
+    """A fenced code block may legitimately contain a `## ` line -- release
+    notes quote CHANGELOG syntax, and a runbook excerpt shows headings. Scanning
+    for `^##\\s` without fence awareness truncates the notes there and makes
+    `check_changelog` invent a stranded `[Unreleased]`."""
+
+    def _changelog(self, body: str) -> str:
+        return f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n{body}\n## [0.24.1] - 2026-09-17\n\n- Older.\n"
+
+    FENCED_BODY = "- see:\n\n```md\n## [Unreleased]\n- fake\n```\n\n- real entry\n"
+
+    def test_a_heading_inside_a_fence_does_not_truncate_the_notes(self, repo):
+        (repo / "CHANGELOG.md").write_text(self._changelog(self.FENCED_BODY))
+        notes = release.release_notes_for(repo, "0.24.2")
+        assert "- real entry" in notes
+        assert "- Older." not in notes
+
+    def test_a_fenced_unreleased_heading_is_not_a_stranded_section(self, repo):
+        (repo / "CHANGELOG.md").write_text(self._changelog(self.FENCED_BODY))
+        release.check_changelog(repo, "0.24.2")  # no raise
+
+    def test_a_tilde_fence_is_handled_too(self, repo):
+        body = "- see:\n\n~~~\n## [Unreleased]\n~~~\n\n- real entry\n"
+        (repo / "CHANGELOG.md").write_text(self._changelog(body))
+        assert "- real entry" in release.release_notes_for(repo, "0.24.2")
+
+    def test_a_real_unreleased_section_is_still_caught(self, repo):
+        """The fence stripping must not blind the check to a genuine one."""
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [Unreleased]\n\n- Not shipped.\n\n"
+            f"## [0.24.2] - {date.today().isoformat()}\n\n- Thing.\n"
+        )
+        with pytest.raises(release.ReleaseError, match="Unreleased"):
+            release.check_changelog(repo, "0.24.2")
+
+
+class TestChangelogDuplicateHeading:
+    """Two `## [X.Y.Z]` headings mean the notes are ambiguous and the first
+    silently wins -- which is how half a release's notes go missing."""
+
+    def test_a_duplicate_version_heading_is_an_error(self, repo):
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n- First.\n\n"
+            f"## [0.24.2] - {date.today().isoformat()}\n\n- Second.\n"
+        )
+        with pytest.raises(release.ReleaseError, match="twice|duplicate"):
+            release.check_changelog(repo, "0.24.2")
+
+    def test_release_notes_also_refuse_a_duplicate(self, repo):
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n- First.\n\n"
+            f"## [0.24.2] - {date.today().isoformat()}\n\n- Second.\n"
+        )
+        with pytest.raises(release.ReleaseError, match="twice|duplicate"):
+            release.release_notes_for(repo, "0.24.2")
+
+
+class TestMalformedInputsAreReleaseErrors:
+    """A traceback tells the maintainer nothing on release day; a ReleaseError
+    names the file and what to do."""
+
+    def test_missing_changelog_is_a_release_error(self, repo):
+        (repo / "CHANGELOG.md").unlink()
+        with pytest.raises(release.ReleaseError, match="CHANGELOG.md"):
+            release.check_changelog(repo, "0.24.2")
+
+    def test_malformed_pyproject_is_a_release_error(self, repo):
+        (repo / "pyproject.toml").write_text("this is not = = toml [[[")
+        with pytest.raises(release.ReleaseError, match="pyproject.toml"):
+            release.read_pyproject_version(repo)
+
+    def test_pyproject_without_a_project_table_is_a_release_error(self, repo):
+        (repo / "pyproject.toml").write_text("[tool.ruff]\nline-length = 100\n")
+        with pytest.raises(release.ReleaseError, match="pyproject.toml"):
+            release.read_pyproject_version(repo)
+
+    def test_pyproject_without_a_version_is_a_release_error(self, repo):
+        (repo / "pyproject.toml").write_text('[project]\nname = "pyrite"\n')
+        with pytest.raises(release.ReleaseError, match="version"):
+            release.read_pyproject_version(repo)
+
+
 class TestContributorsLine:
     def test_credits_outside_authors_sorted_and_deduped(self):
         line = release.contributors_line(["zoe", "amy", "zoe"])
@@ -341,16 +530,67 @@ class TestCiDecision:
     def test_require_check_defaults_to_gate(self):
         assert release.parse_args(["0.24.2"]).require_check == ["gate"]
 
+    def test_a_rerun_to_green_is_the_verdict(self):
+        """A `gate` rerun is a second check run with the SAME name. Reading
+        both and failing on the older one means a rerun can never unblock a
+        release -- the common case after a flaky failure."""
+        checks = [
+            _run("completed", "failure") | {"started_at": "2026-09-18T10:00:00Z"},
+            _run("completed", "success") | {"started_at": "2026-09-18T11:00:00Z"},
+        ]
+        assert release.ci_decision(checks) == release.CI_PASSED
+
+    def test_a_rerun_to_red_is_also_the_verdict(self):
+        checks = [
+            _run("completed", "success") | {"started_at": "2026-09-18T10:00:00Z"},
+            _run("completed", "failure") | {"started_at": "2026-09-18T11:00:00Z"},
+        ]
+        assert release.ci_decision(checks) == release.CI_FAILED
+
+    def test_completed_at_breaks_the_tie_when_started_at_is_absent(self):
+        checks = [
+            _run("completed", "failure") | {"completed_at": "2026-09-18T10:05:00Z"},
+            _run("completed", "success") | {"completed_at": "2026-09-18T11:05:00Z"},
+        ]
+        assert release.ci_decision(checks) == release.CI_PASSED
+
+    def test_a_rerun_in_progress_is_pending_not_the_old_pass(self):
+        checks = [
+            _run("completed", "success") | {"started_at": "2026-09-18T10:00:00Z"},
+            _run("in_progress", None) | {"started_at": "2026-09-18T11:00:00Z"},
+        ]
+        assert release.ci_decision(checks) == release.CI_PENDING
+
+    def test_matrix_legs_are_still_all_required_together(self):
+        """Newest-per-name, not newest-overall: `test (3.11)` and `test (3.12)`
+        are different names and both must pass."""
+        checks = [
+            _run("completed", "success", "test (3.11)") | {"started_at": "2026-09-18T11:00:00Z"},
+            _run("completed", "failure", "test (3.12)") | {"started_at": "2026-09-18T10:00:00Z"},
+        ]
+        assert release.ci_decision(checks, required=("test",)) == release.CI_FAILED
+
     def test_e2e_is_never_required_by_default(self):
         assert "e2e" not in release.DEFAULT_REQUIRED_CHECKS
-        assert "e2e" not in _string_literals(release)
 
-    def test_never_dispatches_a_run(self):
+    def test_e2e_is_never_required_by_a_composed_command(self, every_composed_command):
+        """The literal scan this replaced forbade the string `e2e` anywhere in
+        the module, which `--require-check e2e` makes a lie at runtime and which
+        says nothing about what the run actually does. This asserts over the
+        commands composed on the happy path and every failure path."""
+        for cmd in every_composed_command:
+            assert "e2e" not in " ".join(cmd), cmd
+
+    def test_never_dispatches_a_run(self, every_composed_command):
         """A run this script started is not the run the merge gate saw, so it
-        must never be able to start one: no `gh workflow run` argument anywhere."""
-        literals = _string_literals(release)
-        assert "workflow" not in literals
-        assert not [s for s in literals if "workflow run" in s]
+        must never be able to start one. The literal scan this replaced forbade
+        the word `workflow` and would have missed `gh run rerun` entirely."""
+        for cmd in every_composed_command:
+            joined = " ".join(cmd)
+            assert "workflow run" not in joined, cmd
+            assert cmd[:2] != ["gh", "workflow"], cmd
+            assert cmd[:3] not in (["gh", "run", "rerun"], ["gh", "run", "watch"]), cmd
+            assert not (cmd[:2] == ["gh", "run"] and cmd[2:3] != ["list"]), cmd
 
     def test_a_commit_github_has_never_seen_says_so_in_english(self, monkeypatch):
         """Found running it by hand: the likeliest real failure is a commit
@@ -507,9 +747,12 @@ class TestSafety:
         literals = _string_literals(release)
         assert not [s for s in literals if s in dangerous or "--force" in s]
 
-    def test_no_command_argument_deletes_a_ref(self):
-        literals = _string_literals(release)
-        assert not [s for s in literals if "--delete" in s]
+    def test_no_composed_command_deletes_a_ref(self, every_composed_command):
+        """The literal scan this replaced checked `--delete` only, so `git push
+        -d`, `git tag -d` and `gh release delete` all slipped through."""
+        for cmd in every_composed_command:
+            assert not [a for a in cmd if a in ("-d", "-D", "--delete")], cmd
+            assert "delete" not in " ".join(cmd), cmd
 
     def test_the_only_push_refspecs_are_forward(self, dry_run_commands):
         """As actually composed in a dry run: `<sha>:refs/heads/main` and a tag
@@ -587,6 +830,193 @@ class TestReleaseBlockers:
     def test_no_blockers_passes(self):
         release.check_no_release_blockers([])  # no raise
 
+    def test_a_missing_label_is_a_hard_failure_not_a_note(self, dry_run, no_network, capsys):
+        """The label does not exist in the repo today. Treating that as a note
+        and skipping the blocker query means the precondition is inert on first
+        use -- the run proceeds to the tag having checked nothing."""
+        original = release._check_output
+
+        def without_the_label(cmd, **kwargs):
+            if "gh label list" in " ".join(cmd):
+                return "[]"
+            return original(cmd, **kwargs)
+
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr(release, "_check_output", without_the_label)
+        try:
+            code, runner, _calls = dry_run()
+        finally:
+            monkeypatch.undo()
+        assert code != 0
+        assert runner.planned == [], "a write was planned though the blocker check never ran"
+        err = capsys.readouterr().err
+        assert "gh label create release-blocker" in err
+
+    def test_the_script_never_plans_to_create_a_label(self, dry_run_commands):
+        """It is a documented prerequisite, not something the release creates."""
+        assert not [c for c in dry_run_commands if c[:3] == ["gh", "label", "create"]]
+
+
+class TestTagAndRemotePreconditions:
+    """Step d moves `main` first and tags second: if the tag already exists, or
+    `main` has diverged, the failure lands halfway through something
+    irreversible. Both are preconditions."""
+
+    def _dry_run_with(self, dry_run, monkeypatch, override):
+        original = release._check_output
+
+        def patched(cmd, **kwargs):
+            answer = override(cmd)
+            return original(cmd, **kwargs) if answer is None else answer
+
+        monkeypatch.setattr(release, "_check_output", patched)
+        return dry_run()
+
+    def test_an_existing_local_tag_stops_the_release(self, dry_run, monkeypatch, capsys):
+        code, runner, _calls = self._dry_run_with(
+            dry_run, monkeypatch, lambda cmd: "v0.24.2\n" if "tag" in cmd and "-l" in cmd else None
+        )
+        assert code != 0
+        assert runner.planned == []
+        assert "v0.24.2" in capsys.readouterr().err
+
+    def test_an_existing_remote_tag_stops_the_release(self, dry_run, monkeypatch, capsys):
+        code, runner, _calls = self._dry_run_with(
+            dry_run,
+            monkeypatch,
+            lambda cmd: "deadbeef\trefs/tags/v0.24.2\n" if "ls-remote" in cmd else None,
+        )
+        assert code != 0
+        assert runner.planned == []
+        assert "v0.24.2" in capsys.readouterr().err
+
+    def test_an_existing_github_release_stops_the_release(self, dry_run, monkeypatch, capsys):
+        code, runner, _calls = self._dry_run_with(
+            dry_run,
+            monkeypatch,
+            lambda cmd: '{"tagName":"v0.24.2"}' if cmd[:3] == ["gh", "release", "view"] else None,
+        )
+        assert code != 0
+        assert runner.planned == []
+        assert "v0.24.2" in capsys.readouterr().err
+
+    def test_main_not_an_ancestor_stops_the_release(self, dry_run, monkeypatch, capsys):
+        def diverged(cmd):
+            if "merge-base" in cmd:
+                raise release.ReleaseError("command failed (1): git merge-base --is-ancestor")
+            return None
+
+        code, runner, _calls = self._dry_run_with(dry_run, monkeypatch, diverged)
+        assert code != 0
+        assert runner.planned == []
+        err = capsys.readouterr().err
+        assert "main" in err
+
+    def test_the_happy_path_checks_the_tag_and_the_ancestry(self, dry_run):
+        _code, _runner, calls = dry_run()
+        joined = [" ".join(c) for c in calls]
+        assert any("tag -l v0.24.2" in c for c in joined), joined
+        assert any("ls-remote" in c and "v0.24.2" in c for c in joined), joined
+        assert any(c.startswith("gh release view v0.24.2") for c in joined), joined
+        assert any("merge-base --is-ancestor" in c for c in joined), joined
+
+    def test_the_remote_must_be_the_repo_being_released(self, dry_run, monkeypatch, capsys):
+        """`origin` and the hard-coded REPO_SLUG are never checked to agree, so
+        a fork's checkout would push `main` to the fork and cut the release on
+        markramm/pyrite."""
+        code, runner, _calls = self._dry_run_with(
+            dry_run,
+            monkeypatch,
+            lambda cmd: "https://github.com/someone/fork\n" if "get-url" in cmd else None,
+        )
+        assert code != 0
+        assert runner.planned == []
+        err = capsys.readouterr().err
+        assert "someone/fork" in err
+        assert release.REPO_SLUG in err
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "https://github.com/markramm/pyrite",
+            "https://github.com/markramm/pyrite.git",
+            "git@github.com:markramm/pyrite.git",
+            "ssh://git@github.com/markramm/pyrite.git",
+        ],
+    )
+    def test_both_remote_spellings_are_accepted(self, url):
+        assert release.remote_slug(url) == release.REPO_SLUG
+
+
+class TestPublishFailureSaysWhatHappened:
+    """`main` moves first. "Nothing further was attempted" after that is false
+    and leaves the maintainer guessing what state the repo is in."""
+
+    def test_a_failure_after_main_moved_lists_what_ran(self, dry_run, monkeypatch, capsys):
+        original = release._check_output
+
+        def fail_the_tag(cmd, **kwargs):
+            if cmd[:1] == ["git"] and "tag" in cmd and "-a" in cmd:
+                raise release.ReleaseError("tag refused")
+            return original(cmd, **kwargs)
+
+        monkeypatch.setattr(release, "_check_output", fail_the_tag)
+        code, _runner, _calls = dry_run(("0.24.2", "--execute", "--skip-install-check"))
+        assert code != 0
+        err = capsys.readouterr().err
+        assert "Nothing further was attempted." not in err
+        assert "ALREADY RAN" in err
+        assert "refs/heads/main" in err
+
+    def test_a_failure_before_anything_ran_still_says_nothing_happened(self, dry_run, capsys):
+        release_error = release.ReleaseError("version mismatch")
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr(
+            release,
+            "check_version_matches",
+            lambda repo, v: (_ for _ in ()).throw(release_error),
+        )
+        try:
+            code, _runner, _calls = dry_run()
+        finally:
+            monkeypatch.undo()
+        assert code != 0
+        assert "Nothing further was attempted" in capsys.readouterr().err
+
+
+class TestPostReleaseUsesABranch:
+    """Step e must not commit on local `dev`: the ruleset refuses a direct push
+    and a commit there leaves the checkout ahead of `origin/dev`, which is
+    exactly the state step a refuses on the next release."""
+
+    def test_it_creates_a_branch_before_committing(self, dry_run_commands):
+        planned = [" ".join(c) for c in dry_run_commands]
+        branch = "release/reopen-unreleased-0.24.2"
+        checkout = [i for i, p in enumerate(planned) if f"checkout -b {branch}" in p]
+        commits = [i for i, p in enumerate(planned) if "commit -m" in p]
+        assert checkout, planned
+        assert commits, planned
+        assert checkout[0] < commits[0], planned
+
+    def test_the_branch_is_cut_from_the_release_commit(self, dry_run_commands):
+        planned = [" ".join(c) for c in dry_run_commands]
+        assert any(
+            f"checkout -b release/reopen-unreleased-0.24.2 {FAKE_SHA}" in p for p in planned
+        ), planned
+
+    def test_it_prints_the_push_and_pr_commands(self, dry_run, capsys):
+        dry_run()
+        out = capsys.readouterr().out
+        assert "git push -u origin release/reopen-unreleased-0.24.2" in out
+        assert "gh pr create --base dev --fill" in out
+
+    def test_it_never_commits_on_dev(self, dry_run_commands):
+        """No commit may be planned while the checkout is still on dev."""
+        planned = [" ".join(c) for c in dry_run_commands]
+        for i, p in enumerate(planned):
+            if "commit -m" in p:
+                assert any("checkout -b" in earlier for earlier in planned[:i]), planned
+
 
 # --------------------------------------------------------------------------
 # --dry-run over this repo, with every subprocess call monkeypatched
@@ -600,11 +1030,24 @@ class TestDryRunOverThisRepo:
 
     def test_dry_run_shells_out_only_to_reads(self, dry_run):
         """Every subprocess the dry run attempted must be a read. A write that
-        slipped past the Runner would show up here."""
+        slipped past the Runner would show up here.
+
+        `git tag -l` and `git ls-remote --tags` ARE reads: the precondition that
+        `v<version>` is still free has to ask. `git tag -a`, which creates one,
+        must not appear.
+        """
         _code, _runner, calls = dry_run()
-        joined = " ".join(" ".join(c) for c in calls)
-        for write in ("push", " tag ", "release create", "label create", "uv venv", "uv pip"):
-            assert write not in joined, f"dry run ran a write: {write!r} in {joined}"
+        reads_named_tag = (["tag", "-l"], ["ls-remote", "--tags"])
+        for cmd in calls:
+            joined = " ".join(cmd)
+            for write in ("push", "release create", "label create", "uv venv", "uv pip"):
+                assert write not in joined, f"dry run ran a write: {write!r} in {joined}"
+            if "tag" in cmd and not any(
+                all(part in cmd for part in read) for read in reads_named_tag
+            ):
+                raise AssertionError(f"dry run ran a tag write: {joined}")
+            assert "checkout" not in cmd, f"dry run changed branches: {joined}"
+            assert "commit" not in cmd, f"dry run committed: {joined}"
 
     def test_gh_release_create_names_the_repo_explicitly(self, dry_run_commands):
         """`gh` infers the repo from the cwd, which is not necessarily the repo
@@ -710,10 +1153,165 @@ class TestDryRunOverThisRepo:
 
 
 class TestTutorialVenvHook:
-    def test_run_tutorial_sh_honours_pyrite_tutorial_venv(self):
-        script = (REPO / "scripts" / "run_tutorial.sh").read_text()
-        assert "PYRITE_TUTORIAL_VENV" in script
+    """These run the shell script. Asserting that the string
+    `PYRITE_TUTORIAL_VENV` appears in a file passes against a deleted
+    implementation -- the variable is named in the comments of both files.
+    """
 
-    def test_release_script_targets_the_temp_venv_via_that_var(self):
-        source = Path(release.__file__).read_text()
-        assert "PYRITE_TUTORIAL_VENV" in source
+    @staticmethod
+    def _stub_venv(tmp_path):
+        """A venv-shaped directory whose `bin/python` records its argv and
+        exits 0 without running anything."""
+        venv = tmp_path / "venv"
+        (venv / "bin").mkdir(parents=True)
+        argv_log = tmp_path / "argv.txt"
+        python = venv / "bin" / "python"
+        python.write_text(f'#!/usr/bin/env bash\nprintf "%s\\n" "$0" "$@" > "{argv_log}"\nexit 0\n')
+        python.chmod(0o755)
+        return venv, argv_log
+
+    def _run(self, env_overrides, tmp_path):
+        import os
+        import subprocess
+
+        env = dict(os.environ)
+        env.pop("PYRITE_TUTORIAL_VENV", None)
+        env.update(env_overrides)
+        return subprocess.run(
+            [str(REPO / "scripts" / "run_tutorial.sh"), "--nonexistent-doc-argument"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(tmp_path),
+        )
+
+    def test_the_named_venvs_python_is_the_interpreter_invoked(self, tmp_path):
+        venv, argv_log = self._stub_venv(tmp_path)
+        proc = self._run({"PYRITE_TUTORIAL_VENV": str(venv)}, tmp_path)
+        assert proc.returncode == 0, proc.stderr
+        recorded = argv_log.read_text().splitlines()
+        assert recorded[0] == str(venv / "bin" / "python")
+        assert recorded[1].endswith("run_tutorial.py")
+
+    def test_the_venvs_bin_is_prepended_to_path(self, tmp_path):
+        """The tutorial drives `pyrite` off PATH; pointing the interpreter at
+        the venv is not enough if PATH still finds the checkout's."""
+        venv, _argv_log = self._stub_venv(tmp_path)
+        path_log = tmp_path / "path.txt"
+        python = venv / "bin" / "python"
+        python.write_text(f'#!/usr/bin/env bash\nprintf "%s" "$PATH" > "{path_log}"\nexit 0\n')
+        python.chmod(0o755)
+        proc = self._run({"PYRITE_TUTORIAL_VENV": str(venv)}, tmp_path)
+        assert proc.returncode == 0, proc.stderr
+        assert path_log.read_text().split(":")[0] == str(venv / "bin")
+
+    def test_a_bad_path_fails_loudly_instead_of_falling_back(self, tmp_path):
+        """Silently running the checkout's venv would make the release's
+        install check verify the wrong thing."""
+        proc = self._run({"PYRITE_TUTORIAL_VENV": str(tmp_path / "nope")}, tmp_path)
+        assert proc.returncode == 1
+        assert "has no bin/python" in proc.stderr
+
+    def test_unset_leaves_the_developer_and_ci_case_unchanged(self, tmp_path):
+        """Unset, it must still reach run_tutorial.py with the repo's venv --
+        here proven by the doc argument getting through to the runner, which
+        rejects it."""
+        proc = self._run({}, tmp_path)
+        combined = proc.stdout + proc.stderr
+        assert "has no bin/python" not in combined
+        assert "--nonexistent-doc-argument" in combined or proc.returncode != 0
+
+    def test_the_release_script_passes_the_venv_it_installed_into(self, monkeypatch, tmp_path):
+        """Step c must hand the tutorial the temp venv, as an environment
+        variable on the call -- not merely mention the name in a comment."""
+        seen = {}
+
+        def fake(cmd, cwd=None, env=None):
+            if cmd and str(cmd[0]).endswith("run_tutorial.sh"):
+                seen["env"] = dict(env or {})
+                return ""
+            if cmd and str(cmd[0]).endswith("pyrite"):
+                return "pyrite 0.24.2"
+            return ""
+
+        monkeypatch.setattr(release, "_check_output", fake)
+        monkeypatch.setattr(
+            release.shutil, "which", lambda name: "/usr/bin/uv" if name == "uv" else None
+        )
+        ctx = release.Context(
+            repo=REPO,
+            version="0.24.2",
+            runner=release.Runner(execute=False),
+            wait_ci_minutes=0,
+            rehearse_install_check=True,
+            sha=FAKE_SHA,
+        )
+        release.step_release_layer(ctx)
+        assert "PYRITE_TUTORIAL_VENV" in seen.get("env", {})
+        assert Path(seen["env"]["PYRITE_TUTORIAL_VENV"]).name.startswith("pyrite-release-venv-")
+
+
+class TestNotesFileIsNotLitter:
+    """A dry run wrote `pyrite-release-notes-*/notes.md` into the system temp
+    dir, outside the Runner choke point, and never removed it -- a dry run must
+    change nothing on disk."""
+
+    def test_a_dry_run_writes_no_notes_file(self, dry_run, monkeypatch):
+        made = []
+        real_mkdtemp = release.tempfile.mkdtemp
+
+        def spy(*args, **kwargs):
+            path = real_mkdtemp(*args, **kwargs)
+            made.append(Path(path))
+            return path
+
+        monkeypatch.setattr(release.tempfile, "mkdtemp", spy)
+        dry_run()
+        leftovers = [p for p in made if p.exists()]
+        assert not leftovers, f"a dry run left temp directories behind: {leftovers}"
+
+    def test_the_dry_run_still_shows_where_the_notes_go(self, dry_run, capsys):
+        dry_run()
+        out = capsys.readouterr().out
+        assert "notes" in out.lower()
+        assert "--notes-file" in out
+
+
+class TestWaitCiDefault:
+    """`--wait-ci 0` makes the commonest case -- "I just merged, CI is running"
+    -- fail immediately, which teaches the maintainer to re-run rather than to
+    trust the check."""
+
+    def test_the_default_waits(self):
+        assert release.parse_args(["0.24.2"]).wait_ci >= 5
+
+    def test_it_is_still_overridable_including_to_zero(self):
+        assert release.parse_args(["0.24.2", "--wait-ci", "0"]).wait_ci == 0
+        assert release.parse_args(["0.24.2", "--wait-ci", "40"]).wait_ci == 40
+
+    def test_the_poll_never_sleeps_past_the_deadline(self, monkeypatch):
+        """A fixed 30s sleep past a deadline that is 5s away wastes 25s and
+        reports a timeout later than it found one."""
+        slept = []
+        monkeypatch.setattr(release.time, "sleep", lambda s: slept.append(s))
+        # deadline is computed from the first reading; then one per poll.
+        clock = iter([0.0, 4.0, 9.0, 100.0])
+        monkeypatch.setattr(release.time, "monotonic", lambda: next(clock))
+        monkeypatch.setattr(
+            release,
+            "_checks_for",
+            lambda sha: [{"name": "gate", "status": "in_progress", "conclusion": None}],
+        )
+        ctx = release.Context(
+            repo=REPO,
+            version="0.24.2",
+            runner=release.Runner(execute=False),
+            wait_ci_minutes=0,
+            sha=FAKE_SHA,
+        )
+        ctx.wait_ci_minutes = 10 / 60  # a 10-second deadline
+        with pytest.raises(release.ReleaseError, match="still running"):
+            release.step_ci(ctx)
+        assert slept, "it never waited at all"
+        assert all(s <= 30 for s in slept), slept
+        assert sum(slept) <= 10.001, slept
