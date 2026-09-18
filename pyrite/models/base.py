@@ -62,6 +62,13 @@ _BASE_CONSUMED_KEYS = frozenset(
     }
 )
 
+# #151: timestamps are written back only to a file that already carried them.
+# `capture_extra_frontmatter` records their absence (like the always-written
+# defaults) so a no-op round trip cannot invent them, and `_base_frontmatter`
+# emits them only when that flag has been cleared -- by the source file having
+# the key, or by an explicit assignment (see `__setattr__`).
+_TIMESTAMP_KEYS = ("created_at", "updated_at")
+
 
 def _default_valued_keys_absent_from(entry: "Entry", meta: dict[str, Any]) -> frozenset[str]:
     """Keys a pristine instance of ``entry``'s class writes, that ``meta`` lacks.
@@ -124,7 +131,16 @@ def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
     """
     # Set before serializing: both influence what to_frontmatter emits, and
     # `emitted` below must reflect the decisions the write path will make.
-    entry._absent_default_keys = _default_valued_keys_absent_from(entry, meta)
+    entry._absent_default_keys = _default_valued_keys_absent_from(entry, meta) | frozenset(
+        # #151: created_at/updated_at are only written back to a file that
+        # already carried them. Recording their absence here (same mechanism as
+        # the always-written defaults above) is what keeps a no-op round trip
+        # from inventing them, while an explicit assignment clears the flag
+        # (see __setattr__) and reaches the file from then on.
+        k
+        for k in _TIMESTAMP_KEYS
+        if k not in meta
+    )
     # Keep the mapping as ruamel parsed it, for style on the way back out.
     # Stored by reference, not copied: copying is what mangled anchors and
     # merge keys, and the write path only ever READS this. Two entries loaded
@@ -188,6 +204,46 @@ def _keep_sequence_style(old: Any, new: Any) -> Any:
     return new
 
 
+def _timestamp_same_instant(old: Any, new: Any) -> bool:
+    """True when ``new`` re-serialises the same instant as the raw ``old``
+    source node, so the source node (and its style) can be kept.
+
+    ``#151`` normalises a bare YAML date to a ``datetime`` on load, and the
+    write path re-emits timestamps as ISO strings, so the plain equality check
+    in ``_restyle_like_source`` no longer sees them as "unchanged" and would
+    replace `created_at: 2026-01-15` with `2026-01-15T00:00:00+00:00`.
+    Comparing the parsed instants instead keeps the original node whenever the
+    value still means what the file said; a genuinely changed timestamp (a
+    refreshed `updated_at`, say) still falls through and is written in the new
+    form. Naive values are read as UTC, matching ``parse_datetime``.
+    """
+    n = _plain(new)
+    if not isinstance(n, str):
+        return False
+    try:
+        parsed_new = datetime.fromisoformat(n.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed_new.tzinfo is None:
+        parsed_new = parsed_new.replace(tzinfo=UTC)
+
+    o = _plain(old)
+    if isinstance(o, datetime):
+        parsed_old = o if o.tzinfo is not None else o.replace(tzinfo=UTC)
+    elif isinstance(o, date):
+        parsed_old = datetime(o.year, o.month, o.day, tzinfo=UTC)
+    elif isinstance(o, str):
+        try:
+            parsed_old = datetime.fromisoformat(o.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if parsed_old.tzinfo is None:
+            parsed_old = parsed_old.replace(tzinfo=UTC)
+    else:
+        return False
+    return parsed_old == parsed_new
+
+
 def _restyle_like_source(meta: dict[str, Any], source: Any) -> dict[str, Any]:
     """Re-emit ``meta`` in ``source``'s key order and YAML style.
 
@@ -228,7 +284,8 @@ def _restyle_like_source(meta: dict[str, Any], source: Any) -> dict[str, Any]:
         if key not in meta:
             continue
         new = meta[key]
-        restyled[key] = old if _plain(old) == _plain(new) else _keep_sequence_style(old, new)
+        unchanged = _plain(old) == _plain(new) or _timestamp_same_instant(old, new)
+        restyled[key] = old if unchanged else _keep_sequence_style(old, new)
 
     for key, value in meta.items():
         if key not in restyled:
@@ -313,17 +370,17 @@ class Entry(ABC):
         """Refresh ``updated_at`` as *bookkeeping*, without inventing the key.
 
         ``KBRepository.save``, ``KBService.update_entry`` and ``sw link`` all
-        stamp ``updated_at`` on every write. That is internal housekeeping,
-        not a user edit, so a file that never carried the key must not grow
-        one (#151) -- while a file that *does* carry it is refreshed and
-        written back as before.
-
-        A plain assignment cannot express that: ``__setattr__`` treats any
+        stamp ``updated_at`` on every write. Once the write path started
+        re-emitting the key for files that carry it (#151), that stamp could no
+        longer go through a plain assignment: ``__setattr__`` treats any
         assignment as explicit and clears the key from
-        ``_absent_default_keys``, which is exactly how the repository stamp
-        re-invented ``updated_at`` on every save. ``object.__setattr__``
-        bypasses that hook, so the in-memory value stays fresh while the
-        key's file-presence remains whatever the source file had.
+        ``_absent_default_keys``, so a file that never had ``updated_at`` would
+        have grown one on its first save -- the #46 no-growth invariant,
+        arriving through the repository instead of the service layer.
+
+        ``object.__setattr__`` deliberately bypasses that hook: the in-memory
+        value stays fresh, while the key's file-presence remains whatever the
+        source file had.
         """
         object.__setattr__(self, "updated_at", value if value is not None else _utcnow())
 
@@ -423,19 +480,26 @@ class Entry(ABC):
         # whether the key reaches the FILE is decided once, centrally, in
         # _frontmatter_for_file.
         meta["importance"] = self.importance
-        # created_at/updated_at: from_frontmatter() reads them off the file but
+        # created_at/updated_at: from_frontmatter() reads them off the file, but
         # _base_frontmatter() never re-emitted them, so an explicit key in the
         # source was silently dropped on the next save (#151). Emitted only for
-        # entries whose file actually carried the key: unlike `importance`
-        # there is no meaningful default to compare against -- a pristine
-        # instance's timestamp is just its construction time, so the
-        # _frontmatter_for_file value guard could not tell "still the default"
-        # from "read from the file", and a file that never had the keys would
-        # grow them (#46). An explicit assignment clears the key from
-        # _absent_default_keys (see __setattr__) and is written from then on.
-        for ts_key in ("created_at", "updated_at"):
-            if ts_key not in self._absent_default_keys:
-                meta[ts_key] = getattr(self, ts_key)
+        # an entry loaded from a file that carried them (or assigned since --
+        # see __setattr__): unlike `importance` there is no meaningful default
+        # to compare against -- a pristine instance's timestamp is just its
+        # construction time -- so a file that never had the keys must not grow
+        # them, and neither must a newly created entry (#46).
+        #
+        # Serialised with isoformat(): datetime's own str() form is a
+        # space-separated "2026-01-15 00:00:00+00:00" that nothing else in the
+        # project writes, and a value the source file already had is restored
+        # to its original node (and therefore its original style) by
+        # _restyle_like_source, so this only decides the shape of a *changed*
+        # value.
+        if self._source_frontmatter is not None:
+            for ts_key in _TIMESTAMP_KEYS:
+                if ts_key not in self._absent_default_keys:
+                    value = getattr(self, ts_key)
+                    meta[ts_key] = value.isoformat() if isinstance(value, datetime) else value
         if self.lifecycle != "active":
             meta["lifecycle"] = self.lifecycle
         if self.metadata:
