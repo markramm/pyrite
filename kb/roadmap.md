@@ -279,12 +279,21 @@ without asking:
 | Data-loss class, continued | #46 (`update --tags` rewrites frontmatter — found while tagging this pool), [[typed-entries-silently-drop-the-references-frontmatter-field]] | siblings of #15; the PR #35 write-path tests give them a home |
 | Deploy path | #20 (Railway bind host/port) | small; pairs with the packaged web UI |
 | God-object splits | [[split-the-remaining-god-objects-software-kb-plugin-kb-service-index-qa-service]], [[split-mcp-server-module]], [[split-entries-endpoint]] | Opus, one object per PR, sequenced; a different set of capabilities — large-diff review, behaviour-preserving refactor, the cold read at scale |
+| MCP read-tier ergonomics (hallway test #56–#68, minus #56 which is milestone) | #57 #58 #59 #62 #64 #65 #66 #67 #68 | Sonnet mostly; the read tier is the agent surface, and the report's §2.12 says what not to touch (`kb/notes/hallway-test-read-tier-mcp-2026-09-18`) |
+| MCP write-tier correctness (hallway test tier 2) | #95 `kb_bulk_create` not best-effort, #96 `add_type` overwrites silently, #97 `kb_link` accepts a missing target (the mechanism behind #64) | Sonnet; each has a reproduction and acceptance in the issue |
 | Quality pool for the retro (tagged `quality`) | [[tests-leak-open-pyritedb-connections-into-temporarydirectory-teardown]], [[worktree-no-lost-commits-invariant]], [[index-rebuild-from-files-equivalence-test]], [[regression-test-links-fts-quoting]], [[cli-output-is-inconsistent-when-stdout-is-not-a-tty]] | Sonnet; pre-groomed stock so the retro's quality theme has candidates before it has evidence of its own |
 
 Left out on purpose: the JI UI features and the review surface (0.26 — the
 thesis screen deserves its own release), anything `needs-design`.
 
 ### Not in 0.24.2
+
+**The journalism-investigation plugin's tool bugs** — #61 (`correlate` groups
+nothing), #92/#93 (edges written as index-only ghosts with metadata strings the
+read tools never see), #94 (`investigation_create_*` fails on a runtime-
+registered KB), #98 — are milestone **0.25** (maintainer, 2026-09-18): real,
+reproduced, and a plugin's problem, not the core's; they need the registry
+single-source-of-truth item first anyway.
 
 The GitHub-issues importer (ADR-0033 consequence) — not a priority; the
 pyrite-dev skill checks GitHub directly instead. New UI surface of any kind.
