@@ -7,7 +7,7 @@ tags:
 - dependencies
 - chore
 kind: task
-status: in_progress
+status: done
 priority: medium
 assignee: agent:pyrite-worker
 effort: S
