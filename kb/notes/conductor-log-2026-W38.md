@@ -1286,3 +1286,142 @@ two new `review.md` rules in retro 2 — verify-red on *every* regression-named
 test, and no number in a report that was not measured under one interpreter
 with the tree pinned. #69 is back at `e0c7f704` and was **redispatched**, so my
 local rebase of it is moot; the branch is the worker's again.
+
+## Process notes for the retro — from the 05:50Z/06:45Z/07:10Z session (nested conductor)
+
+Written at the maintainer's request at the close of the session that ran tick 1
+(05:50Z dispatch), absorbed PR #69 (06:45Z) and redispatched it after a cold
+read (07:10Z). Scoped to evidence **only this session can supply** — what
+happened inside its own loop — rather than re-deriving what retro 1 and retro 2
+already cover. Issue numbers are the durable record; this is the reasoning
+behind them.
+
+### 1. The cold read paid for itself, and the trigger that fired was the weakest one
+
+Metric for the retro's "cold-read findings that changed a PR / cold reads
+dispatched" row: **1 of 1 changed the PR's disposition**, from *flip to ready*
+to *do not merge*. It found two data-loss regressions
+(`--importance 5` silently dropped — a regression of commit 7783335, reachable
+from CLI, REST, MCP and the kanban reorder; `deepcopy` destroying YAML anchors
+and merge keys) that the conductor's own review had missed after reading the
+same diff, re-running the suite, and verifying all three acceptance criteria by
+hand.
+
+The part worth generalising is **why** the conductor missed them. The branch
+added a test class named `TestAlwaysWrittenDefaultsStillWork`, documented as
+guarding exactly the `importance`/`rank` hazard. Its three cases covered only
+the situations that already worked. The conductor read that class and was
+reassured *by its name*. A well-named test over an uncovered case is worse than
+no test: it converts an unexamined risk into an apparently examined one, and it
+defeats a reviewer who is checking whether a risk was considered rather than
+whether it was covered.
+
+So the trigger that mattered here was not "touches `pyrite/storage/`" but
+**"the worker's Unsure is non-empty"** — the worker had flagged the
+`_absent_default_keys` design as "the decision most likely to have gone another
+way". That is the cheapest and most specific of review.md's five triggers and
+the easiest to wave through. Suggestion: when a worker's Unsure names a
+*design decision* (not a style choice), the cold read should be mandatory
+rather than discretionary, and the reviewer's brief should quote that Unsure
+verbatim as its first question.
+
+### 2. Verifying a subagent's report is not optional, in either direction
+
+Three claims from model output were checked against measurement this session.
+Two were wrong, and they were wrong in *opposite* directions:
+
+| claim | source | held up? |
+|---|---|---|
+| "flake is pre-existing, confirmed by stashing" (#78) | worker | **No** — 0/4 reproductions on `dev`, 2/4 on the branch |
+| "write path not slower, 0.182s vs 0.214s" | **the conductor itself** | **No** — compared two interpreters (#101) |
+| "+71% load / +99% save" | cold reviewer | **No** — within noise under one interpreter |
+| "no reader of `meta['body']`/`file_path`" | worker | Yes — independently confirmed, 50 `from_frontmatter` impls |
+| two data-loss regressions | cold reviewer | Yes — both reproduced before acting |
+
+The rule in the skill is "a worker's report is model output; verify with the
+diff and the suite". This window says it must extend to **the reviewer's report
+and the conductor's own published numbers**. The conductor's error was the most
+costly of the three, because it was published first, stated confidently, and
+would have been inherited by the next tick as settled fact. A conductor that
+verifies its workers but not itself has moved the trust problem, not solved it.
+
+### 3. The one finding a reviewer structurally cannot make: CI green on untested code (#91)
+
+The worker's four code commits were never pushed. CI classified the remote
+branch — which contained one markdown file — as docs-only, **skipped the test
+job, and reported `gate: success`**. Every signal a conductor normally trusts
+said the PR was fine.
+
+This is invisible to a cold reviewer (it reads a diff, not a remote) and
+invisible to the worker (its local suite passed). Only the conductor, standing
+between the branch and the PR, is positioned to catch it, and only if it
+compares `git rev-parse HEAD` against `origin/<branch>` *before* reading
+`gh pr checks`. The second half, found later: a `workflow_dispatch` run does
+**not** attach to a PR's required checks, so a green manual run leaves
+`mergeStateStatus: UNKNOWN` and can be mistaken for readiness.
+
+The generalisable form, worth a line in review.md above the checklist: **a
+green check is a claim about a commit, so identify the commit before believing
+the check.**
+
+### 4. A measurement trap built into the worktree workflow (#101)
+
+`scripts/new-worktree.sh` gives each worktree its own `.venv`, and those venvs
+can resolve different Python versions (3.11.14 in the branch worktree, 3.13.7
+in the main checkout). The obvious way to A/B a change — run the benchmark
+here, then there — therefore compares **two interpreters**. Both the conductor
+and the cold reviewer fell into this independently on the same day and produced
+contradictory numbers; neither survived a controlled re-run.
+
+Second trap, which cost two further attempts: with the package installed in the
+venv, `cd`-ing into a source tree does not change module resolution. A harness
+that prints the resolved module path catches this instantly; one that does not
+will silently measure the same code twice and report a reassuring null result.
+
+This is a property of the workflow, not of one agent's carelessness — which is
+the argument for fixing it in `review.md` rather than trusting habit.
+
+### 5. Scope discipline: this session ran ~1h46m for a one-tick request
+
+The maintainer flagged it, and it is a finding rather than an apology. The tick
+proper (health, choose, dispatch, log) took ~20 minutes. The worker then
+reported *inside the same tick*, and the session treated that as "the absorb
+lane applies now" instead of "that is the next tick's work". That single
+decision consumed the remaining ~80 minutes: diff review, repeated suite runs,
+8 full-suite runs chasing a flake rate, a ~19-minute cold read, and a
+re-benchmark after the cold read corrected the conductor.
+
+The work was worth doing — it stopped two data-loss regressions from merging —
+but "worth doing" and "in scope for this tick" are different questions, and the
+session conflated them. The skill's own three-lane model says a tick absorbs
+the **previous** set while dispatching the **current** one; a tick that does
+both to the same branch has no natural stopping point, because each next step
+is locally justified.
+
+Concrete suggestion, cheap to apply: **a tick's absorb lane operates only on
+branches that were already reported when the tick began.** A worker that
+reports mid-tick is next tick's absorb. That preserves the pipelining the skill
+already describes and gives the loop host a predictable tick duration, which is
+what makes an unattended loop safe to leave running.
+
+### 6. Cross-session collisions (already #111) — one addition
+
+Confirming from this side: this session was the 07:10Z half of that collision
+and never saw the other session, since it had no reason to re-read a log it had
+itself appended to. Two mechanical notes for whoever implements the fix:
+
+- **File order in the tick log does not match time order.** In this file the
+  07:10Z entry sits above the 06:45Z and 07:15Z ones. Any instruction to "read
+  the latest tick" that means "read the tail" is wrong whenever it matters most.
+  `grep '^## Tick' | sort` on the timestamp, not `tail`.
+- **A `reviewing` label is the right claim** because it is visible before any
+  output exists. The reviewing session has, by definition, published nothing
+  during the window in which the collision occurs — so "check for a PR comment
+  first" cannot work, and both sessions here behaved reasonably under that rule.
+
+### What this session did NOT change, deliberately
+
+No ADR accepted or amended, no release prepared, no push to `main`, no repo
+setting touched, and PR #69 was never flipped to ready — it stays draft with
+the defects documented and the worker reworking it. The kept/delegated boundary
+held throughout; the only maintainer-facing asks are the `process` issues above.
