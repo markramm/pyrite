@@ -113,6 +113,23 @@ now gitignored.
 
 **Review lane.** [review.md](review.md), including the cold read.
 
+**Outside contributions jump the queue.** A pull request from anyone but the
+maintainer or Dependabot is reviewed in the tick it appears — before the
+loop's own branches — and brought to the maintainer with the review
+already done (maintainer, 2026-09-18: "they should be brought to my
+attention with a review right away"). The health step lists them first:
+`gh pr list --state open --json number,author,title --jq '.[] | select(.author.login != "markramm" and (.author.login | test("dependabot") | not))'`.
+For each: claim it (`in-review`), `gh pr checkout` into a fresh worktree,
+the full review.md pass with the cold read always on, then a review
+comment on the PR in the template plus a plain-language recommendation —
+merge; request these specific changes; wait for <PR> it conflicts with;
+or, when two PRs fix one issue, which one and why, and what to credit from
+the other. **Never merge it**: merging outside work is the maintainer's;
+the report's "Needs the maintainer" section leads with it, with the
+recommendation in one sentence. Note whether its CI run is
+`action_required` (first-time contributors need the maintainer to approve
+the workflow run) so the maintainer knows the gate has not spoken yet.
+
 **Test lanes, dispatched when the review lane or the release asks for them:**
 - **Exploratory UI testing** — `pyrite-explorer` drives a real browser
   (the Playwright MCP tools or the Claude-in-Chrome extension, whichever the

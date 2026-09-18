@@ -52,6 +52,20 @@ behaviour; error handling that swallows; a public shape (CLI flag, REST
 field, MCP tool argument) that changed without a note; anything the worker
 marked "Unsure".
 
+## Outside contributors' PRs
+
+Same checklist, three differences. The cold read is always on (the author
+is unknown to the loop and the reviewer's job is to be unimpressed). The
+review comment is written for a person who is not on the team: say what
+was checked and what was found, thank them for what is good specifically,
+and ask for changes as a list they can act on without a second round of
+questions. And the outcome is never "merge": it is a recommendation to the
+maintainer — merge as is; merge after these changes; wait for <PR>; or,
+for competing PRs on one issue, which one, why, and what the other one got
+right that should be credited or folded in. Two PRs for #97 arrived twenty
+minutes apart on 2026-09-18; that will happen again now that issues carry
+reproductions.
+
 ## Outcomes
 
 - **Fix it yourself** when it is small and you are sure: commit on the
