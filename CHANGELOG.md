@@ -11,6 +11,18 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Security
 
+- **`web/` dependency bump closes 16 of 19 open Dependabot alerts.** `vite`
+  7.3.1 → 7.3.6 (range pinned to `^6.0.0 || ^7.3.5` so it cannot resolve
+  below the patched line; GHSA-4w7w-66w2-5vf9, GHSA-v2wj-q39q-566r,
+  GHSA-p9ff-h696-f583, GHSA-v6wh-96g9-6wx3, GHSA-fx2h-pf6j-xcff), `svelte`
+  5.53.3 → 5.57.0 (direct bump; six SSR/XSS/ReDoS advisories, patched at
+  5.53.5 and 5.55.7), `postcss` 8.5.6 → 8.5.28, `picomatch` 4.0.3 → 4.0.7,
+  `esbuild` 0.27.3 → 0.28.2 (all three transitive, via `npm update`, no
+  direct pin or override needed). `cookie` (GHSA-pxg6-pf52-xh8x) stays open:
+  it is pinned to `^0.6.0` by `@sveltejs/kit` 2.x, and the fix needs
+  `cookie` ≥0.7.0, which only a breaking `@sveltejs/kit`
+  3.x/`adapter-node`/`adapter-static` major would allow.
+
 - **Private KBs were readable by any logged-in user, and by anonymous
   visitors on an auth-enabled instance.** Per-KB roles (`default_role: none`,
   explicit grants) were enforced on write routes only; every read route —
