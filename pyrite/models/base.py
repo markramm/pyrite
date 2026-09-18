@@ -9,7 +9,7 @@ import re
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from functools import cache
 from pathlib import Path
 from typing import Any, ClassVar
@@ -588,16 +588,38 @@ class Entry(ABC):
 
 
 def parse_datetime(s: Any) -> datetime:
-    """Parse datetime from various formats."""
+    """Parse a frontmatter timestamp into a timezone-aware ``datetime``.
+
+    Accepted forms:
+
+    * ``datetime`` -- an aware value is returned unchanged (its offset kept);
+      a naive one (e.g. an unquoted ``created_at: 2026-01-15T09:00:00``, which
+      ruamel hands back as a naive ``TimeStamp``) is anchored to UTC, so
+      comparisons against ``_utcnow()`` cannot raise ``TypeError``.
+    * ``datetime.date`` -- a bare YAML date (``created_at: 2026-01-15``) is
+      loaded by the YAML parser as a ``date``, not a ``str``. Anchored to
+      midnight **UTC**: every timestamp the model itself *creates* is UTC
+      (``_utcnow``), so a file-authored date must never read back as the
+      load time (#151).
+    * ISO-8601 ``str`` -- a trailing ``Z`` is treated as UTC; a naive string
+      with no offset (e.g. ``2026-01-15T09:00:00``) is anchored to UTC, so
+      comparisons against ``_utcnow()`` cannot raise ``TypeError``.
+    * anything else (missing/empty/unparseable) -- "now" in UTC.
+    """
     if isinstance(s, datetime):
-        return s
+        return s if s.tzinfo is not None else s.replace(tzinfo=UTC)
+    if isinstance(s, date):
+        return datetime(s.year, s.month, s.day, tzinfo=UTC)
     if not s:
         return _utcnow()
     try:
         # Try ISO format
         if isinstance(s, str):
-            s = s.replace("Z", "+00:00")
-            return datetime.fromisoformat(s)
+            s = re.sub(r"Z$", "+00:00", s)
+            parsed = datetime.fromisoformat(s)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed
     except Exception:
         logger.warning("Failed to parse datetime: %s", s, exc_info=True)
     return _utcnow()

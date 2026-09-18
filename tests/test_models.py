@@ -4,12 +4,14 @@ Tests for entry models.
 
 import re
 import tempfile
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from pyrite.exceptions import FrontmatterError
 from pyrite.models import EventEntry
+from pyrite.models.base import parse_datetime
 from pyrite.models.core_types import (
     OrganizationEntry,
     PersonEntry,
@@ -613,6 +615,66 @@ class TestLoadExistingKBs:
         assert actor.id is not None
         assert actor.title is not None
         assert actor.entry_type == "person"
+
+
+class TestParseDatetime:
+    """#151: bare YAML dates must not read back as "now", and naive strings
+    must carry a timezone so comparisons against ``_utcnow()`` are safe."""
+
+    def test_bare_date_is_anchored_to_midnight_utc(self):
+        assert parse_datetime(date(2026, 1, 15)) == datetime(2026, 1, 15, tzinfo=UTC)
+
+    def test_naive_datetime_string_is_anchored_to_utc(self):
+        assert parse_datetime("2026-01-15T09:00:00") == datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
+
+    def test_naive_date_string_is_anchored_to_utc(self):
+        assert parse_datetime("2026-01-15") == datetime(2026, 1, 15, tzinfo=UTC)
+
+    def test_trailing_z_is_utc(self):
+        assert parse_datetime("2026-01-15T09:00:00Z") == datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
+
+    def test_explicit_offset_is_kept(self):
+        parsed = parse_datetime("2026-01-15T09:00:00+02:00")
+        assert parsed.utcoffset() == timedelta(hours=2)
+        assert parsed.hour == 9  # not converted, only anchored when naive
+
+    def test_datetime_passes_through_unchanged(self):
+        aware = datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
+        assert parse_datetime(aware) is aware
+
+    def test_naive_datetime_is_anchored_to_utc(self):
+        naive = datetime(2026, 1, 15, 9, 0)
+        parsed = parse_datetime(naive)
+        assert parsed == datetime(2026, 1, 15, 9, 0, tzinfo=UTC)
+        assert parsed.tzinfo is not None
+
+    def test_loader_hands_back_aware_values(self):
+        """#171 review: exercise the *loader* path, not just constructed values.
+
+        An unquoted timestamp is not a str by the time it reaches us -- ruamel
+        hands back a naive ``TimeStamp`` (or ``datetime``), which is why the
+        constructed-value tests alone missed the most common on-disk form.
+        """
+        from pyrite.models.core_types import get_entry_class
+
+        cls = get_entry_class("note")
+        for raw in ("2026-01-15T09:00:00", "2026-01-15 09:00:00"):
+            text = f"---\nid: t\ntitle: T\ntype: note\ncreated_at: {raw}\n---\n\nbody\n"
+            entry = cls.from_markdown(text)
+            assert entry.created_at is not None, raw
+            assert entry.created_at.tzinfo is not None, raw
+            assert entry.created_at == datetime(2026, 1, 15, 9, 0, tzinfo=UTC), raw
+
+    def test_missing_or_empty_falls_back_to_now_utc(self):
+        for value in (None, ""):
+            parsed = parse_datetime(value)
+            assert parsed.tzinfo is not None
+            assert abs((datetime.now(UTC) - parsed).total_seconds()) < 60
+
+    def test_unparseable_falls_back_to_now_utc(self):
+        parsed = parse_datetime("not-a-date")
+        assert parsed.tzinfo is not None
+        assert abs((datetime.now(UTC) - parsed).total_seconds()) < 60
 
 
 if __name__ == "__main__":
