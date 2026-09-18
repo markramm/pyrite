@@ -97,6 +97,46 @@ class KBService:
             logger.warning("Embedding service initialization failed", exc_info=True)
         return self._embedding_svc
 
+    def _validate_write(self, entry: Entry, kb_name: str, kb_config: KBConfig) -> None:
+        """Refuse a write the KB schema or a plugin validator rejects.
+
+        The same rules `index health` and `schema validate` report after the
+        fact (enum, required, min/max, pattern) are applied before the file is
+        written, on every surface. Without this, `update -f status=bogus`
+        succeeded and drifted the board (75 items once sat on an undeclared
+        status). No kb.yaml means no schema to enforce; plugin validators for
+        the KB type still run through validate_entry.
+        """
+        try:
+            result = kb_config.kb_schema.validate_entry(
+                entry.entry_type,
+                entry.to_frontmatter(),
+                context={
+                    "kb_name": kb_name,
+                    "kb_type": kb_config.kb_type,
+                    "_schema_version": getattr(entry, "_schema_version", 0),
+                },
+            )
+        except Exception:  # a broken validator must not make every write fail
+            logger.warning("Schema validation skipped for %s/%s", kb_name, entry.id, exc_info=True)
+            return
+        errors = result.get("errors") or []
+        if not errors:
+            return
+        parts = []
+        for e in errors:
+            field = e.get("field", "?")
+            rule = e.get("rule", "")
+            got = e.get("got")
+            expected = e.get("expected")
+            if rule == "enum":
+                parts.append(f"{field}: {got!r} is not one of {expected}")
+            elif rule == "required":
+                parts.append(f"{field}: required")
+            else:
+                parts.append(f"{field}: {rule} (expected {expected}, got {got!r})")
+        raise ValidationError(f"Invalid {entry.entry_type} for KB '{kb_name}': " + "; ".join(parts))
+
     def _auto_embed(self, entry_id: str, kb_name: str) -> None:
         """Embed an entry — via background queue if worker is set, else synchronously."""
         if self._embedding_worker is not None:
@@ -276,6 +316,7 @@ class KBService:
         errors = entry.validate()
         if errors:
             raise ValidationError("; ".join(errors))
+        self._validate_write(entry, kb_name, kb_config)
 
         # Create never replaces. Ids are derived from titles, so two entries
         # sharing a title is ordinary -- and used to destroy the first one while
@@ -531,6 +572,9 @@ class KBService:
                 setattr(entry, key, value)
 
         entry.updated_at = datetime.now(UTC)
+
+        # Refuse before anything is written: the file must stay exactly as it was.
+        self._validate_write(entry, kb_name, kb_config)
 
         # Run before_save hooks
         extra = {"old_status": old_status} if old_status else {}
