@@ -1,21 +1,15 @@
 """Tests for Cascade JI compatibility audit and backfill migration."""
 
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_cascade.migration import audit_ji_compat, backfill_ji_fields
+
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
 def db(tmp_path):
     kb_path = tmp_path / "test-kb"
     kb_path.mkdir()
-    config = PyriteConfig(
-        knowledge_bases=[KBConfig(name="test", path=kb_path, kb_type="cascade-timeline")],
-        settings=Settings(index_path=tmp_path / "index.db"),
-    )
     db = PyriteDB(tmp_path / "index.db")
     db.register_kb("test", "cascade-timeline", str(kb_path))
     yield db
@@ -137,17 +131,19 @@ class TestAuditJiCompat:
 
     def test_partial_ji_fields_counted(self, db):
         """Entry with source_refs but no verification_status."""
-        db.upsert_entry({
-            "id": "partial",
-            "kb_name": "test",
-            "title": "Partial",
-            "entry_type": "timeline_event",
-            "date": "2020-01-01",
-            "metadata": {
-                "source_refs": ["[[src-1]]"],
-                "actors": ["Actor A"],
-            },
-        })
+        db.upsert_entry(
+            {
+                "id": "partial",
+                "kb_name": "test",
+                "title": "Partial",
+                "entry_type": "timeline_event",
+                "date": "2020-01-01",
+                "metadata": {
+                    "source_refs": ["[[src-1]]"],
+                    "actors": ["Actor A"],
+                },
+            }
+        )
         result = audit_ji_compat(db, "test")
         assert result["total"] == 1
         assert result["with_source_refs"] == 1
@@ -157,13 +153,15 @@ class TestAuditJiCompat:
 
     def test_ignores_non_timeline_event_types(self, db):
         """Only timeline_event entries are audited."""
-        db.upsert_entry({
-            "id": "actor-1",
-            "kb_name": "test",
-            "title": "An Actor",
-            "entry_type": "actor",
-            "metadata": {},
-        })
+        db.upsert_entry(
+            {
+                "id": "actor-1",
+                "kb_name": "test",
+                "title": "An Actor",
+                "entry_type": "actor",
+                "metadata": {},
+            }
+        )
         db.upsert_entry(_old_event(id="old-1"))
         result = audit_ji_compat(db, "test")
         assert result["total"] == 1  # only the timeline_event

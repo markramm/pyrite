@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from unittest.mock import MagicMock
 
 import pytest
-
 from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
 from pyrite_journalism_investigation.queries import (
     query_claims,
@@ -15,7 +14,6 @@ from pyrite_journalism_investigation.queries import (
     query_sources,
     query_timeline,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,7 +55,6 @@ class TestToolDescriptionsAreConversational:
         return JournalismInvestigationPlugin()
 
     def _all_tools(self, plugin):
-        read = plugin.get_mcp_tools("read")
         write = plugin.get_mcp_tools("write")
         # write includes read, so just use write for the full set
         return write
