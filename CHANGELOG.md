@@ -31,12 +31,14 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Process
 
-- Two skills replace one: `pyrite-dev` is the worker (one theme, one branch,
+- Three skills replace one: `pyrite-dev` is the worker (one theme, one branch,
   one worktree, TDD, a report), `pyrite-conductor` picks work from GitHub
   issues and the roadmap, composes reviewable themes, dispatches a
   `pyrite-worker` agent per theme (Sonnet 5 or Opus 5 by shape of work),
   reviews branches with a `pyrite-reviewer` cold read for risky changes, opens
-  and shepherds PRs, and keeps the repo healthy. A PR is one complete theme.
+  and shepherds PRs, and keeps the repo healthy; `pyrite-meta-conductor`
+  watches the conductor's loops for the constraint and proposes one measured
+  change per run. A PR is one complete theme.
 - ADR-0032 is in force: work happens on feature branches, each in its own
   worktree (`scripts/new-worktree.sh <branch>` sets one up with venv and
   hooks); `dev` takes pull requests only, checks green on top of current
