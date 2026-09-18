@@ -33,6 +33,7 @@ class CRUDMixin:
     def list_entries(
         self,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
         sort_by: str = "updated_at",
@@ -45,6 +46,7 @@ class CRUDMixin:
     ) -> list[dict[str, Any]]:
         """List entries with pagination, optionally filtered by KB, type, tag, status, importance."""
         return self._backend.list_entries(
+            kb_names=kb_names,
             kb_name=kb_name,
             entry_type=entry_type,
             tag=tag,
@@ -60,6 +62,7 @@ class CRUDMixin:
     def count_entries(
         self,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
         status: str | None = None,
@@ -67,6 +70,7 @@ class CRUDMixin:
     ) -> int:
         """Count entries, optionally filtered by KB, type, tag, status, importance."""
         return self._backend.count_entries(
+            kb_names=kb_names,
             kb_name=kb_name,
             entry_type=entry_type,
             tag=tag,

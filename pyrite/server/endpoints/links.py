@@ -9,12 +9,12 @@ no service-layer duplication.
 from fastapi import APIRouter, Depends, Query, Request
 
 from ...services.link_discovery_service import LinkDiscoveryService
-from ..api import get_link_discovery_service, limiter
+from ..api import get_link_discovery_service, limiter, requires_kb_read
 
 router = APIRouter(tags=["Links"])
 
 
-@router.get("/links/discover-neighbors")
+@router.get("/links/discover-neighbors", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("60/minute")
 def discover_neighbors(
     request: Request,
@@ -44,7 +44,7 @@ def discover_neighbors(
     }
 
 
-@router.get("/links/batch-suggest")
+@router.get("/links/batch-suggest", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("20/minute")
 def batch_suggest(
     request: Request,

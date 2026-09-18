@@ -6,13 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...services.kb_service import KBService
 from ...services.search_service import SearchService
-from ..api import get_kb_service, get_search_service, limiter, negotiate_response
+from ..api import (
+    get_kb_service,
+    get_readable_kbs,
+    get_search_service,
+    limiter,
+    negotiate_response,
+    requires_kb_read,
+)
 from ..schemas import SearchResponse, SearchResult
 
 router = APIRouter(tags=["Search"])
 
 
-@router.get("/search", response_model=SearchResponse)
+@router.get("/search", response_model=SearchResponse, dependencies=[Depends(requires_kb_read())])
 @limiter.limit("100/minute")
 def search(
     request: Request,
@@ -37,8 +44,9 @@ def search(
     ),
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Full-text search across knowledge bases."""
+    """Full-text search across the knowledge bases the caller may read."""
     if svc.count_entries() == 0:
         raise HTTPException(
             status_code=503,
@@ -56,6 +64,7 @@ def search(
         fetch_limit = limit * 5 if group_by_kb else limit
 
         results = search_svc.search(
+            kb_names=None if kb else readable,
             query=q,
             kb_name=kb,
             entry_type=type,

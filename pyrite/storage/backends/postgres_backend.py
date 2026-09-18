@@ -163,6 +163,7 @@ class PostgresBackend(BaseBackend):
         self,
         query: str,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tags: list[str] | None = None,
         date_from: str | None = None,
@@ -201,6 +202,13 @@ class PostgresBackend(BaseBackend):
         if kb_name:
             sql += " AND e.kb_name = :kb_name"
             params["kb_name"] = kb_name
+        if kb_names is not None:
+            names = list(kb_names)
+            if names:
+                sql += " AND e.kb_name = ANY(:kb_names)"
+                params["kb_names"] = names
+            else:
+                sql += " AND FALSE"
         if entry_type:
             sql += " AND e.entry_type = :entry_type"
             params["entry_type"] = entry_type

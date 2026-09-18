@@ -98,6 +98,20 @@ class SearchService:
         sanitized = re.sub(r"(\S*[^\w\s]\S*)", r'"\1"', query)
         return sanitized
 
+    @staticmethod
+    def _restrict(
+        results: list[dict[str, Any]], kb_names: set[str] | list[str] | None, limit: int
+    ) -> list[dict[str, Any]]:
+        """Drop results from KBs the caller may not read (semantic/hybrid legs).
+
+        The keyword leg filters in SQL; the vector KNN and the hybrid merge do
+        not take an allowlist, so those legs over-fetch and are filtered here.
+        """
+        if kb_names is None:
+            return results
+        allowed = set(kb_names)
+        return [r for r in results if r.get("kb_name") in allowed][:limit]
+
     def _db_search(self, **kwargs: Any) -> list[dict[str, Any]]:
         """Call ``self.db.search`` and reclassify a raw FTS5 syntax error.
 
@@ -167,6 +181,7 @@ class SearchService:
         state: str | None = None,
         status: str | None = None,
         trace: dict[str, Any] | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -223,7 +238,9 @@ class SearchService:
 
             if mode == SearchMode.SEMANTIC:
                 # Semantic uses original natural language query, not expanded
-                results = self._semantic_search(query, kb_name, limit, offset=offset)
+                fetch = limit * 4 if kb_names is not None else limit
+                results = self._semantic_search(query, kb_name, fetch, offset=offset)
+                results = self._restrict(results, kb_names, limit)
                 if not results:
                     # Semantic returned nothing (commonly: no embeddings).
                     tr["actual_mode"] = "keyword"
@@ -236,7 +253,7 @@ class SearchService:
                     tags,
                     date_from,
                     date_to,
-                    limit,
+                    limit * 4 if kb_names is not None else limit,
                     offset,
                     sanitize,
                     expanded_query=expanded_query,
@@ -245,6 +262,7 @@ class SearchService:
                     status=status,
                     trace=tr,
                 )
+                results = self._restrict(results, kb_names, limit)
             else:
                 # Default: keyword search
                 kw_query = expanded_query
@@ -255,6 +273,7 @@ class SearchService:
                     return self._db_search(
                         query=q,
                         kb_name=kb_name,
+                        kb_names=kb_names,
                         entry_type=entry_type,
                         tags=tags,
                         date_from=date_from,

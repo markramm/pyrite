@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
+### Security
+
+- **Private KBs were readable by any logged-in user, and by anonymous
+  visitors on an auth-enabled instance.** Per-KB roles (`default_role: none`,
+  explicit grants) were enforced on write routes only; every read route —
+  entry by id, list, search, batch read, graph, export, KB info/schema/orient —
+  returned private content, and search and the KB list disclosed it. Read
+  routes now require read on the named KB (404, so a private KB's existence is
+  not disclosed either) and cross-KB routes are filtered to the KBs the caller
+  may read, in SQL for list, count and keyword search. Operator API keys are
+  unaffected (they are the operator's credential). MCP is operator-level and
+  unchanged.
+
 ### Added
 
 - `auto_embed` setting (`PYRITE_AUTO_EMBED=0` to disable): embed entries on

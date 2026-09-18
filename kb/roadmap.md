@@ -216,8 +216,9 @@ GitHub — when working toward a release, check `gh issue list --milestone` and
 - **#9** web: search results never render (the flagship flow on the demo).
 - **#16, #17** entry-id slugs; **#18** `index health` exit code and `-k`;
   **#21** db backup path.
-- One security fix from the release review, tracked privately until it lands;
-  described in the 0.24.2 changelog. It is also a 0.25 pilot prerequisite.
+- ~~One security fix from the release review~~ **done 2026-09-18**: per-KB read
+  scoping — private KBs (`default_role: none`) were readable by any logged-in
+  or anonymous user on read routes; now 404 / filtered. Pilot prerequisite.
 
 ### Workstream 3 — Docs and README
 

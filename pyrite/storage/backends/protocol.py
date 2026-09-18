@@ -42,6 +42,7 @@ class SearchBackend(Protocol):
     def list_entries(
         self,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
         sort_by: str = "updated_at",
@@ -58,6 +59,7 @@ class SearchBackend(Protocol):
     def count_entries(
         self,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
         status: str | None = None,
@@ -80,6 +82,7 @@ class SearchBackend(Protocol):
         self,
         query: str,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tags: list[str] | None = None,
         date_from: str | None = None,

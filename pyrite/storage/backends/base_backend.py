@@ -403,6 +403,7 @@ class BaseBackend(ABC):
     def list_entries(
         self,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
         sort_by: str = "updated_at",
@@ -426,6 +427,8 @@ class BaseBackend(ABC):
                 .join(Tag, EntryTag.tag_id == Tag.id)
                 .filter(Tag.name == tag)
             )
+        if kb_names is not None:
+            query = query.filter(Entry.kb_name.in_(list(kb_names)))
         if kb_name:
             query = query.filter(Entry.kb_name == kb_name)
         if entry_type:
@@ -457,6 +460,7 @@ class BaseBackend(ABC):
     def count_entries(
         self,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tag: str | None = None,
         status: str | None = None,
@@ -473,6 +477,8 @@ class BaseBackend(ABC):
                 .join(Tag, EntryTag.tag_id == Tag.id)
                 .filter(Tag.name == tag)
             )
+        if kb_names is not None:
+            query = query.filter(Entry.kb_name.in_(list(kb_names)))
         if kb_name:
             query = query.filter(Entry.kb_name == kb_name)
         if entry_type:

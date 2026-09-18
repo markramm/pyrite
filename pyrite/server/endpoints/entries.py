@@ -18,9 +18,12 @@ from ...services.kb_service import KBService
 from ..api import (
     get_config,
     get_kb_service,
+    get_readable_kbs,
     get_worktree_resolver,
+    kb_not_found,
     limiter,
     negotiate_response,
+    requires_kb_read,
     requires_kb_tier,
 )
 from ..schemas import (
@@ -47,7 +50,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Entries"])
 
 
-@router.get("/entries", response_model=EntryListResponse)
+@router.get(
+    "/entries", response_model=EntryListResponse, dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def list_entries(
     request: Request,
@@ -62,8 +67,10 @@ def list_entries(
     offset: int = Query(0, ge=0),
     svc: KBService = Depends(get_kb_service),
     resolver=Depends(get_worktree_resolver),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """List entries with pagination."""
+    """List entries with pagination, limited to KBs the caller may read."""
+    kb_names = None if kb else readable
     # Use overlay so user sees their own edits in lists
     auth_user = getattr(request.state, "auth_user", None)
     if auth_user and kb:
@@ -74,6 +81,7 @@ def list_entries(
 
     results = svc.list_entries(
         kb_name=kb,
+        kb_names=kb_names,
         entry_type=entry_type,
         tag=tag,
         sort_by=sort_by,
@@ -85,6 +93,7 @@ def list_entries(
     )
     total = svc.count_entries(
         kb_name=kb,
+        kb_names=kb_names,
         entry_type=entry_type,
         tag=tag,
         status=status,
@@ -264,7 +273,11 @@ def _guess_field_type(field_name: str) -> str:
     return "text"
 
 
-@router.get("/entries/titles", response_model=EntryTitlesResponse)
+@router.get(
+    "/entries/titles",
+    response_model=EntryTitlesResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def list_entry_titles(
     request: Request,
@@ -301,7 +314,11 @@ def list_entry_titles(
     return EntryTitlesResponse(entries=entries)
 
 
-@router.post("/entries/resolve-batch", response_model=ResolveBatchResponse)
+@router.post(
+    "/entries/resolve-batch",
+    response_model=ResolveBatchResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def resolve_batch(
     request: Request,
@@ -319,6 +336,7 @@ def batch_read_entries(
     request: Request,
     body: dict,
     svc: KBService = Depends(get_kb_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
     """Batch-read multiple entries in one call."""
     entries_spec = body.get("entries", [])
@@ -336,13 +354,19 @@ def batch_read_entries(
         )
 
     ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
+    if readable is not None:
+        # Items in KBs the caller may not read are reported as not found.
+        ids = [(eid, kb) for eid, kb in ids if kb in readable]
     results = svc.get_entries(ids)
 
     if fields_param:
         results = [{k: r[k] for k in fields_param if k in r} for r in results]
 
     found_ids = {(r.get("id"), r.get("kb_name")) for r in results}
-    not_found = [{"entry_id": eid, "kb_name": kb} for eid, kb in ids if (eid, kb) not in found_ids]
+    requested = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
+    not_found = [
+        {"entry_id": eid, "kb_name": kb} for eid, kb in requested if (eid, kb) not in found_ids
+    ]
 
     resp_data = {"entries": results, "found": len(results), "not_found": not_found}
     neg = negotiate_response(request, resp_data)
@@ -351,7 +375,11 @@ def batch_read_entries(
     return resp_data
 
 
-@router.get("/entries/wanted", response_model=WantedPagesResponse)
+@router.get(
+    "/entries/wanted",
+    response_model=WantedPagesResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def list_wanted_pages(
     request: Request,
@@ -376,7 +404,9 @@ def list_wanted_pages(
     return WantedPagesResponse(count=len(result), pages=result)
 
 
-@router.get("/entries/resolve", response_model=ResolveResponse)
+@router.get(
+    "/entries/resolve", response_model=ResolveResponse, dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def resolve_entry(
     request: Request,
@@ -435,7 +465,7 @@ def resolve_entry(
 # =============================================================================
 
 
-@router.get("/entries/export")
+@router.get("/entries/export", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("30/minute")
 def export_entries(
     request: Request,
@@ -577,7 +607,9 @@ async def import_entries(
 # =============================================================================
 
 
-@router.get("/entries/{entry_id}", response_model=EntryResponse)
+@router.get(
+    "/entries/{entry_id}", response_model=EntryResponse, dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def get_entry(
     request: Request,
@@ -587,6 +619,7 @@ def get_entry(
     fields: str | None = Query(None, description="Comma-separated fields to return"),
     svc: KBService = Depends(get_kb_service),
     resolver=Depends(get_worktree_resolver),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
     """Get entry by ID."""
     # Use overlay so user sees their own edits
@@ -607,6 +640,9 @@ def get_entry(
             result.setdefault("outlinks", [])
             result.setdefault("backlinks", [])
 
+    if result and readable is not None and result.get("kb_name") not in readable:
+        # kb was omitted and the lookup landed in a KB the caller may not read.
+        raise kb_not_found(result.get("kb_name", ""))
     if not result:
         raise HTTPException(
             status_code=404,

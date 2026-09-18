@@ -13,8 +13,10 @@ from ..api import (
     get_export_service,
     get_kb_registry,
     get_kb_service,
+    get_readable_kbs,
     limiter,
     negotiate_response,
+    requires_kb_read,
     requires_tier,
 )
 from ..schemas import KBHealthResponse, KBInfo, KBListResponse
@@ -52,9 +54,12 @@ def _kb_to_info(kb: dict) -> KBInfo:
 def list_kbs(
     request: Request,
     registry: KBRegistryService = Depends(get_kb_registry),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """List all knowledge bases."""
+    """List the knowledge bases the caller may read."""
     kbs_data = registry.list_kbs()
+    if readable is not None:
+        kbs_data = [kb for kb in kbs_data if kb.get("name") in readable]
     kbs = [_kb_to_info(kb) for kb in kbs_data]
     resp_data = {"kbs": [kb.model_dump() for kb in kbs], "total": len(kbs)}
     neg = negotiate_response(request, resp_data)
@@ -63,7 +68,7 @@ def list_kbs(
     return KBListResponse(kbs=kbs, total=len(kbs))
 
 
-@router.get("/kbs/{kb_name}", response_model=KBInfo)
+@router.get("/kbs/{kb_name}", response_model=KBInfo, dependencies=[Depends(requires_kb_read())])
 @limiter.limit("100/minute")
 def get_kb(
     kb_name: str,
@@ -79,7 +84,11 @@ def get_kb(
     return _kb_to_info(kb)
 
 
-@router.get("/kbs/{kb_name}/health", response_model=KBHealthResponse)
+@router.get(
+    "/kbs/{kb_name}/health",
+    response_model=KBHealthResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def kb_health(
     kb_name: str,
@@ -97,7 +106,7 @@ def kb_health(
     return KBHealthResponse(**result)
 
 
-@router.get("/kbs/{kb_name}/schema")
+@router.get("/kbs/{kb_name}/schema", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("100/minute")
 def get_kb_schema(
     kb_name: str,
@@ -115,7 +124,7 @@ def get_kb_schema(
     return schema.to_agent_schema()
 
 
-@router.get("/kbs/{kb_name}/orient")
+@router.get("/kbs/{kb_name}/orient", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("60/minute")
 def orient_kb(
     kb_name: str,

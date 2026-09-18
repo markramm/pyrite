@@ -442,6 +442,8 @@ async def verify_api_key(
     # 3. Anonymous tier
     if config.settings.auth.enabled and config.settings.auth.anonymous_tier:
         request.state.api_role = config.settings.auth.anonymous_tier
+        # Not an operator key: per-KB roles apply (a private KB is hidden).
+        request.state.anonymous = True
         return
 
     # 4. No auth configured → admin (existing behavior)
@@ -482,12 +484,12 @@ async def _resolve_kb_name(request: Request) -> str | None:
     if kb:
         return kb
 
-    # 2. Path param (used by admin KB endpoints like /kbs/{name}/permissions)
-    name = request.path_params.get("name")
+    # 2. Path param: /kbs/{name}/permissions (admin) or /kbs/{kb_name}/... (read)
+    name = request.path_params.get("name") or request.path_params.get("kb_name")
     if name:
         return name
 
-    # 3. Parse request body for "kb" key
+    # 3. Parse request body for "kb" / "kb_name"
     try:
         body = await request.body()
         if body:
@@ -495,7 +497,7 @@ async def _resolve_kb_name(request: Request) -> str | None:
 
             data = json.loads(body)
             if isinstance(data, dict):
-                return data.get("kb")
+                return data.get("kb") or data.get("kb_name")
     except Exception:
         logger.warning("Failed to extract KB from request body", exc_info=True)
 
@@ -553,6 +555,89 @@ async def resolve_effective_kb_role(
 
     auth_service = AuthService(db, config.settings.auth)
     return auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
+
+
+async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> set[str] | None:
+    """The KBs this caller may read, or None when the caller is not scoped.
+
+    Not scoped: global admins, and API-key callers (an API key is the
+    operator's credential, not a peer's). A logged-in user is scoped to the KBs
+    where their effective role (grant → KB default_role → global role) is at
+    least read; an anonymous visitor on an auth-enabled instance is scoped the
+    same way with no grants. Cached on the request.
+    """
+    cached = getattr(request.state, "readable_kbs", _UNSET)
+    if cached is not _UNSET:
+        return cached
+
+    role = getattr(request.state, "api_role", None)
+    auth_user = getattr(request.state, "auth_user", None)
+    anonymous = getattr(request.state, "anonymous", False)
+    result: set[str] | None
+    if role == "admin" or (not auth_user and not anonymous):
+        result = None  # an operator API key, or auth disabled
+    else:
+        from ..services.auth_service import AuthService
+
+        auth_service = AuthService(db, config.settings.auth)
+        user_id = auth_user["id"] if auth_user else None
+        result = set()
+        for kb in config.all_kbs():
+            default_role = resolve_kb_default_role(config, db, kb.name)
+            effective = auth_service.get_kb_role(user_id, kb.name, default_role)
+            if effective is not None and TIER_LEVELS.get(effective, -1) >= TIER_LEVELS["read"]:
+                result.add(kb.name)
+    request.state.readable_kbs = result
+    return result
+
+
+def kb_not_found(kb_name: str) -> HTTPException:
+    """404 for a KB the caller may not read. Not 403: its existence is private too."""
+    return HTTPException(
+        status_code=404,
+        detail={"code": "KB_NOT_FOUND", "message": f"KB '{kb_name}' not found"},
+    )
+
+
+async def assert_kb_readable(
+    request: Request, config: PyriteConfig, db: PyriteDB, kb_name: str | None
+) -> None:
+    """Raise 404 if kb_name is given and the caller may not read it."""
+    if not kb_name:
+        return
+    allowed = await readable_kbs(request, config, db)
+    if allowed is not None and kb_name not in allowed:
+        raise kb_not_found(kb_name)
+
+
+async def get_readable_kbs(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> set[str] | None:
+    """Dependency form of readable_kbs() for routes that span KBs (sync or async)."""
+    return await readable_kbs(request, config, db)
+
+
+def requires_kb_read():
+    """FastAPI dependency: the KB named by the request must be readable by the caller.
+
+    Read-side counterpart of requires_kb_tier("write"). Resolves the KB from
+    `kb` / `kb_name` in query, path or body. Routes that span KBs (no kb given)
+    filter with readable_kbs() instead.
+    """
+
+    async def _check(
+        request: Request,
+        config: PyriteConfig = Depends(get_config),
+        db: PyriteDB = Depends(get_db),
+    ):
+        await assert_kb_readable(request, config, db, await _resolve_kb_name(request))
+
+    return _check
+
+
+_UNSET = object()
 
 
 def requires_kb_tier(tier: str):

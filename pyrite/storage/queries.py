@@ -23,6 +23,7 @@ class QueryMixin:
         self,
         query: str,
         kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
         entry_type: str | None = None,
         tags: list[str] | None = None,
         date_from: str | None = None,
@@ -38,6 +39,7 @@ class QueryMixin:
         """Full-text search across entries using FTS5."""
         return self._backend.search(
             query=query,
+            kb_names=kb_names,
             kb_name=kb_name,
             entry_type=entry_type,
             tags=tags,
