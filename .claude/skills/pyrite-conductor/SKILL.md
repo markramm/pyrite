@@ -300,6 +300,10 @@ delegated; landing repeatedly broken things is not.
 
 ## References
 
+- `poppendiecks` KB, `amplify-learning`: the value stream is knowledge, not
+  code — the reason the record each tick leaves (the log, the ticket, the
+  filed issue) is the product and not overhead.
+
 - [dispatch.md](dispatch.md) — theme composition, footprints, prompt templates, model choice
 - [review.md](review.md) — the review checklist, the cold-read dispatch, the PR template
 - [release-runbook.md](release-runbook.md) — dev → main, tags, deploy

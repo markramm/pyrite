@@ -14,8 +14,13 @@ conductor, its workers, its reviewers and its human. You are not a faster
 conductor. You are the reason next month's conductor is better than this
 month's, and the reason the codebase does not silt up while features land.
 
-The lens is Theory of Constraints (ADR-0019): in any tick there is one lane
-whose queue everyone else waits on. Find it with evidence, fix one thing that
+The premise is the Poppendiecks' (`poppendiecks` KB, `amplify-learning`):
+the primary value stream in software is knowledge, not code — learning is
+what development produces, and waste is anything that impedes learning, not
+merely anything that slows code. A spike whose code is thrown away, a retro
+that costs a tick, a worker that files nine issues instead of fixing them:
+value, by that measure. The lens is Theory of Constraints (ADR-0019): in any
+tick there is one lane whose queue everyone else waits on. Find it with evidence, fix one thing that
 exploits or widens it, and stop. Five process changes at once cannot be
 evaluated; one can. The code-quality theme is the exception that proves the
 rule: it is not a process change, it is the week's maintenance, and it goes
@@ -81,9 +86,31 @@ where the quality theme lives.
 | Docs drift: claims `pyrite-docs` had to fix per batch | whether workers document their own changes |
 | Suite time; slowest tests; files changed in ≥3 PRs this window | where refactoring pays |
 
+## Waste, in the Poppendiecks' seven
+
+Before naming the constraint, walk the window through the seven wastes of
+software (`seven-wastes-of-software` in the `poppendiecks` KB). Each has a
+loop-shaped form and a place the evidence sits; a retro that skips this
+list finds only the waste that was loud.
+
+| Waste | What it looks like in this loop | Where to look |
+|---|---|---|
+| Partially done work | branches with no PR; draft PRs whose worker stopped; specs groomed but never dispatched; a merged change with no docs, no CHANGELOG line, no closed ticket | `gh pr list --draft`, `git branch -r`, the architect's last breakdown vs what was dispatched |
+| Extra features | a worker's diff beyond its acceptance criteria; a theme pulled forward that the release did not need; skill text nobody reads | the diff vs the spec; the pool vs the DoD; skill lines never cited in a tick |
+| Relearning | a tick re-deriving what the last tick knew; a worker rediscovering a gotcha; the same `process` issue filed twice; the host re-reading a PR because the report did not say | tick-log repetition, `gotchas.md` gaps, `Unsure` lines that an earlier report answered |
+| Handoffs | spec → worker → report → review → PR: each hop where context was lost — a redispatch quoting what the spec "did not say", a review that had to re-run what the report claimed | redispatch reasons, review-lane time vs report quality |
+| Task switching | the conductor interleaving review with dispatch mid-tick; the host doing a worker's job; a worker paused for a peer session's tree | tick-log timelines, the host's own transcript |
+| Delays | `BEHIND` waits, gate serialization, a worker idle for a decision, a cron firing missed because the host was busy, a PR waiting on the maintainer | PR timestamps (created → ready → merged), `gh run list` durations, kept-decision queue |
+| Defects | red `dev` pushes, reverts, a bug that reached `dev` and was found by a later worker, a test that lies (passes against nothing) | CI conclusions, issues filed against merged work, `test.fixme`s |
+
+Name the one or two that dominate the window with a number; they usually
+point at the constraint, and the "one process change" should remove waste,
+not add ceremony.
+
 ## Process — the retrospective
 
-1. **Measure** the metrics above over the window (last week, or ten ticks).
+1. **Measure** the metrics above over the window (last week, or ten ticks),
+   and walk the seven wastes.
 2. **What worked.** Say it, with a number: the thing to keep doing is as
    much a finding as the thing to fix, and a retro that only lists faults
    teaches the next conductor to hide them.
@@ -164,5 +191,7 @@ where the quality theme lives.
 - [pyrite-conductor](../pyrite-conductor/SKILL.md) — the loops you watch;
   its tick log and `process` issues are your primary evidence
 - `tcp-skills:hallway-agent-testing` — the stance
+- `poppendiecks` KB: `amplify-learning`, `seven-wastes-of-software`,
+  `eliminate-waste` — the premise and the checklist
 - ADR-0019 (the constraint is review attention), ADR-0032 §3a (the value
   chain: each layer must buy new information), ADR-0033 (where findings go)
