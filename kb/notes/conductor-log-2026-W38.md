@@ -616,3 +616,80 @@ Packages **F** and **G** remain parallel-safe and un-groomed (already specified
 by the parent ticket); **H** is the gate flip and must be last, after F and G are
 green on `dev`. Theme 6 comes after H, and the Dependabot batch lands in that
 same window.
+
+## Tick 2026-09-18T06:45Z — absorb of PR #69 (parallel conductor session)
+
+Written by the nested conductor session that dispatched the
+`fix/cli-write-and-report-correctness` theme (#46, #18, #21) earlier in this
+log. Its worker reported inside the same tick, so the absorb lane ran on it
+immediately. Recorded here because the retro reads this file, not any agent's
+memory — and because two of the findings generalise past the theme.
+
+**Verified, not taken on trust.** Suite re-run in the worktree: `4244 passed,
+68 skipped` vs `4212` on `dev` (+32 tests, 0 failures). Each acceptance
+criterion checked by running it: #46's repro now gives an *empty* diff while a
+genuine tag edit gives a *one-line* diff with inline `[a, b]` style preserved;
+#18 exits 1 when unhealthy, 1 on an unknown KB (not a false clean bill), 0
+under `--no-fail`, valid JSON on stdout and an empty stderr; #21 leaves an
+unrelated cwd untouched.
+
+**The measurement that matters.** A no-op load→save round trip over the whole
+`pyrite` KB — no edit at all — ought to be byte-identical. On `dev` it rewrites
+**768 of 768** entries; on this branch **148 of 766**. An 81% reduction on
+exactly the axis the theme is about. The residual 148 differ only inside
+`links:` (bare-string links expanded to mappings, nested sequences
+re-indented). I suspected link `note:` fields were being dropped, checked it
+directly, and they are **not** — restyling, not data loss. Filed as **#90**
+with the round-trip count itself as the acceptance criterion: that invariant
+caught both this and #46, and would have caught #15.
+
+**Root cause, confirmed independently.** `pyrite/storage/repository.py` was
+injecting `body` and `file_path` into the frontmatter dict it then handed to
+`capture_extra_frontmatter`, which decides "undeclared frontmatter"
+empirically — so two model internals were recorded as extras and written back
+into the file on every save. Removing the injection is the whole fix. Nothing
+reads those keys: zero readers of `meta["body"]`/`meta.get("body")`/`file_path`
+across `pyrite/` and `extensions/`, and every extension `from_frontmatter`
+takes `body` positionally. The exit-code change is safe in-tree too — the only
+in-repo mention of `index health` is one line of prose in a skill.
+
+**Where the worker's report was wrong.** It filed **#78** for a teardown flake
+in `test_api_tiers.py`, asserting it was pre-existing and "confirmed by
+reproducing it with this branch's changes stashed". Measured: **0
+reproductions in 4 full-suite runs on clean `dev`, 2 in 4 on the branch**, plus
+a 5th targeted run that reproduced on the first attempt. The underlying race
+*is* pre-existing — the class-scoped fixture leaves `index.db-shm`/`-wal`
+behind after `close()`, identically on both trees — but the branch takes it
+from never to ~50% under `-n auto`, so the stated confirmation does not hold.
+The obvious suspect is ruled out: the new `_restyle_like_source` deep-copy is
+not a slowdown (200 load+save round trips: 0.182s branch vs 0.214s `dev`).
+Numbers posted to #78. **This is directly relevant to PR #81** ("no test
+leaves a writer running"), which is grooming the same teardown-race class.
+
+*Retro-worthy, and the reason the absorb lane exists:* a worker's
+"pre-existing, unrelated to my change" about a flake it met during its own
+theme is a claim to **measure**, not to accept. It is among the cheapest
+things to get wrong and the most expensive to inherit, because it launders a
+regression into the backlog as somebody else's pre-existing problem.
+
+**Process defect caught in review, worth more than the bug.** The worker's four
+code commits were **never pushed** — only the conductor's spec commit was on
+the remote. CI had therefore classified PR #69 as docs-only, **skipped the
+`test` job, and reported green**. A conductor reading `gh pr checks` without
+comparing local `HEAD` to `origin/<branch>` would have seen a passing PR with
+none of its code tested. The dispatch prompt says "do not open a PR" and this
+worker reasonably read that as "do not push"; the skill does not distinguish
+them. Filed as **#91**. Suggested rule for the review checklist: *before
+reading checks, assert `git rev-parse HEAD == git rev-parse origin/<branch>`* —
+green CI on an unpushed branch is worse than red, because it looks finished.
+
+**Cold read dispatched** (`pyrite-reviewer`, opus) on the triggers
+`pyrite/storage/` + `pyrite/schema/` + a public shape change + a modified
+existing test assertion + a non-empty "Unsure". Its brief names the blast
+radius of `_restyle_like_source` (runs on every write, ~48 entry types) and the
+`_absent_default_keys` interaction with commit 7783335's data-loss fix, and
+tells it explicitly not to treat the conductor's reading of the #78 flake as
+settled.
+
+PR #69 stays **draft** pending the cold read and a genuine CI run on the
+now-pushed code.
