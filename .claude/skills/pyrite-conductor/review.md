@@ -11,7 +11,13 @@ In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 - [ ] git log dev..HEAD --oneline        commits are focused, messages say why, Fixes #N present
 - [ ] git diff dev...HEAD                 READ IT. Every hunk. The report is not the diff.
 - [ ] .venv/bin/pytest tests/ extensions/ -n auto     green, here, now
-- [ ] one new test, fix stashed: `scripts/verify-red.sh <test-node-id> <impl file>...`  -> it fails
+- [ ] fix stashed, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...` — EVERY test
+      named for a regression or a "still works" case, not one at random (PR #69: a class named for the
+      exact regression it reintroduced covered only cases that already passed, and read as tested)
+- [ ] any number in the report (faster, slower, N% fewer rewrites) was measured under ONE interpreter with
+      the source tree pinned — each worktree has its own .venv and they resolve different Pythons; "run it
+      here, then there" compares environments (PR #69: a published "not slower" and a cold read's "+71%"
+      were both 3.11-vs-3.13 artefacts) — or the number is struck from the PR
 - [ ] ruff check . && ruff format --check .
 - [ ] theme complete? nothing in "Left:" that belongs to this PR
 - [ ] CHANGELOG [Unreleased] has a line per user-visible change; KB updated via CLI where the theme touched it

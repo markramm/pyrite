@@ -49,6 +49,18 @@ await review (SKILL.md, "The cap is the review queue"). Each merge puts the
 other open PRs `BEHIND`; a disjoint rebase is conflict-free but still re-runs
 a ~3-minute gate, so past five or six in flight the tick is spent rebasing.
 
+**A footprint has two dimensions: files and the machine.** A theme is
+*machine-heavy* when its acceptance runs a browser suite, loops the full
+suite, starts servers, or loads a model — Playwright packages, "N consecutive
+`-n auto` runs", the smoke layer, embedding work. Disjoint files do not make
+heavy themes disjoint: on 2026-09-18 three Playwright packages plus one
+20-run pytest loop shared a 10-core machine at load average 28, each
+Playwright package took 42 min against package B's 20 alone, and every
+review's suite re-run paid the same tax. **Run at most two machine-heavy
+themes at once**, fill the remaining slots with code-only themes (a CLI fix,
+an MCP tool, docs), and say `heavy: yes|no` in the spec so the next tick can
+count. Reviews re-run suites too: one heavy review counts as a heavy theme.
+
 ## 3. Create the worktree, then dispatch
 
 Once per machine: the conductor's state lives in draft PR bodies and issue
