@@ -832,6 +832,27 @@ class TestSemanticFilterConformance:
         rows = embedded_backend.search_semantic(_near_vector(), kb_name="test", limit=10)
         assert {r["id"] for r in rows} == {"mech", "theme", "task"}
 
+    def test_search_semantic_excludes_archived_by_default(self, embedded_backend):
+        """``include_archived`` is a filter too, and it was the one left behind.
+
+        Unlike the others it is a default *exclusion* rather than a value the
+        caller supplies, which is how it stayed in the keyword branch while
+        every other filter was threaded through — archived entries reached
+        semantic and hybrid results while the contract promised they could not.
+        """
+        backend = embedded_backend
+        backend.upsert_entry(_make_entry("archived-one", lifecycle="archived"))
+        if not backend.upsert_embedding("archived-one", "test", _near_vector(9)):
+            pytest.skip("backend cannot store embeddings (no vector support)")
+
+        rows = backend.search_semantic(_near_vector(), kb_name="test", limit=10)
+        assert {r["id"] for r in rows} == {"mech", "theme", "task"}
+
+        rows = backend.search_semantic(
+            _near_vector(), kb_name="test", limit=10, include_archived=True
+        )
+        assert {r["id"] for r in rows} == {"mech", "theme", "task", "archived-one"}
+
     def test_search_semantic_fills_limit_despite_selective_filter(self, embedded_backend):
         """A selective filter must not cost recall.
 

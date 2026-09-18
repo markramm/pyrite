@@ -268,15 +268,16 @@ class SearchService:
                     kb_name,
                     fetch,
                     offset=offset,
-                    filters={
-                        "entry_type": entry_type,
-                        "tags": tags,
-                        "date_from": date_from,
-                        "date_to": date_to,
-                        "fips": fips,
-                        "state": state,
-                        "status": status,
-                    },
+                    filters=self._leg_filters(
+                        entry_type=entry_type,
+                        tags=tags,
+                        date_from=date_from,
+                        date_to=date_to,
+                        fips=fips,
+                        state=state,
+                        status=status,
+                        include_archived=include_archived,
+                    ),
                     warnings=warnings,
                 )
                 results = self._restrict(results, kb_names, limit)
@@ -301,6 +302,7 @@ class SearchService:
                     status=status,
                     trace=tr,
                     warnings=warnings,
+                    include_archived=include_archived,
                 )
                 results = self._restrict(results, kb_names, limit)
             else:
@@ -408,15 +410,24 @@ class SearchService:
         if not svc.has_embeddings():
             return []
 
-        active = {k: v for k, v in (filters or {}).items() if v}
+        # ``include_archived`` is a default *exclusion*, not a value filter: it
+        # must reach the backend even when False (that is when it does its
+        # work), and it is not what a warning should name — the caller did not
+        # ask for it. Every other filter is sent only when set.
+        supplied = {k: v for k, v in (filters or {}).items() if k != "include_archived" and v}
+        active = dict(supplied)
+        if filters and "include_archived" in filters:
+            active["include_archived"] = filters["include_archived"]
+
         if active and not self._backend_filters_semantic():
+            named = sorted(supplied) or ["the archived-entry exclusion"]
             if warnings is not None:
                 warnings.append(
                     "semantic leg dropped: this backend cannot filter vector search by "
-                    + ", ".join(sorted(active))
+                    + ", ".join(named)
                     + "; results come from the keyword leg only"
                 )
-            logger.warning("semantic leg dropped — backend cannot filter by %s", sorted(active))
+            logger.warning("semantic leg dropped — backend cannot filter by %s", named)
             return []
 
         # sqlite-vec KNN doesn't support SQL OFFSET, so fetch limit+offset
@@ -429,6 +440,36 @@ class SearchService:
             **active,
         )
         return results[offset:]
+
+    @staticmethod
+    def _leg_filters(
+        *,
+        entry_type: str | None = None,
+        tags: list[str] | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        fips: str | None = None,
+        state: str | None = None,
+        status: str | None = None,
+        include_archived: bool = False,
+    ) -> dict[str, Any]:
+        """The one filter set every leg receives (#56).
+
+        Built in one place so the semantic and hybrid call sites cannot drift
+        apart — a filter present in one dict and missing from the other is
+        exactly the class of bug this change exists to close. Adding a filter
+        to search means adding it here, and both legs get it.
+        """
+        return {
+            "entry_type": entry_type,
+            "tags": tags,
+            "date_from": date_from,
+            "date_to": date_to,
+            "fips": fips,
+            "state": state,
+            "status": status,
+            "include_archived": include_archived,
+        }
 
     def _backend_filters_semantic(self) -> bool:
         """Does this backend's vector leg honour the keyword leg's filters?
@@ -460,6 +501,7 @@ class SearchService:
         status: str | None = None,
         trace: dict[str, Any] | None = None,
         warnings: list[str] | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """
         Hybrid search using Reciprocal Rank Fusion (RRF).
@@ -487,6 +529,7 @@ class SearchService:
             fips=fips,
             state=state,
             status=status,
+            include_archived=include_archived,
         )
 
         # Try to get semantic results — filtered on the vector leg itself, so
@@ -495,15 +538,16 @@ class SearchService:
             query,
             kb_name,
             limit=fetch_size,
-            filters={
-                "entry_type": entry_type,
-                "tags": tags,
-                "date_from": date_from,
-                "date_to": date_to,
-                "fips": fips,
-                "state": state,
-                "status": status,
-            },
+            filters=self._leg_filters(
+                entry_type=entry_type,
+                tags=tags,
+                date_from=date_from,
+                date_to=date_to,
+                fips=fips,
+                state=state,
+                status=status,
+                include_archived=include_archived,
+            ),
             warnings=warnings,
         )
 

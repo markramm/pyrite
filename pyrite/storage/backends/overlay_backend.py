@@ -358,6 +358,7 @@ class OverlaySearchBackend:
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         # For V1, semantic search from main only. Filters pass straight through
         # so the overlay honours them exactly as main does (#56).
@@ -373,6 +374,7 @@ class OverlaySearchBackend:
             fips=fips,
             state=state,
             status=status,
+            include_archived=include_archived,
         )
 
     def has_embeddings(self) -> bool:

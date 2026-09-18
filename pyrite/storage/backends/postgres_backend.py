@@ -335,6 +335,7 @@ class PostgresBackend(BaseBackend):
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """KNN over pgvector, honouring the same filters as ``search`` (#56).
 
@@ -349,6 +350,11 @@ class PostgresBackend(BaseBackend):
             WHERE e.embedding IS NOT NULL
         """
         params: dict[str, Any] = {"vec": vec_str}
+        if not include_archived:
+            # Character for character the predicate ``search`` uses on this
+            # backend (see the keyword leg above): an archived entry must not
+            # enter a fused result via the vector side (#56).
+            sql += " AND COALESCE(e.lifecycle, 'active') != 'archived'"
         if kb_name:
             sql += " AND e.kb_name = :kb_name"
             params["kb_name"] = kb_name

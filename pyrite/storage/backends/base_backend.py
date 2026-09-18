@@ -572,6 +572,7 @@ class BaseBackend(ABC):
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]: ...
 
     @abstractmethod

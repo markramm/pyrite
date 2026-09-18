@@ -336,6 +336,7 @@ class SQLiteBackend(BaseBackend):
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """KNN over ``vec_entry``, filtered by the same predicates as ``search``.
 
@@ -364,7 +365,7 @@ class SQLiteBackend(BaseBackend):
             return []
         blob = self._embedding_to_blob(embedding)
 
-        where, params = self._semantic_filter_sql(
+        where, params, selective = self._semantic_filter_sql(
             kb_name=kb_name,
             entry_type=entry_type,
             tags=tags,
@@ -373,6 +374,7 @@ class SQLiteBackend(BaseBackend):
             fips=fips,
             state=state,
             status=status,
+            include_archived=include_archived,
         )
 
         # The KNN k-set is materialised in a CTE and its size carried on every
@@ -403,7 +405,10 @@ class SQLiteBackend(BaseBackend):
             )
             SELECT COUNT(*) FROM knn
         """
-        k = min(limit * 3 if (kb_name or where) else limit * 2, _SQLITE_VEC_MAX_K)
+        # Over-fetch more when a caller-supplied filter may cull the k nearest.
+        # The archived exclusion is not counted: it applies to every search, so
+        # treating it as a filter would triple the budget of every query.
+        k = min(limit * 3 if selective else limit * 2, _SQLITE_VEC_MAX_K)
         results: list[dict[str, Any]] = []
         while True:
             rows = self._raw_conn.execute(sql, [blob, k, *params]).fetchall()
@@ -444,15 +449,26 @@ class SQLiteBackend(BaseBackend):
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
-    ) -> tuple[str, list[Any]]:
+        include_archived: bool = False,
+    ) -> tuple[str, list[Any], bool]:
         """Build the WHERE fragment shared by the semantic leg and ``search``.
 
         Deliberately mirrors the predicates in :meth:`search` one for one — the
         two legs are fused, so any divergence is a filter the caller asked for
         and did not get.
+
+        Returns ``(sql, params, selective)``. ``selective`` says whether any
+        *caller-supplied* filter is present; the archived exclusion does not
+        count, because it is the default on both legs and sizing every KNN
+        budget as if it were a filter would triple the work of an ordinary
+        search.
         """
         sql = ""
         params: list[Any] = []
+        if not include_archived:
+            # Same default exclusion the keyword leg applies (#56): an archived
+            # entry must not enter a fused result via the vector side.
+            sql += " AND COALESCE(e.lifecycle, 'active') != 'archived'"
         if kb_name:
             sql += " AND e.kb_name = ?"
             params.append(kb_name)
@@ -487,7 +503,8 @@ class SQLiteBackend(BaseBackend):
         if status:
             sql += " AND e.status = ?"
             params.append(status)
-        return sql, params
+        selective = any((kb_name, entry_type, date_from, date_to, tags, fips, state, status))
+        return sql, params, selective
 
     def has_embeddings(self) -> bool:
         if not self.vec_available:

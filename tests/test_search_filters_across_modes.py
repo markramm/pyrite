@@ -542,3 +542,77 @@ def test_sqlite_declares_filtered_semantic(svc):
     from pyrite.storage.backends.capabilities import BackendCapability
 
     assert BackendCapability.FILTERED_SEMANTIC in type(svc.db.backend).capabilities
+
+
+# =========================================================================
+# include_archived — the one filter that never left the keyword branch
+# =========================================================================
+
+
+@pytest.fixture
+def archived_svc(stub_embeddings):
+    """One active and one archived entry, both embedded and both FTS matches.
+
+    ``lifecycle`` is not a column the caller filters by value; it is a default
+    exclusion the keyword leg has always applied. If the vector leg does not
+    apply it too, an archived entry reaches semantic and hybrid results — which
+    contradicts the contract this change writes, that every filter holds on
+    every leg.
+    """
+    import pyrite.services.embedding_service as es
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db = PyriteDB(Path(tmpdir) / "archived.db")
+        if not db.vec_available:
+            db.close()
+            pytest.skip("sqlite-vec not available")
+        db.register_kb("test-kb", KBType.RESEARCH, "/tmp/test-kb")
+
+        embedder = es.EmbeddingService(db)
+        for entry_id, lifecycle in (("live-one", "active"), ("gone-one", "archived")):
+            db.upsert_entry(
+                {
+                    "id": entry_id,
+                    "kb_name": "test-kb",
+                    "entry_type": "note",
+                    "title": f"Detention note {entry_id}",
+                    "summary": "a detention note",
+                    "body": "detention accountability note",
+                    "tags": [],
+                    "sources": [],
+                    "links": [],
+                    "lifecycle": lifecycle,
+                }
+            )
+            db.backend.upsert_embedding(entry_id, "test-kb", embedder.embed_text(entry_id))
+        assert db.backend.has_embeddings()
+        yield SearchService(db)
+        db.close()
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_archived_entries_are_excluded_by_default_in_every_mode(archived_svc, mode):
+    """The default exclusion must hold on the vector leg too (#56)."""
+    results = archived_svc.search("detention", kb_name="test-kb", mode=mode, limit=10)
+    assert _ids(results) == {"live-one"}, f"mode={mode} leaked an archived entry"
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_include_archived_returns_them_in_every_mode(archived_svc, mode):
+    """Guard against over-filtering: asking for archived entries gets them."""
+    results = archived_svc.search(
+        "detention", kb_name="test-kb", mode=mode, limit=10, include_archived=True
+    )
+    assert _ids(results) == {"live-one", "gone-one"}, f"mode={mode} dropped an archived entry"
+
+
+def test_semantic_leg_alone_excludes_archived(archived_svc):
+    """Pinned at the backend boundary, like the other filters."""
+    backend = archived_svc.db.backend
+    embedding = _StubEmbedder().embed_text("detention")
+
+    rows = backend.search_semantic(embedding, kb_name="test-kb", limit=10)
+    assert {r["id"] for r in rows} == {"live-one"}
+
+    rows = backend.search_semantic(embedding, kb_name="test-kb", limit=10, include_archived=True)
+    assert {r["id"] for r in rows} == {"live-one", "gone-one"}

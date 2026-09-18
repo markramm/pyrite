@@ -138,6 +138,7 @@ class SearchBackend(Protocol):
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """KNN search over stored embeddings, honouring the same filters as
         :meth:`search`.
