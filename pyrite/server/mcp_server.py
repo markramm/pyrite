@@ -320,7 +320,9 @@ class PyriteMCPServer:
         fields = args.get("fields")
         include_body = args.get("include_body", False)
         # Anything the search could not do as asked lands here; omitted from the
-        # response when empty so the happy path costs an agent no tokens (#56).
+        # response when empty so the happy path costs an agent no tokens, and so
+        # an agent can test for the key's presence. See SearchService.search's
+        # docstring, "what a search response owes its caller" (#56).
         warnings: list[str] = []
         try:
             results = self.search_svc.search(

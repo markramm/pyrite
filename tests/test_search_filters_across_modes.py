@@ -411,13 +411,20 @@ def test_rest_search_endpoint_honours_type_filter_in_hybrid(rest_client):
 
 
 def test_rest_search_omits_warnings_on_the_happy_path(rest_client):
-    """``warnings`` is null/absent when every filter was applied everywhere."""
+    """``warnings`` is *absent* — not null — when every filter was applied.
+
+    One convention across the three surfaces: MCP omits the key, the CLI
+    prints nothing, and REST must not serialise ``"warnings": null``. The
+    sentence that defines it lives in ``SearchService.search``'s docstring;
+    a caller tests ``"warnings" in response``, and a null would make that
+    true while meaning the opposite.
+    """
     resp = rest_client.get(
         "/api/search",
         params={"q": "detention", "kb": "test-kb", "mode": "hybrid", "type": "theme"},
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json().get("warnings") in (None, [])
+    assert "warnings" not in resp.json(), resp.json()
 
 
 def test_rest_search_reports_a_dropped_leg_in_warnings(rest_client, svc_db, monkeypatch):

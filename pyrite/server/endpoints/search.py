@@ -19,7 +19,19 @@ from ..schemas import SearchResponse, SearchResult
 router = APIRouter(tags=["Search"])
 
 
-@router.get("/search", response_model=SearchResponse, dependencies=[Depends(requires_kb_read())])
+# ``response_model_exclude_none``: the happy path must not serialise
+# ``"warnings": null``. One convention across every surface — MCP omits the key,
+# the CLI prints nothing, REST omits it — so a caller can test ``"warnings" in
+# response`` and get the right answer. See ``SearchService.search``'s docstring
+# for what a search response owes its caller (#56). The web client already
+# declares the nullable result fields optional (web/src/lib/api/types.ts), so
+# omitting them rather than nulling them matches the contract it was written to.
+@router.get(
+    "/search",
+    response_model=SearchResponse,
+    response_model_exclude_none=True,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def search(
     request: Request,
@@ -59,7 +71,8 @@ def search(
 
     tag_list = tags.split(",") if tags else None
     # Anything the search could not do as asked (today: a filter a backend's
-    # vector leg cannot honour). Omitted from the response when empty (#56).
+    # vector leg cannot honour). Omitted from the response when empty -- see the
+    # route decorator above and SearchService.search's docstring (#56).
     warnings: list[str] = []
 
     try:

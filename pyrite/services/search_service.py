@@ -211,10 +211,20 @@ class SearchService:
                 path; a caller that ignores it still gets correctly filtered
                 results, just without knowing a leg was dropped.
 
-        Every filter — ``entry_type``, ``tags``, ``date_from``/``date_to``,
-        ``fips``, ``state``, ``status`` — is applied on **every** leg of
-        every mode. Before #56 the vector leg ran unfiltered and the fused
-        result silently contained entries the filter excluded.
+        **What a search response owes its caller** (#56) — the one statement
+        of the convention; the REST schema, the REST route and the ``kb_search``
+        tool description point here rather than restating it:
+
+        1. Every filter — ``entry_type``, ``tags``, ``date_from``/``date_to``,
+           ``fips``, ``state``, ``status``, ``include_archived`` — is applied on
+           **every** leg of every mode. Before #56 the vector leg ran unfiltered
+           and the fused result silently contained entries the filter excluded.
+        2. A leg that cannot honour a filter is dropped, never run unfiltered.
+        3. A dropped leg is always named in ``warnings``. Silence means every
+           filter was applied on every leg that ran, so an empty ``warnings``
+           is *absent* on every surface — the MCP payload omits the key, REST
+           omits it (``response_model_exclude_none``), the CLI prints nothing.
+           A caller may therefore test presence, never truthiness of a null.
 
         Returns:
             List of matching entries with snippets and rank

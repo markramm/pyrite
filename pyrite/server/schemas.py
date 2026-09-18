@@ -85,8 +85,11 @@ class SearchResponse(BaseModel):
     results: list[SearchResult]
     #: Anything the search could not do as asked — today, a filter a backend's
     #: vector leg cannot honour, which costs the semantic leg entirely rather
-    #: than returning rows that violate the filter. ``None`` (and omitted from
-    #: the JSON) when every filter was applied on every leg that ran (#56).
+    #: than returning rows that violate the filter. ``None`` here, and *omitted
+    #: from the JSON* — the route sets ``response_model_exclude_none`` — when
+    #: every filter was applied on every leg that ran. See
+    #: ``SearchService.search``'s docstring, "what a search response owes its
+    #: caller", for the convention this follows (#56).
     warnings: list[str] | None = None
 
 
