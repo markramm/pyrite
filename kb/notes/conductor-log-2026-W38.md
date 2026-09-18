@@ -693,3 +693,76 @@ settled.
 
 PR #69 stays **draft** pending the cold read and a genuine CI run on the
 now-pushed code.
+
+## Tick 2026-09-18T07:10Z — cold read on PR #69, and a redispatch
+
+The cold read came back on `fix/cli-write-and-report-correctness` and changed
+the disposition from "ready to flip" to "do not merge". It found two data-loss
+regressions the conductor's own review had missed, and corrected a measurement
+the conductor had already published. Both are recorded here because the retro's
+subject is the process, and this tick is evidence about what the review lane
+catches and what it does not.
+
+**Two regressions, both reproduced by the conductor before acting.** A
+reviewer's report is model output on the same terms as a worker's.
+
+1. **`--importance 5` is a silent no-op** — a straight regression of commit
+   7783335's data-loss fix. `_absent_default_keys` is recorded at load and
+   never invalidated on assignment, and `update_entry` does a plain `setattr`,
+   so an explicit set *to the default value* is indistinguishable from "never
+   set". The write reports `{"updated": true}` and persists nothing. Reachable
+   from the CLI, REST `PUT`/`PATCH`, MCP `entry_update`, and the software-kb
+   reorder (which legitimately computes `rank=0`). Same bug for `rank`.
+2. **`copy.deepcopy` of the ruamel `CommentedMap` destroys YAML anchors and
+   merge keys**, emitting a duplicate key that a strict loader rejects. `dev`
+   round-trips the same input losslessly, so it is introduced, not inherited.
+
+The shapes are worth naming: the theme fixed "a write changed something you did
+not ask for" and introduced "a write did **not** change something you
+explicitly asked for". Both silent, both reporting success. The common cause is
+**inferring intent from load-time state** instead of recording whether a field
+was assigned — the redispatch says so, and prefers a dirty-field signal over
+the minimal patch.
+
+**The test that made it look safe.** `TestAlwaysWrittenDefaultsStillWork` is
+named for exactly regression 1 and covers only the cases that already work (two
+in-memory constructions, and a file that *already has* the key). The failing
+case is absent. It would have landed looking tested, which is worse than an
+obvious gap — and it is the strongest argument yet for the cold read as a
+standing trigger rather than a judgement call, because the conductor read that
+class and was reassured by its name.
+
+**A measurement the conductor got wrong, corrected in public.** The earlier
+absorb entry and a PR comment asserted the new write path was "not slower"
+(0.182s vs 0.214s). That compared the **branch venv on Python 3.11.14 against
+the dev venv on 3.13.7** — two interpreters, not two codepaths. Invalid. The
+cold read caught it and reported the opposite (+71% load, +99% save); re-run
+under one interpreter with both trees resolving correctly (PYTHONPATH pinned,
+1440 cycles, two rounds), branch and dev are **within noise**:
+
+| round | branch load | dev load | branch save | dev save |
+|---|---|---|---|---|
+| 1 | 2.691s | 2.629s | 2.299s | 2.265s |
+| 2 | 3.038s | 3.197s | 2.036s | 2.002s |
+
+So **neither** performance claim about this branch stands, and the conductor's
+was published first and confidently. The flake-rate measurement (0/4 on `dev`,
+2/4 on the branch) was made on the real suite and still stands; its *mechanism*
+is now unexplained and is being asserted in neither direction. Corrected on PR
+#69 and in the redispatch so the worker is not optimising against a phantom.
+
+*For the retro, the generalisable lesson:* **a benchmark across two worktrees
+is a benchmark across two environments.** Each worktree gets its own `.venv`
+from `scripts/new-worktree.sh`, and those venvs can resolve different Python
+versions, so any A/B measured by "run it here, then run it there" is confounded
+by construction. This is a property of the worktree-per-theme workflow itself,
+not a mistake unique to this tick, and it will recur silently. Worth a line in
+`review.md`: measure both codepaths under one interpreter, pinning the source
+tree, or do not report a number.
+
+**Disposition.** PR #69 stays **draft**. Redispatched to the same worker (via
+`SendMessage`, so it keeps its context) with the three defects, the two
+corrections, and an explicit instruction to push this time. Not a new PR — the
+follow-up belongs to work in flight, so it goes onto that branch. The
+`index health` and `db backup` halves were given explicit clean bills by both
+readings and survive the next pass unchanged.
