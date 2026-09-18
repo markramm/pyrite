@@ -7,9 +7,10 @@ tags:
 - testing
 - write-path
 kind: tech_debt
-status: proposed
+status: in_progress
 priority: high
 effort: S
+assignee: agent:pyrite-worker
 ---
 
 ## Problem
