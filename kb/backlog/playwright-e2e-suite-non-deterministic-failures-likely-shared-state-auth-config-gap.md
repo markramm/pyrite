@@ -20,6 +20,7 @@ effort: M
 rank: 0
 ---
 
+
 ## Problem
 
 Investigating ci-make-green-and-load-bearing item 4 (triage Playwright e2e CI failures) surfaced a deeper, non-deterministic reliability problem beyond the two concrete bugs already fixed (see Related fixes below).
@@ -180,3 +181,160 @@ pinned. On `dev` pushes only after ten consecutive greens on `main`.
 
 Sequencing: A alone (it changes the config every package depends on); B–G in
 parallel from the merged A; H last. Three conductor ticks.
+
+## Package A result (2026-09-18): the world is defined; three causes found, one was ours
+
+Delivered: `web/e2e/global-setup.ts` (the seed), `web/e2e/fixtures.ts` (the
+contract), `web/e2e/seed.spec.ts` (the foundation's own tests), and the
+`web/playwright.config.ts` changes. Branch `feature/playwright-foundation`,
+PR #38.
+
+### The world
+
+A private `web/.e2e-data` per run — wiped and rebuilt every invocation, so no
+run inherits another's writes. `PYRITE_DATA_DIR`/`PYRITE_CONFIG_DIR` point the
+backend at it and nothing else; auth is disabled explicitly
+(`PYRITE_AUTH_ENABLED=false`, asserted by a test rather than inferred);
+`PYRITE_AUTO_EMBED=0` + `HF_HUB_OFFLINE=1` keep torch and the Hugging Face hub
+off the write path. One KB `e2e` from the `research` template holding 3 person,
+3 dated event, 2 note, 1 organization, 1 query collection, and 7 daily notes.
+`reuseExistingServer: false` on both servers (a local run must never reach a
+real KB), backend timeout 60 s, `retries: 0`.
+
+`fixtures.ts` exports every one of those as a constant, plus `uniqueTitle()`
+for specs that write and `idForTitle()` mirroring `generate_entry_id`.
+
+### The daily-GET side effect
+
+`get_or_create_daily_note` is already fixed for the read tier
+(`web-daily-notes-view-side-effect`): a caller below write tier gets 404
+instead of a created note. But with auth disabled `verify_api_key` resolves
+every caller to `admin`, so in THIS configuration the GET does create — by
+design, not a bug, and no code change was warranted. The seed instead
+pre-creates every date the specs can navigate to (today ±3, plus a fixed
+2020-03-04), which makes each of those GETs a read. `seed.spec.ts` asserts it:
+it snapshots `/api/daily/dates`, GETs yesterday/today/tomorrow, and asserts the
+date list is unchanged.
+
+### Two bugs found in Package A's own remit, fixed here
+
+1. **The seed ran once per worker, not once per run.** `playwright.config.ts`
+   is evaluated in the main runner process AND again in every worker process,
+   so five workers plus the parent wiped and rebuilt the data directory
+   concurrently: 118 of 119 tests errored at 0 ms inside `pyrite create`.
+   Guarded by a marker in `process.env`, which workers inherit because they are
+   forked with `{...process.env}` (`runner/processHost.js`).
+
+   Related and load-bearing: the seed runs at config-module scope rather than
+   through Playwright's `globalSetup` hook, because `webServer` starts in a
+   plugin setup task and plugin setup tasks run BEFORE globalSetup tasks
+   (`runner/tasks.js: createGlobalSetupTasks`). The backend reads its config
+   once at import, so a globalSetup reseed happens after the server has already
+   read an empty directory. Observed: 6 of 9 seed tests failing until the call
+   moved.
+
+2. **The read rate limiter made the failing set move.** Five workers share one
+   client IP and exhaust `rate_limit_read: 100/minute` partway through a run;
+   whichever page loses renders "API Error 429" instead of its content. Across
+   the first five-run batch, `graph.spec.ts:34` failed in exactly the three runs
+   whose logs contain a 429 and passed in the two that do not. Fixed with
+   `RATELIMIT_ENABLED=false` (slowapi's own switch, read from the environment)
+   for the test backend only. Measured on the seeded backend, 150 sequential
+   reads of `/api/kbs`: limiter on → 100×200 + 50×429; limiter off → 150×200.
+   `seed.spec.ts` asserts the limiter is off.
+
+### Two product bugs found, NOT fixed here (ADR-0033)
+
+Both are real user-facing bugs in the web app, both outside Package A, and both
+are what remains of the moving failure set:
+
+- **#49 — the root layout overwrites every page title with the brand name.**
+  `+layout.svelte` assigns `document.title = brandStore.name` in an `$effect`,
+  clobbering every route's `<svelte:head><title>`. Probed all ten top-level
+  routes: every one returns `"Pyrite"`. Users get the same tab title everywhere.
+  It is also a race — whether the page title or the branding effect lands last
+  depends on when `/config/branding` returns — which is why `search.spec:4` and
+  `settings.spec:4` fail the `toHaveTitle` in 5 of 5 runs while `qa.spec:4` and
+  `daily.spec:4`, the same assertion, fail in 4 of 5.
+- **#45 — the entries page flashes "No entries found" before the KB store
+  resolves.** The list `$effect` is a no-op while `kbStore.activeKB` is null, so
+  `entryStore.loading` is still false and `EntryList` renders its empty state
+  before any request has been made. Against a KB with 17 entries,
+  `app.spec:58` failed in 2 of 5 runs and `entry-crud:36`/`entry-crud:4` in 1 of
+  5 — the latter because the empty state's own "New Entry" action button becomes
+  a second `New Entry` link and turns the assertion into a strict-mode
+  violation.
+
+### Evidence
+
+Five consecutive `npm run test:e2e`, same code, same machine, after the fixes:
+
+| run | failed | skipped | passed | wall |
+|---|---|---|---|---|
+| 1 | 14 | 19 | 87 | 25.4s |
+| 2 | 14 | 19 | 87 | 26.3s |
+| 3 | 12 | 19 | 89 | 24.8s |
+| 4 | 13 | 19 | 88 | 25.0s |
+| 5 | 13 | 19 | 88 | 40.7s |
+
+Eleven specs fail in all five runs — the stable core, which is what packages
+B–G are for (`text=` locators, data assumptions, auth pages under
+auth-disabled):
+
+```
+app.spec.ts:14         Dashboard > shows dashboard heading
+app.spec.ts:19         Dashboard > displays stat cards
+auth.spec.ts:4         Login Page > login page loads
+auth.spec.ts:69        Register Page > register page loads
+collections.spec.ts:4  Collections Page > loads and shows collections heading
+entry-crud.spec.ts:13  Entries Page > has type filter dropdown with "All types" default
+entry-crud.spec.ts:20  Entries Page > has sort controls
+entry-crud.spec.ts:45  New Entry Page > new entry button navigates to creation form
+entry-crud.spec.ts:74  New Entry Page > breadcrumbs show entries link and new entry label
+search.spec.ts:4       Search Page > loads and shows search heading
+settings.spec.ts:4     Settings Page > loads and shows settings heading
+```
+
+Four vary, and every one of them is accounted for by #49 or #45 above:
+`qa.spec:4` (4/5, #49), `daily.spec:4` (4/5, #49), `app.spec:58` (2/5, #45),
+`app.spec:77` (1/5, #45 — the empty state's own "New Entry" action button
+becomes a second `New Entry` link and turns the assertion into a strict-mode
+violation). Nothing else moved, and no run contained a real 429.
+
+Honest caveat on the "identical set" criterion: it is NOT yet met, and cannot
+be met from inside Package A. The four movers are the two product bugs, which
+are races by construction; the set becomes identical when #49 and #45 are
+fixed, not when the harness improves. A second ten-run sample (two batches of
+five) gave the same eleven-test stable core and the same two causes; one run in
+that sample stalled to 1.3 m with nine `page.goto` timeouts because a sibling
+worker's pytest suite was running concurrently (load average 5-6). That is
+machine contention, not the suite — `seed.spec.ts` passed all ten of its
+assertions in all fifteen runs across all three batches, including the stalled
+one.
+
+No run touched the real config directory. Before and after the batch:
+
+```
+2026-08-28T06:07:54 637804544 /Users/markr/.pyrite/index.db
+2026-08-20T16:37:11        27 /Users/markr/.pyrite/config.yaml
+```
+
+Identical mtime and size on both, which is what `reuseExistingServer: false`
+plus `PYRITE_DATA_DIR` buys: a local run can no longer reach a real KB.
+
+`seed.spec.ts` — the ten assertions on the world itself — passed in all five
+runs, and in all fifteen runs across the three batches taken during this work.
+
+### Left for the packages that follow
+
+- B–G still own the spec rewrites, and they should now assert on
+  `fixtures.ts` constants instead of "list or empty state" disjunctions. The 19
+  `test.skip`-on-missing-data skips in `entry-crud`/`entry-features`/`graph`
+  should become real assertions against seeded entries.
+- C's question is answered: auth is disabled, so `/login` and `/register` are
+  not the app's operating mode. `AUTH_ENABLED` in `fixtures.ts` is the constant
+  to branch on; either skip those specs or give them a second project with auth
+  enabled and a seeded user.
+- The suite cannot be green while #49 and #45 are open — they are product bugs,
+  not test bugs, and packages B/D/G will hit them head-on.
+- H still owns `ci.yml` and the `continue-on-error` line.

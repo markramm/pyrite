@@ -144,7 +144,7 @@ is waste; a step that could tell us something new and does not is a gap.
 | local pre-push | ~1 min | the change passes the suite on *my* interpreter |
 | **PR → `dev`** (required check: `gate`, which needs `test (3.12)`, `frontend`, `kb`; skipped = pass) | ~3 min | the change passes on top of *current `dev`*, on the primary interpreter |
 | **push to `dev`** (after merge) | ~5 min, not a merge gate | **breadth**: every supported Python, Postgres conformance; a red `dev` blocks every PR |
-| **push to `main`** (release) | minutes, once per release | **depth**: what a user gets — install from the tag, Quick Start, live server over REST/MCP/stdio, Docker image, e2e once deterministic |
+| **push to `main`** (release) | minutes, once per release | **depth**: what a user gets — install from the tag, Quick Start, live server over REST/MCP/stdio, Docker image, Playwright e2e against a seeded world |
 | pre-release, by hand or script | minutes | the release notes are true; the UI works in a browser; the runbook's clean-venv check |
 
 Consequences: the Python matrix runs one interpreter on pull requests and all

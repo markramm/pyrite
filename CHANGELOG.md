@@ -75,6 +75,11 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Changed
 
+- The Playwright e2e suite now seeds and runs against its own KB in a private
+  data directory (`web/e2e/global-setup.ts`, contract in `web/e2e/fixtures.ts`)
+  with auth explicitly disabled and no server reuse, instead of whatever
+  `~/.pyrite` happened to contain — which is why it had been failing
+  differently on every run.
 - 100 auth tests (`test_auth_endpoints`, `test_auth_service`,
   `test_github_token_storage`, `test_daily_endpoints`, `test_repo_endpoints`,
   `test_ai_quota_enforcement`) now run in CI. Each module carried a stale
