@@ -405,6 +405,20 @@ Two related rules the fix established:
   still emit it — commit 7783335 fixed the loss of an explicit `importance: 5`
   — but a load records which always-written defaults the source lacked, so a
   round trip does not invent them.
+- **That suppression lives in exactly one place: `Entry._frontmatter_for_file`,
+  called only from `to_markdown`. Do not guard it per call site.** The first
+  attempt guarded `importance` and `rank` by hand and missed `priority` three
+  lines above `rank` in the same method — and 31 other types besides, every one
+  of which emits some field unconditionally at its default. A per-site guard
+  also misses every plugin type written afterwards.
+- **`to_frontmatter` and the file deliberately disagree, and that is the point.**
+  `to_frontmatter` always reports the entry's real values, because
+  `storage/index.py` builds the index's metadata column from it and `sw backlog`
+  filters on the `status` and `priority` it finds there. An entry loaded from a
+  file with no `status:` genuinely *is* `proposed`. Suppression is a property of
+  the **file**, not of the entry, so it happens at the file boundary and nowhere
+  else. If you ever feel like moving the filter "up" into `to_frontmatter` for
+  tidiness, that is the bug you would be creating.
 - A write re-emits unchanged keys from the ruamel mapping the file was parsed
   from, so key order, quoting and `tags: [a, b]` flow style survive. Diff noise
   is not cosmetic: the real corruption above stayed invisible in review because

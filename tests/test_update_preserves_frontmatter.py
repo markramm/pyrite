@@ -439,6 +439,21 @@ class TestStructuralYamlSurvivesAWrite:
     merge keys along -- and a deep copy of a ruamel CommentedMap resolves a
     `<<:` merge into a literal key whose value is the merged mapping, emitting
     the merged keys twice.
+
+    These three DO NOT fail on the merge base, and are not expected to. What
+    they guard is a defect *inside* `_restyle_like_source`, which the merge
+    base does not have: reverting the implementation removes the mechanism and
+    its bug together, so the base writes a plain dict and trivially passes.
+    They were written in response to a cold read that found the deepcopy
+    destroying `&anch`, and their job is to catch its return in a future
+    refactor of that function -- a forward guard, not a regression proof.
+    Verified by reintroducing the deepcopy locally: the two that read the
+    emitted TEXT fail, and the meaning-preserving one does not, because a file
+    with a literal `<<:` and a duplicate key still parses back to the same
+    mapping. That asymmetry is why the structural assertions inspect the text.
+    Do not read a green run here as evidence about #46; the tests that
+    carry that are in TestNoRegisteredTypeInventsFrontmatter and
+    TestAlwaysWrittenDefaultsStillWork, and those are red at the base.
     """
 
     @pytest.fixture
@@ -463,24 +478,41 @@ class TestStructuralYamlSurvivesAWrite:
         derived_block = text.split("derived:", 1)[1]
         assert derived_block.count("x: 1") <= 1, text
 
-    def test_the_written_file_round_trips_through_the_loader(self, anchor_env):
-        """Whatever we emit has to be readable again, unchanged in meaning."""
+    def test_the_written_file_still_means_what_the_source_meant(self, anchor_env):
+        """The meaning survives two writes -- checked against the SOURCE.
+
+        A weaker guarantee than the two above, and deliberately kept separate
+        from them. It does NOT fail on the merge-expanding deepcopy: a file
+        carrying a literal `<<:` key and a duplicate `x: 1` still parses back
+        to the same mapping, because the loader resolves the damage away. That
+        is exactly why the two structural assertions above read the TEXT. This
+        one guards the weaker property they do not -- that nothing we emit
+        changes the entry's meaning -- and is named for what it checks rather
+        than for the defect, so it is not mistaken for a guard it is not.
+        """
+        source = _read_frontmatter_text(ANCHOR_NOTE)
         anchor_env["service"].update_entry("anchor-note", "swkb", tags=["z"])
         first = _read_frontmatter(anchor_env["anchor_file"])
 
         anchor_env["service"].update_entry("anchor-note", "swkb", tags=["z2"])
         second = _read_frontmatter(anchor_env["anchor_file"])
 
-        first.pop("tags")
-        second.pop("tags")
-        assert dict(second["metadata"]["derived"]) == dict(first["metadata"]["derived"])
+        expected = {k: dict(v) for k, v in source["metadata"].items()}
+        assert {k: dict(v) for k, v in first["metadata"].items()} == expected
+        assert {k: dict(v) for k, v in second["metadata"].items()} == expected
 
 
 class TestValuesAreComparedByTypeNotTruthiness:
     """`1 == True` and `0 == False` in Python. Comparing a new value to the
     source value with plain `==` therefore treats a bool set over an int (or
     vice versa) as 'unchanged' and silently keeps the old one -- the same
-    'write reports success and does nothing' shape as the importance bug."""
+    'write reports success and does nothing' shape as the importance bug.
+
+    Like the anchor class, this does not fail on the merge base, because the
+    comparison it guards is part of the restyle this branch introduces -- there
+    is nothing there to get wrong. It is a real guard nonetheless: deleting the
+    bool tagging from `_plain` makes it fail with `assert 1 is True`, verified
+    rather than assumed."""
 
     def test_bool_replacing_an_equal_int_is_written(self, swkb_env):
         path = swkb_env["note_file"]

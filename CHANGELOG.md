@@ -183,7 +183,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   internals into the frontmatter dict that decides which keys are "unknown and
   must be preserved", so they were preserved into the file. A one-field update
   is now a one-line diff, keeping key order, quoting and `tags: [a, b]` flow
-  style. (#46)
+  style. The rule holds for every entry type, not just the two originally
+  guarded by hand: 32 of the 48 registered types wrote some field at its
+  default whatever the file said (`adr_number: 0` and `status:` onto an ADR,
+  `maturity:` onto a zettel, `priority: medium` onto a backlog item), and the
+  suppression is now applied once at the file-write boundary, so a plugin type
+  gets it without declaring anything. Setting such a field to its default on
+  purpose still writes it. (#46)
 - **`pyrite index health` exits 1 when it reports unhealthy.** It printed
   `"status": "unhealthy"` and exited 0, so every script, CI step and agent
   gating on the exit code read a failure as success; the verdict was also
