@@ -1922,3 +1922,57 @@ under `pyrite/`, `extensions/` or the theme's test file, the unrelated
 unrelated modified files (conductor skill edits, `.gitignore`, `FEEDBACK.md`,
 `kb/roadmap.md`, untracked `kb/designs/`, `kb/tasks/`, `tests/usability/`) are
 still there and still need an owner before anyone pushes from that tree.
+
+## Retro 2026-09-18T08:20Z (retro 3 — window 07:20Z–08:15Z, ticks 4–5 and the revived ticks; called by the maintainer after the circuit breaker tripped on #69 and `dev` went red twice)
+
+The maintainer's brief: "We ended up in a mess, and should sort out root causes and fixes as well as we can." So this one goes past the constraint to the roots.
+
+### What worked, with numbers
+- **The cold read**: 3 dispatched, 3 changed a PR's disposition (#69 twice — two silent data-loss regressions, then `priority` invented on every write and 9/12 vacuous regression tests; #81 once — the leak the theme was named for was relocated, not fixed). 0 defects merged from those branches.
+- **The breaker tripped correctly** on the second redispatch of #69 and the loop stopped for the maintainer instead of dispatching a third pass on its own authority.
+- **The value chain caught the red**: #81 passed the one-interpreter PR gate and failed the 3.13 leg on `dev` (d3d223a, 83b1da5) — a classmethod fixture pytest 9.1.1 tolerates and 9.0.2 does not. Root-caused and fixed by the host within 40 minutes of the second red (#129), the skew filed (#128).
+- **Nested review landed** #83 and #81 unattended; #84 the window before.
+- **Hallway → contributor**: 26 issues filed from three surfaces in one day; two outside PRs for #97 within 20 minutes of each other, both reviewed within the hour with recommendations posted; the maintainer chose "clean up and merge both in sequence", #116 first — its fixup is pushed with authorship intact.
+- **Workers caught what conductors missed**: the #69 worker found 18 foreign commits in its own branch by diffing against its out-of-scope list (#119); the D worker filed the port collision (#118) instead of patching a file it was told not to touch.
+- **`verify-red.sh` was wrong and is now right** (#121 → #125), with five tests that build a real repository per case.
+
+### Failures and root causes
+| Failure | Evidence | Why → why → root | Fix lives |
+|---|---|---|---|
+| Three conductors reviewed #69; contradictory verdicts 10 s apart | #111, 07:35:28Z vs 07:35:38Z | a worker's hand-back revives its dispatching tick → each revived tick believes it is the conductor → no claim existed on a tick or a PR | SKILL.md: one conductor at a time; `in-review` (landed #113) |
+| A tick ran 1 h 46 m | #114 | worker reported mid-tick → the tick absorbed its own dispatch → no stopping point | SKILL.md: absorb only what had reported before the tick began |
+| 18 foreign commits one push from the wrong PR; HEAD detached under a worker | #119, reflog | a conductor did checkouts inside a live worker's worktree → there was no claim on a worktree, only on a theme | SKILL.md/review.md: conductors review from their own worktree on the pushed head; pyrite-dev: footprint diff before push |
+| `verify-red.sh` verified nothing, 12/12 | #121 | stash-based revert on a committed fix saves nothing → exit 0 → tests ran against the fix | #125 (merge-base revert, exit 2 = no claim); review.md checklist |
+| Two confident wrong numbers | #101, tick 4 | two worktrees = two venvs = two Pythons; a flake rate against `dev` not the merge base | review.md (retro 2 + merge-base rule, #113) |
+| Green gate on unpushed code | #91 | docs-only classification of a remote branch whose code was local → `gate: success` about the wrong commit | review.md: identify the commit before believing the check |
+| A comment body ran `git rebase` on `dev` | #123 | backticks in a double-quoted `--body` are command substitution → the more careful the prose, the more shell runs | review.md: bodies through files, always |
+| A test named for the regression it reintroduced covered only passing cases | #115 | reviewer reassured by a name → the cheapest trigger (Unsure names a design decision) was discretionary | SKILL.md: that trigger is mandatory; the reviewer's brief quotes the Unsure |
+| #69 needed three passes | 11 review comments, 2 cold reads, breaker | dispatched to fix #46 with the root cause unknown → the worker inferred intent from load-time state → each fix exposed the next sibling (32 types invent keys) | dispatch.md: mechanism-unknown → spike first; quality: the round-trip identity gate before the write-path follow-up |
+| `dev` red twice after #81 | d3d223a, 83b1da5 | `@classmethod` fixtures; pytest 9.1.1 (3.12, worktrees) tolerates, 9.0.2 (3.13, main) does not → the PR gate and the matrix ran different runners | #129 (fixed); #128 pin the runner (quality stock) |
+| Ports 8088/5173 shared across worktrees | #118 (dup of #104) | file footprint cannot see a port → three Playwright workers talked to each other's servers | Package A.1 at the head of the queue; Playwright serialized meanwhile |
+| Load 51 | tick 5, `uptime` | three browser suites + a 20-run loop + a redundant 10-run loop | retro 2's heavy cap; the redundant loop killed |
+
+### The two roots
+1. **Claims on themes, none on ticks or worktrees.** The draft-PR-as-claim made themes safe to hand between sessions; nothing did the same for "who is the conductor right now" or "whose tree is this". Every collision in the window is that gap.
+2. **Signals about the wrong object.** A check about a different commit; a number from a different interpreter or baseline; a revert of a different file set (or none); a test whose name promises a case it lacks. The fix pattern is the same each time: bind the claim to its object — the SHA, the interpreter, the file set, the failing case — and refuse the claim when it cannot be bound.
+
+### Waste, in the seven
+Dominant this window: **relearning** (three readings of #69's diff; two cold reads that converged; the same defect filed twice as #104/#118 and #55/#127) and **defects** in the process's own instruments (verify-red, the benchmark, the gate-vs-commit). **Handoffs** cost the most tokens: ~100k for the duplicate cold read alone. Delays fell as load dropped from 51 to 4.
+
+### Constraint
+Coordination — the number of conductor instances alive at once (peak 4). Not the machine any more (load 4–12 by 08:10Z), not review attention per se: the review lane found more than it missed, three times over.
+
+### The one process change
+**One conductor at a time** — a revived tick only appends the report and exits; the scheduled tick absorbs only what had reported when it began; conductors review from their own worktree on the pushed head; workers footprint-diff, push, and report the SHA. In `pyrite-conductor/SKILL.md`, `review.md`, `pyrite-dev/SKILL.md`, `agents/pyrite-worker.md`. With it, as root-cause fixes: commit-before-check (#91), mandatory cold read on a design-decision Unsure (#115), bodies through files (#123), spike-before-worker when the mechanism is unknown, red-dev fix dispatchable under a breaker. PR `process/retro-3-one-conductor`.
+
+### The quality theme
+`pin-the-test-runner-one-pytest-and-xdist-version-for-every-venv-and-every-ci-leg` (#128; high, S, Sonnet). Stock behind it: the round-trip identity gate (prerequisite for #69's follow-up on the 32 types), changelog fragments, Package A.1 (#118).
+
+### Expected effect
+Conductor agents alive at once: peak 4 → 1 (+ revived ticks that exit within a minute); reviews per PR: 3 → 1 (+ cold read when triggered); redispatch rate this window 2/1 theme → ≤ 1/5 next window; zero `process` issues of the collision class. Revert if a worker's hand-back to an exited tick loses its report (check: every worker report appears on its PR body within a tick).
+
+### Not changed, noted for next time
+- The `pyrite-reviewer` agent ran 40 min with an unrequested full pytest on #108 and returned a fragment; one occurrence.
+- #69's disposition: three passes verified by two conductors; held as draft only because `dev` was red and the breaker is tripped. The maintainer decides whether it merges when `dev` is green (recommended: yes, then the round-trip gate, then the 32-type follow-up as one Opus theme with #87 re-verified).
+- Retro 1's heading is mis-stamped 06:45Z (ran ~06:00Z); retro 2 is correct at 07:20Z.
+- The main checkout's local `dev` is clean and at `origin/dev` again after #123's accidental fast-forward; the peer session's commits all landed via #105.
