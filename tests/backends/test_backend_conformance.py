@@ -5,6 +5,8 @@ Every test here runs against every registered backend via the parametrized
 ``backend`` fixture.  A backend passes conformance when all tests pass.
 """
 
+from typing import Any
+
 import pytest
 
 
@@ -708,6 +710,36 @@ class TestEmbeddingInterface:
 # =========================================================================
 
 
+def _spy_on_sql(backend, monkeypatch):
+    """Record every ``(sql, params)`` the backend sends to raw SQLite.
+
+    ``sqlite3.Connection.execute`` is read-only, so the whole connection is
+    wrapped and everything else forwarded untouched. Skips the calling test for
+    backends with no raw sqlite3 connection (Postgres), whose semantic leg puts
+    the predicates in the same ``WHERE`` as the ordering and has no KNN budget
+    to escalate.
+    """
+    conn = getattr(backend, "_raw_conn", None)
+    if conn is None:
+        pytest.skip("backend has no raw sqlite3 connection / no KNN budget")
+
+    log: list[tuple[str, Any]] = []
+
+    class _SpyConn:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def execute(self, sql, params=()):
+            log.append((sql, params))
+            return self._inner.execute(sql, params)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(backend, "_raw_conn", _SpyConn(conn))
+    return log
+
+
 def _near_vector(nudge: int = 0) -> list[float]:
     """A 384-dim vector. All of them are near-identical, so every embedded row
     is a KNN candidate: filtering, not ranking, is what these tests pin."""
@@ -811,3 +843,143 @@ class TestSemanticFilterConformance:
             _near_vector(), kb_name="test", limit=2, status="unprocessed"
         )
         assert {r["id"] for r in rows} == {"mech", "task"}
+
+
+# =========================================================================
+# KNN budget — escalation must stay inside the backend's own k ceiling (#56)
+# =========================================================================
+
+
+class TestSemanticKnnBudget:
+    """Escalating ``k`` to recover recall must not exceed what the engine allows.
+
+    sqlite-vec 0.1.9 rejects ``k > 4096`` outright::
+
+        OperationalError: k value in knn query too large,
+        provided 16384 and the limit is 4096
+
+    An escalation loop clamped only against the table's row count therefore
+    raises on any index bigger than the cap — which reaches users as an HTTP
+    400 ``SEARCH_FAILED``, an unhandled exception out of MCP ``kb_search`` and
+    a silent keyword-only fallback in the AI endpoint. Postgres has no such
+    ceiling and passes these trivially.
+    """
+
+    @pytest.fixture
+    def big_embedded_backend(self, backend):
+        """Just over sqlite-vec's 4096 ``k`` cap, so escalation must clamp.
+
+        All vectors are near-identical, and exactly one row carries the
+        filterable value, so the filtered query is maximally selective: the
+        escalation loop runs to its ceiling on every backend.
+        """
+        backend.upsert_entry(_make_entry("probe"))
+        if not backend.upsert_embedding("probe", "test", _near_vector()):
+            pytest.skip("backend cannot store embeddings (no vector support)")
+        backend.delete_entry("probe", "test")
+
+        for i in range(4097):
+            entry_type = "needle" if i == 0 else "note"
+            backend.upsert_entry(_make_entry(f"e{i}", entry_type=entry_type))
+            backend.upsert_embedding(f"e{i}", "test", _near_vector(i))
+        return backend
+
+    def test_filtered_search_above_the_k_cap_does_not_raise(self, big_embedded_backend):
+        """A selective filter over >4096 embedded rows must return, not raise."""
+        rows = big_embedded_backend.search_semantic(
+            _near_vector(), kb_name="test", limit=5, entry_type="needle"
+        )
+        assert {r["id"] for r in rows} == {"e0"}
+
+    def test_unfiltered_search_above_the_k_cap_does_not_raise(self, big_embedded_backend):
+        """``max_distance`` culling drives the same escalation with no filter.
+
+        A cutoff no row can satisfy means ``limit`` is never reached, so the
+        loop escalates ``k`` to its ceiling exactly as a selective filter does.
+        The honest answer is an empty list, never an exception.
+        """
+        rows = big_embedded_backend.search_semantic(
+            _near_vector(), kb_name="test", limit=5, max_distance=-1.0
+        )
+        assert rows == []
+
+
+class TestSemanticKnnEscalation:
+    """The escalation loop must actually run more than once, and be observed.
+
+    The filter-conformance tests above use three entries, where the first ``k``
+    (``limit * 3``) already covers the table — the loop body runs once and the
+    escalation branch is never exercised. These tests put the needle outside
+    the first budget so a second iteration is the only way to find it.
+    """
+
+    @pytest.fixture
+    def haystack_backend(self, backend):
+        """200 rows where only the *farthest* one matches the filter.
+
+        The first ``k`` (``limit * 3`` = 3) cannot reach it, so a correct
+        implementation escalates; one that filters the k nearest afterwards
+        returns nothing.
+        """
+        backend.upsert_entry(_make_entry("probe"))
+        if not backend.upsert_embedding("probe", "test", _near_vector()):
+            pytest.skip("backend cannot store embeddings (no vector support)")
+        backend.delete_entry("probe", "test")
+
+        for i in range(200):
+            # Distance grows with i, so "needle" (i=199) is the farthest row.
+            entry_type = "needle" if i == 199 else "note"
+            backend.upsert_entry(_make_entry(f"h{i}", entry_type=entry_type))
+            # Distances grow with i but stay well inside the default
+            # ``max_distance`` cutoff, so ordering — not culling — is what
+            # puts the needle out of reach of the first ``k``.
+            vec = [0.05] * 384
+            vec[0] += 0.0001 * i
+            backend.upsert_embedding(f"h{i}", "test", vec)
+        return backend
+
+    def test_selective_filter_beyond_the_first_budget_still_finds_it(self, haystack_backend):
+        """The needle is farther than ``limit * 3`` rows: escalation finds it."""
+        rows = haystack_backend.search_semantic(
+            _near_vector(), kb_name="test", limit=1, entry_type="needle"
+        )
+        assert {r["id"] for r in rows} == {"h199"}
+
+    def test_escalation_loop_runs_a_second_iteration(self, haystack_backend, monkeypatch):
+        """Pin the mechanism, not just the outcome: ``k`` must grow.
+
+        Counts the distinct ``k`` values the backend actually asks for. One
+        value means the loop never escalated and the assertion above passed by
+        accident. Skipped for backends that do not use a KNN budget at all
+        (Postgres puts the predicates in the same ``WHERE`` as the ordering).
+        """
+        sql_log = _spy_on_sql(haystack_backend, monkeypatch)
+        rows = haystack_backend.search_semantic(
+            _near_vector(), kb_name="test", limit=1, entry_type="needle"
+        )
+        assert {r["id"] for r in rows} == {"h199"}
+        seen_k = [p[1] for s, p in sql_log if "MATCH" in s and "k = ?" in s]
+        # The same k can appear twice in one round (the main query plus the
+        # filter-independent size probe); what must grow is the sequence of
+        # distinct budgets.
+        budgets = sorted(set(seen_k))
+        assert len(budgets) >= 2, f"escalation loop ran once only; k values: {seen_k}"
+        assert seen_k == sorted(seen_k), f"k must never shrink: {seen_k}"
+
+    def test_unfiltered_hot_path_runs_one_query(self, haystack_backend, monkeypatch):
+        """No filter, ``limit`` filled on the first budget: one query, no COUNT.
+
+        The unconditional ``SELECT COUNT(*) FROM vec_entry`` an earlier draft
+        used to size the escalation ceiling is a full scan of the vector table
+        on every semantic search, paid even when nothing escalates. The KNN
+        result itself already says when ``k`` has covered the table: fewer rows
+        back than ``k`` asked for means there are no more neighbours.
+        """
+        sql_log = _spy_on_sql(haystack_backend, monkeypatch)
+        rows = haystack_backend.search_semantic(_near_vector(), kb_name="test", limit=5)
+        assert len(rows) == 5
+
+        scans = [s for s, _ in sql_log if "COUNT(*) FROM vec_entry" in " ".join(s.split())]
+        assert scans == [], f"unfiltered hot path scanned the whole vector table: {scans}"
+        knn = [s for s, _ in sql_log if "MATCH" in s and "k = ?" in s]
+        assert len(knn) == 1, f"unfiltered hot path ran {len(knn)} queries against vec_entry"
