@@ -125,8 +125,10 @@ layer repeats work a cheaper layer already did.
   points at that SHA (release runbook, rewritten 2026-09-17). Required linear
   history and `enforce_admins` on `main` make that a rule rather than a habit.
 - `v*` tags are protected from update and deletion.
-- The local pre-push hook stops being a gate. On a feature branch it is opt-in
-  (layer 1); pushing to `dev` directly is no longer possible. Commit hooks stay.
+- The local pre-push hook stays on and runs the full suite (**amended in
+  migration, 2026-09-17:** it was written as opt-in when the suite took 8 min;
+  at ~1 min it is cheaper than a failed CI run, so it remains the default).
+  Pushing to `dev` directly is no longer possible. Commit hooks stay.
 
 ### 4. What does not change
 
@@ -164,6 +166,11 @@ drive the production sites. Version numbers still follow roadmap milestones.
   `dev` until its PR merges. The fast path keeps that to about a minute.
 
 ## Migration
+
+Status 2026-09-17: steps 1–4 done (parallel CI, classifier, rulesets on `dev`,
+`main` and `v*` tags with no bypass, auto-merge and branch auto-delete on,
+`scripts/new-worktree.sh`, CLAUDE.md/skill/CONTRIBUTING rewritten). Step 5
+amended: pre-push stays on.
 
 1. Make CI fast: xdist-safe concurrency test, `-n auto` in CI, the change
    classifier with skip-on-docs. **Gate for everything below.**

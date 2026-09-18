@@ -9,6 +9,12 @@ date: "2026-04-01"
 tags: [process, releases, deployment, git, ci]
 ---
 
+> **Amended by [[adr-0032]] (2026-09-17).** The branch roles below stand. "All
+> work happens on `dev`" does not: work happens on feature branches and reaches
+> `dev` by pull request with checks green on top of current `dev`; `main` moves
+> only by fast-forward to a CI-verified commit. Where this document and
+> ADR-0032 differ, ADR-0032 wins.
+
 # ADR-0025: Release Workflow: Dev Branch, Tagged Releases, and Deployment Tiers
 
 ## Context

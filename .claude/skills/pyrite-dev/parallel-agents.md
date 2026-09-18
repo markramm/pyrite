@@ -74,7 +74,7 @@ FIX: Run #10 + #12 in parallel. #14 waits or runs after #12 commits.
 
 ## Merge Protocol
 
-Since agents work directly on the working branch (`dev`) without worktrees:
+Since agents work directly on the session's branch (in the session's worktree) without worktrees of their own:
 
 ### 1. Verify no conflicts after agents complete
 

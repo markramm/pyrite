@@ -74,12 +74,28 @@ Use correct `type` frontmatter so plugin tools can find entries:
 - **Web frontend**: `web/` — SvelteKit + Svelte 5
 - **Knowledge base**: `kb/` — ADRs, backlog, components, designs, standards, runbooks
 
-## Git Workflow (ADR-0025)
+## Git Workflow (ADR-0025, amended by ADR-0032)
 
-- **`dev`** — daily development (default branch). All work happens here.
-- **`main`** — stable releases only. Merge from dev requires passing CI.
-- Deploy demo.pyrite.wiki from `dev`, capturecascade.org from `main` tags.
-- See `.claude/skills/pyrite-dev/SKILL.md` for release and deploy commands.
+- **`dev`** — the integration branch and default. **Nobody pushes to it directly**, including this session: a ruleset requires a pull request whose checks passed on top of current `dev`, with no bypass.
+- **`main`** — releases only; moves by fast-forward to a commit CI already verified (see the release runbook in `.claude/skills/pyrite-dev/release-runbook.md`).
+- **Your branch** — every batch of work lives on `feature/*`, `fix/*` or `kb/*`, in **its own worktree**. Commit there at whatever pace the work needs.
+
+**Start of a session** (one command; creates the worktree, branch, venv and hooks):
+
+```bash
+scripts/new-worktree.sh fix/what-it-fixes        # from origin/dev
+cd ../pyrite-wt/fix-what-it-fixes
+```
+
+**End of a batch:**
+
+```bash
+git push -u origin "$(git branch --show-current)"
+gh pr create --base dev --fill          # Fixes #N in the body for a bug
+gh pr merge --auto --rebase             # merges itself when checks are green
+```
+
+CI on a PR: ~30 s for docs/KB-only changes, ~4-5 min for code. If `dev` is red, no PR merges until it is fixed — that is the point. `rebase` is the default merge method; `squash` for a branch whose history is noise.
 
 ## Testing
 
@@ -96,20 +112,20 @@ ruff check pyrite/
 
 ## Parallel Agents
 
-**Do NOT use `isolation: "worktree"` for parallel agents.** Worktree merges are fragile and expensive — conflict markers, regex group mismatches, and stray artifacts cost more tokens than Edit retries.
+**Do NOT use `isolation: "worktree"` for parallel sub-agents inside one wave.** They share the session's branch and a file-footprint plan; worktree merges between them are fragile and expensive. Launch them without isolation, working on the session's branch in the session's worktree. When agents share a file, the Edit tool's exact-match replacement fails gracefully on conflict and the agent retries.
 
-Instead, launch agents without isolation. They work directly on the current branch (`dev`). Use **file footprint planning** to minimize collisions. When agents share a file, the Edit tool's exact-match replacement fails gracefully on conflict — the agent retries with the updated content. This is cheaper and self-correcting.
+**Read `.claude/skills/pyrite-dev/parallel-agents.md` before launching parallel agents.**
 
-**Read `.claude/skills/pyrite-dev/parallel-agents.md` before launching parallel agents.** It has the full protocol: wave planning, file footprint validation, agent prompt templates, and merge steps.
+The unit of isolation is the *session's branch*, not the agent: separate sessions get separate worktrees (above); sub-agents of one session share one.
 
-## Multi-Session Git Hazard
+## Multiple Sessions
 
-Two or more Claude sessions (a cron job, a manual session, a concurrent worktree agent) can commit to `dev` concurrently — observed 2026-07-02: a backlog regroom session and a 0.25 implementation session interleaving commits on the same branch. There's no lock; the only protection is discipline:
+Each session has its own worktree and branch, so the old shared-tree hazards (a hook stashing another session's edits, interleaved commits, a wiped shared index) cannot happen between sessions. Two rules remain:
 
-- **Stage explicit paths only.** Never `git add -A` or `git add .` — another session's in-progress edit can be sitting unstaged in the same working tree and get swept into your commit.
-- **Check `git status` before staging.** If you see files you didn't touch, another session is active — don't silently include or discard them.
-- **Re-read files before editing** if there's any chance the tree moved since you last read them (a concurrent session's commit, or the Edit tool reporting "modified since read"). Don't blind-retry an Edit against stale content.
-- **Never assume you're the only writer.** A clean `git status` at the start of your turn doesn't guarantee it stays clean mid-task.
+- **Stage explicit paths.** Never `git add -A` or `git add .` — sub-agents of this session may have unrelated edits in the same tree.
+- **Re-read before editing** when the Edit tool reports "modified since read"; a sub-agent moved the file.
+
+If you find yourself in `/Users/markr/pyrite` on `dev` with uncommitted work, you are in the wrong place: `scripts/new-worktree.sh <branch>` and move the work there (`git stash` → `git stash pop` in the worktree).
 
 ## Pre-commit Hooks
 

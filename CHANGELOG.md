@@ -16,6 +16,15 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   model download on the write path; `pyrite index embed` backfills later. The
   first half of #13 (first write on a fresh install blocked on the download).
 
+### Process
+
+- ADR-0032 is in force: work happens on feature branches, each in its own
+  worktree (`scripts/new-worktree.sh <branch>` sets one up with venv and
+  hooks); `dev` takes pull requests only, checks green on top of current
+  `dev`, no bypass; `main` fast-forwards to CI-verified commits; `v*` tags are
+  immutable. Rebase is the default merge. ADR-0033: bugs and requests live in
+  GitHub issues, the roadmap in `kb/`.
+
 ### Documentation
 
 - `docs/configuration.md`: `config.yaml` and every `PYRITE_*` environment

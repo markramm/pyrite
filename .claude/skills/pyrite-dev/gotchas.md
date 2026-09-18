@@ -347,3 +347,23 @@ intentional change (`pyproject.toml`'s new dependency).
 specific files (`pre-commit run --files <paths>`) or just trust `pre-commit install` succeeding
 — don't run `--all-files` unless the task is explicitly "clean up the whole repo's pre-commit
 compliance." A repo-wide hook run is a different, larger task than a CI-lint-scoped fix.
+
+## Never `pre-commit install` from a worktree's venv
+
+The hook scripts in the shared `.git/hooks/` embed `INSTALL_PYTHON=<path of the
+python that ran pre-commit install>`. Run it from a worktree's `.venv` and every
+checkout's hooks point at that venv; remove the worktree and every commit and
+push in the repo fails with "`pre-commit` not found. Did you forget to activate
+your virtualenv?" (2026-09-17, while testing `scripts/new-worktree.sh`).
+Always install from the main checkout: `cd /path/to/pyrite && .venv/bin/pre-commit
+install`. The script does this for you. If hooks are broken, that same command
+repairs them.
+
+## `git commit --allow-empty` is not an empty commit if anything is staged
+
+It commits the index like any other commit. Used as a "hook probe" with work
+staged, followed by `git reset --hard HEAD~1`, it destroyed the working-tree
+edits made after staging (2026-09-17; recovered from the reflog, three edits
+re-done). Probe hooks with `pre-commit run --all-files` instead, or on a
+throwaway branch with nothing staged. And never `reset --hard` with a dirty
+tree.

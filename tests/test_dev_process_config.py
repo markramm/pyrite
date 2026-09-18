@@ -208,3 +208,20 @@ class TestCoverageAndE2EPolicy:
         assert "refs/heads/main" in cond and "workflow_dispatch" in cond
         assert "needs.changes.outputs" not in cond
         assert "workflow_dispatch" in ci[True] if True in ci else ci["on"]
+
+
+class TestSessionSetupScript:
+    def test_new_worktree_script_is_present_and_parses(self):
+        import os
+        import subprocess
+
+        script = REPO / "scripts" / "new-worktree.sh"
+        assert script.exists(), "ADR-0032 migration step 3: scripts/new-worktree.sh"
+        assert os.access(script, os.X_OK), "must be executable"
+        subprocess.run(["bash", "-n", str(script)], check=True)
+        text = script.read_text()
+        assert "git worktree add" in text and "pre-commit install" in text
+        # The hook shim embeds the installing Python's path. Installing from a
+        # worktree's venv breaks every checkout's hooks when that worktree is
+        # removed; the script must install from the main checkout's venv.
+        assert '"$repo_root/.venv/bin/pre-commit"' in text

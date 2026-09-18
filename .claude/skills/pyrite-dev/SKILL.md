@@ -24,21 +24,19 @@ Thinking "skip this just once"? That's rationalization. These exist because skip
 
 ---
 
-## Git Workflow (ADR-0025)
+## Git Workflow (ADR-0025, amended by ADR-0032)
 
-### Branches
+| Branch | Purpose | Moves by |
+|--------|---------|----------|
+| **your branch** (`feature/*`, `fix/*`, `kb/*`) | the work | commits, at any pace |
+| **`dev`** | integration (default branch) | pull requests only, checks green on top of current `dev`, no bypass |
+| **`main`** | releases | fast-forward to a CI-verified commit; tag points at it |
 
-| Branch | Purpose | Deploys to |
-|--------|---------|------------|
-| **`dev`** | Daily development (default) | demo.pyrite.wiki (auto on CI pass) |
-| **`main`** | Stable releases only | capturecascade.org, early adopters, PyPI |
-| **`feature/*`** | Large multi-day changes (optional) | Nothing — merge to `dev` when ready |
-
-**All work happens on `dev`.** You should be on the `dev` branch. Check with `git branch --show-current` if unsure.
+**Nobody pushes to `dev`.** A session starts with `scripts/new-worktree.sh <branch>` (worktree + venv + hooks) and ends with `gh pr create --base dev --fill && gh pr merge --auto --rebase`. CLAUDE.md has the commands. Check where you are with `git branch --show-current`; if it says `dev` and you have edits, move them to a branch before doing anything else.
 
 ### Committing
 
-Commit early and often to `dev`. Commit hooks are fast checks only (ruff, import cycles, KB schema); the full suite runs at pre-push and in CI — see CLAUDE.md, "Pre-commit Hooks". Small, focused commits are better than large batches.
+Commit early and often on your branch. Commit hooks are fast checks only (ruff, import cycles, KB schema); pre-push runs the full suite in ~1 min; CI on the PR is the gate. Small, focused commits, conventional-commit prefixes, `Fixes #N` for a bug.
 
 ### Releasing & Deploying
 
