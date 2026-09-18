@@ -936,3 +936,44 @@ replay, `.claude/THEME.md` untouched per #107), NOT pushed, worker still
 working in the tree. Its pre-push suite did run green during my attempt —
 4253 passed, 68 skipped, 4m11s — which is useful evidence for whenever it does
 land, but it predates the worker's newest commits and must be re-run.**
+
+## Retro 2026-09-18T07:20Z (retro 2 — window 06:00Z–07:20Z, ticks 3–4; called by the maintainer after the first redispatch)
+
+Correction: retro 1's heading says 06:45Z; it ran at ~06:00Z.
+
+### What worked
+- **The cold read, on its first trigger.** #69's footprint (`models/base.py`, `storage/`, `schema/`) fired the rule; `pyrite-reviewer` found two silent data-loss regressions (`--importance 5` a no-op via load-time inference of "absent"; `deepcopy` of a ruamel map destroying anchors) and a confounded benchmark the conductor had already published. Disposition went from "ready to flip" to "do not merge"; 0 defects merged. The trigger is footprint-based, not judgement-based, and that is why it fired.
+- **Nested review.** #74 (B) and #84 (E) went worker → reviving parent tick → `dev` with no host involvement; #84's review verified the footprint, grep'd the locator rules, and accepted an over-delivery in the right place.
+- **The tick log as the shared surface.** Three conductor agents (tick 1 revived, tick 3 revived, tick 4) wrote about #69 in one file, sequentially, with no clobber; the retro can read it.
+- **Hallway tests on three surfaces in one day** — MCP read (#56–#68), MCP write (#92–#98), CLI (#87, #48, #51, #52, #54) — 26 issues with reproductions, three KB notes, one design note, and every one of them filed rather than fixed in place.
+
+### Failures and root causes
+- **#69 redispatched** (evidence: cold-read comment 06:56Z, log 07:10Z) → the worker inferred "was this field set?" from load-time state → the test named for that regression covered only passing cases → the conductor's spot-check took one test at random and was reassured by the class's name → **review.md**: stash-check every regression-named test (PR `process/retro-2-resource-cap`).
+- **A wrong number published** ("not slower", then "+71%") → two worktrees, two venvs, two Pythons → a benchmark across worktrees is a benchmark across environments → **review.md**: one interpreter or no number.
+- **Playwright C/D/E at 42+ min vs B's 20** (evidence: #84 06:20→07:02; C/D no push in 55 min) → three browser suites + a 20-run pytest loop on one machine → load 28 on 10 cores → the cap counts files, not the machine → **dispatch.md**: machine-heavy ≤ 2 (this retro's change).
+- **`pyrite create` frontmatter** needed a hand repair on every backlog item created today (#86) — product, in the pool; noted because it is relearning waste on every claim until fixed.
+
+### Waste, in the seven
+Dominant: **delays** (contention; #69 waiting 40 min for a review that then had to be redone) and **defects** (a test that tested nothing; a published number that measured the wrong thing). Some **relearning** (three agents each re-reading #69's diff). Partially done work is low (5 drafts, all with live workers).
+
+### Constraint
+The machine — load 28 on 10 cores; heavy themes 2× their solo wall-clock; every review's suite re-run slowed with them. Not review attention this window: the review lane found more than it missed.
+
+### Friction observed
+- Tick 4 had to inspect a worktree mid-rebase by another conductor before touching it — the revived-tick model has no lock; no harm yet, noted.
+- The host lost a `pyrite create` call to inline-heredoc quoting despite documenting `--body-file` for `gh` — the same rule applies to every command; a body file is the default.
+- Tick 3's architect breakdown may have arrived at a tick that had ended; unverified whether it reached the log.
+
+### The one process change
+Machine as a footprint dimension: ≤ 2 heavy themes, `heavy:` in specs, heavy reviews count — `dispatch.md`; plus the two review.md rules above as root-cause fixes. PR `process/retro-2-resource-cap`.
+
+### The quality theme
+`no-op-round-trip-is-byte-identical-a-test-over-kb-that-fails-if-load-then-save-rewrites-any-file` (high, S, Sonnet after #69) — the 768/768 → 148/766 measurement made permanent; would have caught #46, #86, #87, #15. Stock still: teardown races (#81, in review), changelog fragments.
+
+### Expected effect
+Playwright package wall-clock from 42 min back to ≤ 25 by the next retro; load average under 12 while the fan-out runs; redispatch rate 1/6 this window → 0/5 next, with the cold read still catching ≥ 1 finding per trigger (if it catches nothing for five triggers, loosen it). Revert the heavy cap if F/G/H end up waiting on an idle machine.
+
+### Not changed, noted for next time
+- A review claim (label) so two revived ticks cannot review one PR — no collision yet; add it the first time one happens.
+- The write-path family (#46 #86 #87 #15) is one design fault: "save serializes the model" vs "save edits the file". #69's redispatch prefers a dirty-field signal; if that lands, `link`/`links bulk-create` (#87) must go through the same path — one theme, Opus.
+- Whether the architect's output from tick 3 survived — check next tick.
