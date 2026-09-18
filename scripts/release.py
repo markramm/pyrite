@@ -18,8 +18,11 @@ change the world come last:
                        pyproject.toml is <version>; CHANGELOG has a dated
                        section with content and no stranded `[Unreleased]`
                        entries; no open PR labelled `release-blocker`
-  b. ci             -- the CI run for that exact SHA concluded `success`.
-                       Never dispatches a run; waits, with `--wait-ci`.
+  b. ci             -- the REQUIRED checks for that exact SHA concluded
+                       `success` (default `gate`; `--require-check` to change
+                       it). Checks not named are advisory and never block --
+                       the breadth jobs that run after the merge gate must not
+                       hold a tag. Never starts a run; waits, with `--wait-ci`.
   c. release layer  -- what a *user* gets, checked before the tag exists:
                        install from the SHA into a fresh temp venv with `uv`,
                        `pyrite --version`, and the getting-started tutorial run
@@ -48,6 +51,7 @@ import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -65,6 +69,12 @@ MAINTAINER = "markramm"
 BLOCKER_LABEL = "release-blocker"
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$")
+
+# The checks a release waits on, by name. `gate` is the required check on dev
+# and main: it needs the jobs that must pass and fails on any of their
+# failures, so requiring it requires them. Advisory checks (breadth jobs that
+# run after the gate) are deliberately not here -- see ci_decision.
+DEFAULT_REQUIRED_CHECKS = ("gate",)
 
 CI_PASSED = "passed"
 CI_FAILED = "failed"
@@ -126,7 +136,10 @@ class Runner:
 
     def run_write(self, cmd: list[str], cwd: Path | None = None) -> str | None:
         self.planned.append(list(cmd))
-        rendered = " ".join(cmd)
+        # shlex.join, not " ".join: the maintainer pastes these lines into a
+        # shell, and an unquoted `--description Must not ship in the next
+        # release` is five arguments there and one here.
+        rendered = shlex.join(cmd)
         if not self.execute:
             print(f"    WOULD RUN: {rendered}")
             return None
@@ -243,7 +256,14 @@ def check_changelog(repo: Path, version: str) -> None:
             )
 
 
-def extract_release_notes(repo: Path, version: str) -> str:
+def release_notes_for(repo: Path, version: str) -> str:
+    """The body of this version's CHANGELOG section, and nothing else.
+
+    THE seam for where release notes come from. A later theme moves the source
+    to per-PR fragments under `changelog.d/`; when it does, this function's
+    body changes and nothing above it needs to. Keep it the only place that
+    knows the notes' origin.
+    """
     text = (repo / "CHANGELOG.md").read_text()
     heading, end = _section_span(text, version)
     return text[heading.end() : end].strip() + "\n"
@@ -269,7 +289,7 @@ def contributors_line(logins: list[str]) -> str | None:
 
 
 def compose_notes(repo: Path, version: str, logins: list[str]) -> str:
-    notes = extract_release_notes(repo, version)
+    notes = release_notes_for(repo, version)
     line = contributors_line(logins)
     if line:
         notes = notes.rstrip() + "\n\n" + line + "\n"
@@ -281,19 +301,49 @@ def compose_notes(repo: Path, version: str, logins: list[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-def ci_decision(runs: list[dict]) -> str:
-    """Verdict over every CI run reported for one SHA.
+def _matches(check_name: str, required: str) -> bool:
+    """`test` must match the matrix leg `test (3.12)` and the bare `test` a
+    skipped matrix reports -- requiring one by name cannot mean requiring the
+    exact string, or a docs-only run hangs the release the way it hung PRs."""
+    return check_name == required or check_name.startswith(f"{required} (")
 
-    Conservative on purpose: a run still going outranks a sibling that passed,
-    and any non-success conclusion (failure, cancelled, timed_out) is a
-    failure. This function cannot dispatch a run -- it only reads.
+
+def ci_decision(checks: list[dict], required: tuple[str, ...] | None = None) -> str:
+    """Verdict over the NAMED checks a release requires, for one SHA.
+
+    Gating on "every check on the commit" is wrong and would get worse: `e2e`
+    runs on pushes to `main` and is deliberately *not* in `gate`'s needs
+    (ADR-0032 §3a keeps breadth out of the merge gate), so a red or slow e2e
+    must not block a tag. What must be green is `gate` -- and `gate` is green
+    only when the jobs it needs are.
+
+    Conservative within that set: a required check still running outranks a
+    sibling that passed, and any non-success conclusion is a failure. A
+    `skipped` check passes (ADR-0032: the classifier saying "nothing to test
+    here"). A required check that is absent entirely is CI_MISSING, not a pass.
+
+    This function only reads a verdict; it cannot start a run.
     """
-    if not runs:
+    required = required or DEFAULT_REQUIRED_CHECKS
+    if not checks:
         return CI_MISSING
-    if any(run.get("status") != "completed" for run in runs):
-        return CI_PENDING
-    if any(run.get("conclusion") != "success" for run in runs):
+
+    verdicts = []
+    for name in required:
+        matching = [c for c in checks if _matches(c.get("name", ""), name)]
+        if not matching:
+            return CI_MISSING
+        if any(c.get("status") != "completed" for c in matching):
+            verdicts.append(CI_PENDING)
+        elif any(c.get("conclusion") not in ("success", "skipped") for c in matching):
+            verdicts.append(CI_FAILED)
+        else:
+            verdicts.append(CI_PASSED)
+
+    if CI_FAILED in verdicts:
         return CI_FAILED
+    if CI_PENDING in verdicts:
+        return CI_PENDING
     return CI_PASSED
 
 
@@ -341,6 +391,7 @@ class Context:
     version: str
     runner: Runner
     wait_ci_minutes: int
+    required_checks: tuple[str, ...] = DEFAULT_REQUIRED_CHECKS
     skip_install_check: bool = False
     rehearse_install_check: bool = False
     sha: str = ""
@@ -402,53 +453,79 @@ def step_preconditions(ctx: Context) -> None:
         ctx.runner.note(f"no open PRs labelled {BLOCKER_LABEL}")
 
 
-def _ci_runs_for(sha: str) -> list[dict]:
-    runs = _gh_json(
-        [
-            "gh",
-            "run",
-            "list",
-            "--branch",
-            "dev",
-            "--commit",
-            sha,
-            "--workflow",
-            "ci.yml",
-            "--json",
-            "status,conclusion,name,headSha,databaseId,url",
-        ]
+def _checks_for(sha: str) -> list[dict]:
+    """The check runs GitHub reports for a commit, by name.
+
+    Check runs, not workflow runs: what a release waits on is the named check
+    `gate`, which is a job inside ci.yml, and `gh run list` only knows about
+    the workflow as a whole.
+    """
+    try:
+        payload = _gh_json(["gh", "api", f"repos/{MAINTAINER}/pyrite/commits/{sha}/check-runs"])
+    except ReleaseError as exc:
+        # The likeliest real failure is a commit that was never pushed, and the
+        # API answers 422 "No commit found". That is exactly CI_MISSING -- the
+        # caller's advice ("push it to dev and let CI run") is what you need.
+        # Anything else (auth, network) is a genuine error and must surface.
+        if "No commit found" in str(exc):
+            return []
+        raise
+    if isinstance(payload, dict):
+        runs = payload.get("check_runs", [])
+        return runs if isinstance(runs, list) else []
+    return []
+
+
+def _describe(checks: list[dict], required: tuple[str, ...]) -> str:
+    relevant = [c for c in checks if any(_matches(c.get("name", ""), r) for r in required)]
+    return (
+        ", ".join(f"{c.get('name')}={c.get('conclusion') or c.get('status')}" for c in relevant)
+        or "none"
     )
-    return runs if isinstance(runs, list) else []
 
 
 def step_ci(ctx: Context) -> None:
+    required = tuple(ctx.required_checks)
     deadline = time.monotonic() + ctx.wait_ci_minutes * 60
     while True:
-        runs = _ci_runs_for(ctx.sha)
-        verdict = ci_decision(runs)
+        checks = _checks_for(ctx.sha)
+        verdict = ci_decision(checks, required=required)
         if verdict == CI_PASSED:
-            ctx.runner.note(f"CI is green on {ctx.sha[:12]} ({len(runs)} run(s))")
+            ctx.runner.note(
+                f"required check(s) green on {ctx.sha[:12]}: {_describe(checks, required)}"
+            )
+            other = [
+                c.get("name")
+                for c in checks
+                if not any(_matches(c.get("name", ""), r) for r in required)
+                and c.get("conclusion") not in ("success", "skipped", None)
+            ]
+            if other:
+                ctx.runner.note(
+                    f"(advisory, not blocking: {', '.join(other)} -- not in "
+                    "--require-check, so it does not hold the release)"
+                )
             return
         if verdict == CI_FAILED:
-            urls = ", ".join(run.get("url", "?") for run in runs)
             raise ReleaseError(
-                f"CI is not green on {ctx.sha[:12]}: {urls}. "
-                "Fix it on dev; the tagged commit must be one CI passed."
+                f"a required check is not green on {ctx.sha[:12]}: "
+                f"{_describe(checks, required)}. Fix it on dev; the tagged "
+                "commit must be one CI passed."
             )
         if verdict == CI_MISSING:
             raise ReleaseError(
-                f"no ci.yml run exists for {ctx.sha[:12]}. Push the commit to dev "
-                "and let CI run -- this script never dispatches one, because a run "
-                "it started is not the run the merge gate saw."
+                f"no run of {', '.join(required)} exists for {ctx.sha[:12]}. Push the "
+                "commit to dev and let CI run -- this script never starts one, because "
+                "a run it started is not the run the merge gate saw."
             )
         # pending
         if time.monotonic() >= deadline:
             raise ReleaseError(
-                f"CI is still running on {ctx.sha[:12]} after "
-                f"{ctx.wait_ci_minutes} min. Re-run with a longer --wait-ci, or "
-                "wait and try again."
+                f"a required check is still running on {ctx.sha[:12]} after "
+                f"{ctx.wait_ci_minutes} min: {_describe(checks, required)}. "
+                "Re-run with a longer --wait-ci, or wait and try again."
             )
-        ctx.runner.note(f"CI still running on {ctx.sha[:12]}; waiting 30s")
+        ctx.runner.note(f"required check(s) still running on {ctx.sha[:12]}; waiting 30s")
         time.sleep(30)
 
 
@@ -695,6 +772,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="the default; accepted so you can say it out loud.",
     )
     parser.add_argument(
+        "--require-check",
+        action="append",
+        metavar="NAME",
+        help="a check that must be green before the tag, by name. Repeatable. "
+        f"Default: {', '.join(DEFAULT_REQUIRED_CHECKS)}. Checks NOT named here are "
+        "advisory and never block the release -- that is deliberate for the breadth "
+        "jobs that run after the merge gate.",
+    )
+    parser.add_argument(
         "--wait-ci",
         type=int,
         default=0,
@@ -719,7 +805,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=REPO,
         help=argparse.SUPPRESS,  # tests only
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    # `action="append"` starts at None rather than the default, and giving it a
+    # list default would append to it instead of replacing it.
+    if not args.require_check:
+        args.require_check = list(DEFAULT_REQUIRED_CHECKS)
+    return args
 
 
 def run_release(args: argparse.Namespace) -> tuple[int, Runner]:
@@ -739,6 +830,7 @@ def run_release(args: argparse.Namespace) -> tuple[int, Runner]:
         version=version,
         runner=runner,
         wait_ci_minutes=args.wait_ci,
+        required_checks=tuple(args.require_check),
         skip_install_check=args.skip_install_check,
         rehearse_install_check=args.install_check,
     )
@@ -758,8 +850,13 @@ def run_release(args: argparse.Namespace) -> tuple[int, Runner]:
         try:
             step.run(ctx)
         except ReleaseError as exc:
+            # Piped, stdout block-buffers and stderr does not: without this the
+            # failure prints above the header and the step it failed in, which
+            # is how it reads in a log or a CI transcript.
+            sys.stdout.flush()
             print(f"\nFAIL at {step.key}: {exc}", file=sys.stderr)
             print("Nothing further was attempted.", file=sys.stderr)
+            sys.stderr.flush()
             return 1, runner
         print()
 

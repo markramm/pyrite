@@ -85,10 +85,12 @@ def no_network(monkeypatch):
             return "dev"
         if "rev-parse" in joined:
             return FAKE_SHA
-        if "gh run list" in joined:
+        if "check-runs" in joined:
+            # `gate` green, `e2e` red: the release must proceed anyway.
             return (
-                '[{"status":"completed","conclusion":"success","name":"CI",'
-                f'"headSha":"{FAKE_SHA}","databaseId":1,"url":"u"}}]'
+                '{"check_runs":['
+                '{"name":"gate","status":"completed","conclusion":"success"},'
+                '{"name":"e2e","status":"completed","conclusion":"failure"}]}'
             )
         if "gh pr list" in joined:
             return "[]"
@@ -113,7 +115,7 @@ def dry_run(no_network, monkeypatch):
     """
     monkeypatch.setattr(release, "read_pyproject_version", lambda repo: "0.24.2")
     monkeypatch.setattr(release, "check_changelog", lambda repo, v: None)
-    monkeypatch.setattr(release, "extract_release_notes", lambda repo, v: "- A release script.\n")
+    monkeypatch.setattr(release, "release_notes_for", lambda repo, v: "- A release script.\n")
 
     def _go(argv=("0.24.2",)):
         code, runner = release.run_release(release.parse_args(list(argv)))
@@ -214,24 +216,24 @@ class TestChangelogValidation:
 
 class TestExtractNotes:
     def test_takes_the_section_body_only(self, repo):
-        notes = release.extract_release_notes(repo, "0.24.2")
+        notes = release.release_notes_for(repo, "0.24.2")
         assert "- A release script." in notes
         assert "0.24.1" not in notes
         assert "Unreleased" not in notes
 
     def test_does_not_include_the_heading_itself(self, repo):
-        notes = release.extract_release_notes(repo, "0.24.2")
+        notes = release.release_notes_for(repo, "0.24.2")
         assert not notes.lstrip().startswith("## [0.24.2]")
 
     def test_last_section_in_the_file_still_extracts(self, repo):
         (repo / "CHANGELOG.md").write_text(
             f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n- Only one.\n"
         )
-        assert "- Only one." in release.extract_release_notes(repo, "0.24.2")
+        assert "- Only one." in release.release_notes_for(repo, "0.24.2")
 
     def test_missing_section_is_an_error(self, repo):
         with pytest.raises(release.ReleaseError):
-            release.extract_release_notes(repo, "9.9.9")
+            release.release_notes_for(repo, "9.9.9")
 
 
 class TestContributorsLine:
@@ -263,44 +265,85 @@ class TestContributorsLine:
 # --------------------------------------------------------------------------
 
 
-def _run(status, conclusion, name="CI", sha="abc123"):
-    return {
-        "status": status,
-        "conclusion": conclusion,
-        "name": name,
-        "headSha": sha,
-        "databaseId": 1,
-        "url": "https://github.com/markramm/pyrite/actions/runs/1",
-    }
+def _run(status, conclusion, name="gate"):
+    return {"status": status, "conclusion": conclusion, "name": name}
 
 
 class TestCiDecision:
-    def test_successful_ci_run_passes(self):
+    """The verdict is over NAMED checks, not "everything on the SHA".
+
+    `gate` is the required check (ADR-0032 §3a); `e2e` runs on pushes to main
+    and is deliberately advisory -- it is not in `gate`'s needs, and a red e2e
+    must not block a tag. Gating on every check run would make it block one.
+    """
+
+    def test_the_required_check_passing_passes(self):
         assert release.ci_decision([_run("completed", "success")]) == release.CI_PASSED
 
-    def test_failed_ci_run_fails(self):
+    def test_the_required_check_failing_fails(self):
         assert release.ci_decision([_run("completed", "failure")]) == release.CI_FAILED
 
-    def test_in_progress_run_is_pending(self):
+    def test_in_progress_required_check_is_pending(self):
         assert release.ci_decision([_run("in_progress", None)]) == release.CI_PENDING
 
-    def test_queued_run_is_pending(self):
+    def test_queued_required_check_is_pending(self):
         assert release.ci_decision([_run("queued", None)]) == release.CI_PENDING
 
-    def test_no_run_at_all_is_missing(self):
+    def test_no_checks_at_all_is_missing(self):
         assert release.ci_decision([]) == release.CI_MISSING
 
-    def test_cancelled_run_is_a_failure_not_a_pass(self):
+    def test_the_required_check_absent_is_missing(self):
+        """Other checks ran but `gate` did not: that is not a green light."""
+        assert release.ci_decision([_run("completed", "success", "smoke")]) == release.CI_MISSING
+
+    def test_cancelled_is_a_failure_not_a_pass(self):
         assert release.ci_decision([_run("completed", "cancelled")]) == release.CI_FAILED
 
-    def test_a_pending_run_alongside_a_success_is_still_pending(self):
-        """Never claim green while a run on the same SHA is still going."""
-        decision = release.ci_decision([_run("completed", "success"), _run("in_progress", None)])
-        assert decision == release.CI_PENDING
+    def test_timed_out_is_a_failure(self):
+        assert release.ci_decision([_run("completed", "timed_out")]) == release.CI_FAILED
 
-    def test_a_failure_beats_a_success_on_the_same_sha(self):
-        decision = release.ci_decision([_run("completed", "success"), _run("completed", "failure")])
-        assert decision == release.CI_FAILED
+    def test_skipped_required_check_passes(self):
+        """ADR-0032: a skipped job is the classifier saying "nothing to test
+        here", and `gate` itself reports success. A skipped check is a pass."""
+        assert release.ci_decision([_run("completed", "skipped")]) == release.CI_PASSED
+
+    def test_an_advisory_red_check_does_not_block(self):
+        """The coupling that matters: `e2e` runs on pushes to main, is not in
+        `gate`'s needs, and must never block a tag."""
+        checks = [_run("completed", "success", "gate"), _run("completed", "failure", "e2e")]
+        assert release.ci_decision(checks) == release.CI_PASSED
+
+    def test_an_advisory_pending_check_does_not_hold_the_release(self):
+        checks = [_run("completed", "success", "gate"), _run("in_progress", None, "e2e")]
+        assert release.ci_decision(checks) == release.CI_PASSED
+
+    def test_several_required_checks_all_must_pass(self):
+        checks = [_run("completed", "success", "gate"), _run("completed", "failure", "kb")]
+        assert release.ci_decision(checks, required=("gate", "kb")) == release.CI_FAILED
+
+    def test_several_required_checks_pending_beats_passed(self):
+        checks = [_run("completed", "success", "gate"), _run("queued", None, "kb")]
+        assert release.ci_decision(checks, required=("gate", "kb")) == release.CI_PENDING
+
+    def test_matrix_legs_match_by_prefix(self):
+        """`test` reports as `test (3.12)` on a matrix and as `test` when the
+        matrix is skipped -- requiring `test` must match both."""
+        checks = [_run("completed", "success", "test (3.12)")]
+        assert release.ci_decision(checks, required=("test",)) == release.CI_PASSED
+
+    def test_the_default_required_check_is_gate(self):
+        assert release.DEFAULT_REQUIRED_CHECKS == ("gate",)
+
+    def test_require_check_is_configurable_on_the_command_line(self):
+        args = release.parse_args(["0.24.2", "--require-check", "gate", "--require-check", "kb"])
+        assert args.require_check == ["gate", "kb"]
+
+    def test_require_check_defaults_to_gate(self):
+        assert release.parse_args(["0.24.2"]).require_check == ["gate"]
+
+    def test_e2e_is_never_required_by_default(self):
+        assert "e2e" not in release.DEFAULT_REQUIRED_CHECKS
+        assert "e2e" not in _string_literals(release)
 
     def test_never_dispatches_a_run(self):
         """A run this script started is not the run the merge gate saw, so it
@@ -308,6 +351,31 @@ class TestCiDecision:
         literals = _string_literals(release)
         assert "workflow" not in literals
         assert not [s for s in literals if "workflow run" in s]
+
+    def test_a_commit_github_has_never_seen_says_so_in_english(self, monkeypatch):
+        """Found running it by hand: the likeliest real failure is a commit
+        that was never pushed, and `gh` answers HTTP 422 'No commit found'.
+        That must become the CI_MISSING advice, not a raw API error."""
+
+        def explode(cmd, **kwargs):
+            raise release.ReleaseError(
+                "command failed (1): gh api repos/markramm/pyrite/commits/deadbeef/check-runs\n"
+                '{"message":"No commit found for SHA: deadbeef","status":"422"}'
+            )
+
+        monkeypatch.setattr(release, "_check_output", explode)
+        assert release._checks_for("deadbeef") == []
+
+    def test_other_gh_errors_still_surface(self, monkeypatch):
+        """Only 'no commit' is translated: a network or auth failure must not
+        be mistaken for 'CI has not run yet'."""
+
+        def explode(cmd, **kwargs):
+            raise release.ReleaseError("command failed (1): gh api ...\nHTTP 401 Bad credentials")
+
+        monkeypatch.setattr(release, "_check_output", explode)
+        with pytest.raises(release.ReleaseError, match="401"):
+            release._checks_for("deadbeef")
 
 
 # --------------------------------------------------------------------------
@@ -509,6 +577,26 @@ class TestDryRunOverThisRepo:
         assert "uv pip install" in out
         assert "--install-check" in out
 
+    def test_printed_commands_are_copy_pasteable(self, dry_run, capsys):
+        """Found running it by hand: an argument with spaces printed bare, so
+        `gh label create ... --description Must not ship in the next release`
+        could not be pasted into a shell. The maintainer pastes these."""
+        import shlex
+
+        dry_run()
+        for line in capsys.readouterr().out.splitlines():
+            for prefix in ("WOULD RUN: ", "RUN: "):
+                if prefix in line:
+                    rendered = line.split(prefix, 1)[1]
+                    # every multi-word argument must be quoted: re-splitting the
+                    # printed line must not invent extra arguments
+                    assert shlex.split(rendered), rendered
+
+    def test_an_argument_with_spaces_is_quoted_when_printed(self, capsys):
+        runner = release.Runner(execute=False)
+        runner.run_write(["gh", "label", "create", "x", "--description", "two words"])
+        assert "'two words'" in capsys.readouterr().out
+
     def test_dry_run_says_it_is_a_dry_run(self, dry_run, capsys):
         dry_run()
         out = capsys.readouterr().out.lower()
@@ -527,6 +615,31 @@ class TestDryRunOverThisRepo:
         assert runner.planned == [], "a write was planned after a failed check"
         captured = capsys.readouterr()
         assert "gh release create" not in captured.out
+
+    def test_the_failure_reads_in_order_when_piped(self, tmp_path):
+        """Found running it by hand: piped, stdout block-buffers while stderr
+        does not, so `FAIL at preconditions` printed ABOVE the header and the
+        step it failed in -- unreadable in a log or a CI transcript.
+
+        Runs the real script as a subprocess with both streams on one pipe.
+        `--repo` points at an empty tmp dir, so the very first check (git
+        status) fails there: no network, no git writes, nothing reached.
+        """
+        import subprocess
+
+        proc = subprocess.run(
+            f'"{sys.executable}" "{REPO / "scripts" / "release.py"}" 0.0.1 '
+            f'--repo "{tmp_path}" 2>&1',
+            shell=True,
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_path),
+        )
+        out = proc.stdout
+        assert proc.returncode != 0
+        assert "FAIL at preconditions" in out
+        assert out.index("pyrite release 0.0.1") < out.index("FAIL at")
+        assert out.index("a. preconditions") < out.index("FAIL at")
 
 
 # --------------------------------------------------------------------------
