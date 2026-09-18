@@ -58,6 +58,16 @@ gh label create release-blocker --description 'Must not ship in the next release
 | c. release layer | what a *user* gets, **before the tag exists** (ADR-0032 §3a): install from the SHA into a throwaway `uv` venv, `pyrite --version` equals X.Y.Z, `scripts/run_tutorial.sh` (the Quick Start) run against that install, `docker build` when docker is present — a loud note when it is not | no |
 | d. publish | fast-forward `main` to the SHA (`git push origin <sha>:refs/heads/main`; the ruleset allows only a fast-forward), tag `vX.Y.Z`, push the tag, `gh release create` with the CHANGELOG section plus the contributors line | **yes** |
 | e. post-release | reopen `## [Unreleased]` in `CHANGELOG.md`, committed for a PR to `dev` like any other change | **yes** |
+| f. handoff | prints what the release does *not* do and cannot: **pyrite.wiki** (below), the deploys the tag does not trigger, the `[Unreleased]` PR, the announcement. Changes nothing | no |
+
+**pyrite.wiki is not automated and cannot be.** The marketing site lives
+outside this repo, and it carries version-specific claims — the version it
+names, install commands pinned to a tag, and the counts it quotes (MCP tools,
+tests, ADRs) — that go stale silently the moment a release lands. The top
+GitHub referrer for the repo is chatgpt.com, so those numbers are what gets
+quoted to prospective users; `docs-counts-generated-or-asserted-from-code`
+tracks fixing the drift at the source. Until then, step f reminds you and you
+update the site by hand.
 
 If step d's fast-forward is refused, `main` has commits `dev` lacks: stop and
 find out why (a hotfix that was never merged back?) before going further.

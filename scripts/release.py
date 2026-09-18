@@ -11,8 +11,8 @@ maintainer keeps the *decision* to cut a release; this script makes executing
 that decision one command, with every check in front of the first thing that
 cannot be undone.
 
-The order is the point (ADR-0032 §3a). Five steps, and the first two that can
-change the world come last:
+The order is the point (ADR-0032 §3a). Six steps, and the only two that can
+change the world come after every check:
 
   a. preconditions  -- clean `dev` at `origin/dev`; the version in
                        pyproject.toml is <version>; CHANGELOG has a dated
@@ -32,6 +32,10 @@ change the world come last:
                        push the tag, `gh release create` with the CHANGELOG
                        section plus the contributors line.
   e. post-release   -- IRREVERSIBLE (a commit on dev). Reopen `[Unreleased]`.
+  f. handoff        -- what the release does NOT do, said out loud: pyrite.wiki
+                       (outside this repo, and it names the version and quotes
+                       counts that go stale), the deploys the tag does not
+                       trigger, the [Unreleased] PR. Changes nothing.
 
 Safety rules, pinned by tests/test_release_script.py:
 
@@ -405,6 +409,10 @@ class Step:
     name: str
     irreversible: bool
     run: Callable[[Context], None]
+    # A check can still stop the release. Everything after the tag exists
+    # cannot, whatever it finds, so it is not one -- and the ordering
+    # invariant (no irreversible step before a check) is asserted over these.
+    is_check: bool = True
 
 
 def step_preconditions(ctx: Context) -> None:
@@ -764,12 +772,55 @@ def step_post_release(ctx: Context) -> None:
     )
 
 
+def step_handoff(ctx: Context) -> None:
+    """What the release does NOT do, said out loud while it is still in mind.
+
+    Changes nothing and can stop nothing -- by the time it runs, the tag
+    exists. It is here because the steps this script cannot automate are the
+    ones that get forgotten, and a release is not finished when the tag is
+    pushed.
+
+    pyrite.wiki is the case that motivated it: the marketing site lives
+    outside this repo, and it carries version-specific claims (the current
+    version, tool counts, test counts) that go stale silently the moment a
+    release lands. Nothing in this path can update it.
+    """
+    tag = f"v{ctx.version}"
+    if ctx.runner.execute:
+        print("    The tag is cut. These are yours -- nothing here is automated:")
+    else:
+        print("    After --execute, these would be yours -- nothing here is automated:")
+    print()
+    print(f"    1. pyrite.wiki -- the site lives OUTSIDE this repo. Update it for {tag}:")
+    print("         - the version it names, and any install command pinned to a tag")
+    print("         - the counts it quotes (MCP tools, tests, ADRs); they drift every")
+    print("           release and the top GitHub referrer is chatgpt.com, so these are")
+    print("           what gets quoted to prospective users")
+    print(f"         - whatever {tag} added that the site's feature list should say")
+    print()
+    print("    2. Deploys -- the tag does not deploy itself (site mapping, runbook):")
+    print(f"         ./pyrite_deployments/deploy.sh ink {tag}")
+    print("         ./pyrite_deployments/deploy.sh cascade        # --reseed if KB data changed")
+    print("       (demo.pyrite.wiki follows dev HEAD automatically; nothing to do)")
+    print()
+    print("    3. The [Unreleased] commit from step e still needs a PR to dev.")
+    print()
+    print(f"    4. Announce {tag} wherever the release is announced.")
+
+
 STEPS: list[Step] = [
     Step("preconditions", "a. preconditions", False, step_preconditions),
     Step("ci", "b. CI is green on this SHA", False, step_ci),
     Step("release_layer", "c. release layer: install, tutorial, docker", False, step_release_layer),
-    Step("publish", "d. main, tag, GitHub release", True, step_publish),
-    Step("post_release", "e. reopen [Unreleased]", True, step_post_release),
+    Step("publish", "d. main, tag, GitHub release", True, step_publish, is_check=False),
+    Step("post_release", "e. reopen [Unreleased]", True, step_post_release, is_check=False),
+    Step(
+        "handoff",
+        "f. what is still yours to do",
+        False,
+        step_handoff,
+        is_check=False,
+    ),
 ]
 
 

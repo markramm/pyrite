@@ -392,10 +392,14 @@ class TestStepOrdering:
 
     def test_no_irreversible_step_precedes_a_check(self):
         """The whole point of the script: every check runs in front of the
-        first thing that cannot be undone."""
+        first thing that cannot be undone.
+
+        Steps after the irreversible ones are not checks -- nothing they could
+        say would stop a tag that already exists -- so `checks` is what this
+        asserts over, not "everything not irreversible"."""
         names = [s.name for s in release.STEPS]
         first_irreversible = next(i for i, s in enumerate(release.STEPS) if s.irreversible)
-        last_check = max(i for i, s in enumerate(release.STEPS) if not s.irreversible)
+        last_check = max(i for i, s in enumerate(release.STEPS) if s.is_check)
         assert first_irreversible > last_check, (
             f"a check runs after the first irreversible step: {names}"
         )
@@ -407,11 +411,60 @@ class TestStepOrdering:
             "release_layer",
             "publish",
             "post_release",
+            "handoff",
         ]
 
     def test_only_publish_and_post_release_are_irreversible(self):
         irreversible = {s.key for s in release.STEPS if s.irreversible}
         assert irreversible == {"publish", "post_release"}
+
+    def test_the_checks_are_the_three_steps_before_the_tag(self):
+        assert {s.key for s in release.STEPS if s.is_check} == {
+            "preconditions",
+            "ci",
+            "release_layer",
+        }
+
+    def test_the_handoff_is_neither_a_check_nor_irreversible(self):
+        """It only tells the maintainer what is left for them; it changes
+        nothing and can stop nothing."""
+        handoff = next(s for s in release.STEPS if s.key == "handoff")
+        assert handoff.is_check is False
+        assert handoff.irreversible is False
+
+
+class TestHandoffReminders:
+    """pyrite.wiki lives outside this repo and carries version-specific claims
+    (tool counts, test counts, the current version). Nothing in the release
+    path can update it, so the release must at least say so out loud."""
+
+    def test_the_run_ends_by_naming_pyrite_wiki(self, dry_run, capsys):
+        dry_run()
+        out = capsys.readouterr().out
+        assert "pyrite.wiki" in out
+
+    def test_the_reminder_comes_after_the_release_is_cut(self, dry_run, capsys):
+        dry_run()
+        out = capsys.readouterr().out
+        assert out.index("gh release create") < out.index("pyrite.wiki")
+
+    def test_it_names_the_version_being_released(self, dry_run, capsys):
+        dry_run()
+        out = capsys.readouterr().out
+        reminder = out[out.index("pyrite.wiki") - 400 : out.index("pyrite.wiki") + 400]
+        assert "0.24.2" in reminder
+
+    def test_it_reminds_about_the_deploys_too(self, dry_run, capsys):
+        """The site mapping in the runbook: the tag does not deploy itself."""
+        dry_run()
+        out = capsys.readouterr().out.lower()
+        assert "deploy" in out
+
+    def test_the_reminder_changes_nothing(self, dry_run):
+        """It must not be able to touch the site, only mention it."""
+        _code, runner, calls = dry_run()
+        joined = " ".join(" ".join(c) for c in calls)
+        assert "pyrite.wiki" not in joined
 
 
 # --------------------------------------------------------------------------
