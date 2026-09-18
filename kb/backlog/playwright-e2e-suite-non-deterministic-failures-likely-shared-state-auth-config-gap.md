@@ -102,3 +102,75 @@ is what leaves this ticket as the remaining blocker:
 - Zero e2e tests fail due to cross-spec shared state (verified by running each spec file in isolation vs. the full suite and confirming identical outcomes).
 - No spec identifies an element by bare visible text where a role, `href`, or `data-testid` would be stable (the strict-mode-violation class above).
 - **`continue-on-error: true` is removed from the `e2e` job in `ci.yml`** and a full CI run passes with e2e blocking again. This ticket is not done while that line survives.
+
+## Analysis 2026-09-18 (conductor): why the suite fails differently every run
+
+Evidence: eight consecutive failed `e2e` jobs on CI (2026-09-17/18), the ticket's
+own 2026-09-16 runner evidence, and the specs.
+
+**1. The suite has no test-data contract; it assumes a world.**
+`playwright.config.ts` starts `uvicorn pyrite.server.api:app` with no
+`PYRITE_*` environment and `reuseExistingServer: !CI`. Locally that is Mark's
+real config (47 KBs, real daily notes, other sessions writing); on a CI runner
+it is an empty home: zero KBs, zero entries. Every spec then asserts on data:
+the Dashboard heading and stat cards (the page renders its zero state with no
+KBs), "shows edit button when daily note exists", "shows entry", collections
+headings. The failure signature confirms it: the same specs fail on every CI
+run at 5.1–5.6 s, which is the default `expect` timeout — the page loaded, the
+element never existed. Locally the failing set *shifts* because the world
+shifts (specs create daily notes in a real KB; the daily GET itself creates
+today's note — `web-daily-notes-view-side-effect`). "Non-deterministic" is the
+wrong name; the suite is deterministic on its input, and its input is
+undefined.
+
+**2. Locators keyed on visible text.** `text=New Entry`, `text=Daily Notes`,
+`locator('h1').first()` — every later-added element with the same words is a
+strict-mode violation (the runner evidence: "resolved to 2 elements" ×6). The
+logo/footer fix in `app.spec.ts` was one instance of a class.
+
+**3. Environment ambiguity.** Auth state is unspecified (specs for /login and
+/register assume auth pages exist); the backend `webServer` has a 15 s timeout
+that a cold runner importing torch can exceed; nothing pins `PYRITE_AUTO_EMBED`.
+
+None of the three is fixed by retries, which is why `retries: 2` only made the
+job three times slower.
+
+## Plan: foundation first, then mechanical fan-out
+
+**Package A — the deterministic world (one worker, Opus).**
+- `web/e2e/global-setup.ts`: create a temp `PYRITE_DATA_DIR`/`PYRITE_CONFIG_DIR`,
+  write a config with auth **disabled** explicitly, `PYRITE_AUTO_EMBED=0`,
+  seed one KB `e2e` with a fixed set of entries (people, events, notes, a
+  collection, a daily note for a fixed date) via `pyrite init` + `pyrite
+  create`; export the seed as constants in `web/e2e/fixtures.ts`.
+- `playwright.config.ts`: backend `webServer` gets that `env`;
+  `reuseExistingServer: false` always (a local run must never touch real KBs);
+  backend timeout 60 s; `retries: 0` (a flake must be visible, not absorbed).
+- Specs that write get unique titles (`uniqueTitle()` helper) or their own KB.
+- Fix or isolate the daily-GET side effect for the seeded world (it is also a
+  read-tier violation: `web-daily-notes-view-side-effect`).
+- Prove it: 5 consecutive green local runs, then 5 on CI by dispatch.
+- Record: this analysis into the ticket; ADR-0032 §3a "Playwright on main".
+
+**Packages B–G — one Sonnet worker per group, disjoint footprints, after A.**
+Rewrite each spec against the seeded world: assertions on seeded data; roles,
+`href`s, or `data-testid` instead of text; add `data-testid` to the Svelte
+component only where no role exists. Each package = spec file(s) + the
+page component(s) they touch, so no two packages share a file:
+  B: app.spec + settings.spec (layout, dashboard, settings pages)
+  C: auth.spec (login/register — decide: skip when auth disabled, or a second
+     project with auth enabled and a seeded user; A decides, B implements)
+  D: entry-crud.spec + entry-features.spec (entries pages)
+  E: collections.spec + daily.spec
+  F: graph.spec + timeline.spec
+  G: qa.spec + search.spec
+Acceptance per package: its specs pass 5× in a row against A's world; zero
+`text=` locators; no `.first()` to dodge a strict-mode violation.
+
+**Package H — wire it in (Sonnet, after B–G).** `e2e` job runs on pushes to
+`main` (the value chain's depth layer) with `retries: 0`; the report artifact
+stays; the `continue-on-error` line goes; `tests/test_dev_process_config.py`
+pinned. On `dev` pushes only after ten consecutive greens on `main`.
+
+Sequencing: A alone (it changes the config every package depends on); B–G in
+parallel from the merged A; H last. Three conductor ticks.
