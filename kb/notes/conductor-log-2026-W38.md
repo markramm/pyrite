@@ -2341,3 +2341,15 @@ Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` rev
 **Root cause:** the machine budget counts dispatched workers only — not the conductor's own review suites, not review agents (each told to run the suite), not the pre-push hook inside every worker; nothing serialises suites across worktrees and `-n auto` sizes to cores, not to what else is running. The tick log had recorded load 8–14 for three ticks and nothing acted on it.
 
 **State of the loop:** stopped. No crons armed. Not re-armed without the maintainer. Interim rule when it restarts: one full suite on the machine at a time (the conductor's included), review suites `-n 4`, outside-PR review agents do not run the suite themselves, ≤2 workers, Playwright never beside a suite. First theme on restart: a machine-wide suite lock + memory-bounded xdist count, used by the pre-push hook, the workers and the conductor.
+
+## Tick 2026-09-18T12:19Z (tick 12 — WIP = 1; first tick after the OOM incident, #168)
+
+**Pre-check** 12:12Z: load 2.7, 79% memory free, no heavy process, dev green (f977f48). One thing this tick, by the rule: the oldest unreviewed outside PR.
+
+**Since the incident (by hand, serially):** outside PRs #164 and #166 reviewed and posted (both "not yet" — #164: real bug, but the fix writes timestamps into every new entry and its tests read a path `save()` never writes; #166: four fixes on a stale base, #65's re-sort inverts bm25 order — reproduced). A correction posted on #166: the maintainer ruled that a default body cap on the `fields` path is right (the conductor's review had argued the opposite). ADR-0034 "agent-facing reads are bounded by default" drafted `proposed` (PR #170), bounds environment-configurable per the maintainer. WIP = 1 written into the skill (PR #172, merged). One cron re-armed (:07/:37), no sweep cron, no retro cron. Architect dispatched read-only to re-split the remaining work into small serial themes (`kb/notes/serial-queue-2026-09-18.md`).
+
+**This tick: outside PR #169** (makiaveli1, repeat contributor; #137 follow-up; +92/−12). Suite at `-n 4`: 4311 passed (108 s — beside a read-only architect; alone earlier today `-n 4` took 62 s, against 300+ s for `-n auto` under contention). verify-red: red without the fix. Cold read under no-suite orders. **Recommendation posted: merge after two changes** — the guard checks key presence, not values: `entry_id: ["abc"]` and `entries: 5` still return `INTERNAL`/`retryable: true` (reproduced by the host through the dispatcher), and the error does not name the malformed item's index. CI green; no approval click needed. Labelled `reviewed`.
+
+**Waiting:** outside PR #171 (zhongxiao-chang — the `parse_datetime` split the #164 review suggested; +70/−3) is next tick's one thing. Then the loop's own queue: #163, #161, #140, #160, #145.
+
+**Needs the maintainer:** #169, #164, #166 reviews are on the PRs (none is "merge as is" yet); ADR-0034 acceptance (PR #170); the three kept decisions from tick 9 (API-key hashing, CodeQL required check, the private-repo existence oracle).
