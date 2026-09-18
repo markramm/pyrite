@@ -147,6 +147,19 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   creating the entry. The button is now disabled until the KB has resolved,
   same as it already was while saving. Found while rewriting the e2e suite's
   entry-creation coverage against a real, seeded backend.
+- **The login and registration forms no longer show the HTTP status to the
+  user.** Both rendered `ApiError.message`, the developer-facing string, so a
+  mistyped password read "API Error 401: Invalid username or password". They
+  now render the server's own `detail`. Found by the new auth-enabled
+  end-to-end project, where a real 401 is reachable.
+- **The login path is covered end to end.** `web/e2e/auth.spec.ts` runs under
+  its own Playwright project against a backend with auth enabled — its own
+  data directory, port and dev server — so the gate redirect, the API's 401
+  for an anonymous request, a real sign-in, and the redirect away from
+  `/login` once signed in are all asserted. Under the auth-disabled world the
+  other specs use, 8 of those 18 assertions are false, which is what the
+  second world buys.
+
 - **Typed entries no longer drop frontmatter they do not declare.** A load ->
   save through any typed class (core or plugin) deleted unknown keys —
   `pyrite update -f status=done` stripped `milestone:` and `created:`. The
