@@ -7,7 +7,7 @@ tags:
 - security
 - codeql
 kind: tech_debt
-status: in_progress
+status: done
 priority: medium
 assignee: agent:pyrite-worker
 effort: S

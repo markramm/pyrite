@@ -7,6 +7,12 @@ on:
     branches: [main, dev]
   workflow_dispatch:
 
+# Least privilege by default: checkout only. Any job that needs more says so
+# in its own permissions: block, with a one-line comment naming which step
+# needs it (CodeQL actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 # A newer push to the same ref makes the older run's answer irrelevant. CI is
 # the gate (the full suite no longer runs at commit time -- see
 # .pre-commit-config.yaml), so it has to answer quickly, not queue behind
@@ -26,6 +32,11 @@ jobs:
   # ===========================================================================
   changes:
     runs-on: ubuntu-latest
+    # dorny/paths-filter reads the PR's changed-files list on pull_request
+    # events, which needs pull-requests: read beyond the workflow default.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       web: ${{ steps.filter.outputs.web }}
