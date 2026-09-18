@@ -79,6 +79,19 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Added
 
+- **`scripts/release.py`: a release is one command.** Five ordered steps, with
+  every check in front of the first thing that cannot be undone —
+  preconditions (clean `dev` at `origin/dev`, the version, a dated CHANGELOG
+  section with content, no open `release-blocker` PR), the required CI checks
+  green on that exact SHA, the release layer verified *before* the tag exists
+  (install from the SHA into a throwaway venv, `pyrite --version`, the
+  getting-started tutorial run against that install, a Docker build when
+  docker is present), then `main`, the tag and the GitHub release, then
+  reopening `[Unreleased]`. `--dry-run` is the default and prints every
+  command; `--execute` is the only way anything is written. It never passes
+  `--no-verify`, never force-pushes and never deletes a ref.
+  `scripts/run_tutorial.sh` gains `PYRITE_TUTORIAL_VENV` so the tutorial can
+  be run against an arbitrary install rather than the checkout's.
 - Repo-local configuration: a `.pyrite/config.yaml` in the current directory
   or any parent is used instead of `~/.pyrite` when no `PYRITE_CONFIG_DIR` /
   `PYRITE_DATA_DIR` is set, so a checkout (or a git worktree) can carry its own

@@ -9,54 +9,90 @@ Procedural reference for the `dev → main` release path and the deploy script. 
 
 ## Releasing (dev → main)
 
-Only merge `dev` → `main` when the user explicitly asks to release.
-
-**The rule: the commit that gets tagged is a commit CI already passed.** All
-release edits happen on `dev`; `main` only ever fast-forwards. Never commit on
-`main` (a version bump there is an untested commit, and it makes `main` diverge
-from `dev` so the next release needs a real merge).
+Only release when the user explicitly asks to. The decision stays the
+maintainer's; **executing it is one command**:
 
 ```bash
-# --- on dev -----------------------------------------------------------------
-# 1. Release edits, in one commit:
-#    - pyproject.toml `version` (the ONLY place it is written;
-#      pyrite.__version__ reads it, tests/test_version_consistency.py checks it)
-#    - CHANGELOG.md: date the section being released, `## [X.Y.Z] - YYYY-MM-DD`
-#    - SECURITY.md supported-versions table, if the minor changed
+scripts/release.py X.Y.Z             # dry run (the DEFAULT): prints every step,
+                                     # changes nothing
+scripts/release.py X.Y.Z --execute   # cut it
+```
+
+**The rule the script enforces: the commit that gets tagged is a commit CI
+already passed.** All release edits happen on `dev`; `main` only ever
+fast-forwards. Never commit on `main` (a version bump there is an untested
+commit, and it makes `main` diverge from `dev` so the next release needs a
+real merge).
+
+### Before you run it
+
+Three things the script checks and cannot do for you. They belong on `dev`, in
+one commit, pushed and green *before* you release:
+
+- `pyproject.toml` `version` — the ONLY place it is written;
+  `pyrite.__version__` reads it and `tests/test_version_consistency.py` checks
+  it.
+- `CHANGELOG.md` — date the section being released, `## [X.Y.Z] - YYYY-MM-DD`
+  (today), with content, and nothing stranded under `[Unreleased]`.
+- `SECURITY.md` supported-versions table, if the minor changed.
+
+```bash
 git commit -m "release: prepare vX.Y.Z" -- pyproject.toml CHANGELOG.md
-git push origin dev          # pre-push runs the full suite (~8 min)
+git push -u origin release-prep && gh pr create --base dev --fill   # dev takes PRs only
+```
 
-# 2. Wait for CI on THAT commit. `test (3.12)` is the required check on main.
-gh run list --branch dev --limit 1
-SHA=$(git rev-parse dev)
+One-time prerequisite: the `release-blocker` label must exist. The script
+refuses to release while an open PR carries it, and *prints* the creation
+command rather than creating labels behind your back:
 
-# --- fast-forward main, tag, release ----------------------------------------
-# 3. Fast-forward only. If this refuses, main has commits dev lacks: stop and
-#    find out why (a hotfix that was never merged back?) before going further.
-git checkout main && git pull --ff-only
-git merge --ff-only "$SHA"
-git tag -a vX.Y.Z -m "vX.Y.Z: one-line summary" "$SHA"
-git push origin main && git push origin vX.Y.Z
+```bash
+gh label create release-blocker --description 'Must not ship in the next release' --color B60205
+```
 
-# 4. GitHub release, notes taken from the CHANGELOG section, with every
-#    outside contributor of a merged PR credited by name at the end
-#    (contributors are why the project is not a solo project; say so):
-#      gh pr list --state merged --base dev --search "merged:>YYYY-MM-DD" \
-#        --json author --jq '[.[].author.login] | unique | map(select(. != "markramm" and (test("dependabot") | not))) | .[]'
-#    -> append "Thanks to @a, @b, @c for their contributions." to the notes.
-#    (does NOT publish to PyPI -- see note below)
-gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(sed -n '/^## \[X.Y.Z\]/,/^## \[/p' CHANGELOG.md | sed '$d')
+### What each step checks
 
-# 5. Verify what users will actually get, in a throwaway venv
+| Step | Checks | Irreversible |
+|------|--------|--------------|
+| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content and no stranded `[Unreleased]`; no open PR labelled `release-blocker` | no |
+| b. CI | the **required checks** for that exact SHA concluded success — `gate` by default. Never starts a run; `--wait-ci MINUTES` waits out a pending one | no |
+| c. release layer | what a *user* gets, **before the tag exists** (ADR-0032 §3a): install from the SHA into a throwaway `uv` venv, `pyrite --version` equals X.Y.Z, `scripts/run_tutorial.sh` (the Quick Start) run against that install, `docker build` when docker is present — a loud note when it is not | no |
+| d. publish | fast-forward `main` to the SHA (`git push origin <sha>:refs/heads/main`; the ruleset allows only a fast-forward), tag `vX.Y.Z`, push the tag, `gh release create` with the CHANGELOG section plus the contributors line | **yes** |
+| e. post-release | reopen `## [Unreleased]` in `CHANGELOG.md`, committed for a PR to `dev` like any other change | **yes** |
+
+If step d's fast-forward is refused, `main` has commits `dev` lacks: stop and
+find out why (a hotfix that was never merged back?) before going further.
+
+**Required checks, and why not "all green".** `gate` is the required check on
+`dev` and `main`; it needs the jobs that must pass, so requiring it requires
+them. Checks *not* named are advisory and reported but never blocking — `e2e`
+runs on pushes to `main` and is deliberately outside `gate`'s needs (ADR-0032
+§3a keeps breadth out of the merge gate), so a red or merely slow `e2e` must
+not hold a tag. `--require-check NAME` (repeatable) changes the set.
+
+### Safety
+
+`--dry-run` is the default; `--execute` is the only way anything is written.
+Every irreversible command is printed verbatim first, and printed *instead of*
+running without `--execute`. The script never passes `--no-verify`, never
+force-pushes, never deletes a ref, and refuses a dirty checkout or a HEAD that
+is not exactly `origin/dev`. `gh` reads answer the checks; `gh` writes are
+printed.
+
+Step c is minutes of real network, so a dry run prints it rather than running
+it. `--install-check` performs it for real *without* `--execute` — that is how
+to rehearse the release layer before release day. `--skip-install-check` drops
+it, and then the clean-venv check is yours by hand:
+
+```bash
 python -m venv /tmp/relcheck && /tmp/relcheck/bin/pip install -q \
   "pyrite[all] @ git+https://github.com/markramm/pyrite@vX.Y.Z"
 /tmp/relcheck/bin/python -c "import pyrite; print(pyrite.__version__)"   # X.Y.Z
-
-# --- back on dev ------------------------------------------------------------
-# 6. Open the next cycle: add an empty `## [Unreleased]` section at the top of
-#    CHANGELOG.md so new entries stop landing in a version that is already cut.
-git checkout dev
 ```
+
+Contributors are credited automatically: every outside author of a PR merged
+since the previous tag becomes `Thanks to @a, @b for their contributions.` at
+the end of the notes. Contributors are why the project is not a solo project;
+the notes say so.
 
 Version numbers follow the roadmap, not the calendar: a minor (0.25) names a
 milestone with a definition of done. Do not tag it until that is met; ship
