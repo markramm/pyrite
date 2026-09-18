@@ -11,7 +11,7 @@ In the worker's worktree (`cd /Users/markr/pyrite-wt/<branch-dir>`):
 - [ ] git log dev..HEAD --oneline        commits are focused, messages say why, Fixes #N present
 - [ ] git diff dev...HEAD                 READ IT. Every hunk. The report is not the diff.
 - [ ] .venv/bin/pytest tests/ extensions/ -n auto     green, here, now
-- [ ] one new test, fix stashed: `git stash push -- <impl files>; pytest <test>; git stash pop`  -> it fails
+- [ ] one new test, fix stashed: `scripts/verify-red.sh <test-node-id> <impl file>...`  -> it fails
 - [ ] ruff check . && ruff format --check .
 - [ ] theme complete? nothing in "Left:" that belongs to this PR
 - [ ] CHANGELOG [Unreleased] has a line per user-visible change; KB updated via CLI where the theme touched it
@@ -37,10 +37,11 @@ marked "Unsure".
 
 ## The cold read
 
-Dispatch `pyrite-reviewer` when the branch touches **auth, storage, the
-server, a public interface, or more than ~10 files**, or whenever your own
-reading felt too familiar to be critical. Docs and mechanical fixes do not
-earn it.
+Dispatch `pyrite-reviewer` when the diff touches **`pyrite/server/`,
+`pyrite/storage/`, `pyrite/schema/`, the auth code, or a public shape**, when
+it deletes or weakens a test, when the worker's "Unsure" is non-empty, or
+whenever your own reading felt too familiar to be critical. Docs and
+mechanical fixes do not earn it.
 
 The reviewer gets the diff and nothing else — no ticket, no report, no
 conversation. Its value is that it has not been told what to expect.

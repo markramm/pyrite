@@ -73,24 +73,23 @@ While workers build set N, the groom lane is breaking down set N+1 and the
 review lane is landing set N-1. A tick therefore rarely waits on anything:
 if workers are still running, groom and review still have work.
 
-**Groom lane.** Dispatch two read-only agents on the same inputs (the open
-issues, `pyrite sw backlog`, the roadmap's next release, the last tick's
-report) and reconcile their outputs yourself:
-- the **architect** (`pyrite-architect`, strongest model) reads the code the
-  candidates touch and produces the breakdown: themes, file footprints,
-  sequencing, which need Opus and which Sonnet, what is design-shaped enough
-  to want an ADR first;
-- the **PM** reads the trackers and the roadmap's definition of done and
-  produces the ordering: what unblocks what, what the release owes, what a
-  user would notice.
-The conductor merges the two into specs ([dispatch.md](dispatch.md)) and
-does not dispatch a theme the architect flagged as needing a decision the
-maintainer has kept.
+**Groom lane.** Dispatch the **architect** (`pyrite-architect`, strongest
+model, read-only) on the open issues, `pyrite sw backlog`, the roadmap's next
+release section and the last tick's report. It returns the breakdown: themes,
+file footprints, sequencing, Sonnet or Opus, and what is design-shaped enough
+to want an ADR first. The conductor supplies the ordering itself from the
+roadmap's definition of done (what unblocks what, what the release owes) and
+turns the result into specs ([dispatch.md](dispatch.md)). Add a separate PM
+read only when a tick demonstrably chose the wrong thing; until then it is
+cost without evidence. Never dispatch a theme the architect flagged as
+needing a decision the maintainer has kept.
 
-**Build lane.** Workers in their own worktrees; the kanban carries state
-(`pyrite sw claim` / `sw submit` / `sw review-queue`, or the GitHub issue's
-assignee for issue-driven themes), so a tick can read who holds what without
-a running agent's memory.
+**Build lane.** Workers in their own worktrees. **The draft PR is the
+claim**: at dispatch, push the empty branch and `gh pr create --draft --base
+dev` with the theme spec as the body; the worker's report is appended to that
+body; review flips it to ready (`gh pr ready`). One place, visible to anyone
+with `gh pr list`, readable by the next tick with no agent's memory. Backlog
+items also get `pyrite sw claim` so the board agrees.
 
 **Review lane.** [review.md](review.md), including the cold read.
 
@@ -147,9 +146,11 @@ For each worker that reported done — protocol in [review.md](review.md):
 2. Re-run `.venv/bin/pytest tests/ extensions/ -n auto` there yourself.
 3. Spot-check one new test fails with the fix stashed.
 4. Is the theme complete? Would a reviewer see one coherent change?
-5. Does it need a **cold read**? Yes if it touches auth, storage, the server, a public
-   interface (CLI/REST/MCP shape), or more than ~10 files. Dispatch the
-   `pyrite-reviewer` agent with the diff and no other context; triage its
+5. Does it need a **cold read**? Yes if the diff touches `pyrite/server/`,
+   `pyrite/storage/`, `pyrite/schema/`, the auth code, or a public shape
+   (CLI flag, REST field, MCP tool argument, file format); deletes or
+   weakens a test; or the worker's "Unsure" is non-empty. Dispatch
+   `pyrite-reviewer` with the diff and no other context; triage its
    findings: fix, redispatch, or note in the PR as a known trade-off.
 6. Then, and only then: push, `gh pr create --base dev`, body from the
    template in review.md, `gh pr merge --auto --rebase`. Watch it; rebase on
@@ -188,7 +189,9 @@ The spec names: the worktree path, the ticket(s) and acceptance criteria, the
 files expected to change (new vs existing), what is out of scope, and the
 report format. **Sonnet 5** for well-specified, mechanical work with clear
 acceptance; **Opus 5** for anything design-shaped, cross-cutting, or touching
-auth/storage/server. 4–6 workers at most; fewer when PRs are queued.
+auth/storage/server. **Three in flight** to start — the constraint is this
+conductor's attention and context, not runner capacity — raised only after
+ten consecutive green ticks; fewer when PRs are queued.
 
 Never `isolation: "worktree"` on the Agent tool — the script makes the
 worktree, and the agent is told where it is.
@@ -208,9 +211,16 @@ install-from-tag, Docker and artifact checks before the tag exists.
 
 ## Stop conditions
 
+Judgment stops:
 - No dispatchable themes (everything open is blocked on a human) → report, stop.
 - `dev` red and the fix needs a decision → report, stop.
 - The maintainer's queue (PRs awaiting them) is longer than the agents' → stop dispatching.
+
+**Circuit breaker (no judgment involved; loop mode especially):** two
+consecutive ticks whose `dev` push went red, or any PR reverted, or the same
+theme redispatched twice → stop the loop, report what happened, and do not
+dispatch again until the maintainer says so. Landing on `dev` unattended is
+delegated; landing repeatedly broken things is not.
 
 ## References
 
