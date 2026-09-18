@@ -79,17 +79,25 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Added
 
-- **`scripts/release.py`: a release is one command.** Five ordered steps, with
+- **`scripts/release.py`: a release is one command.** Six ordered steps, with
   every check in front of the first thing that cannot be undone —
-  preconditions (clean `dev` at `origin/dev`, the version, a dated CHANGELOG
-  section with content, no open `release-blocker` PR), the required CI checks
-  green on that exact SHA, the release layer verified *before* the tag exists
-  (install from the SHA into a throwaway venv, `pyrite --version`, the
-  getting-started tutorial run against that install, a Docker build when
-  docker is present), then `main`, the tag and the GitHub release, then
-  reopening `[Unreleased]`. `--dry-run` is the default and prints every
-  command; `--execute` is the only way anything is written. It never passes
-  `--no-verify`, never force-pushes and never deletes a ref.
+  preconditions (clean `dev` at `origin/dev`; `origin` really being the repo
+  the `gh` calls name; `vX.Y.Z` existing neither locally, on `origin`, nor as
+  a GitHub release, and `origin/main` already an ancestor of the SHA, so the
+  publish can only ever fast-forward; the version; a dated CHANGELOG section
+  with content; the `release-blocker` label existing, with no open PR carrying
+  it), the required CI checks green on that exact SHA (newest run per check
+  name, so a rerun to green counts; `--wait-ci` waits, 15 minutes by default),
+  the release layer verified *before* the tag exists (install from the SHA
+  into a throwaway venv, `pyrite --version`, the getting-started tutorial run
+  against that install, a Docker build when docker is present), then `main`,
+  the tag and the GitHub release, then reopening `[Unreleased]` on its own
+  branch for a PR to `dev`, then a handoff step naming what the release cannot
+  do. `--dry-run` is the default and prints every command, writing nothing to
+  disk; `--execute` is the only way anything is written. It never passes
+  `--no-verify`, never force-pushes, never deletes a ref and never creates a
+  label. A failure after the publish step began lists which commands already
+  ran rather than claiming nothing was attempted.
   `scripts/run_tutorial.sh` gains `PYRITE_TUTORIAL_VENV` so the tutorial can
   be run against an arbitrary install rather than the checkout's.
 - Repo-local configuration: a `.pyrite/config.yaml` in the current directory

@@ -42,22 +42,24 @@ git push -u origin release-prep && gh pr create --base dev --fill   # dev takes 
 ```
 
 One-time prerequisite: the `release-blocker` label must exist. The script
-refuses to release while an open PR carries it, and *prints* the creation
-command rather than creating labels behind your back:
+refuses to release while an open PR carries it — and refuses to release at all
+while the label is *missing*, because it cannot ask the question. It never
+creates labels; it fails with the command to run:
 
 ```bash
-gh label create release-blocker --description 'Must not ship in the next release' --color B60205
+gh label create release-blocker --repo markramm/pyrite \
+  --description 'Must not ship in the next release' --color B60205
 ```
 
 ### What each step checks
 
 | Step | Checks | Irreversible |
 |------|--------|--------------|
-| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content and no stranded `[Unreleased]`; no open PR labelled `release-blocker` | no |
-| b. CI | the **required checks** for that exact SHA concluded success — `gate` by default. Never starts a run; `--wait-ci MINUTES` waits out a pending one | no |
+| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `origin` resolves to `markramm/pyrite` (the repo the `gh` calls name); `vX.Y.Z` exists neither locally, on `origin`, nor as a GitHub release; `origin/main` is an ancestor of the SHA, so step d's push can only fast-forward; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content and no stranded `[Unreleased]`; the `release-blocker` label exists and no open PR carries it | no |
+| b. CI | the **required checks** for that exact SHA concluded success — `gate` by default, newest run per check name so a rerun to green counts. Never starts a run; `--wait-ci MINUTES` waits out a pending one (default 15) | no |
 | c. release layer | what a *user* gets, **before the tag exists** (ADR-0032 §3a): install from the SHA into a throwaway `uv` venv, `pyrite --version` equals X.Y.Z, `scripts/run_tutorial.sh` (the Quick Start) run against that install, `docker build` when docker is present — a loud note when it is not | no |
 | d. publish | fast-forward `main` to the SHA (`git push origin <sha>:refs/heads/main`; the ruleset allows only a fast-forward), tag `vX.Y.Z`, push the tag, `gh release create` with the CHANGELOG section plus the contributors line | **yes** |
-| e. post-release | reopen `## [Unreleased]` in `CHANGELOG.md`, committed for a PR to `dev` like any other change | **yes** |
+| e. post-release | reopen `## [Unreleased]` in `CHANGELOG.md` on a fresh `release/reopen-unreleased-X.Y.Z` branch cut from the release commit (local `dev` is never committed on), and print the `git push -u origin …` / `gh pr create --base dev --fill` lines. A no-op when `[Unreleased]` is already there | **yes** |
 | f. handoff | prints what the release does *not* do and cannot: **pyrite.wiki** (below), the deploys the tag does not trigger, the `[Unreleased]` PR, the announcement. Changes nothing | no |
 
 **pyrite.wiki is not automated and cannot be.** The marketing site lives
@@ -69,8 +71,15 @@ quoted to prospective users; `docs-counts-generated-or-asserted-from-code`
 tracks fixing the drift at the source. Until then, step f reminds you and you
 update the site by hand.
 
-If step d's fast-forward is refused, `main` has commits `dev` lacks: stop and
-find out why (a hotfix that was never merged back?) before going further.
+If step **a** says `origin/main` is not an ancestor of the SHA, `main` has
+commits `dev` lacks: stop and find out why (a hotfix that was never merged
+back?) before going further. It is checked there, not discovered in step d,
+because step d moves `main` before it tags — a failure halfway through is the
+one thing the ordering exists to prevent.
+
+If something does fail after step d has started, the run says which commands
+already ran and that their effects stand, instead of "nothing further was
+attempted".
 
 **Required checks, and why not "all green".** `gate` is the required check on
 `dev` and `main`; it needs the jobs that must pass, so requiring it requires
