@@ -201,6 +201,29 @@ Two places, one rule — an item lives in exactly one of them (ADR-0033):
   `kb/roadmap.md` is the plan for the next releases. A request we accept gets a
   roadmap item that links back to the issue.
 
+**Contributing a fix.** The PRs that merge fastest here look like this — and
+the ones that arrived on 2026-09-18 from four first-time contributors all did:
+
+- One issue per PR, and the diff stays inside it. A stray hunk from another
+  project (an editor's `.gitignore` additions, say) is the most common thing a
+  review asks to remove.
+- A test that fails without the fix. Reviews run `scripts/verify-red.sh
+  <test> <impl files>` to check exactly that; you can run it too.
+- The full suite green locally: `pytest tests/ extensions/ -n auto`, plus
+  `ruff check` and `ruff format --check`.
+- A line in `CHANGELOG.md` under `[Unreleased]`.
+- If an AI coding agent wrote or co-wrote it, say so in the PR — it is
+  welcome, and it tells the reviewer what to look at first.
+
+What happens next: every outside PR gets a review within about an hour,
+posted as a comment with a plain recommendation (merge as is, merge after
+listed changes, or which of two competing PRs and what to credit from the
+other). First-time contributors' CI runs wait for a maintainer to approve
+them; that is a GitHub safety default, not a judgement. A maintainer may
+rebase your branch or push one small, credited fixup commit to it with a
+comment saying what changed — your commits and authorship stay yours. The
+merge itself is the maintainer's click.
+
 **Security issues:** never in a public issue — see [SECURITY.md](SECURITY.md).
 
 **Private material:** this repository and its KB are public. Placeholders, not
@@ -222,8 +245,10 @@ names, for anything that is not yours to publish; no absolute home paths.
 
 ## Contributors
 
-Maintainer: Mark Ramm (BDFL; see ADR-0032). Contributors are credited in the
-CHANGELOG for the release their work ships in, and in the README.
+Maintainer: Mark Ramm (BDFL; see ADR-0032). Contributors are credited by
+name in the release notes of the release their work ships in (the runbook
+lists every outside author of a merged PR), in the CHANGELOG line for the
+change, and in the README.
 
 ## License
 

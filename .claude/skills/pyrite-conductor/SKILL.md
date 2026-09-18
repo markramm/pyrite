@@ -82,6 +82,21 @@ themes that already have acceptance criteria, a footprint and a model — holds
 fewer than twice the worker cap.** It is read-only and runs beside the
 builds, so it costs the tick nothing but tokens, and a tick that dispatches
 from titles is how two workers end up assigned rows of one table (retro 1).
+**Keep a handful of `good first issue` items open at all times — at least
+five.** The label is a dispatch signal to the outside world: on 2026-09-18
+issues written with a verbatim error, a reproduction and acceptance
+criteria drew four first-time contributors' PRs within an hour of being
+labelled (#57 → #126 in 37 minutes; #97 → #108 and #116, twenty minutes
+apart). The groom lane tops the pool up on every tick where the count has
+fallen below five, from pool items that (a) a stranger could execute from
+the issue alone — the error verbatim, steps, acceptance, the files; (b)
+touch nothing security-adjacent (auth, permissions, the read-scoping
+paths); (c) do not overlap a theme in flight or another open outside PR;
+(d) are small. The architect writes the issue text to that standard before
+the label goes on; a labelled issue that a review later finds unexecutable
+is a groom-lane defect. Outside PRs are then reviewed by the sweep and
+merged by the maintainer (see "Outside contributions jump the queue").
+
 When the architect cannot write acceptance criteria because a question is
 open — a root cause unknown, two designs plausible, a dependency's behaviour
 unverified — it names a **spike** instead: dispatch `pyrite-spike` (one

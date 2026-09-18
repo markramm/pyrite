@@ -38,7 +38,12 @@ git merge --ff-only "$SHA"
 git tag -a vX.Y.Z -m "vX.Y.Z: one-line summary" "$SHA"
 git push origin main && git push origin vX.Y.Z
 
-# 4. GitHub release, notes taken from the CHANGELOG section
+# 4. GitHub release, notes taken from the CHANGELOG section, with every
+#    outside contributor of a merged PR credited by name at the end
+#    (contributors are why the project is not a solo project; say so):
+#      gh pr list --state merged --base dev --search "merged:>YYYY-MM-DD" \
+#        --json author --jq '[.[].author.login] | unique | map(select(. != "markramm" and (test("dependabot") | not))) | .[]'
+#    -> append "Thanks to @a, @b, @c for their contributions." to the notes.
 #    (does NOT publish to PyPI -- see note below)
 gh release create vX.Y.Z --title "vX.Y.Z" --notes-file <(sed -n '/^## \[X.Y.Z\]/,/^## \[/p' CHANGELOG.md | sed '$d')
 
