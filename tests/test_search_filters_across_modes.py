@@ -19,6 +19,7 @@ that made the unfiltered vector leg leak wrong-typed entries into the fused set.
 
 import re
 import tempfile
+import zlib
 from pathlib import Path
 
 import pytest
@@ -91,8 +92,12 @@ class _StubEmbedder:
         pass
 
     def embed_text(self, text: str) -> list[float]:
+        # crc32, not hash(): str.__hash__ is salted per process by
+        # PYTHONHASHSEED, so `hash(text)` gives a different vector on every
+        # run -- and under `-n auto` a different one per worker. These tests
+        # must be reproducible from their inputs alone.
         vec = [0.05] * 384
-        vec[hash(text) % 384] += 0.001
+        vec[zlib.crc32(text.encode()) % 384] += 0.001
         return vec
 
 

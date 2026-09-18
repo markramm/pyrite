@@ -351,8 +351,22 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   The backend conformance suite gained the semantic-filter cases. When a leg
   cannot honour a filter it is dropped rather than returning unfiltered rows,
   and the response carries a `warnings` array naming the filters responsible
-  (`GET /api/search` and MCP `kb_search`; on stderr for the CLI). Fixes #56,
-  #53.
+  (`GET /api/search` and MCP `kb_search`; on stderr for the CLI) — absent, never
+  null, when everything was applied, so a caller tests for the key. Whether a
+  backend can filter its vector leg is a declared capability
+  (`BackendCapability.FILTERED_SEMANTIC`), not a probe: an earlier draft
+  inferred it from a `TypeError`, which turned any genuine bug inside the
+  vector leg into a silently dropped one. The archived-entry exclusion counts
+  as a filter and now holds on the vector leg too. `limit` is validated at the
+  service boundary rather than failing as a `TypeError` or a SQLite error deep
+  inside a leg. Two notes for operators: SQLite's KNN escalation is capped at
+  sqlite-vec's hard ceiling of `k = 4096`, so on an index larger than that a
+  filter selective enough to exclude the 4096 nearest neighbours under-returns
+  on the vector leg (best-effort recall — the keyword leg has no such ceiling
+  and carries hybrid); and the `kb_names` permission allowlist remains a Python
+  post-filter (`SearchService._restrict`) rather than a backend predicate,
+  unchanged by this work and correct, since it over-fetches before restricting.
+  Fixes #56, #53.
 - **The New Entry page's Create button could submit before the target KB was
   known.** `kbStore.activeKB` resolves asynchronously on mount; nothing
   disabled Create while it was still empty, so a fast click sent `kb: ''` and

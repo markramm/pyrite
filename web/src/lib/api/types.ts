@@ -96,6 +96,14 @@ export interface SearchResponse {
 	query: string;
 	count: number;
 	results: SearchResult[];
+	/**
+	 * Anything the search could not do as asked — today, a filter a backend's
+	 * vector leg cannot honour, which costs the semantic leg entirely rather
+	 * than returning rows that violate the filter. Absent (never null) when
+	 * every filter was applied on every leg that ran, so test for the key's
+	 * presence. No UI consumes this yet.
+	 */
+	warnings?: string[];
 }
 
 export interface EntryResponse {

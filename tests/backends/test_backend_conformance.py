@@ -853,6 +853,20 @@ class TestSemanticFilterConformance:
         )
         assert {r["id"] for r in rows} == {"mech", "theme", "task", "archived-one"}
 
+    def test_max_distance_does_not_cost_recall(self, embedded_backend):
+        """A cutoff that excludes nothing must not reduce the rows returned.
+
+        Postgres applied ``max_distance`` in Python *after* ``LIMIT``, so a
+        culled row was one the LIMIT had already spent — it under-returned
+        where sqlite escalates its ``k``. Asking for as many rows as match,
+        with a cutoff wide enough to exclude none, must give all of them on
+        every backend.
+        """
+        rows = embedded_backend.search_semantic(
+            _near_vector(), kb_name="test", limit=3, max_distance=2.0
+        )
+        assert {r["id"] for r in rows} == {"mech", "theme", "task"}
+
     def test_search_semantic_fills_limit_despite_selective_filter(self, embedded_backend):
         """A selective filter must not cost recall.
 

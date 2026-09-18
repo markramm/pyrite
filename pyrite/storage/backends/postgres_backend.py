@@ -339,9 +339,13 @@ class PostgresBackend(BaseBackend):
     ) -> list[dict[str, Any]]:
         """KNN over pgvector, honouring the same filters as ``search`` (#56).
 
-        Unlike sqlite-vec there is no separate KNN budget to escalate: the
-        predicates go into the same ``WHERE`` as the distance ordering, so
-        ``LIMIT`` applies after filtering and cannot under-return.
+        Unlike sqlite-vec there is no separate KNN budget to escalate: every
+        predicate, ``max_distance`` included, goes into the same ``WHERE`` as
+        the distance ordering, so ``LIMIT`` applies after filtering and cannot
+        under-return. The predicates below mirror
+        :meth:`SQLiteBackend._semantic_filter_sql` one for one — the two
+        backends must return the same rows for the same call — and every value
+        is bound, never interpolated.
         """
         vec_str = "[" + ",".join(str(v) for v in embedding) + "]"
         sql = """
@@ -392,12 +396,18 @@ class PostgresBackend(BaseBackend):
         if status:
             sql += " AND e.status = :status"
             params["status"] = status
+        # ``max_distance`` belongs in the WHERE, not in a Python filter after
+        # the fact: applied post-LIMIT it culls rows the LIMIT already paid for
+        # and under-returns, where sqlite escalates its k instead. One
+        # predicate here keeps the two backends returning the same rows (#56).
+        sql += " AND (e.embedding <=> CAST(:vec3 AS vector)) <= :max_distance"
+        params["vec3"] = vec_str
+        params["max_distance"] = max_distance
         sql += " ORDER BY e.embedding <=> CAST(:vec2 AS vector) LIMIT :limit"
         params["vec2"] = vec_str
         params["limit"] = limit
 
-        rows = self._exec(sql, params)
-        return [r for r in rows if r.get("distance", 0) <= max_distance]
+        return self._exec(sql, params)
 
     def has_embeddings(self) -> bool:
         count = self._exec_scalar("SELECT COUNT(*) FROM entry WHERE embedding IS NOT NULL")
