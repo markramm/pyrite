@@ -329,3 +329,26 @@ negative).
 #74 (package B, gate running). A slot is free; the next tick should spend it on
 packages C–G, now that disjointness is proven rather than assumed, with C the
 one that may want Opus for the auth decision A deferred.
+
+### Tick close — package B merged
+
+PR #74's gate went green (`frontend` 1m0s, `gate` 3s; `test`/`kb`/`smoke`
+correctly skipped for a web-only change) and auto-merge landed it. Worktree
+removed, branch deleted. Its push to `dev` is building.
+
+So this tick both dispatched and landed a theme: **dispatched → reviewed →
+merged inside one tick**, which the three-lane model treats as unusual (build
+and review are meant to be different ticks' work) but which a 16-minute Sonnet
+package makes possible. Worth noting for the retro: when a theme is genuinely
+mechanical against an existing contract, the pipeline collapses to one tick and
+the in-flight cap stops being the binding constraint. That is an argument for
+sizing packages *small enough to round-trip in a tick*, not merely small enough
+to review.
+
+At close, other sessions had created worktrees for packages **C, D, E** and a
+`quality/test-teardown-races` theme. Not mine; left untouched. Package B's
+full-suite evidence above is what those packages need, and it says they can run
+in parallel safely.
+
+**Final state this tick: 1 merged (#74), 1 in flight (#69, worker running), 2
+issues filed (#79, #80), smoke green on its first dev push.**
