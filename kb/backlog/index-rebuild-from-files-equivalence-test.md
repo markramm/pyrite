@@ -8,6 +8,7 @@ tags:
 - storage
 - ci
 - programmatic-validation
+- quality
 links:
 - target: mcp-tool-dispatch-smoke-test-every-registered-tool
   relation: related

@@ -7,7 +7,7 @@ status: proposed
 priority: high
 effort: XS
 created: "2026-07-03"
-tags: [testing, links, fts, audit-2026-07]
+tags: [testing, links, fts, audit-2026-07, quality]
 links:
 - target: search-query-syntax-error-contract
   relation: related

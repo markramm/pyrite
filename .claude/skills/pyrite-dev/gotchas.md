@@ -378,3 +378,14 @@ Fixed by repo-local config: `resolve_config_dir()` finds `.pyrite/config.yaml`
 upward from the cwd (explicit `PYRITE_CONFIG_DIR` still wins), and
 `scripts/new-worktree.sh` writes one per worktree. Verify with `pyrite kb
 list` before the first KB command in any worktree.
+
+## `pyrite update --tags` rewrites the whole frontmatter (#46)
+
+On 2026-09-18 `update <backlog-item> --tags a,b` dropped `kind`, `status`,
+`priority`, `effort` and wrote `body:`, `file_path:` and `importance:` into
+the file. The file still parses, so nothing complains; the board just loses
+the item. Until #46 is fixed, change tags with `-f`-free hand edits of the
+`tags:` line (inline or block form) and say so in the commit, or use
+`update -f tags=...` only after checking `git diff` on one file first.
+Related: an entry whose on-disk value is already off-enum (`kind: refactor`)
+cannot be updated at all until hand-repaired (#47).

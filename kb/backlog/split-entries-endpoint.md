@@ -2,11 +2,11 @@
 id: split-entries-endpoint
 type: backlog_item
 title: "Split pyrite/server/endpoints/entries.py (802 LOC) into read/write modules"
-kind: refactor
+kind: tech_debt
 status: proposed
 priority: low
 effort: S
-tags: [refactor, api, code-quality]
+tags: [refactor, api, code-quality, quality]
 ---
 
 ## Problem

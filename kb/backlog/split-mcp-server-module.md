@@ -2,11 +2,11 @@
 id: split-mcp-server-module
 type: backlog_item
 title: "Split pyrite/server/mcp_server.py (1790 LOC) into per-tier modules"
-kind: refactor
+kind: tech_debt
 status: proposed
 priority: low
 effort: M
-tags: [refactor, mcp, code-quality]
+tags: [refactor, mcp, code-quality, quality]
 ---
 
 ## Problem

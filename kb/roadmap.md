@@ -230,6 +230,43 @@ GitHub — when working toward a release, check `gh issue list --milestone` and
 - [[docs-counts-generated-or-asserted-from-code]] (medium, S).
 - [[contributor-docs-pass-contributing-security-pr-template-credits]] (high, S).
 
+### Pull-forward pool (added 2026-09-18)
+
+The conductor loop finishes the list above; while it runs, well-specified
+work that solves real user problems may be pulled into 0.24.2 so the process
+gets feedback on more shapes of work. The maintainer's terms: "As long as
+features are being developed and tested and our process is improving I do
+not think it hurts to pull features and bugfixes and test improvements that
+are well specified forward." The rule, which the meta-conductor may apply
+without asking:
+
+1. **Well-specified** — acceptance criteria a Sonnet worker could execute
+   with no conversation (the `dispatch.md` test). The god-object splits are
+   the deliberate exception: Opus, one object per PR, and the acceptance is
+   "behaviour unchanged, proven by the existing suite plus a boundary test".
+2. **Real** — closes a filed issue, removes a known data-loss or
+   non-convergence bug, or is a test that would have caught one.
+3. **Cheap to hold** — footprint disjoint from anything in flight; effort
+   ≤ M, or L only for the splits below.
+4. **Never displaces** — pulled only when fewer than three themes are in
+   flight and every definition-of-done item above is claimed or done. The
+   release ships when the definition of done is met; a pool item still open
+   then rides on `dev` into the next release. Pulling forward must not
+   lengthen 0.24.2.
+
+| Theme | Closes | Shape / what it exercises |
+|---|---|---|
+| Index sync converges and health tells the truth | #6, #7, #8, #22, #19, #47 | Sonnet; a multi-issue theme with a storage cold read |
+| Web first-visit fixes | #10, #11, #12 — [[web-kb-context-single-authority]], [[web-fix-dropped-kb-seams]], [[web-light-mode-chrome-repair]] | real UI change → explorer agent + Playwright fan-out; 0.25 pilot prerequisites |
+| KB registry as one source of truth | [[collapse-kb-registry-to-one-source-of-truth]] | Opus, cross-cutting; root cause of the PR #4 bug class; first real cold-read test |
+| Data-loss class, continued | #46 (`update --tags` rewrites frontmatter — found while tagging this pool), [[typed-entries-silently-drop-the-references-frontmatter-field]] | siblings of #15; the PR #35 write-path tests give them a home |
+| Deploy path | #20 (Railway bind host/port) | small; pairs with the packaged web UI |
+| God-object splits | [[split-the-remaining-god-objects-software-kb-plugin-kb-service-index-qa-service]], [[split-mcp-server-module]], [[split-entries-endpoint]] | Opus, one object per PR, sequenced; a different set of capabilities — large-diff review, behaviour-preserving refactor, the cold read at scale |
+| Quality pool for the retro (tagged `quality`) | [[tests-leak-open-pyritedb-connections-into-temporarydirectory-teardown]], [[worktree-no-lost-commits-invariant]], [[index-rebuild-from-files-equivalence-test]], [[regression-test-links-fts-quoting]], [[cli-output-is-inconsistent-when-stdout-is-not-a-tty]] | Sonnet; pre-groomed stock so the retro's quality theme has candidates before it has evidence of its own |
+
+Left out on purpose: the JI UI features and the review surface (0.26 — the
+thesis screen deserves its own release), anything `needs-design`.
+
 ### Not in 0.24.2
 
 The GitHub-issues importer (ADR-0033 consequence) — not a priority; the

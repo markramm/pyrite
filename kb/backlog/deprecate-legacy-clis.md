@@ -2,7 +2,7 @@
 id: deprecate-legacy-clis
 type: backlog_item
 title: "Deprecate and remove pyrite/admin_cli.py and pyrite/read_cli.py"
-kind: refactor
+kind: tech_debt
 status: proposed
 priority: low
 effort: M

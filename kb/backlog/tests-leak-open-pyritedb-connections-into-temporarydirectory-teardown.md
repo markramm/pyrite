@@ -5,6 +5,7 @@ type: backlog_item
 tags:
 - testing
 - tech-debt
+- quality
 importance: 5
 kind: tech_debt
 status: proposed

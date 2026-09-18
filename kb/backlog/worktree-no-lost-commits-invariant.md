@@ -7,7 +7,7 @@ status: proposed
 priority: medium
 effort: S
 created: "2026-07-04"
-tags: [worktree, collaboration, git, testing, trust]
+tags: [worktree, collaboration, git, testing, trust, quality]
 links:
 - target: adr-0029
   relation: implements

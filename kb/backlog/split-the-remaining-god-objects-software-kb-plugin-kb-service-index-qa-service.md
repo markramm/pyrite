@@ -5,6 +5,7 @@ type: backlog_item
 tags:
 - architecture
 - refactor
+- quality
 importance: 5
 kind: improvement
 status: proposed
