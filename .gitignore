@@ -34,10 +34,13 @@ web/build/
 # Test artifacts
 web/test-results/
 web/playwright-report/
-# The seeded world the e2e suite builds (web/e2e/global-setup.ts); rebuilt each run
-web/.e2e-data/
-# The auth-enabled world (web/e2e/auth-setup.ts, Package C); likewise rebuilt each run
-web/.e2e-auth-data/
+# The seeded world the e2e suite builds (web/e2e/global-setup.ts); rebuilt each
+# run. Suffixed per worktree with its derived backend port (web/e2e/ports.ts,
+# Package A.1, #118) so two worktrees never share a data directory.
+web/.e2e-data-*/
+# The auth-enabled world (web/e2e/auth-setup.ts, Package C); likewise rebuilt
+# each run, likewise suffixed per worktree.
+web/.e2e-auth-data-*/
 
 # Playwright MCP (browser automation logs/screenshots)
 .playwright-mcp/

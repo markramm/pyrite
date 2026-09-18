@@ -46,10 +46,16 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { REPO_ROOT } from './global-setup';
+import { PORTS, preflightPort, REPO_ROOT } from './global-setup';
 
-/** The auth-enabled world's private data directory — never A's. */
-export const AUTH_E2E_DATA_DIR = join(REPO_ROOT, 'web', '.e2e-auth-data');
+/**
+ * The auth-enabled world's private data directory — never A's.
+ *
+ * Suffixed with this worktree's derived auth-backend port for the same
+ * reason as `E2E_DATA_DIR` in global-setup.ts: two worktrees running the
+ * suite at once must not share, or race to wipe, the same directory.
+ */
+export const AUTH_E2E_DATA_DIR = join(REPO_ROOT, 'web', `.e2e-auth-data-${PORTS.authBackend}`);
 
 /** The only KB the auth-enabled backend knows about. */
 export const AUTH_E2E_KB = 'e2e-auth';
@@ -57,31 +63,27 @@ export const AUTH_E2E_KB = 'e2e-auth';
 export const AUTH_E2E_KB_PATH = join(AUTH_E2E_DATA_DIR, 'kbs', AUTH_E2E_KB);
 
 /**
- * The auth-enabled backend's port. A's is 8088.
+ * The auth-enabled backend's port. A's (base world) is `E2E_BACKEND_PORT`.
  *
- * Uvicorn binds the port it is given or exits, so unlike the dev server this
- * one cannot wander onto a neighbour's port; 8189 is simply kept clear of 8088
- * so the two worlds' logs and `lsof` output stay easy to tell apart.
+ * Derived per worktree, same as the base pair — see `ports.ts`. Uvicorn binds
+ * the port it is given or exits, so unlike the dev server this one cannot
+ * wander onto a neighbour's port; it is derived from its own band precisely
+ * so it stays clear of the base backend port regardless of which worktree
+ * this is.
  */
-export const AUTH_BACKEND_PORT = 8189;
+export const AUTH_BACKEND_PORT = PORTS.authBackend;
 
 /**
  * The auth-enabled Vite dev server's port.
  *
- * NOT 5174, deliberately. The shared `vite.config.ts` does not set
- * `strictPort`, so A's dev server — launched as `vite dev --port 5173` — falls
- * through to 5174, then 5175, whenever 5173 is already taken. That happens
- * routinely: several worktrees of this fan-out run the suite at once, and a
- * run killed mid-flight leaves 5173 held for a while. When it happens, A's
- * server lands on this world's port, and this project either fails to start or
- * (worse, without `strictPort` here) silently drives the auth-DISABLED app.
- * 5274 is well clear of that fallthrough range.
- *
- * The real fix is `strictPort: true` in the shared `vite.config.ts` so a
- * misplaced dev server fails loudly instead of migrating — that file is
- * outside this package's footprint, so it is reported rather than changed.
+ * Package A.1 (#118) gave the shared `vite.config.ts` `strictPort: true`, so
+ * a misplaced dev server now fails loudly instead of silently sliding onto
+ * this world's port — the gap this comment used to describe as out of
+ * package C's footprint is closed. This port is still derived from its own
+ * band (see `ports.ts`) so it cannot collide with the base Vite port even
+ * without relying on strictPort as the only guard.
  */
-export const AUTH_WEB_PORT = 5274;
+export const AUTH_WEB_PORT = PORTS.authVite;
 
 export const AUTH_BASE_URL = `http://localhost:${AUTH_WEB_PORT}`;
 export const AUTH_BACKEND_URL = `http://127.0.0.1:${AUTH_BACKEND_PORT}`;
@@ -160,6 +162,11 @@ export function seedAuthWorld(): void {
 				`(pip install -e ".[all,dev]") — the e2e suite seeds its worlds through the CLI.`
 		);
 	}
+
+	// Same fail-fast preflight as the base world (global-setup.ts), for the
+	// auth-enabled pair.
+	preflightPort(AUTH_BACKEND_PORT, 'auth e2e backend');
+	preflightPort(AUTH_WEB_PORT, 'auth e2e Vite dev server');
 
 	// A fresh world every run, including a fresh index.db — which is where the
 	// user table lives, so this is also what guarantees `auth.setup.ts`'s

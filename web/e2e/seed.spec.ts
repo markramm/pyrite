@@ -21,8 +21,10 @@ import {
 	idForTitle,
 	uniqueTitle
 } from './fixtures';
+import { E2E_BACKEND_URL } from './global-setup';
 
-const API = 'http://127.0.0.1:8088';
+// Per-worktree, not a hardcoded 8088 — see E2E_BACKEND_URL's own doc (#118).
+const API = E2E_BACKEND_URL;
 
 test.describe('seeded e2e world', () => {
 	test('the backend sees exactly one KB, and it is the seeded one', async ({ request }) => {

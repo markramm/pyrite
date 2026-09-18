@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 import { E2E_KB, SEEDED_PEOPLE, SEEDED_EVENTS, SEEDED_NOTES, uniqueTitle, idForTitle } from './fixtures';
+import { E2E_BACKEND_URL } from './global-setup';
 
 /**
  * Entries list, entry creation, and the entry detail page's read-only chrome
@@ -14,7 +15,8 @@ import { E2E_KB, SEEDED_PEOPLE, SEEDED_EVENTS, SEEDED_NOTES, uniqueTitle, idForT
  * is no delete affordance in the web UI to drive instead (see the report).
  */
 
-const API_BASE = 'http://localhost:8088';
+// Per-worktree, not a hardcoded 8088 — see E2E_BACKEND_URL's own doc (#118).
+const API_BASE = E2E_BACKEND_URL;
 
 async function deleteEntry(request: APIRequestContext, id: string): Promise<void> {
 	await request.delete(`${API_BASE}/api/entries/${encodeURIComponent(id)}?kb=${E2E_KB}`);

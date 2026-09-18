@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 
 import { E2E_KB, SEEDED_PEOPLE, uniqueTitle, idForTitle } from './fixtures';
+import { E2E_BACKEND_URL } from './global-setup';
 
 /**
  * Entry detail page features: panel toggles, edit-mode switching, and the
@@ -14,7 +15,8 @@ import { E2E_KB, SEEDED_PEOPLE, uniqueTitle, idForTitle } from './fixtures';
  * packages' specs may assert on in the same run, so this spec never edits one.
  */
 
-const API_BASE = 'http://localhost:8088';
+// Per-worktree, not a hardcoded 8088 — see E2E_BACKEND_URL's own doc (#118).
+const API_BASE = E2E_BACKEND_URL;
 
 // See entry-crud.spec.ts for why this exists: a cold Vite dev server compiles
 // a route's bundle on its first request, which can outrun the default 5s

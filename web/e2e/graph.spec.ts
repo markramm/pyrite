@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+import { E2E_BACKEND_URL } from './global-setup';
+
 test.describe('Graph Page', () => {
 	test('navigates to graph page and shows title', async ({ page }) => {
 		await page.goto('/graph');
@@ -22,7 +24,8 @@ test.describe('Graph Page', () => {
 	});
 
 	test('graph API endpoint responds with nodes/edges shape', async ({ request }) => {
-		const response = await request.get('http://localhost:8088/api/graph');
+		// Per-worktree, not a hardcoded 8088 — see E2E_BACKEND_URL's own doc (#118).
+		const response = await request.get(`${E2E_BACKEND_URL}/api/graph`);
 		expect(response.ok()).toBeTruthy();
 		const data = await response.json();
 		expect(data).toHaveProperty('nodes');
@@ -80,7 +83,7 @@ test.describe('Graph Page', () => {
 	});
 
 	test('entry types API endpoint responds', async ({ request }) => {
-		const response = await request.get('http://localhost:8088/api/entries/types');
+		const response = await request.get(`${E2E_BACKEND_URL}/api/entries/types`);
 		expect(response.ok()).toBeTruthy();
 		const data = await response.json();
 		expect(data).toHaveProperty('types');

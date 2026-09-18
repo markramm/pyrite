@@ -4,32 +4,45 @@ import { defineConfig } from 'vitest/config';
 
 declare const process: { env: Record<string, string | undefined> };
 
+// The backend this dev server proxies to. Plain `npm run dev` keeps the
+// long-standing default of 8088; Playwright's e2e webServer sets
+// PLAYWRIGHT_E2E_PORT to this worktree's derived backend port (see
+// e2e/ports.ts) so the proxy target and the backend it actually started
+// agree, without hardcoding a port two worktrees running at once would
+// collide on. See kb/backlog/playwright-package-a-1-per-worktree-ports-*.md.
+const backendPort = process.env.PLAYWRIGHT_E2E_PORT ?? '8088';
+const backendTarget = `http://127.0.0.1:${backendPort}`;
+
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	server: {
+		// Fail loudly if the derived port is already taken rather than sliding
+		// to the next one: a dev server on an unexpected port would silently
+		// serve a sibling worktree's world under this one's baseURL.
+		strictPort: true,
 		// Proxy every top-level prefix the backend actually serves (see
 		// pyrite/server/api.py's create_app) -- /auth, /branding, and
 		// /config were missing here, so any dev-server or e2e request to
 		// them 404'd against Vite itself instead of reaching the backend.
 		proxy: {
 			'/api': {
-				target: 'http://127.0.0.1:8088',
+				target: backendTarget,
 				changeOrigin: true
 			},
 			'/health': {
-				target: 'http://127.0.0.1:8088',
+				target: backendTarget,
 				changeOrigin: true
 			},
 			'/auth': {
-				target: 'http://127.0.0.1:8088',
+				target: backendTarget,
 				changeOrigin: true
 			},
 			'/branding': {
-				target: 'http://127.0.0.1:8088',
+				target: backendTarget,
 				changeOrigin: true
 			},
 			'/config': {
-				target: 'http://127.0.0.1:8088',
+				target: backendTarget,
 				changeOrigin: true
 			}
 		}
@@ -39,7 +52,7 @@ export default defineConfig({
 		: undefined,
 	test: {
 		environment: 'jsdom',
-		include: ['src/**/*.test.ts'],
+		include: ['src/**/*.test.ts', 'e2e/*.test.ts'],
 		setupFiles: ['src/test-setup.ts']
 	}
 });

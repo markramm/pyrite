@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 import { E2E_KB, SEEDED_PEOPLE, SEEDED_EVENTS, SEEDED_NOTES } from './fixtures';
+import { E2E_BACKEND_URL } from './global-setup';
 
 /**
  * Layout, the landing page, sidebar navigation, and a page-load check for
@@ -162,14 +163,15 @@ test.describe('Theme Toggle', () => {
 
 test.describe('API Health', () => {
 	test('backend health endpoint responds', async ({ request }) => {
-		const response = await request.get('http://localhost:8088/health');
+		// Per-worktree, not a hardcoded 8088 — see E2E_BACKEND_URL's own doc (#118).
+		const response = await request.get(`${E2E_BACKEND_URL}/health`);
 		expect(response.ok()).toBeTruthy();
 		const data = await response.json();
 		expect(data.status).toBe('ok');
 	});
 
 	test('API kbs endpoint responds', async ({ request }) => {
-		const response = await request.get('http://localhost:8088/api/kbs');
+		const response = await request.get(`${E2E_BACKEND_URL}/api/kbs`);
 		expect(response.ok()).toBeTruthy();
 		const data = await response.json();
 		expect(data).toHaveProperty('kbs');

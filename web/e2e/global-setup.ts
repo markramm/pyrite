@@ -25,7 +25,7 @@
  * The world it builds is described, entry by entry, in `fixtures.ts`.
  * See kb/backlog/playwright-e2e-suite-non-deterministic-failures-*.md, Package A.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,15 +39,85 @@ import {
 	SEEDED_ORGANIZATIONS,
 	SEEDED_PEOPLE
 } from './fixtures';
+import { derivePorts } from './ports';
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** Repo root: web/e2e -> web -> repo. */
 export const REPO_ROOT = resolve(here, '..', '..');
-/** The private data directory every e2e process uses instead of ~/.pyrite. */
-export const E2E_DATA_DIR = join(REPO_ROOT, 'web', '.e2e-data');
+
+/**
+ * This worktree's four e2e ports, derived from REPO_ROOT (see ports.ts).
+ * Computed once at module scope — every consumer (this file, auth-setup.ts,
+ * playwright.config.ts) imports the same values, so the backend a webServer
+ * entry starts and the port a spec's baseURL points at can never disagree.
+ */
+export const PORTS = derivePorts(REPO_ROOT, process.env);
+
+export const E2E_BACKEND_PORT = PORTS.backend;
+export const E2E_VITE_PORT = PORTS.vite;
+
+/**
+ * The base world's backend, reachable directly (not through Vite's proxy).
+ *
+ * A handful of specs call the API straight rather than through a page's own
+ * fetches — e.g. to seed or clean up a fixture over HTTP, or to assert on a
+ * health/API-shape endpoint without a browser. Before Package A.1 (#118)
+ * those specs each hardcoded `http://localhost:8088` themselves; now they
+ * import this instead, so the literal exists in exactly one place and a
+ * derived, per-worktree port reaches every caller.
+ */
+export const E2E_BACKEND_URL = `http://127.0.0.1:${E2E_BACKEND_PORT}`;
+
+/**
+ * The private data directory every e2e process uses instead of ~/.pyrite.
+ *
+ * Suffixed with this worktree's derived backend port (not a fixed name) so
+ * two worktrees running the suite at once never share — or race to wipe —
+ * the same directory on disk, the same failure mode the ports themselves
+ * exist to prevent. `.gitignore` matches the whole `web/.e2e-data-*` family.
+ */
+export const E2E_DATA_DIR = join(REPO_ROOT, 'web', `.e2e-data-${PORTS.dataDirSuffix}`);
 export const E2E_KB_PATH = join(E2E_DATA_DIR, 'kbs', E2E_KB);
 
 const PYRITE_BIN = join(REPO_ROOT, '.venv', 'bin', 'pyrite');
+
+/**
+ * Fail fast, naming the port and the owning process, when something outside
+ * this worktree already holds `port`. Without this, Playwright's own
+ * `webServer` retry/health-check loop is the only signal, and its error
+ * ("Timed out waiting ... for the server to start") does not say WHY — a
+ * human has to already know to run `lsof` themselves. `lsof -i :<port>` is
+ * exactly what acceptance criterion #2 asks the error to name.
+ *
+ * A backend this worktree itself started in a previous, still-running
+ * `playwright test` invocation is not "outside this worktree" in spirit —
+ * but `reuseExistingServer: false` (set unconditionally, see
+ * playwright.config.ts) means this project never intends to share a server
+ * across invocations either, so any holder of the port is treated as
+ * foreign and the preflight fails regardless of whose process it is.
+ */
+export function preflightPort(port: number, label: string): void {
+	let output: string;
+	try {
+		output = execSync(`lsof -i :${port}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+	} catch {
+		// lsof exits non-zero (and prints nothing) when nothing holds the port
+		// — that is the success case.
+		return;
+	}
+	if (!output.trim()) {
+		return;
+	}
+	throw new Error(
+		`e2e preflight: port ${port} (${label}) is already in use by another process — ` +
+			`this worktree's e2e suite refuses to reuse a server it did not start.\n\n` +
+			`${output}\n` +
+			`Kill the process above if it is stale, or if it is a sibling worktree's ` +
+			`Playwright/uvicorn/vite still running, let it finish first. ` +
+			`(Ports are derived per worktree — see web/e2e/ports.ts — so this should ` +
+			`only happen when a previous run of THIS worktree's suite was not cleaned up.)`
+	);
+}
 
 /**
  * The environment every e2e backend process gets. `playwright.config.ts` passes
@@ -126,6 +196,11 @@ export function seedE2EWorld(): void {
 				`(pip install -e ".[all,dev]") — the e2e suite seeds its world through the CLI.`
 		);
 	}
+
+	// Fail fast, before starting anything, if this worktree's derived ports
+	// are already held by a foreign process (acceptance criterion #2).
+	preflightPort(E2E_BACKEND_PORT, 'base e2e backend');
+	preflightPort(E2E_VITE_PORT, 'base e2e Vite dev server');
 
 	// A fresh world every run. Without this, a spec that wrote in run N would
 	// still be in the world in run N+1, which is the shared-state failure mode

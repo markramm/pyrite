@@ -68,6 +68,22 @@ settings:
 CFG
 .venv/bin/pyrite index sync >/dev/null 2>&1 || true
 
+# This worktree's Playwright e2e ports, derived from its own path so two
+# worktrees can run `npm run test:e2e` at once without colliding (Package
+# A.1, #118: kb/backlog/playwright-package-a-1-per-worktree-ports-and-data-dir-118.md).
+# Recorded here — not just computed on demand inside playwright.config.ts —
+# so a human running the suite by hand (lsof, curl, a stray uvicorn to kill)
+# sees the same numbers the config derives. `web/e2e/ports.ts` is the single
+# source of truth for the hash; this only prints it. Requires the worktree's
+# node_modules for `derivePorts`'s only import (node:crypto, no npm package),
+# so it works even before `npm ci` has run in web/.
+if command -v node >/dev/null 2>&1 && [ -f "$wt_dir/web/e2e/print-ports.ts" ]; then
+  node "$wt_dir/web/e2e/print-ports.ts" "$wt_dir" > "$wt_dir/.pyrite/e2e-ports" \
+    || echo "note: could not derive e2e ports (node too old for native TS?) — playwright.config.ts will still derive them at test time" >&2
+else
+  echo "note: node not found; skipping .pyrite/e2e-ports (playwright.config.ts derives ports itself at test time)" >&2
+fi
+
 # Hooks live in the shared .git and the installed shim embeds the path of the
 # Python that installed them. Install from the MAIN checkout's venv, which
 # outlives any worktree: hooks installed from a worktree's venv break for
@@ -85,6 +101,7 @@ worktree: $wt_dir
 branch:   $branch (from $start)
 venv:     $wt_dir/.venv
 config:   $wt_dir/.pyrite/config.yaml  (pyrite KB -> this worktree's kb/)
+e2e ports: $wt_dir/.pyrite/e2e-ports  (this worktree's Playwright ports; cat it before running lsof by hand)
 
   cd "$wt_dir"
   ... work, commit ...
