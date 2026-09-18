@@ -140,7 +140,9 @@
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
 			</svg>
 		</button>
-		<span class="text-sm font-medium text-zinc-700 dark:text-zinc-200">{monthLabel()}</span>
+		<span data-testid="calendar-month-label" class="text-sm font-medium text-zinc-700 dark:text-zinc-200"
+			>{monthLabel()}</span
+		>
 		<button
 			onclick={nextMonth}
 			class="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
@@ -164,6 +166,7 @@
 		{#each calendarDays as day}
 			<button
 				onclick={() => onselect(day.date)}
+				data-testid="calendar-day-{day.date}"
 				class="relative flex h-8 w-full flex-col items-center justify-center rounded text-xs transition-colors
 					{day.currentMonth ? 'text-zinc-700 dark:text-zinc-300' : 'text-zinc-300 dark:text-zinc-600'}
 					{day.date === selectedDate ? 'bg-blue-600 text-white dark:bg-blue-500 dark:text-white' : ''}

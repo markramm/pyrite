@@ -91,6 +91,17 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Changed
 
+- `web/e2e/collections.spec.ts` and `web/e2e/daily.spec.ts` (Package E of the
+  Playwright determinism ticket) now assert on the seeded world instead of
+  "a list or an empty state": the collection's membership is exactly the
+  three seeded people, and `daily.spec.ts` only ever navigates within
+  `SEEDED_DAILY_DATES` (auth is disabled in the e2e world, so `GET
+  /daily/{date}` creates a note for a date that has none). Found two real
+  product bugs in the process (`test.fixme`'d, not papered over): the root
+  layout overwrites every route's `<title>` with the bare brand name
+  (#49, pre-existing), and `Calendar.svelte`'s month-navigation buttons are
+  inert wherever a `selectedDate` is set — an effect immediately snaps the
+  view back (#89).
 - The Playwright e2e suite now seeds and runs against its own KB in a private
   data directory (`web/e2e/global-setup.ts`, contract in `web/e2e/fixtures.ts`)
   with auth explicitly disabled and no server reuse, instead of whatever

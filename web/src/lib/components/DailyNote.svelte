@@ -156,7 +156,7 @@
 				</svg>
 			</button>
 			<div>
-				<h1 class="text-lg font-bold text-zinc-800 dark:text-zinc-100">
+				<h1 data-testid="daily-date-heading" class="text-lg font-bold text-zinc-800 dark:text-zinc-100">
 					{formatDisplayDate(selectedDate)}
 				</h1>
 			</div>
