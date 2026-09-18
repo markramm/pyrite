@@ -1787,3 +1787,52 @@ project loses a contributor. The cost of writing #108's author a specific,
 technical "here is what you did better, here is the one thing that decided it,
 please come back" is a few minutes; the value chain's input here is people, not
 just diffs.
+
+### Post-tick: #69's third pass verified — correct, but parked (red `dev` + tripped breaker)
+
+The second-redispatch worker returned. Verified independently; **the theme now
+holds.**
+
+- **0 of 49 types invent keys at the file boundary** (was 32). `update -f rank=0`
+  on a minimal file produces a one-line diff; `link` adds only the links block;
+  #87 still fixed.
+- Suite 4268 passed / 68 skipped here (3.11, `-n auto`).
+
+**The worker improved on my instruction, and that is the notable part.** I told
+it to filter inside `to_frontmatter` or a wrapper on it. It refused: the index
+is built from `to_frontmatter()` and `sw backlog` filters on the `status`/
+`priority`/`rank` it finds there, so filtering at that level would have hidden
+every entry whose file omits `status:` from every status filter — quieter and
+worse than the bug being fixed. It put the filter at the file boundary instead
+(`_frontmatter_for_file`, called only from `to_markdown`). **A conductor's
+proposed design is not a spec, and a worker that pushes back with a reason is
+doing the job.** Worth remembering the next time a redispatch prompt sounds
+prescriptive.
+
+**But its evidence table overstated two rows.** It claimed
+`test_tags_update_never_writes_model_internals` and
+`test_loaded_entry_has_no_internals_in_extra_frontmatter` are red at base and
+that my earlier reading was a #121 artefact. Reverting to `8ba4d42` with an
+assertion that the revert took: both are **green at base**, as I originally
+found. The verdict is unchanged — the new catch-all test is genuinely red and
+is the one that catches all 32 — but **a worker's red/green table is model
+output like any other, and the rule that caught this is the same one that
+caught #121: assert the revert took effect, then believe the result.**
+
+Not merged, and will not be by me:
+1. **`dev` is red** at d3d223a (the #81 merge) — `test (3.13)` errors at setup
+   across `test_api_tiers.py`, `fixture 'configs' not found` + four siblings;
+   3.12 green on the same commit. Nothing merges into a red `dev`. This PR's
+   green 3.11 suite says nothing about a 3.13 collection failure.
+2. **The breaker is still tripped.** I do not merge or dispatch out of that
+   state on my own authority.
+
+Left draft, auto-merge unarmed, `in-review` removed. Recommendation when the
+maintainer restarts: fix red `dev` first, correct the two table rows, then it
+lands as-is.
+
+Also flagged on the PR: this worktree still holds unrelated modified files
+(conductor skill edits, `.gitignore`, `FEEDBACK.md`, `kb/roadmap.md`, untracked
+`kb/tasks/`, `tests/usability/`). The worker found 12 of them *staged*,
+unstaged them and committed explicit paths only — correct behaviour, #119
+recurring. They need an owner before anyone pushes from that tree.
