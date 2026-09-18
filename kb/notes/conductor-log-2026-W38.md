@@ -208,3 +208,45 @@ the web-UI surface is mid-fan-out and two DoD items are only just unblocked),
 no ADR needs acceptance. The seven Dependabot PRs are still the one thing
 sitting in the maintainer's field of view that the conductor has deliberately
 not taken, and the reason is written above.
+
+## Retro 2026-09-18T06:45Z (retro 1 — window 04:00Z–06:30Z, ticks 1–2, host-dispatched #38/#39)
+
+### What worked
+- Landing on `dev` unattended — 9 PRs merged (#35–#42, #50), 0 red `dev` pushes, 0 reverts, 0 redispatches; both worker branches (#38, #39) were first-time mergeable after the host's review, and their evidence reproduced on re-run (15/15 smoke, 4216 default, the Playwright stable-eleven).
+- The KB fast path — process/KB PRs #41, #42, #50 merged in 0–1 min each (gate ~30 s); code PRs ~3 min.
+- The smoke layer on the first `dev` push — run 35312463527, `smoke` 95 s green; full run 4 m 40 s.
+- Workers filing instead of fixing — 9 issues (#43–#45, #48, #49, #51–#55) from two workers, zero scope creep in either diff.
+- Nested dispatch — the Opus conductor dispatched `pyrite-worker` from inside itself twice (#69, #74); the worker outlived its parent tick.
+- The draft-PR claim — tick 1 saw the host-dispatched #38/#39 with no shared memory.
+
+### Failures and root causes
+- #71 tick log on `dev` → the skill line predates the ruleset → the log has no home → **skill**: weekly `kb/` branch, one draft PR (PR #75).
+- #73 empty-branch claim → `gh` refuses PRs with no commits; the skill assumed otherwise → tick 1 improvised `.claude/THEME.md` → **skill**: the claim commit is the theme's backlog item (PR #75).
+- #72 permission refusals on read-only `gh` → no allow rule; `.claude/settings.json` is gitignored so none could ship → **settings.local.json** (maintainer-approved) + dispatch.md setup note (PR #75).
+- ADR-0032 row conflict on #39's rebase → the host's two specs assigned two rows of one table to two parallel workers → dispatch.md's file-footprint rule was violated by the conductor, not the workers → note for next time; CHANGELOG conflicted in the same rebase → **quality item**: changelog fragments.
+- `pyrite update --tags` corrupted six files while tagging the pool (#46) → product bug, in flight on #69; `pyrite create` writes `importance`/`rank` into frontmatter too (seen on the two items created this retro) — add to #46.
+- #55 teardown race (pre-existing, ~1 in 3 under load) → not yet red on `dev`, will be → **quality theme** (this retro).
+
+### Constraint
+The build lane's in-flight cap — WIP 3 with one slot held by the tick-log PR #70, so 2 workers; groom queue at tick 2 = 5 themes ready (C–G, H, Dependabot, architect groom, release.py/web UI). Lead time per code theme 55–58 min (build 35–42, host review 10–15, gate 3–5); nothing waits on the maintainer (0 kept decisions pending).
+
+### Friction observed
+- Tick 1 had to invent a spec-file commit because the claim protocol could not be executed as written (#73).
+- Ticks 1–2 read every file as `origin/dev:<path>` because a peer session is committing to the main checkout's local `dev` (2 commits ahead, untracked `Claude outputs/`); the skill assumes the checkout is `dev`.
+- The host lost two `gh pr create` calls to inline-heredoc quoting; both retried with `--body-file`.
+- The `pyrite-worker` agent type was refused in the host session (types register at session start) but accepted inside subagents.
+
+### The one process change
+The claim protocol corrected (first commit = backlog item; weekly log branch; cap counts workers) + the permission/`--body-file` setup notes — `.claude/skills/pyrite-conductor/SKILL.md`, `dispatch.md`; PR #75. Closes #71, #72, #73.
+
+### The quality theme
+`teardown-races-between-temporarydirectory-and-the-indexworker-thread-under-n` (high, S, Sonnet) — removes the one known intermittent red on `dev` (#55 + the connection-leak item); footprint `tests/conftest.py`, `tests/test_api_tiers.py`, `tests/test_index_worker.py`, `tests/test_admin_cli.py`. Stock for later: `changelog-fragments-one-file-per-pr-under-changelog-d-assembled-by-the-release` (medium, S).
+
+### Expected effect
+Themes dispatched per tick 1 → ≥1.5; `process` issues about claim/log 3 → 0 by the next retro; rebase conflicts per merged PR 1/9 → 0 once fragments land. Revert if the log PR goes a week without a ready flip, or item-per-theme makes `pyrite sw backlog` unreadable.
+
+### Not changed, noted for next time
+- The main checkout as a read surface while a peer session commits there — recommend the skill say `origin/dev:<path>`; waiting to see if the arrangement persists.
+- Raising the cap above three — 2 green ticks of the 10 the skill requires.
+- Cold reads: 0 dispatched, 0 needed (no server/storage/schema diffs yet); the trigger has not been tested.
+- Dependabot #23–#29 — land before or after the Playwright fan-out, not during (tick 2's ordering risk).
