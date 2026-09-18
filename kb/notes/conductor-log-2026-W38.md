@@ -832,3 +832,45 @@ the checks finally run, then review with the **cold read** its footprint demands
 **State at close: 1 in review (#84, rebased, auto-merge armed, checks running),
 4 in flight (#69 conflicted/awaiting rebase, #81 running its 10× suite, #82, #83),
 3 issues filed (#89 product via the worker, #103 and #104 process via review).**
+
+### Tick 3 close — #84 merged, #69 unblocked, and a spec file leaked onto dev
+
+**PR #84 (Package E) merged** at 07:02:20Z and its content verified present on
+`dev` (16 `assertOffsetSeeded` guards, the calendar testid, the backlog item in
+`kb/backlog/done/`). Worktree removed; the branch needed `-D` rather than `-d`
+because auto-merge **rebased** it, so the local tip was the pre-rebase copy —
+worth knowing so a future tick does not read "not fully merged" as "not merged".
+
+**#69's conflict resolved by the conductor, not its worker.** The worker had
+finished; its tree was clean and quiet, so the rebase was mine to do. Two
+findings from doing it:
+
+1. **The `CHANGELOG.md` conflict resolved itself cleanly on replay** — the three
+   new entries append after `dev`'s existing #15 entry with nothing lost. So
+   #103's cost is not the resolution, it is that the conflict *silently starved
+   the PR of checks* until someone noticed. The fix is still worth doing: the
+   next one may not replay this cleanly.
+2. **The real conflict was `.claude/THEME.md`** — and it exposed that **Package
+   B leaked its theme file onto `dev`** when it merged (commit `22619c9`). The
+   skill explicitly warns about this: "Do not commit the spec as a loose file:
+   it has to be removed before the PR goes ready, which a tick forgets." Tick 2
+   forgot, exactly as predicted. `dev` now carries a stale Package B spec.
+
+   The rebase's first pass resolved the conflict by *deleting* the file, which
+   would have made #69 silently clean up another theme's litter — a change
+   nobody reviewing "CLI write-and-report correctness" would expect to find.
+   Restored it with `git checkout origin/dev -- .claude/THEME.md` and amended,
+   so **#69's diff no longer touches the file at all**. Removing B's leftover is
+   a separate one-line KB/chore change, and it belongs to whoever next has a
+   reason to touch `.claude/` — not smuggled into a bugfix PR.
+
+This is the second time in two ticks that the *right* resolution of a mechanical
+conflict was "make my branch touch less", not "take one side". Worth a line in
+the retro: a conductor resolving a rebase should ask what the PR's reviewer
+would expect to see in the diff, not merely what makes the conflict go away.
+
+**State: #84 merged and cleaned up. #69 rebased onto current `dev`, force-pushed
+(pre-push suite running), and should finally get its first real `pull_request`
+checks — it has never had any. Once green it needs the cold read its footprint
+demands. #81 has pushed its fix and is running the 10x suite; #82 and #83 have
+both pushed commits ahead of their claim.**
