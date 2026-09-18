@@ -1148,3 +1148,79 @@ reader produced and eight findings not raised elsewhere. That does not justify
 duplicating reviews — the claim label in #111 is still the right fix — but it is
 a data point that a second cold read on a genuinely risky diff is not redundant,
 which the retro may want when deciding how far the standing trigger should go.
+
+### Tick 3 — #81 (quality theme) reported; first cold read of the loop dispatched
+
+**This report is what a real one looks like**, and it is the direct contrast to
+the mistake logged above. The worker handed back *explicitly incomplete*: "one
+evidence run still in flight when forced to hand back. Do NOT treat the '10
+consecutive runs' evidence below as final." It refused to flip its own backlog
+item to `done` because criterion 5's evidence was not yet a single clean
+artifact — "no completion claims without fresh verification evidence." A worker
+that declines to claim completion it has not earned is worth more than one that
+finishes on time.
+
+**Root cause, both shapes, confirmed before changing anything.** The item's
+theory (unclosed WAL connections recreating `-wal`/`-shm` during `rmtree`) was
+right, and #55's was the second, separate shape: `test_api_tiers.py`'s
+class-scoped fixtures build their own app via `create_app()`, which lazily
+creates an `IndexWorker` on the first `/api/index/sync`, and nothing joined that
+thread before the class-scoped temp dir was removed. **The worker did not touch
+`pyrite/services/index_worker.py`** — `wait_for_idle()` and `_threads` already
+existed; the gap was purely that the test's own app-building code never called
+it. That is the correct call: the product was fine, the test was wrong.
+
+Pre-fix reproducer, pasted as required: 6 runs, run 3 failed with
+`OSError: [Errno 66] Directory not empty` — ~1 in 6 on this machine.
+
+**The fix is a replacement, not a layer.** 369 insertions against **301
+deletions**: a `make_client(tmp_path, **settings)` factory in `tests/conftest.py`
+that owns the DB *and* the app's index worker, replacing four hand-rolled
+`_make_client`/`_make_app_and_db` helpers, plus `PyriteDB.__enter__/__exit__` so
+`with PyriteDB(path) as db:` is the idiom for the plain service tests. Criterion
+2 asked for exactly this and got it. The teardown order is explicit and
+commented: **join every index worker, then close the DBs they write through,
+both before pytest removes `tmp_path`** — and `tmp_path` rather than
+`TemporaryDirectory()` means a late writer cannot fail the run at all, which is
+the belt to the braces.
+
+**Where the ticket was wrong, and it matters for the next quality item.** The
+item said "nine test files". The worker verified that list against the tree as
+instructed and it matched *the nine named* — but nobody had asked whether nine
+was the whole population. It is not: 189 `PyriteDB(` call sites across `tests/`,
+and ~70 files combine `TemporaryDirectory` with `PyriteDB`. Measured honestly
+(bare opens exceeding `.close()` calls per file), the real residue is **3 files**
+— `test_admin_cli.py`, `test_collection_query.py`, `test_collections.py` — so the
+fix covers the actual risk population and the raw counts overstate it badly.
+Noted in the PR as a known remainder rather than treated as a blocker: the
+lesson is that a backlog item's enumeration is a hypothesis, and "verify the
+list" should mean "verify it is complete", not only "verify each entry".
+
+**It also found and fixed a tenth file nobody had listed** —
+`test_api_authorization_coverage.py` broke on collection the moment the helper
+was renamed (a forced fix, not scope creep), and while there it got the
+wait-for-idle teardown it had silently always lacked. Flagged by the worker
+itself for the reviewer to accept or split. Accepted: it is the same defect in
+the same shape, and leaving it would have left the suite red.
+
+**#88 filed, not fixed** — `test_index_worker.py`'s `test_active_jobs_filters`
+and `test_duplicate_sync_returns_same_id` assume `submit_sync()`'s thread has
+*not* finished by the next line, which is only true while the job is slow; under
+the CPU contention that `-n auto` on a loaded machine produces, a near-empty KB's
+sync finishes first. Pre-existing, reproduces unpatched, and a *different* race
+from this theme's (a same-thread assertion racing the job's own completion, not
+a teardown race). Correctly filed rather than folded in — and it is why the
+worker's 10-run passes show an occasional failure that is not a teardown error.
+
+**Cold read dispatched — the first of this loop.** The trigger fired properly
+for once: the diff adds `__enter__`/`__exit__` to a class in
+`pyrite/storage/connection.py`, which is both storage *and* a new public shape on
+a class extensions use. `pyrite-reviewer` (opus) got the diff and nothing else,
+pointed at re-entrancy, double-`close()`, `__exit__` returning False, long-lived
+callers being closed out from under, the fixture's teardown order on the
+raised-exception path, and whether any test conversion silently weakened an
+assertion. Retro 1 noted "cold reads: 0 dispatched, 0 needed; the trigger has not
+been tested." It has now.
+
+**Conductor's own verification in progress:** re-running the pre-fix reproducer
+6× on the branch (2 clean so far, against ~1-in-6 failure before the fix).
