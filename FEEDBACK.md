@@ -418,3 +418,56 @@ entries across `drafts`, `cascade-research`, and `book-drafts`)
   "entry_fts"` — the `entry_fts` FTS5 virtual table cannot be touched outside the app's own
   trigger-mediated write path, which ruled out a raw-SQL cleanup of the repro's row; `pyrite
   delete <id> -k <kb>` was the working path once the KB was (temporarily) re-registered.
+
+## 2026-09-18 · corpus-health loop (qa gaps → links suggest → link) · claude-opus-5
+
+Work being done: wiring up orphaned high-importance entries in `cascade-research` (3,576 entries),
+found via `qa gaps`. Real task, not a probe. Three tools in sequence; two excellent, one destructive.
+
+**Friction 1 — `pyrite link` corrupts the entry it edits. Severity: blocked (filed #87).**
+
+**Command:** `pyrite link michigan-ag-referral-lateness-enforced-accuracy-not lloyd-doug -k cascade-research -r documents --note "..."`
+**Expected:** a `links:` entry appended to frontmatter; nothing else touched.
+**Got:** exit 0, `Linked: ... ----> ...`, and a **181-line diff (+97/-84)** on a 96-line file. The
+entire markdown body was folded into a `body: "..."` YAML scalar, internal `file_path` was written
+into the file, key order scrambled, and `id`, `title`, `type`, `importance`, `tags`,
+`related_actors` were **dropped**. Resulting frontmatter does not parse:
+`yaml.scanner.ScannerError: ... found unexpected end of stream`.
+
+Reproduced on a clean scratch entry, so it is general, not file-specific. Both reverted via
+`git checkout`; no corpus damage persisted. An entry not under version control would have been lost.
+
+**Had to figure out:** that `link` writes at all. Nothing in `--help` suggests it rewrites the file;
+I only looked because I habitually `git diff` after a write. **An agent that trusted the success
+message would have corrupted every entry it linked** — and the task I was doing is "wire up 1,409
+entries with no outbound links," so that is 1,409 corrupted files.
+
+**Would have helped:** a targeted frontmatter append instead of a model round-trip; and failing that,
+a `--dry-run`. Worth auditing every other round-tripping command (`update`, `rename`,
+`links bulk-create`, `qa fix`, `import`) for the same pattern.
+
+**Friction 2 — `qa gaps` rich output hides a field the JSON has. Severity: annoyed.**
+
+`pyrite qa gaps -k cascade-research` (rich) prints empty types, sparse types, and
+"Entries with no outbound links". The JSON output additionally carries **`no_inlinks` (1,855
+entries)** and a `distribution` block — neither appears in the default view. I found `no_inlinks`
+only because I re-ran with `--format json` to post-process. The more interesting number was the
+hidden one.
+
+**Worked well — and these carried the loop:**
+
+- **`qa gaps --format json`** is the single most useful command I have run on this corpus. It
+  turned "independent writes never see across the corpus" from a hunch into **1,409 entries with no
+  outbound links / 1,855 with no inbound, out of 3,576**, broken down by type. Cross-referencing the
+  two lists found **12 entries orphaned in both directions at importance ≥ 6** — a precise, short,
+  actionable work list. Nothing else in the toolchain produces that.
+- **`links suggest`** (FTS5 on title+tags, no LLM) was genuinely good. On an orphaned mechanism
+  entry it returned the correct neighbours ranked sensibly — the two actor profiles and the three
+  source tasks that mechanism was built from. Fast, no embedding cost. This is a credible
+  replacement for the hand-rolled Jaccard duplicate sweep in our conductor skill.
+
+**Research finding worth recording separately:** the orphan analysis surfaced
+`michigan-ag-referral-lateness-enforced-accuracy-not` — an importance-7 mechanism written *yesterday*,
+carrying zero wikilinks in either direction, which is the analytical spine of a brief commissioned
+the same day. The brief does not cite it either. So the gap is not legacy debt; **the pipeline is
+generating disconnected entries right now**, and `qa gaps` is the only thing that can see it.
