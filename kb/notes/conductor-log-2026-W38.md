@@ -874,3 +874,65 @@ would expect to see in the diff, not merely what makes the conflict go away.
 checks — it has never had any. Once green it needs the cold read its footprint
 demands. #81 has pushed its fix and is running the 10x suite; #82 and #83 have
 both pushed commits ahead of their claim.**
+
+### Tick 3 correction — the conductor rebased a branch whose worker was not finished
+
+**What I got wrong.** I judged #69's worker finished and rebased its branch. It
+was not finished; it was *paused*. The evidence I used was wrong in a way worth
+writing down, because the next tick will face the same question:
+
+- Its tree was clean and its last commit was "done-shaped" (a docs/changelog
+  commit). ✅ but not sufficient.
+- `ps` showed no live processes in the worktree at the moment I looked. ✅ but
+  an agent between turns has no processes running. **Absence of processes is
+  absence of a suite run, not absence of a worker.**
+
+Fifteen minutes later the tree had `pyrite/models/base.py` modified, a
+`base.py.tmp.*` scratch file, and 136 new lines in
+`tests/test_update_preserves_frontmatter.py`. The worker had resumed.
+
+**What it was doing, which is the part that matters.** It had found the
+**mirror image of #46**: `_absent_default_keys` records what the source file
+lacked, and that load-time fact was then read as the user's intent forever
+after — so `importance = 5` on a file with no `importance:` key wrote nothing
+*and reported success*. #46 is a write that changes what nobody asked for; this
+is a write that silently does not change what was explicitly asked for. Both
+report success. Its fix intercepts `__setattr__` rather than clearing the set
+inside `KBService.update_entry`, explicitly so that the CLI, REST
+PUT/PATCH, MCP `entry_update` and software-kb's `sw reorder` are all covered
+rather than the one path that goes through that service method. That is exactly
+the root-cause-over-symptom work the theme was dispatched for, and it was
+uncommitted when I started rebasing.
+
+**No harm done, verified rather than assumed.** The reflog shows a clean rebase
+(`rebase (finish)` with no conflicts after `.claude/THEME.md`); git carries
+uncommitted work across a rebase when it does not conflict, and both edits are
+still present at 156 insertions. No pre-commit stash leftovers from my push
+attempt. The "ahead 28, behind 6" that alarmed me is measured against the
+**stale remote ref** and is expected after a rebase — `origin/dev..HEAD` is the
+honest count, and it is 6, the correct set.
+
+**What I did about it.** Killed both of my background pushes against that tree
+(`TaskStop`), because a `git push` runs the pre-push hook, which *stashes every
+unstaged edit in the working tree* — with a worker mid-edit that is how its
+uncommitted work vanishes for four minutes, and CLAUDE.md warns about exactly
+this. Left the branch rebased locally but **unpushed**: the rebase itself is
+sound and the worker can keep working on top of it.
+
+**The rule this should become.** The skill says "rebase a draft claim only when
+its worker has reported" (tick 2 proposed it; it is not yet written into
+`review.md`). Tick 3 proves the sharper version: **a worker has reported when
+its report arrives, and by no other signal.** Not a clean tree, not a
+done-shaped commit, not an idle `ps`. The draft PR body is where the report
+lands; until it is there, the branch is the worker's. I substituted three
+plausible proxies for the one real signal, and the only reason it cost nothing
+is that git happened to be forgiving.
+
+Filed as process friction; it belongs in `review.md` next to the cold-read
+trigger.
+
+**Corrected state: #69 rebased locally onto current `dev` (6 commits, clean
+replay, `.claude/THEME.md` untouched per #107), NOT pushed, worker still
+working in the tree. Its pre-push suite did run green during my attempt —
+4253 passed, 68 skipped, 4m11s — which is useful evidence for whenever it does
+land, but it predates the worker's newest commits and must be re-run.**
