@@ -14,6 +14,8 @@ The `pyrite-architect`'s re-split after #168 (the conductor loop ran the 16 GB m
 
 `heavy` = needs the machine's one slot for something bigger than one suite run (browsers, an npm build, a live server with an empty model cache). Size S ≤ ~150 lines, M ≤ ~300.
 
+> **Update 2026-09-18 evening:** ADR-0034 was accepted by the maintainer — the five `adr-0034-*` entries below are no longer blocked on it (their sequencing waits stand). #169 merged, so #134 waits only on the contributor window.
+
 ## The queue (strictly serial, dispatch order)
 
 **Protects the machine and users**
