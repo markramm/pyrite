@@ -1425,3 +1425,95 @@ No ADR accepted or amended, no release prepared, no push to `main`, no repo
 setting touched, and PR #69 was never flipped to ready — it stays draft with
 the defects documented and the worker reworking it. The kept/delegated boundary
 held throughout; the only maintainer-facing asks are the `process` issues above.
+
+### Tick 3 — the first cold read paid for the whole practice
+
+`pyrite-reviewer` on #81 (opus, diff and nothing else) returned the finding a
+conductor reading the same diff would not have made, because the diff *looks*
+right and the bug is in code the diff does not contain:
+
+> **`create_app()` opens a SECOND `PyriteDB` on the same file** — eagerly, while
+> seeding the KB registry — and parks it on `application.state.pyrite_db`. The
+> fixture's `dependency_overrides[get_db]` redirects dependency injection but
+> does not close that connection; some routes read it *directly* rather than
+> through DI (the export path in `endpoints/kbs.py:167`); and **nothing in
+> `pyrite/` ever closes `app.state.pyrite_db`.**
+
+So the fixture whose docstring said "this is what those hand-rolled helpers were
+missing" was missing the same thing. The leak the theme is named after was still
+there — **relocated, not fixed**, and invisible only because the branch also
+moved to `tmp_path`, which pytest does not delete during a run. A *default*
+(`tmp_path_retention_policy`) was doing the work the code claimed to do.
+
+**Verified before acting, not taken on trust.** `api.py:766` assigns it,
+`kbs.py:167` reads it, `grep` finds no close anywhere. Then the decisive test:
+create a client, hit `/api/kbs`, let the fixture tear down, and look at the
+directory — `index.db-shm` and `index.db-wal` still live. **Verify-red on the
+fix** (retro 2's new rule, applied to my own work): with the app-state tracking
+removed the new test fails with exactly that message; with it, clean.
+
+**Fixed on the branch rather than redispatched** — four commits, because each is
+small, provable and inside the theme:
+1. `tests/conftest.py` tracks and closes `application.state.pyrite_db` too, with
+   the mechanism written into the comment so the next reader does not have to
+   rediscover it. Docstring corrected: `tmp_path` is named as a *second line of
+   defence*, not the fix.
+2. Both teardown loops (conftest's and `test_api_tiers`' four-client fixture)
+   guard each join and each close individually and re-raise the first error —
+   the cold read's second finding: one failing close leaked every connection
+   after it, the same class of bug the fixture exists to fix.
+3. `tests/test_make_client_closes_every_connection.py` — the regression guard.
+   It asserts on *the connection*, not on whether a directory removal happened
+   to survive, precisely because the retention policy is a default a project can
+   change. It also guards its own premise: if `create_app` stops opening a
+   second connection, the test says so rather than passing vacuously.
+4. The three sites the cold read found still matching the ticket's own pattern
+   (`test_collections.py`, `test_collection_query.py`, `test_admin_cli.py` — the
+   last constructed inline inside a `patch()` call and never bound, so it could
+   not be closed at all). **Criterion 1 was not met before this**, and the ticket
+   said it was.
+
+**The transferable lesson**, logged above and worth repeating: the item named
+nine files, the worker verified those nine matched, and nobody asked whether
+nine was the population. *Verify the list* has to mean *verify it is complete*.
+
+**What the cold read got right that I had already passed:** I reviewed this
+diff, read every hunk, ran the suite, and flipped none of these. I checked that
+the teardown order was correct — it is — and never asked whether the fixture
+owned everything it claimed to. The trigger (storage + a new public shape) fired
+correctly and the practice earned its cost on first use. Retro 1 recorded "cold
+reads: 0 dispatched, 0 needed; the trigger has not been tested." Tested.
+
+**Left as follow-ups, not blockers**, all noted in the PR: `close()` is not
+terminal (SQLAlchemy silently re-opens from the pool, so a caller holding a
+reference past the `with` block can resurrect the WAL files); `__exit__` does not
+guard re-entry; `IndexWorker._threads` is never pruned so `wait_for_idle`'s 10 s
+is per-thread and cumulative; and the new context manager has zero adoption in
+`pyrite/` — `cli/context.py` still hand-rolls `try/finally: db.close()` three
+times, which is exactly where a reviewer will ask "why not here?".
+
+### Package D (#83) absorbed
+
+Reviewed, flipped, rebased, auto-merge armed. Footprint matches its spec; zero
+`text=`, zero `.first()`, `uniqueTitle` in both files — all verified by grep
+rather than from the report. **It found and fixed a real product bug**:
+`entries/new/+page.svelte` derives `kb` from `kbStore.activeKB ?? ''` and
+`save()` guards only on `title`, so a click before the store resolved POSTed
+`kb: ''` and failed *silently* (toast gone in 3 s, no navigation, nothing else
+surfaces it). Confirmed independently by reading `save()` against the `$derived`.
+One-word fix mirroring the existing gate. Root-caused with a traced
+`--repeat-each=8` run, not guessed from a flake — criterion 7 working as designed
+for the third package running (B→#49, E→#89, D→this).
+
+Filed by D: **#117** (no delete affordance anywhere in the UI — `deleteEntry()`
+exists and is unit-tested but no component calls it, so delete is untested
+through the UI and its specs clean up via the API) and **#118**, which is a
+duplicate of my **#104** — *the same defect filed independently by two packages
+and the conductor inside one hour*, which is the measure of what it costs. #118
+adds the failure mode #104 missed and it is the dangerous one: **Vite silently
+falls back to 5174+ while Playwright's `baseURL` stays pinned to 5173**, so a run
+can talk to a different worktree's data and read as a mysterious assertion
+failure. Carried into #104's acceptance: a port collision must fail loudly, not
+fall back.
+
+**Load is down to 9.76** from 54 after killing the redundant 10-run loop.
