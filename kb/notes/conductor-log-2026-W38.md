@@ -1094,3 +1094,57 @@ accumulate.
 Nothing. The cap was full, three heavy Playwright/pytest workers were contending
 for one machine, and the retro's own resource cap says not to add a heavy theme
 in that state. Correct outcome, reached the expensive way.
+
+### Addendum — the duplicate cold read came back, and it was not wasted
+
+The second `pyrite-reviewer` (the one this tick dispatched before knowing the
+07:10Z session had one in flight) finished after the tick entry above was
+written. Two things are worth recording.
+
+**It converged independently on both blockers.** `importance` and `rank`
+default-suppression, found from a cold diff with no knowledge of the other
+review. Two independent readers reaching the same two data-loss regressions is
+the strongest evidence yet for the cold read as a **standing trigger** rather
+than a judgement call — the last retro argued that from one instance, and this
+is a second, cleaner one. It also proposed the fix in the form the redispatch
+independently chose: `_omit_default` should apply only when the caller did not
+touch the field, which `update_entry` knows and the model does not.
+
+**It made the teardown-race measurement the other two lacked.** Both earlier
+attempts (mine, and the 07:10Z session's) compared the branch against *`dev`*.
+This one compared against the **merge base** — 1/6 vs 2/6 — which is the only
+comparison that isolates the diff, and it additionally measured and ruled out
+the one plausible timing lever (`_restyle_like_source` costs ~550 µs/save, but
+median `to_markdown` is *faster* on the branch because `dev` was serializing
+`body:` into the YAML). Three measurements now agree the race is pre-existing;
+only this one was designed to be able to say so.
+
+*Generalisable, and the sharper version of this window's other measurement
+lesson:* **compare a branch against its merge base, not against `dev`.** `dev`
+moves under you and carries other themes; the merge base is the only tree that
+differs from the branch by exactly the diff under review. Both earlier
+measurements in this window were confounded and one had to be publicly
+withdrawn. Belongs in `review.md` next to the one-interpreter rule — they are
+the same mistake at different scales (measuring under one condition, reporting
+as a claim about another).
+
+**Findings unique to it**, now on the PR and worth carrying into the redispatch
+or into follow-up tickets: `kb_commands.py:272-280` and `admin_cli.py:261` still
+run the unscoped whole-universe health walk (the exact cost #18 is about, in the
+one place `-k` would pay for itself); `index health` has no gate on the *warning*
+tier, so a KB with 52 unparseable files still exits 0 — which is half of what
+#18 asked for; `check_health` accepts an unknown KB and returns a clean report to
+any non-CLI caller; `db backup` relocates the 125 files without adding retention
+or sub-second timestamps, and they are no longer under `.gitignore` to be caught
+by `git status`; the new broken-links SQL scoping has no test pinning its design
+decision; frontmatter YAML comments now survive an update — a real new guarantee
+with no test and no changelog line, so the next refactor drops it silently; and
+`README.md:109` plus `CLAUDE.md` still document `index health` as a plain check
+while its default exit code has flipped, which will fail agents' bash calls.
+
+**Cost/benefit of the duplicate, honestly:** ~100k tokens and 23 minutes of Opus
+for a second opinion nobody asked for. It produced one measurement neither other
+reader produced and eight findings not raised elsewhere. That does not justify
+duplicating reviews — the claim label in #111 is still the right fix — but it is
+a data point that a second cold read on a genuinely risky diff is not redundant,
+which the retro may want when deciding how far the standing trigger should go.
