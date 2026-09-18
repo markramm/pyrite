@@ -145,9 +145,12 @@ class SearchBackend(Protocol):
         The filter set here is deliberately the keyword leg's filter set. A
         hybrid search fuses the two legs, so a filter applied on only one of
         them produces a result set that silently violates the caller's filter
-        (#56). Implementations MUST apply every filter they are given, or raise
-        rather than return unfiltered rows — ``SearchService`` catches that and
-        reports the dropped leg in ``warnings``.
+        (#56). An implementation that applies every filter it is given declares
+        :attr:`~.capabilities.BackendCapability.FILTERED_SEMANTIC`; one that
+        does not must leave it undeclared, and ``SearchService`` drops the
+        vector leg — naming the filters in ``warnings`` — rather than call it
+        with a filter it would ignore. Returning unfiltered rows is never
+        acceptable.
         """
         ...
 

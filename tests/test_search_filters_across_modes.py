@@ -251,6 +251,21 @@ def test_semantic_leg_alone_honours_filters(svc_db):
     assert rows == []
 
 
+def _undeclare_filtered_semantic(backend, monkeypatch):
+    """Model a backend whose vector leg cannot honour filters.
+
+    The service asks the backend's declared capability set, so that is what a
+    stand-in must change. Raising ``TypeError`` from ``search_semantic`` — what
+    an earlier draft of these tests did — no longer models anything: it is a
+    genuine bug, and the service is now required to let it through.
+    """
+    from pyrite.storage.backends.capabilities import BackendCapability
+
+    cls = type(backend)
+    reduced = set(cls.capabilities) - {BackendCapability.FILTERED_SEMANTIC}
+    monkeypatch.setattr(cls, "capabilities", reduced)
+
+
 # =========================================================================
 # Warnings: a filter a leg cannot honour is named, never dropped silently
 # =========================================================================
@@ -268,14 +283,11 @@ def test_no_warnings_when_every_filter_is_honoured(svc):
 def test_warning_when_a_leg_cannot_honour_a_filter(svc, monkeypatch):
     """A backend whose vector leg cannot filter reports it rather than lying.
 
-    Simulates a backend without filtered-KNN support: the semantic leg is
-    dropped from the fused set and the caller is told which filters caused it.
+    Simulates a backend without filtered-KNN support — one that does not
+    declare ``FILTERED_SEMANTIC``: the semantic leg is dropped from the fused
+    set and the caller is told which filters caused it.
     """
-
-    def _unfiltered(self, embedding, kb_name=None, limit=20, max_distance=1.3, **filters):
-        raise TypeError("backend does not support filtered semantic search")
-
-    monkeypatch.setattr(type(svc.db.backend), "search_semantic", _unfiltered)
+    _undeclare_filtered_semantic(svc.db.backend, monkeypatch)
 
     warnings: list[str] = []
     results = svc.search(
@@ -293,11 +305,7 @@ def test_unfilterable_backend_never_leaks_in_semantic_mode(svc, monkeypatch):
     There is no keyword leg to fall back on, so the honest answer is zero
     results plus a warning — never the unfiltered set that caused #56.
     """
-
-    def _unfiltered(self, embedding, kb_name=None, limit=20, max_distance=1.3, **filters):
-        raise TypeError("backend does not support filtered semantic search")
-
-    monkeypatch.setattr(type(svc.db.backend), "search_semantic", _unfiltered)
+    _undeclare_filtered_semantic(svc.db.backend, monkeypatch)
 
     warnings: list[str] = []
     results = svc.search(
@@ -307,20 +315,25 @@ def test_unfilterable_backend_never_leaks_in_semantic_mode(svc, monkeypatch):
     assert any("entry_type" in w for w in warnings), warnings
 
 
-def test_unfiltered_semantic_search_still_propagates_a_real_type_error(svc, monkeypatch):
-    """The TypeError rescue is scoped to filters, not a blanket swallow.
+@pytest.mark.parametrize(
+    "filters", [{}, {"entry_type": "mechanism"}], ids=["unfiltered", "filtered"]
+)
+def test_a_backend_type_error_always_propagates(svc, monkeypatch, filters):
+    """A ``TypeError`` from the backend is a bug, filter or no filter.
 
-    With no filters active a ``TypeError`` from the backend is a genuine bug
-    and must not be silently turned into an empty result set.
+    There is no rescue left to scope: whether the vector leg can filter is a
+    declared capability, checked before the call, so an exception out of the
+    call itself is never evidence about capabilities. The filtered case is the
+    regression — it used to be swallowed and relabelled.
     """
 
-    def _broken(self, embedding, kb_name=None, limit=20, max_distance=1.3, **filters):
+    def _broken(self, embedding, kb_name=None, limit=20, max_distance=1.3, **kwargs):
         raise TypeError("a real bug in the backend")
 
     monkeypatch.setattr(type(svc.db.backend), "search_semantic", _broken)
 
     with pytest.raises(TypeError, match="a real bug"):
-        svc.search("detention", kb_name="test-kb", mode="semantic")
+        svc.search("detention", kb_name="test-kb", mode="semantic", **filters)
 
 
 def test_warnings_reach_the_mcp_response(svc_db, monkeypatch):
@@ -337,10 +350,7 @@ def test_warnings_reach_the_mcp_response(svc_db, monkeypatch):
     clean = server._kb_search({"query": "detention", "kb_name": "test-kb", "mode": "hybrid"})
     assert "warnings" not in clean, clean
 
-    def _unfiltered(self, embedding, kb_name=None, limit=20, max_distance=1.3, **filters):
-        raise TypeError("backend does not support filtered semantic search")
-
-    monkeypatch.setattr(type(svc_db.backend), "search_semantic", _unfiltered)
+    _undeclare_filtered_semantic(svc_db.backend, monkeypatch)
     noisy = server._kb_search(
         {
             "query": "detention",
@@ -413,10 +423,7 @@ def test_rest_search_omits_warnings_on_the_happy_path(rest_client):
 def test_rest_search_reports_a_dropped_leg_in_warnings(rest_client, svc_db, monkeypatch):
     """A filter a leg cannot honour reaches the REST caller as ``warnings``."""
 
-    def _unfiltered(self, embedding, kb_name=None, limit=20, max_distance=1.3, **filters):
-        raise TypeError("backend does not support filtered semantic search")
-
-    monkeypatch.setattr(type(svc_db.backend), "search_semantic", _unfiltered)
+    _undeclare_filtered_semantic(svc_db.backend, monkeypatch)
 
     resp = rest_client.get(
         "/api/search",
@@ -479,3 +486,52 @@ def test_cli_search_honours_type_filter_in_hybrid(cli_index, monkeypatch):
         )
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["results"] == []
+
+
+def test_a_bug_inside_the_vector_leg_propagates_even_with_a_filter(svc, monkeypatch):
+    """The dropped-leg path must be a declared capability, not a caught TypeError.
+
+    ``_semantic_search`` wrapped the whole of ``search_similar`` — embedding the
+    query, the backend call, *and* snippet generation — in ``except TypeError``.
+    With a filter active, any genuine ``TypeError`` from any of those turned
+    into "this backend cannot filter" and a silently empty semantic leg. Here
+    the backend filters perfectly and the bug is in snippet generation: it must
+    reach the caller, not be relabelled.
+    """
+    import pyrite.services.embedding_service as es
+
+    def _boom(*args, **kwargs):
+        raise TypeError("a real bug in snippet generation")
+
+    monkeypatch.setattr(es, "_generate_snippet", _boom)
+
+    with pytest.raises(TypeError, match="a real bug in snippet generation"):
+        svc.search("detention", kb_name="test-kb", mode="semantic", entry_type="mechanism")
+
+
+def test_backend_without_the_capability_drops_the_leg_with_a_warning(svc, monkeypatch):
+    """A backend that does not declare FILTERED_SEMANTIC is checked up front.
+
+    No exception is raised and none is caught: the capability set says the
+    vector leg cannot honour the filter, so the leg is dropped before it runs
+    and the caller is told which filters cost it.
+    """
+    from pyrite.storage.backends.capabilities import BackendCapability
+
+    backend_cls = type(svc.db.backend)
+    reduced = set(backend_cls.capabilities) - {BackendCapability.FILTERED_SEMANTIC}
+    monkeypatch.setattr(backend_cls, "capabilities", reduced)
+
+    warnings: list[str] = []
+    results = svc.search(
+        "detention", kb_name="test-kb", mode="semantic", entry_type="mechanism", warnings=warnings
+    )
+    assert results == []
+    assert any("entry_type" in w for w in warnings), warnings
+
+
+def test_sqlite_declares_filtered_semantic(svc):
+    """The in-tree backends honour every filter on the vector leg, so they say so."""
+    from pyrite.storage.backends.capabilities import BackendCapability
+
+    assert BackendCapability.FILTERED_SEMANTIC in type(svc.db.backend).capabilities

@@ -2,7 +2,9 @@
 
 Locked design (commit 3777cb5):
 
-- BackendCapability StrEnum with 3 members: ENTITY, SEARCH, EMBEDDING.
+- BackendCapability StrEnum with the 3 subsystems ENTITY, SEARCH and
+  EMBEDDING, plus FILTERED_SEMANTIC (#56), a refinement of EMBEDDING
+  rather than a fourth subsystem.
 - Each dispatched method on the SearchBackend Protocol maps to a
   capability via `_METHOD_CAPABILITIES`.
 - Backend classes declare ``capabilities: ClassVar[set[BackendCapability]]``.
@@ -25,16 +27,39 @@ from __future__ import annotations
 
 
 class TestBackendCapabilityEnum:
-    """3 members: ENTITY, SEARCH, EMBEDDING (locked design decision #1)."""
+    """The 3 subsystems of the locked design (decision #1), plus refinements.
 
-    def test_has_three_members(self):
+    ENTITY, SEARCH and EMBEDDING are the subsystem split. FILTERED_SEMANTIC
+    (#56) is a refinement of EMBEDDING — how *well* a backend implements
+    ``search_semantic``, not whether it implements it. The headcount stays
+    pinned so a new member is a deliberate edit here, with its kind stated.
+    """
+
+    def test_has_the_expected_members(self):
         from pyrite.storage.backends.capabilities import BackendCapability
 
         assert {c.name for c in BackendCapability} == {
             "ENTITY",
             "SEARCH",
             "EMBEDDING",
+            "FILTERED_SEMANTIC",
         }
+
+    def test_filtered_semantic_refines_embedding(self):
+        """A backend claiming the refinement must claim the subsystem too.
+
+        FILTERED_SEMANTIC says ``search_semantic`` honours the keyword leg's
+        filters; a backend that cannot do semantic search at all must not
+        claim it.
+        """
+        from pyrite.storage.backends.capabilities import BackendCapability
+        from pyrite.storage.backends.postgres_backend import PostgresBackend
+        from pyrite.storage.backends.sqlite_backend import SQLiteBackend
+
+        for cls in (SQLiteBackend, PostgresBackend):
+            caps = cls.capabilities
+            assert BackendCapability.FILTERED_SEMANTIC in caps, cls.__name__
+            assert BackendCapability.EMBEDDING in caps, cls.__name__
 
     def test_is_string_enum(self):
         """StrEnum so backends can declare {BackendCapability.ENTITY}
@@ -206,3 +231,54 @@ class TestInTreeBackendDeclarations:
         assert BackendCapability.ENTITY in declared
         assert BackendCapability.SEARCH in declared
         assert BackendCapability.EMBEDDING in declared
+
+
+# =========================================================================
+# Overlay — delegated capabilities (#56)
+# =========================================================================
+
+
+class TestOverlayCapabilities:
+    """The overlay declares the intersection of its two halves.
+
+    It is only as capable as its weaker half for anything it combines, so the
+    intersection is the honest answer. FILTERED_SEMANTIC survives it because
+    ``search_semantic`` delegates straight to main with every filter passed
+    through, and both in-tree backends declare it — without this, a user on an
+    overlay index would silently lose the semantic leg on every filtered
+    search.
+    """
+
+    @staticmethod
+    def _overlay(main_caps, diff_caps):
+        from pyrite.storage.backends.overlay_backend import OverlaySearchBackend
+
+        class _Half:
+            def __init__(self, caps):
+                self.capabilities = caps
+
+        return OverlaySearchBackend(_Half(main_caps), _Half(diff_caps))
+
+    def test_declares_filtered_semantic_when_both_halves_do(self):
+        from pyrite.storage.backends.capabilities import BackendCapability
+
+        caps = {BackendCapability.EMBEDDING, BackendCapability.FILTERED_SEMANTIC}
+        assert BackendCapability.FILTERED_SEMANTIC in self._overlay(caps, caps).capabilities
+
+    def test_drops_a_capability_a_half_lacks(self):
+        from pyrite.storage.backends.capabilities import BackendCapability
+
+        full = {BackendCapability.EMBEDDING, BackendCapability.FILTERED_SEMANTIC}
+        overlay = self._overlay(full, {BackendCapability.EMBEDDING})
+        assert BackendCapability.FILTERED_SEMANTIC not in overlay.capabilities
+        assert BackendCapability.EMBEDDING in overlay.capabilities
+
+    def test_a_half_that_declares_nothing_yields_nothing(self):
+        """Safe failure mode, same as ``backend_declares``: undeclared is empty."""
+
+        class _Bare:
+            pass
+
+        from pyrite.storage.backends.overlay_backend import OverlaySearchBackend
+
+        assert OverlaySearchBackend(_Bare(), _Bare()).capabilities == set()

@@ -82,10 +82,15 @@ class PostgresBackend(BaseBackend):
     # tsvector keyword search, and pgvector embeddings. Declared at the class
     # level; runtime availability of the extensions is a separate gate. See
     # capabilities.py.
+    # FILTERED_SEMANTIC: ``search_semantic`` puts the same predicates as
+    # ``search`` in the same ``WHERE`` as the distance ordering, so a fused
+    # hybrid result can never contain an entry the caller's filter excluded
+    # (#56).
     capabilities: ClassVar[set[BackendCapability]] = {
         BackendCapability.ENTITY,
         BackendCapability.SEARCH,
         BackendCapability.EMBEDDING,
+        BackendCapability.FILTERED_SEMANTIC,
     }
 
     def __init__(self, session: Session, engine=None):

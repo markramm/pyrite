@@ -5,17 +5,25 @@ later assigned to the backend-agnostic query DSL. The r1400 capability design
 was never written up as a numbered ADR; the locked decision lives in commit
 3777cb5.
 
-Backend classes declare which of the 3 backend-protocol subsystems they
-support via a ``capabilities: ClassVar[set[BackendCapability]]`` class
+Backend classes declare which backend-protocol subsystems they support
+via a ``capabilities: ClassVar[set[BackendCapability]]`` class
 attribute. A dispatch helper (``backend_declares``) consults this set
 before calling each method, skipping methods whose capability the
 backend did not claim.
 
-Locked design (commit 3777cb5, Option B). The 3 members mirror the
-3-subsystem split documented in the r1400 ticket — an eventual move to
-Option A (splitting into ``EntityStore``, ``SearchEngine``,
-``EmbeddingStore`` protocols) is mechanical: each Capability becomes
-its own Protocol with the same name.
+Locked design (commit 3777cb5, Option B). ENTITY, SEARCH and EMBEDDING
+mirror the 3-subsystem split documented in the r1400 ticket — an
+eventual move to Option A (splitting into ``EntityStore``,
+``SearchEngine``, ``EmbeddingStore`` protocols) is mechanical: each
+Capability becomes its own Protocol with the same name.
+
+``FILTERED_SEMANTIC`` (#56) is the first member that is not a subsystem
+but a refinement of one: it says *how well* a backend implements
+``search_semantic``, not whether it implements it. Callers that need a
+guarantee rather than a method check it directly rather than going
+through ``backend_declares``, which answers only the dispatch question
+("may I call this method at all"). Under a future Option A split it
+would be a flag on ``EmbeddingStore``, not a protocol of its own.
 
 Decision #2 from the locked design: this module handles ONLY the
 class-attribute question ("can in principle do X"). The runtime
@@ -31,7 +39,7 @@ from typing import Any
 
 
 class BackendCapability(StrEnum):
-    """The 3 backend-protocol subsystems a backend can opt into.
+    """The backend-protocol subsystems a backend can opt into.
 
     ENTITY     — entity-table CRUD, listing, counting, edges, graph,
                  tags, timeline, object refs, folder queries, global
@@ -42,11 +50,30 @@ class BackendCapability(StrEnum):
                  vary at runtime but all live behind this capability.
     EMBEDDING  — vector storage and semantic KNN search. SQLite via
                  sqlite-vec (runtime-gated), Postgres via pgvector.
+
+    FILTERED_SEMANTIC — ``search_semantic`` honours the same filter set
+                 as ``search`` (entry_type, tags, date range, fips,
+                 state, status, include_archived) *inside* the KNN query
+                 rather than after it. A refinement of EMBEDDING, not a
+                 fourth subsystem: a backend declaring it must declare
+                 EMBEDDING too.
+
+                 It exists because hybrid mode fuses the keyword and
+                 vector legs, so a filter honoured on only one of them
+                 yields a result set that silently violates the caller's
+                 filter (#56). ``SearchService`` checks this up front and
+                 drops the vector leg — with a named warning — when a
+                 backend does not declare it. The alternative, probing by
+                 calling and catching ``TypeError``, cannot tell a
+                 backend that lacks the feature from a genuine bug
+                 anywhere inside the vector leg, and relabelled the
+                 second as the first.
     """
 
     ENTITY = "entity"
     SEARCH = "search"
     EMBEDDING = "embedding"
+    FILTERED_SEMANTIC = "filtered_semantic"
 
 
 # =============================================================================

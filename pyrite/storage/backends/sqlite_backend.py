@@ -33,10 +33,14 @@ class SQLiteBackend(BaseBackend):
     # FTS5 keyword search, and sqlite-vec embeddings. EMBEDDING is declared at
     # the class level ("can in principle"); whether sqlite-vec is loaded right
     # now is a separate runtime gate (``vec_available``). See capabilities.py.
+    # FILTERED_SEMANTIC: ``search_semantic`` compiles the same predicates as
+    # ``search`` into the KNN query, so a fused hybrid result can never contain
+    # an entry the caller's filter excluded (#56).
     capabilities: ClassVar[set[BackendCapability]] = {
         BackendCapability.ENTITY,
         BackendCapability.SEARCH,
         BackendCapability.EMBEDDING,
+        BackendCapability.FILTERED_SEMANTIC,
     }
 
     def __init__(

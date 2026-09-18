@@ -24,6 +24,20 @@ class OverlaySearchBackend:
         self._main = main
         self._diff = diff
 
+    @property
+    def capabilities(self) -> set[Any]:
+        """Whatever both halves can do.
+
+        The overlay is only as capable as its weaker half for anything it has
+        to combine, so the intersection is the honest answer. ``FILTERED_
+        SEMANTIC`` (#56) survives it because ``search_semantic`` delegates
+        straight to main with every filter passed through — main's guarantee
+        is the overlay's guarantee, and both in-tree backends declare it.
+        """
+        main = getattr(self._main, "capabilities", set()) or set()
+        diff = getattr(self._diff, "capabilities", set()) or set()
+        return set(main) & set(diff)
+
     def close(self) -> None:
         # Don't close main — it's shared. Only close diff.
         self._diff.close()

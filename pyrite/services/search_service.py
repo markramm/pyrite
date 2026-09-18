@@ -376,11 +376,18 @@ class SearchService:
         """Pure semantic vector search, with the keyword leg's filters applied.
 
         ``filters`` goes to the backend's ``search_semantic``, which applies it
-        inside the KNN query. A backend whose vector leg cannot take a filter
-        raises ``TypeError``; rather than return rows that violate the caller's
-        filter, we drop the semantic leg entirely and name the offending
-        filters in ``warnings`` (#56 — a filter is honoured or reported, never
-        silently dropped).
+        inside the KNN query. Whether a backend can do that is a *declared*
+        capability, ``FILTERED_SEMANTIC``, checked before the leg runs: a
+        backend that does not declare it never sees the filter, and the leg is
+        dropped with the offending filters named in ``warnings`` (#56 — a
+        filter is honoured or reported, never silently dropped).
+
+        Declared rather than probed on purpose. An earlier version called the
+        backend and read a ``TypeError`` as "cannot filter", but that wraps the
+        whole vector leg — embedding the query, the backend call, snippet
+        generation — so any genuine ``TypeError`` anywhere inside it was
+        relabelled as a missing feature and turned into a silently empty
+        semantic leg. Bugs now propagate.
         """
         from .embedding_service import EmbeddingService, is_available
 
@@ -392,20 +399,7 @@ class SearchService:
             return []
 
         active = {k: v for k, v in (filters or {}).items() if v}
-
-        # sqlite-vec KNN doesn't support SQL OFFSET, so fetch limit+offset
-        # and slice in Python
-        try:
-            results = svc.search_similar(
-                query,
-                kb_name=kb_name,
-                limit=limit + offset,
-                max_distance=max_distance,
-                **active,
-            )
-        except TypeError:
-            if not active:
-                raise
+        if active and not self._backend_filters_semantic():
             if warnings is not None:
                 warnings.append(
                     "semantic leg dropped: this backend cannot filter vector search by "
@@ -414,7 +408,30 @@ class SearchService:
                 )
             logger.warning("semantic leg dropped — backend cannot filter by %s", sorted(active))
             return []
+
+        # sqlite-vec KNN doesn't support SQL OFFSET, so fetch limit+offset
+        # and slice in Python
+        results = svc.search_similar(
+            query,
+            kb_name=kb_name,
+            limit=limit + offset,
+            max_distance=max_distance,
+            **active,
+        )
         return results[offset:]
+
+    def _backend_filters_semantic(self) -> bool:
+        """Does this backend's vector leg honour the keyword leg's filters?
+
+        Read from the backend's declared capability set. A backend that
+        declares nothing (or is a stand-in that never declared) is assumed not
+        to filter: the safe reading is to drop the leg and say so, never to
+        return rows that violate the caller's filter.
+        """
+        from ..storage.backends.capabilities import BackendCapability
+
+        declared = getattr(self.db.backend, "capabilities", set()) or set()
+        return BackendCapability.FILTERED_SEMANTIC in declared
 
     def _hybrid_search(
         self,
