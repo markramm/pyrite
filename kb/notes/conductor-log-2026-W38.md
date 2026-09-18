@@ -513,3 +513,106 @@ ordering call.
 **Final state this tick: 0 merged (tick 2 took #74), 5 in flight (#69 verifying,
 #81/#82/#83/#84 dispatched), 1 architect grooming ~23 issues, 1 issue filed
 (#86), 1 root-cause data point posted to #69.**
+
+### Tick 3 close — the architect's breakdown (the ready queue for tick 4)
+
+The groom returned after the tick's dispatch was already out, so nothing here
+was dispatched this tick; it is the ready queue tick 4 chooses from. **23 issues
+collapse to 7 themes, 2 spikes, 1 duplicate, 3 maintainer decisions.** Two
+findings change the shape of the set before any theme is written, and I verified
+both against `origin/dev` rather than taking the report's word:
+
+- **#78 is a duplicate of #55** — same fixture (`test_api_tiers.py`
+  `three_key_client`), same `OSError`, same `-n auto` condition; filed from the
+  #69 worktree without sight of #55. PR #81 already covers it. Commented on the
+  issue; close it when #81 lands.
+- **#43's stated root cause is false.** It claims `pyrite init` writes no
+  `auto_embed` key and that is why nothing embeds. But `config.py:350` is
+  `auto_embed: bool = True` and `:765` is `settings_data.get("auto_embed", True)`
+  — **an absent key means on** (verified). The embed is being attempted and
+  silently failing in one of three places that each degrade to `logger.warning`.
+  A worker specced on #43 as written would add a key, change nothing, and close
+  it. Commented on the issue; it is now Spike 1.
+
+**The seven themes, in the architect's recommended order:**
+
+| # | Theme | Closes | Model | Cold read | When |
+|---|---|---|---|---|---|
+| 1 | Search filters honoured in every mode, on every surface | #53, #56 (+#67) | opus | yes | **now** — the only DoD item in the set |
+| 2 | MCP read-tier response contracts (projection, limits, errors that name the problem) | #57, #58, #63 | sonnet | no | now |
+| 3 | Plugin validators actually run, and a failing one is loud | #48 | opus | yes | now |
+| 4 | `index health` tells the truth about a correct KB | #44, #47, +pool #6/#7/#8/#19/#22 | sonnet | yes | after #69 merges |
+| 5 | Entry-type vocabulary: report the drift, resolve on read | #59, #60 | sonnet (scoped down) | no | after 4 |
+| 6 | Web: KB store resolves before the page judges it empty; page titles survive | #45, #49 | sonnet | no | after the whole fan-out |
+| 7 | Cross-KB read tools: correlate, disclose the tier, separate staging from canon | #61, #62, #64, #65, #66, #68 | opus | yes | **0.25** |
+
+**Themes 1, 2 and 3 are dispatchable in parallel** (footprint-disjoint, no
+collision with #69, #81 or the fan-out) once the review queue drains — with
+**#67 moved from theme 2 into theme 1**, which is what makes them disjoint;
+otherwise both touch `search_service.py`.
+
+**Two root causes I verified myself**, because they are the load-bearing claims:
+
+- **Theme 1.** `_semantic_search` (`search_service.py:336`) takes *no filter
+  parameters at all*; `_hybrid_search` (`:361`) passes filters only to the FTS
+  leg, so the fused RRF set admits vector-leg rows no filter ever saw. The
+  correct guard already exists in the file — `if status:` at `:409`, with a
+  docstring explaining the leg split — applied to `status` and `kb_names` and to
+  none of the other four filters. `status` is the one filter both testers
+  measured as correct in hybrid mode. That is not a coincidence; it is the only
+  one with the guard.
+- **Theme 3.** `extensions/cascade/.../plugin.py:458` is
+  `def _validate_cascade_entry(entry) -> list[str]` — one arg, returning strings.
+  `kb_schema.py` calls `validator(entry_type, fields, ctx)`, falls back to
+  `validator(entry_type, fields)`, and swallows the second `TypeError` into a
+  `logger.warning`. **Neither call matches**, and the return contract is wrong
+  too (the caller does `item.get("severity")` on a `str`), so fixing the arity
+  alone converts a silent skip into an `AttributeError`. No cascade entry has
+  been plugin-validated for as long as the signatures have been out of sync.
+
+**The shape those two share is worth naming:** a guard exists, correctly, for
+exactly one case, and nobody generalized it. Both produce plausible output,
+which is why both survived; both were found by an agent doing real work rather
+than by the suite. **13 of the 23 issues came from one read-tier hallway-test
+session, and the two most valuable themes here are built out of them.** That is
+the strongest evidence the loop has produced for the hallway-test practice
+itself — retro material.
+
+**A gap the groom found by looking at what is *not* in the pile:** milestone
+0.24.2 contains #56, #46, #21, #18, #13 and #9. #46/#21/#18 are PR #69, #56 is
+theme 1 — and **#13 and #9 have no owner anywhere in this breakdown**. #9 (web
+search never renders — the flagship flow on the demo) is the release's most
+user-visible open bug and none of the 23 issues touches it. Tick 4 should compose
+a theme for #9 directly from the milestone, not wait for the groom to surface it.
+
+**Two spikes** (`pyrite-spike`, opus, one tick, no PR, deliverable is a changed
+ticket): **Spike 1** — which of the three silent guards swallows the embed on a
+fresh install, and is the answer to #43 and #13 the same decision? **Spike 2** —
+is #51's `parked_awaiting` a stale index row or a lost write? The reporter could
+not open `index.db` to confirm, and the current `dev` metadata path reads as
+correct, so the defect is either in what `sync_incremental` rewrites for an
+already-indexed path or in a hydration path that is not reached — different
+fixes in different files. Spike 2 is cheap enough to be a conductor task.
+
+**Routed out of the dispatchable set:** **#52** (the conductor skill prescribes a
+worse manual workaround than a `task reset`/`task checkpoint` that already
+exists) is a *skill* fix, not a worker theme — **route to the meta-conductor's
+retro**. **#54** (the best-written usability report in the pile) waits for theme
+1: once filters actually work, half of it may be answered and the rest will have
+evidence behind it.
+
+**Kept decisions this surfaces — not dispatched, for the maintainer:**
+1. **#59's `type_aliases` in `kb.yaml`** — a public file-format addition plus a
+   new read-time resolver behaviour. Recommendation: ship the drift *reports*
+   first (theme 5, scoped down) and let the data say whether the alias map earns
+   its keep.
+2. **#62's `canon: true|false` on the KB registry** — changes the default result
+   set of every cross-KB read. Wants an ADR, written together with the pool's
+   `collapse-kb-registry-to-one-source-of-truth` row; they are the same object.
+3. **#66's `detail: "brief"|"full"` on `kb_orient`** — a public MCP argument on
+   the tool every session calls first. Goes with the #62 ADR.
+
+Packages **F** and **G** remain parallel-safe and un-groomed (already specified
+by the parent ticket); **H** is the gate flip and must be last, after F and G are
+green on `dev`. Theme 6 comes after H, and the Dependabot batch lands in that
+same window.
