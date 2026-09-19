@@ -2,8 +2,8 @@
 
 Loading every entry in a KB and saving it back with no edit should change
 nothing on disk. Before PR #69 this rewrote 768 of 768 real `kb/` files;
-#69 brought that down, and this test measured the remainder directly: 70 of
-770 files as of this branch, split across five distinct causes (see
+#69 brought that down, and this test measured the remainder directly: 69 of
+770 files as of this branch, split across four distinct causes (see
 `KNOWN_RESIDUAL_IDS` below -- each group is a separate, precisely-identified
 finding, not one blob).
 
@@ -141,13 +141,15 @@ LINKS_BLOCK_INDENT_IDS: frozenset[str] = frozenset(
     }
 )
 
-# 3. `GenericEntry` (pyrite/models/generic.py, backs `type: design`/`note`/
-#    any kb.yaml custom type) promotes undeclared frontmatter keys to
-#    `self.metadata`, then `Entry._base_frontmatter()` ALSO unconditionally
-#    re-serializes `self.metadata` as a nested `metadata:` block -- so the
-#    same keys appear twice: once promoted to top level (correct), once
-#    more nested (never existed in the source). Filed as issue #149.
-GENERIC_METADATA_DUP_IDS: frozenset[str] = frozenset({"search-failure-modes-and-agent-interface"})
+# 3. FIXED (issue #149): `GenericEntry` (pyrite/models/generic.py, backs
+#    `type: design`/`note`/any kb.yaml custom type) promoted undeclared
+#    frontmatter keys to `self.metadata`, while `Entry._base_frontmatter()`
+#    also re-serialized that whole mapping as a nested `metadata:` block --
+#    the same keys twice. `GenericEntry.to_frontmatter` now nests only keys
+#    that came from an explicit `metadata:` block and promotes the rest, so
+#    this group is empty. Kept as a named set so the union's shape and the
+#    count test still record which class of finding it was.
+GENERIC_METADATA_DUP_IDS: frozenset[str] = frozenset()
 
 # 4. Six files already carry #87's `body:` frontmatter fold as committed,
 #    pre-existing damage -- NOT something this test's own load/save causes.
@@ -354,20 +356,21 @@ class TestRealKBRoundTrip:
             "and a GitHub issue"
         )
 
-    def test_known_residual_count_is_70(self):
+    def test_known_residual_count_is_69(self):
         """The count, recorded here per #146 acceptance criterion 4 ("the
 
         count in the test's docstring and in the report") as well as in the
-        module docstring: 70 ids as of this branch -- 46 bare-string links +
-        11 block-indented links + 1 GenericEntry metadata duplication + 6
-        pre-existing body: fold + 6 trailing-blank-line normalization.
+        module docstring: 69 ids as of this branch -- 46 bare-string links +
+        11 block-indented links + 6 pre-existing body: fold + 6
+        trailing-blank-line normalization. The `GenericEntry` metadata
+        duplication group is empty (fixed in #149).
         """
         assert len(LINKS_BARE_STRING_IDS) == 46
         assert len(LINKS_BLOCK_INDENT_IDS) == 11
-        assert len(GENERIC_METADATA_DUP_IDS) == 1
+        assert len(GENERIC_METADATA_DUP_IDS) == 0
         assert len(PREEXISTING_BODY_FOLD_IDS) == 6
         assert len(TRAILING_BLANK_LINE_NORMALIZE_IDS) == 6
-        assert len(KNOWN_RESIDUAL_IDS) == 70
+        assert len(KNOWN_RESIDUAL_IDS) == 69
 
     # #146 acceptance criterion 4: "xfail(strict=True) on exactly the failing
     # ids with the count in the test's docstring and in the report, so the

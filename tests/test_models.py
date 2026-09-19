@@ -16,6 +16,7 @@ from pyrite.models.core_types import (
     QAAssessmentEntry,
     RelationshipEntry,
 )
+from pyrite.models.generic import GenericEntry
 from pyrite.schema import EventStatus, ResearchStatus
 
 
@@ -613,6 +614,49 @@ class TestLoadExistingKBs:
         assert actor.id is not None
         assert actor.title is not None
         assert actor.entry_type == "person"
+
+
+class TestGenericEntryFrontmatterRoundTrip:
+    """`GenericEntry` must not duplicate undeclared keys into `metadata:` (#149)."""
+
+    def test_undeclared_keys_are_promoted_not_duplicated(self):
+        meta = {
+            "id": "design-one",
+            "type": "design",
+            "title": "A design",
+            "status": "draft",
+            "author": "someone",
+        }
+
+        out = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+
+        assert out["status"] == "draft"
+        assert out["author"] == "someone"
+        assert "metadata" not in out, out
+
+    def test_explicit_metadata_block_stays_nested(self):
+        meta = {
+            "id": "design-two",
+            "type": "design",
+            "title": "A design",
+            "status": "draft",
+            "metadata": {"owner": "team"},
+        }
+
+        out = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+
+        assert out["status"] == "draft"
+        assert out["metadata"] == {"owner": "team"}
+        assert "owner" not in out, out
+
+    def test_no_op_load_save_is_stable(self):
+        meta = {"id": "design-three", "type": "design", "title": "T", "status": "draft"}
+
+        first = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+        second = GenericEntry.from_frontmatter(first, "body").to_frontmatter()
+
+        assert first == second
+        assert "metadata" not in first
 
 
 if __name__ == "__main__":

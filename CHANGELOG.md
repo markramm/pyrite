@@ -204,6 +204,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **A `GenericEntry` no longer duplicates its undeclared frontmatter keys into
+  a `metadata:` block on save.** `Entry._base_frontmatter` serialized the whole
+  `self.metadata` mapping as a nested block while `GenericEntry.to_frontmatter`
+  also promoted the same keys to top level, so a no-op load→save grew a
+  `metadata:` block the source file never had. Only keys that came from an
+  explicit `metadata:` block stay nested now; the rest are promoted once
+  (#149).
 - **`kb_batch_read` no longer crashes on a malformed spec, and every `fields`
   projection keeps the identity pair.** A non-list `entries`, a non-object item,
   or a missing, empty or non-string `entry_id`/`kb_name` used to raise a raw
