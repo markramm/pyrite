@@ -43,6 +43,12 @@ logger = logging.getLogger(__name__)
 # an entry and feed retrieval. The write-tier check alone was not enough
 # -- a caller with global write tier but no grant on a private KB passed
 # it, then had the entry's body summarised back to them.
+#
+# Because the KB is named in the body, the dependency reads the request
+# body to find it. That is safe: Starlette caches the body on the request,
+# so the handler's own parsing of `req` sees the same bytes. A body the
+# dependency cannot parse is refused (400) rather than treated as naming
+# no KB at all -- "names none" is exactly what lets a request through.
 router = APIRouter(
     prefix="/ai",
     tags=["AI"],

@@ -10,9 +10,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_kb_name_logs_warning_on_body_parse_failure(caplog):
-    """When request body parsing raises, a warning should be logged."""
-    from pyrite.server.api import _resolve_kb_name
+def test_resolve_kb_names_logs_warning_and_fails_closed_on_body_parse_failure(caplog):
+    """A body that cannot be parsed logs a warning AND refuses to resolve.
+
+    Returning "no KB named" here would make every guard that calls this
+    *pass*, which is the wrong default for a permission check -- so the
+    resolver raises and the guards turn that into a 400.
+    """
+    import pytest
+
+    from pyrite.server.api import _resolve_kb_names, _UnparseableBodyError
 
     request = AsyncMock()
     request.query_params = {}
@@ -20,9 +27,9 @@ def test_resolve_kb_name_logs_warning_on_body_parse_failure(caplog):
     request.body = AsyncMock(side_effect=Exception("read error"))
 
     with caplog.at_level(logging.WARNING, logger="pyrite.server.api"):
-        result = asyncio.run(_resolve_kb_name(request))
+        with pytest.raises(_UnparseableBodyError):
+            asyncio.run(_resolve_kb_names(request))
 
-    assert result is None
     assert "Failed to extract KB from request body" in caplog.text
 
 

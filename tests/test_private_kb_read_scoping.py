@@ -25,6 +25,11 @@ PUBLIC, PRIVATE = "public-kb", "private-kb"
 
 @pytest.fixture
 def env():
+    # This file sends far more than a hundred requests a minute to routes
+    # limited at "100/minute". The limiter's counters are process-global
+    # (see `_reset_rate_limiter` in tests/conftest.py, which resets them
+    # per test); without that reset this suite is load-sensitive rather
+    # than deterministic.
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
         (tmp / PUBLIC).mkdir()
@@ -208,6 +213,55 @@ KB_NAMED_ROUTES = [
     "/api/reviews?entry_id=secret-note&kb_name={kb}",
     "/api/reviews/latest?entry_id=secret-note&kb_name={kb}",
     "/api/reviews/status?entry_id=secret-note&kb_name={kb}",
+    "/api/kbs/{kb}",
+    "/api/kbs/{kb}/schema",
+    "/api/kbs/{kb}/orient",
+    "/api/kbs/{kb}/health",
+    "/api/kbs/{kb}/changes",
+    "/api/entries?kb={kb}",
+    "/api/entries/secret-note?kb={kb}",
+    "/api/search?q=zebra&kb={kb}",
+]
+
+# The same routes, but with the KB named TWICE: once where the handler will
+# read it and once somewhere else. The resolver must check *every* location
+# the request names a KB, so naming a readable KB alongside the private one
+# can never buy a caller anything. Each entry is (template, readable_decoy)
+# where `{kb}` is the private KB the handler actually serves from.
+#
+# `kb` vs `kb_name` in the query string: the reviews handlers bind
+# `Query(..., alias="kb_name")`, so `kb_name` is what they read; a resolver
+# that stops at the first spelling it finds checks `kb` instead.
+TWO_KB_ROUTES_QUERY_SPELLINGS = [
+    "/api/reviews?entry_id=secret-note&kb_name={kb}&kb={other}",
+    "/api/reviews/latest?entry_id=secret-note&kb_name={kb}&kb={other}",
+    "/api/reviews/status?entry_id=secret-note&kb_name={kb}&kb={other}",
+]
+
+# Query vs path: the handler takes `kb_name` from the path, the resolver
+# (first-wins, query before path) sees the `kb` query param instead.
+TWO_KB_ROUTES_QUERY_VS_PATH = [
+    "/api/kbs/{kb}?kb={other}",
+    "/api/kbs/{kb}/schema?kb={other}",
+    "/api/kbs/{kb}/orient?kb={other}",
+    "/api/kbs/{kb}/health?kb={other}",
+    "/api/kbs/{kb}/changes?kb={other}",
+    "/api/kbs/{kb}/templates?kb={other}",
+    "/api/kbs/{kb}/templates/daily?kb={other}",
+]
+
+# Query vs query, on routes whose handler reads `kb`: naming the private KB
+# as `kb` and a readable one as `kb_name` must not pass either.
+TWO_KB_ROUTES_KB_PLUS_KB_NAME = [
+    "/api/tags?kb={kb}&kb_name={other}",
+    "/api/timeline?kb={kb}&kb_name={other}",
+    "/api/qa/status?kb={kb}&kb_name={other}",
+    "/api/daily/dates?kb={kb}&kb_name={other}",
+    "/api/tasks?kb={kb}&kb_name={other}",
+    "/api/starred?kb={kb}&kb_name={other}",
+    "/api/collections?kb={kb}&kb_name={other}",
+    "/api/entries?kb={kb}&kb_name={other}",
+    "/api/search?q=zebra&kb={kb}&kb_name={other}",
 ]
 
 # Routes that span every KB: the response must contain nothing private,
@@ -260,6 +314,138 @@ class TestNamedPrivateKBIs404:
         body = _body_text(env[who].get(route.format(kb=PRIVATE)))
         leaked = [m for m in PRIVATE_MARKERS if m in body]
         assert not leaked, f"{route} leaked {leaked} in: {body[:300]}"
+
+
+@pytest.mark.parametrize("who", ["peer", "anon"])
+@pytest.mark.parametrize(
+    "route",
+    TWO_KB_ROUTES_QUERY_SPELLINGS + TWO_KB_ROUTES_QUERY_VS_PATH + TWO_KB_ROUTES_KB_PLUS_KB_NAME,
+)
+class TestNamingTwoKBsBuysNothing:
+    """A request that names two KBs is checked against *every* one of them.
+
+    The bug this pins: `_resolve_kb_name` returned the first spelling it
+    found, so a caller could satisfy the guard with a KB they may read
+    while the handler served a KB they may not -- `kb` checked, `kb_name`
+    served on the reviews routes; a `kb` query param checked, the path's
+    `kb_name` served on `/api/kbs/{kb_name}` and `/orient`. The answer
+    must be exactly what naming the private KB alone gives.
+    """
+
+    def test_answers_as_the_private_kb_alone_does(self, env, who, route):
+        both = env[who].get(route.format(kb=PRIVATE, other=PUBLIC))
+        alone = env[who].get(route.format(kb=PRIVATE, other=PRIVATE))
+        assert both.status_code == alone.status_code == 404, (
+            f"{route}: naming a readable KB alongside the private one changed the "
+            f"answer -- both={both.status_code} {both.text[:200]}"
+        )
+
+    def test_no_private_content_in_the_body(self, env, who, route):
+        body = env[who].get(route.format(kb=PRIVATE, other=PUBLIC)).text
+        leaked = [m for m in PRIVATE_MARKERS if m in body]
+        assert not leaked, f"{route} leaked {leaked} in: {body[:300]}"
+
+
+@pytest.mark.parametrize("who", ["peer", "anon"])
+class TestNamingTwoKBsInTheBody:
+    """The four AI routes name their KB in the JSON body. The resolver reads
+    the body too, so the same rule holds there: a readable KB in the query
+    must not buy a private KB in the body (or the reverse)."""
+
+    @pytest.mark.parametrize(
+        ("path", "payload"),
+        [
+            ("/api/ai/summarize", {"entry_id": "secret-note", "kb_name": PRIVATE}),
+            ("/api/ai/auto-tag", {"entry_id": "secret-note", "kb_name": PRIVATE}),
+            ("/api/ai/suggest-links", {"entry_id": "secret-note", "kb_name": PRIVATE}),
+            (
+                "/api/ai/chat",
+                {"messages": [{"role": "user", "content": "zebra"}], "kb": PRIVATE},
+            ),
+        ],
+    )
+    def test_readable_kb_in_the_query_does_not_unlock_a_private_kb_in_the_body(
+        self, env, who, path, payload
+    ):
+        r = env[who].post(f"{path}?kb={PUBLIC}", json=payload)
+        assert r.status_code in (403, 404), f"{path}: {r.status_code} {r.text[:200]}"
+        assert not [m for m in PRIVATE_MARKERS if m in r.text], path
+
+
+@pytest.mark.parametrize("who", ["peer", "anon"])
+class TestAnUnreadableBodyFailsClosed:
+    """A body the resolver cannot parse must not make the guard *pass*.
+
+    `_resolve_kb_names` used to swallow any body-parse failure and return
+    nothing, and "no KB named" is exactly what lets a request through. A
+    request whose body cannot be parsed has to be refused -- by the guard
+    or by FastAPI's own 422 -- never served.
+    """
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "/api/ai/summarize",
+            "/api/ai/auto-tag",
+            "/api/ai/suggest-links",
+            "/api/ai/chat",
+            "/api/entries",
+        ],
+    )
+    def test_unparseable_body_is_refused(self, env, who, path):
+        r = env[who].post(
+            path,
+            content=b"{not json at all",
+            headers={"content-type": "application/json"},
+        )
+        assert r.status_code in (400, 403, 404, 422), (
+            f"{path}: unparseable body was not refused -- {r.status_code} {r.text[:200]}"
+        )
+        assert not [m for m in PRIVATE_MARKERS if m in r.text], path
+
+
+class TestWriteTierNeedsTheTierOnEveryNamedKB:
+    """`requires_kb_tier('write')` shares the resolver, so it inherits the
+    same rule: the caller needs the tier on every KB the request names.
+
+    A peer granted write on the public KB must not be able to write to the
+    private KB by naming the public one elsewhere in the request.
+    """
+
+    def _grant_write_on_public(self, env):
+        auth = AuthService(env["db"], env["config"].settings.auth)
+        users = {u["username"]: u for u in auth.list_users()}
+        auth.grant_kb_permission(users["peer"]["id"], PUBLIC, "write", users["admin-user"]["id"])
+
+    def test_naming_a_writable_kb_in_the_query_does_not_authorise_a_write_to_another(self, env):
+        self._grant_write_on_public(env)
+        r = env["peer"].post(
+            f"/api/entries?kb={PUBLIC}",
+            json={
+                "kb": PRIVATE,
+                "id": "smuggled-in",
+                "title": "Smuggled in",
+                "type": "note",
+                "content": "should never be written",
+            },
+        )
+        assert r.status_code in (403, 404), f"write slipped through: {r.status_code} {r.text[:300]}"
+        assert env["admin"].get(f"/api/entries/smuggled-in?kb={PRIVATE}").status_code == 404
+
+    def test_naming_a_writable_kb_in_the_body_does_not_authorise_a_write_to_another(self, env):
+        self._grant_write_on_public(env)
+        r = env["peer"].post(
+            "/api/reviews",
+            json={
+                "entry_id": "secret-note",
+                "kb_name": PRIVATE,
+                "kb": PUBLIC,
+                "reviewer": "peer",
+                "reviewer_type": "user",
+                "result": "pass",
+            },
+        )
+        assert r.status_code in (403, 404), f"write slipped through: {r.status_code} {r.text[:300]}"
 
 
 @pytest.mark.parametrize("who", ["peer", "anon"])

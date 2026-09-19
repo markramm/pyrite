@@ -5,12 +5,24 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from ...exceptions import KBNotFoundError, PyriteError
 from ...services.export_service import ExportService
 from ...services.kb_service import KBService
-from ..api import get_export_service, get_kb_service, limiter, requires_tier
+from ..api import (
+    get_export_service,
+    get_kb_service,
+    limiter,
+    requires_kb_read,
+    requires_tier,
+)
 
 router = APIRouter(tags=["Git Operations"])
 
 
-@router.get("/kbs/{kb_name}/changes", dependencies=[Depends(requires_tier("read"))])
+# Entry-level diffs are KB *content*, not metadata: the global read tier
+# says nothing about which KBs this caller may read, so the per-KB check
+# has to be here too.
+@router.get(
+    "/kbs/{kb_name}/changes",
+    dependencies=[Depends(requires_tier("read")), Depends(requires_kb_read())],
+)
 @limiter.limit("60/minute")
 def get_pending_changes(
     request: Request,

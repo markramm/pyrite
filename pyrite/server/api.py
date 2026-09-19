@@ -477,35 +477,101 @@ def requires_tier(tier: str):
     return _check_tier
 
 
-async def _resolve_kb_name(request: Request) -> str | None:
-    """Extract KB name from request via query params, path params, or body."""
-    # 1. Query param (used by DELETE, import, export). Both spellings: the
-    #    reviews routes declare `kb: str = Query(..., alias="kb_name")`, so
-    #    the name on the wire is `kb_name`. Missing that spelling made
-    #    requires_kb_read() resolve to None -- i.e. pass -- on every
-    #    reviews route.
-    kb = request.query_params.get("kb") or request.query_params.get("kb_name")
-    if kb:
-        return kb
+# The parameter names that name a knowledge base, in every location a
+# request can carry one. Pinned by tests/test_read_scoping_is_structural.py,
+# which fails if a handler declares a KB-bearing parameter outside this set.
+KB_PARAM_NAMES = ("kb", "kb_name")
 
-    # 2. Path param: /kbs/{name}/permissions (admin) or /kbs/{kb_name}/... (read)
-    name = request.path_params.get("name") or request.path_params.get("kb_name")
-    if name:
-        return name
 
-    # 3. Parse request body for "kb" / "kb_name"
+class _UnparseableBodyError(Exception):
+    """The request body could not be read or parsed, so the KBs it names are
+    unknown. Never treated as "names no KB": that would make a guard pass."""
+
+
+async def _resolve_kb_names(request: Request) -> list[str]:
+    """Every KB this request names, in every location it can name one.
+
+    Query parameters (`kb` and `kb_name` -- `reviews.py` binds
+    `Query(..., alias="kb_name")`, so the wire name differs from the
+    Python one), path parameters, and the JSON body's `kb`/`kb_name`.
+
+    **Every** value is returned, never just the first. A request that names
+    two KBs used to be checked against whichever spelling the resolver
+    happened to read first and served from the other -- `kb` checked,
+    `kb_name` served on the reviews routes; a `kb` query param checked, the
+    path's `kb_name` served on `/api/kbs/{kb_name}` and `/orient`. Callers
+    require *each* value to be permitted, which removes the whole class.
+
+    Order is preserved and duplicates removed, so the first value is still
+    a sensible single name for an error message.
+
+    Raises `_UnparseableBodyError` when the body exists but cannot be parsed:
+    "no KB named" is what lets a request through, so an unknown body must
+    not produce it.
+    """
+    names: list[str] = []
+
+    def add(value: object) -> None:
+        if isinstance(value, str) and value and value not in names:
+            names.append(value)
+
+    # Path first: it is the route's own identity, the one location a caller
+    # cannot add or remove. Only `kb`/`kb_name`; `/plugins/{name}` and
+    # `/kbs/{name}` (admin) use `name` for other things, so `name` is read
+    # only where the route is a KB route -- see `_admin_kb_path_name` below.
+    for param in KB_PARAM_NAMES:
+        add(request.path_params.get(param))
+    add(_admin_kb_path_name(request))
+
+    for param in KB_PARAM_NAMES:
+        add(request.query_params.get(param))
+
     try:
         body = await request.body()
-        if body:
-            import json
-
-            data = json.loads(body)
-            if isinstance(data, dict):
-                return data.get("kb") or data.get("kb_name")
-    except Exception:
+    except Exception as exc:
         logger.warning("Failed to extract KB from request body", exc_info=True)
+        raise _UnparseableBodyError() from exc
+    if body:
+        import json
 
-    return None
+        try:
+            data = json.loads(body)
+        except Exception as exc:
+            logger.warning("Failed to extract KB from request body", exc_info=True)
+            raise _UnparseableBodyError() from exc
+        if isinstance(data, dict):
+            for param in KB_PARAM_NAMES:
+                add(data.get(param))
+
+    return names
+
+
+def _admin_kb_path_name(request: Request) -> str | None:
+    """The `{name}` path param, but only on routes where it names a KB.
+
+    `admin.py` declares `/kbs/{name}` and `/kbs/{name}/permissions`; it also
+    declares `/plugins/{name}`, where `name` is a plugin. Keying on the URL
+    path keeps the plugin routes from being treated as KB routes.
+    """
+    name = request.path_params.get("name")
+    if not name:
+        return None
+    return name if request.url.path.startswith("/api/kbs/") else None
+
+
+async def _resolve_kb_name(request: Request) -> str | None:
+    """The single KB this request names, for callers that genuinely need one.
+
+    Prefers the path parameter -- the route's own identity -- over a query
+    parameter, which a caller can add freely. Guards must use
+    `_resolve_kb_names` and check every value instead; this exists only for
+    call sites that need one name (an error message, a role lookup).
+    """
+    try:
+        names = await _resolve_kb_names(request)
+    except _UnparseableBodyError:
+        return None
+    return names[0] if names else None
 
 
 def resolve_kb_default_role(config: PyriteConfig, db: PyriteDB, kb_name: str) -> str | None:
@@ -536,6 +602,11 @@ async def resolve_effective_kb_role(
     `requires_tier`/`requires_kb_tier`; this helper is for call sites
     that need to check permissions inline without failing the request
     (e.g. deciding whether a GET is allowed to have a write side effect).
+
+    Resolves a **single** KB name when none is given, preferring the path
+    parameter. A caller that must cover every KB the request names --
+    `requires_kb_tier` does -- resolves them with `_resolve_kb_names` and
+    calls this once per name.
     """
     role = getattr(request.state, "api_role", None)
     if role is None:
@@ -624,11 +695,17 @@ async def get_readable_kbs(
 
 
 def requires_kb_read():
-    """FastAPI dependency: the KB named by the request must be readable by the caller.
+    """FastAPI dependency: **every** KB named by the request must be readable.
 
     Read-side counterpart of requires_kb_tier("write"). Resolves the KB from
-    `kb` / `kb_name` in query, path or body. Routes that span KBs (no kb given)
-    filter with readable_kbs() instead.
+    `kb` / `kb_name` in query, path and body -- all of them, not the first
+    one found -- and 404s on any value the caller may not read. Naming a
+    readable KB alongside a private one therefore buys nothing.
+
+    Routes that span KBs (no kb given) filter with readable_kbs() instead.
+
+    Note for the AI router: the dependency reads the request body. Starlette
+    caches it on the request, so the handler's own body parsing is unaffected.
     """
 
     async def _check(
@@ -636,7 +713,17 @@ def requires_kb_read():
         config: PyriteConfig = Depends(get_config),
         db: PyriteDB = Depends(get_db),
     ):
-        await assert_kb_readable(request, config, db, await _resolve_kb_name(request))
+        try:
+            names = await _resolve_kb_names(request)
+        except _UnparseableBodyError:
+            # Fail closed: an unreadable body names an unknown set of KBs,
+            # and "names none" is what lets a request through.
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_BODY", "message": "Request body could not be parsed"},
+            ) from None
+        for name in names:
+            await assert_kb_readable(request, config, db, name)
 
     return _check
 
@@ -645,13 +732,17 @@ _UNSET = object()
 
 
 def requires_kb_tier(tier: str):
-    """FastAPI dependency factory: enforce minimum tier on a per-KB basis.
+    """FastAPI dependency factory: enforce a minimum tier on **every** KB named.
 
-    Resolution chain:
+    Resolution chain, per KB:
     1. Global admins always pass
     2. Explicit KB grant → KB default_role → user global role → anonymous tier
 
-    Falls back to global role check when KB name cannot be resolved.
+    Falls back to a global role check when the request names no KB.
+
+    The same rule as `requires_kb_read`, for the same reason: a request that
+    names two KBs gets the tier checked on both, so a caller cannot authorise
+    a write to KB A by naming writable KB B elsewhere in the request.
     """
 
     async def _check_kb_tier(
@@ -663,18 +754,25 @@ def requires_kb_tier(tier: str):
         if role is None:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-        effective_role = await resolve_effective_kb_role(request, config, db)
+        try:
+            kb_names = await _resolve_kb_names(request)
+        except _UnparseableBodyError:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_BODY", "message": "Request body could not be parsed"},
+            ) from None
 
-        if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(
-            tier, 99
-        ):
-            kb_name = await _resolve_kb_name(request)
-            detail = (
-                f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier"
-                if kb_name
-                else f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'"
-            )
-            raise HTTPException(status_code=403, detail=detail)
+        for kb_name in kb_names or [None]:
+            effective_role = await resolve_effective_kb_role(request, config, db, kb_name)
+            if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(
+                tier, 99
+            ):
+                detail = (
+                    f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier"
+                    if kb_name
+                    else f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'"
+                )
+                raise HTTPException(status_code=403, detail=detail)
 
     return _check_kb_tier
 
