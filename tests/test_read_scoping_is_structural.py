@@ -19,7 +19,11 @@ that **the resolver looks everywhere the handler reads**:
 compares each scoped route's declared KB-bearing parameters -- query
 names *and* aliases, path params, and `kb`/`kb_name` fields of a body
 model -- against `RESOLVED_KB_LOCATIONS`, the set
-`pyrite.server.api._resolve_kb_names` actually inspects.
+`pyrite.server.api._resolve_kb_names` actually inspects. A handful of
+routes take a *secondary* KB under another name (`target_kb`,
+`source_kb`, `center_kb`); each is listed in `SECONDARY_KB_PARAMETERS`
+with what is known about it, including the two on `links.py` that are
+genuinely not covered and belong to part 2.
 
 **What the walk cannot see -- recorded, not reviewed.** It visits
 `APIRoute`s under `/api` only. Two surfaces are therefore absent rather
@@ -67,6 +71,46 @@ SCOPING_DEPENDENCIES = {
 # resolver does not look -- which is exactly the hole that let a request
 # name two KBs and be checked against the wrong one.
 RESOLVED_KB_LOCATIONS = {"kb", "kb_name"}
+
+# A route's *primary* KB is the one the resolver checks. A few routes also
+# take a **secondary** KB parameter -- "compare against that KB too",
+# "centre the graph there" -- which the resolver does not see, because it
+# is not `kb` or `kb_name`. Each one is listed here with what is known
+# about it, so the gate stays meaningful (it fires on any name not listed)
+# without silently blessing the ones that exist.
+#
+# These routes are outside part 1's list; this file is where their status
+# is recorded, not where it is fixed.
+SECONDARY_KB_PARAMETERS: dict[tuple[str, str], dict[str, str]] = {
+    ("GET", "/api/graph"): {
+        "center_kb": (
+            "secondary, and harmless: get_graph filters nodes and edges by "
+            "`readable` after building the graph, so a KB named here that the "
+            "caller cannot read contributes nothing to the response."
+        ),
+    },
+    ("GET", "/api/links/discover-neighbors"): {
+        "target_kb": (
+            "secondary, and NOT covered: requires_kb_read() checks `kb` only, "
+            "and LinkDiscoveryService.discover_neighbors takes no readable set, "
+            "so candidates can come from a KB the caller may not read. Part 2."
+        ),
+    },
+    ("GET", "/api/links/batch-suggest"): {
+        "source_kb": (
+            "the route's real primary KB, under a name the resolver does not "
+            "read -- requires_kb_read() finds no `kb` at all here. Part 2."
+        ),
+        "target_kb": (
+            "secondary, and NOT covered: LinkDiscoveryService.batch_suggest "
+            "takes no readable set. Part 2."
+        ),
+    },
+    ("GET", "/api/search"): {
+        "group_by_kb": "not a KB name: a bool controlling result grouping.",
+        "limit_per_kb": "not a KB name: an int cap per KB.",
+    },
+}
 
 # Surfaces this walk structurally cannot reach: not `APIRoute`s, so they
 # have no dependant tree to inspect. Recorded here as *unreviewed*, so
@@ -302,10 +346,16 @@ def _declared_kb_parameters(route: APIRoute) -> set[str]:
 
 
 def _is_kb_parameter(name: str) -> bool:
-    """`kb` / `kb_name` exactly. `target_kb`, `center_kb` and friends name a
-    *secondary* KB for a route that is already scoped on its primary one;
-    they are a separate question (part 2) and deliberately not claimed here."""
-    return name in {"kb", "kb_name"}
+    """Does this parameter name a knowledge base?
+
+    Deliberately wider than `RESOLVED_KB_LOCATIONS`: the whole point of
+    `test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores` is to
+    catch a handler that reads its KB from a name the resolver does *not*
+    inspect, so this predicate must recognise such a name or the test can
+    never fire. Anything that is `kb`, ends in `_kb`, or ends in `_kb_name`
+    counts -- `target_kb`, `source_kb`, `center_kb`, `kb_name`.
+    """
+    return name == "kb" or name.endswith(("_kb", "kb_name"))
 
 
 def test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores():
@@ -314,13 +364,15 @@ def test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores():
     Attaching `requires_kb_read()` proves a check runs; it does not prove
     the check looked at the KB the handler will serve from. This closes
     that gap: for every route counted as scoped, each KB-bearing parameter
-    the handler declares must be one `_resolve_kb_names` reads.
+    the handler declares must be one `_resolve_kb_names` reads, or be
+    listed in `SECONDARY_KB_PARAMETERS` with a reason.
     """
     offenders = []
     for method, path, route in _iter_api_routes():
         if not _is_scoped(route):
             continue
-        unseen = _declared_kb_parameters(route) - RESOLVED_KB_LOCATIONS
+        allowed = RESOLVED_KB_LOCATIONS | set(SECONDARY_KB_PARAMETERS.get((method, path), ()))
+        unseen = _declared_kb_parameters(route) - allowed
         if unseen:
             offenders.append((method, path, sorted(unseen), route))
     if offenders:
@@ -337,6 +389,27 @@ def test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores():
             f"alias), path and JSON body. Either teach the resolver the new "
             f"location or rename the parameter."
         )
+
+
+def test_secondary_kb_parameters_all_carry_a_reason_and_still_exist():
+    """An entry without a reason is a hole nobody can review; a stale one
+    makes this list a worse inventory than no list at all."""
+    missing = [
+        (key, param)
+        for key, params in SECONDARY_KB_PARAMETERS.items()
+        for param, reason in params.items()
+        if not (reason or "").strip()
+    ]
+    assert not missing, f"secondary KB parameters with no reason: {missing}"
+
+    declared = {(m, p): _declared_kb_parameters(r) for m, p, r in _iter_api_routes()}
+    stale = [
+        (key, param)
+        for key, params in SECONDARY_KB_PARAMETERS.items()
+        for param in params
+        if param not in declared.get(key, set())
+    ]
+    assert not stale, f"listed secondary KB parameters that the route no longer declares: {stale}"
 
 
 def test_the_resolver_reads_every_location_this_file_claims():
