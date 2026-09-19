@@ -164,7 +164,7 @@ def cli_index(stub_embeddings, tmp_path, monkeypatch):
     # The staleness probe compares the index against files on disk; there are
     # no files here (entries were inserted directly), so silence it.
     monkeypatch.setattr("pyrite.cli.search_commands._warn_if_stale", lambda *a, **kw: None)
-    yield config, index_path
+    return config, index_path
 
 
 @pytest.fixture
@@ -183,7 +183,7 @@ def _ids(results):
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize(
-    "filter_name,valid,expected_ids,bogus",
+    ("filter_name", "valid", "expected_ids", "bogus"),
     FILTER_CASES,
     ids=[c[0] for c in FILTER_CASES],
 )
@@ -199,7 +199,7 @@ def test_bogus_filter_value_returns_nothing(svc, mode, filter_name, valid, expec
 
 @pytest.mark.parametrize("mode", MODES)
 @pytest.mark.parametrize(
-    "filter_name,valid,expected_ids,bogus",
+    ("filter_name", "valid", "expected_ids", "bogus"),
     FILTER_CASES,
     ids=[c[0] for c in FILTER_CASES],
 )

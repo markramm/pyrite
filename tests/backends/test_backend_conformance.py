@@ -804,7 +804,7 @@ class TestSemanticFilterConformance:
     """
 
     @pytest.mark.parametrize(
-        "kwargs,expected",
+        ("kwargs", "expected"),
         [
             ({"entry_type": "mechanism"}, {"mech"}),
             ({"entry_type": "zzz-not-a-real-type"}, set()),
