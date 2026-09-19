@@ -7,6 +7,13 @@ enforced: false
 tags: [extensions, plugins]
 ---
 
+Worked examples: `extensions/zettelkasten`, `extensions/encyclopedia` and
+`extensions/social` are example plugins built to this standard — read their
+`plugin.py`, `entry_types.py` and `README.md` alongside these rules. They
+demonstrate entry types, CLI commands, MCP tools, presets, hooks, workflows
+and custom DB tables; they are reference code for plugin authors, not
+supported products.
+
 ## Package Structure
 ```
 extensions/<name>/

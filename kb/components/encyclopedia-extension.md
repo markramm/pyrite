@@ -11,4 +11,6 @@ path: extensions/encyclopedia/
 owner: markr
 ---
 
+Example plugin. `encyclopedia` exists to show how a Pyrite plugin adds entry types, CLI commands, MCP tools and a preset; it is a reference for plugin authors, not a supported product.
+
 Wikipedia-inspired collaborative knowledge base extension. Provides article and talk_page entry types with quality assessment, article review workflows (draft → review → published), protection levels, and talk pages for editorial discussion. Includes custom DB tables and the encyclopedia KB preset.

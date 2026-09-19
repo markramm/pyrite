@@ -210,6 +210,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   ~22 min → ~3-5 min. The one xdist-unsafe test (the task-claim race) now uses
   a start barrier and a single group deadline instead of per-process timeouts,
   which also makes it a real race rather than a sequence under load.
+- `social`, `zettelkasten` and `encyclopedia` relabelled as example plugins
+  (README, `docs/plugins.md`, `docs/getting-started.md`, each extension's new
+  `README.md`, `kb/components/*-extension.md`, `pyproject.toml`
+  `description`): reference code showing how a Pyrite plugin adds entry
+  types, CLI commands, MCP tools and a preset, not supported products.
+  Wording only — no package name, entry point, module path, preset name,
+  template name, CLI command name, MCP tool name or directory changed.
 
 ### Fixed
 

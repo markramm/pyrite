@@ -29,9 +29,9 @@ Structured knowledge management for software teams -- ADRs, design docs, coding 
 
 ---
 
-### Zettelkasten
+### Zettelkasten *(example plugin)*
 
-Personal knowledge management with atomic note-taking, CEQRC workflow, maturity tracking, and literature notes.
+Example plugin. `zettelkasten` exists to show how a Pyrite plugin adds entry types, CLI commands, MCP tools and a preset; it is a reference for plugin authors, not a supported product. It demonstrates atomic note-taking with a CEQRC workflow, maturity tracking, and literature notes.
 
 **Install:** `pip install -e extensions/zettelkasten`
 
@@ -43,15 +43,15 @@ Personal knowledge management with atomic note-taking, CEQRC workflow, maturity 
 - **Preset:** `zettelkasten`
 - **Relationships:** `elaborates`, `branches_from`, `synthesizes` (and inverses)
 
-**Use case:** Researchers, writers, and lifelong learners who practice Zettelkasten-style note-taking and want AI agents to help process their inbox of fleeting notes into permanent knowledge.
+**Use case:** What this example shows a plugin author -- a `NoteEntry` subclass with domain-specific maturity fields, two read-tier MCP tools, a dedicated Typer sub-app, and custom relationship types wired through `get_relationship_types()`.
 
 [Full docs](https://github.com/markramm/pyrite/tree/main/extensions/zettelkasten)
 
 ---
 
-### Encyclopedia
+### Encyclopedia *(example plugin)*
 
-Wikipedia-inspired collaborative knowledge base with quality assessment, review workflows, protection levels, and talk pages.
+Example plugin. `encyclopedia` exists to show how a Pyrite plugin adds entry types, CLI commands, MCP tools and a preset; it is a reference for plugin authors, not a supported product. It demonstrates a collaborative knowledge base with quality assessment, review workflows, protection levels, and talk pages.
 
 **Install:** `pip install -e extensions/encyclopedia`
 
@@ -64,15 +64,15 @@ Wikipedia-inspired collaborative knowledge base with quality assessment, review 
 - **Workflows:** Article review workflow
 - **DB tables:** Encyclopedia review tables
 
-**Use case:** Teams building shared reference documentation that needs editorial quality control -- quality ratings (stub through Featured Article), peer review queues, and page protection.
+**Use case:** What this example shows a plugin author -- tier-gated MCP tool registration (read/write/admin), a `get_workflows()` state machine, and plugin-owned DB tables prefixed to avoid collisions.
 
 [Full docs](https://github.com/markramm/pyrite/tree/main/extensions/encyclopedia)
 
 ---
 
-### Social
+### Social *(example plugin)*
 
-Everything2-inspired community knowledge base with user-authored writeups, voting, reputation tracking, and author-only editing enforcement.
+Example plugin. `social` exists to show how a Pyrite plugin adds entry types, CLI commands, MCP tools and a preset; it is a reference for plugin authors, not a supported product. It demonstrates user-authored writeups, voting, reputation tracking, and author-only editing enforcement.
 
 **Install:** `pip install -e extensions/social`
 
@@ -85,7 +85,7 @@ Everything2-inspired community knowledge base with user-authored writeups, votin
 - **Hooks:** `before_save` (author check), `after_save` (count updates), `after_delete` (reputation adjustment)
 - **DB tables:** Social vote and reputation tables
 
-**Use case:** Communities that want a collaborative writing platform where members contribute essays, reviews, how-tos, and stories with upvote/downvote reputation mechanics.
+**Use case:** What this example shows a plugin author -- lifecycle hooks (`before_save`, `after_save`, `after_delete`) enforcing authorship and keeping derived counts in sync, plus a full read/write MCP tool split.
 
 [Full docs](https://github.com/markramm/pyrite/tree/main/extensions/social)
 

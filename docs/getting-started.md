@@ -165,8 +165,8 @@ pyrite init --template software --path my-project
 
 The **software** template adds ADRs, components, backlog items, standards, and runbooks — everything you need to manage a software project's knowledge. Other templates include:
 
-- **`zettelkasten`** — note maturity workflows (capture, elaborate, question, refine, connect)
-- **`encyclopedia`** — articles with review and voting workflows
+- **`zettelkasten`** — note maturity workflows (capture, elaborate, question, refine, connect); the extension behind this template is an example plugin, showing how a Pyrite plugin adds entry types, CLI commands, MCP tools and a preset, not a supported product
+- **`encyclopedia`** — articles with review and voting workflows; likewise an example plugin, not a supported product
 - **`cascade`** — timeline research with actors and capture lanes
 
 ## Launch the Web UI

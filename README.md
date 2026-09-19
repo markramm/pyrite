@@ -179,11 +179,16 @@ Six extensions ship:
 | Extension | Purpose | Key Types |
 |-----------|---------|-----------|
 | **software-kb** | Software project management | ADRs, components, backlog items, standards, runbooks |
-| **zettelkasten** | CEQRC maturity workflow | Notes with maturity progression |
-| **encyclopedia** | Articles with review workflow | Articles, reviews, voting |
-| **social** | Engagement tracking | Social interactions |
+| **zettelkasten** *(example plugin)* | CEQRC maturity workflow | Notes with maturity progression |
+| **encyclopedia** *(example plugin)* | Articles with review workflow | Articles, reviews, voting |
+| **social** *(example plugin)* | Engagement tracking | Social interactions |
 | **journalism-investigation** | Investigative research | Sources, claims, actors, evidence chains |
 | **cascade** | Timeline research | Timeline events, actors, capture lanes |
+
+`zettelkasten`, `encyclopedia` and `social` are example plugins: reference
+code showing how a Pyrite plugin adds entry types, CLI commands, MCP tools
+and a preset, not supported products. See each extension's `README.md` for
+what it demonstrates.
 
 ## Web UI
 
@@ -227,7 +232,7 @@ pyrite/
 ├── plugins/         # Plugin discovery and protocol
 └── formats/         # Content negotiation (JSON, Markdown, CSV, YAML)
 
-extensions/          # Domain-specific plugins (software-kb, zettelkasten, encyclopedia, social, journalism-investigation, cascade)
+extensions/          # Domain-specific plugins (software-kb, zettelkasten [example], encyclopedia [example], social [example], journalism-investigation, cascade)
 web/                 # SvelteKit 2 + Svelte 5 frontend (TypeScript + Tailwind)
 kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 ```
@@ -315,6 +320,9 @@ pip install -e extensions/social
 pip install -e extensions/cascade
 pip install -e extensions/journalism-investigation
 ```
+
+(`zettelkasten`, `encyclopedia` and `social` are example plugins — see
+[Plugin Protocol](#plugin-protocol) above.)
 
 Prefer not to install anything locally? See [Deploy](#deploy) above for
 Docker, one-click cloud (Railway/Render/Fly.io), and self-hosted VPS
