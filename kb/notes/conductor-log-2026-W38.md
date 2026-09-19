@@ -2494,3 +2494,7 @@ Groom lane landed (c1045aa): priorities 2 and 3 have items with `## Groom` secti
 **Choose/dispatch:** none — three branches in review, three on the desk; no workers running. Ready queue empty (only `changelog-fragments` is groomed); the groom lane is not re-dispatched until the maintainer answers on the follow-ups, since those answers decide the next set.
 
 **Needs the maintainer:** unchanged.
+
+## Tick 2026-09-19T21:21Z (absorb: #187 ready; process issue #189)
+
+**A false red, caught:** the conductor's first suite on #187 reported `59 failed` — exactly the branch's RED count. Cause: review worktrees made with `git worktree add` + a symlink to the main checkout's `.venv` import `extensions/*` from the main checkout (`dev`), because the extension packages are editable installs pointing at one tree (`new-worktree.sh` lines 38-39 say so); `pyrite/` resolves to the worktree, so every earlier review this session (`pyrite/`+`tests/` only) was sound. Filed **#189** (process): `review.md` to say why the script is mandatory, `verify-red.sh` to exit 2 when a reverted file's package resolves outside the worktree. Rebuilt a per-worktree venv; **#187 suite 4501 passed, 0 failed**, verify-red genuine. Review stamped, backlog item closed on the branch, rebased onto `dev`, **flipped ready and armed** (1 of 2). **#180**: conductor's suite 4721 passed, 0 failed; verify-red and the cold read still running. **#173**: cold read still running.
