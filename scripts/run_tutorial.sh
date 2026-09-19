@@ -11,9 +11,25 @@
 #
 # The runner drives the INSTALLED package -- `pyrite` off PATH, the way a
 # reader of the doc has it -- not the checkout, so install before running.
+#
+# PYRITE_TUTORIAL_VENV=/path/to/venv runs the tutorial against THAT venv
+# instead of the repo's. scripts/release.py sets it to the throwaway venv it
+# installed the release SHA into, so the release check exercises what a user
+# gets rather than the checkout. Unset (the CI and developer case), nothing
+# changes.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -n "${PYRITE_TUTORIAL_VENV:-}" ]; then
+  if [ ! -x "${PYRITE_TUTORIAL_VENV}/bin/python" ]; then
+    echo "PYRITE_TUTORIAL_VENV=${PYRITE_TUTORIAL_VENV} has no bin/python" >&2
+    exit 1
+  fi
+  PATH="${PYRITE_TUTORIAL_VENV}/bin:$PATH"
+  export PATH
+  exec "${PYRITE_TUTORIAL_VENV}/bin/python" "$here/run_tutorial.py" "$@"
+fi
 
 # Prefer the repo's venv when there is one and nothing else is active; a bare
 # `python3` on a developer machine usually has no pyrite installed.
