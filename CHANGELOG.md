@@ -30,14 +30,35 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `actions/missing-workflow-permissions` alerts on `ci.yml`.
 - **Private KBs were readable by any logged-in user, and by anonymous
   visitors on an auth-enabled instance.** Per-KB roles (`default_role: none`,
-  explicit grants) were enforced on write routes only; every read route —
-  entry by id, list, search, batch read, graph, export, KB info/schema/orient —
+  explicit grants) were enforced on write routes only; every read route
   returned private content, and search and the KB list disclosed it. Read
   routes now require read on the named KB (404, so a private KB's existence is
   not disclosed either) and cross-KB routes are filtered to the KBs the caller
   may read, in SQL for list, count and keyword search. Operator API keys are
   unaffected (they are the operator's credential). MCP is operator-level and
   unchanged.
+
+  Every route serving KB content is now covered. The first pass reached
+  entry by id, list, search, batch read, graph, export and KB
+  info/schema/orient; a second pass reached the sixteen endpoint modules
+  it had missed — `/tags` and `/tags/tree` (a tag name and its count
+  disclose a KB), `/timeline`, `/qa/status`, `/qa/validate`,
+  `/qa/validate/{entry_id}`, `/qa/coverage`, both `/entries/{id}/versions`
+  routes, `/entries/{id}/blocks`, `/daily/dates` and `/daily/{date}`, all
+  four `/collections` reads, `/tasks`, `/starred`, the three
+  `/kbs/{kb}/templates*` routes, the three `/reviews` reads, and the four
+  `/ai/*` POSTs, whose retrieval now only sees readable KBs. Where a
+  route spans KBs the filter is pushed into the query, so `count`,
+  `total` and `limit` are computed over readable rows only — a count of
+  three for a KB you cannot read is itself a disclosure.
+
+  `tests/test_read_scoping_is_structural.py` now enforces this: it walks
+  the real app's routes and fails for any `/api` route that declares no
+  read-scoping dependency and is not on an explicit allowlist where every
+  entry carries a reason. A new unscoped route fails CI with instructions.
+  Meta and admin surfaces (`/stats`, `/plugins*`, `/settings*`, `/repos*`,
+  `/worktree*`, the git-ops routes, MCP over HTTP) are allowlisted pending
+  the same treatment; they are tier-guarded today but not per-KB scoped.
 
 ### Added
 
