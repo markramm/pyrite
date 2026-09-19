@@ -2430,3 +2430,7 @@ Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` rev
 Other findings queued as tickets after the release gate: MCP/REST contract test, shared read-shaping module, one error taxonomy on `PyriteError`, pin the CI classifier's filter paths, `verify-red.sh` must show why a test failed, `add_link` skips `_validate_write`, the `EventEntry` load fallback retypes entries, `KBService`/`mcp_server.py` splits, fixture reach (22 of 216 test files use the shared fixtures).
 
 **Review-process lessons:** `ruff check` + `ruff format --check` at CI's exact scope are now run on every PR head (the #171 miss). Agreeing the take with the maintainer before posting cost one round trip and changed three recommendations' framing.
+
+## Tick 2026-09-19T19:16Z (loop re-armed by the maintainer at 20 min; WIP = 1)
+
+Pre-check: load 2.3, 57% free, dev green (c0db60e — #176 merged by the maintainer). **A worker is running** (#180 read scoping; branch head moved 1bdec79 → 10a5b57, a single test file under pytest at check time), so by rule 1 this tick starts nothing heavy. No unreviewed outside PRs; no reviewed PR's head has moved. #171: the maintainer approved the CI run; `test (3.12)` in progress; the PR is one commit BEHIND dev (#176) with no conflicts — if the ruleset insists on up-to-date at merge time it needs `update-branch`, which on a first-time contributor's fork re-arms the approval, so that is left for the maintainer's word. Nothing dispatched, nothing reviewed.
