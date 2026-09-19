@@ -86,6 +86,20 @@ def test_reintroduced_config_kb_is_protected_again(pyrite_config, pyrite_db):
         registry.remove_kb(name)
 
 
+def test_reconciliation_updates_config_in_current_process(pyrite_config, pyrite_db):
+    make_registry(pyrite_config, pyrite_db).seed_from_config()
+    removed = pyrite_config.knowledge_bases[0]
+    new_config = PyriteConfig(settings=pyrite_config.settings)
+
+    # CLI, REST and MCP merge user KBs before the registry is seeded.
+    assert pyrite_db.merge_registered_kbs(new_config) == 0
+    assert new_config.get_kb(removed.name) is None
+    make_registry(new_config, pyrite_db).seed_from_config()
+
+    assert new_config.get_kb(removed.name).path == removed.path
+    assert removed.name in {kb.name for kb in new_config.all_kbs()}
+
+
 def test_cli_remove_after_editing_config_yaml(pyrite_config):
     from typer.testing import CliRunner
 

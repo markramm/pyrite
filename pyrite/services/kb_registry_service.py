@@ -54,6 +54,7 @@ class KBRegistryService:
             .values(source="user")
         )
         self.db.session.commit()
+        self.db.merge_registered_kbs(self.config)
         return count
 
     def list_kbs(self, type_filter: str | None = None) -> list[dict[str, Any]]:
