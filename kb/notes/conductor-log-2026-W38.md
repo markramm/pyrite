@@ -2522,3 +2522,7 @@ Groom lane landed (c1045aa): priorities 2 and 3 have items with `## Groom` secti
 **Dispatched (build):** none — four outside reviews in flight take the review slots, and #13/#43 wait on #145, which is on the maintainer's desk.
 
 **Needs the maintainer:** #180/#161/#145/#140 fix-at-review or redispatch (#145 now also blocks #13 and #43); #173 message; #184 take, now as a choice against #190 (recommendation coming with the cold read); ADR-0035; the follow-ups note.
+
+## Tick 2026-09-19T23:44Z (scheduled — waiting on reviews)
+
+`dev` 130f433 green. Load 9.3 (two review suites at `-n 4` running concurrently for #190 and #175→#174), 60% free — nothing heavy started. No new outside activity. In flight: three cold reads (#190 vs #184, #175, #174), the two suites, the package-G groom. Nothing to absorb, nothing dispatchable, the desk unchanged.
