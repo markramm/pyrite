@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "check_fix_commit_has_tests.py"
 
 sys.path.insert(0, str(SCRIPT.parent))
@@ -57,6 +59,35 @@ class TestTouchesTests:
         """A filename like 'latest_stats.py' contains the substring 'test'
         but is not under a tests/ directory -- must not false-positive."""
         assert touches_tests(["pyrite/latest_stats.py"]) is False
+
+    # #159: the frontend's tests do not live under a tests/ directory -- vitest
+    # files sit beside their source (`*.test.ts`) and Playwright specs under
+    # web/e2e/ (`*.spec.ts`). A `fix:` that ships with one of those has a test;
+    # with CI now enforcing this rule on PR ranges, not counting them would
+    # fail every honest frontend fix.
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "web/e2e/ports.test.ts",
+            "web/src/lib/utils/sanitize.test.ts",
+            "web/src/lib/stores/search.test.js",
+            "web/e2e/graph.spec.ts",
+        ],
+    )
+    def test_frontend_test_files_count(self, path):
+        assert touches_tests([path, "web/src/lib/utils/sanitize.ts"]) is True
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "web/src/lib/utils/sanitize.ts",  # source, not a test
+            "web/e2e/fixtures.ts",  # e2e support file, not a spec
+            "docs/writing.test.ts.md",  # not under web/, not a test file
+            "pyrite/foo.test.ts",  # the frontend rule is scoped to web/
+        ],
+    )
+    def test_frontend_non_test_files_do_not_count(self, path):
+        assert touches_tests([path]) is False
 
 
 class TestRangeMode:

@@ -33,10 +33,23 @@ def is_fix_commit(message: str) -> bool:
     return subject.startswith("fix:")
 
 
+_FRONTEND_TEST_SUFFIXES = (".test.ts", ".test.js", ".spec.ts", ".spec.js")
+
+
+def _is_test_path(path: str) -> bool:
+    """A path that is a test: anything under a tests/ directory (top-level
+    tests/ or extensions/*/tests/), or a frontend test file under web/ --
+    vitest files sit beside their source and Playwright specs live in
+    web/e2e/, so neither is ever under a tests/ directory (#159)."""
+    parts = Path(path).parts
+    if "tests" in parts:
+        return True
+    return bool(parts) and parts[0] == "web" and path.endswith(_FRONTEND_TEST_SUFFIXES)
+
+
 def touches_tests(changed_paths: list[str]) -> bool:
-    """True if any changed path lives under a tests/ directory (top-level
-    tests/ or extensions/*/tests/)."""
-    return any("tests" in Path(path).parts for path in changed_paths)
+    """True if any changed path is a test (see _is_test_path)."""
+    return any(_is_test_path(path) for path in changed_paths)
 
 
 def get_staged_paths() -> list[str]:
