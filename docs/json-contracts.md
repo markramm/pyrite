@@ -31,6 +31,43 @@ Every error surface (CLI `cli_error`, MCP tool `_error`, REST
 
 Source of truth: `pyrite/utils/errors.py` (`build_error`).
 
+## Repo endpoint errors
+
+`/api/repos/*` predates the shape above and answers a failure with a
+FastAPI `detail` object instead:
+
+```json
+{"detail": {"code": "REPO_NOT_FOUND", "message": "human-readable"}}
+```
+
+`code` is drawn from a closed set — an unrecognised service code is
+replaced by the endpoint's default rather than echoed to the caller:
+
+| Code | Meaning |
+|---|---|
+| `REPO_NOT_FOUND` | the remote repository is absent, or the configured credentials cannot see it |
+| `AUTH_REQUIRED` | connect or refresh the GitHub credentials |
+| `BRANCH_NOT_FOUND` | the branch does not exist on the remote |
+| `PATH_EXISTS` | that `owner/repo` is already present in the workspace |
+| `CLONE_TIMEOUT` | the clone exceeded its deadline |
+| `CLONE_FAILED` | an unrecognised clone failure; git's stderr is in the operator's log |
+| `INVALID_REQUEST` | the URL or branch was rejected before git ran |
+| `SUBSCRIBE_FAILED`, `FORK_FAILED`, `SYNC_FAILED`, `UNSUBSCRIBE_FAILED`, `PR_FAILED` | per-endpoint defaults when nothing more specific applies |
+| `GITHUB_NOT_CONNECTED` | `/repos/fork` with no GitHub account connected |
+
+`message` never contains an absolute filesystem path or a token: git's
+stderr is redacted on the way out and logged unredacted at `WARNING`
+server-side (CodeQL `py/stack-trace-exposure` #51, #52, #53). Remote URLs
+the caller supplied are preserved, since they are the actionable part.
+`POST /repos/{name}/sync` reports per-repo failures nested under `repos`
+in a 200 body; those `error` strings are redacted the same way.
+
+Match on `code`, not on `message` text.
+
+Source of truth: `pyrite/server/endpoints/repos.py` (`_PUBLIC_ERROR_CODES`,
+`_error_detail`) and `pyrite/services/git_service.py` (`sanitize_error`,
+`classify_git_error`).
+
 ## Search result envelope
 
 ```json

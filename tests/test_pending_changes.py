@@ -178,6 +178,21 @@ class TestPublishChanges:
             "push_error must be the real git failure message, not the generic "
             f"mislabel that could hide the actual cause: {result['push_error']!r}"
         )
+        # The stated intent, now enforced: any canned stand-in fails this.
+        # Error redaction (CodeQL #51/#52/#53) must not turn every non-clone
+        # git failure into "Git operation failed -- see the server log", which
+        # the CLI user -- who *is* the operator -- cannot act on, and which the
+        # web UI renders verbatim (web/src/routes/changes/+page.svelte).
+        assert "see the server log" not in result["push_error"], (
+            f"push_error is a canned string, not git's own words: {result['push_error']!r}"
+        )
+        # git's actual wording for a missing local remote. It must NOT be
+        # reported as "Repository not found, or the configured credentials
+        # cannot see it" -- false on both halves for a KB with no remote.
+        assert "does not appear to be a git repository" in result["push_error"], (
+            f"expected git's own no-remote wording: {result['push_error']!r}"
+        )
+        assert "credentials cannot see it" not in result["push_error"]
 
     def test_publish_push_raising_surfaces_real_exception(self, git_kb, monkeypatch):
         """The narrower regression: if push_kb ever does raise (a future

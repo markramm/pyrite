@@ -58,6 +58,42 @@ STDERR_BRANCH_NOT_FOUND = (
     "fatal: Remote branch no-such-branch not found in upstream origin\n"
 )
 
+# An unclassified clone failure: matches none of the patterns, so the response
+# depends entirely on redaction. The destination is quoted and contains a
+# space, which the first pass redacted only partly ("'<path> Docs<path>'").
+STDERR_UNCLASSIFIED_SPACED_PATH = (
+    "Cloning into '{dest}'...\nfatal: could not create work tree dir '{dest}': Permission denied\n"
+)
+
+# Real, non-clone git failures. Before this branch both returned git's own
+# words to the CLI operator and the web UI; classification must not eat them.
+STDERR_PULL_MERGE_CONFLICT = (
+    "error: Your local changes to the following files would be overwritten by merge:\n"
+    "\tnotes/inbox.md\n"
+    "Please commit your changes or stash them before you merge.\n"
+    "Aborting\n"
+)
+
+STDERR_PUSH_REJECTED = (
+    "To https://github.com/owner/repo.git\n"
+    " ! [rejected]        main -> main (fetch first)\n"
+    "error: failed to push some refs to 'https://github.com/owner/repo.git'\n"
+    "hint: Updates were rejected because the tip of your current branch is behind\n"
+    "hint: its remote counterpart. Integrate the remote changes (e.g.\n"
+    "hint: 'git pull ...') before pushing again.\n"
+    "hint: See the 'Note about fast-forwards' in 'git push --help' for details.\n"
+)
+
+# git's wording when the *local* remote is missing — nothing to do with a
+# remote repository being absent or the credentials being wrong.
+STDERR_NO_REMOTE = (
+    "fatal: 'origin' does not appear to be a git repository\n"
+    "fatal: Could not read from remote repository.\n"
+    "\n"
+    "Please make sure you have the correct access rights\n"
+    "and the repository exists.\n"
+)
+
 
 def _fake_clone_run(stderr_template: str):
     """A subprocess.run stub that fails a `git clone` with `stderr_template`,
@@ -69,6 +105,19 @@ def _fake_clone_run(stderr_template: str):
         result.returncode = 128
         result.stdout = ""
         result.stderr = stderr_template.format(dest=dest)
+        return result
+
+    return _run
+
+
+def _fake_failing_run(stderr: str):
+    """A subprocess.run stub that fails whatever git command it is given."""
+
+    def _run(cmd, *args, **kwargs):
+        result = MagicMock(spec=subprocess.CompletedProcess)
+        result.returncode = 1
+        result.stdout = ""
+        result.stderr = stderr
         return result
 
     return _run
@@ -114,14 +163,94 @@ class TestSanitiser:
         assert str(tmp_path) not in safe
 
     def test_windows_style_absolute_path_is_replaced(self):
-        raw = "Cloning into 'C:\\Users\\alice\\.pyrite\\repos\\owner\\repo'...\nfatal: nope\n"
+        # NOT a "Cloning into" line: the narration regex deletes those whole,
+        # so the Windows arm of the path regex was never exercised.
+        raw = "fatal: could not create work tree dir 'C:\\Users\\alice\\.pyrite\\repos\\o\\r'\n"
 
         safe = GitService.sanitize_error(raw, token=None)
 
         assert "C:\\Users\\alice" not in safe
+        assert "alice" not in safe
+        assert "could not create work tree dir" in safe
 
     def test_sanitize_output_still_exists_and_redacts_tokens(self):
         assert GitService._sanitize_output("err ghp_x", "ghp_x") == "err ***"
+
+
+class TestSanitiserPreservesURLs:
+    """Finding 3: `_ABS_PATH_RE` must not eat scheme-qualified URLs or
+    scp-style remotes — that mangled text is what fork (#52) and pr (#53)
+    callers actually receive, since only clone is classified."""
+
+    @pytest.mark.parametrize(
+        ("raw", "must_survive"),
+        [
+            (
+                "fatal: repository 'https://github.com/owner/repo/' not found\n",
+                "https://github.com/owner/repo/",
+            ),
+            (
+                "fatal: Could not read from remote repository ssh://git@github.com/owner/repo.git\n",
+                "ssh://git@github.com/owner/repo.git",
+            ),
+            (
+                "fatal: 'git@github.com:owner/repo.git' does not appear to be a git repository\n",
+                "git@github.com:owner/repo.git",
+            ),
+            (
+                "hint: See https://docs.github.com/articles/about-remote-repositories\n",
+                "https://docs.github.com/articles/about-remote-repositories",
+            ),
+        ],
+    )
+    def test_urls_survive_redaction(self, raw, must_survive):
+        safe = GitService.sanitize_error(raw, token=None)
+
+        assert must_survive in safe, f"URL mangled by path redaction: {safe!r}"
+
+
+class TestSanitiserPathsWithSpaces:
+    """Finding 4: a path containing a space must be redacted whole — the first
+    pass left `'<path> Docs<path>'`, leaking a directory name."""
+
+    def test_quoted_path_with_space_is_fully_redacted(self):
+        raw = (
+            "fatal: could not create work tree dir "
+            "'/Users/alice/My Docs/repos/o/r': Permission denied\n"
+        )
+
+        safe = GitService.sanitize_error(raw, token=None)
+
+        assert "My Docs" not in safe
+        assert "Docs" not in safe
+        assert "alice" not in safe
+        assert "Permission denied" in safe
+
+    def test_unquoted_path_with_space_is_fully_redacted(self):
+        raw = "fatal: cannot access /Users/alice/My Docs/repos/o/r: Permission denied\n"
+
+        safe = GitService.sanitize_error(raw, token=None)
+
+        assert "Docs" not in safe
+        assert "alice" not in safe
+        assert "Permission denied" in safe
+
+    def test_windows_path_with_space_is_fully_redacted(self):
+        raw = "fatal: cannot open 'C:\\Users\\alice\\My Docs\\repos\\o\\r\\.git'\n"
+
+        safe = GitService.sanitize_error(raw, token=None)
+
+        assert "Docs" not in safe
+        assert "repos" not in safe
+        assert "alice" not in safe
+
+    def test_tilde_path_with_space_is_fully_redacted(self):
+        raw = "fatal: cannot open '~/My Docs/repos/o/r/.git': No such file\n"
+
+        safe = GitService.sanitize_error(raw, token=None)
+
+        assert "Docs" not in safe
+        assert "No such file" in safe
 
 
 class TestErrorClassification:
@@ -160,6 +289,27 @@ class TestErrorClassification:
         assert code == "CLONE_FAILED"
         assert str(tmp_path) not in message
 
+    def test_branch_pattern_is_matched_before_repo_pattern(self, tmp_path):
+        """Pattern order is load-bearing: git says "Remote branch X not found
+        in upstream origin", which a looser "not found" reading would swallow
+        into REPO_NOT_FOUND. Pins the order against a reorder."""
+        raw = STDERR_BRANCH_NOT_FOUND.format(dest=tmp_path / "o" / "r")
+
+        code, _message = GitService.classify_git_error(raw, token=None)
+
+        assert code == "BRANCH_NOT_FOUND"
+        assert code != "REPO_NOT_FOUND"
+
+    def test_missing_local_remote_is_not_repo_not_found(self):
+        """Finding 2: `does not appear to be a git repository` is what git says
+        when the *local* remote is missing (a push from a KB with no remote).
+        Telling that user "Repository not found, or the configured credentials
+        cannot see it" is false on both halves."""
+        code, message = GitService.classify_git_error(STDERR_NO_REMOTE, token=None)
+
+        assert code != "REPO_NOT_FOUND"
+        assert "credentials cannot see it" not in message
+
 
 class TestCloneLogsFullStderr:
     """Criterion 4: the operator still gets everything the body omits."""
@@ -180,10 +330,88 @@ class TestCloneLogsFullStderr:
         assert str(dest) not in message
         assert "Cloning into" not in message
 
-        logged = "\n".join(r.getMessage() for r in caplog.records)
-        assert "Repository not found" in logged
+        carrying = [r for r in caplog.records if "Repository not found" in r.getMessage()]
+        assert carrying, "the raw stderr must reach the log"
+        assert all(r.levelno == logging.WARNING for r in carrying), (
+            "the record carrying the stderr must be at WARNING, not DEBUG: "
+            f"{[(r.levelname, r.getMessage()[:60]) for r in carrying]}"
+        )
+
+        logged = "\n".join(r.getMessage() for r in carrying)
         assert str(dest) in logged, "the operator must still see the real path"
         assert raw.strip().splitlines()[-1] in logged
+
+
+class TestPullAndPushReturnGitsOwnWords:
+    """Finding 1: `pull`/`push` must return git's own text (token- and
+    path-redacted), not a canned "Git operation failed — see the server log"
+    that the CLI operator, who *is* the operator, cannot act on. The web UI
+    renders `push_error` verbatim (web/src/routes/changes/+page.svelte:50)."""
+
+    def _repo(self, tmp_path):
+        path = tmp_path / "repo"
+        path.mkdir()
+        (path / ".git").mkdir()
+        return path
+
+    def test_pull_surfaces_merge_conflict_stderr(self, tmp_path):
+        with patch("subprocess.run", _fake_failing_run(STDERR_PULL_MERGE_CONFLICT)):
+            success, message = GitService.pull(self._repo(tmp_path))
+
+        assert success is False
+        assert "would be overwritten by merge" in message, (
+            f"the real git error must surface, not a canned string: {message!r}"
+        )
+        assert "see the server log" not in message
+        assert str(tmp_path) not in message
+
+    def test_push_surfaces_rejected_stderr(self, tmp_path):
+        repo = self._repo(tmp_path)
+        with (
+            patch.object(GitService, "is_git_repo", return_value=True),
+            patch.object(GitService, "get_current_branch", return_value="main"),
+            patch("subprocess.run", _fake_failing_run(STDERR_PUSH_REJECTED)),
+        ):
+            success, message = GitService.push(repo)
+
+        assert success is False
+        assert "tip of your current branch is behind" in message, (
+            f"the real git error must surface, not a canned string: {message!r}"
+        )
+        assert "see the server log" not in message
+        assert "https://github.com/owner/repo.git" in message, (
+            "the remote URL must survive path redaction"
+        )
+        assert str(tmp_path) not in message
+
+    def test_push_with_no_remote_says_so(self, tmp_path):
+        """Finding 2, end to end: a push from a KB with no remote must not be
+        reported as "Repository not found, or the configured credentials
+        cannot see it"."""
+        repo = self._repo(tmp_path)
+        with (
+            patch.object(GitService, "is_git_repo", return_value=True),
+            patch.object(GitService, "get_current_branch", return_value="main"),
+            patch("subprocess.run", _fake_failing_run(STDERR_NO_REMOTE)),
+        ):
+            success, message = GitService.push(repo)
+
+        assert success is False
+        assert "does not appear to be a git repository" in message
+        assert "credentials cannot see it" not in message
+
+    def test_pull_still_redacts_tokens_and_paths(self, tmp_path):
+        stderr = (
+            f"fatal: unable to access 'https://oauth2:ghp_secret123@github.com/o/r/': "
+            f"could not lock config file {tmp_path}/repo/.git/config\n"
+        )
+        with patch("subprocess.run", _fake_failing_run(stderr)):
+            success, message = GitService.pull(self._repo(tmp_path), token="ghp_secret123")
+
+        assert success is False
+        assert "ghp_secret123" not in message
+        assert str(tmp_path) not in message
+        assert "could not lock config file" in message
 
 
 class TestSubscribeEndpointDisclosure:
@@ -248,6 +476,127 @@ class TestSubscribeEndpointDisclosure:
         assert r.json()["detail"]["code"] == expected_code
         assert str(tmp_path) not in r.text
 
+    def test_subscribe_unclassified_failure_stays_path_free(
+        self, client_factory, repo_service, workspace, tmp_path
+    ):
+        """A clone failure matching *no* pattern — the shape most likely to
+        carry a path git wrote about the destination.
+
+        Note for the reader: unlike the fork/pr cases below, this one cannot
+        be made to depend on `redact_paths`. A clone that matches no pattern
+        falls to `CLONE_FAILED`, whose message is a fixed literal by design:
+        an unrecognised stderr may embed a hostname or a URL, so none of it is
+        forwarded. `TestUnclassifiedErrorsDependOnRedaction` covers the paths
+        where redaction is the only thing standing between git's text and the
+        caller."""
+        client = client_factory(repo_service)
+
+        with patch("subprocess.run", _fake_clone_run(STDERR_UNCLASSIFIED_SPACED_PATH)):
+            r = client.post(
+                "/api/repos/subscribe",
+                json={"remote_url": "https://github.com/owner/repo"},
+            )
+
+        assert r.status_code == 400
+        body = r.text
+        assert "Cloning into" not in body
+        assert str(workspace) not in body
+        assert str(tmp_path) not in body
+        assert str(Path.home()) not in body
+
+
+class TestUnclassifiedErrorsDependOnRedaction:
+    """The headline subscribe test passes with `redact_paths` stubbed to the
+    identity, because clone classification short-circuits to a fixed literal.
+    These cases return the service's own text, so a clean body proves
+    redaction ran — stub `redact_paths` and they go red."""
+
+    @pytest.fixture
+    def client_factory(self, make_client):
+        def _make(service):
+            client, _, _ = make_client(
+                auth=AuthConfig(enabled=True, allow_registration=True),
+                dependency_overrides={get_repo_service: lambda: service},
+                register_user=("testuser", "password123"),
+            )
+            return client
+
+        return _make
+
+    def test_fork_error_with_spaced_path_is_fully_redacted(self, client_factory, tmp_path):
+        leaky = (
+            "fatal: could not create work tree dir "
+            f"'{tmp_path}/My Docs/owner/repo': Permission denied\n"
+        )
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_test"
+        svc.fork_and_subscribe.return_value = {"success": False, "error": leaky}
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/fork", json={"remote_url": "https://github.com/owner/repo"})
+
+        assert r.status_code == 400
+        assert str(tmp_path) not in r.text
+        assert "My Docs" not in r.text
+        assert "Docs" not in r.text
+        # ...and the actionable part survives.
+        assert "Permission denied" in r.json()["detail"]["message"]
+
+    def test_pr_error_keeps_the_remote_url_but_drops_the_path(self, client_factory, tmp_path):
+        leaky = (
+            "fatal: unable to access 'https://github.com/owner/repo/': "
+            f"could not lock config file {tmp_path}/owner/repo/.git/config\n"
+        )
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_test"
+        svc.create_pr.return_value = {"success": False, "error": leaky}
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/owner/repo/pr", json={"title": "T", "body": "B"})
+
+        assert r.status_code == 400
+        message = r.json()["detail"]["message"]
+        assert str(tmp_path) not in message
+        assert "https://github.com/owner/repo/" in message, (
+            "the caller's own remote URL is the actionable part and must survive"
+        )
+
+
+class TestSyncEndpointDisclosure:
+    """Finding 5: `RepoService.sync` returns `{"success": True, "repos":
+    {name: {"success": False, "error": ...}}}`, so a nested per-repo error is
+    serialised verbatim at 200, never reaching `_error_detail`."""
+
+    @pytest.fixture
+    def client_factory(self, make_client):
+        def _make(service):
+            client, _, _ = make_client(
+                auth=AuthConfig(enabled=True, allow_registration=True),
+                dependency_overrides={get_repo_service: lambda: service},
+                register_user=("testuser", "password123"),
+            )
+            return client
+
+        return _make
+
+    def test_nested_per_repo_error_is_sanitised(self, client_factory, tmp_path):
+        leaky = f"Pull failed: fatal: cannot open '{tmp_path}/owner/repo/.git/config'\n"
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_test"
+        svc.sync.return_value = {
+            "success": True,
+            "repos": {"owner/repo": {"success": False, "error": leaky}},
+        }
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/owner/repo/sync")
+
+        assert r.status_code == 200
+        assert str(tmp_path) not in r.text, f"nested error leaked the server path: {r.text!r}"
+        nested = r.json()["repos"]["owner/repo"]
+        assert nested["success"] is False
+        assert "cannot open" in nested["error"]
+
 
 class TestForkAndPRDisclosure:
     """Criterion 5: fork (#52) and pr (#53) route errors through the same
@@ -289,3 +638,98 @@ class TestForkAndPRDisclosure:
 
         assert r.status_code == 400
         assert str(tmp_path) not in r.text
+
+    def test_fork_error_redacts_the_services_token(self, client_factory, tmp_path):
+        """`_error_detail` called `sanitize_error(str(raw))` with no token,
+        while every other call site passes one."""
+        leaky = "fatal: unable to access 'https://oauth2:ghp_secret123@github.com/o/r/'\n"
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_secret123"
+        svc.fork_and_subscribe.return_value = {"success": False, "error": leaky}
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/fork", json={"remote_url": "https://github.com/owner/repo"})
+
+        assert r.status_code == 400
+        assert "ghp_secret123" not in r.text
+
+
+def test_no_second_clone_implementation_returning_raw_stderr():
+    """`github_auth.clone_private_repo` was a second, dead clone path that
+    returned `f"Clone failed: {result.stderr}"` — raw, path-bearing, bypassing
+    every control in GitService. Nothing called it; it is gone, and must not
+    come back as a way around the sanitiser."""
+    import pyrite.github_auth as github_auth
+
+    assert not hasattr(github_auth, "clone_private_repo")
+
+
+class TestErrorDetailHygiene:
+    """Should-fix items: the public code set is closed, and messages are not
+    double-prefixed."""
+
+    @pytest.fixture
+    def client_factory(self, make_client):
+        def _make(service):
+            client, _, _ = make_client(
+                auth=AuthConfig(enabled=True, allow_registration=True),
+                dependency_overrides={get_repo_service: lambda: service},
+                register_user=("testuser", "password123"),
+            )
+            return client
+
+        return _make
+
+    def test_unknown_error_code_is_not_echoed_to_the_caller(self, client_factory):
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_test"
+        svc.fork_and_subscribe.return_value = {
+            "success": False,
+            "error": "nope",
+            "error_code": "SOMETHING_INTERNAL_1234",
+        }
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/fork", json={"remote_url": "https://github.com/owner/repo"})
+
+        assert r.status_code == 400
+        assert r.json()["detail"]["code"] == "FORK_FAILED"
+        assert "SOMETHING_INTERNAL_1234" not in r.text
+
+    def test_known_error_code_is_passed_through(self, client_factory):
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_test"
+        svc.fork_and_subscribe.return_value = {
+            "success": False,
+            "error": "nope",
+            "error_code": "AUTH_REQUIRED",
+        }
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/fork", json={"remote_url": "https://github.com/owner/repo"})
+
+        assert r.json()["detail"]["code"] == "AUTH_REQUIRED"
+
+    def test_clone_message_is_not_double_prefixed(self, tmp_path):
+        with patch("subprocess.run", _fake_clone_run(STDERR_REPO_NOT_FOUND)):
+            success, message = GitService.clone(
+                "https://github.com/owner/repo", tmp_path / "o" / "r"
+            )
+
+        assert success is False
+        assert not message.startswith("Clone failed: Repository not found"), (
+            f"double prefix: {message!r}"
+        )
+
+    def test_push_message_is_not_double_prefixed(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        with (
+            patch.object(GitService, "is_git_repo", return_value=True),
+            patch.object(GitService, "get_current_branch", return_value="main"),
+            patch("subprocess.run", _fake_failing_run(STDERR_PUSH_REJECTED)),
+        ):
+            success, message = GitService.push(repo)
+
+        assert success is False
+        assert message.count("Push failed:") <= 1

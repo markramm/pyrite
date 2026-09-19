@@ -12,7 +12,46 @@ from ..schemas import ForkRequest, PRRequest, RepoInfo, RepoListResponse, Subscr
 logger = logging.getLogger(__name__)
 
 
-def _error_detail(result: dict, default_code: str) -> dict:
+# The public error codes a repo endpoint may put in `detail.code`. A service
+# result's `error_code` is echoed only if it is one of these — an unrecognised
+# value is an internal identifier, and naming internals to a caller is the same
+# class of disclosure as naming paths. Documented in docs/json-contracts.md.
+_PUBLIC_ERROR_CODES = frozenset(
+    {
+        "REPO_NOT_FOUND",
+        "AUTH_REQUIRED",
+        "BRANCH_NOT_FOUND",
+        "PATH_EXISTS",
+        "CLONE_TIMEOUT",
+        "CLONE_FAILED",
+        "INVALID_REQUEST",
+        "SUBSCRIBE_FAILED",
+        "FORK_FAILED",
+        "SYNC_FAILED",
+        "UNSUBSCRIBE_FAILED",
+        "PR_FAILED",
+        "GITHUB_NOT_CONNECTED",
+    }
+)
+
+
+def _sanitized_message(raw: object, token: str | None, context: str) -> str:
+    """Redact a service error string, logging the unredacted original."""
+    text = str(raw)
+    message = GitService.sanitize_error(text, token)
+    if message != text:
+        logger.warning("%s (unredacted): %s", context, text)
+    return message or "Unknown error"
+
+
+def _service_token(svc: object) -> str | None:
+    """The GitHub token this service would have injected into a remote URL, so
+    it can be redacted out of whatever git wrote about that URL."""
+    token = getattr(svc, "_github_token", None)
+    return token if isinstance(token, str) and token else None
+
+
+def _error_detail(result: dict, default_code: str, svc: object = None) -> dict:
     """Build a 400 detail body from a service result without disclosing the
     server's filesystem layout.
 
@@ -21,14 +60,35 @@ def _error_detail(result: dict, default_code: str) -> dict:
     `GitService.sanitize_error` on the way out — CodeQL py/stack-trace-exposure
     #51 (subscribe), #52 (fork), #53 (pr). The raw text is logged, not sent.
     """
-    raw = result.get("error", "Unknown error")
-    message = GitService.sanitize_error(str(raw))
-    if message != raw:
-        logger.warning("%s (unredacted): %s", default_code, raw)
+    message = _sanitized_message(
+        result.get("error", "Unknown error"), _service_token(svc), default_code
+    )
+    code = result.get("error_code")
     return {
-        "code": result.get("error_code") or default_code,
-        "message": message or "Unknown error",
+        "code": code if code in _PUBLIC_ERROR_CODES else default_code,
+        "message": message,
     }
+
+
+def _sanitize_sync_result(result: dict, svc: object) -> dict:
+    """`RepoService.sync` reports per-repo outcomes nested under `repos`, and
+    a failed repo's `error` is whatever `GitService.pull` returned — now git's
+    own words, which can carry an absolute path. That nesting means a 200 body
+    never reaches `_error_detail`, so redact it here."""
+    repos = result.get("repos")
+    if not isinstance(repos, dict):
+        return result
+    token = _service_token(svc)
+    cleaned = dict(result)
+    cleaned["repos"] = {
+        name: (
+            {**entry, "error": _sanitized_message(entry["error"], token, "SYNC_FAILED")}
+            if isinstance(entry, dict) and entry.get("error") is not None
+            else entry
+        )
+        for name, entry in repos.items()
+    }
+    return cleaned
 
 
 router = APIRouter(
@@ -79,7 +139,7 @@ def get_repo(
     if result.get("error"):
         raise HTTPException(
             status_code=404,
-            detail=_error_detail(result, "REPO_NOT_FOUND"),
+            detail=_error_detail(result, "REPO_NOT_FOUND", svc),
         )
     return result
 
@@ -95,7 +155,7 @@ def subscribe_to_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail=_error_detail(result, "SUBSCRIBE_FAILED"),
+            detail=_error_detail(result, "SUBSCRIBE_FAILED", svc),
         )
     return result
 
@@ -119,7 +179,7 @@ def fork_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail=_error_detail(result, "FORK_FAILED"),
+            detail=_error_detail(result, "FORK_FAILED", svc),
         )
     return result
 
@@ -135,9 +195,10 @@ def sync_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail=_error_detail(result, "SYNC_FAILED"),
+            detail=_error_detail(result, "SYNC_FAILED", svc),
         )
-    return result
+    # Per-repo failures ride along in a 200 body; redact them too.
+    return _sanitize_sync_result(result, svc)
 
 
 @router.delete("/repos/{name:path}")
@@ -152,7 +213,7 @@ def unsubscribe_repo(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail=_error_detail(result, "UNSUBSCRIBE_FAILED"),
+            detail=_error_detail(result, "UNSUBSCRIBE_FAILED", svc),
         )
     return result
 
@@ -237,6 +298,6 @@ def create_pull_request(
     if not result.get("success"):
         raise HTTPException(
             status_code=400,
-            detail=_error_detail(result, "PR_FAILED"),
+            detail=_error_detail(result, "PR_FAILED", svc),
         )
     return result

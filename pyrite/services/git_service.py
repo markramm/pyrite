@@ -35,9 +35,37 @@ _PATH_NARRATION_RE = re.compile(
     r"Receiving objects|Counting objects|Compressing objects|remote: Enumerating)\b.*$",
     re.MULTILINE,
 )
-# POSIX absolute paths and Windows drive paths, plus ~ expansions.
-_ABS_PATH_RE = re.compile(r"(?:[A-Za-z]:[\\/]|~?/)[^\s'\"<>|]*")
 _PATH_PLACEHOLDER = "<path>"
+
+# Absolute filesystem paths, in the three shapes git prints them.
+#
+# Two things the first pass got wrong, both reproduced by the cold read:
+#
+#  * A bare `/...` run also matches the path portion of a URL, so
+#    `repository 'https://github.com/owner/repo/' not found` became
+#    `repository 'http<path>' not found` and `git@github.com:owner/repo.git`
+#    became `git@github.com:owner<path>`. Those URLs are the caller's *own*
+#    input and disclose nothing; they are also the only actionable part of a
+#    fork (#52) or pr (#53) error, which is unclassified and returned as text.
+#    `(?<![\w:@.-])` refuses a match that continues a scheme, a host or an
+#    scp-style `host:path`.
+#
+#  * A path containing a space was truncated at the space, leaking the rest
+#    of the directory name (`'/Users/alice/My Docs/repos/o/r'` →
+#    `'<path> Docs<path>'`). Quoted paths are therefore matched to the closing
+#    quote, and unquoted ones may absorb spaces up to a `:` or end of line.
+#
+# Matched in order; the first alternative that fits wins.
+_PATH_BODY = r"(?:[A-Za-z]:[\\/]|~/|/)"
+_ABS_PATH_RE = re.compile(
+    # Quoted: '/a/b c/d' or "C:\a\b c" — redact everything to the closing quote.
+    rf"(?<=')(?<![\w:@.-]')(?!//){_PATH_BODY}[^'\n]*(?=')"
+    rf"|(?<=\")(?!//){_PATH_BODY}[^\"\n]*(?=\")"
+    # Unquoted: absorb spaces, but stop at a `:` (git's "<path>: reason"),
+    # a quote, or end of line.
+    rf"|(?<![\w:@.\-/]){_PATH_BODY}(?!/)[^\s'\"<>|:\n]*"
+    rf"(?:[ \t]+[^\s'\"<>|:\n]+)*"
+)
 
 # Order is significant: the first match wins, and the branch and auth shapes
 # are the specific ones ("Remote branch X not found in upstream origin" would
@@ -64,9 +92,14 @@ _GIT_ERROR_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ),
     (
         "REPO_NOT_FOUND",
+        # `does not appear to be a git repository` is deliberately NOT here:
+        # git says that when the *local* remote is missing (`fatal: 'origin'
+        # does not appear to be a git repository`, i.e. a push from a KB with
+        # no remote configured), so mapping it to REPO_NOT_FOUND told the user
+        # "Repository not found, or the configured credentials cannot see it"
+        # — false on both halves.
         re.compile(
-            r"repository .* not found|Repository not found|"
-            r"remote: Not Found|does not appear to be a git repository",
+            r"repository .* not found|Repository not found|remote: Not Found",
             re.IGNORECASE,
         ),
         "Repository not found, or the configured credentials cannot see it",
@@ -227,8 +260,15 @@ class GitService:
                 result.returncode,
                 GitService._sanitize_output(result.stderr, token).strip(),
             )
-            _code, message = GitService.classify_git_error(result.stderr, token)
-            return False, f"Pull failed: {message}"
+            # Git's own words, token- and path-redacted — NOT classified.
+            # `classify_git_error` knows four clone-shaped patterns; routing
+            # pull through it answered a merge conflict ("Your local changes
+            # ... would be overwritten by merge") with a canned "see the
+            # server log", which the CLI user — who *is* the operator, with
+            # no server log — cannot act on, and which the web UI renders
+            # verbatim (web/src/routes/changes/+page.svelte).
+            message = GitService.sanitize_error(result.stderr, token)
+            return False, f"Pull failed: {message}" if message else "Pull failed"
         except subprocess.TimeoutExpired:
             return False, "Pull timed out"
         except (subprocess.SubprocessError, OSError) as e:
@@ -690,8 +730,11 @@ class GitService:
                 result.returncode,
                 GitService._sanitize_output(result.stderr, token).strip(),
             )
-            _code, message = GitService.classify_git_error(result.stderr, token)
-            return False, f"Push failed: {message}"
+            # Git's own words, token- and path-redacted — see the note in
+            # `pull`. A rejected push ("the tip of your current branch is
+            # behind") must reach the user as git wrote it.
+            message = GitService.sanitize_error(result.stderr, token)
+            return False, f"Push failed: {message}" if message else "Push failed"
         except subprocess.TimeoutExpired:
             return False, "Push timed out"
         except (subprocess.SubprocessError, OSError) as e:

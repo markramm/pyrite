@@ -65,6 +65,60 @@ def _reset_rate_limiter():
     yield
 
 
+# Test files that exercise clone/fork/subscribe paths. A stub that stops being
+# the method actually called -- the `@patch.object(GitService, "clone")` that
+# went fail-open once `clone_with_code` became the real implementation -- made
+# one of them reach out to github.com instead of erroring. This guard turns
+# that silent network call into a failure.
+_NO_NETWORK_CLONE_FILES = frozenset(
+    {
+        "test_repo_service.py",
+        "test_repo_endpoints.py",
+        "test_repo_error_disclosure.py",
+        "test_git_service.py",
+        "test_export_to_repo.py",
+        "test_repository_rename.py",
+    }
+)
+
+
+def _is_local_clone_url(url: str) -> bool:
+    """A clone source that touches no network: a filesystem path, a file:// URL
+    or a Windows drive path."""
+    return url.startswith(("/", ".", "~", "file://")) or (
+        len(url) > 1 and url[1] == ":" and url[0].isalpha()
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_network_git_clone(request, monkeypatch):
+    """Fail any test in the repo/git files that shells out to `git clone`
+    against a non-local URL, rather than letting it hit the network."""
+    if Path(request.node.fspath).name not in _NO_NETWORK_CLONE_FILES:
+        return
+
+    import subprocess
+
+    real_run = subprocess.run
+
+    def _guarded_run(cmd, *args, **kwargs):
+        if isinstance(cmd, (list, tuple)) and len(cmd) >= 2:
+            argv = [str(c) for c in cmd]
+            if argv[0].endswith("git") and "clone" in argv[1:3]:
+                targets = [a for a in argv[2:] if not a.startswith("-") and a != "--"]
+                remote = targets[0] if targets else ""
+                if remote and not _is_local_clone_url(remote):
+                    raise AssertionError(
+                        "test attempted a real `git clone` of a non-local URL "
+                        f"({remote!r}) -- a clone stub stopped being the method "
+                        "actually called (fail-open patch). Patch the method the "
+                        "code under test invokes, or stub subprocess.run."
+                    )
+        return real_run(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", _guarded_run)
+
+
 @pytest.fixture
 def tmp_kb_dir():
     """Temporary directory with KB subdirectories."""

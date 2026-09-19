@@ -341,47 +341,6 @@ def get_github_user_info(token: str) -> dict | None:
     return None
 
 
-def clone_private_repo(repo_url: str, local_path: Path, branch: str = "main") -> tuple[bool, str]:
-    """
-    Clone a private repository using GitHub OAuth token.
-
-    Returns (success, message).
-    """
-    token = get_github_token()
-    if not token:
-        return False, "Not authenticated with GitHub"
-
-    # Convert SSH URL to HTTPS if needed
-    if repo_url.startswith("git@github.com:"):
-        repo_url = repo_url.replace("git@github.com:", "https://github.com/")
-        if repo_url.endswith(".git"):
-            pass  # Keep .git suffix
-        else:
-            repo_url += ".git"
-
-    # Insert token into URL
-    if "github.com" in repo_url:
-        # https://github.com/user/repo.git -> https://token@github.com/user/repo.git
-        repo_url = repo_url.replace("https://", f"https://oauth2:{token}@")
-
-    import subprocess
-
-    try:
-        result = subprocess.run(
-            ["git", "clone", "--branch", branch, repo_url, str(local_path)],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            return True, f"Cloned to {local_path}"
-        else:
-            # Don't leak token in error messages
-            error = result.stderr.replace(token, "***")
-            return False, f"Clone failed: {error}"
-    except Exception as e:
-        return False, f"Clone failed: {e}"
-
-
 def pull_repo(local_path: Path) -> tuple[bool, str]:
     """Pull latest changes for a repository."""
     token = get_github_token()
