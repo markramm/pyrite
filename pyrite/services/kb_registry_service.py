@@ -26,10 +26,15 @@ class KBRegistryService:
         self.index_mgr = index_mgr
 
     def seed_from_config(self) -> int:
-        """Upsert config.yaml KBs into DB with source='config'. Idempotent.
+        """Reconcile config.yaml KB ownership in the DB. Idempotent.
 
-        Returns the number of KBs seeded.
+        KBs removed from config.yaml become user-managed without losing data.
+        Returns the number of KBs seeded from the current config.
         """
+        from sqlalchemy import update
+
+        from ..storage.models import KB
+
         count = 0
         for kb in self.config.knowledge_bases:
             self.db.register_kb(
@@ -41,6 +46,14 @@ class KBRegistryService:
                 default_role=kb.default_role,
             )
             count += 1
+
+        config_names = [kb.name for kb in self.config.knowledge_bases]
+        self.db.session.execute(
+            update(KB)
+            .where(KB.source == "config", KB.name.not_in(config_names))
+            .values(source="user")
+        )
+        self.db.session.commit()
         return count
 
     def list_kbs(self, type_filter: str | None = None) -> list[dict[str, Any]]:
