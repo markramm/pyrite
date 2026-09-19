@@ -1,14 +1,13 @@
 """Tests for cross-KB entity deduplication."""
 
 import pytest
-
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.dedup import (
     create_same_as_links,
     find_duplicates,
     merge_entity_view,
 )
+
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
@@ -28,20 +27,24 @@ class TestFindDuplicatesExactTitle:
     """Exact title match across KBs."""
 
     def test_exact_title_match(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "john-smith-1",
-            "kb_name": "kb1",
-            "title": "John Smith",
-            "entry_type": "person",
-            "body": "A person in kb1",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "john-smith-2",
-            "kb_name": "kb2",
-            "title": "John Smith",
-            "entry_type": "person",
-            "body": "A person in kb2",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "john-smith-1",
+                "kb_name": "kb1",
+                "title": "John Smith",
+                "entry_type": "person",
+                "body": "A person in kb1",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "john-smith-2",
+                "kb_name": "kb2",
+                "title": "John Smith",
+                "entry_type": "person",
+                "body": "A person in kb2",
+            }
+        )
         groups = find_duplicates(multi_kb_db)
         assert len(groups) >= 1
         group = groups[0]
@@ -52,27 +55,28 @@ class TestFindDuplicatesExactTitle:
         assert dup["confidence"] == 1.0
 
     def test_case_insensitive_title_match(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "acme-1",
-            "kb_name": "kb1",
-            "title": "ACME Corporation",
-            "entry_type": "organization",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "acme-2",
-            "kb_name": "kb2",
-            "title": "acme corporation",
-            "entry_type": "organization",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "acme-1",
+                "kb_name": "kb1",
+                "title": "ACME Corporation",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "acme-2",
+                "kb_name": "kb2",
+                "title": "acme corporation",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
         groups = find_duplicates(multi_kb_db)
         assert len(groups) >= 1
         # Find the ACME group
-        acme_groups = [
-            g for g in groups
-            if g["canonical"]["title"].lower() == "acme corporation"
-        ]
+        acme_groups = [g for g in groups if g["canonical"]["title"].lower() == "acme corporation"]
         assert len(acme_groups) == 1
         assert acme_groups[0]["duplicates"][0]["match_type"] == "exact"
 
@@ -81,22 +85,26 @@ class TestFindDuplicatesAlias:
     """Alias overlap detection."""
 
     def test_alias_overlap(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "vladimir-putin",
-            "kb_name": "kb1",
-            "title": "Vladimir Putin",
-            "entry_type": "person",
-            "body": "",
-            "metadata": {"aliases": ["VVP", "Putin"]},
-        })
-        multi_kb_db.upsert_entry({
-            "id": "vvp-person",
-            "kb_name": "kb2",
-            "title": "VVP",
-            "entry_type": "person",
-            "body": "",
-            "metadata": {"aliases": ["Vladimir Vladimirovich Putin"]},
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "vladimir-putin",
+                "kb_name": "kb1",
+                "title": "Vladimir Putin",
+                "entry_type": "person",
+                "body": "",
+                "metadata": {"aliases": ["VVP", "Putin"]},
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "vvp-person",
+                "kb_name": "kb2",
+                "title": "VVP",
+                "entry_type": "person",
+                "body": "",
+                "metadata": {"aliases": ["Vladimir Vladimirovich Putin"]},
+            }
+        )
         groups = find_duplicates(multi_kb_db)
         assert len(groups) >= 1
         # Find the group containing these two
@@ -105,10 +113,7 @@ class TestFindDuplicatesAlias:
             ids = {g["canonical"]["id"]} | {d["id"] for d in g["duplicates"]}
             if "vladimir-putin" in ids and "vvp-person" in ids:
                 found = True
-                dup = [
-                    d for d in g["duplicates"]
-                    if d["id"] in ("vladimir-putin", "vvp-person")
-                ][0]
+                dup = [d for d in g["duplicates"] if d["id"] in ("vladimir-putin", "vvp-person")][0]
                 assert dup["match_type"] == "alias"
                 assert dup["confidence"] == 0.95
         assert found
@@ -118,20 +123,24 @@ class TestFindDuplicatesFuzzy:
     """Fuzzy matching above/below threshold."""
 
     def test_fuzzy_match_above_threshold(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "acme-corp",
-            "kb_name": "kb1",
-            "title": "ACME Corporation Ltd",
-            "entry_type": "organization",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "acme-corp-2",
-            "kb_name": "kb2",
-            "title": "ACME Corporation Limited",
-            "entry_type": "organization",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "acme-corp",
+                "kb_name": "kb1",
+                "title": "ACME Corporation Ltd",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "acme-corp-2",
+                "kb_name": "kb2",
+                "title": "ACME Corporation Limited",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
         groups = find_duplicates(multi_kb_db, threshold=0.80)
         assert len(groups) >= 1
         found = False
@@ -145,20 +154,24 @@ class TestFindDuplicatesFuzzy:
         assert found
 
     def test_below_threshold_not_detected(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "alpha-inc",
-            "kb_name": "kb1",
-            "title": "Alpha Industries Inc",
-            "entry_type": "organization",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "beta-llc",
-            "kb_name": "kb2",
-            "title": "Beta Holdings LLC",
-            "entry_type": "organization",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "alpha-inc",
+                "kb_name": "kb1",
+                "title": "Alpha Industries Inc",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "beta-llc",
+                "kb_name": "kb2",
+                "title": "Beta Holdings LLC",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
         groups = find_duplicates(multi_kb_db, threshold=0.85)
         # These titles are very different — should not be grouped
         for g in groups:
@@ -170,27 +183,33 @@ class TestFindDuplicatesFiltering:
     """Filtering by entry type."""
 
     def test_filter_by_entry_type(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "john-person",
-            "kb_name": "kb1",
-            "title": "John Smith",
-            "entry_type": "person",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "john-person-2",
-            "kb_name": "kb2",
-            "title": "John Smith",
-            "entry_type": "person",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "john-event",
-            "kb_name": "kb1",
-            "title": "John Smith Event",
-            "entry_type": "investigation_event",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "john-person",
+                "kb_name": "kb1",
+                "title": "John Smith",
+                "entry_type": "person",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "john-person-2",
+                "kb_name": "kb2",
+                "title": "John Smith",
+                "entry_type": "person",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "john-event",
+                "kb_name": "kb1",
+                "title": "John Smith Event",
+                "entry_type": "investigation_event",
+                "body": "",
+            }
+        )
         # Only look at persons
         groups = find_duplicates(multi_kb_db, entry_types=["person"])
         for g in groups:
@@ -199,20 +218,24 @@ class TestFindDuplicatesFiltering:
                 assert d["id"] != "john-event"
 
     def test_no_duplicates_returns_empty(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "unique-person",
-            "kb_name": "kb1",
-            "title": "Unique Person Alpha",
-            "entry_type": "person",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "different-person",
-            "kb_name": "kb2",
-            "title": "Completely Different Name",
-            "entry_type": "person",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "unique-person",
+                "kb_name": "kb1",
+                "title": "Unique Person Alpha",
+                "entry_type": "person",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "different-person",
+                "kb_name": "kb2",
+                "title": "Completely Different Name",
+                "entry_type": "person",
+                "body": "",
+            }
+        )
         groups = find_duplicates(multi_kb_db)
         # These are too different to match
         for g in groups:
@@ -224,20 +247,24 @@ class TestCreateSameAsLinks:
     """Create same_as links between canonical and duplicate entries."""
 
     def test_create_links(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "person-a",
-            "kb_name": "kb1",
-            "title": "Jane Doe",
-            "entry_type": "person",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "person-b",
-            "kb_name": "kb2",
-            "title": "Jane Doe",
-            "entry_type": "person",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "person-a",
+                "kb_name": "kb1",
+                "title": "Jane Doe",
+                "entry_type": "person",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "person-b",
+                "kb_name": "kb2",
+                "title": "Jane Doe",
+                "entry_type": "person",
+                "body": "",
+            }
+        )
         result = create_same_as_links(
             multi_kb_db,
             "person-a",
@@ -260,20 +287,24 @@ class TestCreateSameAsLinks:
         assert same_as_links[0]["id"] == "person-b"
 
     def test_dry_run_returns_preview(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "org-a",
-            "kb_name": "kb1",
-            "title": "Big Corp",
-            "entry_type": "organization",
-            "body": "",
-        })
-        multi_kb_db.upsert_entry({
-            "id": "org-b",
-            "kb_name": "kb2",
-            "title": "Big Corp",
-            "entry_type": "organization",
-            "body": "",
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "org-a",
+                "kb_name": "kb1",
+                "title": "Big Corp",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "org-b",
+                "kb_name": "kb2",
+                "title": "Big Corp",
+                "entry_type": "organization",
+                "body": "",
+            }
+        )
         result = create_same_as_links(
             multi_kb_db,
             "org-a",
@@ -294,24 +325,28 @@ class TestMergeEntityView:
     """Merge entity view across KBs via same_as links."""
 
     def test_merge_view(self, multi_kb_db):
-        multi_kb_db.upsert_entry({
-            "id": "entity-a",
-            "kb_name": "kb1",
-            "title": "Acme Corp",
-            "entry_type": "organization",
-            "body": "",
-            "metadata": {"aliases": ["ACME"]},
-            "tags": ["company", "target"],
-        })
-        multi_kb_db.upsert_entry({
-            "id": "entity-b",
-            "kb_name": "kb2",
-            "title": "ACME Corporation",
-            "entry_type": "organization",
-            "body": "",
-            "metadata": {"aliases": ["Acme Co"]},
-            "tags": ["fraud", "company"],
-        })
+        multi_kb_db.upsert_entry(
+            {
+                "id": "entity-a",
+                "kb_name": "kb1",
+                "title": "Acme Corp",
+                "entry_type": "organization",
+                "body": "",
+                "metadata": {"aliases": ["ACME"]},
+                "tags": ["company", "target"],
+            }
+        )
+        multi_kb_db.upsert_entry(
+            {
+                "id": "entity-b",
+                "kb_name": "kb2",
+                "title": "ACME Corporation",
+                "entry_type": "organization",
+                "body": "",
+                "metadata": {"aliases": ["Acme Co"]},
+                "tags": ["fraud", "company"],
+            }
+        )
         # Create same_as link
         create_same_as_links(
             multi_kb_db,

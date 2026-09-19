@@ -23,12 +23,14 @@ def _find_owners(all_ownership: list[dict[str, Any]], asset_id: str) -> list[dic
                 pct = float(pct_str)
             except (ValueError, TypeError):
                 pct = 0.0
-            results.append({
-                "owner_id": strip_wikilink(meta.get("owner", "")),
-                "percentage": pct,
-                "beneficial": bool(meta.get("beneficial", False)),
-                "entry": entry,
-            })
+            results.append(
+                {
+                    "owner_id": strip_wikilink(meta.get("owner", "")),
+                    "percentage": pct,
+                    "beneficial": bool(meta.get("beneficial", False)),
+                    "entry": entry,
+                }
+            )
     return results
 
 
@@ -89,12 +91,16 @@ def _trace_chains(
         owner_id = owner_info["owner_id"]
         if not owner_id or owner_id in visited:
             # Circular reference or empty — treat as terminal
-            chains.append([{
-                "id": owner_id,
-                "title": owner_id,
-                "percentage": owner_info["percentage"],
-                "beneficial": owner_info["beneficial"],
-            }])
+            chains.append(
+                [
+                    {
+                        "id": owner_id,
+                        "title": owner_id,
+                        "percentage": owner_info["percentage"],
+                        "beneficial": owner_info["beneficial"],
+                    }
+                ]
+            )
             continue
 
         node = {
@@ -142,9 +148,7 @@ def _enrich_titles(db, kb_name: str, chains: list[list[dict[str, Any]]]) -> None
                 node["title"] = title_map[node["id"]]
 
 
-def trace_ownership_chain(
-    db, kb_name: str, entity_id: str, max_depth: int = 5
-) -> dict[str, Any]:
+def trace_ownership_chain(db, kb_name: str, entity_id: str, max_depth: int = 5) -> dict[str, Any]:
     """Trace ownership chains for an entity to find beneficial owners.
 
     Args:
@@ -178,10 +182,12 @@ def trace_ownership_chain(
         effective = 100.0
         for node in path:
             effective *= node["percentage"] / 100.0
-        chains.append({
-            "path": path,
-            "effective_percentage": effective,
-        })
+        chains.append(
+            {
+                "path": path,
+                "effective_percentage": effective,
+            }
+        )
 
     # Identify beneficial owners (terminal nodes — end of each chain)
     beneficial_owners_map: dict[str, dict[str, Any]] = {}
@@ -209,10 +215,12 @@ def trace_ownership_chain(
     for mid in intermediary_ids:
         if _is_shell_company(mid, all_ownership, all_membership):
             entry = db.get_entry(mid, kb_name)
-            shell_indicators.append({
-                "id": mid,
-                "title": entry.get("title", mid) if entry else mid,
-            })
+            shell_indicators.append(
+                {
+                    "id": mid,
+                    "title": entry.get("title", mid) if entry else mid,
+                }
+            )
 
     return {
         "entity": entity_info,
@@ -222,9 +230,7 @@ def trace_ownership_chain(
     }
 
 
-def aggregate_ownership(
-    db, kb_name: str, entity_id: str
-) -> dict[str, Any]:
+def aggregate_ownership(db, kb_name: str, entity_id: str) -> dict[str, Any]:
     """Aggregate all beneficial owners and their effective ownership percentages.
 
     Args:

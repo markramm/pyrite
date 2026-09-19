@@ -69,7 +69,17 @@ SOFTWARE_KB_PRESET = {
             {"field": "status", "enum": ["proposed", "accepted", "deprecated", "superseded"]},
         ],
     },
-    "directories": ["adrs", "designs", "standards", "validations", "conventions", "components", "backlog", "runbooks", "milestones"],
+    "directories": [
+        "adrs",
+        "designs",
+        "standards",
+        "validations",
+        "conventions",
+        "components",
+        "backlog",
+        "runbooks",
+        "milestones",
+    ],
     "default_board": {
         "lanes": [
             {"name": "Backlog", "statuses": ["proposed", "planned"]},

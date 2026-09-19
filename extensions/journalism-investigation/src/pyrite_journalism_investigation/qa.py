@@ -78,9 +78,7 @@ def compute_qa_metrics(db: Any, kb_name: str, stale_days: int = 30) -> dict[str,
     coverage_score = coverage_pct  # 0-100
     dispute_score = max(0, 100 - disputed_ratio)  # 0-100
 
-    quality_score = round(
-        source_score * 0.4 + coverage_score * 0.4 + dispute_score * 0.2
-    )
+    quality_score = round(source_score * 0.4 + coverage_score * 0.4 + dispute_score * 0.2)
     quality_score = max(0, min(100, quality_score))
 
     # --- Warnings ---
@@ -90,9 +88,13 @@ def compute_qa_metrics(db: Any, kb_name: str, stale_days: int = 30) -> dict[str,
     if total_claims > 0:
         orphan_pct = orphans / total_claims * 100
         if orphan_pct > 30:
-            warnings.append(f"High orphan claim ratio: {orphan_pct:.0f}% of claims have no evidence")
+            warnings.append(
+                f"High orphan claim ratio: {orphan_pct:.0f}% of claims have no evidence"
+            )
     if total_claims > 0 and disputed_ratio > 50:
-        warnings.append(f"High dispute ratio: {disputed_ratio:.0f}% of claims disputed or retracted")
+        warnings.append(
+            f"High dispute ratio: {disputed_ratio:.0f}% of claims disputed or retracted"
+        )
 
     return {
         "source_tiers": source_tiers,

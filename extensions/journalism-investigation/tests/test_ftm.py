@@ -1,12 +1,6 @@
 """Tests for FollowTheMoney import/export."""
 
-import json
-
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.ftm import (
     export_ftm,
     ftm_to_pyrite,
@@ -14,6 +8,7 @@ from pyrite_journalism_investigation.ftm import (
     pyrite_to_ftm,
 )
 
+from pyrite.storage.database import PyriteDB
 
 # =========================================================================
 # Fixtures
@@ -24,11 +19,6 @@ from pyrite_journalism_investigation.ftm import (
 def db(tmp_path):
     kb_path = tmp_path / "test-kb"
     kb_path.mkdir()
-    kb = KBConfig(name="test", path=kb_path, kb_type="journalism-investigation")
-    config = PyriteConfig(
-        knowledge_bases=[kb],
-        settings=Settings(index_path=tmp_path / "index.db"),
-    )
     db = PyriteDB(tmp_path / "index.db")
     db.register_kb("test", "journalism-investigation", str(kb_path))
     yield db
@@ -495,20 +485,24 @@ class TestExportFtm:
     def test_export_entries(self, db):
         """Export KB entries as FtM JSON."""
         # Insert some entries
-        db.upsert_entry({
-            "id": "alice",
-            "kb_name": "test",
-            "title": "Alice",
-            "entry_type": "person",
-            "metadata": {"nationality": "US"},
-        })
-        db.upsert_entry({
-            "id": "evil-corp",
-            "kb_name": "test",
-            "title": "Evil Corp",
-            "entry_type": "organization",
-            "metadata": {"jurisdiction": "RU"},
-        })
+        db.upsert_entry(
+            {
+                "id": "alice",
+                "kb_name": "test",
+                "title": "Alice",
+                "entry_type": "person",
+                "metadata": {"nationality": "US"},
+            }
+        )
+        db.upsert_entry(
+            {
+                "id": "evil-corp",
+                "kb_name": "test",
+                "title": "Evil Corp",
+                "entry_type": "organization",
+                "metadata": {"jurisdiction": "RU"},
+            }
+        )
 
         result = export_ftm(db, "test")
         assert len(result) == 2
@@ -518,20 +512,24 @@ class TestExportFtm:
 
     def test_export_with_type_filter(self, db):
         """Export filters by entry type."""
-        db.upsert_entry({
-            "id": "alice",
-            "kb_name": "test",
-            "title": "Alice",
-            "entry_type": "person",
-            "metadata": {"nationality": "US"},
-        })
-        db.upsert_entry({
-            "id": "evil-corp",
-            "kb_name": "test",
-            "title": "Evil Corp",
-            "entry_type": "organization",
-            "metadata": {"jurisdiction": "RU"},
-        })
+        db.upsert_entry(
+            {
+                "id": "alice",
+                "kb_name": "test",
+                "title": "Alice",
+                "entry_type": "person",
+                "metadata": {"nationality": "US"},
+            }
+        )
+        db.upsert_entry(
+            {
+                "id": "evil-corp",
+                "kb_name": "test",
+                "title": "Evil Corp",
+                "entry_type": "organization",
+                "metadata": {"jurisdiction": "RU"},
+            }
+        )
 
         result = export_ftm(db, "test", entry_types=["person"])
         assert len(result) == 1
@@ -539,20 +537,24 @@ class TestExportFtm:
 
     def test_export_skips_unmappable_types(self, db):
         """Entries with unmappable types are skipped."""
-        db.upsert_entry({
-            "id": "claim-1",
-            "kb_name": "test",
-            "title": "Some Claim",
-            "entry_type": "claim",
-            "metadata": {},
-        })
-        db.upsert_entry({
-            "id": "alice",
-            "kb_name": "test",
-            "title": "Alice",
-            "entry_type": "person",
-            "metadata": {},
-        })
+        db.upsert_entry(
+            {
+                "id": "claim-1",
+                "kb_name": "test",
+                "title": "Some Claim",
+                "entry_type": "claim",
+                "metadata": {},
+            }
+        )
+        db.upsert_entry(
+            {
+                "id": "alice",
+                "kb_name": "test",
+                "title": "Alice",
+                "entry_type": "person",
+                "metadata": {},
+            }
+        )
 
         result = export_ftm(db, "test")
         assert len(result) == 1

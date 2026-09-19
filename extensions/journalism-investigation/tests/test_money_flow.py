@@ -1,22 +1,15 @@
 """Tests for money flow tracing and aggregation."""
 
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.money_flow import aggregate_flows, trace_money_flow
+
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
 def db(tmp_path):
     kb_path = tmp_path / "test-kb"
     kb_path.mkdir()
-    kb = KBConfig(name="test", path=kb_path, kb_type="journalism-investigation")
-    config = PyriteConfig(
-        knowledge_bases=[kb],
-        settings=Settings(index_path=tmp_path / "index.db"),
-    )
     db = PyriteDB(tmp_path / "index.db")
     db.register_kb("test", "journalism-investigation", str(kb_path))
     yield db
@@ -24,31 +17,43 @@ def db(tmp_path):
 
 
 def _create_entity(db, entity_id, title="", entity_type="person"):
-    db.upsert_entry({
-        "id": entity_id,
-        "kb_name": "test",
-        "title": title or entity_id.replace("-", " ").title(),
-        "entry_type": entity_type,
-        "metadata": {},
-    })
+    db.upsert_entry(
+        {
+            "id": entity_id,
+            "kb_name": "test",
+            "title": title or entity_id.replace("-", " ").title(),
+            "entry_type": entity_type,
+            "metadata": {},
+        }
+    )
 
 
-def _create_txn(db, txn_id, sender, receiver, amount="10000", currency="USD",
-                date="2024-01-15", txn_type="payment"):
-    db.upsert_entry({
-        "id": txn_id,
-        "kb_name": "test",
-        "title": f"Payment from {sender} to {receiver}",
-        "entry_type": "transaction",
-        "date": date,
-        "metadata": {
-            "sender": f"[[{sender}]]",
-            "receiver": f"[[{receiver}]]",
-            "amount": amount,
-            "currency": currency,
-            "transaction_type": txn_type,
-        },
-    })
+def _create_txn(
+    db,
+    txn_id,
+    sender,
+    receiver,
+    amount="10000",
+    currency="USD",
+    date="2024-01-15",
+    txn_type="payment",
+):
+    db.upsert_entry(
+        {
+            "id": txn_id,
+            "kb_name": "test",
+            "title": f"Payment from {sender} to {receiver}",
+            "entry_type": "transaction",
+            "date": date,
+            "metadata": {
+                "sender": f"[[{sender}]]",
+                "receiver": f"[[{receiver}]]",
+                "amount": amount,
+                "currency": currency,
+                "transaction_type": txn_type,
+            },
+        }
+    )
 
 
 class TestTraceMoneyFlowSingleHop:
@@ -158,8 +163,9 @@ class TestDateFiltering:
         _create_txn(db, "txn-1", "entity-a", "entity-b", "50000", date="2024-01-15")
         _create_txn(db, "txn-2", "entity-a", "entity-b", "30000", date="2024-06-15")
 
-        result = trace_money_flow(db, "test", "entity-a", direction="outbound",
-                                  from_date="2024-03-01")
+        result = trace_money_flow(
+            db, "test", "entity-a", direction="outbound", from_date="2024-03-01"
+        )
 
         txn_ids = {txn["id"] for flow in result["flows"] for txn in flow["path"]}
         assert "txn-2" in txn_ids
@@ -171,8 +177,9 @@ class TestDateFiltering:
         _create_txn(db, "txn-1", "entity-a", "entity-b", "50000", date="2024-01-15")
         _create_txn(db, "txn-2", "entity-a", "entity-b", "30000", date="2024-06-15")
 
-        result = trace_money_flow(db, "test", "entity-a", direction="outbound",
-                                  to_date="2024-03-01")
+        result = trace_money_flow(
+            db, "test", "entity-a", direction="outbound", to_date="2024-03-01"
+        )
 
         txn_ids = {txn["id"] for flow in result["flows"] for txn in flow["path"]}
         assert "txn-1" in txn_ids
@@ -185,8 +192,14 @@ class TestDateFiltering:
         _create_txn(db, "txn-2", "entity-a", "entity-b", "20000", date="2024-03-15")
         _create_txn(db, "txn-3", "entity-a", "entity-b", "30000", date="2024-06-15")
 
-        result = trace_money_flow(db, "test", "entity-a", direction="outbound",
-                                  from_date="2024-02-01", to_date="2024-05-01")
+        result = trace_money_flow(
+            db,
+            "test",
+            "entity-a",
+            direction="outbound",
+            from_date="2024-02-01",
+            to_date="2024-05-01",
+        )
 
         txn_ids = {txn["id"] for flow in result["flows"] for txn in flow["path"]}
         assert txn_ids == {"txn-2"}
@@ -266,8 +279,9 @@ class TestAggregateFlows:
         _create_txn(db, "txn-1", "entity-a", "entity-b", "50000", date="2024-01-10")
         _create_txn(db, "txn-2", "entity-a", "entity-b", "30000", date="2024-06-10")
 
-        result = aggregate_flows(db, "test", "entity-a",
-                                 from_date="2024-05-01", to_date="2024-12-31")
+        result = aggregate_flows(
+            db, "test", "entity-a", from_date="2024-05-01", to_date="2024-12-31"
+        )
 
         assert len(result["outflows"]) == 1
         assert result["outflows"][0]["total"] == "30000.0"
@@ -307,19 +321,21 @@ class TestMissingAmounts:
         _create_entity(db, "entity-b", "Entity B")
         _create_txn(db, "txn-1", "entity-a", "entity-b", "50000")
         # Transaction with no amount
-        db.upsert_entry({
-            "id": "txn-2",
-            "kb_name": "test",
-            "title": "Payment without amount",
-            "entry_type": "transaction",
-            "date": "2024-01-20",
-            "metadata": {
-                "sender": "[[entity-a]]",
-                "receiver": "[[entity-b]]",
-                "currency": "USD",
-                "transaction_type": "payment",
-            },
-        })
+        db.upsert_entry(
+            {
+                "id": "txn-2",
+                "kb_name": "test",
+                "title": "Payment without amount",
+                "entry_type": "transaction",
+                "date": "2024-01-20",
+                "metadata": {
+                    "sender": "[[entity-a]]",
+                    "receiver": "[[entity-b]]",
+                    "currency": "USD",
+                    "transaction_type": "payment",
+                },
+            }
+        )
 
         result = trace_money_flow(db, "test", "entity-a", direction="outbound")
 
@@ -330,19 +346,21 @@ class TestMissingAmounts:
         _create_entity(db, "entity-a", "Entity A")
         _create_entity(db, "entity-b", "Entity B")
         _create_txn(db, "txn-1", "entity-a", "entity-b", "50000")
-        db.upsert_entry({
-            "id": "txn-2",
-            "kb_name": "test",
-            "title": "Payment without amount",
-            "entry_type": "transaction",
-            "date": "2024-01-20",
-            "metadata": {
-                "sender": "[[entity-a]]",
-                "receiver": "[[entity-b]]",
-                "currency": "USD",
-                "transaction_type": "payment",
-            },
-        })
+        db.upsert_entry(
+            {
+                "id": "txn-2",
+                "kb_name": "test",
+                "title": "Payment without amount",
+                "entry_type": "transaction",
+                "date": "2024-01-20",
+                "metadata": {
+                    "sender": "[[entity-a]]",
+                    "receiver": "[[entity-b]]",
+                    "currency": "USD",
+                    "transaction_type": "payment",
+                },
+            }
+        )
 
         result = aggregate_flows(db, "test", "entity-a")
 

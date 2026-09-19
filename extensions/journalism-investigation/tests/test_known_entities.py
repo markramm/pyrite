@@ -1,13 +1,12 @@
 """Tests for known-entities KB pattern and matching utility."""
 
 import pytest
-
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
-from pyrite.services.kb_service import KBService
-
-from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
 from pyrite_journalism_investigation.known_entities import find_matching_entities
+from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
+
+from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.services.kb_service import KBService
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
@@ -70,7 +69,10 @@ class TestFindMatchingByAlias:
     def test_find_matching_by_alias(self, setup):
         svc = setup["svc"]
         svc.create_entry(
-            "known-ents", "acme-corp", "Acme Corporation", "organization",
+            "known-ents",
+            "acme-corp",
+            "Acme Corporation",
+            "organization",
             aliases=["Acme Corp", "ACME"],
         )
 
@@ -82,7 +84,10 @@ class TestFindMatchingByAlias:
     def test_find_matching_by_alias_case_insensitive(self, setup):
         svc = setup["svc"]
         svc.create_entry(
-            "known-ents", "acme-corp", "Acme Corporation", "organization",
+            "known-ents",
+            "acme-corp",
+            "Acme Corporation",
+            "organization",
             aliases=["Acme Corp", "ACME"],
         )
 

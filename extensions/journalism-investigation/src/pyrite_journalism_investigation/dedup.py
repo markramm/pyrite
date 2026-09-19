@@ -11,7 +11,6 @@ from typing import Any
 
 from .utils import parse_meta
 
-
 # Default entity types to scan for duplicates
 _DEFAULT_ENTITY_TYPES = ["person", "organization", "asset", "account"]
 
@@ -62,25 +61,29 @@ def find_duplicates(
                 for r in rows:
                     meta = parse_meta(r)
                     aliases = meta.get("aliases", []) or r.get("aliases", []) or []
-                    entries.append({
-                        "id": r["id"],
-                        "kb_name": r["kb_name"],
-                        "title": r["title"],
-                        "entry_type": r.get("entry_type", ""),
-                        "aliases": aliases,
-                    })
+                    entries.append(
+                        {
+                            "id": r["id"],
+                            "kb_name": r["kb_name"],
+                            "title": r["title"],
+                            "entry_type": r.get("entry_type", ""),
+                            "aliases": aliases,
+                        }
+                    )
         else:
             rows = db.list_entries(kb_name=None, entry_type=etype, limit=5000)
             for r in rows:
                 meta = parse_meta(r)
                 aliases = meta.get("aliases", []) or r.get("aliases", []) or []
-                entries.append({
-                    "id": r["id"],
-                    "kb_name": r["kb_name"],
-                    "title": r["title"],
-                    "entry_type": r.get("entry_type", ""),
-                    "aliases": aliases,
-                })
+                entries.append(
+                    {
+                        "id": r["id"],
+                        "kb_name": r["kb_name"],
+                        "title": r["title"],
+                        "entry_type": r.get("entry_type", ""),
+                        "aliases": aliases,
+                    }
+                )
 
     # Build groups using union-find approach
     # Key: (id, kb_name) -> group index
@@ -131,9 +134,7 @@ def find_duplicates(
                     confidence = 0.95
                 else:
                     # 3. Fuzzy title match
-                    ratio = SequenceMatcher(
-                        None, title_i.lower(), title_j.lower()
-                    ).ratio()
+                    ratio = SequenceMatcher(None, title_i.lower(), title_j.lower()).ratio()
                     if ratio >= threshold:
                         match_type = "fuzzy"
                         confidence = round(ratio, 4)
@@ -155,7 +156,7 @@ def find_duplicates(
         groups_map.setdefault(root, []).append(idx)
 
     result: list[dict] = []
-    for root, members in groups_map.items():
+    for _root, members in groups_map.items():
         if len(members) < 2:
             continue
 
@@ -167,25 +168,29 @@ def find_duplicates(
         for m in members[1:]:
             key = (min(canonical_idx, m), max(canonical_idx, m))
             info = match_info.get(key, {"match_type": "fuzzy", "confidence": threshold})
-            duplicates.append({
-                "id": entries[m]["id"],
-                "kb_name": entries[m]["kb_name"],
-                "title": entries[m]["title"],
-                "match_type": info["match_type"],
-                "confidence": info["confidence"],
-            })
+            duplicates.append(
+                {
+                    "id": entries[m]["id"],
+                    "kb_name": entries[m]["kb_name"],
+                    "title": entries[m]["title"],
+                    "match_type": info["match_type"],
+                    "confidence": info["confidence"],
+                }
+            )
 
         # Sort duplicates by confidence descending
         duplicates.sort(key=lambda d: d["confidence"], reverse=True)
 
-        result.append({
-            "canonical": {
-                "id": canonical["id"],
-                "kb_name": canonical["kb_name"],
-                "title": canonical["title"],
-            },
-            "duplicates": duplicates,
-        })
+        result.append(
+            {
+                "canonical": {
+                    "id": canonical["id"],
+                    "kb_name": canonical["kb_name"],
+                    "title": canonical["title"],
+                },
+                "duplicates": duplicates,
+            }
+        )
 
     # Sort groups by highest confidence descending
     result.sort(
@@ -347,12 +352,14 @@ def merge_entity_view(db, entity_id: str, kb_name: str) -> dict:
     appearances: list[dict] = []
 
     for e in all_entries:
-        appearances.append({
-            "id": e["id"],
-            "kb_name": e["kb_name"],
-            "title": e["title"],
-            "entry_type": e.get("entry_type", ""),
-        })
+        appearances.append(
+            {
+                "id": e["id"],
+                "kb_name": e["kb_name"],
+                "title": e["title"],
+                "entry_type": e.get("entry_type", ""),
+            }
+        )
         meta = parse_meta(e)
         for alias in meta.get("aliases", []) or e.get("aliases", []) or []:
             all_aliases.add(alias)

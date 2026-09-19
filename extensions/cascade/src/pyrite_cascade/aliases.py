@@ -70,6 +70,7 @@ KNOWN_ACRONYMS: dict[str, str] = {
 
 # ── Proposal data structure ─────────────────────────────────────────────────
 
+
 @dataclass
 class AliasProposal:
     """A proposed alias grouping with confidence score."""
@@ -96,6 +97,7 @@ class AliasProposal:
 
 # ── Normalization helpers ────────────────────────────────────────────────────
 
+
 def slugify(text: str) -> str:
     """Convert text to a slug for comparison."""
     text = unicodedata.normalize("NFKD", text)
@@ -112,7 +114,7 @@ def strip_prefix(name: str) -> str | None:
     """Remove U.S./US/United States prefix."""
     for prefix in ["U.S. ", "US ", "United States "]:
         if name.startswith(prefix):
-            return name[len(prefix):]
+            return name[len(prefix) :]
     return None
 
 
@@ -126,11 +128,13 @@ def strip_parenthetical(name: str) -> tuple[str | None, str | None]:
 
 # ── Canonical name selection ─────────────────────────────────────────────────
 
+
 def pick_canonical(names: list[str], counts: dict[str, int]) -> str:
     """Choose the canonical name from a set of candidates.
 
     Priority: full name > no prefix > proper case > no parenthetical > highest count.
     """
+
     def score(name: str) -> tuple:
         is_acronym = name.isupper() and len(name) <= 8
         has_prefix = any(name.startswith(p) for p in ["U.S. ", "US ", "United States "])
@@ -144,11 +148,11 @@ def pick_canonical(names: list[str], counts: dict[str, int]) -> str:
                 prefix_dominant = True
 
         return (
-            0 if is_acronym else 1,            # prefer full name
+            0 if is_acronym else 1,  # prefer full name
             0 if (has_prefix and not prefix_dominant) else 1,  # prefer no prefix
-            1 if is_proper else 0,              # prefer proper case
-            0 if has_paren else 1,              # prefer no parenthetical
-            counts.get(name, 0),                # highest count breaks ties
+            1 if is_proper else 0,  # prefer proper case
+            0 if has_paren else 1,  # prefer no parenthetical
+            counts.get(name, 0),  # highest count breaks ties
         )
 
     return max(names, key=score)
@@ -156,8 +160,10 @@ def pick_canonical(names: list[str], counts: dict[str, int]) -> str:
 
 # ── Detection strategies ─────────────────────────────────────────────────────
 
+
 def find_case_duplicates(
-    actors: list[str], counts: dict[str, int],
+    actors: list[str],
+    counts: dict[str, int],
 ) -> tuple[list[AliasProposal], set[str]]:
     """Pass 1: Exact case-insensitive matches."""
     lower_groups: dict[str, list[str]] = defaultdict(list)
@@ -177,7 +183,8 @@ def find_case_duplicates(
 
 
 def find_slug_duplicates(
-    actors: list[str], counts: dict[str, int],
+    actors: list[str],
+    counts: dict[str, int],
 ) -> tuple[list[AliasProposal], set[str]]:
     """Pass 2: Group actors with identical slugs."""
     slug_groups: dict[str, list[str]] = defaultdict(list)
@@ -197,7 +204,8 @@ def find_slug_duplicates(
 
 
 def find_prefix_duplicates(
-    actors: list[str], counts: dict[str, int],
+    actors: list[str],
+    counts: dict[str, int],
 ) -> tuple[list[AliasProposal], set[str]]:
     """Pass 3: U.S./US prefix stripping."""
     actor_set = set(actors)
@@ -216,7 +224,8 @@ def find_prefix_duplicates(
 
 
 def find_parenthetical_duplicates(
-    actors: list[str], counts: dict[str, int],
+    actors: list[str],
+    counts: dict[str, int],
 ) -> tuple[list[AliasProposal], set[str]]:
     """Pass 4: Parenthetical removal (+ acronym matching)."""
     actor_set = set(actors)
@@ -245,7 +254,8 @@ def find_parenthetical_duplicates(
 
 
 def find_acronym_duplicates(
-    actors: list[str], counts: dict[str, int],
+    actors: list[str],
+    counts: dict[str, int],
 ) -> tuple[list[AliasProposal], set[str]]:
     """Pass 5: Known acronym table matching."""
     actor_set = set(actors)
@@ -284,8 +294,10 @@ def find_acronym_duplicates(
 
 
 def find_fuzzy_duplicates(
-    actors: list[str], counts: dict[str, int],
-    threshold: float = 0.85, min_count: int = 2,
+    actors: list[str],
+    counts: dict[str, int],
+    threshold: float = 0.85,
+    min_count: int = 2,
 ) -> tuple[list[AliasProposal], set[str]]:
     """Pass 6: Fuzzy matching using difflib, grouped by first word."""
     candidates = [a for a in actors if counts.get(a, 0) >= min_count]
@@ -319,6 +331,7 @@ def find_fuzzy_duplicates(
 
 # ── Main pipeline ────────────────────────────────────────────────────────────
 
+
 def run_detection(actor_counts: dict[str, int]) -> list[AliasProposal]:
     """Run all detection strategies in order, each pass removes matched actors."""
     remaining = set(actor_counts.keys())
@@ -344,8 +357,11 @@ def run_detection(actor_counts: dict[str, int]) -> list[AliasProposal]:
 
 # ── Actor extraction from Pyrite DB ──────────────────────────────────────────
 
+
 def extract_actor_counts_from_db(
-    db: Any, kb_name: str, event_types: list[str] | None = None,
+    db: Any,
+    kb_name: str,
+    event_types: list[str] | None = None,
 ) -> Counter:
     """Extract actor name → count mapping from events in a Pyrite KB."""
     if event_types is None:

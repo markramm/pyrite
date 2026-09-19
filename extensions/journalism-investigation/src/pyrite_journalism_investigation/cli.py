@@ -38,7 +38,9 @@ def timeline(
     from_date: str = typer.Option("", "--from", help="Start date (YYYY-MM-DD)"),
     to_date: str = typer.Option("", "--to", help="End date (YYYY-MM-DD)"),
     actor: str = typer.Option("", "--actor", help="Filter by actor name"),
-    event_type: str = typer.Option("", "--type", help="Filter by type: investigation_event, transaction, legal_action"),
+    event_type: str = typer.Option(
+        "", "--type", help="Filter by type: investigation_event, transaction, legal_action"
+    ),
     min_importance: int = typer.Option(0, "--min-importance", help="Minimum importance (1-10)"),
     limit: int = typer.Option(50, "--limit", help="Max results"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
@@ -91,7 +93,9 @@ def timeline(
 @investigation_app.command("entities")
 def entities(
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
-    entity_type: str = typer.Option("", "--type", help="Filter by type: person, organization, asset, account"),
+    entity_type: str = typer.Option(
+        "", "--type", help="Filter by type: person, organization, asset, account"
+    ),
     jurisdiction: str = typer.Option("", "--jurisdiction", help="Filter by jurisdiction"),
     min_importance: int = typer.Option(0, "--min-importance", help="Minimum importance (1-10)"),
     limit: int = typer.Option(50, "--limit", help="Max results"),
@@ -135,7 +139,9 @@ def entities(
 def sources(
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
     reliability: str = typer.Option("", "--reliability", help="Filter: high, medium, low, unknown"),
-    classification: str = typer.Option("", "--classification", help="Filter: public, leaked, foia, etc."),
+    classification: str = typer.Option(
+        "", "--classification", help="Filter: public, leaked, foia, etc."
+    ),
     from_date: str = typer.Option("", "--from", help="Start date (YYYY-MM-DD)"),
     to_date: str = typer.Option("", "--to", help="End date (YYYY-MM-DD)"),
     limit: int = typer.Option(50, "--limit", help="Max results"),
@@ -172,7 +178,13 @@ def sources(
         table.add_column("Date", style="dim")
 
         for s in result["sources"]:
-            table.add_row(s["id"], s["reliability"], s.get("classification", ""), s["title"], s.get("date", ""))
+            table.add_row(
+                s["id"],
+                s["reliability"],
+                s.get("classification", ""),
+                s["title"],
+                s.get("date", ""),
+            )
         console.print(table)
     finally:
         db.close()
@@ -181,7 +193,11 @@ def sources(
 @investigation_app.command("claims")
 def claims(
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
-    status: str = typer.Option("", "--status", help="Filter: unverified, partially_verified, corroborated, disputed, retracted"),
+    status: str = typer.Option(
+        "",
+        "--status",
+        help="Filter: unverified, partially_verified, corroborated, disputed, retracted",
+    ),
     confidence: str = typer.Option("", "--confidence", help="Filter: high, medium, low"),
     min_importance: int = typer.Option(0, "--min-importance", help="Minimum importance (1-10)"),
     limit: int = typer.Option(50, "--limit", help="Max results"),
@@ -218,8 +234,12 @@ def claims(
 
         for c in result["claims"]:
             table.add_row(
-                c["id"], c["claim_status"], c["confidence"],
-                c["title"], str(c["evidence_count"]), str(c["importance"]),
+                c["id"],
+                c["claim_status"],
+                c["confidence"],
+                c["title"],
+                str(c["evidence_count"]),
+                str(c["importance"]),
             )
         console.print(table)
     finally:
@@ -297,7 +317,11 @@ def evidence_chain(
                     console.print(f"  [red]✗[/red] {ev['evidence_id']} — missing")
                 else:
                     source = ev.get("source_document")
-                    source_info = f" → {source['title']} ({source['reliability']})" if source else " → [dim]no source[/dim]"
+                    source_info = (
+                        f" → {source['title']} ({source['reliability']})"
+                        if source
+                        else " → [dim]no source[/dim]"
+                    )
                     console.print(f"  ✓ {ev['title']} ({ev['evidence_type']}){source_info}")
 
         if result["gaps"]:
@@ -312,7 +336,9 @@ def evidence_chain(
 @investigation_app.command("qa")
 def qa_report(
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
-    stale_days: int = typer.Option(30, "--stale-days", help="Days before unverified claims are stale"),
+    stale_days: int = typer.Option(
+        30, "--stale-days", help="Days before unverified claims are stale"
+    ),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Show investigation quality metrics and warnings."""
@@ -329,7 +355,9 @@ def qa_report(
 
         score = result["quality_score"]
         score_color = "green" if score >= 70 else "yellow" if score >= 40 else "red"
-        console.print(f"[bold]Investigation Quality Score: [{score_color}]{score}/100[/{score_color}][/bold]")
+        console.print(
+            f"[bold]Investigation Quality Score: [{score_color}]{score}/100[/{score_color}][/bold]"
+        )
         console.print()
 
         # Source tiers
@@ -349,7 +377,9 @@ def qa_report(
         claims = result["claims"]
         console.print("[bold]Claims:[/bold]")
         console.print(f"  Total: {claims['total']}")
-        console.print(f"  With evidence: {claims['total'] - claims['orphans']} ({claims['coverage_pct']}%)")
+        console.print(
+            f"  With evidence: {claims['total'] - claims['orphans']} ({claims['coverage_pct']}%)"
+        )
         console.print(f"  Orphans (no evidence): {claims['orphans']}")
         console.print(f"  Disputed/retracted: {claims['disputed_ratio']}%")
         console.print()
@@ -375,8 +405,12 @@ def qa_report(
 @investigation_app.command("search")
 def search_all(
     query: str = typer.Argument(..., help="Search query"),
-    kb_names: list[str] = typer.Option([], "--kb", "-k", help="KB names to search (repeat for multiple; omit for all)"),
-    correlate: bool = typer.Option(False, "--correlate", "-c", help="Correlate results by entity identity across KBs"),
+    kb_names: list[str] = typer.Option(
+        [], "--kb", "-k", help="KB names to search (repeat for multiple; omit for all)"
+    ),
+    correlate: bool = typer.Option(
+        False, "--correlate", "-c", help="Correlate results by entity identity across KBs"
+    ),
     entry_type: str = typer.Option("", "--type", help="Filter by entry type"),
     limit: int = typer.Option(50, "--limit", help="Max results"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
@@ -410,8 +444,12 @@ def search_all(
             console.print(f"[bold]Cross-KB Entity Correlation ({len(correlated)} entities)[/bold]")
             console.print()
             for group in correlated:
-                kb_label = f"[green]{group['kb_count']} KBs[/green]" if group["kb_count"] > 1 else "1 KB"
-                console.print(f"  [bold]{group['title']}[/bold]  ({kb_label}, importance: {group['max_importance']})")
+                kb_label = (
+                    f"[green]{group['kb_count']} KBs[/green]" if group["kb_count"] > 1 else "1 KB"
+                )
+                console.print(
+                    f"  [bold]{group['title']}[/bold]  ({kb_label}, importance: {group['max_importance']})"
+                )
                 for app in group["appearances"]:
                     console.print(f"    - {app['kb_name']}: {app['id']} ({app['entry_type']})")
                 console.print()
@@ -425,7 +463,7 @@ def search_all(
             console.print("[dim]No results found.[/dim]")
             return
 
-        console.print(f"[bold]Cross-KB Search: \"{query}\" ({result['total_count']} results)[/bold]")
+        console.print(f'[bold]Cross-KB Search: "{query}" ({result["total_count"]} results)[/bold]')
         console.print()
         for group in result["groups"]:
             console.print(f"[green]{group['kb_name']}[/green] ({group['count']} results)")
@@ -451,7 +489,9 @@ def search_all(
 def start_investigation(
     title: str = typer.Option(..., "--title", help="Investigation title"),
     scope: str = typer.Option("", "--scope", help="Investigation scope/description"),
-    questions: list[str] = typer.Option([], "--question", "-q", help="Key questions (repeat for multiple)"),
+    questions: list[str] = typer.Option(
+        [], "--question", "-q", help="Key questions (repeat for multiple)"
+    ),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
@@ -582,7 +622,9 @@ def ownership_chain(
 def money_flow(
     entity_id: str = typer.Argument(..., help="Entity ID to trace money flows for"),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
-    direction: str = typer.Option("both", "--direction", "-d", help="Flow direction: outbound, inbound, or both"),
+    direction: str = typer.Option(
+        "both", "--direction", "-d", help="Flow direction: outbound, inbound, or both"
+    ),
     hops: int = typer.Option(3, "--hops", help="Max transaction hops to follow"),
     from_date: str = typer.Option("", "--from", help="Start date (YYYY-MM-DD)"),
     to_date: str = typer.Option("", "--to", help="End date (YYYY-MM-DD)"),
@@ -595,7 +637,9 @@ def money_flow(
     db = PyriteDB(config.settings.index_path)
     try:
         result = trace_money_flow(
-            db, kb_name, entity_id,
+            db,
+            kb_name,
+            entity_id,
             direction=direction,
             max_hops=hops,
             from_date=from_date,
@@ -637,7 +681,9 @@ def money_flow(
                 for step in flow["path"]:
                     amt = step.get("amount", "?")
                     path_parts.append(f"{step['title']} ({amt})")
-                console.print(f"  {i}. {' → '.join(path_parts)} → [red]BACK TO {entity['title']}[/red]")
+                console.print(
+                    f"  {i}. {' → '.join(path_parts)} → [red]BACK TO {entity['title']}[/red]"
+                )
 
         # Also show aggregate summary
         console.print()
@@ -647,11 +693,15 @@ def money_flow(
             if agg["outflows"]:
                 console.print("  [red]Outflows:[/red]")
                 for o in agg["outflows"]:
-                    console.print(f"    → {o['counterparty']['title']}: {o['total']} ({o['count']} txn(s))")
+                    console.print(
+                        f"    → {o['counterparty']['title']}: {o['total']} ({o['count']} txn(s))"
+                    )
             if agg["inflows"]:
                 console.print("  [green]Inflows:[/green]")
                 for i in agg["inflows"]:
-                    console.print(f"    ← {i['counterparty']['title']}: {i['total']} ({i['count']} txn(s))")
+                    console.print(
+                        f"    ← {i['counterparty']['title']}: {i['total']} ({i['count']} txn(s))"
+                    )
             console.print(f"  Net flow: {agg['net_flow']}")
     finally:
         db.close()
@@ -662,8 +712,12 @@ def export_pack(
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
     fmt: str = typer.Option("json", "--format", "-f", help="Export format: json or markdown"),
     output: str = typer.Option("", "--output", "-o", help="Output file path (default: stdout)"),
-    redact_sources: bool = typer.Option(False, "--redact-sources", help="Redact source URLs and titles"),
-    min_importance: int = typer.Option(0, "--min-importance", help="Minimum importance filter (1-10)"),
+    redact_sources: bool = typer.Option(
+        False, "--redact-sources", help="Redact source URLs and titles"
+    ),
+    min_importance: int = typer.Option(
+        0, "--min-importance", help="Minimum importance filter (1-10)"
+    ),
 ):
     """Export investigation as a self-contained pack."""
     from .export import build_investigation_pack, export_as_json, export_as_markdown
@@ -672,7 +726,8 @@ def export_pack(
     db = PyriteDB(config.settings.index_path)
     try:
         pack = build_investigation_pack(
-            db, kb_name,
+            db,
+            kb_name,
             redact_sources=redact_sources,
             min_importance=min_importance,
         )
@@ -720,6 +775,7 @@ def bulk_edges(
         except json_mod.JSONDecodeError:
             try:
                 import yaml
+
                 data = yaml.safe_load(raw)
             except Exception:
                 console.print("[red]Error:[/red] Could not parse input as JSON or YAML")
@@ -731,7 +787,7 @@ def bulk_edges(
         elif isinstance(data, list):
             edges = data
         else:
-            console.print("[red]Error:[/red] Input must be a list of edges or {\"edges\": [...]}")
+            console.print('[red]Error:[/red] Input must be a list of edges or {"edges": [...]}')
             raise typer.Exit(1)
 
         result = create_edge_batch(db, kb_name, edges, dry_run=dry_run)
@@ -743,7 +799,9 @@ def bulk_edges(
         if dry_run:
             console.print("[bold]Dry run — no entries created[/bold]")
 
-        console.print(f"  Created: {result['created']}  Skipped: {result['skipped']}  Errors: {result['errors']}")
+        console.print(
+            f"  Created: {result['created']}  Skipped: {result['skipped']}  Errors: {result['errors']}"
+        )
 
         if result["entries"]:
             table = Table(title="Edge Results")
@@ -753,7 +811,12 @@ def bulk_edges(
             table.add_column("Status")
 
             for e in result["entries"]:
-                status_style = {"created": "green", "skipped": "yellow", "error": "red", "would_create": "dim"}.get(e["status"], "")
+                status_style = {
+                    "created": "green",
+                    "skipped": "yellow",
+                    "error": "red",
+                    "would_create": "dim",
+                }.get(e["status"], "")
                 table.add_row(
                     e.get("id") or "-",
                     e.get("type", ""),
@@ -767,7 +830,9 @@ def bulk_edges(
 
 @investigation_app.command("ftm-import")
 def ftm_import(
-    file: str = typer.Option(..., "--file", "-f", help="Path to FtM JSON file (one entity per line, or JSON array)"),
+    file: str = typer.Option(
+        ..., "--file", "-f", help="Path to FtM JSON file (one entity per line, or JSON array)"
+    ),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without importing"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
@@ -801,7 +866,9 @@ def ftm_import(
                     try:
                         entities.append(json_mod.loads(line))
                     except json_mod.JSONDecodeError:
-                        console.print(f"[red]Error:[/red] Could not parse line as JSON: {line[:80]}...")
+                        console.print(
+                            f"[red]Error:[/red] Could not parse line as JSON: {line[:80]}..."
+                        )
                         raise typer.Exit(1)
 
         result = import_ftm(db, kb_name, entities, dry_run=dry_run)
@@ -813,7 +880,9 @@ def ftm_import(
         if dry_run:
             console.print("[bold]Dry run — no entries imported[/bold]")
 
-        console.print(f"  Imported: {result['imported']}  Skipped: {result['skipped']}  Unmapped: {result['unmapped']}  Errors: {result['errors']}")
+        console.print(
+            f"  Imported: {result['imported']}  Skipped: {result['skipped']}  Unmapped: {result['unmapped']}  Errors: {result['errors']}"
+        )
 
         if result["unmapped_schemas"]:
             console.print(f"  Unmapped schemas: {', '.join(result['unmapped_schemas'])}")
@@ -827,8 +896,10 @@ def ftm_import(
 
             for e in result["entries"]:
                 status_style = {
-                    "imported": "green", "skipped": "yellow",
-                    "error": "red", "would_import": "dim",
+                    "imported": "green",
+                    "skipped": "yellow",
+                    "error": "red",
+                    "would_import": "dim",
                 }.get(e["status"], "")
                 table.add_row(
                     e.get("id", ""),
@@ -845,8 +916,12 @@ def ftm_import(
 def ftm_export(
     output: str = typer.Option("", "--output", "-o", help="Output file path (default: stdout)"),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
-    types: list[str] = typer.Option([], "--types", "-t", help="Entry types to export (repeat for multiple; omit for all)"),
-    output_json: bool = typer.Option(False, "--json", help="Output as JSON (always JSON, this flag is for consistency)"),
+    types: list[str] = typer.Option(
+        [], "--types", "-t", help="Entry types to export (repeat for multiple; omit for all)"
+    ),
+    output_json: bool = typer.Option(
+        False, "--json", help="Output as JSON (always JSON, this flag is for consistency)"
+    ),
 ):
     """Export KB entries as FollowTheMoney (FtM) JSON."""
     import sys
@@ -876,14 +951,17 @@ def ftm_export(
 @investigation_app.command("promote-claim")
 def promote_claim(
     claim_id: str = typer.Argument(..., help="Claim entry ID to promote"),
-    edge_type: str = typer.Option(..., "--edge-type", help="Edge type: ownership, membership, funding"),
+    edge_type: str = typer.Option(
+        ..., "--edge-type", help="Edge type: ownership, membership, funding"
+    ),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without creating"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Promote a corroborated claim to an edge-entity."""
-    from .promote import promote_claim_to_edge
     from pyrite.services.kb_service import KBService
+
+    from .promote import promote_claim_to_edge
 
     config = load_config()
     db = PyriteDB(config.settings.index_path)
@@ -923,14 +1001,20 @@ def promote_claim(
 
 @investigation_app.command("dedup")
 def dedup(
-    kb_names: list[str] = typer.Option([], "--kb", "-k", help="KB names to scan (repeat for multiple; omit for all)"),
-    threshold: float = typer.Option(0.85, "--threshold", help="Minimum fuzzy match ratio (0.0-1.0)"),
-    link: bool = typer.Option(False, "--link", help="Auto-link high-confidence matches (confidence >= 0.95)"),
+    kb_names: list[str] = typer.Option(
+        [], "--kb", "-k", help="KB names to scan (repeat for multiple; omit for all)"
+    ),
+    threshold: float = typer.Option(
+        0.85, "--threshold", help="Minimum fuzzy match ratio (0.0-1.0)"
+    ),
+    link: bool = typer.Option(
+        False, "--link", help="Auto-link high-confidence matches (confidence >= 0.95)"
+    ),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without creating links"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
     """Find and review duplicate entities across KBs."""
-    from .dedup import create_same_as_links, find_duplicates
+    from .dedup import find_duplicates
 
     config = load_config()
     db = PyriteDB(config.settings.index_path)
@@ -992,8 +1076,11 @@ def _auto_link_groups(db, groups: list[dict], *, dry_run: bool = False) -> int:
         ]
         if high_conf:
             result = create_same_as_links(
-                db, canonical["id"], canonical["kb_name"],
-                high_conf, dry_run=dry_run,
+                db,
+                canonical["id"],
+                canonical["kb_name"],
+                high_conf,
+                dry_run=dry_run,
             )
             total += result["linked"]
     return total

@@ -1,13 +1,13 @@
 """Tests for claim-to-edge promotion feature."""
 
-import pytest
 from dataclasses import dataclass
 
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
-from pyrite.services.kb_service import KBService
-
+import pytest
 from pyrite_journalism_investigation.promote import promote_claim_to_edge
+
+from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.services.kb_service import KBService
+from pyrite.storage.database import PyriteDB
 
 
 @dataclass
@@ -83,7 +83,9 @@ class TestPromoteCorroboratedClaim:
         kb_service = setup["kb_service"]
 
         _create_claim(
-            kb_service, "claim-funding-a-b", "A funds B",
+            kb_service,
+            "claim-funding-a-b",
+            "A funds B",
             claim_status="partially_verified",
         )
 
@@ -106,7 +108,9 @@ class TestRejectUnverifiedClaim:
         kb_service = setup["kb_service"]
 
         _create_claim(
-            kb_service, "claim-unverified", "Unverified claim",
+            kb_service,
+            "claim-unverified",
+            "Unverified claim",
             claim_status="unverified",
         )
 
@@ -127,7 +131,9 @@ class TestRejectUnverifiedClaim:
         kb_service = setup["kb_service"]
 
         _create_claim(
-            kb_service, "claim-disputed", "Disputed claim",
+            kb_service,
+            "claim-disputed",
+            "Disputed claim",
             claim_status="disputed",
         )
 
@@ -209,9 +215,9 @@ class TestSourcedFromLink:
 
         links = edge_entry.get("links", [])
         sourced_from_links = [
-            link for link in links
-            if link.get("relation") == "sourced_from"
-            and link.get("target_id") == "claim-link-test"
+            link
+            for link in links
+            if link.get("relation") == "sourced_from" and link.get("target_id") == "claim-link-test"
         ]
         assert len(sourced_from_links) == 1, (
             f"Expected sourced_from link to claim-link-test, got links: {links}"

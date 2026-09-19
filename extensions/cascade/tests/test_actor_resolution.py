@@ -5,14 +5,11 @@ links, supporting both plain strings and wikilinks in the actors field.
 """
 
 import pytest
-from dataclasses import dataclass
-
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
-from pyrite.services.kb_service import KBService
-
 from pyrite_cascade.plugin import CascadePlugin
-from pyrite_cascade.entry_types import TimelineEventEntry, SolidarityEventEntry, ActorEntry
+
+from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.services.kb_service import KBService
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
@@ -43,8 +40,12 @@ class TestActorResolutionHook:
 
         # Create timeline event referencing actor by string name
         svc.create_entry(
-            "test", "event-1", "Something happened", "timeline_event",
-            date="2025-01-20", actors=["Donald Trump"],
+            "test",
+            "event-1",
+            "Something happened",
+            "timeline_event",
+            date="2025-01-20",
+            actors=["Donald Trump"],
         )
 
         # The event should have an outlink to the actor
@@ -59,8 +60,12 @@ class TestActorResolutionHook:
         svc.create_entry("test", "elon-musk", "Elon Musk", "actor")
 
         svc.create_entry(
-            "test", "event-2", "Musk does thing", "timeline_event",
-            date="2025-02-01", actors=["[[elon-musk]]"],
+            "test",
+            "event-2",
+            "Musk does thing",
+            "timeline_event",
+            date="2025-02-01",
+            actors=["[[elon-musk]]"],
         )
 
         outlinks = setup["db"].get_outlinks("event-2", "test")
@@ -74,7 +79,10 @@ class TestActorResolutionHook:
         svc.create_entry("test", "elon-musk", "Elon Musk", "actor")
 
         svc.create_entry(
-            "test", "event-3", "Joint event", "timeline_event",
+            "test",
+            "event-3",
+            "Joint event",
+            "timeline_event",
             date="2025-03-01",
             actors=["Donald Trump", "[[elon-musk]]"],
         )
@@ -89,13 +97,20 @@ class TestActorResolutionHook:
         svc = setup["svc"]
         # Use an entry_id that doesn't match the alias to prove alias lookup works
         svc.create_entry(
-            "test", "federal-bureau-of-investigation", "Federal Bureau of Investigation", "actor",
+            "test",
+            "federal-bureau-of-investigation",
+            "Federal Bureau of Investigation",
+            "actor",
             aliases=["FBI", "F.B.I."],
         )
 
         svc.create_entry(
-            "test", "event-4", "FBI investigation", "timeline_event",
-            date="2025-04-01", actors=["FBI"],
+            "test",
+            "event-4",
+            "FBI investigation",
+            "timeline_event",
+            date="2025-04-01",
+            actors=["FBI"],
         )
 
         outlinks = setup["db"].get_outlinks("event-4", "test")
@@ -108,8 +123,12 @@ class TestActorResolutionHook:
 
         # No actor entry exists for "Unknown Person"
         svc.create_entry(
-            "test", "event-5", "Mystery event", "timeline_event",
-            date="2025-05-01", actors=["Unknown Person"],
+            "test",
+            "event-5",
+            "Mystery event",
+            "timeline_event",
+            date="2025-05-01",
+            actors=["Unknown Person"],
         )
 
         outlinks = setup["db"].get_outlinks("event-5", "test")
@@ -123,15 +142,20 @@ class TestActorResolutionHook:
         svc.create_entry("test", "donald-trump", "Donald Trump", "actor")
 
         svc.create_entry(
-            "test", "event-6", "Double reference", "timeline_event",
+            "test",
+            "event-6",
+            "Double reference",
+            "timeline_event",
             date="2025-06-01",
             actors=["Donald Trump", "[[donald-trump]]"],
         )
 
         outlinks = setup["db"].get_outlinks("event-6", "test")
-        trump_links = [o for o in outlinks
-                       if o.get("id") == "donald-trump"
-                       and o.get("relation") == "actor_reference"]
+        trump_links = [
+            o
+            for o in outlinks
+            if o.get("id") == "donald-trump" and o.get("relation") == "actor_reference"
+        ]
         assert len(trump_links) == 1
 
     def test_solidarity_event_actors_resolved(self, setup):
@@ -140,8 +164,12 @@ class TestActorResolutionHook:
         svc.create_entry("test", "aclu", "ACLU", "actor")
 
         svc.create_entry(
-            "test", "sol-1", "ACLU files lawsuit", "solidarity_event",
-            date="2025-07-01", actors=["ACLU"],
+            "test",
+            "sol-1",
+            "ACLU files lawsuit",
+            "solidarity_event",
+            date="2025-07-01",
+            actors=["ACLU"],
         )
 
         outlinks = setup["db"].get_outlinks("sol-1", "test")
@@ -154,12 +182,20 @@ class TestActorResolutionHook:
         svc.create_entry("test", "donald-trump", "Donald Trump", "actor")
 
         svc.create_entry(
-            "test", "event-7", "Event A", "timeline_event",
-            date="2025-01-01", actors=["Donald Trump"],
+            "test",
+            "event-7",
+            "Event A",
+            "timeline_event",
+            date="2025-01-01",
+            actors=["Donald Trump"],
         )
         svc.create_entry(
-            "test", "event-8", "Event B", "timeline_event",
-            date="2025-02-01", actors=["Donald Trump"],
+            "test",
+            "event-8",
+            "Event B",
+            "timeline_event",
+            date="2025-02-01",
+            actors=["Donald Trump"],
         )
 
         backlinks = setup["db"].get_backlinks("donald-trump", "test")
@@ -173,8 +209,12 @@ class TestActorResolutionHook:
         svc.create_entry("test", "donald-trump", "Donald Trump", "actor")
 
         svc.create_entry(
-            "test", "event-9", "Case test", "timeline_event",
-            date="2025-09-01", actors=["donald trump"],
+            "test",
+            "event-9",
+            "Case test",
+            "timeline_event",
+            date="2025-09-01",
+            actors=["donald trump"],
         )
 
         outlinks = setup["db"].get_outlinks("event-9", "test")

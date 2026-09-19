@@ -27,16 +27,18 @@ def _get_all_transactions(
         receiver_raw = meta.get("receiver", "")
         if not sender_raw or not receiver_raw:
             continue
-        txns.append({
-            "id": r.get("id", ""),
-            "title": r.get("title", ""),
-            "date": date,
-            "sender": strip_wikilink(sender_raw),
-            "receiver": strip_wikilink(receiver_raw),
-            "amount": meta.get("amount", ""),
-            "currency": meta.get("currency", ""),
-            "transaction_type": meta.get("transaction_type", ""),
-        })
+        txns.append(
+            {
+                "id": r.get("id", ""),
+                "title": r.get("title", ""),
+                "date": date,
+                "sender": strip_wikilink(sender_raw),
+                "receiver": strip_wikilink(receiver_raw),
+                "amount": meta.get("amount", ""),
+                "currency": meta.get("currency", ""),
+                "transaction_type": meta.get("transaction_type", ""),
+            }
+        )
     return txns
 
 
@@ -244,11 +246,13 @@ def aggregate_flows(
         items = []
         for cp_id in sorted(totals.keys()):
             cp_info = _get_entity_info(db, kb_name, cp_id)
-            items.append({
-                "counterparty": cp_info,
-                "total": str(totals[cp_id]),
-                "count": counts[cp_id],
-            })
+            items.append(
+                {
+                    "counterparty": cp_info,
+                    "total": str(totals[cp_id]),
+                    "count": counts[cp_id],
+                }
+            )
         return items
 
     outflows_list = _build_flow_list(outflow_totals, outflow_counts)

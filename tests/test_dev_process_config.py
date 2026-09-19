@@ -115,6 +115,68 @@ class TestCIWorkflow:
         assert '["3.11", "3.12", "3.13"]' in matrix
 
 
+class TestExtensionsLintParity:
+    """extensions/ must be linted in CI exactly like pyrite/ tests/ (CI parity).
+
+    The commit-stage ruff hook already covers extensions/ -- the first person
+    to touch one file there inherited the whole extension's lint debt in an
+    unrelated commit (2026-09-17). CI's ruff step covered pyrite/ tests/ only,
+    so a PR could go green with extensions/ lint errors a local commit would
+    have blocked. See
+    kb/backlog/done/ci-parity-lint-extensions-and-enforce-the-fix-needs-a-test-rule.md.
+    """
+
+    def test_ruff_check_covers_extensions(self, ci):
+        runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["test"]["steps"])
+        assert "ruff check pyrite/ tests/ extensions/" in runs, runs
+
+    def test_ruff_format_check_covers_extensions(self, ci):
+        runs = "\n".join(str(s.get("run", "")) for s in ci["jobs"]["test"]["steps"])
+        assert "ruff format --check pyrite/ tests/ extensions/" in runs, runs
+
+
+class TestFixCommitCheckRunsInCI:
+    """A `fix:` commit without a tests/ change must fail CI on a PR.
+
+    `check_fix_commit_has_tests.py` only ran as a local commit-msg hook --
+    outside contributors' PRs never run local hooks, and all three outside
+    PRs so far were fixes without tests. The check has to run in CI, over the
+    PR's commit range, and only on `pull_request` (a `push` has no PR range
+    to walk).
+    """
+
+    def _step(self, ci: dict) -> dict:
+        steps = [
+            s
+            for s in ci["jobs"]["test"]["steps"]
+            if "check_fix_commit_has_tests.py" in str(s.get("run", ""))
+        ]
+        assert len(steps) == 1, "expected exactly one step running the fix-commit check"
+        return steps[0]
+
+    def test_a_step_invokes_the_script(self, ci):
+        self._step(ci)  # raises if missing or duplicated
+
+    def test_the_step_only_runs_on_pull_request(self, ci):
+        step = self._step(ci)
+        cond = str(step.get("if", ""))
+        assert "pull_request" in cond, cond
+
+    def test_checkout_fetches_full_history(self, ci):
+        # A shallow checkout can't walk base.sha..head across the PR's commits.
+        checkout = [
+            s
+            for s in ci["jobs"]["test"]["steps"]
+            if s.get("uses", "").startswith("actions/checkout")
+        ][0]
+        assert checkout.get("with", {}).get("fetch-depth") == 0, checkout
+
+    def test_the_step_walks_the_pr_commit_range(self, ci):
+        step = self._step(ci)
+        run = str(step.get("run", ""))
+        assert "github.event.pull_request.base.sha" in run, run
+
+
 class TestPrePushStage:
     def test_only_pytest_runs_at_pre_push(self, precommit):
         # `default_stages` does NOT apply to hooks whose upstream manifest sets

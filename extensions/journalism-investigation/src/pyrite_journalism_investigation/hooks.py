@@ -4,7 +4,6 @@ from typing import Any
 
 from .utils import strip_wikilink
 
-
 # ---------------------------------------------------------------------------
 # Connection entry → auto-link mapping
 # Maps (entry_type) → [(field_name, relation_on_field, relation_on_other)]

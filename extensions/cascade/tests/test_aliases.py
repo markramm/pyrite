@@ -2,8 +2,6 @@
 
 from collections import Counter
 
-import pytest
-
 from pyrite_cascade.aliases import (
     AliasProposal,
     apply_proposals,
@@ -116,10 +114,12 @@ class TestFindPrefixDuplicates:
 
 class TestFindParentheticalDuplicates:
     def test_acronym_in_parens(self):
-        actors = ["Federal Bureau of Investigation (FBI)", "FBI",
-                   "Federal Bureau of Investigation"]
-        counts = {"Federal Bureau of Investigation (FBI)": 5, "FBI": 80,
-                  "Federal Bureau of Investigation": 20}
+        actors = ["Federal Bureau of Investigation (FBI)", "FBI", "Federal Bureau of Investigation"]
+        counts = {
+            "Federal Bureau of Investigation (FBI)": 5,
+            "FBI": 80,
+            "Federal Bureau of Investigation": 20,
+        }
         proposals, matched = find_parenthetical_duplicates(actors, counts)
         assert len(proposals) == 1
         assert proposals[0].canonical == "Federal Bureau of Investigation"
@@ -159,17 +159,19 @@ class TestFindFuzzyDuplicates:
 
 class TestRunDetection:
     def test_full_pipeline(self):
-        actor_counts = Counter({
-            "Donald Trump": 500,
-            "donald trump": 3,
-            "FBI": 100,
-            "Federal Bureau of Investigation": 20,
-            "U.S. Senate": 30,
-            "Senate": 50,
-            "Pete Hegseth": 40,
-            "Peter Hegseth": 5,
-            "Joe Biden": 200,
-        })
+        actor_counts = Counter(
+            {
+                "Donald Trump": 500,
+                "donald trump": 3,
+                "FBI": 100,
+                "Federal Bureau of Investigation": 20,
+                "U.S. Senate": 30,
+                "Senate": 50,
+                "Pete Hegseth": 40,
+                "Peter Hegseth": 5,
+                "Joe Biden": 200,
+            }
+        )
         proposals = run_detection(actor_counts)
         assert len(proposals) >= 3
         canonicals = {p.canonical for p in proposals}
@@ -177,9 +179,12 @@ class TestRunDetection:
         assert "Donald Trump" in canonicals
         # Some strategy should group FBI/Federal Bureau
         fbi_proposal = next(
-            (p for p in proposals
-             if "FBI" in [p.canonical] + p.aliases
-             or "Federal Bureau of Investigation" in [p.canonical] + p.aliases),
+            (
+                p
+                for p in proposals
+                if "FBI" in [p.canonical] + p.aliases
+                or "Federal Bureau of Investigation" in [p.canonical] + p.aliases
+            ),
             None,
         )
         assert fbi_proposal is not None
@@ -217,9 +222,9 @@ class TestApplyProposals:
 
 class TestExtractActorCountsFromDB:
     def test_extracts_from_events(self, tmp_path):
-        from pyrite.config import PyriteConfig, Settings, KBConfig
-        from pyrite.storage.database import PyriteDB
+        from pyrite.config import KBConfig, PyriteConfig, Settings
         from pyrite.services.kb_service import KBService
+        from pyrite.storage.database import PyriteDB
 
         kb_path = tmp_path / "test-kb"
         kb_path.mkdir()
@@ -231,10 +236,22 @@ class TestExtractActorCountsFromDB:
         db = PyriteDB(tmp_path / "index.db")
         svc = KBService(config, db)
 
-        svc.create_entry("test", "e1", "Event 1", "timeline_event",
-                         date="2025-01-01", actors=["Donald Trump", "FBI"])
-        svc.create_entry("test", "e2", "Event 2", "timeline_event",
-                         date="2025-02-01", actors=["Donald Trump", "Elon Musk"])
+        svc.create_entry(
+            "test",
+            "e1",
+            "Event 1",
+            "timeline_event",
+            date="2025-01-01",
+            actors=["Donald Trump", "FBI"],
+        )
+        svc.create_entry(
+            "test",
+            "e2",
+            "Event 2",
+            "timeline_event",
+            date="2025-02-01",
+            actors=["Donald Trump", "Elon Musk"],
+        )
 
         counts = extract_actor_counts_from_db(db, "test")
         assert counts["Donald Trump"] == 2

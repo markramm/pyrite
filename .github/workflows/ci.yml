@@ -120,6 +120,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 -- the fix-commit-has-tests step below walks
+          # base.sha..head over the PR's own commit range; the default shallow
+          # checkout doesn't have base.sha's history to diff against.
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -161,9 +166,14 @@ jobs:
           done
 
       - name: Lint with ruff
+        # extensions/ included: the commit-stage ruff hook already lints it
+        # (`.pre-commit-config.yaml`), so a PR that skipped extensions/ here
+        # could go green with lint debt a local commit would have blocked
+        # (hit 2026-09-17: two journalism-investigation files needed
+        # reformatting to land an unrelated three-line fix).
         run: |
-          ruff check pyrite/ tests/
-          ruff format --check pyrite/ tests/
+          ruff check pyrite/ tests/ extensions/
+          ruff format --check pyrite/ tests/ extensions/
 
       # The local commit hooks, re-run here: outside contributors' PRs never
       # run local hooks, and hooks can be skipped with --no-verify. CI can't.
@@ -172,6 +182,21 @@ jobs:
 
       - name: Validate KB entries
         run: pyrite schema validate kb/
+
+      # Same reasoning as the two checks above: check_fix_commit_has_tests.py
+      # only ran as a local commit-msg hook, so outside contributors' PRs
+      # (which never run local hooks) could land a `fix:` commit with zero
+      # test lines -- all three outside PRs so far did exactly that. `push`
+      # events have no PR to diff against (base.sha is unset there), so this
+      # only runs on pull_request; fetch-depth: 0 above makes base.sha walkable.
+      # --range walks each commit individually (not the range's cumulative
+      # diff), so an earlier offending commit isn't hidden by a later,
+      # unrelated commit that happens to touch tests/.
+      - name: "Check fix: commits have tests (pull_request only)"
+        if: github.event_name == 'pull_request'
+        run: >-
+          python scripts/check_fix_commit_has_tests.py --range
+          ${{ github.event.pull_request.base.sha }} ${{ github.sha }}
 
       - name: Type check with mypy
         continue-on-error: true

@@ -1,14 +1,12 @@
 """Tests for investigation guided setup and status reporting."""
 
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.investigation_setup import (
     build_investigation_status,
     create_investigation,
 )
+
+from pyrite.storage.database import PyriteDB
 
 KB_NAME = "test-investigation"
 
@@ -18,11 +16,6 @@ def ji_db(tmp_path):
     """Fresh DB with an empty investigation KB."""
     kb_path = tmp_path / "test-kb"
     kb_path.mkdir()
-    kb = KBConfig(name=KB_NAME, path=kb_path, kb_type="journalism-investigation")
-    config = PyriteConfig(
-        knowledge_bases=[kb],
-        settings=Settings(index_path=tmp_path / "index.db"),
-    )
     db = PyriteDB(tmp_path / "index.db")
     db.register_kb(KB_NAME, "journalism-investigation", str(kb_path))
     yield db, KB_NAME
@@ -35,96 +28,115 @@ def db_with_investigation(ji_db):
     db, kb_name = ji_db
 
     # Create an investigation note entry
-    db.upsert_entry({
-        "id": "investigation-acme-fraud",
-        "kb_name": kb_name,
-        "title": "ACME Corp Fraud Investigation",
-        "entry_type": "note",
-        "body": "Investigation into ACME Corp financial irregularities",
-        "importance": 8,
-        "tags": ["investigation", "fraud", "acme"],
-        "metadata": {"investigation_status": "active", "key_questions": ["Where did the money go?"]},
-    })
+    db.upsert_entry(
+        {
+            "id": "investigation-acme-fraud",
+            "kb_name": kb_name,
+            "title": "ACME Corp Fraud Investigation",
+            "entry_type": "note",
+            "body": "Investigation into ACME Corp financial irregularities",
+            "importance": 8,
+            "tags": ["investigation", "fraud", "acme"],
+            "metadata": {
+                "investigation_status": "active",
+                "key_questions": ["Where did the money go?"],
+            },
+        }
+    )
 
     # Create some entities
-    db.upsert_entry({
-        "id": "john-smith",
-        "kb_name": kb_name,
-        "title": "John Smith",
-        "entry_type": "person",
-        "importance": 7,
-        "tags": ["ceo", "acme"],
-    })
-    db.upsert_entry({
-        "id": "acme-corp",
-        "kb_name": kb_name,
-        "title": "ACME Corporation",
-        "entry_type": "organization",
-        "importance": 8,
-        "tags": ["company", "target"],
-    })
+    db.upsert_entry(
+        {
+            "id": "john-smith",
+            "kb_name": kb_name,
+            "title": "John Smith",
+            "entry_type": "person",
+            "importance": 7,
+            "tags": ["ceo", "acme"],
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "acme-corp",
+            "kb_name": kb_name,
+            "title": "ACME Corporation",
+            "entry_type": "organization",
+            "importance": 8,
+            "tags": ["company", "target"],
+        }
+    )
 
     # Create events
-    db.upsert_entry({
-        "id": "event-wire-transfer",
-        "kb_name": kb_name,
-        "title": "Suspicious wire transfer",
-        "entry_type": "transaction",
-        "date": "2025-06-15",
-        "importance": 9,
-        "tags": ["financial"],
-        "metadata": {"actors": ["John Smith"], "sender": "ACME Corp", "receiver": "Shell LLC"},
-    })
-    db.upsert_entry({
-        "id": "event-foia-response",
-        "kb_name": kb_name,
-        "title": "FOIA response received",
-        "entry_type": "investigation_event",
-        "date": "2025-08-01",
-        "importance": 6,
-        "tags": ["foia"],
-        "metadata": {"actors": ["EPA"]},
-    })
+    db.upsert_entry(
+        {
+            "id": "event-wire-transfer",
+            "kb_name": kb_name,
+            "title": "Suspicious wire transfer",
+            "entry_type": "transaction",
+            "date": "2025-06-15",
+            "importance": 9,
+            "tags": ["financial"],
+            "metadata": {"actors": ["John Smith"], "sender": "ACME Corp", "receiver": "Shell LLC"},
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "event-foia-response",
+            "kb_name": kb_name,
+            "title": "FOIA response received",
+            "entry_type": "investigation_event",
+            "date": "2025-08-01",
+            "importance": 6,
+            "tags": ["foia"],
+            "metadata": {"actors": ["EPA"]},
+        }
+    )
 
     # Create claims at different stages
-    db.upsert_entry({
-        "id": "claim-embezzlement",
-        "kb_name": kb_name,
-        "title": "Embezzlement by CEO",
-        "entry_type": "claim",
-        "importance": 9,
-        "tags": ["fraud"],
-        "metadata": {
-            "assertion": "John Smith embezzled $2M from ACME Corp",
-            "claim_status": "partially_verified",
-            "confidence": "medium",
-            "evidence_refs": ["evidence-bank-records"],
-        },
-    })
-    db.upsert_entry({
-        "id": "claim-shell-company",
-        "kb_name": kb_name,
-        "title": "Shell company ownership",
-        "entry_type": "claim",
-        "importance": 7,
-        "tags": ["fraud"],
-        "metadata": {
-            "assertion": "Shell LLC is owned by Smith's spouse",
-            "claim_status": "unverified",
-            "confidence": "low",
-        },
-    })
+    db.upsert_entry(
+        {
+            "id": "claim-embezzlement",
+            "kb_name": kb_name,
+            "title": "Embezzlement by CEO",
+            "entry_type": "claim",
+            "importance": 9,
+            "tags": ["fraud"],
+            "metadata": {
+                "assertion": "John Smith embezzled $2M from ACME Corp",
+                "claim_status": "partially_verified",
+                "confidence": "medium",
+                "evidence_refs": ["evidence-bank-records"],
+            },
+        }
+    )
+    db.upsert_entry(
+        {
+            "id": "claim-shell-company",
+            "kb_name": kb_name,
+            "title": "Shell company ownership",
+            "entry_type": "claim",
+            "importance": 7,
+            "tags": ["fraud"],
+            "metadata": {
+                "assertion": "Shell LLC is owned by Smith's spouse",
+                "claim_status": "unverified",
+                "confidence": "low",
+            },
+        }
+    )
 
     # Create a source
-    db.upsert_entry({
-        "id": "source-bank-records",
-        "kb_name": kb_name,
-        "title": "Bank records subpoena response",
-        "entry_type": "document_source",
-        "importance": 8,
-        "tags": ["financial"],
-        "metadata": {"reliability": "high", "classification": "court_filing"},
-    })
+    db.upsert_entry(
+        {
+            "id": "source-bank-records",
+            "kb_name": kb_name,
+            "title": "Bank records subpoena response",
+            "entry_type": "document_source",
+            "importance": 8,
+            "tags": ["financial"],
+            "metadata": {"reliability": "high", "classification": "court_filing"},
+        }
+    )
 
     return db, kb_name
 

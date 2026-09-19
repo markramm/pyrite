@@ -1,6 +1,6 @@
 """Tests for EvidenceEntry type."""
 
-from pyrite_journalism_investigation.entry_types import EvidenceEntry, EVIDENCE_TYPES
+from pyrite_journalism_investigation.entry_types import EVIDENCE_TYPES, EvidenceEntry
 
 
 class TestEvidenceEntry:

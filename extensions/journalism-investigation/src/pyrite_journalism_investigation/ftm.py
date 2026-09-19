@@ -78,8 +78,15 @@ def ftm_to_pyrite(ftm_entity: dict) -> dict | None:
     # Schema-specific property mapping
     if schema == "Person":
         meta = {}
-        for key in ("nationality", "birthDate", "gender", "country",
-                     "firstName", "lastName", "idNumber"):
+        for key in (
+            "nationality",
+            "birthDate",
+            "gender",
+            "country",
+            "firstName",
+            "lastName",
+            "idNumber",
+        ):
             val = _first(props, key)
             if val:
                 meta[key] = val
@@ -87,8 +94,13 @@ def ftm_to_pyrite(ftm_entity: dict) -> dict | None:
 
     elif schema in ("Organization", "Company", "LegalEntity"):
         meta = {}
-        for key in ("jurisdiction", "registrationNumber", "incorporationDate",
-                     "country", "address"):
+        for key in (
+            "jurisdiction",
+            "registrationNumber",
+            "incorporationDate",
+            "country",
+            "address",
+        ):
             val = _first(props, key)
             if val:
                 meta[key] = val
@@ -99,8 +111,10 @@ def ftm_to_pyrite(ftm_entity: dict) -> dict | None:
         entry["title"] = title
         meta: dict[str, Any] = {}
         for src_key, dst_key in [
-            ("owner", "owner"), ("asset", "asset"),
-            ("percentage", "percentage"), ("startDate", "start_date"),
+            ("owner", "owner"),
+            ("asset", "asset"),
+            ("percentage", "percentage"),
+            ("startDate", "start_date"),
             ("endDate", "end_date"),
         ]:
             val = _first(props, src_key)
@@ -113,8 +127,10 @@ def ftm_to_pyrite(ftm_entity: dict) -> dict | None:
         entry["title"] = title
         meta = {}
         for src_key, dst_key in [
-            ("member", "person"), ("organization", "organization"),
-            ("role", "role"), ("startDate", "start_date"),
+            ("member", "person"),
+            ("organization", "organization"),
+            ("role", "role"),
+            ("startDate", "start_date"),
             ("endDate", "end_date"),
         ]:
             val = _first(props, src_key)
@@ -127,8 +143,10 @@ def ftm_to_pyrite(ftm_entity: dict) -> dict | None:
         entry["title"] = title
         meta = {}
         for src_key, dst_key in [
-            ("payer", "sender"), ("beneficiary", "receiver"),
-            ("amount", "amount"), ("currency", "currency"),
+            ("payer", "sender"),
+            ("beneficiary", "receiver"),
+            ("amount", "amount"),
+            ("currency", "currency"),
             ("purpose", "purpose"),
         ]:
             val = _first(props, src_key)
@@ -220,16 +238,28 @@ def pyrite_to_ftm(entry: dict) -> dict | None:
 
     if schema == "Person":
         props["name"] = [title]
-        for key in ("nationality", "birthDate", "gender", "country",
-                     "firstName", "lastName", "idNumber"):
+        for key in (
+            "nationality",
+            "birthDate",
+            "gender",
+            "country",
+            "firstName",
+            "lastName",
+            "idNumber",
+        ):
             val = meta.get(key)
             if val:
                 props[key] = [str(val)]
 
     elif schema == "Organization":
         props["name"] = [title]
-        for key in ("jurisdiction", "registrationNumber", "incorporationDate",
-                     "country", "address"):
+        for key in (
+            "jurisdiction",
+            "registrationNumber",
+            "incorporationDate",
+            "country",
+            "address",
+        ):
             val = meta.get(key)
             if val:
                 props[key] = [str(val)]
@@ -237,8 +267,10 @@ def pyrite_to_ftm(entry: dict) -> dict | None:
     elif schema == "Ownership":
         props["name"] = [title]
         for pyrite_key, ftm_key in [
-            ("owner", "owner"), ("asset", "asset"),
-            ("percentage", "percentage"), ("start_date", "startDate"),
+            ("owner", "owner"),
+            ("asset", "asset"),
+            ("percentage", "percentage"),
+            ("start_date", "startDate"),
             ("end_date", "endDate"),
         ]:
             val = meta.get(pyrite_key)
@@ -248,8 +280,10 @@ def pyrite_to_ftm(entry: dict) -> dict | None:
     elif schema == "Membership":
         props["name"] = [title]
         for pyrite_key, ftm_key in [
-            ("person", "member"), ("organization", "organization"),
-            ("role", "role"), ("start_date", "startDate"),
+            ("person", "member"),
+            ("organization", "organization"),
+            ("role", "role"),
+            ("start_date", "startDate"),
             ("end_date", "endDate"),
         ]:
             val = meta.get(pyrite_key)
@@ -259,8 +293,10 @@ def pyrite_to_ftm(entry: dict) -> dict | None:
     elif schema == "Payment":
         props["name"] = [title]
         for pyrite_key, ftm_key in [
-            ("sender", "payer"), ("receiver", "beneficiary"),
-            ("amount", "amount"), ("currency", "currency"),
+            ("sender", "payer"),
+            ("receiver", "beneficiary"),
+            ("amount", "amount"),
+            ("currency", "currency"),
             ("purpose", "purpose"),
         ]:
             val = meta.get(pyrite_key)
@@ -354,22 +390,26 @@ def import_ftm(
         existing = db.get_entry(entry_id, kb_name)
         if existing is not None:
             skipped += 1
-            entries.append({
-                "id": entry_id,
-                "title": pyrite_entry["title"],
-                "type": pyrite_entry["entry_type"],
-                "status": "skipped",
-            })
+            entries.append(
+                {
+                    "id": entry_id,
+                    "title": pyrite_entry["title"],
+                    "type": pyrite_entry["entry_type"],
+                    "status": "skipped",
+                }
+            )
             continue
 
         if dry_run:
             imported += 1
-            entries.append({
-                "id": entry_id,
-                "title": pyrite_entry["title"],
-                "type": pyrite_entry["entry_type"],
-                "status": "would_import",
-            })
+            entries.append(
+                {
+                    "id": entry_id,
+                    "title": pyrite_entry["title"],
+                    "type": pyrite_entry["entry_type"],
+                    "status": "would_import",
+                }
+            )
             continue
 
         # Persist
@@ -385,21 +425,25 @@ def import_ftm(
                 entry_data["date"] = pyrite_entry["date"]
             db.upsert_entry(entry_data)
             imported += 1
-            entries.append({
-                "id": entry_id,
-                "title": pyrite_entry["title"],
-                "type": pyrite_entry["entry_type"],
-                "status": "imported",
-            })
+            entries.append(
+                {
+                    "id": entry_id,
+                    "title": pyrite_entry["title"],
+                    "type": pyrite_entry["entry_type"],
+                    "status": "imported",
+                }
+            )
         except Exception as exc:
             logger.error("Error importing FtM entity %s: %s", ftm_entity.get("id"), exc)
             errors += 1
-            entries.append({
-                "id": entry_id,
-                "title": pyrite_entry.get("title", ""),
-                "type": pyrite_entry.get("entry_type", ""),
-                "status": "error",
-            })
+            entries.append(
+                {
+                    "id": entry_id,
+                    "title": pyrite_entry.get("title", ""),
+                    "type": pyrite_entry.get("entry_type", ""),
+                    "status": "error",
+                }
+            )
 
     return {
         "imported": imported,

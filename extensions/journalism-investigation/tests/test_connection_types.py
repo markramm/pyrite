@@ -34,7 +34,9 @@ class TestOwnershipEntry:
         assert meta["percentage"] == "51%"
         assert meta["beneficial"] is True
 
-        restored = OwnershipEntry.from_frontmatter(meta, "Beneficial ownership via nominee structure")
+        restored = OwnershipEntry.from_frontmatter(
+            meta, "Beneficial ownership via nominee structure"
+        )
         assert restored.owner == "[[john-doe]]"
         assert restored.asset == "[[shell-corp-ltd]]"
         assert restored.percentage == "51%"

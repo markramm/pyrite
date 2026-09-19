@@ -68,13 +68,16 @@ class TestAssetEntry:
     def test_asset_type_values(self):
         """All asset types from the spec should be valid."""
         valid_types = [
-            "real_estate", "vehicle", "vessel", "aircraft",
-            "luxury_good", "intellectual_property", "other",
+            "real_estate",
+            "vehicle",
+            "vessel",
+            "aircraft",
+            "luxury_good",
+            "intellectual_property",
+            "other",
         ]
         for asset_type in valid_types:
-            entry = AssetEntry.from_frontmatter(
-                {"title": "Test", "asset_type": asset_type}, ""
-            )
+            entry = AssetEntry.from_frontmatter({"title": "Test", "asset_type": asset_type}, "")
             assert entry.asset_type == asset_type
 
     def test_to_frontmatter_omits_empty(self):
@@ -136,8 +139,12 @@ class TestAccountEntry:
 
     def test_account_type_values(self):
         valid_types = [
-            "bank", "brokerage", "crypto_wallet",
-            "shell_company", "trust", "other",
+            "bank",
+            "brokerage",
+            "crypto_wallet",
+            "shell_company",
+            "trust",
+            "other",
         ]
         for account_type in valid_types:
             entry = AccountEntry.from_frontmatter(
@@ -197,20 +204,21 @@ class TestDocumentSourceEntry:
     def test_reliability_values(self):
         valid = ["high", "medium", "low", "unknown"]
         for r in valid:
-            entry = DocumentSourceEntry.from_frontmatter(
-                {"title": "Test", "reliability": r}, ""
-            )
+            entry = DocumentSourceEntry.from_frontmatter({"title": "Test", "reliability": r}, "")
             assert entry.reliability == r
 
     def test_classification_values(self):
         valid = [
-            "public", "leaked", "foia", "court_filing",
-            "financial_disclosure", "corporate_registry", "other",
+            "public",
+            "leaked",
+            "foia",
+            "court_filing",
+            "financial_disclosure",
+            "corporate_registry",
+            "other",
         ]
         for c in valid:
-            entry = DocumentSourceEntry.from_frontmatter(
-                {"title": "Test", "classification": c}, ""
-            )
+            entry = DocumentSourceEntry.from_frontmatter({"title": "Test", "classification": c}, "")
             assert entry.classification == c
 
     def test_to_frontmatter_omits_empty(self):

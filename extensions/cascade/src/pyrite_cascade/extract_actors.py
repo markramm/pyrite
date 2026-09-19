@@ -55,7 +55,8 @@ def _load_alias_file(alias_file: Path) -> dict[str, list[str]]:
 
 
 def _apply_alias_mapping(
-    actor_counts: Counter, alias_map: dict[str, list[str]],
+    actor_counts: Counter,
+    alias_map: dict[str, list[str]],
 ) -> dict[str, dict[str, Any]]:
     """Group actor names using alias mappings, merging counts."""
     # Build reverse lookup: alias → canonical
@@ -100,10 +101,7 @@ def _apply_alias_mapping(
 
 def _build_groups_without_aliases(actor_counts: Counter) -> dict[str, dict[str, Any]]:
     """Build actor groups without alias mapping — each actor is its own group."""
-    return {
-        actor: {"count": count, "aliases": []}
-        for actor, count in actor_counts.most_common()
-    }
+    return {actor: {"count": count, "aliases": []} for actor, count in actor_counts.most_common()}
 
 
 def extract_actors(

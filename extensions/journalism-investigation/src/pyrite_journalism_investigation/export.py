@@ -58,14 +58,16 @@ def build_investigation_pack(
                 continue
             meta = parse_meta(r)
             actors = meta.get("actors") or meta.get("parties") or []
-            timeline.append({
-                "id": r.get("id"),
-                "title": r.get("title"),
-                "type": etype,
-                "date": str(r.get("date", "")),
-                "importance": int(r.get("importance", 5)),
-                "actors": actors,
-            })
+            timeline.append(
+                {
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "type": etype,
+                    "date": str(r.get("date", "")),
+                    "importance": int(r.get("importance", 5)),
+                    "actors": actors,
+                }
+            )
         counts[etype] = len([e for e in timeline if e["type"] == etype])
     timeline.sort(key=lambda e: e.get("date", ""))
 
@@ -80,12 +82,14 @@ def build_investigation_pack(
         for r in results:
             if not _passes_importance(r):
                 continue
-            connections.append({
-                "id": r.get("id"),
-                "title": r.get("title"),
-                "type": ctype,
-                "importance": int(r.get("importance", 5)),
-            })
+            connections.append(
+                {
+                    "id": r.get("id"),
+                    "title": r.get("title"),
+                    "type": ctype,
+                    "importance": int(r.get("importance", 5)),
+                }
+            )
         counts[ctype] = len([c for c in connections if c["type"] == ctype])
 
     # Claims
@@ -96,15 +100,17 @@ def build_investigation_pack(
             continue
         meta = parse_meta(r)
         evidence_refs = meta.get("evidence_refs", []) or []
-        claims.append({
-            "id": r.get("id"),
-            "title": r.get("title"),
-            "assertion": meta.get("assertion", ""),
-            "claim_status": meta.get("claim_status", "unverified"),
-            "confidence": meta.get("confidence", "low"),
-            "importance": int(r.get("importance", 5)),
-            "evidence_count": len(evidence_refs),
-        })
+        claims.append(
+            {
+                "id": r.get("id"),
+                "title": r.get("title"),
+                "assertion": meta.get("assertion", ""),
+                "claim_status": meta.get("claim_status", "unverified"),
+                "confidence": meta.get("confidence", "low"),
+                "importance": int(r.get("importance", 5)),
+                "evidence_count": len(evidence_refs),
+            }
+        )
     counts["claim"] = len(claims)
 
     # Sources
@@ -116,13 +122,15 @@ def build_investigation_pack(
         meta = parse_meta(r)
         title = "[REDACTED]" if redact_sources else r.get("title", "")
         url = "[REDACTED]" if redact_sources else meta.get("url", "")
-        sources.append({
-            "id": r.get("id"),
-            "title": title,
-            "reliability": meta.get("reliability", "unknown"),
-            "classification": meta.get("classification", ""),
-            "url": url,
-        })
+        sources.append(
+            {
+                "id": r.get("id"),
+                "title": title,
+                "reliability": meta.get("reliability", "unknown"),
+                "classification": meta.get("classification", ""),
+                "url": url,
+            }
+        )
     counts["document_source"] = len(sources)
 
     # Evidence chains for each claim
@@ -220,7 +228,9 @@ def export_as_markdown(pack: dict) -> str:
         lines.append("| Title | Status | Confidence | Evidence Count |")
         lines.append("|-------|--------|------------|----------------|")
         for c in pack["claims"]:
-            lines.append(f"| {c['title']} | {c['claim_status']} | {c['confidence']} | {c['evidence_count']} |")
+            lines.append(
+                f"| {c['title']} | {c['claim_status']} | {c['confidence']} | {c['evidence_count']} |"
+            )
     else:
         lines.append("No claims.")
     lines.append("")
@@ -232,7 +242,9 @@ def export_as_markdown(pack: dict) -> str:
         lines.append("| Title | Reliability | Classification | URL |")
         lines.append("|-------|-------------|----------------|-----|")
         for s in pack["sources"]:
-            lines.append(f"| {s['title']} | {s['reliability']} | {s.get('classification', '')} | {s.get('url', '')} |")
+            lines.append(
+                f"| {s['title']} | {s['reliability']} | {s.get('classification', '')} | {s.get('url', '')} |"
+            )
     else:
         lines.append("No sources.")
     lines.append("")
@@ -244,7 +256,9 @@ def export_as_markdown(pack: dict) -> str:
         for chain_data in pack["evidence_chains"]:
             claim = chain_data.get("claim", {})
             lines.append(f"### {claim.get('title', 'Unknown claim')}")
-            lines.append(f"- Status: {claim.get('claim_status', '?')}, Confidence: {claim.get('confidence', '?')}")
+            lines.append(
+                f"- Status: {claim.get('claim_status', '?')}, Confidence: {claim.get('confidence', '?')}"
+            )
             chain_items = chain_data.get("evidence_chain", [])
             if chain_items:
                 for ev in chain_items:

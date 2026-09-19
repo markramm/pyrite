@@ -1,6 +1,10 @@
 """Tests for ClaimEntry type and lifecycle."""
 
-from pyrite_journalism_investigation.entry_types import ClaimEntry, CLAIM_STATUSES, CONFIDENCE_LEVELS
+from pyrite_journalism_investigation.entry_types import (
+    CLAIM_STATUSES,
+    CONFIDENCE_LEVELS,
+    ClaimEntry,
+)
 
 
 class TestClaimEntry:
@@ -114,14 +118,16 @@ class TestClaimConfidenceCalculation:
 
     def test_two_sources_medium(self):
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]"],
         )
         assert entry.auto_confidence() == "medium"
 
     def test_disputed_always_low(self):
         entry = ClaimEntry(
-            id="c1", title="Test",
+            id="c1",
+            title="Test",
             evidence_refs=["[[doc-1]]", "[[doc-2]]", "[[doc-3]]"],
             disputed_by=["[[counter-1]]"],
         )

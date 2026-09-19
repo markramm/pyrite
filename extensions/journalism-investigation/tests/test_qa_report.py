@@ -4,16 +4,14 @@ import json
 from dataclasses import dataclass
 
 import pytest
+from pyrite_journalism_investigation.cli import investigation_app
+from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
+from pyrite_journalism_investigation.qa import compute_qa_metrics
 from typer.testing import CliRunner
 
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
+from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.services.kb_service import KBService
-
-from pyrite_journalism_investigation.qa import compute_qa_metrics
-from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
-from pyrite_journalism_investigation.cli import investigation_app
-
+from pyrite.storage.database import PyriteDB
 
 runner = CliRunner()
 
@@ -66,8 +64,9 @@ class TestClaimCoverage:
     def test_orphan_claims(self, setup):
         svc = setup["svc"]
         svc.create_entry("test", "claim-1", "Claim 1", "claim", assertion="X did Y")
-        svc.create_entry("test", "claim-2", "Claim 2", "claim",
-                         assertion="A paid B", evidence_refs=["[[ev-1]]"])
+        svc.create_entry(
+            "test", "claim-2", "Claim 2", "claim", assertion="A paid B", evidence_refs=["[[ev-1]]"]
+        )
 
         metrics = compute_qa_metrics(setup["db"], "test")
         assert metrics["claims"]["total"] == 2
@@ -101,9 +100,16 @@ class TestQualityScore:
         """All sources high, all claims covered, no disputes."""
         svc = setup["svc"]
         svc.create_entry("test", "src-1", "Source 1", "document_source", reliability="high")
-        svc.create_entry("test", "c-1", "Claim 1", "claim",
-                         assertion="X", evidence_refs=["[[ev-1]]"],
-                         claim_status="corroborated", confidence="high")
+        svc.create_entry(
+            "test",
+            "c-1",
+            "Claim 1",
+            "claim",
+            assertion="X",
+            evidence_refs=["[[ev-1]]"],
+            claim_status="corroborated",
+            confidence="high",
+        )
 
         metrics = compute_qa_metrics(setup["db"], "test")
         assert metrics["quality_score"] >= 80
@@ -137,8 +143,7 @@ class TestWarnings:
         svc = setup["svc"]
         svc.create_entry("test", "c-1", "C1", "claim", assertion="X")
         svc.create_entry("test", "c-2", "C2", "claim", assertion="Y")
-        svc.create_entry("test", "c-3", "C3", "claim", assertion="Z",
-                         evidence_refs=["[[ev-1]]"])
+        svc.create_entry("test", "c-3", "C3", "claim", assertion="Z", evidence_refs=["[[ev-1]]"])
 
         metrics = compute_qa_metrics(setup["db"], "test")
         assert any("orphan" in w.lower() for w in metrics["warnings"])
@@ -172,8 +177,9 @@ class TestCLIQACommand:
     def test_qa_json(self, setup, monkeypatch):
         svc = setup["svc"]
         svc.create_entry("test", "src-1", "Source 1", "document_source", reliability="high")
-        monkeypatch.setattr("pyrite_journalism_investigation.cli.load_config",
-                            lambda: setup["svc"].config)
+        monkeypatch.setattr(
+            "pyrite_journalism_investigation.cli.load_config", lambda: setup["svc"].config
+        )
 
         result = runner.invoke(investigation_app, ["qa", "-k", "test", "--json"])
         assert result.exit_code == 0
@@ -181,8 +187,9 @@ class TestCLIQACommand:
         assert "quality_score" in data
 
     def test_qa_table(self, setup, monkeypatch):
-        monkeypatch.setattr("pyrite_journalism_investigation.cli.load_config",
-                            lambda: setup["svc"].config)
+        monkeypatch.setattr(
+            "pyrite_journalism_investigation.cli.load_config", lambda: setup["svc"].config
+        )
         result = runner.invoke(investigation_app, ["qa", "-k", "test"])
         assert result.exit_code == 0
         assert "Quality Score" in result.output

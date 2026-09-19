@@ -4,15 +4,14 @@ These tests set up a real KBService + PyriteDB to verify
 that write-tier tools create entries that read-tier tools can query.
 """
 
-import pytest
 from dataclasses import dataclass
-from typing import Any
 
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
-from pyrite.services.kb_service import KBService
-
+import pytest
 from pyrite_journalism_investigation.plugin import JournalismInvestigationPlugin
+
+from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.services.kb_service import KBService
+from pyrite.storage.database import PyriteDB
 
 
 @dataclass
@@ -63,15 +62,17 @@ class TestCreateEntityRoundTrip:
         create = setup["write"]["investigation_create_entity"]["handler"]
         query = setup["read"]["investigation_entities"]["handler"]
 
-        result = create({
-            "entity_type": "asset",
-            "title": "London Belgravia Mansion",
-            "body": "Five-storey townhouse in Belgravia.",
-            "importance": 8,
-            "fields": {"asset_type": "real_estate", "jurisdiction": "United Kingdom"},
-            "tags": ["london", "luxury"],
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "entity_type": "asset",
+                "title": "London Belgravia Mansion",
+                "body": "Five-storey townhouse in Belgravia.",
+                "importance": 8,
+                "fields": {"asset_type": "real_estate", "jurisdiction": "United Kingdom"},
+                "tags": ["london", "luxury"],
+                "kb_name": "test",
+            }
+        )
 
         assert "error" not in result
         assert "created" in result
@@ -87,13 +88,15 @@ class TestCreateEntityRoundTrip:
         create = setup["write"]["investigation_create_entity"]["handler"]
         query = setup["read"]["investigation_entities"]["handler"]
 
-        result = create({
-            "entity_type": "person",
-            "title": "Dmitry Oligarchov",
-            "body": "Sanctioned individual.",
-            "importance": 9,
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "entity_type": "person",
+                "title": "Dmitry Oligarchov",
+                "body": "Sanctioned individual.",
+                "importance": 9,
+                "kb_name": "test",
+            }
+        )
         assert "error" not in result
         assert "created" in result
 
@@ -104,11 +107,13 @@ class TestCreateEntityRoundTrip:
 
     def test_create_entity_invalid_type(self, setup):
         create = setup["write"]["investigation_create_entity"]["handler"]
-        result = create({
-            "entity_type": "spaceship",
-            "title": "Test",
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "entity_type": "spaceship",
+                "title": "Test",
+                "kb_name": "test",
+            }
+        )
         assert "error" in result
         assert "spaceship" in result["error"]
 
@@ -119,14 +124,16 @@ class TestCreateEventRoundTrip:
         create = setup["write"]["investigation_create_event"]["handler"]
         query = setup["read"]["investigation_timeline"]["handler"]
 
-        result = create({
-            "event_type": "investigation_event",
-            "title": "Sanctions Announced",
-            "date": "2022-02-24",
-            "body": "EU sanctions package announced.",
-            "importance": 9,
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "event_type": "investigation_event",
+                "title": "Sanctions Announced",
+                "date": "2022-02-24",
+                "body": "EU sanctions package announced.",
+                "importance": 9,
+                "kb_name": "test",
+            }
+        )
 
         assert "error" not in result
         assert "created" in result
@@ -140,13 +147,19 @@ class TestCreateEventRoundTrip:
         create = setup["write"]["investigation_create_event"]["handler"]
         query = setup["read"]["investigation_timeline"]["handler"]
 
-        result = create({
-            "event_type": "transaction",
-            "title": "Wire Transfer to Cyprus",
-            "date": "2019-06-15",
-            "fields": {"sender": "[[oligarchov]]", "receiver": "[[cyprus-corp]]", "amount": "5000000"},
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "event_type": "transaction",
+                "title": "Wire Transfer to Cyprus",
+                "date": "2019-06-15",
+                "fields": {
+                    "sender": "[[oligarchov]]",
+                    "receiver": "[[cyprus-corp]]",
+                    "amount": "5000000",
+                },
+                "kb_name": "test",
+            }
+        )
         assert "error" not in result
 
         timeline = query({"kb_name": "test", "event_type": "transaction"})
@@ -154,12 +167,14 @@ class TestCreateEventRoundTrip:
 
     def test_create_event_invalid_type(self, setup):
         create = setup["write"]["investigation_create_event"]["handler"]
-        result = create({
-            "event_type": "spaceship_launch",
-            "title": "Test",
-            "date": "2020-01-01",
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "event_type": "spaceship_launch",
+                "title": "Test",
+                "date": "2020-01-01",
+                "kb_name": "test",
+            }
+        )
         assert "error" in result
 
 
@@ -169,13 +184,15 @@ class TestCreateClaimRoundTrip:
         create = setup["write"]["investigation_create_claim"]["handler"]
         query = setup["read"]["investigation_claims"]["handler"]
 
-        result = create({
-            "title": "Oligarchov owns London mansion",
-            "assertion": "Dmitry Oligarchov is the beneficial owner of the Belgravia mansion via Cyprus nominee.",
-            "evidence_refs": ["[[panama-papers-doc-4427]]"],
-            "importance": 8,
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "title": "Oligarchov owns London mansion",
+                "assertion": "Dmitry Oligarchov is the beneficial owner of the Belgravia mansion via Cyprus nominee.",
+                "evidence_refs": ["[[panama-papers-doc-4427]]"],
+                "importance": 8,
+                "kb_name": "test",
+            }
+        )
 
         assert "error" not in result
         assert "created" in result
@@ -189,11 +206,13 @@ class TestCreateClaimRoundTrip:
     def test_create_claim_no_evidence_warns(self, setup):
         """Claims with no evidence should succeed but warn."""
         create = setup["write"]["investigation_create_claim"]["handler"]
-        result = create({
-            "title": "Unsubstantiated claim",
-            "assertion": "Something happened.",
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "title": "Unsubstantiated claim",
+                "assertion": "Something happened.",
+                "kb_name": "test",
+            }
+        )
         assert "error" not in result
         assert "warnings" in result
         assert any("evidence" in w.lower() for w in result["warnings"])
@@ -205,15 +224,17 @@ class TestLogSourceRoundTrip:
         create = setup["write"]["investigation_log_source"]["handler"]
         query = setup["read"]["investigation_sources"]["handler"]
 
-        result = create({
-            "title": "Panama Papers Document 4427",
-            "reliability": "high",
-            "classification": "leaked",
-            "obtained_method": "ICIJ database",
-            "body": "Mossack Fonseca incorporation document.",
-            "importance": 9,
-            "kb_name": "test",
-        })
+        result = create(
+            {
+                "title": "Panama Papers Document 4427",
+                "reliability": "high",
+                "classification": "leaked",
+                "obtained_method": "ICIJ database",
+                "body": "Mossack Fonseca incorporation document.",
+                "importance": 9,
+                "kb_name": "test",
+            }
+        )
 
         assert "error" not in result
         assert "created" in result
@@ -228,16 +249,20 @@ class TestLogSourceRoundTrip:
         """Sources can be filtered by reliability level."""
         create = setup["write"]["investigation_log_source"]["handler"]
 
-        create({
-            "title": "High Reliability Source",
-            "reliability": "high",
-            "kb_name": "test",
-        })
-        create({
-            "title": "Low Reliability Source",
-            "reliability": "low",
-            "kb_name": "test",
-        })
+        create(
+            {
+                "title": "High Reliability Source",
+                "reliability": "high",
+                "kb_name": "test",
+            }
+        )
+        create(
+            {
+                "title": "Low Reliability Source",
+                "reliability": "low",
+                "kb_name": "test",
+            }
+        )
 
         query = setup["read"]["investigation_sources"]["handler"]
         high_sources = query({"kb_name": "test", "reliability": "high"})
@@ -259,21 +284,25 @@ class TestEvidenceChainRoundTrip:
         trace = setup["read"]["investigation_evidence_chain"]["handler"]
 
         # Create a source document
-        source_result = log_source({
-            "title": "Bank Statement March 2019",
-            "reliability": "high",
-            "classification": "leaked",
-            "kb_name": "test",
-        })
+        source_result = log_source(
+            {
+                "title": "Bank Statement March 2019",
+                "reliability": "high",
+                "classification": "leaked",
+                "kb_name": "test",
+            }
+        )
         assert "error" not in source_result
 
         # Create a claim referencing evidence (evidence entry doesn't exist yet — gap expected)
-        claim_result = create_claim({
-            "title": "Transfer occurred in March 2019",
-            "assertion": "A $5M transfer from Account A to Account B occurred.",
-            "evidence_refs": ["[[evidence-bank-statement]]"],
-            "kb_name": "test",
-        })
+        claim_result = create_claim(
+            {
+                "title": "Transfer occurred in March 2019",
+                "assertion": "A $5M transfer from Account A to Account B occurred.",
+                "evidence_refs": ["[[evidence-bank-statement]]"],
+                "kb_name": "test",
+            }
+        )
         assert "error" not in claim_result
 
         # Trace the chain — should report gap for missing evidence entry

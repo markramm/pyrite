@@ -188,11 +188,23 @@ class JournalismInvestigationPlugin:
                     "properties": {
                         "from_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
                         "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
-                        "actor": {"type": "string", "description": "Filter by actor name (substring match)"},
-                        "event_type": {"type": "string", "description": "Filter by type: investigation_event, transaction, legal_action"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "actor": {
+                            "type": "string",
+                            "description": "Filter by actor name (substring match)",
+                        },
+                        "event_type": {
+                            "type": "string",
+                            "description": "Filter by type: investigation_event, transaction, legal_action",
+                        },
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance (1-10)",
+                        },
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": [],
                 },
@@ -203,11 +215,23 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "entity_type": {"type": "string", "description": "Filter by type: person, organization, asset, account"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
-                        "jurisdiction": {"type": "string", "description": "Filter by jurisdiction (substring match)"},
+                        "entity_type": {
+                            "type": "string",
+                            "description": "Filter by type: person, organization, asset, account",
+                        },
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance (1-10)",
+                        },
+                        "jurisdiction": {
+                            "type": "string",
+                            "description": "Filter by jurisdiction (substring match)",
+                        },
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": [],
                 },
@@ -218,8 +242,14 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "entry_id": {"type": "string", "description": "Entry ID to get network for"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "entry_id": {
+                            "type": "string",
+                            "description": "Entry ID to get network for",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["entry_id"],
                 },
@@ -230,12 +260,21 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "reliability": {"type": "string", "description": "Filter by reliability: high, medium, low, unknown"},
-                        "classification": {"type": "string", "description": "Filter by classification: public, leaked, foia, court_filing, etc."},
+                        "reliability": {
+                            "type": "string",
+                            "description": "Filter by reliability: high, medium, low, unknown",
+                        },
+                        "classification": {
+                            "type": "string",
+                            "description": "Filter by classification: public, leaked, foia, court_filing, etc.",
+                        },
                         "from_date": {"type": "string", "description": "Start date (YYYY-MM-DD)"},
                         "to_date": {"type": "string", "description": "End date (YYYY-MM-DD)"},
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": [],
                 },
@@ -246,11 +285,23 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "claim_status": {"type": "string", "description": "Filter by status: unverified, partially_verified, corroborated, disputed, retracted"},
-                        "confidence": {"type": "string", "description": "Filter by confidence: high, medium, low"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance (1-10)"},
+                        "claim_status": {
+                            "type": "string",
+                            "description": "Filter by status: unverified, partially_verified, corroborated, disputed, retracted",
+                        },
+                        "confidence": {
+                            "type": "string",
+                            "description": "Filter by confidence: high, medium, low",
+                        },
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance (1-10)",
+                        },
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": [],
                 },
@@ -262,7 +313,10 @@ class JournalismInvestigationPlugin:
                     "type": "object",
                     "properties": {
                         "claim_id": {"type": "string", "description": "Claim entry ID to trace"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["claim_id"],
                 },
@@ -273,12 +327,30 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "entry_id": {"type": "string", "description": "Entity entry ID to trace flows for"},
-                        "direction": {"type": "string", "description": "Flow direction: outbound, inbound, or both (default both)"},
-                        "max_hops": {"type": "integer", "description": "Max transaction hops to follow (default 3)"},
-                        "from_date": {"type": "string", "description": "Start date filter (YYYY-MM-DD)"},
-                        "to_date": {"type": "string", "description": "End date filter (YYYY-MM-DD)"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "entry_id": {
+                            "type": "string",
+                            "description": "Entity entry ID to trace flows for",
+                        },
+                        "direction": {
+                            "type": "string",
+                            "description": "Flow direction: outbound, inbound, or both (default both)",
+                        },
+                        "max_hops": {
+                            "type": "integer",
+                            "description": "Max transaction hops to follow (default 3)",
+                        },
+                        "from_date": {
+                            "type": "string",
+                            "description": "Start date filter (YYYY-MM-DD)",
+                        },
+                        "to_date": {
+                            "type": "string",
+                            "description": "End date filter (YYYY-MM-DD)",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["entry_id"],
                 },
@@ -289,8 +361,14 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
-                        "stale_days": {"type": "integer", "description": "Days before unverified claims are stale (default 30)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                        "stale_days": {
+                            "type": "integer",
+                            "description": "Days before unverified claims are stale (default 30)",
+                        },
                     },
                     "required": [],
                 },
@@ -301,10 +379,22 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
-                        "format": {"type": "string", "description": "Export format: json or markdown (default json)"},
-                        "redact_sources": {"type": "boolean", "description": "Redact source URLs and titles (default false)"},
-                        "min_importance": {"type": "integer", "description": "Minimum importance filter (1-10, default 0 = all)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                        "format": {
+                            "type": "string",
+                            "description": "Export format: json or markdown (default json)",
+                        },
+                        "redact_sources": {
+                            "type": "boolean",
+                            "description": "Redact source URLs and titles (default false)",
+                        },
+                        "min_importance": {
+                            "type": "integer",
+                            "description": "Minimum importance filter (1-10, default 0 = all)",
+                        },
                     },
                     "required": [],
                 },
@@ -315,9 +405,18 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "entry_id": {"type": "string", "description": "Entity entry ID to trace ownership for"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
-                        "max_depth": {"type": "integer", "description": "Maximum chain depth to traverse (default 5)"},
+                        "entry_id": {
+                            "type": "string",
+                            "description": "Entity entry ID to trace ownership for",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                        "max_depth": {
+                            "type": "integer",
+                            "description": "Maximum chain depth to traverse (default 5)",
+                        },
                     },
                     "required": ["entry_id"],
                 },
@@ -342,7 +441,10 @@ class JournalismInvestigationPlugin:
                             "type": "number",
                             "description": "Minimum fuzzy match ratio (default 0.85)",
                         },
-                        "kb_name": {"type": "string", "description": "KB name (for context, auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (for context, auto-detected if omitted)",
+                        },
                     },
                     "required": [],
                 },
@@ -353,7 +455,10 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                         "entry_types": {
                             "type": "array",
                             "items": {"type": "string"},
@@ -370,13 +475,29 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "entity_type": {"type": "string", "description": "Type: person, organization, asset, account"},
+                        "entity_type": {
+                            "type": "string",
+                            "description": "Type: person, organization, asset, account",
+                        },
                         "title": {"type": "string", "description": "Entity name/title"},
                         "body": {"type": "string", "description": "Description and context"},
-                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
-                        "fields": {"type": "object", "description": "Type-specific fields (e.g. asset_type, jurisdiction)"},
-                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "importance": {
+                            "type": "integer",
+                            "description": "Importance 1-10 (default 5)",
+                        },
+                        "fields": {
+                            "type": "object",
+                            "description": "Type-specific fields (e.g. asset_type, jurisdiction)",
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Tags",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["entity_type", "title"],
                 },
@@ -387,14 +508,30 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "event_type": {"type": "string", "description": "Type: investigation_event, transaction, legal_action"},
+                        "event_type": {
+                            "type": "string",
+                            "description": "Type: investigation_event, transaction, legal_action",
+                        },
                         "title": {"type": "string", "description": "Event title"},
                         "date": {"type": "string", "description": "Event date (YYYY-MM-DD)"},
                         "body": {"type": "string", "description": "Narrative context"},
-                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
-                        "fields": {"type": "object", "description": "Type-specific fields (e.g. sender, receiver, case_type)"},
-                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "importance": {
+                            "type": "integer",
+                            "description": "Importance 1-10 (default 5)",
+                        },
+                        "fields": {
+                            "type": "object",
+                            "description": "Type-specific fields (e.g. sender, receiver, case_type)",
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Tags",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["event_type", "title", "date"],
                 },
@@ -406,12 +543,29 @@ class JournalismInvestigationPlugin:
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "description": "Claim title"},
-                        "assertion": {"type": "string", "description": "The specific factual assertion"},
-                        "evidence_refs": {"type": "array", "items": {"type": "string"}, "description": "Wikilinks to evidence entries"},
+                        "assertion": {
+                            "type": "string",
+                            "description": "The specific factual assertion",
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Wikilinks to evidence entries",
+                        },
                         "body": {"type": "string", "description": "Narrative context"},
-                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
-                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "importance": {
+                            "type": "integer",
+                            "description": "Importance 1-10 (default 5)",
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Tags",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["title", "assertion"],
                 },
@@ -423,9 +577,16 @@ class JournalismInvestigationPlugin:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Search query"},
-                        "kb_names": {"type": "array", "items": {"type": "string"}, "description": "Specific KBs to search (omit for all)"},
+                        "kb_names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Specific KBs to search (omit for all)",
+                        },
                         "entry_type": {"type": "string", "description": "Filter by entry type"},
-                        "correlate": {"type": "boolean", "description": "Group results by entity identity across KBs (default false)"},
+                        "correlate": {
+                            "type": "boolean",
+                            "description": "Group results by entity identity across KBs (default false)",
+                        },
                         "limit": {"type": "integer", "description": "Max results (default 50)"},
                     },
                     "required": ["query"],
@@ -438,20 +599,33 @@ class JournalismInvestigationPlugin:
                     "type": "object",
                     "properties": {
                         "title": {"type": "string", "description": "Investigation title"},
-                        "scope": {"type": "string", "description": "What the investigation is about"},
-                        "key_questions": {"type": "array", "items": {"type": "string"}, "description": "Key questions to investigate"},
+                        "scope": {
+                            "type": "string",
+                            "description": "What the investigation is about",
+                        },
+                        "key_questions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Key questions to investigate",
+                        },
                         "initial_entities": {
                             "type": "array",
                             "items": {
                                 "type": "object",
                                 "properties": {
                                     "name": {"type": "string"},
-                                    "type": {"type": "string", "description": "person, organization, asset, account"},
+                                    "type": {
+                                        "type": "string",
+                                        "description": "person, organization, asset, account",
+                                    },
                                 },
                             },
                             "description": "Initial entities to create",
                         },
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["title"],
                 },
@@ -462,7 +636,10 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": [],
                 },
@@ -473,10 +650,22 @@ class JournalismInvestigationPlugin:
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "claim_id": {"type": "string", "description": "ID of the claim entry to promote"},
-                        "edge_type": {"type": "string", "description": "Edge type: ownership, membership, funding"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
-                        "dry_run": {"type": "boolean", "description": "Preview without creating (default false)"},
+                        "claim_id": {
+                            "type": "string",
+                            "description": "ID of the claim entry to promote",
+                        },
+                        "edge_type": {
+                            "type": "string",
+                            "description": "Edge type: ownership, membership, funding",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                        "dry_run": {
+                            "type": "boolean",
+                            "description": "Preview without creating (default false)",
+                        },
                     },
                     "required": ["claim_id", "edge_type"],
                 },
@@ -489,13 +678,32 @@ class JournalismInvestigationPlugin:
                     "properties": {
                         "title": {"type": "string", "description": "Source document title"},
                         "url": {"type": "string", "description": "Source URL"},
-                        "reliability": {"type": "string", "description": "Reliability: high, medium, low, unknown"},
-                        "classification": {"type": "string", "description": "Classification: public, leaked, foia, court_filing, etc."},
-                        "obtained_method": {"type": "string", "description": "How the source was obtained"},
+                        "reliability": {
+                            "type": "string",
+                            "description": "Reliability: high, medium, low, unknown",
+                        },
+                        "classification": {
+                            "type": "string",
+                            "description": "Classification: public, leaked, foia, court_filing, etc.",
+                        },
+                        "obtained_method": {
+                            "type": "string",
+                            "description": "How the source was obtained",
+                        },
                         "body": {"type": "string", "description": "Notes about the source"},
-                        "importance": {"type": "integer", "description": "Importance 1-10 (default 5)"},
-                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
+                        "importance": {
+                            "type": "integer",
+                            "description": "Importance 1-10 (default 5)",
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Tags",
+                        },
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
                     },
                     "required": ["title"],
                 },
@@ -511,16 +719,31 @@ class JournalismInvestigationPlugin:
                             "items": {
                                 "type": "object",
                                 "properties": {
-                                    "type": {"type": "string", "description": "Edge type: ownership, membership, funding"},
-                                    "fields": {"type": "object", "description": "Type-specific fields (e.g. owner, asset for ownership)"},
-                                    "title": {"type": "string", "description": "Optional custom title (auto-generated if omitted)"},
+                                    "type": {
+                                        "type": "string",
+                                        "description": "Edge type: ownership, membership, funding",
+                                    },
+                                    "fields": {
+                                        "type": "object",
+                                        "description": "Type-specific fields (e.g. owner, asset for ownership)",
+                                    },
+                                    "title": {
+                                        "type": "string",
+                                        "description": "Optional custom title (auto-generated if omitted)",
+                                    },
                                 },
                                 "required": ["type", "fields"],
                             },
                             "description": "Array of edge definitions to create",
                         },
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
-                        "dry_run": {"type": "boolean", "description": "Preview without creating (default false)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                        "dry_run": {
+                            "type": "boolean",
+                            "description": "Preview without creating (default false)",
+                        },
                     },
                     "required": ["edges"],
                 },
@@ -536,8 +759,14 @@ class JournalismInvestigationPlugin:
                             "items": {"type": "object"},
                             "description": "Array of FtM entity objects with id, schema, and properties",
                         },
-                        "kb_name": {"type": "string", "description": "KB name (auto-detected if omitted)"},
-                        "dry_run": {"type": "boolean", "description": "Preview without importing (default false)"},
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                        "dry_run": {
+                            "type": "boolean",
+                            "description": "Preview without importing (default false)",
+                        },
                     },
                     "required": ["entities"],
                 },
@@ -567,7 +796,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_timeline(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 from_date=args.get("from_date", ""),
                 to_date=args.get("to_date", ""),
                 actor=args.get("actor", ""),
@@ -583,7 +813,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_entities(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 entity_type=args.get("entity_type", ""),
                 min_importance=args.get("min_importance", 0),
                 jurisdiction=args.get("jurisdiction", ""),
@@ -605,7 +836,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_sources(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 reliability=args.get("reliability", ""),
                 classification=args.get("classification", ""),
                 from_date=args.get("from_date", ""),
@@ -620,7 +852,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return query_claims(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 claim_status=args.get("claim_status", ""),
                 confidence=args.get("confidence", ""),
                 min_importance=args.get("min_importance", 0),
@@ -644,7 +877,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             pack = build_investigation_pack(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 redact_sources=args.get("redact_sources", False),
                 min_importance=args.get("min_importance", 0),
             )
@@ -662,7 +896,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return trace_money_flow(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 args["entry_id"],
                 direction=args.get("direction", "both"),
                 max_hops=args.get("max_hops", 3),
@@ -679,7 +914,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return compute_qa_metrics(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 stale_days=args.get("stale_days", 30),
             )
         finally:
@@ -692,7 +928,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return trace_ownership_chain(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 entity_id=args["entry_id"],
                 max_depth=args.get("max_depth", 5),
             )
@@ -744,7 +981,9 @@ class JournalismInvestigationPlugin:
 
         kb_service = self._get_kb_service()
         if kb_service is None:
-            return {"error": "No KB service available — write tools require a running server context"}
+            return {
+                "error": "No KB service available — write tools require a running server context"
+            }
 
         try:
             kb_service.create_entry(
@@ -779,7 +1018,9 @@ class JournalismInvestigationPlugin:
 
         kb_service = self._get_kb_service()
         if kb_service is None:
-            return {"error": "No KB service available — write tools require a running server context"}
+            return {
+                "error": "No KB service available — write tools require a running server context"
+            }
 
         try:
             kb_service.create_entry(
@@ -814,7 +1055,9 @@ class JournalismInvestigationPlugin:
 
         kb_service = self._get_kb_service()
         if kb_service is None:
-            return {"error": "No KB service available — write tools require a running server context"}
+            return {
+                "error": "No KB service available — write tools require a running server context"
+            }
 
         try:
             kb_service.create_entry(
@@ -848,7 +1091,9 @@ class JournalismInvestigationPlugin:
 
         kb_service = self._get_kb_service()
         if kb_service is None:
-            return {"error": "No KB service available — write tools require a running server context"}
+            return {
+                "error": "No KB service available — write tools require a running server context"
+            }
 
         try:
             kb_service.create_entry(
@@ -952,7 +1197,9 @@ class JournalismInvestigationPlugin:
         if kb_service is None:
             if should_close:
                 db.close()
-            return {"error": "No KB service available — write tools require a running server context"}
+            return {
+                "error": "No KB service available — write tools require a running server context"
+            }
 
         kb_name = self._resolve_kb(args)
         try:
@@ -976,7 +1223,8 @@ class JournalismInvestigationPlugin:
         try:
             return {
                 "entities": export_ftm(
-                    db, self._resolve_kb(args),
+                    db,
+                    self._resolve_kb(args),
                     entry_types=args.get("entry_types"),
                 ),
             }
@@ -991,7 +1239,8 @@ class JournalismInvestigationPlugin:
         db, should_close = self._get_db()
         try:
             return import_ftm(
-                db, self._resolve_kb(args),
+                db,
+                self._resolve_kb(args),
                 args.get("entities", []),
                 dry_run=args.get("dry_run", False),
             )

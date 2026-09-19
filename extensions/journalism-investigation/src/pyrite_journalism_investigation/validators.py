@@ -17,7 +17,10 @@ from .entry_types import (
 
 
 def validate_enum(
-    value: str, valid_values: tuple[str, ...], field_name: str, errors: list[str],
+    value: str,
+    valid_values: tuple[str, ...],
+    field_name: str,
+    errors: list[str],
 ) -> None:
     """Append an error if value is non-empty and not in valid_values."""
     if value and value not in valid_values:

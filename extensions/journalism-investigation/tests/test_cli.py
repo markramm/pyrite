@@ -3,14 +3,12 @@
 import json
 
 import pytest
+from pyrite_journalism_investigation.cli import investigation_app
 from typer.testing import CliRunner
 
-from pyrite.config import PyriteConfig, Settings, KBConfig
-from pyrite.storage.database import PyriteDB
+from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.services.kb_service import KBService
-
-from pyrite_journalism_investigation.cli import investigation_app
-
+from pyrite.storage.database import PyriteDB
 
 runner = CliRunner()
 
@@ -32,17 +30,47 @@ def populated_kb(tmp_path, monkeypatch):
     monkeypatch.setattr("pyrite_journalism_investigation.cli.load_config", lambda: config)
 
     # Create test data
-    svc.create_entry("test", "sanctions-2022", "Sanctions Announced", "investigation_event",
-                     body="EU sanctions", date="2022-02-24", importance=9)
-    svc.create_entry("test", "wire-transfer-001", "Wire Transfer", "transaction",
-                     body="Transfer via Cyprus", date="2019-06-15", importance=7,
-                     sender="[[oligarchov]]", receiver="[[cyprus-corp]]", amount="5000000")
-    svc.create_entry("test", "mansion-belgravia", "London Belgravia Mansion", "asset",
-                     body="Townhouse", asset_type="real_estate", jurisdiction="United Kingdom",
-                     importance=8)
-    svc.create_entry("test", "panama-doc-4427", "Panama Papers Doc 4427", "document_source",
-                     body="Mossack Fonseca doc", reliability="high", classification="leaked",
-                     importance=9)
+    svc.create_entry(
+        "test",
+        "sanctions-2022",
+        "Sanctions Announced",
+        "investigation_event",
+        body="EU sanctions",
+        date="2022-02-24",
+        importance=9,
+    )
+    svc.create_entry(
+        "test",
+        "wire-transfer-001",
+        "Wire Transfer",
+        "transaction",
+        body="Transfer via Cyprus",
+        date="2019-06-15",
+        importance=7,
+        sender="[[oligarchov]]",
+        receiver="[[cyprus-corp]]",
+        amount="5000000",
+    )
+    svc.create_entry(
+        "test",
+        "mansion-belgravia",
+        "London Belgravia Mansion",
+        "asset",
+        body="Townhouse",
+        asset_type="real_estate",
+        jurisdiction="United Kingdom",
+        importance=8,
+    )
+    svc.create_entry(
+        "test",
+        "panama-doc-4427",
+        "Panama Papers Doc 4427",
+        "document_source",
+        body="Mossack Fonseca doc",
+        reliability="high",
+        classification="leaked",
+        importance=9,
+    )
 
     yield {"config": config, "db": db, "svc": svc}
     db.close()
@@ -62,9 +90,17 @@ class TestTimelineCommand:
         assert data["count"] >= 1
 
     def test_timeline_date_filter(self, populated_kb):
-        result = runner.invoke(investigation_app, [
-            "timeline", "-k", "test", "--from", "2022-01-01", "--json",
-        ])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "timeline",
+                "-k",
+                "test",
+                "--from",
+                "2022-01-01",
+                "--json",
+            ],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         # Should only get 2022 events, not 2019
@@ -100,9 +136,17 @@ class TestSourcesCommand:
         assert data["count"] >= 1
 
     def test_sources_reliability_filter(self, populated_kb):
-        result = runner.invoke(investigation_app, [
-            "sources", "-k", "test", "--reliability", "high", "--json",
-        ])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "sources",
+                "-k",
+                "test",
+                "--reliability",
+                "high",
+                "--json",
+            ],
+        )
         data = json.loads(result.output)
         assert data["count"] >= 1
         for s in data["sources"]:
@@ -120,17 +164,31 @@ class TestClaimsCommand:
 
 class TestNetworkCommand:
     def test_network_found(self, populated_kb):
-        result = runner.invoke(investigation_app, [
-            "network", "mansion-belgravia", "-k", "test", "--json",
-        ])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "network",
+                "mansion-belgravia",
+                "-k",
+                "test",
+                "--json",
+            ],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["center"]["id"] == "mansion-belgravia"
 
     def test_network_not_found(self, populated_kb):
-        result = runner.invoke(investigation_app, [
-            "network", "nonexistent", "-k", "test", "--json",
-        ])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "network",
+                "nonexistent",
+                "-k",
+                "test",
+                "--json",
+            ],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "error" in data
@@ -138,9 +196,16 @@ class TestNetworkCommand:
 
 class TestEvidenceChainCommand:
     def test_evidence_chain_not_found(self, populated_kb):
-        result = runner.invoke(investigation_app, [
-            "evidence-chain", "nonexistent", "-k", "test", "--json",
-        ])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "evidence-chain",
+                "nonexistent",
+                "-k",
+                "test",
+                "--json",
+            ],
+        )
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "error" in data

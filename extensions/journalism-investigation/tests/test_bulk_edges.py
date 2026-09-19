@@ -1,22 +1,15 @@
 """Tests for bulk edge creation."""
 
 import pytest
-
-from pyrite.config import KBConfig, PyriteConfig, Settings
-from pyrite.storage.database import PyriteDB
-
 from pyrite_journalism_investigation.bulk import create_edge_batch, validate_edge_batch
+
+from pyrite.storage.database import PyriteDB
 
 
 @pytest.fixture
 def db(tmp_path):
     kb_path = tmp_path / "test-kb"
     kb_path.mkdir()
-    kb = KBConfig(name="test", path=kb_path, kb_type="journalism-investigation")
-    config = PyriteConfig(
-        knowledge_bases=[kb],
-        settings=Settings(index_path=tmp_path / "index.db"),
-    )
     db = PyriteDB(tmp_path / "index.db")
     db.register_kb("test", "journalism-investigation", str(kb_path))
     yield db
@@ -223,6 +216,7 @@ class TestCreateEdgeBatch:
         meta = entry.get("metadata", {})
         if isinstance(meta, str):
             import json
+
             meta = json.loads(meta)
         assert meta.get("percentage") == 51
         assert meta.get("beneficial") is True
