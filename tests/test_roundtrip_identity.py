@@ -593,16 +593,12 @@ class TestAdversarialFixtures:
         after = dest.read_text(encoding="utf-8")
 
         timestamp_lines = [
-            line
-            for line in before.splitlines()
-            if line.startswith(("created_at:", "updated_at:"))
+            line for line in before.splitlines() if line.startswith(("created_at:", "updated_at:"))
         ]
         assert len(timestamp_lines) == 2, "fixture no longer carries both timestamp keys"
         after_lines = after.splitlines()
         for line in timestamp_lines:
-            assert line in after_lines, (
-                f"{line!r} did not survive the round trip -- #151 regressed"
-            )
+            assert line in after_lines, f"{line!r} did not survive the round trip -- #151 regressed"
 
 
 class TestPristineProbeIsolation:
