@@ -2,12 +2,12 @@
 id: adr-0034
 type: adr
 title: "Writes are eventually-embedded: auto_embed guarantees embedding, not synchrony"
-adr_number: 34
+adr_number: 35
 status: proposed
 date: 2026-09-19
 ---
 
-# ADR-0034: Writes are eventually-embedded: auto_embed guarantees embedding, not synchrony
+# ADR-0035: Writes are eventually-embedded: auto_embed guarantees embedding, not synchrony
 
 ## Context
 

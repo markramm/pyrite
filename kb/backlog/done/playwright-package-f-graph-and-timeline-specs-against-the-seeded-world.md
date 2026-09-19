@@ -9,7 +9,7 @@ tags:
 - playwright
 importance: 5
 kind: task
-status: in_progress
+status: done
 priority: high
 assignee: agent:pyrite-worker
 effort: M
