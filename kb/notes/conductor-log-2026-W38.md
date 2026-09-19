@@ -2438,3 +2438,9 @@ Pre-check: load 2.3, 57% free, dev green (c0db60e — #176 merged by the maintai
 ## Tick 2026-09-19T19:33Z (no-op; WIP = 1)
 
 Load 2.2, 53% free, dev green (c0db60e). The #180 worker has not reported (branch still at 10a5b57; no suite running at check time) — rule 1, nothing heavy. #171: updated from dev by merge at the maintainer's word (the rebase form conflicted on the branch's own CHANGELOG resolution), new head be204f1, CI `action_required` again; recommended squash-merge. No unreviewed outside PRs; no reviewed head has moved.
+
+## Tick 2026-09-19T19:53Z (budgets raised by the maintainer: ≤4 suite slots, ≤2 loop PRs ready)
+
+Load 4.2, 53% free, dev green (cd21874 — #183, the skill change carrying the two budgets, merged). Slots in use: 1 (the conductor's review suite on #180); a read-only cold read of #180 is out under no-suite orders. The #180 worker reported at ~19:45Z: 27 unscoped routes (exactly the ticket's inventory) scoped, a structural route-walk test with a reasoned allowlist, a resolver bug fixed at root (`_resolve_kb_name` ignored the `kb_name` spelling, so every reviews route passed unchecked), 4549 passed at `-n 4`; part-2 inventory includes `GET /api/kbs/{kb_name}/changes` (tier check, no KB check) and MCP-over-HTTP (no per-KB scoping at all). Review in progress: ruff clean at CI scope; suite running. #163 claimed and checked out; its suite takes the review slot next. No dispatch: five loop branches await review (PR budget: finish first).
+
+**Process note.** #171 (outside, first-time contributor) was updated from dev and is waiting on the maintainer's CI approval; the conductor's own #183 then merged and put it BEHIND again — each such round costs the maintainer a click. Rule adopted for now: while an outside PR is waiting on the maintainer's approval-and-merge, the loop lands nothing; its own PRs wait as drafts or unarmed. The merge queue after Sunday's move removes this class.
