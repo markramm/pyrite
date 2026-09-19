@@ -7,7 +7,7 @@ status: proposed
 priority: medium
 effort: S
 created: "2026-07-03"
-tags: [refactor, frontmatter, duplication, audit-2026-07]
+tags: [refactor, frontmatter, duplication, audit-2026-07, quality]
 ---
 
 ## Problem
@@ -50,3 +50,18 @@ at `plugin.py:1004`.
   shared util.
 - Round-trip test: an entry with `_schema_version` survives
   journalism-investigation type instantiation.
+
+## Groom 2026-09-20 (retro 6 — the quality theme)
+
+**Why now:** #187 (merged 2026-09-19) found and deleted **five** hand-rolled copies of `Entry._base_kwargs`, each drifting differently, after a registry-wide conformance test went red on 59 entry types. This item named the journalism copy's drift (`_schema_version` dropped, raw `int()` on `importance`) in July; it was fixed only when the duplication class was attacked as a class. The frontmatter *split* is the same class — 8+ copies of `startswith("---")`/`split("---", 2)` — and the same failure is waiting (a file whose body contains `---` on its own line, a CRLF file, a BOM, a frontmatter block with no trailing newline: each copy answers differently today).
+
+**Acceptance**
+1. One function, `split_frontmatter(text) -> tuple[dict, str]` (or `(raw_yaml, body)` plus the existing loader — decide once, say why in the docstring), in `pyrite/utils/yaml.py` beside the round-trip loader, raising `FrontmatterError` on a malformed block. It is the *only* implementation: `grep -rn 'split("---"\|startswith("---")' pyrite/ extensions/` returns hits only inside that function and its tests.
+2. Every listed call site (`storage/repository.py`, `services/kb_service.py` ×2, `services/template_service.py`, `cli/entry_commands.py`, `cli/schema_commands.py`, `formats/importers/markdown_importer.py`, `extensions/cascade/.../hooks.py`, `extensions/journalism-investigation/.../known_entities.py`) calls it; the journalism `utils.py:parse_meta` duplicate and its dead alias at `plugin.py` are deleted in favour of `pyrite/utils/metadata.py`.
+3. A conformance test over a fixed corpus of edge files — body containing `---` on its own line; `---` inside a fenced code block; CRLF line endings; a UTF-8 BOM; no trailing newline after the closing `---`; an empty frontmatter block; no frontmatter at all; a frontmatter block that is not a mapping — asserts every former call site's *observable* behaviour is unchanged where it was correct and identical across surfaces where it differed (RED first: write the corpus, run it through each copy via its public entry point — `KBRepository.load_entry_from_file`, `pyrite import`, the template service, the two extensions' hooks — and record which copies disagree; that table goes in the PR body).
+4. `Regimes:` the eight corpus files above × the public entry points; plus the `pyrite/models/base.py` `from_markdown` path, which must keep using the same function.
+5. CHANGELOG line under Fixed naming the divergent cases that now agree.
+
+**Touches** — existing: the nine files above, `pyrite/utils/yaml.py`, `extensions/journalism-investigation/src/pyrite_journalism_investigation/{utils.py,plugin.py}`, `CHANGELOG.md`; new: `tests/test_split_frontmatter_conformance.py`, `tests/fixtures/frontmatter_split/*.md`.
+**Sequence:** after #173 and #175 merge (both edit `pyrite/models/base.py` / the round-trip tests; this must not race them). Independent of #180/#161/#145/#140.
+**Model:** Sonnet. **heavy:** no. **Cold read:** yes — `storage/` and a file-format surface. **Out of scope:** changing what any correct case returns; the YAML loader itself; `_base_kwargs` (done in #187).
