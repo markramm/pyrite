@@ -49,3 +49,13 @@ crashing tools. Page facts (tool and test counts, the no-flag
 by [[docs-counts-generated-or-asserted-from-code]].
 
 Source: 2026-09-17 project review (three read-only audits: docs/contributor, public-repo, code-health). See `kb/positioning/` and the ADR-0031 review response.
+
+## Groom 2026-09-18 (serial)
+
+**Acceptance:** the item's Direction, as the test of the draft — leads with "knowledge your agents can write to, and you can verify"; the newsroom origin as proof; "second brain" gone; one primary audience named. In-repo only: `README.md`'s opening (title block through the first "why" section). pyrite.wiki is outside this repo.
+**Regimes:** docs-only — none beyond `tests/test_docs_facts.py` (once it exists) staying green: the rewrite must not reintroduce a count or a name the test then has to chase.
+**Touches** — existing: `README.md` (opening only), this item.
+**Sequence:** last of the 0.24.2 docs line — after packaged-web-ui-3 and the docs-facts theme (all three edit `README.md`; this one frames facts the other two fix).
+**Model:** opus — and the deliverable is **a draft PR for the maintainer to rewrite in his own voice**, not an auto-merged change: this is the paragraph that gets quoted by LLM referrers. **heavy:** no. **Cold read:** no (the maintainer is the review). **Size:** S, ~80 lines.
+**Decision flagged:** whether the maintainer wants a worker's draft at all, or writes it himself — asked in `kb/notes/serial-queue-2026-09-18.md`.
+**Out of scope:** the site; the "Why Pyrite" grid beyond the opening; any fact correction (docs-facts owns those).

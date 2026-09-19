@@ -87,3 +87,13 @@ harmless, but it is the same allowlist at work.
 
 Related: [[choose-a-pypi-distribution-name-and-decide-the-fate-of-pyrite-mcp]],
 ADR-0031 (`pyrite-core-ui` as an addressable package).
+
+## Groom 2026-09-18 (serial)
+
+Split into three themes after #168 (one Pyrite task at a time; each theme one worker pass and one review). This item stays the parent and closes with the third. Dispatch order and the full groom — acceptance, regimes, touches, model, size — are in each:
+
+1. [[packaged-web-ui-1-the-server-finds-a-packaged-ui-and-warns-when-there-is-none]] — sonnet, S, cold read. `pyrite/server/api.py` only. Independent; ships alone.
+2. [[packaged-web-ui-2-the-built-frontend-ships-inside-the-package]] — opus, M, heavy (one npm build, one wheel build), cold read. `.gitignore`, `MANIFEST.in`, `pyproject.toml`, `pyrite/static/`, the build-hash and wheel-contents tests. After 1.
+3. [[packaged-web-ui-3-quick-start-leads-with-the-one-liner-and-the-release-checks-the-ui]] — sonnet, S–M, cold read (`scripts/release.py`). After 2, after #140, after the changelog-fragments theme.
+
+The tick-6 groom's open coordination question ("release.py first, or this theme owns the runbook edit") is settled by the split: #140 lands as it is; theme 3 owns the UI check in both `scripts/release.py` and the runbook.
