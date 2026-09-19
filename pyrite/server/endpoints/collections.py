@@ -8,7 +8,14 @@ from ...exceptions import EntryNotFoundError
 from ...plugins.registry import get_registry
 from ...services.kb_service import KBService
 from ...utils.metadata import parse_metadata
-from ..api import get_kb_service, limiter, negotiate_response, requires_kb_tier
+from ..api import (
+    get_kb_service,
+    get_readable_kbs,
+    limiter,
+    negotiate_response,
+    requires_kb_read,
+    requires_kb_tier,
+)
 from ..schemas import (
     CollectionEntriesResponse,
     CollectionListResponse,
@@ -46,15 +53,25 @@ def get_collection_types(request: Request):
     return {"types": merged}
 
 
-@router.get("/collections", response_model=CollectionListResponse)
+@router.get(
+    "/collections",
+    response_model=CollectionListResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def list_collections(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: KBService = Depends(get_kb_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """List all collections."""
-    results = svc.list_collections(kb_name=kb)
+    """List the collections in the KBs the caller may read.
+
+    A collection is an entry: its id, title and tags are KB content, and
+    ``total`` counts the rows returned. The readable set is pushed into
+    the underlying ``list_entries`` query for that reason.
+    """
+    results = svc.list_collections(kb_name=kb, kb_names=None if kb else readable)
 
     collections = []
     for r in results:
@@ -149,7 +166,11 @@ def create_collection(
     )
 
 
-@router.get("/collections/{collection_id}", response_model=CollectionResponse)
+@router.get(
+    "/collections/{collection_id}",
+    response_model=CollectionResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def get_collection(
     request: Request,
@@ -186,7 +207,11 @@ def get_collection(
     return resp
 
 
-@router.get("/collections/{collection_id}/entries", response_model=CollectionEntriesResponse)
+@router.get(
+    "/collections/{collection_id}/entries",
+    response_model=CollectionEntriesResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def get_collection_entries(
     request: Request,
@@ -233,14 +258,25 @@ def get_collection_entries(
     return CollectionEntriesResponse(entries=entries, total=total, collection_id=collection_id)
 
 
-@router.post("/collections/query-preview", response_model=QueryPreviewResponse)
+@router.post(
+    "/collections/query-preview",
+    response_model=QueryPreviewResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("60/minute")
 def preview_collection_query(
     request: Request,
     body: QueryPreviewRequest = Body(...),
     svc: KBService = Depends(get_kb_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Preview results for a collection query without saving."""
+    """Preview results for a collection query without saving.
+
+    A read route despite the POST: it runs an arbitrary query and returns
+    the matching entries. With no ``kb`` in the body the query spans every
+    KB, so the readable set is pushed into the evaluation -- ``total``
+    counts the matched rows and must not count private ones.
+    """
     from ...services.collection_query import (
         evaluate_query,
         parse_query,
@@ -259,7 +295,7 @@ def preview_collection_query(
             detail={"code": "INVALID_QUERY", "message": "; ".join(errors)},
         )
 
-    results, total = evaluate_query(query, svc.db)
+    results, total = evaluate_query(query, svc.db, kb_names=None if query.kb_name else readable)
 
     entries = []
     for r in results:

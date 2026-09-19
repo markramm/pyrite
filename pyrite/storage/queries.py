@@ -157,9 +157,13 @@ class QueryMixin:
     # Analytics
     # =========================================================================
 
-    def get_all_tags(self, kb_name: str | None = None) -> list[tuple[str, int]]:
+    def get_all_tags(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[tuple[str, int]]:
         """Get all tags with counts."""
-        return self._backend.get_all_tags(kb_name=kb_name)
+        return self._backend.get_all_tags(kb_name=kb_name, kb_names=kb_names)
 
     def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         """Get entries with most incoming links (most referenced)."""
@@ -178,6 +182,7 @@ class QueryMixin:
         limit: int = 50,
         offset: int = 0,
         sort_order: str = "asc",
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         return self._backend.get_timeline(
@@ -188,6 +193,7 @@ class QueryMixin:
             limit=limit,
             offset=offset,
             sort_order=sort_order,
+            kb_names=kb_names,
         )
 
     def get_global_counts(self) -> dict[str, int]:
@@ -200,10 +206,11 @@ class QueryMixin:
         limit: int = 100,
         offset: int = 0,
         prefix: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Get tags with counts as dicts, optionally filtered by KB and prefix."""
         return self._backend.get_tags_as_dicts(
-            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix
+            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix, kb_names=kb_names
         )
 
     # =========================================================================
@@ -254,9 +261,13 @@ class QueryMixin:
     # Tag hierarchy (computed from backend data)
     # =========================================================================
 
-    def get_tag_tree(self, kb_name: str | None = None) -> list[dict[str, Any]]:
+    def get_tag_tree(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Build hierarchical tag tree from /-separated tags."""
-        flat_tags = self._backend.get_all_tags(kb_name)
+        flat_tags = self._backend.get_all_tags(kb_name, kb_names=kb_names)
 
         root_children: list[dict[str, Any]] = []
         node_map: dict[str, dict[str, Any]] = {}

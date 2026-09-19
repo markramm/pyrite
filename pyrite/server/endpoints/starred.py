@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...exceptions import EntryNotFoundError
 from ...services.starred_service import StarredService
-from ..api import get_starred_service, limiter, requires_tier
+from ..api import (
+    get_readable_kbs,
+    get_starred_service,
+    limiter,
+    requires_kb_read,
+    requires_tier,
+)
 from ..schemas import (
     ReorderStarredRequest,
     ReorderStarredResponse,
@@ -18,15 +24,25 @@ from ..schemas import (
 router = APIRouter(tags=["Starred"])
 
 
-@router.get("/starred", response_model=StarredEntryListResponse)
+@router.get(
+    "/starred",
+    response_model=StarredEntryListResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def list_starred(
     request: Request,
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: StarredService = Depends(get_starred_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """List all starred entries, optionally filtered by KB."""
-    items = svc.list_starred(kb=kb)
+    """List the caller's starred entries in the KBs they may read.
+
+    A star resolves its entry's *title* from the backend, so an
+    unfiltered list hands over private titles; the filter therefore goes
+    into the query, before titles are resolved.
+    """
+    items = svc.list_starred(kb=kb, kb_names=None if kb else readable)
     return StarredEntryListResponse(
         count=len(items),
         starred=[StarredEntryItem(**item) for item in items],

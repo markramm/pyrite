@@ -151,22 +151,34 @@ class QAService:
             "issues": issues,
         }
 
-    def validate_all(self) -> dict[str, Any]:
-        """Validate all KBs. Returns {kbs: [{kb_name, total, checked, issues}]}."""
+    def validate_all(self, kb_names: set[str] | list[str] | None = None) -> dict[str, Any]:
+        """Validate all KBs. Returns {kbs: [{kb_name, total, checked, issues}]}.
+
+        ``kb_names`` restricts the sweep to those KBs -- the caller's
+        readable set. A KB left out contributes neither issues nor its
+        name, so the aggregate totals in ``get_status`` are computed over
+        readable rows only.
+        """
         kbs = []
         for kb in self.config.all_kbs():
+            if kb_names is not None and kb.name not in kb_names:
+                continue
             result = self.validate_kb(kb.name)
             kbs.append(result)
         return {"kbs": kbs}
 
-    def get_status(self, kb_name: str | None = None) -> dict[str, Any]:
+    def get_status(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> dict[str, Any]:
         """Get QA status dashboard."""
         if kb_name:
             result = self.validate_kb(kb_name)
             issues = result["issues"]
             total_entries = result["total"]
         else:
-            all_result = self.validate_all()
+            all_result = self.validate_all(kb_names=kb_names)
             issues = []
             total_entries = 0
             for kb in all_result["kbs"]:

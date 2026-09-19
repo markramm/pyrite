@@ -10,28 +10,43 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from ...services.task_service import TaskService
-from ..api import get_task_service, limiter, requires_kb_tier
+from ..api import (
+    get_readable_kbs,
+    get_task_service,
+    limiter,
+    requires_kb_read,
+    requires_kb_tier,
+)
 
 router = APIRouter(tags=["Tasks"])
 
 
-@router.get("/tasks")
+@router.get("/tasks", dependencies=[Depends(requires_kb_read())])
 @limiter.limit("120/minute")
 def list_tasks(
     request: Request,
-    kb: str | None = Query(None, description="KB name; omit to span all KBs"),
+    kb: str | None = Query(None, description="KB name; omit to span readable KBs"),
     status: str | None = Query(None, description="Filter by status ('open' also matches unset)"),
     assignee: str | None = Query(None, description="Filter by assignee, e.g. 'mark'"),
     parent: str | None = Query(None, description="Filter by parent task id"),
     svc: TaskService = Depends(get_task_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """List tasks across one KB or all of them.
+    """List tasks across one KB or every readable one.
 
     Exists so the human worklist board can ask one question -- "what is
-    assigned to Mark, everywhere?" -- in a single call. TaskService.list_tasks
-    already did this for the CLI; only the REST surface was missing.
+    assigned to Mark, everywhere?" -- in a single call. "Everywhere" now
+    means the KBs the caller may read: a task is an entry, with a title
+    and an assignee, and ``count`` counts the rows returned, so the
+    readable set goes into the SQL rather than into a comprehension.
     """
-    tasks = svc.list_tasks(kb_name=kb, status=status, assignee=assignee, parent=parent)
+    tasks = svc.list_tasks(
+        kb_name=kb,
+        status=status,
+        assignee=assignee,
+        parent=parent,
+        kb_names=None if kb else readable,
+    )
     return {"count": len(tasks), "tasks": tasks}
 
 

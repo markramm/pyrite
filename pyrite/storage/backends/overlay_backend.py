@@ -277,9 +277,13 @@ class OverlaySearchBackend:
 
     # ── tags → merge ────────────────────────────────────────────────
 
-    def get_all_tags(self, kb_name: str | None = None) -> list[tuple[str, int]]:
-        main_tags = dict(self._main.get_all_tags(kb_name))
-        diff_tags = dict(self._diff.get_all_tags(kb_name))
+    def get_all_tags(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[tuple[str, int]]:
+        main_tags = dict(self._main.get_all_tags(kb_name, kb_names=kb_names))
+        diff_tags = dict(self._diff.get_all_tags(kb_name, kb_names=kb_names))
         merged = dict(main_tags)
         for tag, count in diff_tags.items():
             merged[tag] = merged.get(tag, 0) + count
@@ -291,10 +295,11 @@ class OverlaySearchBackend:
         limit: int = 100,
         offset: int = 0,
         prefix: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         # Delegate to main for V1 — tag counts from diff are minimal
         return self._main.get_tags_as_dicts(
-            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix
+            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix, kb_names=kb_names
         )
 
     # ── timeline → delegate to main ─────────────────────────────────
@@ -308,6 +313,7 @@ class OverlaySearchBackend:
         limit: int = 50,
         offset: int = 0,
         sort_order: str = "asc",
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         return self._main.get_timeline(
             date_from=date_from,
@@ -317,6 +323,7 @@ class OverlaySearchBackend:
             limit=limit,
             offset=offset,
             sort_order=sort_order,
+            kb_names=kb_names,
         )
 
     # ── embeddings → delegate to main ───────────────────────────────

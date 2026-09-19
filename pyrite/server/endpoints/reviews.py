@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...services.review_service import ReviewService
-from ..api import get_review_service, limiter, requires_kb_tier
+from ..api import get_review_service, limiter, requires_kb_read, requires_kb_tier
 
 router = APIRouter(tags=["Reviews"])
 
@@ -76,7 +76,9 @@ def create_review(
     return ReviewResponse(**review)
 
 
-@router.get("/reviews", response_model=ReviewListResponse)
+@router.get(
+    "/reviews", response_model=ReviewListResponse, dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def list_reviews(
     request: Request,
@@ -93,7 +95,9 @@ def list_reviews(
     )
 
 
-@router.get("/reviews/latest", response_model=ReviewResponse)
+@router.get(
+    "/reviews/latest", response_model=ReviewResponse, dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def get_latest_review(
     request: Request,
@@ -111,7 +115,11 @@ def get_latest_review(
     return ReviewResponse(**review)
 
 
-@router.get("/reviews/status", response_model=ReviewStatusResponse)
+@router.get(
+    "/reviews/status",
+    response_model=ReviewStatusResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def get_review_status(
     request: Request,

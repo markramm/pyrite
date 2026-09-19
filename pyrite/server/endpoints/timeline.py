@@ -3,13 +3,21 @@
 from fastapi import APIRouter, Depends, Query, Request
 
 from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter, negotiate_response
+from ..api import (
+    get_kb_service,
+    get_readable_kbs,
+    limiter,
+    negotiate_response,
+    requires_kb_read,
+)
 from ..schemas import TimelineEvent, TimelineResponse
 
 router = APIRouter(tags=["Timeline"])
 
 
-@router.get("/timeline", response_model=TimelineResponse)
+@router.get(
+    "/timeline", response_model=TimelineResponse, dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def get_timeline(
     request: Request,
@@ -20,8 +28,15 @@ def get_timeline(
     sort: str = Query("asc", pattern=r"^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=500),
     svc: KBService = Depends(get_kb_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Get timeline events."""
+    """Get timeline events from the KBs the caller may read.
+
+    The readable set goes into the query, not into a list comprehension
+    afterwards: ``count`` is the length of the returned events and
+    ``limit`` is applied by SQL, so post-filtering would both under-fill
+    the page and let the count reveal how many private events matched.
+    """
     results = svc.get_timeline(
         date_from=date_from,
         date_to=date_to,
@@ -29,6 +44,7 @@ def get_timeline(
         kb_name=kb,
         limit=limit,
         sort_order=sort,
+        kb_names=None if kb else readable,
     )
 
     events = [

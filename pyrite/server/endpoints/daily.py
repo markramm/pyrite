@@ -14,6 +14,7 @@ from ..api import (
     get_db,
     get_kb_service,
     limiter,
+    requires_kb_read,
     requires_kb_tier,
     resolve_effective_kb_role,
 )
@@ -33,7 +34,11 @@ def _default_daily_body(date_str: str) -> str:
     return f"# {d.strftime('%A, %B %-d, %Y')}\n\n"
 
 
-@router.get("/daily/dates", response_model=DailyDatesResponse)
+@router.get(
+    "/daily/dates",
+    response_model=DailyDatesResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("60/minute")
 def list_daily_dates(
     request: Request,
@@ -154,7 +159,11 @@ def _validate_date(date_str: str) -> None:
         )
 
 
-@router.get("/daily/{date_str}", response_model=EntryResponse)
+@router.get(
+    "/daily/{date_str}",
+    response_model=EntryResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("60/minute")
 async def get_or_create_daily_note(
     request: Request,

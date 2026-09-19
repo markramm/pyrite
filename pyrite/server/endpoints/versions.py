@@ -3,13 +3,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...services.version_service import VersionService
-from ..api import get_version_service, limiter
+from ..api import get_version_service, limiter, requires_kb_read
 from ..schemas import EntryVersionResponse, VersionListResponse
 
 router = APIRouter(tags=["Versions"])
 
 
-@router.get("/entries/{entry_id}/versions", response_model=VersionListResponse)
+@router.get(
+    "/entries/{entry_id}/versions",
+    response_model=VersionListResponse,
+    dependencies=[Depends(requires_kb_read())],
+)
 @limiter.limit("100/minute")
 def get_entry_versions(
     request: Request,
@@ -29,7 +33,9 @@ def get_entry_versions(
     )
 
 
-@router.get("/entries/{entry_id}/versions/{commit_hash}")
+@router.get(
+    "/entries/{entry_id}/versions/{commit_hash}", dependencies=[Depends(requires_kb_read())]
+)
 @limiter.limit("100/minute")
 def get_entry_at_version(
     request: Request,

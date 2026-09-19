@@ -831,9 +831,13 @@ class KBService:
             min_importance=min_importance,
         )
 
-    def list_collections(self, kb_name: str | None = None) -> list[dict[str, Any]]:
-        """List all collection entries."""
-        return self.list_entries(kb_name=kb_name, entry_type="collection")
+    def list_collections(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """List all collection entries, optionally restricted to readable KBs."""
+        return self.list_entries(kb_name=kb_name, kb_names=kb_names, entry_type="collection")
 
     @staticmethod
     def _normalize_metadata_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -971,8 +975,14 @@ class KBService:
         limit: int = 50,
         offset: int = 0,
         sort_order: str = "asc",
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Get timeline events ordered by date."""
+        """Get timeline events ordered by date.
+
+        ``kb_names`` restricts the result to the caller's readable KBs;
+        pushed into the query so ``limit`` and the reported count are
+        computed over readable rows only.
+        """
         return self.db.get_timeline(
             date_from=date_from,
             date_to=date_to,
@@ -981,6 +991,7 @@ class KBService:
             limit=limit,
             offset=offset,
             sort_order=sort_order,
+            kb_names=kb_names,
         )
 
     def get_tags(
@@ -989,9 +1000,17 @@ class KBService:
         limit: int = 100,
         offset: int = 0,
         prefix: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Get tags with counts as dicts."""
-        return self.db.get_tags_as_dicts(kb_name=kb_name, limit=limit, offset=offset, prefix=prefix)
+        """Get tags with counts as dicts.
+
+        ``kb_names`` restricts the result to the caller's readable KBs, so
+        that neither a tag name nor its count comes from a KB they cannot
+        read.
+        """
+        return self.db.get_tags_as_dicts(
+            kb_name=kb_name, limit=limit, offset=offset, prefix=prefix, kb_names=kb_names
+        )
 
     def get_most_linked(self, kb_name: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
         """Get most referenced entries."""
@@ -1001,9 +1020,13 @@ class KBService:
         """Get entries with no links."""
         return self.db.get_orphans(kb_name)
 
-    def get_tag_tree(self, kb_name: str | None = None) -> list[dict]:
-        """Get hierarchical tag tree."""
-        return self.db.get_tag_tree(kb_name=kb_name)
+    def get_tag_tree(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict]:
+        """Get hierarchical tag tree, optionally restricted to readable KBs."""
+        return self.db.get_tag_tree(kb_name=kb_name, kb_names=kb_names)
 
     def search_by_tag_prefix(
         self, prefix: str, kb_name: str | None = None, limit: int = 50

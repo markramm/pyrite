@@ -22,16 +22,27 @@ class StarredService:
         self.db = db
         self.kb_service = kb_service
 
-    def list_starred(self, kb: str | None = None) -> list[dict]:
+    def list_starred(
+        self,
+        kb: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict]:
         """List starred entries, optionally filtered by KB.
 
         Returns a list of dicts with keys: entry_id, kb_name, title,
         sort_order, created_at.  Titles are resolved from the storage
         backend; missing titles degrade gracefully to None.
+
+        ``kb_names`` restricts the result to the caller's readable KBs --
+        a star on a private entry resolves that entry's *title*, so an
+        unfiltered list leaks it. ``None`` means unrestricted; an empty
+        set means no rows.
         """
         query = self.db.session.query(StarredEntry)
         if kb:
             query = query.filter(StarredEntry.kb_name == kb)
+        if kb_names is not None:
+            query = query.filter(StarredEntry.kb_name.in_(list(kb_names)))
         query = query.order_by(StarredEntry.sort_order, StarredEntry.created_at.desc())
         results = query.all()
 

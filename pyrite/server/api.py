@@ -479,8 +479,12 @@ def requires_tier(tier: str):
 
 async def _resolve_kb_name(request: Request) -> str | None:
     """Extract KB name from request via query params, path params, or body."""
-    # 1. Query param (used by DELETE, import, export)
-    kb = request.query_params.get("kb")
+    # 1. Query param (used by DELETE, import, export). Both spellings: the
+    #    reviews routes declare `kb: str = Query(..., alias="kb_name")`, so
+    #    the name on the wire is `kb_name`. Missing that spelling made
+    #    requires_kb_read() resolve to None -- i.e. pass -- on every
+    #    reviews route.
+    kb = request.query_params.get("kb") or request.query_params.get("kb_name")
     if kb:
         return kb
 

@@ -159,7 +159,8 @@ class TestPeerCannotSeePrivateKB:
 # title, tag, body text or KB name reaches a caller without a grant.
 # =============================================================================
 
-# Strings that must never appear in an unscoped caller's response body.
+# Content of the private KB: never in any response to a caller without a
+# grant, on any route.
 PRIVATE_MARKERS = (
     "secret-note",
     "secret-two",
@@ -171,8 +172,14 @@ PRIVATE_MARKERS = (
     "another zebra, hidden",
     "smuggled",
     "confidential/operation-zebra",
-    PRIVATE,
 )
+
+# The KB's *name* is separate. On a KB-spanning route it must not appear:
+# its presence would disclose that the KB exists. On a route where the
+# caller named it themselves, the KB_NOT_FOUND body echoes it back --
+# which discloses nothing, because a KB that does not exist echoes it in
+# exactly the same body (test_private_kb_answers_exactly_as_a_nonexistent_kb).
+PRIVATE_KB_NAME = PRIVATE
 
 NONEXISTENT = "no-such-kb-at-all"
 
@@ -229,16 +236,27 @@ class TestNamedPrivateKBIs404:
         assert r.status_code == 404, f"{route} returned {r.status_code}: {r.text[:300]}"
 
     def test_private_kb_answers_exactly_as_a_nonexistent_kb(self, env, who, route):
-        """A private KB's *existence* is private too: byte-identical 404."""
+        """A private KB's *existence* is private too.
+
+        The two responses must be identical once the KB name the caller
+        supplied is normalised out -- that name is the caller's own input
+        echoed back, and it appears in both. Anything else differing
+        (status, code, message shape, extra fields) would let a caller
+        distinguish "you may not read this" from "this does not exist",
+        which is the whole point of answering 404 rather than 403.
+        """
         private = env[who].get(route.format(kb=PRIVATE))
         missing = env[who].get(route.format(kb=NONEXISTENT))
         assert private.status_code == missing.status_code == 404
-        assert private.json() == missing.json(), (
+        normalised = private.text.replace(PRIVATE, "<kb>")
+        assert normalised == missing.text.replace(NONEXISTENT, "<kb>"), (
             f"{route}: private KB distinguishable from a nonexistent one\n"
             f"  private: {private.text[:200]}\n  missing: {missing.text[:200]}"
         )
 
-    def test_no_private_marker_in_the_body(self, env, who, route):
+    def test_no_private_content_in_the_body(self, env, who, route):
+        """No id, title, body text or tag from the private KB. The KB name
+        the caller supplied may be echoed -- see PRIVATE_KB_NAME."""
         body = _body_text(env[who].get(route.format(kb=PRIVATE)))
         leaked = [m for m in PRIVATE_MARKERS if m in body]
         assert not leaked, f"{route} leaked {leaked} in: {body[:300]}"
@@ -247,10 +265,12 @@ class TestNamedPrivateKBIs404:
 @pytest.mark.parametrize("who", ["peer", "anon"])
 @pytest.mark.parametrize("route", KB_SPANNING_ROUTES)
 class TestKBSpanningRoutesFilterToReadable:
-    def test_ok_and_no_private_marker(self, env, who, route):
+    def test_ok_and_nothing_private(self, env, who, route):
+        """Here the KB name is a leak too: the caller never named it, so
+        its appearance would disclose that the KB exists at all."""
         r = env[who].get(route)
         assert r.status_code == 200, f"{route} returned {r.status_code}: {r.text[:300]}"
-        leaked = [m for m in PRIVATE_MARKERS if m in r.text]
+        leaked = [m for m in (*PRIVATE_MARKERS, PRIVATE_KB_NAME) if m in r.text]
         assert not leaked, f"{route} leaked {leaked} in: {r.text[:400]}"
 
 
@@ -324,7 +344,7 @@ class TestErrorBodiesDoNotEchoPrivateNames:
             private.json()["detail"]["code"] == missing.json()["detail"]["code"] == "KB_NOT_FOUND"
         )
         # No private *content* -- only the KB name the caller supplied.
-        leaked = [m for m in PRIVATE_MARKERS if m != PRIVATE and m in private.text]
+        leaked = [m for m in PRIVATE_MARKERS if m in private.text]
         assert not leaked, leaked
 
     def test_templates_404_is_indistinguishable(self, env, who):

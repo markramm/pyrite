@@ -74,10 +74,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("POST", "/api/tasks/{task_id}/claim"): "write route: requires_kb_tier('write') subsumes read",
     ("POST", "/api/reviews"): "write route: requires_kb_tier('write') subsumes read",
     ("DELETE", "/api/reviews/{review_id}"): "write route: requires_kb_tier('write') subsumes read",
-    (
-        "POST",
-        "/api/kbs/{kb_name}/templates/{template_name}/render",
-    ): "write-shaped: renders a template, no KB rows; read-scoped with the other template routes",
     # -- part 2: meta/admin surfaces ------------------------------------
     ("GET", "/api/stats"): "part 2: admin.py -- index-wide counts, no per-KB scoping today",
     ("GET", "/api/plugins"): "part 2: admin.py",

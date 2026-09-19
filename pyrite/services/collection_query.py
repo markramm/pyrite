@@ -192,11 +192,20 @@ def validate_query(query: CollectionQuery) -> list[str]:
     return errors
 
 
-def evaluate_query(query: CollectionQuery, db: PyriteDB) -> tuple[list[dict], int]:
+def evaluate_query(
+    query: CollectionQuery,
+    db: PyriteDB,
+    kb_names: set[str] | list[str] | None = None,
+) -> tuple[list[dict], int]:
     """Evaluate query against DB. Returns (entries, total_count).
 
     Uses db.list_entries() for the base query, then applies additional
     filters (date_from, date_to, status, tags_all, fields) in Python.
+
+    ``kb_names`` restricts the base query to the caller's readable KBs.
+    It goes into ``list_entries`` rather than into ``_post_filter``
+    because ``total_count`` is computed from the filtered rows: a private
+    row dropped after the fact would still be counted.
     """
     # Use the first tag from tags_any for the DB-level filter (it only supports one)
     db_tag = query.tags_any[0] if query.tags_any and len(query.tags_any) == 1 else None
@@ -205,6 +214,7 @@ def evaluate_query(query: CollectionQuery, db: PyriteDB) -> tuple[list[dict], in
     fetch_limit = query.limit + query.offset + 500  # over-fetch for post-filtering
     base_results = db.list_entries(
         kb_name=query.kb_name,
+        kb_names=kb_names,
         entry_type=query.entry_type,
         tag=db_tag,
         sort_by=query.sort_by

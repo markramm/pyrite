@@ -254,13 +254,29 @@ class TaskService:
         status: str | None = None,
         assignee: str | None = None,
         parent: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """List tasks with optional filters."""
+        """List tasks with optional filters.
+
+        ``kb_names`` restricts the result to the caller's readable KBs;
+        ``None`` means unrestricted, an empty set means no rows.
+        """
         query = "SELECT id, title, kb_name, status, assignee, priority, metadata, updated_at FROM entry WHERE entry_type = 'task'"
         params: dict[str, str] = {}
         if kb_name:
             query += " AND kb_name = :kb_name"
             params["kb_name"] = kb_name
+        if kb_names is not None:
+            names = list(kb_names)
+            if not names:
+                # "may read nothing" must match no rows; IN () is not SQL.
+                query += " AND 1 = 0"
+            else:
+                keys = []
+                for i, name in enumerate(names):
+                    params[f"kbn_{i}"] = name
+                    keys.append(f":kbn_{i}")
+                query += f" AND kb_name IN ({', '.join(keys)})"
         if status:
             if status == "open":
                 query += " AND (status = 'open' OR status IS NULL)"

@@ -19,9 +19,11 @@ from ..api import (
     get_db,
     get_kb_service,
     get_llm_service,
+    get_readable_kbs,
     get_search_service,
     get_user_llm_context,
     limiter,
+    requires_kb_read,
     requires_tier,
 )
 from ..schemas import (
@@ -36,7 +38,16 @@ from ..schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ai", tags=["AI"], dependencies=[Depends(requires_tier("write"))])
+# requires_kb_read() on the router, not per-route: every route here names
+# a KB in its body (`kb_name`, or `kb` for chat), and all four both read
+# an entry and feed retrieval. The write-tier check alone was not enough
+# -- a caller with global write tier but no grant on a private KB passed
+# it, then had the entry's body summarised back to them.
+router = APIRouter(
+    prefix="/ai",
+    tags=["AI"],
+    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
+)
 
 
 def _resolve_llm(llm: LLMService, user_ctx: dict | None) -> LLMService:
@@ -203,8 +214,13 @@ async def ai_suggest_links(
     user_ctx: dict | None = Depends(get_user_llm_context),
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Suggest wikilinks for an entry using AI + search."""
+    """Suggest wikilinks for an entry using AI + search.
+
+    Retrieval is scoped: a suggestion names a target entry's id and
+    title, so candidates may only come from KBs the caller may read.
+    """
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
     _enforce_llm_quota(request, config, db, kind="suggest-links")
@@ -213,10 +229,12 @@ async def ai_suggest_links(
     body = entry.get("body", "") or ""
     title = entry.get("title", "")
 
+    kb_names = None if req.kb_name else readable
     try:
         related = search_svc.search(
             query=title,
             kb_name=req.kb_name,
+            kb_names=kb_names,
             limit=15,
             mode="hybrid",
         )
@@ -224,6 +242,7 @@ async def ai_suggest_links(
         related = search_svc.search(
             query=title,
             kb_name=req.kb_name,
+            kb_names=kb_names,
             limit=15,
             mode="keyword",
         )
@@ -285,8 +304,16 @@ async def ai_chat(
     svc: KBService = Depends(get_kb_service),
     search_svc: SearchService = Depends(get_search_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
+    readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Chat with your knowledge base using RAG. Returns SSE stream."""
+    """Chat with your knowledge base using RAG. Returns SSE stream.
+
+    With no ``kb`` the RAG step searches every KB and quotes what it
+    finds into the prompt and the `sources` event, so retrieval is scoped
+    to the readable set. The per-hit entry fetch is checked too: the
+    search already filtered, but a fetch that trusts a search result is
+    exactly the shape that regresses.
+    """
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
 
@@ -300,11 +327,13 @@ async def ai_chat(
     # RAG: search KB for context
     sources = []
     context_text = ""
+    kb_names = None if req.kb else readable
     try:
         try:
             results = search_svc.search(
                 query=last_msg,
                 kb_name=req.kb,
+                kb_names=kb_names,
                 limit=5,
                 mode="hybrid",
             )
@@ -312,11 +341,14 @@ async def ai_chat(
             results = search_svc.search(
                 query=last_msg,
                 kb_name=req.kb,
+                kb_names=kb_names,
                 limit=5,
                 mode="keyword",
             )
 
         for r in results:
+            if readable is not None and r.get("kb_name") not in readable:
+                continue
             sources.append(
                 {
                     "id": r.get("id", ""),

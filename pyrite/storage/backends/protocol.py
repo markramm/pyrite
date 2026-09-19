@@ -228,8 +228,17 @@ class SearchBackend(Protocol):
 
     # ── tags ─────────────────────────────────────────────────────────
 
-    def get_all_tags(self, kb_name: str | None = None) -> list[tuple[str, int]]:
-        """Get all tags with counts."""
+    def get_all_tags(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[tuple[str, int]]:
+        """Get all tags with counts.
+
+        ``kb_names`` restricts the result to a set of KBs -- the caller's
+        readable set. ``None`` means unrestricted; an empty set means the
+        caller may read nothing and must match no rows.
+        """
         ...
 
     def get_tags_as_dicts(
@@ -238,6 +247,7 @@ class SearchBackend(Protocol):
         limit: int = 100,
         offset: int = 0,
         prefix: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Get tags with counts as dicts."""
         ...
@@ -253,6 +263,7 @@ class SearchBackend(Protocol):
         limit: int = 50,
         offset: int = 0,
         sort_order: str = "asc",
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Get timeline events ordered by date."""
         ...

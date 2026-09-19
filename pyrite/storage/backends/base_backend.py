@@ -862,21 +862,49 @@ class BaseBackend(ABC):
     # Tags (raw SQL — shared via _exec)
     # =====================================================================
 
-    def get_all_tags(self, kb_name: str | None = None) -> list[tuple[str, int]]:
+    @staticmethod
+    def _kb_names_clause(
+        column: str, kb_names: set[str] | list[str] | None, params: dict[str, Any]
+    ) -> str | None:
+        """SQL predicate restricting ``column`` to ``kb_names``, binding params.
+
+        ``None`` means "not scoped" -- no predicate. An *empty* set means
+        "this caller may read nothing", which must match no rows, not every
+        row: ``IN ()`` is not valid SQLite, so it becomes ``1 = 0``.
+        """
+        if kb_names is None:
+            return None
+        names = list(kb_names)
+        if not names:
+            return "1 = 0"
+        keys = []
+        for i, name in enumerate(names):
+            key = f"kbn_{i}"
+            params[key] = name
+            keys.append(f":{key}")
+        return f"{column} IN ({', '.join(keys)})"
+
+    def get_all_tags(
+        self,
+        kb_name: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[tuple[str, int]]:
+        conditions: list[str] = []
+        params: dict[str, Any] = {}
         if kb_name:
-            rows = self._exec(
-                """SELECT t.name, COUNT(*) as count
-                   FROM tag t JOIN entry_tag et ON t.id = et.tag_id
-                   WHERE et.kb_name = :kb_name
-                   GROUP BY t.name ORDER BY count DESC""",
-                {"kb_name": kb_name},
-            )
-        else:
-            rows = self._exec("""
-                SELECT t.name, COUNT(*) as count
+            conditions.append("et.kb_name = :kb_name")
+            params["kb_name"] = kb_name
+        scope = self._kb_names_clause("et.kb_name", kb_names, params)
+        if scope:
+            conditions.append(scope)
+        where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+        rows = self._exec(
+            f"""SELECT t.name, COUNT(*) as count
                 FROM tag t JOIN entry_tag et ON t.id = et.tag_id
-                GROUP BY t.name ORDER BY count DESC
-            """)
+                {where}
+                GROUP BY t.name ORDER BY count DESC""",
+            params,
+        )
         return [(r["name"], r["count"]) for r in rows]
 
     def get_tags_as_dicts(
@@ -885,12 +913,16 @@ class BaseBackend(ABC):
         limit: int = 100,
         offset: int = 0,
         prefix: str | None = None,
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         conditions: list[str] = []
         params: dict[str, Any] = {"limit": limit, "offset": offset}
         if kb_name:
             conditions.append("et.kb_name = :kb_name")
             params["kb_name"] = kb_name
+        scope = self._kb_names_clause("et.kb_name", kb_names, params)
+        if scope:
+            conditions.append(scope)
         if prefix:
             conditions.append("t.name LIKE :prefix")
             params["prefix"] = f"{prefix}%"
@@ -918,6 +950,7 @@ class BaseBackend(ABC):
         limit: int = 50,
         offset: int = 0,
         sort_order: str = "asc",
+        kb_names: set[str] | list[str] | None = None,
     ) -> list[dict[str, Any]]:
         sql = """
             SELECT id, kb_name, title, date, importance, location, summary
@@ -928,6 +961,9 @@ class BaseBackend(ABC):
         if kb_name:
             sql += " AND kb_name = :kb_name"
             params["kb_name"] = kb_name
+        scope = self._kb_names_clause("kb_name", kb_names, params)
+        if scope:
+            sql += f" AND {scope}"
         if date_from:
             sql += " AND date >= :date_from"
             params["date_from"] = date_from

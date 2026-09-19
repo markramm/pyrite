@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ...config import PyriteConfig
 from ...exceptions import KBNotFoundError
-from ..api import get_config, limiter
+from ..api import get_config, limiter, requires_kb_read
 from ..schemas import (
     RenderedTemplate,
     RenderTemplateRequest,
@@ -26,6 +26,7 @@ def get_template_svc(config: PyriteConfig = Depends(get_config)):
 @router.get(
     "/kbs/{kb_name}/templates",
     response_model=TemplateListResponse,
+    dependencies=[Depends(requires_kb_read())],
 )
 @limiter.limit("100/minute")
 def list_templates(request: Request, kb_name: str, svc=Depends(get_template_svc)):
@@ -46,6 +47,7 @@ def list_templates(request: Request, kb_name: str, svc=Depends(get_template_svc)
 @router.get(
     "/kbs/{kb_name}/templates/{template_name}",
     response_model=TemplateDetail,
+    dependencies=[Depends(requires_kb_read())],
 )
 @limiter.limit("100/minute")
 def get_template_detail(
@@ -73,6 +75,7 @@ def get_template_detail(
 @router.post(
     "/kbs/{kb_name}/templates/{template_name}/render",
     response_model=RenderedTemplate,
+    dependencies=[Depends(requires_kb_read())],
 )
 @limiter.limit("30/minute")
 def render_template(
