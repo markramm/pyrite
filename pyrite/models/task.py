@@ -3,9 +3,6 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..schema import Provenance, generate_entry_id
-from ..utils.parse import safe_int
-from .base import parse_datetime, parse_links, parse_sources
 from .core_types import NoteEntry
 from .protocols import Assignable, Parentable, Prioritizable, Statusable, Temporal
 
@@ -402,30 +399,6 @@ TASK_KB_PRESET = {
 # =========================================================================
 
 
-def _note_base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
-    prov_data = meta.get("provenance")
-    provenance = Provenance.from_dict(prov_data) if prov_data else None
-    entry_id = meta.get("id", "")
-    if not entry_id:
-        entry_id = generate_entry_id(meta.get("title", ""))
-    return {
-        "id": entry_id,
-        "title": meta.get("title", ""),
-        "body": body,
-        "summary": meta.get("summary", ""),
-        "tags": meta.get("tags", []) or [],
-        "aliases": meta.get("aliases", []) or [],
-        "sources": parse_sources(meta.get("sources")),
-        "links": parse_links(meta.get("links")),
-        "provenance": provenance,
-        "importance": safe_int(meta.get("importance"), 5),
-        "metadata": meta.get("metadata", {}),
-        "created_at": parse_datetime(meta.get("created_at")),
-        "updated_at": parse_datetime(meta.get("updated_at")),
-        "_schema_version": safe_int(meta.get("_schema_version"), 0),
-    }
-
-
 @dataclass
 class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, NoteEntry):
     """Agent-oriented task with workflow state machine."""
@@ -484,7 +457,7 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TaskEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         # Accept both "parent" and legacy "parent_task"
         parent = meta.get("parent", "") or meta.get("parent_task", "")
         # Collect any top-level frontmatter keys this schema doesn't know

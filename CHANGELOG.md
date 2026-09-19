@@ -220,6 +220,21 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **Extension entry classes silently dropped `aliases` and `_schema_version` on
+  every load -> save round trip, and rewrote `importance` back to its default**
+  — a `writeup` (social), `zettel`/`literature_note` (zettelkasten), or
+  `article`/`talk_page` (encyclopedia) saved at `importance: 9` came back
+  `importance: 5` on the next save, because each class's `from_frontmatter`
+  hand-rolled its constructor call instead of routing through
+  `Entry._base_kwargs`, and `extra_frontmatter` could not rescue the loss since
+  all three keys are members of `_BASE_CONSUMED_KEYS`. All six classes now call
+  `cls._base_kwargs(meta, body)`; the same hand-rolled-copy pattern in
+  `cascade`, `journalism-investigation`, `software-kb` and
+  `pyrite/models/task.py` is deleted in favour of the one shared
+  implementation. A new registry-wide conformance test in
+  `tests/test_frontmatter_round_trip_all_types.py` parametrizes over every
+  registered entry type (core + every installed plugin) and pins the
+  guarantee for future types automatically.
 - **`kb_batch_read` no longer crashes on a malformed spec, and every `fields`
   projection keeps the identity pair.** A non-list `entries`, a non-object item,
   or a missing, empty or non-string `entry_id`/`kb_name` used to raise a raw

@@ -3,9 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyrite.models.base import parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import NoteEntry
-from pyrite.schema import Provenance, generate_entry_id
 
 QUALITY_LEVELS = ("stub", "start", "C", "B", "GA", "FA")
 REVIEW_STATUSES = ("draft", "under_review", "published")
@@ -41,30 +39,12 @@ class ArticleEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ArticleEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            quality=meta.get("quality", "stub"),
-            review_status=meta.get("review_status", "draft"),
-            protection_level=meta.get("protection_level", "none"),
-            categories=meta.get("categories", []) or [],
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["quality"] = meta.get("quality", "stub")
+        kw["review_status"] = meta.get("review_status", "draft")
+        kw["protection_level"] = meta.get("protection_level", "none")
+        kw["categories"] = meta.get("categories", []) or []
+        return cls(**kw)
 
 
 @dataclass
@@ -89,24 +69,6 @@ class TalkPageEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TalkPageEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            article_id=meta.get("article_id", ""),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["article_id"] = meta.get("article_id", "")
+        return cls(**kw)

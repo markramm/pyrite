@@ -3,9 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from pyrite.models.base import parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import NoteEntry, PersonEntry
-from pyrite.schema import Provenance, generate_entry_id
 
 WRITEUP_TYPES = ("essay", "story", "review", "howto", "opinion")
 
@@ -37,29 +35,11 @@ class WriteupEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "WriteupEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            author_id=meta.get("author_id", ""),
-            writeup_type=meta.get("writeup_type", "essay"),
-            allow_voting=meta.get("allow_voting", True),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["author_id"] = meta.get("author_id", "")
+        kw["writeup_type"] = meta.get("writeup_type", "essay")
+        kw["allow_voting"] = meta.get("allow_voting", True)
+        return cls(**kw)
 
 
 @dataclass
@@ -88,13 +68,6 @@ class UserProfileEntry(PersonEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "UserProfileEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
         from pyrite.schema import ResearchStatus
 
         status_str = meta.get("research_status", "stub")
@@ -103,23 +76,11 @@ class UserProfileEntry(PersonEntry):
         except ValueError:
             research_status = ResearchStatus.STUB
 
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            role=meta.get("role", ""),
-            affiliations=meta.get("affiliations", []) or [],
-            importance=int(meta.get("importance", 5)),
-            research_status=research_status,
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            reputation=int(meta.get("reputation", 0)),
-            join_date=meta.get("join_date", ""),
-            writeup_count=int(meta.get("writeup_count", 0)),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["role"] = meta.get("role", "")
+        kw["affiliations"] = meta.get("affiliations", []) or []
+        kw["research_status"] = research_status
+        kw["reputation"] = int(meta.get("reputation", 0))
+        kw["join_date"] = meta.get("join_date", "")
+        kw["writeup_count"] = int(meta.get("writeup_count", 0))
+        return cls(**kw)

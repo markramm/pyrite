@@ -3,12 +3,12 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyrite.models.base import Entry, parse_datetime, parse_links, parse_sources
+from pyrite.models.base import Entry
 from pyrite.models.core_types import DocumentEntry, EventEntry
-from pyrite.schema import EventStatus, Provenance, generate_entry_id
+from pyrite.schema import EventStatus
 
 # ---------------------------------------------------------------------------
-# Helper: build common kwargs from frontmatter meta dict
+# Helpers
 # ---------------------------------------------------------------------------
 
 
@@ -26,31 +26,6 @@ def _str_or_empty(value: Any) -> str:
     if value is None:
         return ""
     return str(value)
-
-
-def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
-    """Extract base Entry fields from frontmatter dict."""
-    prov_data = meta.get("provenance")
-    provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-    entry_id = meta.get("id", "")
-    if not entry_id:
-        entry_id = generate_entry_id(meta.get("title", ""))
-
-    return {
-        "id": str(entry_id),
-        "title": meta.get("title", ""),
-        "body": body,
-        "summary": meta.get("summary", ""),
-        "tags": meta.get("tags", []) or [],
-        "aliases": meta.get("aliases", []) or [],
-        "sources": parse_sources(meta.get("sources")),
-        "links": parse_links(meta.get("links")),
-        "provenance": provenance,
-        "metadata": meta.get("metadata", {}),
-        "created_at": parse_datetime(meta.get("created_at")),
-        "updated_at": parse_datetime(meta.get("updated_at")),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -188,10 +163,9 @@ class AssetEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "AssetEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             asset_type=meta.get("asset_type", ""),
             value=_str_or_empty(meta.get("value", "")),
             currency=meta.get("currency", ""),
@@ -238,10 +212,9 @@ class AccountEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "AccountEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             account_type=meta.get("account_type", ""),
             institution=meta.get("institution", ""),
             jurisdiction=meta.get("jurisdiction", ""),
@@ -278,10 +251,9 @@ class DocumentSourceEntry(DocumentEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "DocumentSourceEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             date=meta.get("date", ""),
             author=meta.get("author", ""),
             document_type=meta.get("document_type", ""),
@@ -323,12 +295,11 @@ class InvestigationEventEntry(EventEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "InvestigationEventEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
 
         return cls(
             **kw,
             date=_str_or_empty(meta.get("date", "")),
-            importance=int(meta.get("importance", 5)),
             status=_parse_event_status(meta),
             location=meta.get("location", ""),
             participants=meta.get("actors", meta.get("participants", [])) or [],
@@ -375,12 +346,11 @@ class TransactionEntry(EventEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TransactionEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
 
         return cls(
             **kw,
             date=_str_or_empty(meta.get("date", "")),
-            importance=int(meta.get("importance", 5)),
             status=_parse_event_status(meta),
             location=meta.get("location", ""),
             participants=meta.get("actors", meta.get("participants", [])) or [],
@@ -430,12 +400,11 @@ class LegalActionEntry(EventEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "LegalActionEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
 
         return cls(
             **kw,
             date=_str_or_empty(meta.get("date", "")),
-            importance=int(meta.get("importance", 5)),
             status=_parse_event_status(meta),
             location=meta.get("location", ""),
             participants=meta.get("actors", meta.get("participants", [])) or [],
@@ -486,10 +455,9 @@ class EvidenceEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "EvidenceEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             evidence_type=meta.get("evidence_type", ""),
             source_document=meta.get("source_document", ""),
             reliability=meta.get("reliability", "unknown"),
@@ -572,10 +540,9 @@ class ClaimEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ClaimEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             assertion=meta.get("assertion", ""),
             confidence=meta.get("confidence", "low"),
             claim_status=meta.get("claim_status", "unverified"),
@@ -625,10 +592,9 @@ class OwnershipEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "OwnershipEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             owner=meta.get("owner", ""),
             asset=meta.get("asset", ""),
             percentage=_str_or_empty(meta.get("percentage", "")),
@@ -670,10 +636,9 @@ class MembershipEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "MembershipEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             person=meta.get("person", ""),
             organization=meta.get("organization", ""),
             role=meta.get("role", ""),
@@ -719,10 +684,9 @@ class FundingEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "FundingEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             funder=meta.get("funder", ""),
             recipient=meta.get("recipient", ""),
             amount=_str_or_empty(meta.get("amount", "")),

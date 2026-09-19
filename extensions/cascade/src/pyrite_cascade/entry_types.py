@@ -5,40 +5,9 @@ from typing import Any
 
 from pyrite_journalism_investigation.entry_types import InvestigationEventEntry
 
-from pyrite.models.base import Entry, parse_datetime, parse_links, parse_sources
+from pyrite.models.base import Entry
 from pyrite.models.core_types import EventEntry, OrganizationEntry, PersonEntry, TopicEntry
 from pyrite.models.protocols import Locatable
-from pyrite.schema import Provenance, generate_entry_id
-
-# ---------------------------------------------------------------------------
-# Helper: build common kwargs from frontmatter meta dict
-# ---------------------------------------------------------------------------
-
-
-def _base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
-    """Extract base Entry fields from frontmatter dict."""
-    prov_data = meta.get("provenance")
-    provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-    entry_id = meta.get("id", "")
-    if not entry_id:
-        entry_id = generate_entry_id(meta.get("title", ""))
-
-    return {
-        "id": str(entry_id),
-        "title": meta.get("title", ""),
-        "body": body,
-        "summary": meta.get("summary", ""),
-        "tags": meta.get("tags", []) or [],
-        "aliases": meta.get("aliases", []) or [],
-        "sources": parse_sources(meta.get("sources")),
-        "links": parse_links(meta.get("links")),
-        "provenance": provenance,
-        "metadata": meta.get("metadata", {}),
-        "created_at": parse_datetime(meta.get("created_at")),
-        "updated_at": parse_datetime(meta.get("updated_at")),
-    }
-
 
 # ---------------------------------------------------------------------------
 # Actor — extends PersonEntry
@@ -72,7 +41,7 @@ class ActorEntry(PersonEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ActorEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         from pyrite.schema import ResearchStatus
 
         status_str = meta.get("research_status", "stub")
@@ -85,7 +54,6 @@ class ActorEntry(PersonEntry):
             **kw,
             role=meta.get("role", ""),
             affiliations=meta.get("affiliations", []) or [],
-            importance=int(meta.get("importance", 5)),
             research_status=research_status,
             tier=int(meta.get("tier", 0)),
             era=str(meta.get("era", "")),
@@ -121,7 +89,7 @@ class CascadeOrgEntry(OrganizationEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "CascadeOrgEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         from pyrite.schema import ResearchStatus
 
         status_str = meta.get("research_status", "stub")
@@ -135,7 +103,6 @@ class CascadeOrgEntry(OrganizationEntry):
             org_type=meta.get("org_type", ""),
             jurisdiction=meta.get("jurisdiction", ""),
             founded=str(meta.get("founded", "")),
-            importance=int(meta.get("importance", 5)),
             research_status=research_status,
             capture_lanes=meta.get("capture_lanes", []) or [],
             chapters=meta.get("chapters", []) or [],
@@ -175,7 +142,7 @@ class CascadeEventEntry(EventEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "CascadeEventEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         from pyrite.schema import EventStatus
 
         status_str = meta.get("status", "confirmed")
@@ -187,7 +154,6 @@ class CascadeEventEntry(EventEntry):
         return cls(
             **kw,
             date=str(meta.get("date", meta.get("event_date", ""))),
-            importance=int(meta.get("importance", 5)),
             status=status,
             location=meta.get("location", ""),
             participants=meta.get("actors", meta.get("participants", [])) or [],
@@ -236,7 +202,7 @@ class TimelineEventEntry(InvestigationEventEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "TimelineEventEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         from pyrite.schema import EventStatus
 
         status_str = meta.get("status", "confirmed")
@@ -248,7 +214,6 @@ class TimelineEventEntry(InvestigationEventEntry):
         return cls(
             **kw,
             date=str(meta.get("date", "")).strip("'"),
-            importance=int(meta.get("importance", 5)),
             status=status,
             location=meta.get("location", ""),
             participants=meta.get("actors", meta.get("participants", [])) or [],
@@ -311,7 +276,7 @@ class SolidarityEventEntry(EventEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "SolidarityEventEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         from pyrite.schema import EventStatus
 
         status_str = meta.get("status", "confirmed")
@@ -323,7 +288,6 @@ class SolidarityEventEntry(EventEntry):
         return cls(
             **kw,
             date=str(meta.get("date", "")).strip("'"),
-            importance=int(meta.get("importance", 5)),
             status=status,
             location=meta.get("location", ""),
             participants=meta.get("actors", meta.get("participants", [])) or [],
@@ -362,10 +326,9 @@ class ThemeEntry(TopicEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ThemeEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
-            importance=int(meta.get("importance", 5)),
             research_status=meta.get("research_status", "stub"),
         )
 
@@ -400,13 +363,12 @@ class VictimEntry(Locatable, Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "VictimEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
             era=str(meta.get("era", "")),
             location=meta.get("location", ""),
             research_status=meta.get("research_status", "stub"),
-            importance=int(meta.get("importance", 5)),
         )
 
 
@@ -443,14 +405,13 @@ class StatisticEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "StatisticEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
             era=str(meta.get("era", "")),
             data_type=str(meta.get("data_type", "")),
             research_status=meta.get("research_status", "stub"),
             verified=bool(meta.get("verified", False)),
-            importance=int(meta.get("importance", 5)),
         )
 
 
@@ -491,7 +452,7 @@ class MechanismEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "MechanismEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
             synopsis=meta.get("synopsis", ""),
@@ -499,7 +460,6 @@ class MechanismEntry(Entry):
             related_actors=meta.get("related_actors", []) or [],
             chapters=meta.get("chapters", []) or [],
             word_count=int(meta.get("word_count", 0)),
-            importance=int(meta.get("importance", 5)),
         )
 
 
@@ -538,12 +498,11 @@ class SceneEntry(Entry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "SceneEntry":
-        kw = _base_kwargs(meta, body)
+        kw = cls._base_kwargs(meta, body)
         return cls(
             **kw,
             scene_date=str(meta.get("scene_date", "")),
             era=str(meta.get("era", "")),
             related_events=meta.get("related_events", []) or [],
             actors=meta.get("actors", []) or [],
-            importance=int(meta.get("importance", 5)),
         )

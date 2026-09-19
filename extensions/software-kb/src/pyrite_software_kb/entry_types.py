@@ -3,10 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyrite.models.base import parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import DocumentEntry, NoteEntry
 from pyrite.models.protocols import Assignable, Statusable, Temporal
-from pyrite.schema import Provenance, generate_entry_id
 
 # Enum tuples
 ADR_STATUSES = ("proposed", "accepted", "rejected", "deprecated", "superseded")
@@ -57,28 +55,6 @@ RUNBOOK_KINDS = ("howto", "troubleshooting", "setup", "operations", "onboarding"
 MILESTONE_STATUSES = ("open", "closed")
 
 
-# Helper for NoteEntry-based from_frontmatter
-def _note_base_kwargs(meta: dict[str, Any], body: str) -> dict[str, Any]:
-    prov_data = meta.get("provenance")
-    provenance = Provenance.from_dict(prov_data) if prov_data else None
-    entry_id = meta.get("id", "")
-    if not entry_id:
-        entry_id = generate_entry_id(meta.get("title", ""))
-    return {
-        "id": entry_id,
-        "title": meta.get("title", ""),
-        "body": body,
-        "summary": meta.get("summary", ""),
-        "tags": meta.get("tags", []) or [],
-        "sources": parse_sources(meta.get("sources")),
-        "links": parse_links(meta.get("links")),
-        "provenance": provenance,
-        "metadata": meta.get("metadata", {}),
-        "created_at": parse_datetime(meta.get("created_at")),
-        "updated_at": parse_datetime(meta.get("updated_at")),
-    }
-
-
 @dataclass
 class ADREntry(Statusable, Temporal, NoteEntry):
     """Architecture Decision Record."""
@@ -107,7 +83,7 @@ class ADREntry(Statusable, Temporal, NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ADREntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             adr_number=int(meta.get("adr_number", 0)),
@@ -140,28 +116,13 @@ class DesignDocEntry(DocumentEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "DesignDocEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
+            **kwargs,
             date=meta.get("date", ""),
             author=meta.get("author", ""),
             document_type=meta.get("document_type", ""),
             url=meta.get("url", ""),
-            importance=int(meta.get("importance", 5)),
             status=meta.get("status", "draft"),
             reviewers=meta.get("reviewers", []) or [],
         )
@@ -189,7 +150,7 @@ class StandardEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "StandardEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             category=meta.get("category", ""),
@@ -222,7 +183,7 @@ class ProgrammaticValidationEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ProgrammaticValidationEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             category=meta.get("category", ""),
@@ -250,7 +211,7 @@ class DevelopmentConventionEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "DevelopmentConventionEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             category=meta.get("category", ""),
@@ -285,7 +246,7 @@ class ComponentEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ComponentEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             kind=meta.get("kind", ""),
@@ -332,7 +293,7 @@ class BacklogItemEntry(Assignable, Statusable, NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "BacklogItemEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             kind=meta.get("kind", ""),
@@ -366,7 +327,7 @@ class RunbookEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "RunbookEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             runbook_kind=meta.get("runbook_kind", ""),
@@ -404,7 +365,7 @@ class WorkLogEntry(Temporal, NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "WorkLogEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             item_id=meta.get("item_id", ""),
@@ -433,7 +394,7 @@ class MilestoneEntry(Statusable, NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "MilestoneEntry":
-        kwargs = _note_base_kwargs(meta, body)
+        kwargs = cls._base_kwargs(meta, body)
         return cls(
             **kwargs,
             status=meta.get("status", "open"),

@@ -3,9 +3,7 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from pyrite.models.base import parse_datetime, parse_links, parse_sources
 from pyrite.models.core_types import NoteEntry
-from pyrite.schema import Provenance, generate_entry_id
 
 ZETTEL_TYPES = ("fleeting", "literature", "permanent", "hub")
 MATURITY_LEVELS = ("seed", "sapling", "evergreen")
@@ -42,30 +40,12 @@ class ZettelEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "ZettelEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            zettel_type=meta.get("zettel_type", "fleeting"),
-            maturity=meta.get("maturity", "seed"),
-            source_ref=meta.get("source_ref", ""),
-            processing_stage=meta.get("processing_stage", ""),
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["zettel_type"] = meta.get("zettel_type", "fleeting")
+        kw["maturity"] = meta.get("maturity", "seed")
+        kw["source_ref"] = meta.get("source_ref", "")
+        kw["processing_stage"] = meta.get("processing_stage", "")
+        return cls(**kw)
 
 
 @dataclass
@@ -93,26 +73,8 @@ class LiteratureNoteEntry(NoteEntry):
 
     @classmethod
     def from_frontmatter(cls, meta: dict[str, Any], body: str) -> "LiteratureNoteEntry":
-        prov_data = meta.get("provenance")
-        provenance = Provenance.from_dict(prov_data) if prov_data else None
-
-        entry_id = meta.get("id", "")
-        if not entry_id:
-            entry_id = generate_entry_id(meta.get("title", ""))
-
-        return cls(
-            id=entry_id,
-            title=meta.get("title", ""),
-            body=body,
-            summary=meta.get("summary", ""),
-            tags=meta.get("tags", []) or [],
-            sources=parse_sources(meta.get("sources")),
-            links=parse_links(meta.get("links")),
-            provenance=provenance,
-            metadata=meta.get("metadata", {}),
-            created_at=parse_datetime(meta.get("created_at")),
-            updated_at=parse_datetime(meta.get("updated_at")),
-            source_work=meta.get("source_work", ""),
-            author=meta.get("author", ""),
-            page_refs=meta.get("page_refs", []) or [],
-        )
+        kw = cls._base_kwargs(meta, body)
+        kw["source_work"] = meta.get("source_work", "")
+        kw["author"] = meta.get("author", "")
+        kw["page_refs"] = meta.get("page_refs", []) or []
+        return cls(**kw)
