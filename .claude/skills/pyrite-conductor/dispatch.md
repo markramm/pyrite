@@ -64,12 +64,12 @@ dispatch the second when the first's PR has merged, from a fresh
 to save time by running both and rebasing later — the rebase is where the
 semantic conflict hides.
 
-Cap: **one task at a time** — one worker *or* one review, never both
-(SKILL.md, "WIP limit: one Pyrite task at a time"; #168). The earlier cap
-(three workers, up to six when footprint-disjoint) crashed the maintainer's
-machine on 2026-09-18 and returns only when they say so. With one task in
-flight the sequencing rules above still decide *order*; they no longer
-decide parallelism.
+Cap: **the two budgets in SKILL.md ("WIP limits")** — at most four suite
+slots (a worker holds one, the conductor's review suite one, a Playwright run
+two; one Playwright-heavy task at a time), and at most two of the loop's PRs
+ready with auto-merge armed; no new dispatch while three or more branches
+await review. The cap before 2026-09-18 (three workers, six when disjoint,
+nothing counted but workers) crashed the maintainer's machine (#168).
 
 **A footprint has two dimensions: files and the machine.** A theme is
 *machine-heavy* when its acceptance runs a browser suite, loops the full
@@ -82,9 +82,10 @@ review's suite re-run paid the same tax. Later the same day up to eight
 `-n auto` suites ran at once and the machine went down (#168): the count had
 covered dispatched workers, not the conductor's own review suites, not
 review agents told to run the suite, not the pre-push hook inside each
-worker. **Everything that runs the suite, a browser, a server or a model is
-the one task** — say `heavy: yes|no` in the spec anyway, so the record shows
-what a theme costs when the limit is raised. Every worker prompt says: run
+worker. **Everything that runs the suite, a browser, a server or a model
+holds a suite slot** (SKILL.md, "WIP limits": four slots; a Playwright run
+holds two and only one runs at a time) — say `heavy: yes|no` in the spec, so
+the next tick can count slots before it dispatches. Every worker prompt says: run
 the suite with `-n 4`, once per verification, never in a loop beside another
 process; every reviewer and outside-review prompt says: run no suite, the
 conductor has run it and here is the result.

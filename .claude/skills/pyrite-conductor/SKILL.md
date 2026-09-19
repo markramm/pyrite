@@ -305,39 +305,51 @@ report format. **Sonnet 5** for well-specified, mechanical work with clear
 acceptance; **Opus 5** for anything design-shaped, cross-cutting, or touching
 auth/storage/server.
 
-**WIP limit: one Pyrite task at a time** (maintainer, 2026-09-18, after the
-loop ran their machine out of memory — #168). A *task* is anything that runs
-the suite, a browser, a server or a model: a worker building, a review's
-suite run, a Playwright run, an outside-PR review. Exactly one may be in
-progress on the machine, the conductor's own included. A tick therefore does
-**one** of these, in this order of preference, and then stops:
+**WIP limits: a machine budget and a pull-request budget** (maintainer,
+2026-09-19: "we should be able to run multiple workers now, we just need to
+keep things reasonable in terms of pull requests, so we don't have so many
+rebases, and Playwright tests, so we don't use all the memory on my
+machine"). From 2026-09-18 to 09-19 the limit was one task at a time, after
+the loop ran the machine out of memory (#168: up to eight `-n auto` suites at
+once, because the old cap counted dispatched workers and not the conductor's
+own review suites, review agents told to run the suite, or the pre-push hook
+inside each worker). That is the failure these two budgets exist to prevent.
 
-1. a worker is still running → nothing heavy; health, reading a diff, the
-   log — then stop;
-2. an outside PR is unreviewed → review that one;
-3. a branch awaits review → review the oldest one, to merged or sent back;
-4. nothing is waiting → dispatch **one** worker, on the smallest groomed
-   theme that advances the release.
+*The machine budget* — count **suite slots**, not workers, and count your
+own:
+- every suite anywhere runs `-n 4`, never `-n auto` (ten processes per suite
+  on this 10-core / 16 GB machine); every worker prompt and every reviewer
+  prompt says so;
+- at most **four suite slots** in use at once: each code worker holds one
+  while it lives (it may run its suite at any moment, and its pre-push hook
+  will), the conductor's review suite holds one, and **a Playwright run holds
+  two** (uvicorn + vite + several Chromium workers);
+- so: up to **three workers** plus one review suite; **one Playwright-heavy
+  task at a time**, worker or review, and beside it at most two other slots;
+- read-only agents (the architect, a cold read, an outside-PR cold read) take
+  no slot **only** under an explicit instruction to run no suite, no `-n`
+  flag, no server and no browser — the conductor runs the suite once and
+  hands them the result;
+- the health step reads `uptime` and `memory_pressure` and starts nothing
+  heavy above load 8 or below 30% free memory, whatever the slot count says.
 
-Stop starting, start finishing: no dispatch while anything awaits review.
-Themes are groomed *small* for this — a theme that needs more than one
-suite-and-review cycle is split before it is dispatched. Read-only agents
-(the architect, a cold read) may run beside the one task **only** under an
-explicit instruction to run no suite, no `-n` flag, no server and no
-browser; an agent told to "run the full suite" is a task and takes the
-slot. Review suites run `-n 4`, never `-n auto`: on a 10-core / 16 GB
-machine `-n auto` is ten processes per suite, and on 2026-09-18 up to eight
-suites ran at once — three the conductor started for reviews, three inside
-outside-PR review agents, two inside workers — none of which the old
-"≤2 machine-heavy" cap counted, because it counted dispatched workers only.
-The health step reads `uptime` and `memory_pressure` and starts nothing
-heavy above load 8 or below 30% free memory. The maintainer raises this
-limit, not the conductor; the earlier cap (three workers, six when
-disjoint) is what to return to only when a machine-wide suite lock exists
-and they say so.
+*The pull-request budget* — every merge puts every other open PR `BEHIND`,
+and until a merge queue exists each of those is a rebase and a gate run:
+- at most **two of the loop's PRs ready with auto-merge armed** at once; the
+  rest wait as drafts and are flipped as those land;
+- **finish before starting**: no new dispatch while three or more branches
+  await review — spare slots go to reviews, not to more branches;
+- a follow-up to work in flight goes onto that PR's branch, never a new PR;
+- outside PRs still jump the review queue and are never merged by the loop.
+
+A tick therefore: health → an unreviewed outside PR, if any → the oldest
+branch awaiting review → dispatch into free slots, within both budgets.
+Themes stay groomed *small* (one worker pass, one review). The budgets are
+the maintainer's to change; when the machine-wide suite lock (#168) lands,
+its measured memory per worker is the evidence for the next change.
 
 The cap counts *tasks*: the week's tick-log PR and other record-only KB PRs
-are not in flight and do not take the slot. Spikes are tasks.
+are not in flight and take no slot. Spikes are tasks.
 
 Never `isolation: "worktree"` on the Agent tool — the script makes the
 worktree, and the agent is told where it is.
