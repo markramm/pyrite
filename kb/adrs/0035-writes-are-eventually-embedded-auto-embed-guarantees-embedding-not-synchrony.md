@@ -1,5 +1,5 @@
 ---
-id: adr-0034
+id: adr-0035
 type: adr
 title: "Writes are eventually-embedded: auto_embed guarantees embedding, not synchrony"
 adr_number: 35
