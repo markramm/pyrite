@@ -52,13 +52,30 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `total` and `limit` are computed over readable rows only — a count of
   three for a KB you cannot read is itself a disclosure.
 
+  **A request that names a knowledge base in more than one place is now
+  checked against every one of them.** A request can name a KB in its path,
+  in either of two query spellings (`kb`, `kb_name`) and in its JSON body,
+  and the permission check used to stop at the first place it looked while
+  the handler read a different one — so pairing a knowledge base you may
+  read with one you may not could return the second one's content, or
+  authorise a write to it. Every KB a request names must now be permitted:
+  readable for a read route, and at the required tier for a write route.
+  A request whose body cannot be parsed is refused rather than treated as
+  naming no KB at all.
+
+  `GET /api/kbs/{kb}/changes`, which returns uncommitted entry-level diffs,
+  now requires read access to that KB as well as the global read tier.
+
   `tests/test_read_scoping_is_structural.py` now enforces this: it walks
   the real app's routes and fails for any `/api` route that declares no
   read-scoping dependency and is not on an explicit allowlist where every
-  entry carries a reason. A new unscoped route fails CI with instructions.
-  Meta and admin surfaces (`/stats`, `/plugins*`, `/settings*`, `/repos*`,
-  `/worktree*`, the git-ops routes, MCP over HTTP) are allowlisted pending
-  the same treatment; they are tier-guarded today but not per-KB scoped.
+  entry carries a reason — and, since a declared check is not the same as a
+  check that looked in the right place, it also fails any scoped route that
+  reads its KB from somewhere the resolver does not inspect. A new unscoped
+  route fails CI with instructions. Meta and admin surfaces (`/stats`,
+  `/plugins*`, `/settings*`, `/repos*`, `/worktree*`, the remaining git-ops
+  routes, MCP over HTTP) are allowlisted pending the same treatment; they
+  are tier-guarded today but not per-KB scoped.
 
 ### Added
 
