@@ -426,6 +426,31 @@ class TestAnUnreadableBodyFailsClosed:
             f"a multipart upload was refused as an unparseable body: {r.text[:200]}"
         )
 
+    @pytest.mark.parametrize("content_type", ["text/plain", "application/x-www-form-urlencoded"])
+    def test_a_non_json_content_type_cannot_smuggle_a_kb_past_the_resolver(
+        self, env, who, content_type
+    ):
+        """Skipping a non-JSON body is only safe because the handler cannot
+        read one either.
+
+        The resolver reads the body only when the content type is JSON. That
+        would be a hole if a handler could still parse a JSON body sent under
+        another content type -- the resolver would skip the KB the handler
+        then acted on. FastAPI does not: a Pydantic body parameter is a 422
+        unless the content type is JSON. This pins that, so the day it stops
+        being true this test fails rather than the guard silently going
+        quiet.
+        """
+        r = env[who].post(
+            "/api/ai/summarize",
+            content=b'{"entry_id":"secret-note","kb_name":"' + PRIVATE.encode() + b'"}',
+            headers={"content-type": content_type},
+        )
+        assert r.status_code in (403, 404, 422), (
+            f"a KB named in a {content_type} body was acted on: {r.status_code} {r.text[:200]}"
+        )
+        assert not [m for m in PRIVATE_MARKERS if m in r.text]
+
 
 class TestWriteTierNeedsTheTierOnEveryNamedKB:
     """`requires_kb_tier('write')` shares the resolver, so it inherits the
