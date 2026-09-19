@@ -2411,3 +2411,22 @@ Issue #168. Tick 11 began 10:49Z with load at 14 and started three `-n auto` rev
 - **ADR-0034 accepted** by the maintainer ("I have accepted 170"). `status: accepted` committed on `kb/adr-bounded-reads`, PR #170 rebased onto dev with auto-merge armed. Entries 35–39 of `serial-queue-2026-09-18.md` (the five `adr-0034-*` themes) are **unblocked**; their other waits stand ((i) and (ii) after #166's #58 fix lands or is abandoned, and after #145).
 - #173 now conflicts with dev only in `CHANGELOG.md`; it still waits on #171 and its four changes.
 - The maintainer's read on the release: on track for the middle of next week.
+
+## Session 2026-09-19T19:07Z — by hand with the maintainer (loop stopped; WIP = 1)
+
+**Overnight:** #169 and #170 (ADR-0034, accepted) merged; dev green. #171's author pushed the merge-of-dev + format fix — byte-identical to the version the conductor had lint-verified; it needs only the maintainer's CI approval click. #173's author is holding their push until #171 merges. #166's author commented "Updated" without pushing.
+
+**Four new outside PRs reviewed, one suite at a time at `-n 4` (61–63 s each), cold reads under no-suite orders, and — new — the takes were agreed with the maintainer before anything was posted** ("easier for contributors if they get one message with our best thinking"):
+- **#176** (makiaveli1, classmethod fixtures, #144): merge as is. Its decorator order is pytest's documented one, not the order that broke dev on 09-18; probed on 3.11/3.12/3.13 with pytest 9.1.1 and 9.0.2.
+- **#174** (makiaveli1, REST batch parity, #134): merge after two changes — `fields` of a wrong type is still a 500 (reproduced); one private-KB + `fields` test. The copied validation loop is accepted; we extract the shared helper ourselves with ADR-0034's module. Sibling `?fields=` bugs filed as #179 (`good first issue`).
+- **#175** (makiaveli1, GenericEntry metadata, #149): merge after three — the bookkeeping field must be `init=False, repr=False, compare=False` (it changes `==`; reproduced); guard a non-mapping `metadata:` (still retypes to `event`); one file-level fixture. Two format behaviours accepted deliberately; "new keys join an existing block / one helper owns the decision" filed as #178.
+- **#177** (Gambit-Checkmate, first-time, #19): needs rework. Maintainer's decision: removing a KB from `config.yaml` means it is gone from the running server until re-added — so the fix is `remove_kb` consulting the live config, not a startup `UPDATE` (which un-protects everything under an empty config — reproduced — keeps a removed KB published, and writes on every read-tier start).
+- #166 nudged to push; #164 noted as superseded by #173.
+
+**Design review of what has merged since 09-16** (three read-only reviewers; key claims spot-checked by the host). Verdict: decisions good, code unusually well explained, but contracts live in prose and nothing enforces them, so fixes land on one surface or class and not its siblings. It produced the maintainer's next three priorities, ahead of the serial queue:
+1. **Private-KB read scoping is incomplete** — the entry/search/graph/link/KB routes are scoped; sixteen other endpoint modules that serve KB content are not. Dispatched as the one running task: PR #180 (opus; structural test over every route + scoping of all content routes; cold read mandatory; part 2 covers meta/admin routes).
+2. **social / zettelkasten / encyclopedia hand-roll `from_frontmatter`** and drop base fields — route through `_base_kwargs`, plus an entry-class conformance test over every registered class.
+3. **Relabel those three as example plugins (not supported)** for 0.24.2, with a release-note line; the directory move waits until after the release.
+Other findings queued as tickets after the release gate: MCP/REST contract test, shared read-shaping module, one error taxonomy on `PyriteError`, pin the CI classifier's filter paths, `verify-red.sh` must show why a test failed, `add_link` skips `_validate_write`, the `EventEntry` load fallback retypes entries, `KBService`/`mcp_server.py` splits, fixture reach (22 of 216 test files use the shared fixtures).
+
+**Review-process lessons:** `ruff check` + `ruff format --check` at CI's exact scope are now run on every PR head (the #171 miss). Agreeing the take with the maintainer before posting cost one round trip and changed three recommendations' framing.
