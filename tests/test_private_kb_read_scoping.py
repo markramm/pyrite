@@ -415,3 +415,42 @@ class TestWhoCanSee:
         assert _kb_names(env["peer"].get("/api/kbs")) == {PUBLIC, PRIVATE}
         assert env["peer"].get(f"/api/entries/secret-note?kb={PRIVATE}").status_code == 200
         assert "secret-note" in _ids(env["peer"].get("/api/search?q=zebra"))
+
+
+@pytest.mark.parametrize("route", KB_NAMED_ROUTES)
+class TestScopingIsNotAWallForCallersWhoMayRead:
+    """The other half of every criterion above: a caller who may read the
+    KB must still get through. A check that 404s everyone would pass every
+    leak test in this file and be worthless."""
+
+    def test_a_global_admin_is_never_404ed_by_scoping(self, env, route):
+        r = env["admin"].get(route.format(kb=PRIVATE))
+        assert r.status_code != 404 or "KB_NOT_FOUND" not in r.text, (
+            f"{route}: scoping 404'd a global admin -- {r.text[:200]}"
+        )
+
+    def test_a_granted_peer_is_never_404ed_by_scoping(self, env, route):
+        auth = AuthService(env["db"], env["config"].settings.auth)
+        users = {u["username"]: u for u in auth.list_users()}
+        auth.grant_kb_permission(users["peer"]["id"], PRIVATE, "read", users["admin-user"]["id"])
+        r = env["peer"].get(route.format(kb=PRIVATE))
+        assert r.status_code != 404 or "KB_NOT_FOUND" not in r.text, (
+            f"{route}: scoping 404'd a peer holding a read grant -- {r.text[:200]}"
+        )
+
+
+@pytest.mark.parametrize("route", KB_SPANNING_ROUTES)
+def test_a_global_admin_still_spans_every_kb(env, route):
+    """The KB-spanning routes pass kb_names=None for an unscoped caller,
+    so an admin's view is unchanged by this work."""
+    r = env["admin"].get(route)
+    assert r.status_code == 200, f"{route}: {r.text[:200]}"
+
+
+def test_admin_timeline_and_tags_still_include_the_private_kb(env):
+    """The sharpest form of "nothing changes for a caller who reads
+    everything": the private rows are still there for an admin."""
+    timeline = env["admin"].get("/api/timeline")
+    assert {e["id"] for e in timeline.json()["events"]} == {"public-event", "secret-event"}
+    tags = env["admin"].get("/api/tags")
+    assert "confidential/operation-zebra" in {t["name"] for t in tags.json()["tags"]}
