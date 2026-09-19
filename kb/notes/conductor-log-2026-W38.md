@@ -2526,3 +2526,11 @@ Groom lane landed (c1045aa): priorities 2 and 3 have items with `## Groom` secti
 ## Tick 2026-09-19T23:44Z (scheduled — waiting on reviews)
 
 `dev` 130f433 green. Load 9.3 (two review suites at `-n 4` running concurrently for #190 and #175→#174), 60% free — nothing heavy started. No new outside activity. In flight: three cold reads (#190 vs #184, #175, #174), the two suites, the package-G groom. Nothing to absorb, nothing dispatchable, the desk unchanged.
+
+## Tick 2026-09-19T23:50Z (absorb suites; dispatch package G)
+
+**Outside suites (conductor half):** #190 — 4445 passed + the 59 conformance failures that are the #189 artefact (the shared venv's `extensions/` were at the pre-#187 main checkout; main checkout pulled to 130f433, conformance file then 201/201), verify-red red on `tests/test_rest_fields_projection.py`. #175 — 4451 passed, same 59 artefact + one `test_no_wal_files_survive_the_fixture_teardown` failure that passes alone on the branch and on `dev` (load-sensitive under two concurrent suites; the known WAL-teardown race, not this PR's); verify-red red on all three test paths. #174 — 4465 passed + the 59 artefact; verify-red red on both test files. Cold reads on all three still running. **Lesson recorded on #189:** a symlinked venv is only sound when the main checkout is at the branch's base; the cheap fix is to keep the main checkout on `origin/dev` at every tick's health step.
+
+**Groom lane:** package G already existed with a 09-18 Groom (title mismatch); the architect appended a superseding `## Groom 2026-09-19` — dispatchable now, after nothing (the "#49 first" blocker dropped on package F's precedent), with the selector facts read off `dev` written into the item. **Dispatched:** **#191** `feature/playwright-g-search-qa` (Sonnet, `heavy: yes`, the one Playwright task — 2 slots; PR budget 0 armed). Its first acceptance criterion is the assertion that lets #9 close.
+
+**Needs the maintainer:** unchanged.
