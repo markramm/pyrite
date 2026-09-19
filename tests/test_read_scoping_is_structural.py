@@ -8,6 +8,27 @@ docstring. This test is the enforcement: it walks the real app's routes
 and fails for any `/api` route that is neither scoped nor explicitly
 allowlisted with a reason.
 
+**What this file proves is two things, not one.** A first version proved
+only that a scoping dependency was *attached* to the route, and that was
+not enough: the dependency and the handler can read the KB from different
+places. `reviews.py` binds `Query(..., alias="kb_name")` while the
+resolver looked at `kb` first, so a request naming both was checked
+against one KB and served from the other. So the gate now also proves
+that **the resolver looks everywhere the handler reads**:
+`test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores`
+compares each scoped route's declared KB-bearing parameters -- query
+names *and* aliases, path params, and `kb`/`kb_name` fields of a body
+model -- against `RESOLVED_KB_LOCATIONS`, the set
+`pyrite.server.api._resolve_kb_names` actually inspects.
+
+**What the walk cannot see -- recorded, not reviewed.** It visits
+`APIRoute`s under `/api` only. Two surfaces are therefore absent rather
+than approved, and are listed in `UNREACHABLE_BY_THIS_WALK` below:
+`/mcp` is a `Mount` (a whole sub-application: MCP over HTTP resolves a
+global tier and has no per-KB scoping anywhere) and `/ws` is a
+`WebSocketRoute`. Neither is a `FastAPI` route object with a dependant
+tree, so nothing here says anything about them.
+
 **How scoping is detected: the dependency tree, not the handler body.**
 Every route's `route.dependant` is walked recursively and each
 dependency's callable is matched by qualified name against
@@ -25,6 +46,7 @@ correctly, because such a call is invisible to review.
 """
 
 from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
 
 from pyrite.server.api import create_app
 
@@ -37,6 +59,25 @@ SCOPING_DEPENDENCIES = {
     "pyrite.server.api.requires_kb_read.<locals>._check",
     "pyrite.server.api.get_readable_kbs",
     "pyrite.server.api.assert_kb_readable",
+}
+
+# The parameter names `_resolve_kb_names` inspects, in every location it
+# looks (query, path, JSON body). A scoped route that declares a
+# KB-bearing parameter outside this set reads its KB from somewhere the
+# resolver does not look -- which is exactly the hole that let a request
+# name two KBs and be checked against the wrong one.
+RESOLVED_KB_LOCATIONS = {"kb", "kb_name"}
+
+# Surfaces this walk structurally cannot reach: not `APIRoute`s, so they
+# have no dependant tree to inspect. Recorded here as *unreviewed*, so
+# their absence from the results above is never read as approval.
+UNREACHABLE_BY_THIS_WALK = {
+    "/mcp": (
+        "Mount (a sub-application, mcp_routes.py). MCP over HTTP resolves a "
+        "global tier from the API key and has no per-KB read scoping anywhere "
+        "in its path. Not covered by any test in this file."
+    ),
+    "/ws": ("WebSocketRoute. No dependant tree; its scoping, if any, is unreviewed here."),
 }
 
 # Routes that serve no KB content, or whose scoping is part 2 of this work.
@@ -119,10 +160,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("GET", "/api/admin/merge-queue/{username}/diff"): "part 2: worktree.py",
     ("POST", "/api/admin/merge-queue/{username}/merge"): "part 2: worktree.py",
     ("POST", "/api/admin/merge-queue/{username}/reject"): "part 2: worktree.py",
-    (
-        "GET",
-        "/api/kbs/{kb_name}/changes",
-    ): "part 2: git_ops.py -- tier check but no per-KB read check",
     ("POST", "/api/kbs/{kb_name}/commit"): "part 2: git_ops.py",
     ("POST", "/api/kbs/{kb_name}/publish"): "part 2: git_ops.py",
     ("POST", "/api/kbs/{kb_name}/push"): "part 2: git_ops.py",
@@ -239,6 +276,129 @@ def test_every_api_route_is_scoped_or_allowlisted():
         raise AssertionError(
             f"{len(unscoped)} /api route(s) are not read-scoped:\n{listing}\n{HOW_TO_FIX}"
         )
+
+
+def _declared_kb_parameters(route: APIRoute) -> set[str]:
+    """Every name by which this route's handler can receive a KB.
+
+    Query parameters by both their Python name and their wire alias (a
+    handler may bind `kb: str = Query(..., alias="kb_name")` -- the wire
+    name is what the resolver must look for), path parameters, and the
+    `kb`/`kb_name` fields of any Pydantic body model.
+    """
+    d = route.dependant
+    names: set[str] = set()
+    for p in (*d.query_params, *d.path_params):
+        if _is_kb_parameter(p.name) or _is_kb_parameter(p.alias or ""):
+            names |= {n for n in (p.name, p.alias) if n and _is_kb_parameter(n)}
+    for p in d.body_params:
+        annotation = getattr(p.field_info, "annotation", None)
+        for field in getattr(annotation, "model_fields", {}) or {}:
+            if _is_kb_parameter(field):
+                names.add(field)
+        if _is_kb_parameter(p.name):
+            names.add(p.name)
+    return names
+
+
+def _is_kb_parameter(name: str) -> bool:
+    """`kb` / `kb_name` exactly. `target_kb`, `center_kb` and friends name a
+    *secondary* KB for a route that is already scoped on its primary one;
+    they are a separate question (part 2) and deliberately not claimed here."""
+    return name in {"kb", "kb_name"}
+
+
+def test_scoped_routes_declare_no_kb_parameter_the_resolver_ignores():
+    """A scoped route must read its KB from a place the resolver inspects.
+
+    Attaching `requires_kb_read()` proves a check runs; it does not prove
+    the check looked at the KB the handler will serve from. This closes
+    that gap: for every route counted as scoped, each KB-bearing parameter
+    the handler declares must be one `_resolve_kb_names` reads.
+    """
+    offenders = []
+    for method, path, route in _iter_api_routes():
+        if not _is_scoped(route):
+            continue
+        unseen = _declared_kb_parameters(route) - RESOLVED_KB_LOCATIONS
+        if unseen:
+            offenders.append((method, path, sorted(unseen), route))
+    if offenders:
+        listing = "\n".join(
+            f"  {method:6} {path:52} reads its KB from {names} "
+            f"({route.endpoint.__module__.rsplit('.', 1)[-1]}.py:{route.endpoint.__name__})"
+            for method, path, names, route in offenders
+        )
+        raise AssertionError(
+            f"{len(offenders)} scoped route(s) declare a KB parameter that "
+            f"pyrite.server.api._resolve_kb_names does not inspect, so the "
+            f"scoping check and the handler can read different KBs:\n{listing}\n"
+            f"Resolver reads: {sorted(RESOLVED_KB_LOCATIONS)} in query (name and "
+            f"alias), path and JSON body. Either teach the resolver the new "
+            f"location or rename the parameter."
+        )
+
+
+def test_the_resolver_reads_every_location_this_file_claims():
+    """`RESOLVED_KB_LOCATIONS` above is the contract the previous test
+    enforces; here it is checked against the resolver itself, so the two
+    cannot drift apart silently."""
+    from pyrite.server.api import KB_PARAM_NAMES
+
+    assert set(KB_PARAM_NAMES) == RESOLVED_KB_LOCATIONS
+
+
+def test_surfaces_outside_the_walk_are_recorded_as_unreviewed():
+    """The two non-APIRoute surfaces still exist and are still unreviewed.
+
+    If `/mcp` or `/ws` ever disappears -- or a third such mount appears --
+    this file's statement about what it does not cover has gone stale.
+    """
+    app = create_app()
+    mounted = {
+        getattr(r, "path", None)
+        for r in app.routes
+        if not isinstance(r, APIRoute) and getattr(r, "path", "").startswith(("/mcp", "/ws"))
+    }
+    assert mounted == set(UNREACHABLE_BY_THIS_WALK), (
+        f"non-APIRoute surfaces changed: app has {sorted(mounted)}, this file "
+        f"records {sorted(UNREACHABLE_BY_THIS_WALK)}"
+    )
+
+
+def test_a_exhausting_the_rate_limit_does_not_leak_into_the_next_test():
+    """Half one: spend the whole per-minute budget on a limited route.
+
+    `pyrite.server.api.limiter` is a process-global `Limiter` with in-memory
+    storage that no `create_app()` clears, so without a per-test reset the
+    429s this produces are inherited by whatever runs next -- which is why
+    both scoping files failed in a batch under load and passed on an idle
+    machine (the wall-clock minute, not the test, decided). The pair of
+    tests here is the regression: this one burns the budget, and the next
+    asserts it came back.
+    """
+    client = TestClient(create_app())
+    codes = {client.get("/api/kbs").status_code for _ in range(130)}
+    assert 429 in codes, (
+        "the limiter did not engage at all -- this pair of tests no longer "
+        "proves anything about the reset; check the limit on /api/kbs"
+    )
+
+
+def test_b_the_next_test_gets_a_fresh_rate_limit_budget():
+    """Half two: the budget the previous test spent is back.
+
+    Fails without the autouse `_reset_rate_limiter` fixture in
+    tests/conftest.py. Named to sort after its partner, which the walk and
+    pytest both run in file order.
+    """
+    client = TestClient(create_app())
+    codes = {client.get("/api/kbs").status_code for _ in range(30)}
+    assert 429 not in codes, (
+        "rate-limit state leaked from the previous test -- the autouse "
+        "_reset_rate_limiter fixture in tests/conftest.py is missing or no "
+        "longer applies here, and the scoping suites are load-sensitive again"
+    )
 
 
 def test_allowlist_entries_all_carry_a_reason():

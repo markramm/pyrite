@@ -38,6 +38,33 @@ def _isolate_global_config(tmp_path_factory, monkeypatch):
     monkeypatch.setattr(config_module, "CONFIG_FILE", safe_dir / "config.yaml")
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Give each test its own rate-limit budget.
+
+    `pyrite.server.api.limiter` is a module-level `Limiter` with in-process
+    memory storage, so its counters are shared by every app every test in
+    the process builds -- a fresh `create_app()` does not reset them. Routes
+    limited at "100/minute" therefore start returning 429 once the tests in
+    one worker have, between them, sent a hundred requests inside the same
+    wall-clock minute.
+
+    That makes any suite exercising those routes **load-sensitive**: how many
+    requests land in a given minute depends on how fast everything else on
+    the machine ran, so the tests pass on an idle box and fail in a batch
+    under `-n auto`. `tests/test_private_kb_read_scoping.py` failed exactly
+    that way -- 110 of 239 cases while another suite ran, all 239 green when
+    the machine was idle. Resetting per test makes the count each test's own.
+    """
+    if not _HAS_FASTAPI:
+        yield
+        return
+    from pyrite.server.api import limiter
+
+    limiter.reset()
+    yield
+
+
 @pytest.fixture
 def tmp_kb_dir():
     """Temporary directory with KB subdirectories."""
