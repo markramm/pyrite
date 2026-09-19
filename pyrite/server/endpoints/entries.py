@@ -342,6 +342,14 @@ def batch_read_entries(
     entries_spec = body.get("entries", [])
     fields_param = body.get("fields")
 
+    if not isinstance(entries_spec, list):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "VALIDATION_FAILED",
+                "message": "entries must be an array of {entry_id, kb_name} objects",
+            },
+        )
     if not entries_spec:
         raise HTTPException(
             status_code=400,
@@ -353,6 +361,28 @@ def batch_read_entries(
             detail={"code": "VALIDATION_FAILED", "message": "Maximum 50 entries per call"},
         )
 
+    # REST parity with the MCP kb_batch_read contract (#134): a malformed spec is
+    # a client error with a stable code, not a 500, and the identity pair is
+    # always kept so `found` cannot contradict `not_found` when `fields` omits it.
+    for index, spec in enumerate(entries_spec):
+        if (
+            not isinstance(spec, dict)
+            or not isinstance(spec.get("entry_id"), str)
+            or not spec["entry_id"]
+            or not isinstance(spec.get("kb_name"), str)
+            or not spec["kb_name"]
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "VALIDATION_FAILED",
+                    "message": (
+                        f"entries[{index}] must be an object with non-empty string "
+                        "entry_id and kb_name"
+                    ),
+                },
+            )
+
     ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
     if readable is not None:
         # Items in KBs the caller may not read are reported as not found.
@@ -360,9 +390,11 @@ def batch_read_entries(
     results = svc.get_entries(ids)
 
     if fields_param:
-        results = [{k: r[k] for k in fields_param if k in r} for r in results]
+        # Keep the identity pair in the projection: found_ids below reads it,
+        # and dropping it is what made `found` and `not_found` disagree (#134).
+        results = [{k: r[k] for k in ("id", "kb_name", *fields_param) if k in r} for r in results]
 
-    found_ids = {(r.get("id"), r.get("kb_name")) for r in results}
+    found_ids = {(r["id"], r["kb_name"]) for r in results}
     requested = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
     not_found = [
         {"entry_id": eid, "kb_name": kb} for eid, kb in requested if (eid, kb) not in found_ids

@@ -204,6 +204,11 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Fixed
 
+- **The REST `POST /entries/batch` endpoint now matches the MCP
+  `kb_batch_read` contract.** A malformed spec returns a structured
+  `VALIDATION_FAILED` (HTTP 400) naming `entries[i]` instead of a 500, and the
+  `fields` projection always keeps `id` and `kb_name`, so `found` can no longer
+  contradict `not_found` (#134).
 - **`kb_batch_read` no longer crashes on a malformed spec, and every `fields`
   projection keeps the identity pair.** A non-list `entries`, a non-object item,
   or a missing, empty or non-string `entry_id`/`kb_name` used to raise a raw
