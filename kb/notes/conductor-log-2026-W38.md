@@ -2484,3 +2484,13 @@ Groom lane landed (c1045aa): priorities 2 and 3 have items with `## Groom` secti
 **Dispatched:** none — all four slots' worth of review work is in hand (two conductor suites queued serially, two cold reads out) and the groom queue is empty until the maintainer answers on the follow-ups.
 
 **Needs the maintainer:** unchanged — #184 comment, #173 nudge (now moot: they rebased; the re-review will produce the next message), #140/#145/#161 fix-at-review or redispatch, the follow-ups note.
+
+## Tick 2026-09-19T21:16Z (scheduled)
+
+**Health:** `dev` 3369bab green (#188 landed at 20:56Z). Load 5.8, 72% free. No new outside comments; #173 rebased and in re-review. Every open PR is `BEHIND` after #188 — outside ones are the maintainer's; ours rebase at flip time.
+
+**Absorb:** **#187** (reported last tick) — review worktree at 3692a68; `ruff check`/`format --check` at CI scope (`pyrite/ tests/ extensions/`) clean; diff read: each of the six classes is now `kw = cls._base_kwargs(meta, body)` + its own keys (+55/−300 net across the six `entry_types.py`), `task.py`'s copy deleted with its four now-unused imports, and the conformance test's fixture puts every base key at a non-default value with the `created_at`/`updated_at`/`metadata` assertions scoped exactly as the dispatch asked (survive onto the entry; declared mapping only; `TaskEntry`'s promoted shape accepted for that one type with the reason in a comment). No cold-read trigger. Suite at `-n 4` running in the second review slot with verify-red on the test file; flip when green. **#173** (outside): conductor half done — suite `-n 4` **4335 passed, 0 failed**, verify-red red on both test files; cold read still out. **#180**: suite running in the first review slot; second cold read still out.
+
+**Choose/dispatch:** none — three branches in review, three on the desk; no workers running. Ready queue empty (only `changelog-fragments` is groomed); the groom lane is not re-dispatched until the maintainer answers on the follow-ups, since those answers decide the next set.
+
+**Needs the maintainer:** unchanged.
