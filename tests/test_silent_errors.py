@@ -24,6 +24,10 @@ def test_resolve_kb_names_logs_warning_and_fails_closed_on_body_parse_failure(ca
     request = AsyncMock()
     request.query_params = {}
     request.path_params = {}
+    # A JSON body is the only kind the resolver reads at all; anything else
+    # (a multipart upload, a form post) is left alone, because it cannot
+    # name a KB the way this resolver understands.
+    request.headers = {"content-type": "application/json"}
     request.body = AsyncMock(side_effect=Exception("read error"))
 
     with caplog.at_level(logging.WARNING, logger="pyrite.server.api"):

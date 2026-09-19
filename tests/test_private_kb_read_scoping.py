@@ -403,6 +403,29 @@ class TestAnUnreadableBodyFailsClosed:
         )
         assert not [m for m in PRIVATE_MARKERS if m in r.text], path
 
+    def test_a_multipart_upload_still_works(self, env, who):
+        """Fail-closed must not mean "refuse every body the resolver cannot
+        read as JSON".
+
+        `/api/entries/import` takes `UploadFile = File(...)`, so FastAPI
+        consumes the request as a multipart *stream* and a later
+        `request.body()` raises RuntimeError("Stream consumed"). That is
+        not a malformed body and not an attack: the route names its KB in
+        the query string, where the resolver has already seen it. Refusing
+        it broke four import tests.
+
+        Asserted for a caller who may not write, so this stays a scoping
+        test: the answer must be the ordinary 403/404, never a 400 from the
+        resolver failing to read a body it was never going to find a KB in.
+        """
+        r = env[who].post(
+            f"/api/entries/import?kb={PUBLIC}&format=json",
+            files={"file": ("entries.json", b"[]", "application/json")},
+        )
+        assert r.status_code != 400, (
+            f"a multipart upload was refused as an unparseable body: {r.text[:200]}"
+        )
+
 
 class TestWriteTierNeedsTheTierOnEveryNamedKB:
     """`requires_kb_tier('write')` shares the resolver, so it inherits the

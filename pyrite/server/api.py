@@ -505,9 +505,17 @@ async def _resolve_kb_names(request: Request) -> list[str]:
     Order is preserved and duplicates removed, so the first value is still
     a sensible single name for an error message.
 
-    Raises `_UnparseableBodyError` when the body exists but cannot be parsed:
-    "no KB named" is what lets a request through, so an unknown body must
-    not produce it.
+    Raises `_UnparseableBodyError` when a **JSON** body cannot be parsed:
+    "no KB named" is what lets a request through, so a body that was
+    supposed to carry a KB and could not be read must not produce it.
+
+    A body of any other content type is not read at all. Only a JSON object
+    can name a KB the way this resolver understands, and a multipart upload
+    (`/api/entries/import` binds `UploadFile = File(...)`) is consumed as a
+    stream by FastAPI, so reading it here raises
+    `RuntimeError("Stream consumed")` -- which is neither a malformed body
+    nor an attack, and those routes name their KB in the query string
+    anyway.
     """
     names: list[str] = []
 
@@ -525,6 +533,9 @@ async def _resolve_kb_names(request: Request) -> list[str]:
 
     for param in KB_PARAM_NAMES:
         add(request.query_params.get(param))
+
+    if not _has_json_body(request):
+        return names
 
     try:
         body = await request.body()
@@ -544,6 +555,18 @@ async def _resolve_kb_names(request: Request) -> list[str]:
                 add(data.get(param))
 
     return names
+
+
+def _has_json_body(request: Request) -> bool:
+    """Could this request's body be a JSON object naming a KB?
+
+    Anything else -- a multipart upload, a form post, no body at all -- is
+    left unread. The KB in those cases is in the path or the query, which
+    the caller has already collected.
+    """
+    content_type = request.headers.get("content-type", "")
+    media_type = content_type.split(";", 1)[0].strip().lower()
+    return media_type == "application/json" or media_type.endswith("+json")
 
 
 def _admin_kb_path_name(request: Request) -> str | None:
