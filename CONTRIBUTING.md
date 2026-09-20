@@ -184,6 +184,23 @@ build and Playwright. `--no-verify` is for a documented emergency, not for a
 red test you did not write; if a test you did not touch fails, say so in the PR
 and we will look at it together.
 
+**Claiming an issue:** before you spend more than an hour on an issue, say so
+on the issue: two or three lines on how you'll fix it and what test proves
+it. A draft PR with that in the body is even better — we'll steer you there
+before you write much, and the draft is visible to everyone else looking at
+the issue. The plan scales with the change: for a `good first issue` one
+sentence is enough ("I'll add `id`/`kb_name` to the three projections and a
+test per command").
+
+A claim with no PR after 5 days lapses. Two people on one issue is fine — the
+first PR that meets the acceptance criteria merges, and we credit the other
+in the CHANGELOG line.
+
+A placeholder commit or file is not a claim, and we don't merge placeholders.
+
+Push as you go. A fix that exists only on your machine cannot be reviewed,
+and "it's in a local commit" has cost a round trip more than once.
+
 **Pull requests:**
 
 1. `git checkout -b fix/what-it-fixes dev` (or `feature/...`)

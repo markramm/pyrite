@@ -235,6 +235,7 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   types, CLI commands, MCP tools and a preset, not supported products.
   Wording only — no package name, entry point, module path, preset name,
   template name, CLI command name, MCP tool name or directory changed.
+- CONTRIBUTING: how to claim an issue
 
 ### Fixed
 

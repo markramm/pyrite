@@ -29,3 +29,9 @@ If this involves a knowledge base you cannot share, describe its shape (entry
 types, rough size) rather than pasting content. Security problems go to the
 [private report form](https://github.com/markramm/pyrite/security/advisories/new),
 not here.
+
+---
+
+*Want to fix this yourself?* Before you spend more than an hour on it, say so
+in a comment: two or three lines on how you'll fix it and what test proves it
+(see [CONTRIBUTING.md](../../CONTRIBUTING.md#branches-hooks-and-pull-requests)).

@@ -3,6 +3,10 @@ What changed and why, in a few sentences. If this fixes a bug, say which one:
 
 Fixes #
 
+## Plan / claim
+Link to the issue comment where you claimed this (or paste the two or three
+lines here if this PR is itself the claim).
+
 ## Testing
 - [ ] `pytest tests/ extensions/ -n auto` passes locally (or: the pre-push hook ran it)
 - [ ] `ruff check pyrite/ tests/ extensions/ && ruff format --check pyrite/ tests/ extensions/` is clean
