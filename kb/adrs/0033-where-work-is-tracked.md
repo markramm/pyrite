@@ -173,3 +173,13 @@ superseded. The importer is not a priority; agents use `gh` directly.
 3. **Should `github_issue` become a declared field on `backlog_item`** in the
    software-kb plugin (so it survives `pyrite update` and can be queried)?
    Proposed: yes, as part of step 2.
+
+## Amendment 2026-09-20 (proposed) — process findings live in the KB
+
+**Decision (proposed by the conductor on the maintainer's instruction, 2026-09-20: "keep those in the pyrite kb rather than in github"):** findings about *how the loop works* — a skill that did not say, a script that assumed, a check that fired late, a review that could not see something — are recorded as backlog items in `kb/backlog/` tagged `process`, not as GitHub issues. GitHub keeps what it had: bugs and requests from users and contributors, and the tasks the maintainer assigns to themself (the org move, #182). The roadmap stays in `kb/`.
+
+**Why:** on 2026-09-20 the `process` label held 16 open issues; a groom pass found 11 of them already fixed by merged skill changes and nobody had closed them, because the fix lived in a skill file and the record lived in another tracker. A process finding is a fact about this repository's own practice — the skills, the scripts, the ADRs — and belongs beside them, where `pyrite search` finds it, the retro reads it, and the fix's PR can close it by moving the item to `done/` in the same commit. It also keeps the public issue list to what an outside contributor can act on.
+
+**How it applies:** the conductor and its workers file friction with `pyrite create -k pyrite -t backlog_item --tags process` on the log branch (or the theme branch when the fix is in the same PR); the retro (`pyrite-meta-conductor`) reads `pyrite sw backlog` filtered on `process` instead of `gh issue list --label process`; the five items open on the day of the amendment (#189, #133, #122, #115, #103) were migrated with their triage text and the GitHub issues closed pointing at the item ids. The `process` GitHub label stays for anything an outside contributor files that turns out to be about practice; the conductor migrates it.
+
+**Status:** proposed — the maintainer's acceptance moves this to accepted (ADR-0032).
