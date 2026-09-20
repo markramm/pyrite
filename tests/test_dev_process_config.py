@@ -471,3 +471,30 @@ class TestSmokeLayer:
         assert script.exists(), "docs-as-tests runner for docs/getting-started.md"
         assert os.access(script, os.X_OK), "must be executable"
         subprocess.run(["bash", "-n", str(script)], check=True)
+
+
+class TestNoTrackedFileIsGitignored:
+    """A file both tracked and gitignored produces add/add conflicts (#122/#107).
+
+    `.claude/THEME.md` was gitignored (`.gitignore:101`) after it was already
+    committed, so the ignore rule only ever blocked *new* adds -- the tracked
+    blob kept riding every branch cut from `dev`, and two branches that both
+    modify it can still hit an add/add conflict. `git rm --cached` is the fix;
+    this test pins that no path under `.claude/` is ever tracked-and-ignored
+    again.
+    """
+
+    def test_no_tracked_path_under_claude_is_gitignored(self):
+        import subprocess
+
+        tracked_and_ignored = subprocess.run(
+            ["git", "ls-files", "-ci", "--exclude-standard", "--", ".claude/"],
+            cwd=REPO,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        assert tracked_and_ignored == "", (
+            f"tracked but gitignored under .claude/ (add/add-conflict risk): "
+            f"{tracked_and_ignored!r}"
+        )
