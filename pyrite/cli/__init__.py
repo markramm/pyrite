@@ -826,23 +826,45 @@ def import_entries(
         console.print("[yellow]No entries found in file.[/yellow]")
         raise typer.Exit(0)
 
+    # ADR-0034 rule 2, per record: a record whose body is marked truncated is
+    # a partial read someone saved to a file. Refuse it on its own and import
+    # its clean siblings -- the same semantics as REST's /entries/import.
+    # Checked here, after parsing, because the importers differ in whether
+    # their key whitelist carries the marker through (json and markdown do;
+    # yaml and csv strip it), and the guard must not depend on which did.
+    from ..services.body_bounds import refuse_truncated_body
+
+    refused: list[dict] = []
+    clean: list[dict] = []
+    for record in parsed:
+        message = refuse_truncated_body(record)
+        if message is None:
+            clean.append(record)
+        else:
+            refused.append({"title": record.get("title", "?"), "error": message})
+
     if dry_run:
         console.print(f"[bold]Dry run:[/bold] {len(parsed)} entries parsed")
         for i, entry in enumerate(parsed):
             title = entry.get("title", "Untitled")
             etype = entry.get("entry_type", "note")
             console.print(f"  {i + 1}. [{etype}] {title}")
+        for r in refused:
+            console.print(f"  [red]Would refuse:[/red] {r['title']}: {r['error']}")
         console.print("\n[dim]No entries were created (--dry-run).[/dim]")
         return
 
     with cli_context() as (config, db, svc):
         try:
-            results = svc.bulk_create_entries(kb_name, parsed)
+            results = svc.bulk_create_entries(kb_name, clean) if clean else []
         except PyriteError as e:
             _cli_err(e)
 
+        for r in refused:
+            console.print(f"  [red]Refused:[/red] {r['title']}: {r['error']}")
+
         created = sum(1 for r in results if r.get("created"))
-        failed = sum(1 for r in results if not r.get("created"))
+        failed = sum(1 for r in results if not r.get("created")) + len(refused)
 
         for r in results:
             if r.get("created"):
@@ -855,6 +877,13 @@ def import_entries(
             console.print(f" [red]({failed} failed)[/red]")
         else:
             console.print()
+
+        # A refused record is a data-loss guard firing, not an ordinary
+        # per-record failure: exit non-zero so a script or agent cannot read
+        # "Imported N" off a run that silently dropped a truncated body.
+        # (Pre-existing per-record failures keep their exit-0 behaviour.)
+        if refused:
+            raise typer.Exit(1)
 
 
 # =============================================================================

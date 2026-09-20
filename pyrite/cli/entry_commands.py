@@ -35,6 +35,50 @@ def _cli_error(message: str, output_format: str = "rich", error_code: str | None
     cli_error(message, output_format, error_code=error_code or "ERROR")
 
 
+def _refuse_truncated_body_or_exit(
+    body: Any, extra: dict[str, Any], output_format: str = "rich"
+) -> None:
+    """ADR-0034 rule 2 for `pyrite create` / `pyrite update`.
+
+    The CLI assembles its body and its extra fields separately -- the body from
+    `--body`/`--body-file`/`--stdin`, the marker from `--field
+    body_truncated=true` or from the YAML frontmatter of a saved bounded read
+    -- so the check reassembles them into the one shape the shared rule reads.
+
+    Exits 1 through `cli_error` (docs/json-contracts.md, "Exit codes (CLI)")
+    with a message that names how to get the whole body instead.
+    """
+    from ..services.body_bounds import REFUSAL_SUGGESTION, refuse_truncated_body
+    from ..utils.errors import cli_error
+
+    payload = {**extra}
+    if body is not None:
+        payload["body"] = body
+
+    message = refuse_truncated_body(payload)
+    if message is None:
+        return
+    cli_error(
+        message,
+        output_format,
+        error_code="VALIDATION_FAILED",
+        suggestion=REFUSAL_SUGGESTION,
+        retryable=False,
+    )
+
+
+def _strip_truncation_keys(values: dict[str, Any]) -> dict[str, Any]:
+    """Drop ADR-0034's read-transport keys from a write's fields.
+
+    They are never entry content: an allowed `body_truncated: false` reaching
+    `create_entry`/`update_entry` as an extra field would be persisted as
+    frontmatter, come back on the next read, and be echoed into a later write.
+    """
+    from ..services.body_bounds import TRUNCATION_KEYS
+
+    return {k: v for k, v in values.items() if k not in TRUNCATION_KEYS}
+
+
 def _parse_field_value(value: str) -> Any:
     """Parse a --field value, supporting JSON, integers, floats, and comma-separated lists.
 
@@ -250,6 +294,12 @@ def register_entry_commands(app: typer.Typer) -> None:
                 k, v = fv.split("=", 1)
                 extra[k] = _parse_field_value(v)
 
+        # ADR-0034 rule 2: refuse a body marked truncated, whether the marker
+        # arrived via --field or in the frontmatter of a --body-file/--stdin
+        # read. Then drop the keys so an allowed `false` is never persisted.
+        _refuse_truncated_body_or_exit(body, extra)
+        extra = _strip_truncation_keys(extra)
+
         with cli_context() as (config, db, svc):
             # Write-side type enforcement: refuse undeclared types unless
             # --allow-undeclared was passed. Mirrors the MCP-side check in
@@ -403,6 +453,12 @@ def register_entry_commands(app: typer.Typer) -> None:
                 except ValueError:
                     logger.debug("Could not coerce field value to int: %s", v)
                 updates[k] = v
+
+        # ADR-0034 rule 2. `updates` already carries the body under "body",
+        # so it is the payload shape the shared rule reads. A marker with no
+        # body is a metadata-only update and passes.
+        _refuse_truncated_body_or_exit(None, updates, output_format)
+        updates = _strip_truncation_keys(updates)
 
         with cli_context() as (config, db, svc):
             try:
