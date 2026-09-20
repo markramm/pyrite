@@ -109,7 +109,7 @@ pyrite index embed                 # embed everything not yet embedded
 pyrite index sync                  # incremental index update, then embed
 ```
 
-`pyrite-server` also drains what is owed at startup (with `prewarm_embeddings` on) and at the end of `POST /api/index/sync`. `GET /api/index/embed-status` reports how much is outstanding. Set `PYRITE_AUTO_EMBED=0` to opt out of embedding entirely and keep keyword search only:
+`pyrite-server` also drains what is owed on every startup and at the end of `POST /api/index/sync`. `GET /api/index/embed-status` reports how much is outstanding, and a semantic search against a KB with no embeddings yet says so in its `warnings` instead of returning a bare empty list. Set `PYRITE_AUTO_EMBED=0` to opt out of embedding entirely and keep keyword search only:
 
 ```bash
 pyrite index embed -k my-research

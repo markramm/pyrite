@@ -178,27 +178,16 @@ def get_kb_service(
     return KBService(config, db)
 
 
-def _drain_embed_queue(db: PyriteDB) -> int:
+def _drain_embed_queue(db: PyriteDB, *, label: str = "") -> int:
     """Embed everything a write left in `embed_queue`. Blocking; never raises.
 
-    ADR-0035 moved the embedding cost off the write path and onto the paths
-    that already have a caller willing to wait. On the server those are
-    startup prewarm and `POST /api/index/sync`, both of which call this.
-    Failures are logged and left in the queue (or marked `failed` after
-    `max_attempts`) so `GET /api/index/embed-status` keeps telling the truth
-    -- a drain that cannot reach a model must not look like a drain that
-    succeeded.
+    Thin alias for `services.embedding_worker.settle_embed_queue`, which is
+    the single drain implementation the CLI shares. Kept as a name in this
+    module because the endpoints import it from here.
     """
-    try:
-        from ..services.embedding_worker import EmbeddingWorker
+    from ..services.embedding_worker import settle_embed_queue
 
-        embedded = EmbeddingWorker(db).drain()
-        if embedded:
-            logger.info("Embedded %d queued entr%s", embedded, "y" if embedded == 1 else "ies")
-        return embedded
-    except Exception:
-        logger.warning("Embed queue drain failed; entries stay queued", exc_info=True)
-        return 0
+    return settle_embed_queue(db, label=label)
 
 
 def get_task_service(
@@ -986,14 +975,30 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
                     "Embedding model pre-warm failed or unavailable "
                     "(sentence-transformers not installed?)"
                 )
-                return
 
-            # ADR-0035: writes enqueue rather than embed, so anything written
-            # while this process (or a previous one) had no model is sitting
-            # in embed_queue. The model is warm now and this hook already owns
-            # a thread that may block -- drain here rather than starting a
-            # background thread of our own (#102).
-            await run_in_threadpool(_drain_embed_queue, _app_get_db())
+    # ADR-0035: writes enqueue rather than embed, so anything written while
+    # this process -- or a previous one -- had no model is sitting in
+    # embed_queue. Draining it is what turns "eventually embedded" into
+    # "embedded".
+    #
+    # **Deliberately outside the `prewarm_embeddings` branch above.** That
+    # setting defaults to False, so gating the drain on it meant the default
+    # server (`auto_embed: true`, `prewarm_embeddings: false`) enqueued
+    # forever with only the admin-tier `POST /api/index/sync?wait=true` left
+    # to drain it -- every `--mode semantic` returning [] on a stock install,
+    # a straight functional loss against the synchronous behaviour ADR-0035
+    # replaced. Affordable unconditionally because `settle_embed_queue`
+    # checks `has_pending()` first: one indexed COUNT, and no EmbeddingService
+    # (so no torch) when there is nothing owed, which is the usual case.
+    #
+    # Still no background thread (#102): this runs in the startup threadpool,
+    # which the server already waits on before serving.
+    @application.on_event("startup")
+    async def _drain_embed_queue_on_startup() -> None:
+        from starlette.concurrency import run_in_threadpool
+
+        db = _app_get_db()
+        await run_in_threadpool(lambda: _drain_embed_queue(db, label="startup"))
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins

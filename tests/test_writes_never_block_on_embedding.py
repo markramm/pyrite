@@ -13,9 +13,12 @@ went uncaught for so long:
 1. **The suite runs with write-time embedding off.** The root `conftest.py`
    stubs `KBService._get_embedding_svc` to `None` and sets
    `PYRITE_AUTO_EMBED=0` for every test that does not carry
-   `@pytest.mark.embeddings`. So an in-process test of "does a write embed?"
-   asserts nothing at all unless it opts back in. The cold-process checks
-   below opt in by running in a **subprocess** with the suite's stubs absent.
+   `@pytest.mark.embeddings`. While the bug was live that stub sat squarely on
+   the write path, so an in-process test of "does a write embed?" asserted
+   nothing; the fix routes writes around `_get_embedding_svc` entirely, which
+   closes that particular hole. The subprocess remains the right tool anyway:
+   once *any* test in an xdist worker imports torch, an in-process
+   `sys.modules` delta can only measure history, never this write.
 
 2. **Every developer machine has the model cached**, so a wall-clock bound
    alone passes no matter what the code does. The cold-cache regime is
@@ -35,6 +38,7 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -336,45 +340,55 @@ class TestDrainingTheQueue:
         assert worker.get_status()["pending"] == 1
 
 
-class TestRetiringRowsEmbedAllAlreadySatisfied:
-    """`pyrite index embed`/`sync`/`build` embed from the index, not the queue.
+class TestSettlingTheQueueIsCheapWhenNothingIsOwed:
+    """`settle_embed_queue` is the one drain both the server and CLI call.
 
-    They call `EmbeddingService.embed_all`, which embeds every entry lacking a
-    vector whether or not a queue row exists. Those rows must then be retired,
-    or `embed-status` reports debt that has already been paid and an operator
-    watching that number never sees zero.
+    An earlier version of this file tested a `clear_embedded()` that retired
+    rows by asking whether the entry had *a* vector. That was wrong -- it
+    could not tell a current vector from a stale one, so an updated entry's
+    row was deleted while its embedding still encoded the old body -- and it
+    is gone. What remains worth pinning is the property that lets this run on
+    every server startup rather than only under `prewarm_embeddings`.
     """
 
-    def test_clear_embedded_retires_rows_whose_entry_now_has_a_vector(self, tmp_path):
-        from pyrite.services.embedding_worker import EmbeddingWorker
+    def test_an_empty_queue_never_builds_an_embedding_service(self, tmp_path, monkeypatch):
+        import pyrite.services.embedding_worker as ew
+        from pyrite.services.embedding_worker import settle_embed_queue
+
+        svc = _svc(tmp_path, auto_embed=False)  # nothing enqueued
+
+        built = []
+        monkeypatch.setattr(ew.EmbeddingWorker, "_get_embedding_svc", lambda self: built.append(1))
+
+        assert settle_embed_queue(svc.db) == 0
+        assert built == [], "settling an empty queue constructed an embedding service"
+
+    def test_a_non_empty_queue_does_the_work(self, tmp_path, monkeypatch):
+        from unittest.mock import MagicMock
+
+        import pyrite.services.embedding_worker as ew
+        from pyrite.services.embedding_worker import settle_embed_queue
 
         svc = _svc(tmp_path, auto_embed=True)
-        if not svc.db.vec_available:
-            pytest.skip("sqlite-vec unavailable; nothing can be embedded")
         svc.create_entry("t", "one", "One", "note", "first")
-        svc.create_entry("t", "two", "Two", "note", "second")
+        monkeypatch.setattr(
+            ew.EmbeddingWorker,
+            "_get_embedding_svc",
+            lambda self: MagicMock(**{"embed_entry.return_value": True}),
+        )
 
-        # Stand in for what embed_all did: a vector for `one` only.
-        dim = 384
-        svc.db.backend.upsert_embedding("one", "t", [0.01] * dim)
+        assert settle_embed_queue(svc.db) == 1
+        assert queue_rows(svc.db) == []
 
-        worker = EmbeddingWorker(svc.db)
-        retired = worker.clear_embedded()
-
-        assert retired == 1
-        assert [row[0] for row in queue_rows(svc.db)] == ["two"], queue_rows(svc.db)
-
-    def test_clear_embedded_leaves_failed_rows_alone(self, tmp_path):
-        """A `failed` row is a report, not debt; clearing it would hide it."""
-        from pyrite.services.embedding_worker import EmbeddingWorker
+    def test_settling_never_raises_on_a_broken_queue(self, tmp_path, monkeypatch):
+        """A CLI that indexed fine must not exit non-zero over bookkeeping."""
+        import pyrite.services.embedding_worker as ew
+        from pyrite.services.embedding_worker import settle_embed_queue
 
         svc = _svc(tmp_path, auto_embed=True)
-        if not svc.db.vec_available:
-            pytest.skip("sqlite-vec unavailable; nothing can be embedded")
         svc.create_entry("t", "one", "One", "note", "first")
-        svc.db._raw_conn.execute("UPDATE embed_queue SET status = 'failed'")
-        svc.db._raw_conn.commit()
-        svc.db.backend.upsert_embedding("one", "t", [0.01] * 384)
+        monkeypatch.setattr(
+            ew, "EmbeddingWorker", MagicMock(side_effect=RuntimeError("database is locked"))
+        )
 
-        assert EmbeddingWorker(svc.db).clear_embedded() == 0
-        assert [row[2] for row in queue_rows(svc.db)] == ["failed"]
+        assert settle_embed_queue(svc.db) == 0

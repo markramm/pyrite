@@ -254,11 +254,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   entry, makes it keyword-searchable immediately, and notes one `pending` row
   in `embed_queue`; it never imports torch and never touches the network.
   The debt is paid on paths that already have a caller willing to wait —
-  `pyrite index embed` / `index sync` / `index build`, `pyrite-server`'s
-  startup prewarm hook, and `POST /api/index/sync?wait=true` — and
+  `pyrite index embed` / `index sync` / `index build`, every `pyrite-server`
+  startup, and `POST /api/index/sync?wait=true` — and
   `GET /api/index/embed-status` reports what is outstanding. **Semantic search
   is therefore eventually-consistent:** an entry written a moment ago may not
-  be findable by meaning until a drain runs. No background thread is
+  be findable by meaning until a drain runs, and a semantic search against a
+  KB with no embeddings now says so in `warnings` (naming `pyrite index
+  embed`) instead of returning a silent empty list. No background thread is
   introduced (deliberately not copying #102's unjoined daemon thread).
   `auto_embed: false` is unchanged: nothing is enqueued and no embedding code
   is reached at all.

@@ -51,6 +51,24 @@ def _svc(tmp_path, **settings):
     return KBService(config, PyriteDB(config.settings.index_path))
 
 
+def _worktree_db(main_cfg, main_db, diff_dir):
+    """The DB shape `WorktreeResolver.get_write_service` hands to a KBService.
+
+    Writes go to a per-user *diff* database; `_raw_conn` -- where `embed_queue`
+    lives -- is forwarded to main. Both sides must have the KB registered or
+    the entry insert trips a foreign key.
+    """
+    from pyrite.config import KBType
+    from pyrite.storage.backends.overlay_backend import WorktreeDB
+
+    diff_dir.mkdir(parents=True, exist_ok=True)
+    diff_db = PyriteDB(diff_dir / "d.db")
+    kb_path = str(main_cfg.knowledge_bases[0].path)
+    for db in (main_db, diff_db):
+        db.register_kb("t", KBType.GENERIC, kb_path)
+    return WorktreeDB(main_db, diff_db)
+
+
 def queue_rows(db):
     try:
         return [
@@ -201,12 +219,15 @@ class TestUpdatingAnEntryRefreshesItsEmbedding:
             f"the vector still encodes the old body. embed_entry calls: {embedded}"
         )
 
-    def test_clear_embedded_does_not_retire_a_row_for_a_stale_vector(self, tmp_path):
+    def test_no_api_retires_a_row_merely_because_some_vector_exists(self, tmp_path):
         """The narrow unit: a queued row means 'this entry changed'.
 
-        A vector that predates the queue row cannot satisfy it, so
-        `clear_embedded` must leave the row alone. Only a vector written
-        *after* the row was queued proves the debt was paid.
+        The first pass had a `clear_embedded()` that deleted any pending row
+        whose entry had *a* vector, with no notion of currency -- which is
+        precisely wrong for the update case, where a vector exists and is
+        stale. It is gone: the only way a row leaves the queue is
+        `process_batch` actually re-embedding the entry. This test pins that,
+        so the shortcut cannot come back without a red.
         """
         from pyrite.services.embedding_worker import EmbeddingWorker
 
@@ -214,18 +235,21 @@ class TestUpdatingAnEntryRefreshesItsEmbedding:
         if not svc.db.vec_available:
             pytest.skip("sqlite-vec unavailable")
 
+        worker = EmbeddingWorker(svc.db)
+        assert not hasattr(worker, "clear_embedded"), (
+            "clear_embedded is back; it cannot tell a current vector from a "
+            "stale one, which is how an update's embedding got frozen"
+        )
+
         svc.create_entry("t", "kestrel", "Kestrel", "note", "original")
         svc.db.backend.upsert_embedding("kestrel", "t", [0.01] * 384)
-        EmbeddingWorker(svc.db).clear_embedded()  # the create's row is legitimately retired
-        assert queue_rows(svc.db) == []
-
         svc.update_entry("kestrel", "t", body="revised")
-        assert len(queue_rows(svc.db)) == 1
 
-        retired = EmbeddingWorker(svc.db).clear_embedded()
-
-        assert retired == 0, "clear_embedded retired an update's row against a stale vector"
+        # A vector exists, and the row is still owed. Only an embed clears it.
         assert len(queue_rows(svc.db)) == 1
+        worker._embedding_svc = MagicMock(**{"embed_entry.return_value": False})
+        worker.drain()
+        assert len(queue_rows(svc.db)) == 1, "a row left the queue without being embedded"
 
     @pytest.mark.parametrize("surface", ["cli", "server"])
     def test_both_drain_paths_re_embed_an_update(self, tmp_path, monkeypatch, surface):
@@ -319,13 +343,9 @@ class TestAWriteNeverQueuesIntoADatabaseThatCannotSeeIt:
         diff DB and whose `_raw_conn` is main's -- and asserts a write through
         it does not leave a row in main's queue for an entry main cannot see.
         """
-        from pyrite.storage.backends.overlay_backend import WorktreeDB
-
         main_cfg = _config(tmp_path / "main", auto_embed=True)
         main_db = PyriteDB(main_cfg.settings.index_path)
-        diff_db = PyriteDB((tmp_path / "diff") / "d.db")
-
-        wt_db = WorktreeDB(main_db, diff_db)
+        wt_db = _worktree_db(main_cfg, main_db, tmp_path / "diff")
         assert wt_db._raw_conn is main_db._raw_conn, (
             "precondition for this test: WorktreeDB forwards _raw_conn to main"
         )
@@ -339,29 +359,25 @@ class TestAWriteNeverQueuesIntoADatabaseThatCannotSeeIt:
             f"cannot see; the drain would 'succeed' on it and delete it: {orphans}"
         )
 
-    def test_the_write_still_succeeds_when_the_queue_is_refused(self, tmp_path, caplog):
+    def test_the_write_still_succeeds_and_stays_searchable(self, tmp_path):
         """Refusing to queue must never cost the user their write.
 
-        The entry is on disk and in the index either way; what is lost is
-        semantic freshness, which `pyrite index embed` re-derives from the
-        index rather than from the queue.
+        Skipping the queue on an overlay DB is a routing decision, not an
+        error -- a worktree entry embeds from the main index once its branch
+        merges -- so it is logged at debug and the write is unaffected: the
+        entry comes back from the service and is searchable through the
+        overlay it was written to.
         """
-        import logging
-
-        from pyrite.storage.backends.overlay_backend import WorktreeDB
-
         main_cfg = _config(tmp_path / "main", auto_embed=True)
         main_db = PyriteDB(main_cfg.settings.index_path)
-        diff_db = PyriteDB((tmp_path / "diff") / "d.db")
-        svc = KBService(main_cfg, WorktreeDB(main_db, diff_db))
+        wt_db = _worktree_db(main_cfg, main_db, tmp_path / "diff")
+        svc = KBService(main_cfg, wt_db)
 
-        with caplog.at_level(logging.WARNING):
-            entry = svc.create_entry("t", "kestrel", "Kestrel", "note", "falcons")
+        entry = svc.create_entry("t", "kestrel", "Kestrel", "note", "falcons")
 
         assert entry.id == "kestrel"
-        assert any(record.levelno >= logging.WARNING for record in caplog.records), (
-            "the queue was skipped with no warning at all; an operator would "
-            "have no way to learn why semantic search is behind"
+        assert svc.get_entry("kestrel", "t") is not None, (
+            "the write was refused a queue row and lost the entry with it"
         )
 
 

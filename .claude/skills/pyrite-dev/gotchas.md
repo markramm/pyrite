@@ -438,31 +438,41 @@ monkeypatch.setattr(KBService, "_get_embedding_svc", _no_model)  # returns None
 monkeypatch.setenv("PYRITE_AUTO_EMBED", "0")
 ```
 
-That is correct and load-bearing — it is the 3m37s → 45 s suite win — but it
-means **an in-process test asserting anything about whether a write loads the
-embedding model is asserting nothing**, unless it opts back in.
+That is correct and load-bearing — it is the 3m37s → 45 s suite win.
 
-This bites in a way that looks like success. Writing the regression test for
-#13, a test asserting "`create_entry` imports no torch" **passed on the
-unfixed code**, because the stub had already removed the embedding service the
-bug runs through. The same code, run as a plain script, took 9.9 s and
-imported 1277 `torch`/`sentence_transformers` modules. A green test, a live
-bug, and nothing in the output to tell them apart.
+**History, because the shape of the trap generalises even though this
+instance is closed.** While #13's fix was being written, the write path still
+went through `_get_embedding_svc`, so the stub sat directly on it. A test
+asserting "`create_entry` imports no torch" therefore **passed on the unfixed
+code** — the stub had already removed the very service the bug ran through.
+The same code as a plain script took 9.9 s and imported 1277
+`torch`/`sentence_transformers` modules. Green test, live bug, nothing in the
+output to tell them apart.
 
-Note also that the env var and the stub cover *different* things: the stub
-reaches any `KBService`, while `PYRITE_AUTO_EMBED=0` is applied by
-`_apply_env_overrides` during `load_config()` only — a test that constructs
-`Settings(auto_embed=True)` by hand is not covered by it at all.
+**As of ADR-0035 that particular masking is gone:** `_auto_embed` enqueues and
+never calls `_get_embedding_svc` at all, so the stub cannot hide a write-path
+model load any more, and an in-process assertion about the *write* is now
+honest. The fixture still governs everything that reaches the embedding
+service another way, so before trusting a green test in this area, check
+whether the code under test is one the autouse fixture has a hand on.
 
-Two honest ways out, both used by
+Note the env var and the stub cover *different* things: the stub reaches any
+`KBService`, while `PYRITE_AUTO_EMBED=0` is applied by `_apply_env_overrides`
+during `load_config()` only — a test that constructs `Settings(auto_embed=
+True)` by hand is not covered by it at all.
+
+Two ways to get an honest answer, both used by
 `tests/test_writes_never_block_on_embedding.py`:
 
 - **Run the write in a subprocess.** A cold interpreter has none of the
-  suite's stubs, and its `sys.modules` is a clean measurement. Bonus: it is
-  the only way to ask "did *this one write* import torch", since once any test
-  in a worker imports it the in-process answer is permanently yes.
+  suite's stubs, and its `sys.modules` is a clean measurement. It remains the
+  only way to ask "did *this one write* import torch" even now the stub is out
+  of the way: once any test in a worker imports torch, the in-process answer
+  is permanently yes, so a module-delta assertion in a shared worker can only
+  ever be measuring history.
 - **Mark the test `@pytest.mark.embeddings`** when you genuinely want the real
-  path in-process — but then you own the ~10 s model load for that worker.
+  embedding path in-process — but then you own the ~10 s model load for that
+  worker.
 
 And to simulate a fresh install without downloading 90 MB: point `HF_HOME`
 (plus `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`) at an empty directory and

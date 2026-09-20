@@ -76,9 +76,15 @@ class TestTheEmptyResultExplainsItself:
         search silently did not run.
         """
         warnings: list[str] = []
-        results = _search(db_with_entries_but_no_embeddings, "hybrid", warnings)
+        # A query that really does hit the keyword leg, so the point of the
+        # test is the *warning beside real results*, not an empty response.
+        results = SearchService(db_with_entries_but_no_embeddings).search(
+            "falcon", mode="hybrid", warnings=warnings
+        )
 
-        assert any(r["id"] == "kestrel" for r in results), "the keyword leg should still hit"
+        assert any(r["id"] == "kestrel" for r in results), (
+            f"the keyword leg should still hit: {results}"
+        )
         assert any("embed" in w.lower() for w in warnings), (
             f"hybrid ran with a dead vector leg and said nothing: {warnings}"
         )
