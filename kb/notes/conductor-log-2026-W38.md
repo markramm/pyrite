@@ -2600,3 +2600,11 @@ Desk-held loop branches from **4 (for ≥5 h)** to **0** within two ticks of the
 - **Package G existed under another title** — the groom lane should search the board by content (`pyrite search`) before creating; a line in `SKILL.md`'s groom-lane paragraph.
 - **The "land nothing while an outside PR awaits the click" rule cost #160/#163 ~30 h each** — correct by the maintainer's own priority (contributors first), but the merge queue after the org move (#182) is what removes the trade-off; nothing to change now.
 - The MCP-over-HTTP path has **no per-KB read scoping anywhere** (found by #180, recorded in its gate as unreviewed) — part 2 of the scoping work; the architect should groom it as the next security theme once #180 lands.
+
+## Tick 2026-09-20T00:15Z (scheduled)
+
+**Health:** `dev` 130f433 green; load 1.5, 70% free. **Two outside events:** #173 pushed `2b8e2b3` ("address the #173 review — timestamp-only restyle, honour explicit updated_at, …") 17 minutes after our message — the grep shows the four asks are now on the branch (`key in _TIMESTAMP_KEYS and …` at `base.py:286`, `touch_updated_at=` at two sites, `microsecond=0` at `:504`, the fixtures back in the strict set); suite `-n 4` running, third-pass cold read out. **#198** (timerloggedout-spec, first PR): a "help-wanted lane stake" — one placeholder file, no code, claiming #192; not mergeable and not a claim; reply drafted for the maintainer's agreement (push the real fix or we close in a couple of days). The gfi architect was told #192 stays in the pool.
+
+**Absorb — #191 (Playwright package G):** review worktree via the script (#189 lesson), diff read clean (attributes only; no softened assertions), conductor's own run 14 passed with zero invalid-run markers; **flipped ready and armed** (1 of 2). #9 closes on merge, citing `web/e2e/search.spec.ts:44`.
+
+**Running:** the two backlog architects (gfi pool; the other ~60 issues); #173 suite + cold read. **Desk:** the breaker paragraph, fix-at-review per branch, ADR-0035, #198's reply, merges of #184/#174/#175 when their asks land.
