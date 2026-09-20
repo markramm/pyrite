@@ -2636,3 +2636,7 @@ Desk-held loop branches from **4 (for ≥5 h)** to **0** within two ticks of the
 **#202 (#49) reported:** guarded title writer + 9 vitest regimes, 406 unit tests green, mutation-checked; the Unsure explains why the issue's `<svelte:head>` one-liner does not work (a shared `<title>` element re-clobbered on any layout re-render — prototyped) and that the design rests on SvelteKit's `afterNavigate` ordering traced from internals. That is a design decision → cold read at the next tick's absorb. Report appended.
 
 Slots: #203 worker (1, +1 when its server runs) = 2 of 4. PR budget: 0 armed.
+
+## Tick 2026-09-20T00:54Z (scheduled)
+
+`dev` 24533f4 green; load 1.5, 63% free; no outside activity. **Absorb #202 (#49):** review worktree via the script; diff read — `+layout.svelte` swaps the unconditional `document.title` write for a guarded writer wired through `onNavigate`/`afterNavigate` (+34), new `brand-title.ts` (83 lines, well-documented) and 9 vitest regimes; conductor's half: `npm run test:unit` 406 passed, `npm run check` 0 errors, `npm run build` clean. Cold read out (mandatory: the Unsure names a design decision — imperative hooks vs the idiomatic `$page.data.title` shape, and an ordering traced from SvelteKit internals). #203 (per-request sessions) still building. Nothing dispatched.
