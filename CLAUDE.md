@@ -21,7 +21,7 @@ This project has a comprehensive knowledge base in `kb/` indexed by Pyrite's own
 # Browse project structure
 .venv/bin/pyrite sw components    # Core modules and services
 .venv/bin/pyrite sw adrs          # Architecture Decision Records
-.venv/bin/pyrite sw backlog       # All backlog items with status
+.venv/bin/pyrite sw backlog       # Top 50 backlog items with status (--limit/--offset to page, --limit 0 for all)
 .venv/bin/pyrite sw standards     # Coding standards and conventions
 
 # Find what links to something

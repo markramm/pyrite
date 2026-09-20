@@ -3171,6 +3171,34 @@ class TestColumnFirstStatusFallback:
             finally:
                 db.close()
 
+    def test_board_lane_items_bounded_by_default(self):
+        """A lane with many items does not return every one unbounded (#233).
+
+        `sw_board` grows with the project the same way `sw_backlog` does —
+        it embeds a full item list per lane. Counts stay exact; only the
+        embedded item list per lane is bounded.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            entries = [
+                {
+                    "id": f"item-{i:03d}",
+                    "title": f"Item {i}",
+                    "entry_type": "backlog_item",
+                    "status": "proposed",
+                    "priority": "medium",
+                    "meta": {"kind": "feature", "status": "proposed"},
+                }
+                for i in range(75)
+            ]
+            db = _make_test_db(tmpdir, entries=entries)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_board({"kb_name": "test"})
+                proposed_lane = next(lane for lane in result["lanes"] if lane["count"] == 75)
+                assert len(proposed_lane["items"]) < 75
+            finally:
+                db.close()
+
     def test_backlog_filter_uses_db_column(self):
         """sw_backlog status filter matches against DB column, not metadata."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -4096,6 +4124,154 @@ class TestBacklogSortAndFilter:
             finally:
                 db.close()
 
+    def test_default_limit_bounds_large_result_set(self):
+        """No --limit given: result is bounded, not the full 661-item firehose (#233)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            entries = [
+                {
+                    "id": f"item-{i:03d}",
+                    "title": f"Item {i}",
+                    "entry_type": "backlog_item",
+                    "status": "proposed",
+                    "priority": "medium",
+                    "meta": {"kind": "feature", "status": "proposed", "priority": "medium"},
+                    "created_at": f"2026-01-{(i % 28) + 1:02d}T00:00:00",
+                }
+                for i in range(75)
+            ]
+            db = _make_test_db(tmpdir, entries=entries)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog({"kb_name": "test"})
+                assert len(result["items"]) < 75
+                assert result["has_more"] is True
+                assert result["count"] == len(result["items"])
+                assert result["total"] == 75
+            finally:
+                db.close()
+
+    def test_limit_and_offset_page_without_skip_or_duplicate(self):
+        """Paging through --limit/--offset covers every item exactly once."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            entries = [
+                {
+                    "id": f"item-{i:03d}",
+                    "title": f"Item {i}",
+                    "entry_type": "backlog_item",
+                    "status": "proposed",
+                    "priority": "medium",
+                    "meta": {"kind": "feature", "status": "proposed", "priority": "medium"},
+                    "created_at": f"2026-01-{(i % 28) + 1:02d}T00:00:00",
+                }
+                for i in range(23)
+            ]
+            db = _make_test_db(tmpdir, entries=entries)
+            try:
+                plugin = _make_plugin_with_db(db)
+                seen_ids: list[str] = []
+                offset = 0
+                page_size = 10
+                for _ in range(10):  # enough iterations to exhaust 23 items
+                    result = plugin._mcp_backlog(
+                        {"kb_name": "test", "limit": page_size, "offset": offset}
+                    )
+                    ids = [i["id"] for i in result["items"]]
+                    seen_ids.extend(ids)
+                    if not result["has_more"]:
+                        break
+                    offset += page_size
+                assert sorted(seen_ids) == sorted(e["id"] for e in entries)
+                assert len(seen_ids) == len(set(seen_ids))  # no duplicates across pages
+            finally:
+                db.close()
+
+    def test_has_more_accurate_at_boundary(self):
+        """has_more is False exactly when a page reaches the last item."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            entries = [
+                {
+                    "id": f"item-{i:03d}",
+                    "title": f"Item {i}",
+                    "entry_type": "backlog_item",
+                    "status": "proposed",
+                    "priority": "medium",
+                    "meta": {"kind": "feature", "status": "proposed", "priority": "medium"},
+                    "created_at": f"2026-01-{(i % 28) + 1:02d}T00:00:00",
+                }
+                for i in range(10)
+            ]
+            db = _make_test_db(tmpdir, entries=entries)
+            try:
+                plugin = _make_plugin_with_db(db)
+                # Exactly consumes all 10 -> no more.
+                result = plugin._mcp_backlog({"kb_name": "test", "limit": 10, "offset": 0})
+                assert result["total"] == 10
+                assert result["has_more"] is False
+
+                # One short of the end -> more remains.
+                result = plugin._mcp_backlog({"kb_name": "test", "limit": 9, "offset": 0})
+                assert result["has_more"] is True
+
+                # Offset lands exactly on the last item -> no more.
+                result = plugin._mcp_backlog({"kb_name": "test", "limit": 5, "offset": 5})
+                assert len(result["items"]) == 5
+                assert result["has_more"] is False
+
+                # Offset past the end -> empty page, no more.
+                result = plugin._mcp_backlog({"kb_name": "test", "limit": 5, "offset": 20})
+                assert result["items"] == []
+                assert result["has_more"] is False
+            finally:
+                db.close()
+
+    def test_filter_composes_with_limit_not_applied_after(self):
+        """--status filtering happens before the limit is applied.
+
+        If limiting happened first and filtering second, a --limit smaller
+        than the unfiltered result could silently drop matching items that
+        were sorted past the cut, returning the wrong page.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # 5 "done" items sorted before 5 "proposed" items by created_at,
+            # so a naive limit-then-filter with limit=3 would see only "done"
+            # items and incorrectly report zero proposed results.
+            entries = [
+                {
+                    "id": f"done-{i}",
+                    "title": f"Done {i}",
+                    "entry_type": "backlog_item",
+                    "status": "done",
+                    "priority": "low",
+                    "meta": {"kind": "feature", "status": "done", "priority": "low"},
+                    "created_at": f"2025-01-{i + 1:02d}T00:00:00",
+                }
+                for i in range(5)
+            ] + [
+                {
+                    "id": f"proposed-{i}",
+                    "title": f"Proposed {i}",
+                    "entry_type": "backlog_item",
+                    "status": "proposed",
+                    "priority": "critical",
+                    "meta": {"kind": "feature", "status": "proposed", "priority": "critical"},
+                    "created_at": f"2025-02-{i + 1:02d}T00:00:00",
+                }
+                for i in range(5)
+            ]
+            db = _make_test_db(tmpdir, entries=entries)
+            try:
+                plugin = _make_plugin_with_db(db)
+                result = plugin._mcp_backlog(
+                    {"kb_name": "test", "status": "proposed", "limit": 3, "offset": 0}
+                )
+                ids = [i["id"] for i in result["items"]]
+                assert len(ids) == 3
+                assert all(i.startswith("proposed-") for i in ids)
+                assert result["total"] == 5
+                assert result["has_more"] is True
+            finally:
+                db.close()
+
     def test_group_by_epic(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db = _make_test_db(
@@ -4144,6 +4320,32 @@ class TestBacklogSortAndFilter:
                 assert len(unassigned) == 1
             finally:
                 db.close()
+
+
+class TestBacklogCliPaginationFlags:
+    """`sw backlog --limit/--offset` (#233) must reach `_mcp_backlog`."""
+
+    def test_limit_and_offset_threaded_to_mcp_backlog(self):
+        from unittest.mock import MagicMock, patch
+
+        from pyrite_software_kb.cli import sw_app
+        from typer.testing import CliRunner
+
+        runner = CliRunner()
+        mock_plugin = MagicMock()
+        mock_plugin._mcp_backlog.return_value = {"count": 0, "items": [], "has_more": False}
+
+        with patch("pyrite_software_kb.plugin.SoftwareKBPlugin", return_value=mock_plugin):
+            result = runner.invoke(
+                sw_app,
+                ["backlog", "--limit", "5", "--offset", "10", "--kb", "test"],
+            )
+
+        assert result.exit_code == 0, result.output
+        mock_plugin._mcp_backlog.assert_called_once()
+        call_args = mock_plugin._mcp_backlog.call_args[0][0]
+        assert call_args["limit"] == 5
+        assert call_args["offset"] == 10
 
 
 # =========================================================================

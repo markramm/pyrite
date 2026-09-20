@@ -23,6 +23,15 @@ from .preset import SOFTWARE_KB_PRESET
 from .validators import validate_software_kb
 from .workflows import ADR_LIFECYCLE, BACKLOG_WORKFLOW
 
+# Default page size for list-shaped sw_* surfaces (#233). These commands are
+# advertised as orientation aids ("quick context lookups"), not exhaustive
+# dumps, so the default should be sized for a reader skimming to decide what
+# to look at next -- not for completeness. 50 matches kb_list_entries's own
+# default (mcp_server.py:_kb_list_entries), the established convention for
+# "browse with pagination" in this codebase; a caller that wants everything
+# passes an explicit --limit/limit=None.
+DEFAULT_LIST_LIMIT = 50
+
 
 class SoftwareKBPlugin:
     """Software KB plugin for pyrite.
@@ -207,6 +216,13 @@ class SoftwareKBPlugin:
                     "type": "object",
                     "properties": {
                         "kb_name": {"type": "string", "description": "KB name (optional)"},
+                        "limit": {
+                            "type": "integer",
+                            "description": (
+                                "Max items to embed per lane (default 50; lane `count` is "
+                                "always the true total). Pass null for every item in every lane."
+                            ),
+                        },
                     },
                     "required": [],
                 },
@@ -287,6 +303,18 @@ class SoftwareKBPlugin:
                             "type": "string",
                             "enum": ["epic"],
                             "description": "Group results by epic",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": (
+                                "Max items to return (default 50). Pass null for the full, "
+                                "unbounded list. Ignored when group_by=epic (groups are "
+                                "always complete)."
+                            ),
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Skip this many items before returning (default 0)",
                         },
                     },
                     "required": [],
@@ -850,7 +878,16 @@ class SoftwareKBPlugin:
                 db.close()
 
     def _mcp_backlog(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List backlog items with optional sort, epic filter, and grouping."""
+        """List backlog items with optional sort, epic filter, and grouping.
+
+        `limit`/`offset` bound the returned `items` list. Filtering by
+        status/priority/kind/epic happens against the FULL result set before
+        the bound is applied (#233) -- limiting first and filtering second
+        would silently drop matching items sorted past the cut and return
+        the wrong page. `group_by=epic` returns every group unbounded: a
+        caller grouping by epic wants the whole board shape, not a slice of
+        it cut off mid-epic.
+        """
         import json
 
         db, should_close = self._get_db()
@@ -861,6 +898,8 @@ class SoftwareKBPlugin:
         epic_filter = args.get("epic")
         sort_by = args.get("sort", "priority")
         group_by = args.get("group_by")
+        limit = args.get("limit", DEFAULT_LIST_LIMIT)
+        offset = args.get("offset", 0)
 
         try:
             # If filtering by epic, get the set of subtask IDs
@@ -946,12 +985,23 @@ class SoftwareKBPlugin:
             for item in items:
                 del item["_created"]
 
-            # Group by epic if requested
+            # Group by epic if requested. Unbounded: the caller wants the
+            # whole board shape, not a slice of it.
             if group_by == "epic":
                 grouped = self._group_items_by_epic(db, items, kb_name or "")
                 return {"count": len(items), "groups": grouped}
 
-            return {"count": len(items), "items": items}
+            total = len(items)
+            page = items[offset : offset + limit] if limit is not None else items[offset:]
+
+            return {
+                "count": len(page),
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "has_more": offset + len(page) < total,
+                "items": page,
+            }
         finally:
             if should_close:
                 db.close()
@@ -1455,7 +1505,14 @@ class SoftwareKBPlugin:
                 db.close()
 
     def _mcp_board(self, args: dict[str, Any]) -> dict[str, Any]:
-        """View kanban board."""
+        """View kanban board.
+
+        Each lane's `count` is always the true total in that lane; `items`
+        is bounded to `limit` per lane (default DEFAULT_LIST_LIMIT) so a
+        lane that grows with the project (#233) doesn't dump its full
+        contents unbounded. Pass limit=None (or <= 0 from the CLI) for the
+        full per-lane item list.
+        """
         import json
         from pathlib import Path
 
@@ -1463,6 +1520,7 @@ class SoftwareKBPlugin:
 
         db, should_close = self._get_db()
         kb_name = args.get("kb_name")
+        limit = args.get("limit", DEFAULT_LIST_LIMIT)
 
         try:
             # Load board config
@@ -1518,10 +1576,12 @@ class SoftwareKBPlugin:
             for i, lane_def in enumerate(board_config["lanes"]):
                 items = lane_items.get(i, [])
                 wip_limit = lane_def.get("wip_limit")
+                page = items if limit is None else items[:limit]
                 lane = {
                     "name": lane_def["name"],
                     "count": len(items),
-                    "items": items,
+                    "items": page,
+                    "has_more": len(page) < len(items),
                 }
                 if wip_limit is not None:
                     lane["wip_limit"] = wip_limit
