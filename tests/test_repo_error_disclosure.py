@@ -654,6 +654,173 @@ class TestForkAndPRDisclosure:
         assert "ghp_secret123" not in r.text
 
 
+_ABS_PATH_MARKERS = ("/", "~")
+
+
+def _looks_absolute(value: str) -> bool:
+    """True if `value` has the shape of an absolute filesystem path: a
+    leading `/`, a leading `~`, or a Windows drive letter (`C:\\...`)."""
+    if not isinstance(value, str) or not value:
+        return False
+    if value[0] in _ABS_PATH_MARKERS:
+        return True
+    return len(value) >= 3 and value[1] == ":" and value[2] in ("\\", "/")
+
+
+def _assert_no_absolute_paths(obj, path=""):
+    """Recursively walk a JSON-able structure and assert no string value has
+    the shape of an absolute path. Asserts the property, not one hardcoded
+    temp path, so it holds on any machine."""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            _assert_no_absolute_paths(value, f"{path}.{key}")
+    elif isinstance(obj, list):
+        for i, value in enumerate(obj):
+            _assert_no_absolute_paths(value, f"{path}[{i}]")
+    elif isinstance(obj, str):
+        assert not _looks_absolute(obj), f"absolute-path-shaped value at {path!r}: {obj!r}"
+
+
+class TestSuccessBodyDisclosure:
+    """Issue #195 -- the success-path twin of #161: `RepoInfo.local_path` and
+    the `path` key in `subscribe`/`fork` success bodies carried the server's
+    absolute workspace path. The maintainer's decision (2026-09-20): relativize
+    to the workspace root (`owner/repo_name`), not drop or opaque-handle --
+    `local_path` is public REST response shape an external consumer may read.
+
+    Internal callers (repo_service.py:189, :221, :302, :347; config.py:682)
+    consume these fields as absolute paths from the DB row or the service's
+    own dict, which are untouched here -- only what crosses the HTTP boundary
+    is relativized. See `_repo_dict_to_info` and the endpoint handlers in
+    `pyrite/server/endpoints/repos.py`.
+    """
+
+    @pytest.fixture
+    def client_factory(self, make_client):
+        def _make(service):
+            client, _, _ = make_client(
+                auth=AuthConfig(enabled=True, allow_registration=True),
+                dependency_overrides={get_repo_service: lambda: service},
+                register_user=("testuser", "password123"),
+            )
+            return client
+
+        return _make
+
+    def test_list_repos_local_path_is_relative(self, client_factory, workspace, tmp_path):
+        abs_path = workspace / "owner" / "repo"
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = None
+        svc.config = MagicMock()
+        svc.config.settings.workspace_path = workspace
+        svc.list_repos.return_value = [
+            {
+                "id": 1,
+                "name": "owner/repo",
+                "local_path": str(abs_path),
+                "owner": "owner",
+            }
+        ]
+        client = client_factory(svc)
+
+        r = client.get("/api/repos")
+
+        assert r.status_code == 200
+        body = r.json()
+        _assert_no_absolute_paths(body)
+        assert body["repos"][0]["local_path"] == "owner/repo"
+
+    def test_get_repo_local_path_is_relative(self, client_factory, workspace):
+        abs_path = workspace / "owner" / "repo"
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = None
+        svc.config = MagicMock()
+        svc.config.settings.workspace_path = workspace
+        svc.get_repo_status.return_value = {
+            "id": 1,
+            "name": "owner/repo",
+            "local_path": str(abs_path),
+            "current_branch": "main",
+        }
+        client = client_factory(svc)
+
+        r = client.get("/api/repos/owner/repo")
+
+        assert r.status_code == 200
+        body = r.json()
+        _assert_no_absolute_paths(body)
+        assert body["local_path"] == "owner/repo"
+
+    def test_subscribe_success_path_is_relative(self, client_factory, workspace):
+        abs_path = workspace / "owner" / "repo"
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = None
+        svc.config = MagicMock()
+        svc.config.settings.workspace_path = workspace
+        svc.subscribe.return_value = {
+            "success": True,
+            "repo": "owner/repo",
+            "path": str(abs_path),
+            "kbs": ["some-kb"],
+            "entries_indexed": 3,
+        }
+        client = client_factory(svc)
+
+        r = client.post(
+            "/api/repos/subscribe",
+            json={"remote_url": "https://github.com/owner/repo"},
+        )
+
+        assert r.status_code == 200
+        body = r.json()
+        _assert_no_absolute_paths(body)
+        assert body["path"] == "owner/repo"
+
+    def test_fork_success_path_is_relative(self, client_factory, workspace):
+        abs_path = workspace / "myfork" / "repo"
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = "ghp_test"
+        svc.config = MagicMock()
+        svc.config.settings.workspace_path = workspace
+        svc.fork_and_subscribe.return_value = {
+            "success": True,
+            "repo": "myfork/repo",
+            "path": str(abs_path),
+            "kbs": [],
+            "is_fork": True,
+            "upstream": "owner/repo",
+        }
+        client = client_factory(svc)
+
+        r = client.post("/api/repos/fork", json={"remote_url": "https://github.com/owner/repo"})
+
+        assert r.status_code == 200
+        body = r.json()
+        _assert_no_absolute_paths(body)
+        assert body["path"] == "myfork/repo"
+
+    def test_relativize_falls_back_gracefully_outside_workspace(self, client_factory, tmp_path):
+        """A path the workspace root cannot be relative to (e.g. legacy data
+        from a moved workspace) must not raise -- and must still not leak the
+        absolute value in a way an external caller could use to learn server
+        layout. It's replaced by an opaque marker rather than crashing."""
+        outside = tmp_path / "elsewhere" / "owner" / "repo"
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        svc = MagicMock(spec=RepoService)
+        svc._github_token = None
+        svc.config = MagicMock()
+        svc.config.settings.workspace_path = workspace
+        svc.list_repos.return_value = [{"id": 1, "name": "owner/repo", "local_path": str(outside)}]
+        client = client_factory(svc)
+
+        r = client.get("/api/repos")
+
+        assert r.status_code == 200
+        body = r.json()
+        _assert_no_absolute_paths(body)
+
+
 def test_no_second_clone_implementation_returning_raw_stderr():
     """`github_auth.clone_private_repo` was a second, dead clone path that
     returned `f"Clone failed: {result.stderr}"` — raw, path-bearing, bypassing

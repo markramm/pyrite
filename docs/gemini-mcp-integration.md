@@ -122,4 +122,4 @@ You should see Gemini call `kb_list` and return your knowledge bases.
 
 **Tools not showing up** -- Restart Gemini CLI after editing `settings.json`. The config is read at startup.
 
-**Tool not available** -- Check the tier. The default tier is `write`. Use `--tier admin` if you need index and git operations.
+**Tool not available** -- Check the tier. `pyrite mcp` (used above) defaults to `write` if `--tier` is omitted; the separate `pyrite-server` binary defaults to `read` instead -- always pass `--tier` explicitly rather than relying on either default. Use `--tier admin` if you need index and git operations.

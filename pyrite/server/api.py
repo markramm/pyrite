@@ -178,6 +178,18 @@ def get_kb_service(
     return KBService(config, db)
 
 
+def _drain_embed_queue(db: PyriteDB, *, label: str = "") -> int:
+    """Embed everything a write left in `embed_queue`. Blocking; never raises.
+
+    Thin alias for `services.embedding_worker.settle_embed_queue`, which is
+    the single drain implementation the CLI shares. Kept as a name in this
+    module because the endpoints import it from here.
+    """
+    from ..services.embedding_worker import settle_embed_queue
+
+    return settle_embed_queue(db, label=label)
+
+
 def get_task_service(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
@@ -655,8 +667,55 @@ async def resolve_effective_kb_role(
     return auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
 
 
+def readable_kbs_for_user(
+    config: PyriteConfig,
+    db: PyriteDB,
+    user_id: int | None,
+    role: str | None,
+    *,
+    scoped: bool = True,
+) -> set[str] | None:
+    """The KBs a caller may read, or None when the caller is not scoped.
+
+    The one rule, framework-free: no `Request`, so the MCP transport can
+    apply exactly what the REST routes apply. `readable_kbs()` below is a
+    thin Request-reading wrapper over it, and `mcp_routes._resolve_bearer_auth`
+    is the other caller. **Do not add a second implementation** -- two copies
+    drift, and a grant honoured on one surface but refused on the other is
+    the bug this whole shape exists to prevent (#201).
+
+    Not scoped (returns None): a global admin, and any caller with no user
+    identity to scope by -- an operator API key, or auth disabled entirely.
+    Callers that know the identity question is already settled pass
+    `scoped=False` to say so.
+
+    Scoped: `user_id` is resolved per KB through the same chain the REST
+    routes use (explicit grant → KB default_role → the user's global role),
+    and the KB is readable when that effective role is at least "read".
+    `user_id=None` with `scoped=True` is the anonymous visitor on an
+    auth-enabled instance: the same walk with no grants.
+    """
+    if role == "admin" or not scoped:
+        return None
+
+    from ..services.auth_service import AuthService
+
+    auth_service = AuthService(db, config.settings.auth)
+    result: set[str] = set()
+    for kb in config.all_kbs():
+        default_role = resolve_kb_default_role(config, db, kb.name)
+        effective = auth_service.get_kb_role(user_id, kb.name, default_role)
+        if effective is not None and TIER_LEVELS.get(effective, -1) >= TIER_LEVELS["read"]:
+            result.add(kb.name)
+    return result
+
+
 async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> set[str] | None:
     """The KBs this caller may read, or None when the caller is not scoped.
+
+    Request-reading wrapper over `readable_kbs_for_user`: it pulls the
+    identity off `request.state` and caches the answer on the request. The
+    rule itself lives in the helper, shared with the MCP transport.
 
     Not scoped: global admins, and API-key callers (an API key is the
     operator's credential, not a peer's). A logged-in user is scoped to the KBs
@@ -671,20 +730,14 @@ async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> 
     role = getattr(request.state, "api_role", None)
     auth_user = getattr(request.state, "auth_user", None)
     anonymous = getattr(request.state, "anonymous", False)
-    result: set[str] | None
-    if role == "admin" or (not auth_user and not anonymous):
-        result = None  # an operator API key, or auth disabled
-    else:
-        from ..services.auth_service import AuthService
-
-        auth_service = AuthService(db, config.settings.auth)
-        user_id = auth_user["id"] if auth_user else None
-        result = set()
-        for kb in config.all_kbs():
-            default_role = resolve_kb_default_role(config, db, kb.name)
-            effective = auth_service.get_kb_role(user_id, kb.name, default_role)
-            if effective is not None and TIER_LEVELS.get(effective, -1) >= TIER_LEVELS["read"]:
-                result.add(kb.name)
+    result = readable_kbs_for_user(
+        config,
+        db,
+        auth_user["id"] if auth_user else None,
+        role,
+        # An operator API key, or auth disabled: no user identity to scope by.
+        scoped=bool(auth_user or anonymous),
+    )
     request.state.readable_kbs = result
     return result
 
@@ -963,6 +1016,30 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
                     "Embedding model pre-warm failed or unavailable "
                     "(sentence-transformers not installed?)"
                 )
+
+    # ADR-0035: writes enqueue rather than embed, so anything written while
+    # this process -- or a previous one -- had no model is sitting in
+    # embed_queue. Draining it is what turns "eventually embedded" into
+    # "embedded".
+    #
+    # **Deliberately outside the `prewarm_embeddings` branch above.** That
+    # setting defaults to False, so gating the drain on it meant the default
+    # server (`auto_embed: true`, `prewarm_embeddings: false`) enqueued
+    # forever with only the admin-tier `POST /api/index/sync?wait=true` left
+    # to drain it -- every `--mode semantic` returning [] on a stock install,
+    # a straight functional loss against the synchronous behaviour ADR-0035
+    # replaced. Affordable unconditionally because `settle_embed_queue`
+    # checks `has_pending()` first: one indexed COUNT, and no EmbeddingService
+    # (so no torch) when there is nothing owed, which is the usual case.
+    #
+    # Still no background thread (#102): this runs in the startup threadpool,
+    # which the server already waits on before serving.
+    @application.on_event("startup")
+    async def _drain_embed_queue_on_startup() -> None:
+        from starlette.concurrency import run_in_threadpool
+
+        db = _app_get_db()
+        await run_in_threadpool(lambda: _drain_embed_queue(db, label="startup"))
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins

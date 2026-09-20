@@ -36,6 +36,10 @@ pyrite create -k my-kb --type note --title "Switch to async standups" \
 pyrite search "consulting" -k my-kb
 pyrite search "career transition" -k my-kb --mode=semantic  # keyword mode finds exact words only
 # The first semantic search downloads the embedding model (~90 MB, one time).
+# Writes never wait on that download: an entry is keyword-searchable the
+# moment it is written, and gets its embedding on the next `pyrite index
+# embed` / `index sync` (or, on a server, at startup). Run `pyrite index
+# embed` to fetch the model and catch up on demand.
 
 # Connect to Claude Desktop / Claude Code
 # Add to your MCP config:
@@ -71,15 +75,15 @@ Your files (git)  →  SQLite index (derived)  →  MCP server / CLI / REST API 
 
 ## MCP Server
 
-Three permission tiers. Each tier includes the tools from lower tiers.
+Three permission tiers. Each tier includes the tools from lower tiers. Counts below are the core `kb_*`/`task_*` tools only; installed plugins add more per tier (e.g. software-kb adds `sw_adrs`, `sw_backlog`, `sw_new_adr`) — run `pyrite mcp --help` for the live total including plugin tools, generated from the tool registry so it can't drift from what a running server exposes.
 
-| Tier | Tools |
+| Tier | Core tools |
 |------|-------|
 | **read** (29) | `kb_list`, `kb_search`, `kb_get`, `kb_timeline`, `kb_tags`, `kb_backlinks`, `kb_stats`, `kb_schema`, `kb_orient`, `kb_batch_read`, `kb_batch_suggest`, `kb_discover_neighbors`, `kb_list_entries`, `kb_recent`, `kb_qa_validate`, `kb_qa_status`, `kb_read_body`, `kb_find_by_status`, `kb_find_by_assignee`, `kb_find_by_location`, `kb_find_overdue`, `kb_index_job_status`, `list_edge_types`, `task_list`, `task_status`, `task_ancestors`, `task_blocked_by`, `task_critical_path`, `task_subtree` |
 | **write** (+11) | read + `kb_create`, `kb_bulk_create`, `kb_update`, `kb_delete`, `kb_link`, `kb_qa_assess`, `task_create`, `task_update`, `task_claim`, `task_checkpoint`, `task_decompose` |
 | **admin** (+8) | write + `kb_index_sync`, `kb_manage`, `kb_commit`, `kb_push`, `kb_registry_add`, `kb_registry_remove`, `kb_registry_reindex`, `kb_registry_health` |
 
-All paginated tools (`kb_search`, `kb_timeline`, `kb_backlinks`, `kb_tags`) support `limit`/`offset` params and return a `has_more` flag. `kb_bulk_create` handles up to 50 entries per call with best-effort per-entry semantics. `kb_orient` provides a one-shot KB summary for agent onboarding. `kb_batch_read` fetches multiple entries in one call. Search results return snippets by default (use `include_body` for full text, `fields` for projection).
+Pagination and totals differ by tool and by transport (CLI/MCP/REST) — see `docs/json-contracts.md` for the measured shape of each, rather than assuming a uniform `has_more`/`total` contract. `kb_bulk_create` handles up to 50 entries per call; one malformed entry currently rejects the whole batch (#95), not best-effort. `kb_orient` provides a one-shot KB summary for agent onboarding. `kb_batch_read` fetches multiple entries in one call. Search results return snippets by default (use `include_body` for full text, `fields` for projection).
 
 Plugins add their own tools per tier (e.g., software-kb adds `sw_adrs`, `sw_backlog`, `sw_new_adr`).
 

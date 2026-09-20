@@ -30,6 +30,7 @@ from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
 from ..utils.metadata import parse_metadata
+from .body_bounds import MARKER_KEYS
 from .export_service import ExportService
 from .hook_runner import HookRunner
 from .wikilink_service import WikilinkService
@@ -137,17 +138,104 @@ class KBService:
                 parts.append(f"{field}: {rule} (expected {expected}, got {got!r})")
         raise ValidationError(f"Invalid {entry.entry_type} for KB '{kb_name}': " + "; ".join(parts))
 
-    def _auto_embed(self, entry_id: str, kb_name: str) -> None:
-        """Embed an entry — via background queue if worker is set, else synchronously."""
+    def _get_embedding_worker(self):
+        """Lazy `EmbeddingWorker` over this service's index DB.
+
+        Constructing one is a ``CREATE TABLE IF NOT EXISTS`` and nothing else:
+        no thread, no torch import, ~50 ms cold (ADR-0035's spike). It is built
+        here rather than assigned by each caller because #13 *was* the
+        assign-it-yourself design -- ``_embedding_worker`` existed, nothing in
+        production ever set it, so every write on every surface took the
+        synchronous branch. Callers may still inject one by setting
+        ``_embedding_worker`` directly; tests do.
+        """
         if self._embedding_worker is not None:
-            self._embedding_worker.enqueue(entry_id, kb_name)
+            return self._embedding_worker
+        if not self._queue_can_see_our_writes():
+            return None
+        try:
+            from .embedding_worker import EmbeddingWorker
+
+            self._embedding_worker = EmbeddingWorker(self.db)
+        except Exception:
+            # A DB that cannot hold the queue (read-only, locked, out of disk)
+            # must not fail the write: the entry is on disk and in the index
+            # either way, and `pyrite index embed` re-derives what is missing
+            # from the index rather than from the queue. exc_info because
+            # "embed queue unavailable" without a cause leaves an operator
+            # unable to tell a locked database from a full disk.
+            logger.warning(
+                "Embed queue unavailable for %s; run `pyrite index embed` to catch up",
+                getattr(self.config.settings, "index_path", "?"),
+                exc_info=True,
+            )
+            return None
+        return self._embedding_worker
+
+    def _queue_can_see_our_writes(self) -> bool:
+        """Refuse to queue into a database that cannot see what we just wrote.
+
+        ``WorktreeDB`` routes entry writes to a per-user *diff* DB while
+        forwarding ``_raw_conn`` -- which is where ``embed_queue`` lives -- to
+        **main**. Queuing through it files the debt in main's queue naming an
+        entry only the diff DB holds. The drain then calls ``embed_entry``
+        against main, which cannot find the entry; before the sibling fix in
+        ``process_batch`` that returned ``False`` without raising and the row
+        was deleted as though embedded.
+
+        A worktree entry is embedded when its branch merges and the main index
+        picks the file up, so skipping the queue here loses nothing; filing a
+        row that names an unreachable entry loses the operator's trust in
+        ``embed-status``.
+
+        Checked structurally rather than by class name: ask the backend that
+        *receives the writes* for its connection and compare it with the one
+        ``embed_queue`` would be created on. A future overlay type gets the
+        same protection without this method learning about it.
+        """
+        try:
+            queue_conn = self.db._raw_conn
+            backend = self.db.backend
+            # OverlaySearchBackend sends writes to `_diff`; a plain backend is
+            # its own write target.
+            write_backend = getattr(backend, "_diff", backend)
+            write_conn = getattr(write_backend, "_raw_conn", queue_conn)
+        except Exception:
+            logger.debug("Could not compare write/queue connections", exc_info=True)
+            return True
+        if write_conn is queue_conn:
+            return True
+        logger.debug(
+            "Skipping embed queue: entry writes go to a different database "
+            "than the one embed_queue lives on (overlay/worktree DB). The "
+            "entry embeds from the main index once its branch merges."
+        )
+        return False
+
+    def _auto_embed(self, entry_id: str, kb_name: str) -> None:
+        """Record that an entry needs embedding. Never embeds inline.
+
+        ADR-0035: ``auto_embed: true`` guarantees an entry **will be**
+        embedded, not that it is embedded when the write returns. Loading the
+        sentence-transformers model inside a write is what made the first
+        ``POST /api/entries`` on a fresh install block for over a minute while
+        it downloaded ~90 MB (#13).
+
+        The debt is drained by callers who can afford to wait and who already
+        exist: the server's startup prewarm hook, ``POST /api/index/sync``,
+        and ``pyrite index embed`` / ``sync`` / ``build``. ``auto_embed:
+        false`` still means *nothing happens at all* -- no queue row, no
+        embedding stack touched (ADR-0035 §4).
+        """
+        if not getattr(self.config.settings, "auto_embed", True):
             return
-        svc = self._get_embedding_svc()
-        if svc:
-            try:
-                svc.embed_entry(entry_id, kb_name)
-            except Exception as e:
-                logger.warning("Auto-embed failed for %s: %s", entry_id, e, exc_info=True)
+        worker = self._get_embedding_worker()
+        if worker is None:
+            return
+        try:
+            worker.enqueue(entry_id, kb_name)
+        except Exception as e:
+            logger.warning("Could not queue %s for embedding: %s", entry_id, e, exc_info=True)
 
     @property
     def wikilinks(self) -> WikilinkService:
@@ -398,8 +486,15 @@ class KBService:
                 # Resolve type, scoped to this KB's type (see create_entry)
                 entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
 
-                # Build extra kwargs
-                extra = {k: v for k, v in spec.items() if k not in ("entry_type", "title", "body")}
+                # Build extra kwargs. MARKER_KEYS are ADR-0034 read
+                # transport, never entry content: a spec that legitimately
+                # carries `body_truncated: false` must not have it persisted
+                # as frontmatter. (A truthy marker is refused before here.)
+                extra = {
+                    k: v
+                    for k, v in spec.items()
+                    if k not in ("entry_type", "title", "body", *MARKER_KEYS)
+                }
 
                 entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **extra)
                 entry = self._run_hooks("before_save", entry, hook_ctx)

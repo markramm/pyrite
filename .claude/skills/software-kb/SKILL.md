@@ -87,7 +87,7 @@ pyrite sw transition <item-id> <status> -k <kb>  # Transition with gate check
 pyrite sw check-ready <item-id> -k <kb>        # Check DoR without claiming
 pyrite sw refine -k <kb>                       # Scan backlog for DoR gaps
 pyrite sw adrs -k <kb>                 # List ADRs
-pyrite sw new-adr --title "..." -k <kb>  # Create ADR
+pyrite sw new-adr "..." -k <kb>        # Create ADR (title is positional)
 pyrite sw components -k <kb>           # Component docs
 pyrite sw validations -k <kb>          # Validations
 pyrite sw conventions -k <kb>          # Conventions

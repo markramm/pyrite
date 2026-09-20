@@ -12,7 +12,13 @@ Claude Code, any agent framework that reads `AGENTS.md`.
    base — it returns entry types, tags, recent changes, schema, and
    the operational contracts (indexing, error shape, search quoting,
    task-claim semantics) in one call. Don't relearn these from trial
-   and error.
+   and error. Caveat: for a plugin-declared type (e.g. this repo's own
+   `backlog_item`, `adr`, `component`, `standard`), the schema block is
+   rubric prose with no field list — `pyrite kb schema show <kb>` and
+   `pyrite schema diff` don't fill the gap either (both verified to
+   return the same prose, no fields); today the required fields exist
+   only in that type's MCP create-tool schema (e.g. `sw_create_backlog_item`
+   requires `title`, `kind`, `kb_name`) — see #232.
 3. If integrating over MCP: connect with `pyrite mcp --tier <tier>`
    and call the `kb_orient` tool first for the same reason.
 

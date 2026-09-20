@@ -100,9 +100,19 @@ pyrite search "algorithm" -k my-research
 pyrite search "mathematics" -k my-research --type person
 ```
 
-**Semantic search** finds conceptually related content, not just keyword matches. It uses a local embedding model (`all-MiniLM-L6-v2`, ~90 MB) that is downloaded the first time it is needed — expect the first semantic search or the first `pyrite-server` write to take a minute, once. Set `PYRITE_AUTO_EMBED=0` to skip embedding on write and keep keyword search only:
+**Semantic search** finds conceptually related content, not just keyword matches. It uses a local embedding model (`all-MiniLM-L6-v2`, ~90 MB) that is downloaded the first time it is needed — expect that one download to take a minute, once.
+
+**Writes never wait on it.** `auto_embed` (on by default) promises that an entry *will be* embedded, not that it is embedded by the time the write returns (ADR-0035): a `pyrite create` or a `POST /api/entries` records the entry, makes it keyword-searchable immediately, and notes the embedding as owed. So on a brand-new KB, a semantic search issued straight after a write may not find that entry yet. Settle the debt — and trigger the download — whenever you like:
 
 ```bash
+pyrite index embed                 # embed everything not yet embedded
+pyrite index sync                  # incremental index update, then embed
+```
+
+`pyrite-server` also drains what is owed on every startup and at the end of `POST /api/index/sync`. `GET /api/index/embed-status` reports how much is outstanding, and a semantic search against a KB with no embeddings yet says so in its `warnings` instead of returning a bare empty list. Set `PYRITE_AUTO_EMBED=0` to opt out of embedding entirely and keep keyword search only:
+
+```bash
+pyrite index embed -k my-research
 pyrite search "early computer science pioneers" -k my-research --mode semantic
 ```
 
@@ -140,7 +150,7 @@ Desktop/Code afterward to pick up the change.
 }
 ```
 
-Your AI can now search, read, and create entries in your knowledge base. It gets 29 read tools, 11 write tools, and 8 admin tools across three permission tiers. For read-only access:
+Your AI can now search, read, and create entries in your knowledge base, across three permission tiers (read/write/admin, each cumulative on the last, including tools contributed by any installed plugins). Run `pyrite mcp --help` for the current tool count per tier and representative tool names — it's generated from the live tool registry, so it never drifts from what a running server actually exposes. For read-only access:
 
 ```json
 {

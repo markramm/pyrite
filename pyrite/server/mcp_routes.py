@@ -33,9 +33,42 @@ def _resolve_bearer_auth(
 ) -> dict[str, Any]:
     """Validate Bearer token, X-API-Key header, or session cookie.
 
-    Returns a dict with keys: role, username, user_id (optional).
-    Raises HTTPException(401) on failure.
+    Returns a dict with keys: role, username, user_id (optional), and
+    `readable_kbs` -- the KBs this caller may read, or None when the caller
+    is not scoped.
+
+    The readable set comes from `api.readable_kbs_for_user`, the same helper
+    the REST routes resolve through, so a grant honoured over REST is
+    honoured over MCP and vice versa. There is deliberately no second
+    implementation of the rule (#201).
+
+    `user_id` is the discriminator, matching REST: non-None for a session
+    user (scoped), None for an API key -- the operator's credential, not a
+    peer's -- or for auth being disabled entirely, both unscoped.
+
+    Raises HTTPException(401) on failure. Note there is no anonymous branch:
+    `/mcp` 401s a caller with no credential where REST would admit them at
+    `anonymous_tier`.
     """
+    ctx = _resolve_credential(request, config, db)
+    from .api import readable_kbs_for_user
+
+    ctx["readable_kbs"] = readable_kbs_for_user(
+        config,
+        db,
+        ctx.get("user_id"),
+        ctx["role"],
+        scoped=ctx.get("user_id") is not None,
+    )
+    return ctx
+
+
+def _resolve_credential(
+    request: Request,
+    config: PyriteConfig,
+    db: PyriteDB,
+) -> dict[str, Any]:
+    """The credential half of `_resolve_bearer_auth`: role, username, user_id."""
     # 1. Bearer token in Authorization header
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
@@ -178,11 +211,22 @@ def mount_mcp_routes(
         role = user_ctx["role"]
         client_id = user_ctx["username"]
         tier = role if role in ("read", "write", "admin") else "read"
+        readable = user_ctx["readable_kbs"]
 
-        logger.info("MCP SSE connection: user=%s tier=%s", client_id, tier)
+        logger.info(
+            "MCP SSE connection: user=%s tier=%s scoped=%s",
+            client_id,
+            tier,
+            readable is not None,
+        )
 
+        # The per-tier cache is untouched and its key stays `tier`: the
+        # cached PyriteMCPServer is identity-free, and the readable set
+        # rides the per-connection closures build_sdk_server already makes
+        # for client_id. Two callers at one tier share this instance and
+        # still get correctly different answers (#201).
         mcp_server = _get_mcp_server(tier)
-        sdk = mcp_server.build_sdk_server(client_id=client_id)
+        sdk = mcp_server.build_sdk_server(client_id=client_id, readable_kbs=readable)
 
         async with sse_transport.connect_sse(request.scope, request.receive, request._send) as (
             read_stream,

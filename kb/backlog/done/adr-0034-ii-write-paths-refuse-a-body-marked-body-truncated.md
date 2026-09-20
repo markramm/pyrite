@@ -7,16 +7,15 @@ tags:
 - agent-ux
 - bounded-reads
 - adr-0034
-- blocked
 importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: S
 rank: 0
 ---
 
-**BLOCKED — not dispatchable. ADR-0034 ("Agent-facing reads are bounded by default", PR #170) is `proposed`, not accepted.** The numbers in rule 4 are the maintainer's to set. Re-read the ADR as accepted before dispatching: if a number, a variable name or the CLI default changed, this item changes with it.
+**DONE 2026-09-20** on `fix/adr-0034-ii-refuse-truncated-writes`. ADR-0034 was accepted 2026-09-18; the numbers in rule 4 were untouched by this theme (themes i/iii/iv/v still own them).
 
 ## Problem
 
@@ -40,3 +39,54 @@ A bounded read hands an agent part of a body plus `body_truncated: true`. An age
 **Model:** opus (write path, two surfaces, one rule). **heavy:** no. **Cold read:** yes. **Size:** S, ~200 lines, mostly tests.
 
 **Out of scope:** the CLI — `pyrite create`/`update` take the body as text (`--body`, `--body-file`, `--stdin`), so there is no marker to receive; theme (iii)'s stderr notice is its protection. Detecting truncation heuristically (a body that "looks cut off") — the marker is the contract; the web editor (it requests whole bodies, rule 6).
+
+## Done 2026-09-20
+
+The rule lives once, in `pyrite/services/body_bounds.py`
+(`refuse_truncated_body`), and runs on the **raw** request per surface --
+not in `KBService`, which takes an `Entry` plus keyword frontmatter and
+cannot carry the marker, and not after REST's pydantic models, which drop
+the undeclared key.
+
+- **MCP**: the guard is in `_dispatch_tool`, so it covers every write-tier
+  and admin-tier tool by construction -- `kb_create`, `kb_update`,
+  `task_create`, `task_decompose` and any plugin write tool -- rather than
+  by enumerating handlers. Reads are never guarded.
+- **`kb_bulk_create`**: per-item refusal per its existing
+  `{"created": false, "error": ...}` contract; clean siblings are created
+  and result indices stay aligned to the request's `entries` array.
+- **REST**: a FastAPI dependency (`refuses_truncated_body`) on
+  `POST`/`PUT`/`PATCH /api/entries` reads the raw JSON before pydantic;
+  `POST /api/entries/import` refuses per record, and the JSON importer now
+  carries the truncation keys through its whitelist so the endpoint can see
+  a marker saved to a file.
+- **Refusal rule**: a truthy `body_truncated` (including the strings
+  `"true"`/`"yes"`/`"1"`) arriving alongside a body, at the top level or
+  nested (`metadata`, a child-spec list). Allowed: `false`, the marker with
+  no body (a metadata-only update), and a body exactly `body_chunk_size`
+  long with no marker.
+- **Also fixed**: an allowed `body_truncated: false` was being persisted as
+  frontmatter by the three paths that forward unrecognised keys into the
+  entry (MCP `kb_create`, `KBService.bulk_create_entries`, the REST import
+  endpoint, and `pyrite create`'s `--field`/frontmatter path). The
+  truncation keys are read transport, never entry content.
+
+- **CLI** (#230, the third untrusted input surface -- ADR-0034 rule 5
+  records that most CLI callers today are agents): `pyrite import` refuses
+  per record and exits 1; `pyrite create` refuses the marker from
+  `--field` *or* from the YAML frontmatter of a `--body-file`/`--stdin`
+  read, which is the saved-scratch-file path by which a marker is most
+  likely to be persisted and replayed; `pyrite update` refuses the marker
+  from `--field`. `pyrite update --body-file` is deliberately unchanged:
+  it does not parse frontmatter, so a marker there is body content, and
+  refusing on it would be the heuristic detection ADR-0034 rules out.
+
+**Importer audit** (asked for by #230): `json` and `markdown` carry the
+marker through to the caller -- markdown always has, via
+`_parse_single_md`'s frontmatter splat, so REST's `/entries/import` could
+receive one before this branch -- while `yaml` and `csv` strip it through
+their key whitelists. Both import endpoints check every record regardless
+of format, so a whitelist that gains the key later is already covered.
+
+Tests: `tests/test_truncated_body_refused_on_write.py` (21),
+`tests/test_truncated_body_refused_on_cli_write.py` (13).

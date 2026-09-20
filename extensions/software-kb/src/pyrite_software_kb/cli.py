@@ -241,13 +241,25 @@ def sw_backlog(
     epic: str | None = typer.Option(None, "--epic", "-e", help="Filter to subtasks of this epic"),
     sort: str = typer.Option("priority", "--sort", help="Sort: priority (default), rank, created"),
     group_by: str | None = typer.Option(None, "--group-by", "-g", help="Group by: epic"),
+    limit: int | None = typer.Option(
+        None,
+        "--limit",
+        "-l",
+        help="Max items to return (default 50; pass 0 or a negative number for no limit)",
+    ),
+    offset: int = typer.Option(0, "--offset", help="Skip this many items before returning"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
     fmt: str = typer.Option("json", "--format", "-f", help="Output format: json, rich"),
 ):
-    """List backlog items with sorting, filtering, and grouping."""
-    from .plugin import SoftwareKBPlugin
+    """List backlog items with sorting, filtering, and grouping.
+
+    Defaults to the 50 highest-sorted items; pass --limit/--offset to page
+    through the rest, or --limit 0 for the full, unbounded list.
+    """
+    from .plugin import DEFAULT_LIST_LIMIT, SoftwareKBPlugin
 
     plugin = SoftwareKBPlugin()
+    effective_limit = DEFAULT_LIST_LIMIT if limit is None else (None if limit <= 0 else limit)
     result = plugin._mcp_backlog(
         {
             "kb_name": kb_name,
@@ -257,6 +269,8 @@ def sw_backlog(
             "epic": epic,
             "sort": sort,
             "group_by": group_by,
+            "limit": effective_limit,
+            "offset": offset,
         }
     )
 

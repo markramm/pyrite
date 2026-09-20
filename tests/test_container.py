@@ -156,3 +156,39 @@ class TestEnvOverrides:
         config = cfg_mod.load_config()
         assert config.settings.host == "0.0.0.0"
         assert config.settings.port == 9999
+
+
+class TestDockerignoreExcludesNestedNodeModules:
+    """`node_modules` must be excluded at every depth, not just the root.
+
+    The frontend stage runs `npm ci` and then `COPY web/ ./`. A host
+    `web/node_modules` that reaches the build context overwrites what `npm ci`
+    installed, so the image builds against whatever the developer's machine
+    happened to have. That was invisible while the two agreed and became a
+    hard failure when they diverged:
+
+        Cannot start service: Host version "0.27.3" does not match binary
+        version "0.28.2"
+
+    -- the 0.24.3 release build, after esbuild was bumped to 0.28.2 in the
+    lockfile while the host tree still had 0.27.3 on disk.
+    """
+
+    def _patterns(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        lines = (root / ".dockerignore").read_text().splitlines()
+        return [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
+
+    def test_node_modules_is_excluded_at_any_depth(self):
+        patterns = self._patterns()
+        assert "**/node_modules" in patterns, (
+            "`node_modules` alone matches only the context root; web/node_modules "
+            "would be copied into the frontend stage and shadow `npm ci`"
+        )
+
+    def test_the_root_only_pattern_is_gone(self):
+        """A bare `node_modules` beside the recursive one is not wrong, but it
+        is the pattern that caused this, so its absence is what we assert."""
+        assert "node_modules" not in self._patterns()

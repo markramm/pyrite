@@ -284,6 +284,27 @@ KB presets first (`PluginRegistry.get_type_default_subdirectory`), so new items 
 When closing an item you still `git mv` it to `kb/backlog/done/` yourself — that is a
 convention, not something the type's subdirectory encodes.
 
+**Trap 3 — `-f` is not a substitute for a dedicated flag on list-typed fields (#231).**
+`-f status=done` is correct and is the pattern CLAUDE.md shows, so the hand reaches for
+`-f tags=a,b` next. It does not work, and it does not tell you:
+
+```
+$ pyrite update <id> -k pyrite -f tags=mcp,agent-ux
+{"updated": true, ...}                 # looks fine
+$ pyrite get <id> -k pyrite --format json | jq .tags
+["m","c","p",",","a","g","e","n","t","-","u","x"]     # the CHARACTERS
+```
+
+`-f` stores the raw string (`tags: mcp,agent-ux`, not a YAML list), and the reader then
+iterates it as a sequence. The entry drops out of `pyrite tags`, out of tag-filtered
+search and out of every `sw` view keyed on a tag, silently. Use `--tags "a,b"`, which
+parses properly. Assume the same for any other list-typed field reachable through `-f`
+(`participants`, `aliases`, `actors`). Repair by re-running with `--tags`.
+
+**Always read the entry back** after a CLI update that touched a list field:
+`pyrite get <id> -k pyrite --format json` shows what the index will actually serve, which
+is not always what the file looks like at a glance.
+
 ## `pyrite sw new-adr` Takes a Positional TITLE and Misfiles Without `-k`
 
 Two traps in one command:
@@ -426,3 +447,57 @@ Two related rules the fix established:
 
 Still open: an entry whose on-disk value is already off-enum (`kind: refactor`)
 cannot be updated at all until hand-repaired (#47).
+
+## The suite silently disables write-time embedding, so embedding tests can pass vacuously
+
+The **root** `conftest.py` (repo root, not `tests/conftest.py`) has an autouse
+fixture `_no_auto_embed_unless_marked`. For every test that does **not** carry
+`@pytest.mark.embeddings` it does two things:
+
+```python
+monkeypatch.setattr(KBService, "_get_embedding_svc", _no_model)  # returns None
+monkeypatch.setenv("PYRITE_AUTO_EMBED", "0")
+```
+
+That is correct and load-bearing — it is the 3m37s → 45 s suite win.
+
+**History, because the shape of the trap generalises even though this
+instance is closed.** While #13's fix was being written, the write path still
+went through `_get_embedding_svc`, so the stub sat directly on it. A test
+asserting "`create_entry` imports no torch" therefore **passed on the unfixed
+code** — the stub had already removed the very service the bug ran through.
+The same code as a plain script took 9.9 s and imported 1277
+`torch`/`sentence_transformers` modules. Green test, live bug, nothing in the
+output to tell them apart.
+
+**As of ADR-0035 that particular masking is gone:** `_auto_embed` enqueues and
+never calls `_get_embedding_svc` at all, so the stub cannot hide a write-path
+model load any more, and an in-process assertion about the *write* is now
+honest. The fixture still governs everything that reaches the embedding
+service another way, so before trusting a green test in this area, check
+whether the code under test is one the autouse fixture has a hand on.
+
+Note the env var and the stub cover *different* things: the stub reaches any
+`KBService`, while `PYRITE_AUTO_EMBED=0` is applied by `_apply_env_overrides`
+during `load_config()` only — a test that constructs `Settings(auto_embed=
+True)` by hand is not covered by it at all.
+
+Two ways to get an honest answer, both used by
+`tests/test_writes_never_block_on_embedding.py`:
+
+- **Run the write in a subprocess.** A cold interpreter has none of the
+  suite's stubs, and its `sys.modules` is a clean measurement. It remains the
+  only way to ask "did *this one write* import torch" even now the stub is out
+  of the way: once any test in a worker imports torch, the in-process answer
+  is permanently yes, so a module-delta assertion in a shared worker can only
+  ever be measuring history.
+- **Mark the test `@pytest.mark.embeddings`** when you genuinely want the real
+  embedding path in-process — but then you own the ~10 s model load for that
+  worker.
+
+And to simulate a fresh install without downloading 90 MB: point `HF_HOME`
+(plus `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`) at an empty directory and
+set `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`. The model load then fails
+the way it would on a machine that has never seen it, in about 7 s instead of
+a minute. **A timing bound alone is never enough** — every developer machine
+has the model cached, which is precisely why no test ever caught #13.

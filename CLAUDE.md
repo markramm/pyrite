@@ -21,7 +21,7 @@ This project has a comprehensive knowledge base in `kb/` indexed by Pyrite's own
 # Browse project structure
 .venv/bin/pyrite sw components    # Core modules and services
 .venv/bin/pyrite sw adrs          # Architecture Decision Records
-.venv/bin/pyrite sw backlog       # All backlog items with status
+.venv/bin/pyrite sw backlog       # Top 50 backlog items with status (--limit/--offset to page, --limit 0 for all)
 .venv/bin/pyrite sw standards     # Coding standards and conventions
 
 # Find what links to something
@@ -52,7 +52,7 @@ When your work changes architecture, adds components, or completes backlog items
 .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags enhancement
 
 # Create new ADRs
-.venv/bin/pyrite sw new-adr --title "..." --status accepted
+.venv/bin/pyrite sw new-adr "..." --status accepted
 
 # Verify your changes are findable
 .venv/bin/pyrite search "<your feature>" -k pyrite

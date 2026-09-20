@@ -7,16 +7,15 @@ tags:
 - agent-ux
 - bounded-reads
 - adr-0034
-- blocked
 importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: S
 rank: 0
 ---
 
-**BLOCKED — not dispatchable. ADR-0034 ("Agent-facing reads are bounded by default", PR #170) is `proposed`, not accepted.** The numbers in rule 4 are the maintainer's to set. Re-read the ADR as accepted before dispatching: if a number, a variable name or the CLI default changed, this item changes with it.
+**DONE 2026-09-20** on `fix/adr-0034-i-body-ceiling-and-budget`, closing #58. ADR-0034 was accepted with the numbers in rule 4 unchanged (8,000 / 20,000 / 40,000), so this item shipped as written. All six acceptance criteria are met; see `## Shipped` at the end for what was found beyond them.
 
 ## Problem
 
@@ -42,3 +41,17 @@ rank: 0
 **Model:** opus (server; a public MCP contract changes; the budget arithmetic is where the off-by-one lives). **heavy:** no. **Cold read:** yes. **Size:** S–M, ~250 lines.
 
 **Out of scope:** CLI and REST (iii, iv); the write-path refusal (ii); `docs/json-contracts.md` (v); list pagination, which already exists; token-based bounds (ADR alternative, rejected).
+
+## Shipped 2026-09-20
+
+All six acceptance criteria met. Three things the groom did not anticipate, recorded for themes (ii)–(v):
+
+1. **The `fields` hole was on five read paths, not the two #58 named.** Probing every read tool with a 30,000-character body found `kb_search` returning whole bodies for **both** `include_body=true` and `fields=[...,"body"]` — it takes no `body_limit` at all — and `kb_list_entries` and `kb_recent` returning whole bodies for up to 200 entries **with or without `fields`**. Rule 3 says every path, so all five are bounded; the last two are bounded by the response budget alone, since neither tool has a per-body parameter to clamp. **Theme (iv) should expect the same shape on the REST side:** the hole is "a read path that returns bodies and was never given a bound", not "the `fields` branch".
+
+2. **A negative `body_offset` sliced from the end.** `body[-5 : -5 + limit]` returns the tail of a short body and **empty** on any body longer than the limit, reported as `body_offset: -5`. `kb_read_body` compounded it: `has_more` was computed as `-5 + 0 < body_len`, i.e. true, so a paginating agent retried the same offset forever on a body it never read. Clamped to 0 in `chunk_body` and in `kb_read_body`. **Themes (iii) and (iv) inherit the clamp** by importing `body_bounds`; a REST endpoint that validates `body_offset >= 0` with a 422 (as its groom proposes) is stricter and also fine.
+
+3. **The marker keys must survive projection, and `_project_fields` now does that** — but only when the projection kept `body`. A projection that excluded `body` carries no markers, since there is nothing there to have been truncated. **Theme (ii)'s write refusal should key on the marker keys arriving *alongside a body*,** matching what a read can actually emit.
+
+**Evidence:** #58's reported call (two bodies, 37,767 + 129,736 chars, `body_limit=6000`, `fields=[...,"body"]`) returned 171,189 characters; it now returns 12,369. Twenty entries at the old 50,000 ceiling returned 1,000,000 body characters; now 40,000 across a 55,581-character response, with the 18 starved entries in place carrying `body_truncated: true` and their true `body_length`.
+
+**Arithmetic left for the cold read:** the budget charges only characters actually returned, so a caller passing `body_offset` past the end of every body spends nothing and all entries come back marked with empty bodies — bounded, but the response carries no content. That is the intended reading of "truncated to what remains (possibly zero)"; an alternative design would refuse the offset instead.

@@ -96,7 +96,7 @@ Entries are saved to the correct subdirectory automatically and indexed.
 ### Shortcuts and mutations
 
 ```bash
-pyrite sw new-adr --title "Add Rate Limiting"   # Auto-numbered ADR
+pyrite sw new-adr "Add Rate Limiting"           # Auto-numbered ADR (title is positional)
 pyrite update <entry-id> --kb=pyrite --title="New Title"
 pyrite update <entry-id> --kb=pyrite --body="Updated body" --tags="new,tags" --importance=8
 pyrite delete <entry-id> --kb=pyrite             # With confirmation

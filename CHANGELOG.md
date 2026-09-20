@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
+## [0.24.3] - 2026-09-20
+
+"Operational" — see `kb/roadmap.md`.
+
+**The last release from `markramm/pyrite`.** The repository moves to the
+`pyrite-wiki` organization next, and 0.25 will be the first release from its
+new home. Eight of the 86 pull requests merged into this release came from
+outside contributors — @Voyagerroc-Lab, @YaoSong808, @fathirramadhan-web,
+@makiaveli1 and @zhongxiao-chang. That is 9%. Of the pull requests open as
+this release was cut, 11 of 13 are theirs.
+
+The move is not a rename. It is what makes pull request queues, contributor
+permissions and a home for community extensions possible — and the point at
+which Pyrite stops being one person's experiment.
 
 ### Fixed
 
@@ -17,6 +30,24 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   leave application and root logging configuration untouched (#196).
 
 ### Security
+
+- **Private-KB content was readable over MCP-over-HTTP by any logged-in
+  user.** The `/mcp` mount resolved a global tier from the caller's
+  credential and applied no per-KB read scoping anywhere in its path — the
+  one KB-content surface the REST-side fix did not reach. A plain read-tier
+  user could read entry **bodies** from a KB they had no grant on: `kb_get`,
+  `kb_read_body`, `kb_list_entries` and `kb_search` all served it, and
+  `kb_list` named the KB. MCP now resolves the caller's readable set per
+  connection, through the same helper the REST routes use, and enforces it
+  at all three content chokepoints: tool dispatch, resources and prompts. A
+  KB the caller may not read is reported exactly as one that does not exist,
+  so its existence stays private. Anonymous callers were never exposed —
+  `/mcp` already rejected them. Operator API keys, global admins and local
+  stdio are unscoped, unchanged. Tools that span every KB and cannot yet
+  filter (45 extension tools taking an *optional* `kb_name`) are refused for
+  a scoped caller rather than served across the whole index; naming a
+  readable KB makes them work as before.
+  ([#201](https://github.com/markramm/pyrite/issues/201))
 
 - **`web/` dependency bump closes 16 of 19 open Dependabot alerts.** `vite`
   7.3.1 → 7.3.6 (range pinned to `^6.0.0 || ^7.3.5` so it cannot resolve
@@ -50,8 +81,22 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   falling back to `CLONE_FAILED`); see `docs/json-contracts.md`. Pull and push
   keep returning git's own words, redacted — a merge conflict or a rejected
   push still says so, and remote URLs the caller supplied are preserved.
-  Success bodies (`RepoInfo.local_path`, `subscribe`'s `path`) still carry
-  absolute server paths; narrowing those is separate work.
+  Success bodies (`RepoInfo.local_path`, `subscribe`'s `path`) narrowed to
+  the workspace-relative form in the entry below.
+- **Repo endpoint *success* bodies disclosed the same absolute server paths
+  #161 removed from error bodies.** `RepoInfo.local_path` (`GET /repos`, `GET
+  /repos/{name}`) and the `path` key in `subscribe`/`fork` responses returned
+  the server's real filesystem path (`/Users/<user>/.pyrite/repos/owner/repo`)
+  at 200. Both are now relative to the workspace root (`owner/repo_name`) —
+  the field stays populated rather than dropped, since `RepoInfo` is public
+  REST response shape an external consumer may already read, but discloses
+  no server layout or usernames; a path outside the workspace root comes back
+  as `"<path>"` rather than leaking the absolute value or raising. Only the
+  HTTP boundary changed — the CLI (`pyrite repo list`/`status`) still shows
+  the real absolute path for the local operator, and every internal caller
+  (fork's `add_remote`, sync, PR, config load) still reads `local_path`
+  absolute off the DB row or the service's own dict, unaffected. See
+  `docs/json-contracts.md`.
 - **Private KBs were readable by any logged-in user, and by anonymous
   visitors on an auth-enabled instance.** Per-KB roles (`default_role: none`,
   explicit grants) were enforced on write routes only; every read route
@@ -102,6 +147,16 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   are tier-guarded today but not per-KB scoped.
 
 ### Added
+
+- **`pyrite --version` (also `-V`), which had never existed.** The CLI
+  answered `Error: No such option: --version` for every release up to this
+  one. The version itself was never wrong — `pyrite.__version__` reads from
+  `pyproject.toml` with an installed-metadata fallback, and a test has pinned
+  it since it drifted to `0.12.0` while `pyproject.toml` said `0.24.1`. That
+  test covered the package attribute; nothing covered the command line, which
+  is the surface a user meets first. Found by the release script's own
+  release-layer step on its first real run, against a clean install from the
+  release SHA.
 
 - **`scripts/release.py`: a release is one command.** Six ordered steps, with
   every check in front of the first thing that cannot be undone —
@@ -216,6 +271,27 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Documentation
 
+- Six false statements in agent-facing docs, found by a cold read and
+  independently re-verified (#229): `CLAUDE.md` documented a `--title` flag
+  `pyrite sw new-adr` does not have (title is positional; same fix applied
+  to `.claude/skills/kb/SKILL.md` and `.claude/skills/software-kb/SKILL.md`,
+  which repeated it) — **@Umar-2026 found and fixed the same `--title` bug
+  independently in #237, fourteen minutes before this sweep merged**;
+  `docs/json-contracts.md`'s `has_more`/`total` claims
+  are replaced with a measured per-surface, per-transport table (`search`,
+  `list_entries`, `recent`, `tags`, `backlinks` × CLI/MCP/REST — none of
+  them uniform); the 29/11/8 MCP tool-tier counts in `docs/getting-started.md`,
+  `README.md` and `pyrite mcp --help` undercounted by 2.4x by omitting 41+
+  plugin tools exposed per tier — `pyrite mcp --help`'s counts are now
+  generated from the live tool registry (true counts: read 70, write 103,
+  admin 112) and the other two docs point to it instead of retyping a
+  number; `docs/gemini-mcp-integration.md` and `docs/openai-mcp-integration.md`
+  now name which binary (`pyrite mcp` vs `pyrite-server`) each tier default
+  applies to, since the two disagree (`write` vs `read`); `kb_bulk_create`'s
+  MCP tool description no longer claims best-effort per-entry semantics
+  (#95: one malformed entry rejects the whole batch); `AGENTS.md` now says
+  `pyrite orient`'s schema block has no field list for plugin-declared
+  types (#232) instead of implying it always does.
 - `kb/runbooks/setting-up-dev-environment.md` (#212): the troubleshooting
   runbook had drifted from CONTRIBUTING and could not run the suite —
   `pip install -e ".[dev]"` (no `fastapi`, no CLI deps, cannot collect
@@ -241,6 +317,55 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 - CODE_OF_CONDUCT names a contact.
 
 ### Changed
+
+- **`auto_embed: true` now guarantees that an entry *will be* embedded, not
+  that it is embedded when the write returns (ADR-0035).** A write records the
+  entry, makes it keyword-searchable immediately, and notes one `pending` row
+  in `embed_queue`; it never imports torch and never touches the network.
+  The debt is paid on paths that already have a caller willing to wait —
+  `pyrite index embed` / `index sync` / `index build`, every `pyrite-server`
+  startup, and `POST /api/index/sync?wait=true` — and
+  `GET /api/index/embed-status` reports what is outstanding. **Semantic search
+  is therefore eventually-consistent:** an entry written a moment ago may not
+  be findable by meaning until a drain runs, and a semantic search against a
+  KB with no embeddings now says so in `warnings` (naming `pyrite index
+  embed`) instead of returning a silent empty list. No background thread is
+  introduced (deliberately not copying #102's unjoined daemon thread).
+  `auto_embed: false` is unchanged: nothing is enqueued and no embedding code
+  is reached at all.
+- **MCP reads are bounded by default, and the bound can no longer be
+  defeated (ADR-0034 rules 1, 3, 4).** Two behaviour changes for clients
+  passing large `body_limit`s: the per-body ceiling drops from **50,000 to
+  20,000** characters (92% of measured bodies still fit in one call; the
+  rest continue with `kb_read_body`), and multi-entry reads gain a
+  **per-response budget of 40,000 body characters** — previously the
+  ceiling was per body, so 50 entries at it was a megabyte. Bodies fill in
+  request order; an entry reached after the budget is spent comes back in
+  place with an empty body, `body_truncated: true` and its true
+  `body_length`, never dropped and never reported `not_found`.
+
+  All three numbers are now configuration read at server start —
+  `PYRITE_BODY_CHUNK_DEFAULT` (8000), `PYRITE_BODY_CHUNK_MAX` (20000),
+  `PYRITE_BODY_RESPONSE_BUDGET` (40000). An invalid value (non-integer,
+  ≤ 0, or a default above the max) stops the server with a message naming
+  the variable rather than silently falling back, and the MCP tool
+  descriptions report the effective values instead of compiled-in ones.
+
+- **A `fields` projection no longer skips body chunking** — the documented
+  contract it replaces is retired (ADR-0034 rule 1: a parameter that
+  reduces output never disables another bound). `kb_get` and
+  `kb_batch_read` with `fields=[..., "body"]` and `body_limit=6000`
+  returned 171,189 characters, 28× the explicit cap (#58); the same call
+  now returns 12,369. A projection that keeps `body` also keeps
+  `body_truncated`, `body_length`, `body_offset` and `body_chunk_size`, so
+  a truncated body can still be recognised as one.
+
+  The same hole was open on three read paths the issue did not name, and
+  they are closed with it: `kb_search` returned whole bodies for both
+  `include_body=true` and `fields=[..., "body"]` (it has no `body_limit`
+  at all, so it is bounded at the default chunk within the response
+  budget), and `kb_list_entries` and `kb_recent` returned whole bodies for
+  up to 200 entries whether or not `fields` was passed.
 
 - Three open process findings fixed: `.claude/THEME.md` is no longer tracked
   (it was gitignored but the already-committed blob kept riding every branch,
@@ -342,6 +467,47 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 - CONTRIBUTING: how to claim an issue
 
 ### Fixed
+
+- **The first write on a fresh install no longer blocks for over a minute
+  downloading the embedding model (#13).** `KBService._auto_embed` took a
+  synchronous branch whenever `self._embedding_worker` was unset — and nothing
+  in production ever set it, so *every* write on *every* surface imported
+  torch and fetched ~90 MB inside the request. Writes now enqueue (see
+  ADR-0035 under Changed): measured on a live `pyrite-server` with an empty
+  `HF_HOME` and the network blocked, `POST /api/entries` returns in
+  milliseconds instead of failing a 2 s budget, and the entry is
+  keyword-searchable at once.
+
+- **Writing back a body that a bounded read had truncated silently destroyed
+  the rest of the entry.** `kb_get`/`kb_batch_read` return at most the default
+  chunk (8,000 characters, `PYRITE_BODY_CHUNK_DEFAULT`) of a long body plus
+  `body_truncated: true`; nothing refused that body on the way back in, so an
+  agent that edited what it received and saved it replaced a
+  170,000-character entry with that fragment — silent, permanent, and produced
+  by the safety feature itself. 21% of entries on the maintainer's index are
+  long enough to be affected. Every write surface that can receive a
+  body now refuses one carrying a truthy `body_truncated` marker, with
+  `VALIDATION_FAILED`, `retryable: false` and a message naming `kb_read_body` /
+  `body_offset` as the way to assemble the whole body first: MCP's write and
+  admin tiers (`kb_create`, `kb_update`, `task_create`, `task_decompose` and
+  any plugin write tool, guarded at the dispatcher), `kb_bulk_create`
+  per-item, REST `POST`/`PUT`/`PATCH /api/entries` plus
+  `POST /api/entries/import` per-record, and the CLI — `pyrite import`
+  per-record (exiting 1, so a script cannot read "Imported N" off a run that
+  dropped a truncated body), `pyrite create` and `pyrite update`. A write
+  without the marker, a write carrying `body_truncated: false`, and a
+  metadata-only update that carries the marker but no body are all unaffected.
+  ADR-0034 rule 2; the CLI half closes #230.
+
+  `pyrite create --body-file`/`--stdin` lifts a file's YAML frontmatter into
+  the entry's fields, so a bounded read saved to a scratch file — the most
+  likely way a marker gets persisted before being replayed — is refused too.
+  `pyrite update --body-file` does not parse frontmatter and is unchanged: a
+  marker there is body content, not a write argument.
+
+  Importer audit: `json` and `markdown` carry the marker through to the
+  caller, `yaml` and `csv` strip it through their key whitelists. Both import
+  endpoints check every record regardless of format.
 
 - **Extension entry classes silently dropped `aliases` and `_schema_version` on
   every load -> save round trip, and rewrote `importance` back to its default**

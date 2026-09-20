@@ -63,6 +63,28 @@ is no CLI command for them yet.
 downloaded on first use) and `search_backend` (`sqlite` or `postgres`, with
 `database_url` for the latter).
 
+## Bounded reads (MCP)
+
+Every MCP read that returns a body is bounded, so one call cannot exceed what
+its caller can hold (ADR-0034). Tune these when your clients' context windows
+are smaller or larger than the defaults assume; the MCP tool descriptions
+report whatever values are in force, so an agent reads the numbers that
+actually apply.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PYRITE_BODY_CHUNK_DEFAULT` | `8000` | Body characters returned when the caller passed no `body_limit`. 79% of measured bodies arrive whole at this size. |
+| `PYRITE_BODY_CHUNK_MAX` | `20000` | Per-body ceiling. A caller's `body_limit` above this is clamped to it, on every read path including `fields`. |
+| `PYRITE_BODY_RESPONSE_BUDGET` | `40000` | Total body characters one response may carry across all of its entries (`kb_batch_read`, `kb_search` with `include_body` or `fields`, `kb_list_entries`, `kb_recent`). Bodies fill in request order; entries past the budget return an empty body with `body_truncated` and their true `body_length`. |
+
+All three are read at server start. A value that is not a positive integer, or
+a `PYRITE_BODY_CHUNK_DEFAULT` above `PYRITE_BODY_CHUNK_MAX`, stops the server
+with a message naming the variable rather than silently falling back — a
+deployment that ignores its own tuning is worse than one that will not boot.
+
+Continue a truncated body with `kb_read_body` (offset-based); see
+[json-contracts.md](json-contracts.md) for the marker keys.
+
 ## AI features
 
 | Variable | Default | Meaning |

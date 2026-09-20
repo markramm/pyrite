@@ -25,6 +25,28 @@ def _format_output(data: dict, fmt: str) -> str | None:
     return format_output(data, fmt)
 
 
+def _settle_embed_queue(db) -> int:
+    """Pay off whatever ADR-0035 writes left in `embed_queue`.
+
+    Shares one implementation with the server (`settle_embed_queue`), which is
+    the point: an earlier version retired rows here by asking only "does this
+    entry have *a* vector?", which is false for an entry whose body changed
+    after it was embedded. Combined with `embed_all(force=False)` skipping
+    entries that already have a vector, an update's queue row was deleted
+    while its vector still encoded the old body -- `embed-status` zero, the
+    semantic index silently stale, and only `--force` able to recover it.
+    Draining re-embeds through `upsert_embedding`, which replaces the vector
+    unconditionally, so the update is handled correctly and no reconciliation
+    step is needed.
+
+    Never raises: a CLI that indexed successfully must not exit non-zero
+    because the queue bookkeeping could not be finished.
+    """
+    from ..services.embedding_worker import settle_embed_queue
+
+    return settle_embed_queue(db)
+
+
 @index_app.command("build")
 def index_build(
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to index (all if omitted)"),
@@ -123,6 +145,13 @@ def index_build(
 
             if is_available() and db.vec_available:
                 console.print("[dim]Generating embeddings...[/dim]")
+                # Queue first: a queued row means "this entry changed", and
+                # draining re-embeds it through upsert_embedding, which
+                # replaces the vector. embed_all(force=False) afterwards would
+                # *skip* it -- it only asks whether a vector exists, not
+                # whether it is current -- so an update's row must be settled
+                # before, not after.
+                _settle_embed_queue(db)
                 svc = EmbeddingService(db, model_name=config.settings.embedding_model)
                 stats = svc.embed_all(kb_name=kb_name, force=force)
                 if stats["embedded"] > 0:
@@ -172,8 +201,19 @@ def index_sync(
         if len(malformed) > 5:
             console.print(f"    [dim]… and {len(malformed) - 5} more[/dim]")
 
-    # Auto-embed new/updated entries if embeddings are available
+    # Auto-embed new/updated entries if embeddings are available.
+    #
+    # The queue is settled FIRST and outside the `changed > 0` gate, for two
+    # separate reasons. (a) `changed > 0` gates the *file*-driven embed only:
+    # under ADR-0035 a write indexes its own entry and leaves a queue row, so
+    # a sync can find nothing changed on disk and still owe embeddings --
+    # which is the whole point of `pyrite index sync` as a drain point. (b) a
+    # queued row means "this entry changed", and only draining re-embeds it;
+    # `embed_all(force=False)` would skip it because a (stale) vector exists.
     changed = results["added"] + results["updated"]
+    if not no_embed:
+        _settle_embed_queue(db)
+
     if changed > 0 and not no_embed:
         try:
             from ..services.embedding_service import EmbeddingService, is_available
@@ -263,6 +303,11 @@ def index_embed(
         )
 
     from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
+
+    # Before embed_all, not after: a queued row marks an entry whose body
+    # changed, and only the drain re-embeds it. embed_all(force=False) skips
+    # anything that already has a vector, stale or not.
+    _settle_embed_queue(db)
 
     svc = EmbeddingService(db, model_name=config.settings.embedding_model)
 

@@ -420,6 +420,20 @@ class SearchService:
 
         svc = EmbeddingService(self.db)
         if not svc.has_embeddings():
+            # ADR-0035 §5. Under "writes are eventually-embedded" this is the
+            # ordinary state of a KB nobody has embedded yet, and an empty
+            # result set is indistinguishable from "searched, found nothing".
+            # Say which it is and name the command that fixes it -- without
+            # this, a fresh install's semantic search is a silent [].
+            #
+            # Only when the KB has entries: on a genuinely empty index the
+            # answer is `pyrite index build`, and sending someone to `index
+            # embed` would be the wrong advice confidently given.
+            if warnings is not None and self._index_has_entries(kb_name):
+                warnings.append(
+                    "semantic leg skipped: no embeddings exist for this index yet, so "
+                    "only the keyword leg ran; run `pyrite index embed` to build them"
+                )
             return []
 
         # ``include_archived`` is a default *exclusion*, not a value filter: it
@@ -482,6 +496,22 @@ class SearchService:
             "status": status,
             "include_archived": include_archived,
         }
+
+    def _index_has_entries(self, kb_name: str | None = None) -> bool:
+        """Is there anything indexed that *could* have been embedded?
+
+        Distinguishes "indexed but not embedded" (tell them `pyrite index
+        embed`) from "nothing indexed at all" (they need `pyrite index build`,
+        and an embed warning would send them the wrong way). Best-effort: a
+        backend that cannot answer cheaply gets the benefit of the doubt,
+        because a missing warning is a smaller harm than a wrong one.
+        """
+        kwargs = {"kb_name": kb_name} if kb_name else {}
+        try:
+            return self.db.count_entries(**kwargs) > 0
+        except Exception:
+            logger.debug("Could not count entries for the embed warning", exc_info=True)
+            return False
 
     def _backend_filters_semantic(self) -> bool:
         """Does this backend's vector leg honour the keyword leg's filters?

@@ -50,6 +50,60 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Entries"])
 
 
+async def refuses_truncated_body(request: Request) -> None:
+    """ADR-0034 rule 2 for the REST JSON write endpoints.
+
+    A FastAPI dependency rather than a check inside each handler, because the
+    pydantic request models do not declare `body_truncated` and drop it before
+    any handler could see it. This reads the *raw* JSON body, so the marker is
+    still there. It runs before the handler and raises 400 instead of letting
+    a partial body overwrite a whole one.
+
+    A request whose payload is not JSON (a multipart upload, an empty body) is
+    left alone: there is nothing to inspect, and `/entries/import` does its own
+    per-item check on the parsed file.
+
+    **The JSON test mirrors FastAPI's own**, deliberately. FastAPI parses a
+    body whenever the media type's maintype is `application` and its subtype
+    is `json` or ends `+json`, lower-cased by `email.message` first
+    (`fastapi/routing.py::get_request_handler`). A narrower test here does not
+    make the guard conservative -- it makes it *bypassable*, because the
+    handler still runs and still writes. `Content-Type: Application/JSON` is
+    legal (media types are case-insensitive, RFC 9110 section 8.3) and
+    `application/vnd.api+json` is ordinary; both parsed and both skipped this
+    guard until the cold read caught it.
+    """
+    from ...services.body_bounds import REFUSAL_SUGGESTION, refuse_truncated_body
+
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if not (media_type == "application/json" or media_type.endswith("+json")):
+        return
+    try:
+        payload = await request.json()
+    except Exception:
+        return
+
+    # PATCH writes one named field, so it is a body write only when that field
+    # IS the body -- and then `value`, not a `body` key, holds the body.
+    if isinstance(payload, dict) and payload.get("field") is not None:
+        if payload.get("field") != "body":
+            return
+        payload = {**payload, "body": payload.get("value")}
+
+    message = refuse_truncated_body(payload)
+    if message is None:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "code": "VALIDATION_FAILED",
+            "message": message,
+            "hint": REFUSAL_SUGGESTION,
+            "retryable": False,
+        },
+    )
+
+
 @router.get(
     "/entries", response_model=EntryListResponse, dependencies=[Depends(requires_kb_read())]
 )
@@ -622,16 +676,28 @@ async def import_entries(
             detail={"code": "PARSE_ERROR", "message": f"Failed to parse file: {e}"},
         )
 
+    from ...services.body_bounds import MARKER_KEYS, refuse_truncated_body
+
     created = []
     errors = []
     for entry_data in parsed:
+        # ADR-0034 rule 2, per item: an imported record that carries the
+        # truncation marker alongside a body is a partial read someone saved
+        # to a file. Refuse it on its own; import the clean records.
+        refusal = refuse_truncated_body(entry_data)
+        if refusal is not None:
+            errors.append({"title": entry_data.get("title", "?"), "error": refusal})
+            continue
         try:
             entry_id = entry_data.get("id") or generate_entry_id(entry_data["title"])
             entry_type = entry_data.get("entry_type", "note")
+            # The truncation keys are transport, not content: an untruncated
+            # record may still carry `body_truncated: false`, and that must not
+            # become frontmatter on the stored entry.
             extra = {
                 k: v
                 for k, v in entry_data.items()
-                if k not in ("id", "title", "entry_type", "body") and v is not None
+                if k not in ("id", "title", "entry_type", "body", *MARKER_KEYS) and v is not None
             }
             entry = svc.create_entry(
                 kb, entry_id, entry_data["title"], entry_type, entry_data.get("body", ""), **extra
@@ -718,7 +784,9 @@ def get_entry(
 
 
 @router.post(
-    "/entries", response_model=CreateResponse, dependencies=[Depends(requires_kb_tier("write"))]
+    "/entries",
+    response_model=CreateResponse,
+    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
 )
 @limiter.limit("30/minute")
 def create_entry(
@@ -782,7 +850,7 @@ def create_entry(
 @router.put(
     "/entries/{entry_id}",
     response_model=UpdateResponse,
-    dependencies=[Depends(requires_kb_tier("write"))],
+    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
 )
 @limiter.limit("30/minute")
 def update_entry(
@@ -833,7 +901,7 @@ def update_entry(
 @router.patch(
     "/entries/{entry_id}",
     response_model=UpdateResponse,
-    dependencies=[Depends(requires_kb_tier("write"))],
+    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
 )
 @limiter.limit("30/minute")
 def patch_entry_field(

@@ -112,3 +112,48 @@ def test_search_kb_not_found_suggestion_includes_db_only_kb(tmp_path, monkeypatc
     assert "db-only-kb" in parsed["suggestion"], (
         f"expected DB-only KB in the known-KBs suggestion; got {parsed['suggestion']!r}"
     )
+
+
+class TestHintsAreNotRichMarkup:
+    """A hint is literal text, not Rich markup.
+
+    `cli_error` rendered the suggestion through `console.print`, which parses
+    `[...]` as a style tag. The install hint for semantic search read:
+
+        hint: install with: pip install pyrite
+
+    -- the `[semantic]` silently eaten, leaving a command that installs the
+    package the user already has and does not fix their error. Found by the
+    0.24.3 release dry run, whose tutorial step hit it on block 9.
+
+    The message is user-controlled too (entry ids, KB names, git stderr), so
+    both halves of the line are rendered literally.
+    """
+
+    def _render(self, capsys, message, suggestion=None):
+        with pytest.raises(typer.Exit):
+            cli_error(message, error_code="DEPENDENCY_MISSING", suggestion=suggestion)
+        return capsys.readouterr().out
+
+    def test_bracketed_extra_survives_in_the_hint(self, capsys):
+        out = self._render(
+            capsys,
+            "sentence-transformers is not installed.",
+            suggestion="install with: pip install pyrite[semantic]",
+        )
+        assert "pip install pyrite[semantic]" in out
+
+    def test_bracketed_json_example_survives_in_the_hint(self, capsys):
+        out = self._render(capsys, "bad entries", suggestion='pass entries as [{"id": "x"}]')
+        assert '[{"id": "x"}]' in out
+
+    def test_brackets_in_the_message_survive(self, capsys):
+        out = self._render(capsys, "no entry matched [draft] in kb")
+        assert "[draft]" in out
+
+    def test_an_unclosed_bracket_does_not_crash_the_error_path(self, capsys):
+        """Rich raises MarkupError on a malformed tag. An error reporter that
+        raises while reporting an error is the worst possible failure."""
+        out = self._render(capsys, "unterminated [tag", suggestion="also [unclosed")
+        assert "[tag" in out
+        assert "[unclosed" in out
