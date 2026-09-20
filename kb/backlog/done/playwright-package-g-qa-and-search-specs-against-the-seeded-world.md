@@ -10,7 +10,7 @@ tags:
 - quality
 importance: 5
 kind: task
-status: in_progress
+status: done
 priority: high
 effort: S
 rank: 0
@@ -238,3 +238,48 @@ read then.
   scope.
 - Restyling either page, or "while I'm here" accessibility work beyond the
   `aria-label`s on the four unlabeled selects named above.
+
+## Worker report 2026-09-19
+
+Both specs rewritten, 5/5 + full suite green. The #9 assertion is
+`web/e2e/search.spec.ts:44` (`a seeded query renders the seeded entry as a
+result link, skeleton gone`), asserting `a[href="/entries/e2e-note-alpha"]`
+visible with title text and `getByTestId('search-skeleton')` at count 0 in the
+same test — the conductor can close #9 citing this test.
+
+**Correction to this groom's premise (not a product bug):** the "QA with an
+issue" regime is marked above as "it currently does not [produce one]" —
+false. `global-setup.ts` (Package A, out of scope) creates no links between
+any seeded entry (the same fact `graph.spec.ts` already asserts against
+`/api/graph` — "the seeded world has no linked entries"), and
+`qa_service.py`'s `orphan_entry` rule (line 640) fires for every entry with no
+links in either direction. The seeded world therefore reports exactly
+`SEEDED_ENTRIES.length + SEEDED_DAILY_DATES.length` = 17 `orphan_entry`
+issues (info) plus 20 `rubric_violation` issues (warning) = 37 total, on
+every run, deterministically. There is no zero-issue regime to test against
+this seed. `qa.spec.ts`'s `QA against the seeded world reports an
+orphan_entry issue for every seeded entry` test (line 46) asserts this
+invariant instead (total-issues count from the stat card, the Issues(N)
+heading matching it, and one `orphan_entry` row per `SEEDED_ENTRIES` id) —
+this is now the closest thing to a "QA with an issue" regime this seed can
+exercise, and I'd suggest whoever picks up the parent ticket or package H
+retire the "QA with zero issues" framing rather than add a seed change to
+force it true.
+
+Also found while removing the `.or()` dodge on the mode-selector test:
+semantic search against this e2e world returns zero results for every query,
+always — `.pyrite/config.yaml` in this worktree sets `auto_embed: false` and
+`global-setup.ts` never computes embeddings, so
+`SearchService._semantic_search`'s `has_embeddings()` check
+(`search_service.py:351`) is always false, and the mode surfaces
+`reason: "semantic_empty_no_embeddings"` (`search_service.py:247`). This is an
+intentional, named fallback in the product, not a bug — `qa.spec.ts`'s
+counterpart in `search.spec.ts` (`mode selector toggles aria-pressed and
+keyword/hybrid still return the seeded entry`, line 109) asserts the empty
+state for semantic and the keyword-fallback result for hybrid instead of
+"still returns the seeded entry" for all three modes, with the reasoning in a
+comment at the top of that test.
+
+No real product bug requiring `test.fixme` was found by a newly-real
+assertion in this package (the two findings above are groom-premise
+corrections and an already-documented product behaviour, not new defects).

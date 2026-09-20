@@ -178,6 +178,24 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   (#49, pre-existing), and `Calendar.svelte`'s month-navigation buttons are
   inert wherever a `selectedDate` is set — an effect immediately snaps the
   view back (#89).
+- `web/e2e/search.spec.ts` and `web/e2e/qa.spec.ts` (Package G of the
+  Playwright determinism ticket) now assert on the seeded world instead of
+  `.or(...)` "results or an empty state" dodges: a seeded query renders the
+  seeded entry's title **as a result link** with the loading skeleton gone at
+  that moment (`web/e2e/search.spec.ts:44`) — the assertion issue #9 needed to
+  be closed, since the "N results" header alone can't distinguish a rendered
+  list from one stuck on the skeleton. Removing the `.or()`/`if (count > 0)`
+  dodges surfaced that the seeded world is not the zero-issue QA state the
+  ticket assumed: `global-setup.ts` creates no links between entries (the
+  same fact `graph.spec.ts` already asserts against `/api/graph`), so
+  `qa_service.py`'s `orphan_entry` rule fires for every seeded entry, every
+  run — `qa.spec.ts` now asserts that deterministic count instead of a
+  clean-state dodge. `aria-label` added to the four unlabeled `<select>`s
+  (search's KB and type filters, QA's severity filter) and `aria-pressed` to
+  the search mode buttons, plus `data-testid` on the search skeleton, the
+  search empty state, and the two QA stat cards — additive attributes only,
+  no guard logic changed. The two `toHaveTitle` assertions are dropped
+  (comment naming #49), following package F's precedent.
 - The Playwright e2e suite now seeds and runs against its own KB in a private
   data directory (`web/e2e/global-setup.ts`, contract in `web/e2e/fixtures.ts`)
   with auth explicitly disabled and no server reuse, instead of whatever

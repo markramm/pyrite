@@ -201,6 +201,7 @@
 				{#each (['keyword', 'semantic', 'hybrid'] as const) as m}
 					<button
 						onclick={() => setMode(m)}
+						aria-pressed={searchStore.mode === m}
 						class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors capitalize {searchStore.mode === m
 							? 'bg-gold-500/20 text-gold-400 border border-gold-500/50'
 							: 'text-zinc-500 hover:text-zinc-300'}"
@@ -214,6 +215,7 @@
 			<select
 				bind:value={selectedKb}
 				onchange={onKbChange}
+				aria-label="Filter by knowledge base"
 				class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
 			>
 				<option value="">All KBs</option>
@@ -226,6 +228,7 @@
 			<select
 				bind:value={selectedType}
 				onchange={onTypeChange}
+				aria-label="Filter by entry type"
 				class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
 			>
 				<option value="">All types</option>
@@ -358,11 +361,13 @@
 	<!-- Results area -->
 	<div class="flex-1 overflow-y-auto p-6">
 		{#if searchStore.loading}
-			<SkeletonLoader variant="search" lines={4} />
+			<div data-testid="search-skeleton">
+				<SkeletonLoader variant="search" lines={4} />
+			</div>
 		{:else if searchStore.error}
 			<ErrorState message={searchStore.error} onretry={runSearch} />
 		{:else if searchStore.query.trim() && searchStore.results.length === 0}
-			<div class="flex flex-col items-center justify-center py-16 text-center">
+			<div data-testid="search-empty-state" class="flex flex-col items-center justify-center py-16 text-center">
 				<svg class="mb-4 h-12 w-12 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
 				</svg>

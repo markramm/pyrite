@@ -92,6 +92,7 @@
 
 			<select
 				bind:value={severityFilter}
+				aria-label="Filter by severity"
 				class="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
 			>
 				<option value="">All Severities</option>
@@ -112,12 +113,14 @@
 			{#if status}
 				<div class="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
 					<div
+						data-testid="qa-stat-total-entries"
 						class="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800"
 					>
 						<div class="text-sm text-zinc-500">Total Entries</div>
 						<div class="text-2xl font-bold">{status.total_entries}</div>
 					</div>
 					<div
+						data-testid="qa-stat-total-issues"
 						class="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800"
 					>
 						<div class="text-sm text-zinc-500">Total Issues</div>
@@ -181,7 +184,7 @@
 					Issues ({filteredIssues.length})
 				</h2>
 				{#if filteredIssues.length === 0}
-					<div class="rounded-md bg-green-50 p-4 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+					<div data-testid="qa-clean-state" class="rounded-md bg-green-50 p-4 text-green-700 dark:bg-green-900/20 dark:text-green-400">
 						No issues found.
 					</div>
 				{:else}
