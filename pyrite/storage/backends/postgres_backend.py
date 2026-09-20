@@ -106,9 +106,35 @@ class PostgresBackend(BaseBackend):
         BackendCapability.FILTERED_SEMANTIC,
     }
 
-    def __init__(self, session: Session, engine=None):
-        self._session = session
+    def __init__(self, session: Session | None = None, engine=None, owner=None):
+        # Same session lifetime as SQLiteBackend (#131 criterion 8): when an
+        # `owner` (a PyriteDB) is given, `self._session` resolves to that
+        # owner's *current scope* session rather than caching one object for
+        # the backend's lifetime. A shared psycopg connection under concurrent
+        # use raises rather than corrupting results the way SQLite does, so the
+        # symptom differs — the lifetime bug is the same one.
+        self._owner = owner
+        self._explicit_session = session
         self._engine = engine
+
+    @property
+    def _session(self):
+        """The session for the current scope (see ``PyriteDB.session``)."""
+        if self._owner is not None:
+            return self._owner.session
+        return self._explicit_session
+
+    @_session.setter
+    def _session(self, value):
+        self._explicit_session = value
+
+    def for_owner(self, owner):
+        """A copy whose session resolves through *owner* (see SQLiteBackend)."""
+        import copy as _copy
+
+        clone = _copy.copy(self)
+        clone._owner = owner
+        return clone
 
     def close(self) -> None:
         """No-op — connection lifecycle owned by caller."""

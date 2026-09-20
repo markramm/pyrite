@@ -429,6 +429,14 @@ async def verify_api_key(
     2. Session cookie (web UI auth)
     3. Anonymous tier (configurable public access)
     4. No auth configured → admin (backwards-compatible)
+
+    This dependency is ``async``, so its body runs on the event-loop thread.
+    Everything here must therefore be non-blocking — the one synchronous DB
+    call (``AuthService.verify_session``) is offloaded with
+    ``run_in_threadpool`` below (#131 criterion 4). Calling it inline both
+    blocked the loop for the duration of the query and put event-loop DB work
+    in the same session as the threadpool handlers' — the second, distinct
+    exposure of the shared-session bug, specifically on the auth-enabled path.
     """
     # 1. API key (header or query param)
     key = request.headers.get("X-API-Key") or request.query_params.get("api_key")
@@ -442,10 +450,18 @@ async def verify_api_key(
     if config.settings.auth.enabled:
         token = request.cookies.get("pyrite_session")
         if token:
+            from starlette.concurrency import run_in_threadpool
+
             from ..services.auth_service import AuthService
 
-            auth_service = AuthService(db, config.settings.auth)
-            user = auth_service.verify_session(token)
+            def _verify() -> dict | None:
+                # Runs on a worker thread. `db` is this request's handle, so
+                # the lookup uses this request's session — no scope to open,
+                # and nothing shared with a concurrent request.
+                auth_service = AuthService(db, config.settings.auth)
+                return auth_service.verify_session(token)
+
+            user = await run_in_threadpool(_verify)
             if user:
                 request.state.api_role = user["role"]
                 request.state.auth_user = user
@@ -949,7 +965,13 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     def _app_get_config() -> PyriteConfig:
         return application.state.pyrite_config
 
-    def _app_get_db() -> PyriteDB:
+    def _app_db() -> PyriteDB:
+        """The app's shared ``PyriteDB`` — engine and pool, no session.
+
+        Plain accessor for the other app-state builders below (index manager,
+        KB registry, index worker), which need the object, not a request
+        scope. The *dependency* is ``_app_get_db`` underneath.
+        """
         if application.state.pyrite_db is None:
             cfg = application.state.pyrite_config
             db = PyriteDB(cfg.settings.index_path)
@@ -957,21 +979,51 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             db.merge_registered_kbs(cfg)
         return application.state.pyrite_db
 
+    def _app_get_db():
+        """Per-request database session (#131).
+
+        The ``PyriteDB`` — and so the engine and its connection pool — is still
+        built once and cached on app state; what is now per-request is the
+        SQLAlchemy ``Session``. ``session_scope()`` binds a fresh one for the
+        duration of this request and closes it in its ``finally``, on every
+        path including exceptions.
+
+        Being a generator dependency, FastAPI opens the handle before the
+        handler and closes it after the response is produced. The handler
+        receives a per-request *handle* onto the same database — same engine,
+        pool, raw connection and backend — whose ``db.session`` and backend
+        ``self._session`` resolve to this request's own Session. That is why no
+        service or endpoint signature had to change.
+
+        The handle, rather than a thread-local or a ContextVar, is what makes
+        this correct: one anyio worker thread interleaves several requests (see
+        ``PyriteDB.session`` for the measurements), so neither the thread nor
+        the context identifies a request.
+
+        Both halves of the fix are required and both are here: the per-request
+        session (isolation) and its close (returning the connection to the
+        pool, which ``storage/connection.py`` sizes to the anyio threadpool so
+        the close cannot be traded for ``QueuePool limit ... reached``).
+        """
+        db = _app_db()
+        with db.request_handle() as handle:
+            yield handle
+
     def _app_get_index_mgr() -> IndexManager:
         if application.state.pyrite_index_mgr is None:
-            application.state.pyrite_index_mgr = IndexManager(_app_get_db(), _app_get_config())
+            application.state.pyrite_index_mgr = IndexManager(_app_db(), _app_get_config())
         return application.state.pyrite_index_mgr
 
     def _app_get_kb_registry() -> KBRegistryService:
         if application.state.pyrite_kb_registry is None:
             application.state.pyrite_kb_registry = KBRegistryService(
-                _app_get_config(), _app_get_db(), _app_get_index_mgr()
+                _app_get_config(), _app_db(), _app_get_index_mgr()
             )
         return application.state.pyrite_kb_registry
 
     def _app_get_index_worker() -> IndexWorker:
         if application.state.pyrite_index_worker is None:
-            worker = IndexWorker(_app_get_db(), _app_get_config())
+            worker = IndexWorker(_app_db(), _app_get_config())
 
             # Wire WebSocket broadcast for progress updates.
             # NOTE: This callback is invoked from IndexWorker's background
@@ -1013,7 +1065,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         from ..services.embedding_service import EmbeddingService
 
         application.state.pyrite_embedding_svc = EmbeddingService(
-            _app_get_db(), model_name=config.settings.embedding_model
+            _app_db(), model_name=config.settings.embedding_model
         )
 
         @application.on_event("startup")

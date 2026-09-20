@@ -7,7 +7,7 @@ tags:
 - server
 - storage
 importance: 5
-status: in_progress
+status: done
 priority: medium
 rank: 0
 assignee: agent:pyrite-worker
