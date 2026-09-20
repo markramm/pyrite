@@ -62,9 +62,17 @@ def cli_error(
         typer.echo(json.dumps(payload))
     else:
         from rich.console import Console
+        from rich.text import Text
 
         console = Console()
-        console.print(f"[red]ERROR[/red] [[yellow]{error_code}[/yellow]]: {message}")
+        # The styled labels are ours and stay markup; `message` and
+        # `suggestion` are data -- an extra like `pyrite[semantic]`, a JSON
+        # example, an entry id -- and Rich would parse their brackets as style
+        # tags. `pip install pyrite[semantic]` rendered as `pip install
+        # pyrite`, a command that does not fix the error it is offered for.
+        # Wrapping them in `Text` is what keeps them literal -- passing them as
+        # a separate argument is NOT enough, Rich parses each string argument.
+        console.print(f"[red]ERROR[/red] [[yellow]{error_code}[/yellow]]:", Text(message))
         if suggestion:
-            console.print(f"    [dim]hint:[/dim] {suggestion}")
+            console.print("    [dim]hint:[/dim]", Text(suggestion))
     raise typer.Exit(1)

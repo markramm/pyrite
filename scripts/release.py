@@ -98,6 +98,14 @@ DEFAULT_REQUIRED_CHECKS = ("gate",)
 # fails immediately for a scripted check.
 DEFAULT_WAIT_CI_MINUTES = 15
 
+# The extras the release layer installs. This must match what
+# docs/getting-started.md tells a user to install, because step (c) then runs
+# that very tutorial against this install: `[server,cli]` omits
+# sentence-transformers, so the tutorial's `pyrite index embed` failed on a
+# release candidate that was fine -- the check was narrower than the document
+# it was checking.
+INSTALL_CHECK_EXTRAS = "all"
+
 CI_PASSED = "passed"
 CI_FAILED = "failed"
 CI_PENDING = "pending"
@@ -788,7 +796,7 @@ def step_release_layer(ctx: Context) -> None:
         return
 
     if not (ctx.runner.execute or ctx.rehearse_install_check):
-        spec = f"pyrite[server,cli] @ git+{REMOTE_URL}@{ctx.sha}"
+        spec = f"pyrite[{INSTALL_CHECK_EXTRAS}] @ git+{REMOTE_URL}@{ctx.sha}"
         print("    WOULD RUN: uv venv <tmp>")
         print(f'    WOULD RUN: uv pip install --python <tmp>/bin/python "{spec}"')
         print(f"    WOULD RUN: <tmp>/bin/pyrite --version    (must contain {ctx.version})")
@@ -808,7 +816,7 @@ def step_release_layer(ctx: Context) -> None:
         )
 
     venv = Path(tempfile.mkdtemp(prefix="pyrite-release-venv-"))
-    spec = f"pyrite[server,cli] @ git+{REMOTE_URL}@{ctx.sha}"
+    spec = f"pyrite[{INSTALL_CHECK_EXTRAS}] @ git+{REMOTE_URL}@{ctx.sha}"
     try:
         ctx.runner.note(f"temp venv: {venv}")
         print(f"    RUN: uv venv {venv}")

@@ -1384,3 +1384,27 @@ class TestWaitCiDefault:
         assert slept, "it never waited at all"
         assert all(s <= 30 for s in slept), slept
         assert sum(slept) <= 10.001, slept
+
+
+class TestInstallCheckMatchesTheTutorial:
+    """Step (c) must install what getting-started.md tells a user to install.
+
+    It installed `pyrite[server,cli]` and then ran the tutorial against that
+    venv. The tutorial says `pip install -e ".[all]"`, and its `pyrite index
+    embed` block needs sentence-transformers, which lives in the `semantic`
+    extra. So the release layer failed on a perfectly good candidate: the
+    check was narrower than the document it was checking.
+    """
+
+    def test_the_extras_are_the_ones_the_tutorial_names(self):
+        tutorial = (REPO / "docs" / "getting-started.md").read_text()
+        assert f'".[{release.INSTALL_CHECK_EXTRAS}]"' in tutorial, (
+            f"the install check uses [{release.INSTALL_CHECK_EXTRAS}] but "
+            "getting-started.md does not tell users to install that"
+        )
+
+    def test_the_planned_install_uses_those_extras(self, dry_run_commands, dry_run):
+        _code, _runner, calls = dry_run(("0.24.2", "--execute"))
+        installs = [c for c in calls if c[:2] == ["uv", "pip"]]
+        assert installs, "no install was composed"
+        assert any(f"pyrite[{release.INSTALL_CHECK_EXTRAS}]" in " ".join(c) for c in installs)
