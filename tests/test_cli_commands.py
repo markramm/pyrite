@@ -595,21 +595,42 @@ class TestMcpCommandTier:
     def test_help_tool_inventory_matches_actual_tool_counts(self):
         """docs-operational-contracts-travel-with-tool item 5: `pyrite mcp
         --help` claimed the read tier exposes 8 named tools and the write
-        tier adds 3 -- both drastically stale (actual: 29 read tools, 11
-        write-tier additions, 8 admin-tier additions, currently 48 total
-        before any plugin tools). Refresh --help text to state real counts
-        per tier instead of a fixed enumeration that goes stale."""
+        tier adds 3 -- both drastically stale.
+
+        #229 found the next fix (core dict counts: 29/11/8) had drifted the
+        same way: it omitted 41+ plugin tools (sw_*, investigation_*,
+        cascade_*, ...) registered dynamically per tier
+        (`PyriteMCPServer._register_plugin_tools`), understating the real
+        read-tier total by 2.4x (29 claimed vs. 70 actual). The help text
+        now counts core + plugin tools per tier, the same way
+        `PyriteMCPServer.__init__` assembles `self.tools` -- assert against
+        that live total, not the core-only dicts alone. See also the more
+        detailed regex-based check in test_mcp_help_tool_counts.py."""
+        from pyrite.plugins import get_registry
         from pyrite.server.tool_schemas import ADMIN_TOOLS, READ_TOOLS, WRITE_TOOLS
 
         result = runner.invoke(app, ["mcp", "--help"])
         assert result.exit_code == 0
 
-        assert str(len(READ_TOOLS)) in result.output, (
-            f"expected read tool count ({len(READ_TOOLS)}) in --help output"
+        registry = get_registry()
+        read_total = len(READ_TOOLS) + len(registry.get_all_mcp_tools("read"))
+        write_additions = (
+            len(WRITE_TOOLS)
+            + len(registry.get_all_mcp_tools("write"))
+            - len(registry.get_all_mcp_tools("read"))
         )
-        assert str(len(WRITE_TOOLS)) in result.output, (
-            f"expected write tool count ({len(WRITE_TOOLS)}) in --help output"
+        admin_additions = (
+            len(ADMIN_TOOLS)
+            + len(registry.get_all_mcp_tools("admin"))
+            - len(registry.get_all_mcp_tools("write"))
         )
-        assert str(len(ADMIN_TOOLS)) in result.output, (
-            f"expected admin tool count ({len(ADMIN_TOOLS)}) in --help output"
+
+        assert str(read_total) in result.output, (
+            f"expected live read tool count ({read_total}) in --help output"
+        )
+        assert str(write_additions) in result.output, (
+            f"expected live write-tier addition count ({write_additions}) in --help output"
+        )
+        assert str(admin_additions) in result.output, (
+            f"expected live admin-tier addition count ({admin_additions}) in --help output"
         )

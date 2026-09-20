@@ -643,22 +643,38 @@ def auth_github_setup():
 
 
 def _mcp_command_help() -> str:
-    """Tool counts derived from tool_schemas.py so this can't drift the way
-    the old fixed enumeration did (claimed 8 read tools; actual count grew
-    to 29 as orient/batch_read/task_* etc. were added over time)."""
+    """Tool counts derived from tool_schemas.py plus plugin tools registered
+    per tier, so this can't drift the way two fixed enumerations already
+    have: a hardcoded "8 read tools" once drifted to 29 as orient/batch_read/
+    task_* etc. were added; then 29/11/8 (core tools only) drifted from the
+    live count once plugins (sw_*, investigation_*, cascade_*, zettel_*,
+    wiki_*, social_*) started exposing 41+ tools at read tier alone (#229).
+    Mirrors how PyriteMCPServer.__init__ assembles self.tools, without
+    constructing a full server (no DB/config needed for --help text)."""
+    from ..plugins import get_registry
     from ..server.tool_schemas import ADMIN_TOOLS, READ_TOOLS, WRITE_TOOLS
+
+    registry = get_registry()
+    read_total = len(READ_TOOLS) + len(registry.get_all_mcp_tools("read"))
+    write_total = len(READ_TOOLS) + len(WRITE_TOOLS) + len(registry.get_all_mcp_tools("write"))
+    admin_total = (
+        len(READ_TOOLS)
+        + len(WRITE_TOOLS)
+        + len(ADMIN_TOOLS)
+        + len(registry.get_all_mcp_tools("admin"))
+    )
 
     return (
         "Start the MCP (Model Context Protocol) server.\n\n"
         "Runs the server over stdio for integration with Claude Code and "
         "other MCP-compatible AI agents. Tier controls which tools are "
-        "exposed:\n\n"
-        f"- read: {len(READ_TOOLS)} tools (kb_orient, kb_search, kb_get, "
+        "exposed (counts include plugin tools registered for that tier):\n\n"
+        f"- read: {read_total} tools (kb_orient, kb_search, kb_get, "
         "kb_timeline, kb_backlinks, kb_tags, kb_stats, kb_schema, task_*, "
-        "and more)\n"
-        f"- write: read tier + {len(WRITE_TOOLS)} more (kb_create, "
+        "sw_*/investigation_*/cascade_* and other plugin tools, and more)\n"
+        f"- write: read tier + {write_total - read_total} more (kb_create, "
         "kb_update, kb_delete, kb_link, task_claim, and more)\n"
-        f"- admin: write tier + {len(ADMIN_TOOLS)} more (kb_registry_*, "
+        f"- admin: write tier + {admin_total - write_total} more (kb_registry_*, "
         "kb_commit, kb_push, and more)"
     )
 

@@ -712,7 +712,7 @@ WRITE_TOOLS = {
         },
     },
     "kb_bulk_create": {
-        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. Best-effort: each entry succeeds or fails independently. Max 50 entries per call.",
+        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. Not best-effort: one malformed entry (e.g. a missing required field) rejects the entire batch before any entry is created (#95). Max 50 entries per call.",
         "inputSchema": {
             "type": "object",
             "properties": {
