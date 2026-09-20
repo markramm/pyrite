@@ -236,6 +236,9 @@ class TestUpdatingAnEntryRefreshesItsEmbedding:
             pytest.skip("sqlite-vec unavailable")
 
         worker = EmbeddingWorker(svc.db)
+        # A name tripwire, not the guarantee: it catches a literal revert
+        # cheaply, but a reimplementation under another name sails past it.
+        # The behavioural assertion below is what actually holds the line.
         assert not hasattr(worker, "clear_embedded"), (
             "clear_embedded is back; it cannot tell a current vector from a "
             "stale one, which is how an update's embedding got frozen"
@@ -434,3 +437,101 @@ class TestAFailureToQueueIsExplained:
             "sentence and cannot tell a locked DB from a full disk"
         )
         assert any("database is locked" in (r.exc_text or "") or r.exc_info for r in records)
+
+
+# ===========================================================================
+# A DELETED ENTRY'S DEBT IS VOID, NOT OWED
+#
+# Found by the second cold read. `delete_entry` and `rename_entry` do not
+# clean up `embed_queue`, and `process_batch` selects ORDER BY queued_at ASC
+# while `drain` stops on the first batch that embeds nothing -- so rows for
+# entries that no longer exist sit at the HEAD of the queue and starve every
+# live row behind them.
+# ===========================================================================
+
+
+class TestADeletedEntrysDebtIsVoid:
+    """A row whose entry is gone can never succeed, so it must not be kept.
+
+    The first pass counted a falsey `embed_entry` as success and deleted the
+    row -- silently wrong, but self-healing. The second pass raised
+    `EmbedRefusedError` for every falsey return, which is honest about work
+    not done but keeps a row nothing can ever pay. Both fail; the queue needs
+    the third answer: retire the row *because the debt is void*.
+    """
+
+    def test_a_deleted_entrys_row_is_retired_not_retried(self, tmp_path):
+        from pyrite.services.embedding_worker import EmbeddingWorker
+
+        svc = _svc(tmp_path, auto_embed=True)
+        svc.create_entry("t", "gone", "Gone", "note", "x")
+        assert ("gone", "t", "pending") in queue_rows(svc.db)
+
+        svc.delete_entry("gone", "t")
+        assert svc.db.get_entry("gone", "t") is None
+
+        worker = EmbeddingWorker(svc.db)
+        worker._get_embedding_svc = lambda: MagicMock(embed_entry=MagicMock(return_value=False))
+        worker.process_batch(batch_size=10)
+
+        assert queue_rows(svc.db) == [], (
+            "the row for a deleted entry is still queued; nothing can ever "
+            "embed it, so it will block the queue head forever"
+        )
+
+    def test_deleted_entries_at_the_head_do_not_starve_live_ones(self, tmp_path):
+        """The reviewer's scenario: 10 dead rows ahead of live work.
+
+        `drain` breaks on the first batch returning 0. If retiring a void row
+        does not count as progress, a batch of nothing but deleted entries
+        reads as "no progress" and every newer row starves.
+        """
+        from pyrite.services.embedding_worker import EmbeddingWorker
+
+        svc = _svc(tmp_path, auto_embed=True)
+        for i in range(10):
+            svc.create_entry("t", f"dead{i}", "D", "note", "x")
+            svc.delete_entry(f"dead{i}", "t")
+        for i in range(5):
+            svc.create_entry("t", f"live{i}", "L", "note", "x")
+
+        embedded: list[str] = []
+
+        def _embed(entry_id, kb_name):
+            if svc.db.get_entry(entry_id, kb_name) is None:
+                return False
+            embedded.append(entry_id)
+            return True
+
+        worker = EmbeddingWorker(svc.db)
+        worker._get_embedding_svc = lambda: MagicMock(embed_entry=MagicMock(side_effect=_embed))
+
+        worker.drain(batch_size=10)
+
+        assert sorted(embedded) == [f"live{i}" for i in range(5)], (
+            f"one drain embedded {sorted(embedded)}; the five live entries "
+            "starved behind ten rows for entries that no longer exist"
+        )
+        assert queue_rows(svc.db) == [], "queue not empty after a full drain"
+
+    def test_a_real_refusal_is_still_retried_not_retired(self, tmp_path):
+        """The guard must not swallow the case it was built to preserve.
+
+        An entry that still exists but could not embed (no model, empty body)
+        is unpaid debt: the row stays, attempts increment, `embed-status`
+        keeps reporting it.
+        """
+        from pyrite.services.embedding_worker import EmbeddingWorker
+
+        svc = _svc(tmp_path, auto_embed=True)
+        svc.create_entry("t", "here", "Here", "note", "x")
+
+        worker = EmbeddingWorker(svc.db)
+        worker._get_embedding_svc = lambda: MagicMock(embed_entry=MagicMock(return_value=False))
+        worker.process_batch(batch_size=10)
+
+        rows = queue_rows(svc.db)
+        assert rows and rows[0][0] == "here", (
+            "a still-present entry that refused was retired; that is the "
+            "silent data loss the second pass existed to stop"
+        )

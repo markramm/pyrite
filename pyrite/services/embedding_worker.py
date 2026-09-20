@@ -34,13 +34,19 @@ logger = logging.getLogger(__name__)
 
 
 class EmbedRefusedError(Exception):
-    """`embed_entry` declined an entry without raising.
+    """`embed_entry` declined an entry without raising, and it may yet succeed.
 
-    Its ``False`` return covers several ordinary conditions -- the entry is
-    not in this database, its body is empty, sqlite-vec is not loaded. Raising
-    turns that into the same retry-and-record path as any other failure, so
-    the row stays queued and `embed-status` keeps reporting it instead of the
-    queue quietly deleting work it never did.
+    Its ``False`` return covers several conditions -- an empty body,
+    sqlite-vec not loaded, the model unreachable. Raising turns that into the
+    same retry-and-record path as any other failure, so the row stays queued
+    and `embed-status` keeps reporting it instead of the queue quietly
+    deleting work it never did.
+
+    **Not** raised when the entry no longer exists: see `_entry_is_gone`. A
+    row whose entry has been deleted or renamed can never succeed, and
+    keeping it would block the queue head forever (rows are drained
+    ``ORDER BY queued_at ASC``, and `drain` stops on the first batch that
+    embeds nothing). That debt is void, not owed.
     """
 
 
@@ -161,14 +167,30 @@ class EmbeddingWorker:
             return 0
 
         success_count = 0
+        retired_count = 0
         for row in rows:
             entry_id, kb_name, attempts = row[0], row[1], row[2]
             try:
                 embedded = svc.embed_entry(entry_id, kb_name)
+                if not embedded and self._entry_is_gone(entry_id, kb_name):
+                    # The debt is void, not owed: nothing will ever embed an
+                    # entry that no longer exists. Retire the row rather than
+                    # retrying it forever at the head of the queue.
+                    logger.debug(
+                        "Retiring embed_queue row for %s/%s: the entry no longer exists",
+                        kb_name,
+                        entry_id,
+                    )
+                    self.db._raw_conn.execute(
+                        "DELETE FROM embed_queue WHERE entry_id = ? AND kb_name = ?",
+                        (entry_id, kb_name),
+                    )
+                    retired_count += 1
+                    continue
                 if not embedded:
                     raise EmbedRefusedError(
                         f"embed_entry returned {embedded!r} for {kb_name}/{entry_id} "
-                        "(entry not in this database, empty body, or sqlite-vec unavailable)"
+                        "(empty body, or sqlite-vec unavailable)"
                     )
                 # Mark as done — delete from queue
                 self.db._raw_conn.execute(
@@ -196,7 +218,11 @@ class EmbeddingWorker:
                 )
 
         self.db._raw_conn.commit()
-        return success_count
+        # Retiring a void row IS progress, even though nothing was embedded:
+        # `drain` stops on a batch that returns 0, so a batch of nothing but
+        # deleted entries must not read as "no progress" or every live row
+        # behind them starves (rows come out ORDER BY queued_at ASC).
+        return success_count + retired_count
 
     def drain(self, batch_size: int = 10, max_batches: int = 1000) -> int:
         """Process pending rows until the queue stops making progress.
@@ -224,6 +250,35 @@ class EmbeddingWorker:
                 break
             total += processed
         return total
+
+    def _entry_is_gone(self, entry_id: str, kb_name: str) -> bool:
+        """Is this row's entry absent from the index the queue reads?
+
+        Distinguishes a **void** debt from an unpaid one. `embed_entry`
+        returns ``False`` for several unrelated reasons, and only this one is
+        permanent: an entry that has been deleted or renamed can never be
+        embedded, so retrying it forever blocks every newer row behind it.
+
+        `delete_entry` and `rename_entry` do not clean up `embed_queue`, so
+        these rows are produced by the most ordinary operations there are --
+        deleting a draft, renaming a note. Checking here rather than adding
+        dequeue calls to both keeps the queue's invariant in the queue: a row
+        leaves when the work is done *or* when the work becomes void.
+
+        Fails **closed** (returns False, so the row is retried and recorded)
+        if the lookup itself errors -- a locked or unreadable database must
+        not be mistaken for a deleted entry.
+        """
+        try:
+            return self.db.get_entry(entry_id, kb_name) is None
+        except Exception:
+            logger.debug(
+                "Could not confirm whether %s/%s still exists; treating the debt as owed",
+                kb_name,
+                entry_id,
+                exc_info=True,
+            )
+            return False
 
     def has_pending(self) -> bool:
         """Is there any debt at all? One indexed COUNT, no embedding stack.
