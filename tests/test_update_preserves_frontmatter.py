@@ -869,7 +869,13 @@ def test_a_timestamp_looking_title_edit_reaches_the_file(tmp_path):
 
 def test_an_explicit_updated_at_update_keeps_the_callers_value(swkb_env):
     """#173 review: `update_entry` must not stamp over a caller-supplied
-    `updated_at` -- before the guard it printed "Updated:" and wrote "now"."""
+    `updated_at` -- before the guard it printed "Updated:" and wrote "now".
+
+    The third review's case: REST PATCH and the CLI's `--field` hand the value
+    in as a *string*. Assigned as-is it was written to the file as a quoted
+    string and then raised inside `IndexManager._entry_to_dict` (a `str` has no
+    `.isoformat`), so the file was written and the index was not.
+    """
     path = swkb_env["note_file"]
     explicit = datetime(2001, 2, 3, 4, 5, 6, tzinfo=UTC)
 
@@ -877,6 +883,53 @@ def test_an_explicit_updated_at_update_keeps_the_callers_value(swkb_env):
 
     after = _read_frontmatter(path)
     assert after["updated_at"] == explicit
+
+    entry = swkb_env["service"].update_entry(
+        "sample-note", "swkb", updated_at="2002-03-04T05:06:07+00:00"
+    )
+
+    assert entry.updated_at == datetime(2002, 3, 4, 5, 6, 7, tzinfo=UTC)
+    assert _read_frontmatter(path)["updated_at"] == datetime(2002, 3, 4, 5, 6, 7, tzinfo=UTC)
+
+
+def test_a_string_created_at_is_coerced_like_updated_at(swkb_env):
+    """The same `.isoformat()` at `index.py:149` makes `created_at` reachable
+    exactly like `updated_at`; both are coerced at the service boundary so
+    neither can leave the file written and the index stale."""
+    path = swkb_env["note_file"]
+
+    entry = swkb_env["service"].update_entry(
+        "sample-note", "swkb", created_at="2001-02-03T04:05:06+00:00"
+    )
+
+    assert entry.created_at == datetime(2001, 2, 3, 4, 5, 6, tzinfo=UTC)
+    assert _read_frontmatter(path)["created_at"] == datetime(2001, 2, 3, 4, 5, 6, tzinfo=UTC)
+
+
+def test_a_refreshed_updated_at_is_written_unquoted_without_microseconds(swkb_env):
+    """#173 review: pin the file shape of the refreshed stamp.
+
+    The value has to reach ruamel as a `datetime` so it is written as a plain
+    YAML timestamp -- `updated_at: 2026-… 05:06:07+00:00` -- rather than a
+    quoted `isoformat()` string carrying microseconds. Nothing pinned that
+    shape before this test.
+    """
+    path = swkb_env["note_file"]
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "tags: [alpha]",
+            "tags: [alpha]\nupdated_at: 2020-01-02T00:00:00+00:00",
+        ),
+        encoding="utf-8",
+    )
+
+    swkb_env["service"].update_entry("sample-note", "swkb", tags=["beta"])
+
+    text = path.read_text(encoding="utf-8")
+    line = next(l for l in text.splitlines() if l.startswith("updated_at:"))
+    assert re.fullmatch(r"updated_at: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\+00:00", line), (
+        f"refreshed updated_at has the wrong shape: {line!r}"
+    )
 
 
 ADR_WITH_BARE_DATE = """---

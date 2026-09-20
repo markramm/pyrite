@@ -23,6 +23,7 @@ from ..exceptions import (
     ValidationError,
 )
 from ..models import Entry
+from ..models.base import parse_datetime
 from ..models.factory import build_entry
 from ..plugins.context import PluginContext
 from ..storage.database import PyriteDB
@@ -652,6 +653,18 @@ class KBService:
 
         # Capture old_status before applying updates (for workflow hooks)
         old_status = getattr(entry, "status", None)
+
+        # A timestamp may arrive as a string: REST `PATCH /entries/{id}` sends
+        # `value: str` and the CLI passes `--field updated_at=…`. Coerce it
+        # before it is assigned -- the file, the model and the index all expect
+        # a `datetime`, and a string used to reach
+        # `IndexManager._entry_to_dict` (`entry.<ts>.isoformat()`) *after* the
+        # file had been written: an `AttributeError` that left the file written
+        # and the index stale, so the two diverged (#173 review). A naive
+        # string is read as UTC by `parse_datetime`, like ingestion.
+        for ts_key in ("created_at", "updated_at"):
+            if ts_key in updates and not isinstance(updates[ts_key], datetime):
+                updates[ts_key] = parse_datetime(updates[ts_key])
 
         # Apply updates
         for key, value in updates.items():
