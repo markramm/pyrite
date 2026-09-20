@@ -449,6 +449,74 @@ class TestContributorsLine:
         assert "Thanks to" not in notes
 
 
+class TestContributorWindow:
+    """The window that feeds `contributors_line`.
+
+    Cutting 0.24.3 produced notes crediting three of five outside
+    contributors. `contributors_line` was right; the *window* handed to it
+    was wrong, in two independent ways. Both are pinned here because a
+    dropped contributor is invisible -- the notes read perfectly well
+    without them.
+    """
+
+    def test_window_is_a_timestamp_not_a_truncated_date(self, monkeypatch):
+        """`merged:>2026-09-18` excludes everything merged ON 09-18.
+
+        GitHub's `>` over a bare date means "after that day ends". The
+        previous tag was published at 09-18T09:22Z, so truncating it to a
+        date silently dropped #116 and #108, merged 42 and 26 minutes
+        earlier.
+        """
+        captured = {}
+
+        def fake_check_output(cmd, **kw):
+            return "2026-09-18T09:22:47Z"
+
+        def fake_gh_json(cmd):
+            captured["search"] = cmd[cmd.index("--search") + 1]
+            return []
+
+        monkeypatch.setattr(release, "_check_output", fake_check_output)
+        monkeypatch.setattr(release, "_gh_json", fake_gh_json)
+        release._contributor_logins("v0.24.1")
+
+        assert captured["search"] == "merged:>2026-09-18T09:22:47Z", (
+            "the window must keep the time component; a bare date loses a day"
+        )
+
+    def test_previous_tag_skips_a_tag_main_never_moved_to(self, tmp_path, monkeypatch):
+        """`git describe` picked `v0.24.2`, which was never a release.
+
+        It pointed at a mid-development commit whose own pyproject said
+        0.24.1, and `main` never moved to it. A published GitHub release is
+        NOT the test -- that accidental tag had one, empty and unnamed. The
+        boundary is step (d): the commit `main` fast-forwarded to.
+        """
+
+        def fake_check_output(cmd, **kw):
+            if "tag" in cmd:
+                return "v0.24.3\nv0.24.2\nv0.24.1\n"
+            raise AssertionError(f"unexpected: {cmd}")
+
+        monkeypatch.setattr(release, "_check_output", fake_check_output)
+        monkeypatch.setattr(release, "_tag_is_released", lambda repo, tag: tag == "v0.24.1")
+
+        assert release._previous_tag(tmp_path, exclude="v0.24.3") == "v0.24.1"
+
+    def test_a_tag_off_main_is_not_a_release_boundary(self, tmp_path, monkeypatch):
+        """`_tag_is_released` asks git, not the releases API."""
+
+        def fake_check_output(cmd, **kw):
+            if "rev-list" in cmd:
+                return "47ea84c\n"
+            if "merge-base" in cmd:
+                raise release.ReleaseError("not an ancestor")
+            raise AssertionError(f"unexpected: {cmd}")
+
+        monkeypatch.setattr(release, "_check_output", fake_check_output)
+        assert release._tag_is_released(tmp_path, "v0.24.2") is False
+
+
 # --------------------------------------------------------------------------
 # CI status decision, from mocked `gh run list` JSON
 # --------------------------------------------------------------------------
@@ -1032,12 +1100,13 @@ class TestDryRunOverThisRepo:
         """Every subprocess the dry run attempted must be a read. A write that
         slipped past the Runner would show up here.
 
-        `git tag -l` and `git ls-remote --tags` ARE reads: the precondition that
-        `v<version>` is still free has to ask. `git tag -a`, which creates one,
-        must not appear.
+        `git tag -l`, `git tag --list` and `git ls-remote --tags` ARE reads:
+        the precondition that `v<version>` is still free has to ask, and the
+        contributor window has to find the previous released tag. `git tag -a`,
+        which creates one, must not appear.
         """
         _code, _runner, calls = dry_run()
-        reads_named_tag = (["tag", "-l"], ["ls-remote", "--tags"])
+        reads_named_tag = (["tag", "-l"], ["tag", "--list"], ["ls-remote", "--tags"])
         for cmd in calls:
             joined = " ".join(cmd)
             for write in ("push", "release create", "label create", "uv venv", "uv pip"):
