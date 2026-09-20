@@ -2618,3 +2618,7 @@ Desk-held loop branches from **4 (for ≥5 h)** to **0** within two ticks of the
 **Dispatched:** **#202** `fix/49-page-title-survives-branding` (Sonnet, `heavy: no`, vitest only) — the root layout clobbers every page title; both blockers discharged by #163; on the Playwright critical path. **Spike #131** (Opus; one server allowed; read-only otherwise). Slots: 1 worker + 1 spike-server = 2 of 4. PR budget: 0 armed.
 
 **#173:** suite clean on the new head, cold read running. **#198:** stake PR, reply drafted. **Desk:** the breaker paragraph; fix-at-review per branch; ADR-0035; the 14 closures; the 6 decisions; #198's reply; merges of #184/#174/#175 when their asks land.
+
+## Tick 2026-09-20T00:26Z (absorb: #173 third pass)
+
+**#173 at `2b8e2b3`** — four of six items properly fixed and verified by probe (scoped restyle; explicit `updated_at` datetime; plain second-precision refresh; fixtures in the strict set); threading complete; 37/37 entry types byte-identical; merges with `dev` and #175 clean; suite 4338/0, lint clean. Two remain, both reproduced by the conductor: an unparseable `created_at` (`null`, `""`, `Jan 15 2026`) is still overwritten with the wall-clock time on a no-op save and through `update_entry` (`dev` dropped the key; this fabricates one); and the new guard at `kb_service.py:577` lets a string `updated_at` reach `index.py:150` → `AttributeError` after the file is written (REST `PATCH` → 500, CLI `--field`). Message drafted (`post/c173-round3.md`): merge after those two + three test additions.
