@@ -32,8 +32,10 @@ pre-commit install
 
 # Verify installation
 .venv/bin/pytest tests/ extensions/*/tests/ -q
-# Expected: ~4000 tests passing
 ```
+
+Pytest prints the current collected and passed test counts in its summary;
+they change as the project and extensions grow.
 
 See [Setting Up the Development Environment](kb/runbooks/setting-up-dev-environment.md) for troubleshooting.
 
@@ -114,7 +116,7 @@ pyrite/
 ## Testing
 
 ```bash
-# Everything, in parallel (~1 min). This is what the pre-push hook and CI run.
+# Everything, in parallel. This is what the pre-push hook and CI run.
 .venv/bin/pytest tests/ extensions/ -n auto
 
 # One file, or tests matching a pattern
@@ -131,6 +133,9 @@ that passes alone but fails under `-n auto` is a bug in that test (shared
 state, a fixed wall-clock timeout, an unclosed database), not a reason to run
 serially — `tests/test_task_claim_concurrency.py` shows the pattern for
 process-spawning tests.
+
+The full suite can take several minutes; runtime varies with available CPU
+cores and system load.
 
 **The runner itself is pinned.** `pytest`, `pytest-cov` and `pytest-xdist`
 are exact `==` pins in the `dev` extra (#128) — not a floor like the rest of
@@ -177,7 +182,7 @@ uv pip install --python .venv/bin/python -e ".[all,dev]"
 |---|---|---|
 | commit | ruff, formatting, file hygiene, import-cycle check, KB schema validation | seconds |
 | commit-msg | a `fix:` commit must touch `tests/` | — |
-| pre-push | `pytest tests/ extensions/ -n auto`, only when the push touches code or config | ~1 min |
+| pre-push | `pytest tests/ extensions/ -n auto`, only when the push touches code or config | Several minutes; varies by machine and load |
 
 CI runs the same checks plus the full Python matrix, Postgres, the frontend
 build and Playwright. `--no-verify` is for a documented emergency, not for a
@@ -265,7 +270,7 @@ names, for anything that is not yours to publish; no absolute home paths.
 
 - KB config: `kb.yaml` in each KB directory
 - Claude Code skill: `.claude/skills/pyrite-dev/SKILL.md`
-- Plugin developer guide: `kb/standards/plugin-developer-guide.md`
+- Plugin developer guide: `kb/notes/plugin-developer-guide.md`
 - Architecture docs: `kb/components/` and `kb/adrs/`
 
 ## Getting Help
