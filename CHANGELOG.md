@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Nothing yet.
-
 ## [0.24.2] - 2026-09-20
 
 "Operational" — see `kb/roadmap.md`.
