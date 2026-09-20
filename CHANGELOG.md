@@ -458,10 +458,23 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `body_offset` as the way to assemble the whole body first: MCP's write and
   admin tiers (`kb_create`, `kb_update`, `task_create`, `task_decompose` and
   any plugin write tool, guarded at the dispatcher), `kb_bulk_create`
-  per-item, and REST `POST`/`PUT`/`PATCH /api/entries` plus
-  `POST /api/entries/import` per-record. A write without the marker, a write
-  carrying `body_truncated: false`, and a metadata-only update that carries the
-  marker but no body are all unaffected. ADR-0034 rule 2.
+  per-item, REST `POST`/`PUT`/`PATCH /api/entries` plus
+  `POST /api/entries/import` per-record, and the CLI — `pyrite import`
+  per-record (exiting 1, so a script cannot read "Imported N" off a run that
+  dropped a truncated body), `pyrite create` and `pyrite update`. A write
+  without the marker, a write carrying `body_truncated: false`, and a
+  metadata-only update that carries the marker but no body are all unaffected.
+  ADR-0034 rule 2; the CLI half closes #230.
+
+  `pyrite create --body-file`/`--stdin` lifts a file's YAML frontmatter into
+  the entry's fields, so a bounded read saved to a scratch file — the most
+  likely way a marker gets persisted before being replayed — is refused too.
+  `pyrite update --body-file` does not parse frontmatter and is unchanged: a
+  marker there is body content, not a write argument.
+
+  Importer audit: `json` and `markdown` carry the marker through to the
+  caller, `yaml` and `csv` strip it through their key whitelists. Both import
+  endpoints check every record regardless of format.
 
 - **Extension entry classes silently dropped `aliases` and `_schema_version` on
   every load -> save round trip, and rewrote `importance` back to its default**

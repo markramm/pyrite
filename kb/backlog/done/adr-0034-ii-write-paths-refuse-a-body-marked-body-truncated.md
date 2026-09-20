@@ -68,6 +68,25 @@ the undeclared key.
 - **Also fixed**: an allowed `body_truncated: false` was being persisted as
   frontmatter by the three paths that forward unrecognised keys into the
   entry (MCP `kb_create`, `KBService.bulk_create_entries`, the REST import
-  endpoint). The truncation keys are read transport, never entry content.
+  endpoint, and `pyrite create`'s `--field`/frontmatter path). The
+  truncation keys are read transport, never entry content.
 
-Tests: `tests/test_truncated_body_refused_on_write.py` (21).
+- **CLI** (#230, the third untrusted input surface -- ADR-0034 rule 5
+  records that most CLI callers today are agents): `pyrite import` refuses
+  per record and exits 1; `pyrite create` refuses the marker from
+  `--field` *or* from the YAML frontmatter of a `--body-file`/`--stdin`
+  read, which is the saved-scratch-file path by which a marker is most
+  likely to be persisted and replayed; `pyrite update` refuses the marker
+  from `--field`. `pyrite update --body-file` is deliberately unchanged:
+  it does not parse frontmatter, so a marker there is body content, and
+  refusing on it would be the heuristic detection ADR-0034 rules out.
+
+**Importer audit** (asked for by #230): `json` and `markdown` carry the
+marker through to the caller -- markdown always has, via
+`_parse_single_md`'s frontmatter splat, so REST's `/entries/import` could
+receive one before this branch -- while `yaml` and `csv` strip it through
+their key whitelists. Both import endpoints check every record regardless
+of format, so a whitelist that gains the key later is already covered.
+
+Tests: `tests/test_truncated_body_refused_on_write.py` (21),
+`tests/test_truncated_body_refused_on_cli_write.py` (13).
