@@ -101,3 +101,95 @@ def test_a_file_new_on_the_branch_is_removed_for_the_run_and_restored(repo: Path
     assert result.returncode == 0, result.stderr
     assert (repo / "helper.py").exists()
     assert git(repo, "status", "--porcelain") == ""
+
+
+# ---------------------------------------------------------------------------
+# #189: a review worktree whose .venv is a symlink to the main checkout's
+# resolves `pyrite` (and every extension package) to an EDITABLE INSTALL
+# pointing at the main checkout on `dev`, not the branch under review, even
+# though the interpreter itself lives "in" the worktree. verify-red.sh must
+# refuse to report a suite number in that situation: it has to resolve the
+# top-level package for each reverted production file and confirm the
+# INTERPRETER'S import of that package resolves under the worktree.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def pkg_repo(tmp_path: Path) -> Path:
+    """Like `repo`, but the reverted file is `pyrite/__init__.py` (a package)."""
+    r = tmp_path / "repo"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "dev")
+    git(r, "config", "user.email", "t@example.com")
+    git(r, "config", "user.name", "t")
+    (r / ".gitignore").write_text("__pycache__/\n")
+    pkg = r / "pyrite"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("def add(a, b):\n    return a - b\n")
+    (r / "test_impl.py").write_text(
+        "from pyrite import add\n\n\ndef test_add():\n    assert add(2, 2) == 4\n"
+    )
+    git(r, "add", ".")
+    git(r, "commit", "-q", "-m", "base: broken impl and its test")
+    git(r, "checkout", "-q", "-b", "fix/add")
+    (pkg / "__init__.py").write_text("def add(a, b):\n    return a + b\n")
+    git(r, "commit", "-q", "-am", "fix: add adds")
+    return r
+
+
+def _make_wrapper_python(tmp_path: Path, extra_sys_path: Path) -> Path:
+    """A fake `python` that resolves `import pyrite` to `extra_sys_path`, not cwd.
+
+    Simulates a symlinked venv: the interpreter binary is real, but an
+    editable install (a .pth-style entry in site-packages) makes `import
+    pyrite` resolve to another checkout entirely. PYTHONPATH puts the
+    external package on sys.path; PYTHONSAFEPATH (3.11+) drops the implicit
+    cwd entry that would otherwise let a same-named local directory shadow
+    it -- matching the real bug, where the worktree has no local install of
+    its own `pyrite` at all, only the editable install pointing elsewhere.
+    """
+    wrapper = tmp_path / "fake-python"
+    wrapper.write_text(
+        "#!/usr/bin/env bash\n"
+        f'export PYTHONPATH="{extra_sys_path}${{PYTHONPATH:+:$PYTHONPATH}}"\n'
+        "export PYTHONSAFEPATH=1\n"
+        f'exec {sys.executable} "$@"\n'
+    )
+    wrapper.chmod(0o755)
+    return wrapper
+
+
+def test_package_resolving_outside_the_worktree_is_refused(pkg_repo: Path, tmp_path: Path) -> None:
+    # An external "other checkout" with its OWN pyrite package -- this is what
+    # a symlinked .venv's editable install points at instead of the worktree.
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "pyrite").mkdir(parents=True)
+    (elsewhere / "pyrite" / "__init__.py").write_text("def add(a, b):\n    return a + b\n")
+
+    wrapper = _make_wrapper_python(tmp_path, elsewhere)
+
+    env = {
+        **os.environ,
+        "VERIFY_RED_BASE": "dev",
+        "VERIFY_RED_PYTHON": str(wrapper),
+    }
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "test_impl.py::test_add", "pyrite/__init__.py"],
+        cwd=pkg_repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "not importing" in result.stderr or "resolves outside" in result.stderr, result.stderr
+    # The tree is still restored even though the claim was refused.
+    assert (pkg_repo / "pyrite" / "__init__.py").read_text() == "def add(a, b):\n    return a + b\n"
+
+
+def test_package_resolving_inside_the_worktree_still_runs(pkg_repo: Path) -> None:
+    # The normal case: the venv's own interpreter, pyrite resolves under the
+    # worktree itself. Must behave exactly as before -- red without the fix.
+    result = run(pkg_repo, "test_impl.py::test_add", "pyrite/__init__.py")
+    assert result.returncode == 0, result.stderr
+    assert "fails without the fix" in result.stdout
+    assert (pkg_repo / "pyrite" / "__init__.py").read_text() == "def add(a, b):\n    return a + b\n"

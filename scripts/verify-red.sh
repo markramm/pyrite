@@ -15,6 +15,15 @@
 # twelve "verified" tests on PR #69 had verified nothing (#121). A revert that
 # cannot prove it changed the tree is refused.
 #
+# A review worktree whose .venv is a SYMLINK to another checkout's (instead
+# of one built by scripts/new-worktree.sh) resolves every extension package
+# -- and sometimes pyrite itself -- to an editable install pointing at that
+# OTHER checkout, not this worktree. The interpreter then runs real tests
+# against the wrong code and reports a suite number that proves nothing
+# (#189). For each reverted production file, resolve its top-level package
+# and refuse (exit 2) unless the interpreter's import of that package
+# resolves under this worktree.
+#
 #   VERIFY_RED_BASE    integration ref (default origin/dev, then dev)
 #   VERIFY_RED_PYTHON  interpreter (default .venv/bin/python, then python)
 set -euo pipefail
@@ -24,11 +33,53 @@ py="${VERIFY_RED_PYTHON:-.venv/bin/python}"; [ -x "$py" ] || py=python
 base="${VERIFY_RED_BASE:-origin/dev}"
 git rev-parse --verify -q "$base^{commit}" >/dev/null || base=dev
 mb="$(git merge-base "$base" HEAD)"
+worktree_root="$(git rev-parse --show-toplevel)"
 
 if ! git diff --quiet -- "$@" || ! git diff --cached --quiet -- "$@"; then
   echo "verify-red: $* have uncommitted changes; commit them first so the revert is unambiguous" >&2
   exit 2
 fi
+
+# Resolve each reverted file's top-level package: pyrite/... -> pyrite;
+# extensions/<name>/src/<pkg>/... -> <pkg>. Files outside both shapes (e.g.
+# tests/) carry no importable package and are skipped. (Plain space-separated
+# "seen" list, not an associative array: the pre-push hook and CI both run
+# this under macOS's stock bash 3.2, which has no `declare -A`.)
+checked_pkgs=" "
+for f in "$@"; do
+  pkg=""
+  case "$f" in
+    pyrite/*) pkg="pyrite" ;;
+    extensions/*/src/*)
+      # extensions/<name>/src/<pkg>/...  -- take the path segment after src/
+      rest="${f#extensions/*/src/}"
+      pkg="${rest%%/*}"
+      ;;
+  esac
+  [ -n "$pkg" ] || continue
+  case "$checked_pkgs" in *" $pkg "*) continue ;; esac
+  checked_pkgs="$checked_pkgs$pkg "
+
+  # PYTHONDONTWRITEBYTECODE: this import runs BEFORE the revert below. A .pyc
+  # written here from the fixed source can be same-size/same-second as the
+  # merge-base source that replaces it on disk, which fools CPython's mtime
+  # check into serving the stale (fixed) bytecode to the pytest run that is
+  # supposed to see the reverted (broken) one -- silently defeating the
+  # revert this whole script exists to prove happened.
+  resolved="$(PYTHONDONTWRITEBYTECODE=1 "$py" -c "import ${pkg}, os; print(os.path.dirname(${pkg}.__file__))" 2>/dev/null || true)"
+  if [ -z "$resolved" ]; then
+    echo "verify-red: \`$py -c 'import $pkg'\` failed -- cannot confirm which tree this interpreter tests" >&2
+    exit 2
+  fi
+  case "$resolved" in
+    "$worktree_root"/*|"$worktree_root")
+      ;;
+    *)
+      echo "verify-red: $pkg resolves outside this worktree ($resolved, not under $worktree_root) -- a suite number from a tree the interpreter is not importing is not evidence" >&2
+      exit 2
+      ;;
+  esac
+done
 
 restore() { git checkout -q HEAD -- "$@" 2>/dev/null || true; }
 trap 'restore "$@"' EXIT
@@ -40,6 +91,12 @@ for f in "$@"; do
   else
     rm -f -- "$f"
   fi
+  # A .pyc from the pre-revert (fixed) source can be same-size/same-second as
+  # the reverted source that just replaced it, which fools CPython's mtime
+  # check into serving stale bytecode to the pytest run below. Force a
+  # recompile from the file actually on disk.
+  base="$(basename "$f" .py)"
+  rm -f "$(dirname "$f")/__pycache__/${base}".cpython-*.pyc 2>/dev/null || true
 done
 
 # `git checkout <rev> -- f` updates the index too, so compare against HEAD, not the index.

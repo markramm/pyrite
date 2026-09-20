@@ -35,6 +35,11 @@ code nobody had pushed).
 ```
 - [ ] git log dev..HEAD --oneline        commits are focused, messages say why, Fixes #N present
 - [ ] git diff dev...HEAD                 READ IT. Every hunk. The report is not the diff.
+- [ ] before trusting a suite number, `python -c 'import pyrite, <ext_pkg>; print(...)'` must point into
+      the worktree; make review worktrees with `scripts/new-worktree.sh` (never a symlinked .venv — #189,
+      a review worktree whose .venv symlinked the main checkout's resolved every extension package to an
+      editable install on `dev`, not the branch under review, and a suite number measured that way is not
+      evidence)
 - [ ] .venv/bin/pytest tests/ extensions/ -n auto     green, here, now
 - [ ] fix reverted to the merge base, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...`
       (exit 0 = red without the fix; exit 1 = passes anyway; exit 2 = nothing was reverted, NO claim — #121) — EVERY test
