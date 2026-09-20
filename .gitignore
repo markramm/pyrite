@@ -99,3 +99,7 @@ pyrite_deployments/
 
 # A theme spec belongs in the draft PR body, never in the tree (#106)
 .claude/THEME.md
+
+# The maintainer's desk: a per-repo, local Pyrite KB (conductor queue, tick logs, retros).
+# See docs/conductor-desk.md. Never committed.
+desk/

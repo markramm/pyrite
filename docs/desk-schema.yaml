@@ -1,0 +1,104 @@
+name: desk
+description: >
+  The maintainer's desk for one project: the decisions only a human can make,
+  queued by the conductor and closed when they are made, plus the conductor's
+  own tick log and retros. Lives in a gitignored `desk/` directory inside the
+  repository that runs the conductor, so every conductor user has one and none
+  of it reaches the repository's history or its public issue tracker.
+kb_type: desk
+goals:
+  primary: >
+    The maintainer opens one list and sees everything waiting on them, with a
+    link and a one-sentence recommendation each; the conductor and the retro
+    can measure how long a decision waited (created -> done) instead of
+    counting tick-log lines.
+  success_criteria: >
+    `pyrite task list -k <project>-desk --status open` is the whole queue; no
+    desk task duplicates a PR, an ADR or an issue -- it points at one; a task
+    whose PR merged or whose ADR flipped is closed by the next tick's reconcile
+    step, so the list never rots.
+types:
+  task:
+    description: >
+      One thing the maintainer must do: a merge click, an ADR to accept, a
+      release to approve, a reply to agree, a design question to answer.
+      Created by the conductor when a tick reaches a kept item, or by the
+      maintainer for themself. Points at the artifact; never duplicates it.
+    guidelines: >
+      Title is the action ("Merge #184", "Accept ADR-0035"). `link` is the
+      PR/ADR/issue URL. `recommendation` is one sentence the maintainer can act
+      on without opening the link. `kind` says what sort of act it is; `tags`
+      are the maintainer's own organisation (e.g. release, security, outside,
+      quick). Close with `pyrite task update <id> -k <desk> --status done`;
+      the conductor's health step does it when it can observe the outcome.
+    required:
+      - title
+      - project
+      - kind
+    optional:
+      - link
+      - recommendation
+      - requested_by
+      - requested_at
+      - priority
+      - due_date
+      - status
+      - assignee
+      - tags
+    subdirectory: tasks
+  conductor_tick:
+    description: >
+      One conductor tick for this project: what merged, what is in review and
+      why it waits, what was dispatched, what is blocked and on whom, and the
+      machine budget at the time. The retro reads these; the maintainer can
+      too.
+    guidelines: >
+      One entry per tick, titled `Tick <UTC ISO minute> (<one-line theme>)`,
+      `tick_time` from `date -u`. Name PRs and issues by number so the retro's
+      scripts can count them. Keep the maintainer's queue in `task` entries,
+      not here -- link to them.
+    required:
+      - title
+      - project
+      - tick_time
+    optional:
+      - merged
+      - in_review
+      - dispatched
+      - blocked_on
+      - slots
+      - tags
+    subdirectory: ticks
+  retro:
+    description: >
+      A meta-conductor retrospective for this project: what worked, failures
+      and root causes, the constraint, the one process change, the quality
+      theme, the prediction.
+    required:
+      - title
+      - project
+      - window_start
+      - window_end
+    optional:
+      - process_change
+      - quality_theme
+      - constraint
+      - tags
+    subdirectory: retros
+  note:
+    description: Anything else the maintainer wants beside the queue -- a plan, a draft reply, a list.
+    required:
+      - title
+    optional:
+      - project
+      - tags
+    subdirectory: notes
+validation:
+  enforce: true
+  rules:
+  - field: kind
+    enum: [merge, decide, accept-adr, release, reply, review, chore, read]
+  - field: status
+    enum: [open, in_progress, blocked, done, dropped]
+policies:
+  qa_on_write: false
