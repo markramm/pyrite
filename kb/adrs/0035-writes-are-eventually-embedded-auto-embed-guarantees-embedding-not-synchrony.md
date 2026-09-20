@@ -3,7 +3,7 @@ id: adr-0035
 type: adr
 title: "Writes are eventually-embedded: auto_embed guarantees embedding, not synchrony"
 adr_number: 35
-status: proposed
+status: accepted
 date: 2026-09-19
 ---
 
@@ -100,3 +100,7 @@ the "two switches" outcome this ADR exists to avoid.
 - Issue #102 — `submit_sync` leaves an unjoined daemon thread (the hazard not copied here)
 - PR #35 — introduced `settings.auto_embed`
 - PR #145 — introduced the `warnings` out-parameter this ADR reuses
+
+## Decision record
+
+Accepted by the maintainer on 2026-09-20 ("accept the two adrs"). `auto_embed: true` now promises that a write *will be* embedded, not that it is embedded when the write returns; #13 (server half) and #43 (fresh-KB half) are dispatchable on this basis.
