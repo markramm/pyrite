@@ -5,12 +5,11 @@ type: note
 tags:
 - followups
 - review
-- unfiled
+- filed
 importance: 5
 ---
 
-Five follow-ups found during the 2026-09-19 reviews. **None is filed yet** — the
-maintainer agrees each outward post before it goes to GitHub. Each section below
+Five follow-ups found during the 2026-09-19 reviews. **Filed 2026-09-20 with the maintainer's agreement:** #192, #193, #194, #195, #196; the `pyrite create -t note` → ADR bug hit while writing this note is #197. Each section below
 is ready-to-file issue text: copy the body, use the stated title and label.
 
 ---
