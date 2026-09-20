@@ -88,4 +88,4 @@ args = ["mcp"]
 
 **Timeout errors** -- Increase `startup_timeout_sec` if Pyrite takes time to initialize (e.g., building the index on first run).
 
-**Tool not available** -- Check the tier. The default tier is `write`. Use `--tier admin` if you need index and git operations.
+**Tool not available** -- Check the tier. `pyrite mcp` (used above) defaults to `write` if `--tier` is omitted; the separate `pyrite-server` binary defaults to `read` instead -- always pass `--tier` explicitly rather than relying on either default. Use `--tier admin` if you need index and git operations.

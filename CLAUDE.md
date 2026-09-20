@@ -52,7 +52,7 @@ When your work changes architecture, adds components, or completes backlog items
 .venv/bin/pyrite create -k pyrite -t backlog_item --title "..." -b "..." --tags enhancement
 
 # Create new ADRs
-.venv/bin/pyrite sw new-adr --title "..." --status accepted
+.venv/bin/pyrite sw new-adr "..." --status accepted
 
 # Verify your changes are findable
 .venv/bin/pyrite search "<your feature>" -k pyrite

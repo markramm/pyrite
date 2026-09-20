@@ -150,7 +150,7 @@ Desktop/Code afterward to pick up the change.
 }
 ```
 
-Your AI can now search, read, and create entries in your knowledge base. It gets 29 read tools, 11 write tools, and 8 admin tools across three permission tiers. For read-only access:
+Your AI can now search, read, and create entries in your knowledge base, across three permission tiers (read/write/admin, each cumulative on the last, including tools contributed by any installed plugins). Run `pyrite mcp --help` for the current tool count per tier and representative tool names — it's generated from the live tool registry, so it never drifts from what a running server actually exposes. For read-only access:
 
 ```json
 {

@@ -241,6 +241,25 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Documentation
 
+- Six false statements in agent-facing docs, found by a cold read and
+  independently re-verified (#229): `CLAUDE.md` documented a `--title` flag
+  `pyrite sw new-adr` does not have (title is positional; same fix applied
+  to `.claude/skills/kb/SKILL.md` and `.claude/skills/software-kb/SKILL.md`,
+  which repeated it); `docs/json-contracts.md`'s `has_more`/`total` claims
+  are replaced with a measured per-surface, per-transport table (`search`,
+  `list_entries`, `recent`, `tags`, `backlinks` × CLI/MCP/REST — none of
+  them uniform); the 29/11/8 MCP tool-tier counts in `docs/getting-started.md`,
+  `README.md` and `pyrite mcp --help` undercounted by 2.4x by omitting 41+
+  plugin tools exposed per tier — `pyrite mcp --help`'s counts are now
+  generated from the live tool registry (true counts: read 70, write 103,
+  admin 112) and the other two docs point to it instead of retyping a
+  number; `docs/gemini-mcp-integration.md` and `docs/openai-mcp-integration.md`
+  now name which binary (`pyrite mcp` vs `pyrite-server`) each tier default
+  applies to, since the two disagree (`write` vs `read`); `kb_bulk_create`'s
+  MCP tool description no longer claims best-effort per-entry semantics
+  (#95: one malformed entry rejects the whole batch); `AGENTS.md` now says
+  `pyrite orient`'s schema block has no field list for plugin-declared
+  types (#232) instead of implying it always does.
 - `kb/runbooks/setting-up-dev-environment.md` (#212): the troubleshooting
   runbook had drifted from CONTRIBUTING and could not run the suite —
   `pip install -e ".[dev]"` (no `fastapi`, no CLI deps, cannot collect

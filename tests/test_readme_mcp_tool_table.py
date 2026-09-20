@@ -74,22 +74,27 @@ def test_readme_admin_tier_count_and_tools_match_actual():
     )
 
 
-def test_getting_started_tool_counts_match_actual():
-    """docs/getting-started.md has its own prose sentence with the same
-    three tier counts (not a table, just inline numbers) -- same drift
-    risk as the README table, verified separately since the text shape
-    differs."""
+def test_getting_started_points_to_generated_counts_instead_of_retyping_them():
+    """docs/getting-started.md used to state its own "<N> read tools, <N>
+    write tools, <N> admin tools" sentence, which drifted the same way the
+    README table and `pyrite mcp --help` did (#229: the undocumented 41+
+    plugin tools per tier made any hardcoded core-only count wrong by
+    2.4x). Per kb/backlog/docs-counts-generated-or-asserted-from-code.md
+    rule 1 ("don't state what will drift"), the sentence was replaced with
+    a pointer to `pyrite mcp --help`, whose counts are generated from the
+    live tool registry (see test_mcp_help_tool_counts.py). This test pins
+    that the pointer exists and that the old drift-prone sentence shape is
+    gone, rather than re-asserting numbers here that would just be a third
+    place to drift."""
     text = GETTING_STARTED_PATH.read_text()
-    match = re.search(r"gets (\d+) read tools, (\d+) write tools, and (\d+) admin tools", text)
-    assert match, "expected the '<N> read tools, <N> write tools, <N> admin tools' sentence"
-    read_count, write_count, admin_count = (int(g) for g in match.groups())
 
-    assert read_count == len(READ_TOOLS), (
-        f"getting-started.md says {read_count} read tools; actual {len(READ_TOOLS)}"
+    assert "pyrite mcp --help" in text, (
+        "expected getting-started.md to point readers at the generated "
+        "tool-count source instead of stating its own numbers"
     )
-    assert write_count == len(WRITE_TOOLS), (
-        f"getting-started.md says {write_count} write tools; actual {len(WRITE_TOOLS)}"
-    )
-    assert admin_count == len(ADMIN_TOOLS), (
-        f"getting-started.md says {admin_count} admin tools; actual {len(ADMIN_TOOLS)}"
+
+    stale_sentence = re.search(r"gets \d+ read tools, \d+ write tools, and \d+ admin tools", text)
+    assert stale_sentence is None, (
+        "getting-started.md re-introduced a hardcoded tool-count sentence "
+        f"that will drift again: {stale_sentence.group(0) if stale_sentence else ''}"
     )
