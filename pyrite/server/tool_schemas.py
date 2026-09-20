@@ -3,7 +3,43 @@ MCP tool schema definitions for Pyrite.
 
 Static description and inputSchema data for all MCP tools, separated from
 handler logic in mcp_server.py. Each dict maps tool_name -> {description, inputSchema}.
+
+Descriptions that quote a body bound write it as a placeholder --
+``{body_chunk_default}``, ``{body_chunk_max}``, ``{body_response_budget}`` --
+rather than a literal. ADR-0034 rule 4 makes those three numbers
+configuration, and the tool descriptions must report the *effective* values,
+not the compiled-in ones: an agent tuning its calls to "max 50000" on a
+deployment whose ceiling is 20,000 has been misled by its own tool schema.
+:func:`render_tool_schemas` substitutes them at server start.
 """
+
+import copy
+from typing import Any
+
+
+def render_tool_schemas(schemas: dict[str, Any], **values: int) -> dict[str, Any]:
+    """Return a deep copy of ``schemas`` with description placeholders filled.
+
+    Only ``description`` strings are formatted; every other value is copied
+    verbatim, so a JSON-schema keyword containing braces cannot be mangled.
+    A description naming a placeholder this call was not given is left as-is
+    rather than raising, so adding a schema never breaks server start.
+    """
+
+    def render(node: Any, key: str | None = None) -> Any:
+        if isinstance(node, dict):
+            return {k: render(v, k) for k, v in node.items()}
+        if isinstance(node, list):
+            return [render(v) for v in node]
+        if key == "description" and isinstance(node, str) and "{" in node:
+            try:
+                return node.format(**values)
+            except (KeyError, IndexError, ValueError):
+                return node
+        return copy.deepcopy(node)
+
+    return render(schemas)
+
 
 READ_TOOLS = {
     "kb_list": {
@@ -71,19 +107,19 @@ READ_TOOLS = {
                 },
                 "include_body": {
                     "type": "boolean",
-                    "description": "Include full body text in results. Default: false (returns snippet instead, saving tokens).",
+                    "description": "Include body text in results, bounded to {body_chunk_default} chars per body within a {body_response_budget}-char response budget. Default: false (returns snippet instead, saving tokens). Truncated bodies carry body_truncated; continue them with kb_read_body.",
                 },
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields per result (e.g. ['id','title','tags']). Omit for default fields. Overrides include_body. `id` and `kb_name` are always included.",
+                    "description": "Return only these fields per result (e.g. ['id','title','tags']). Omit for default fields. Overrides include_body; asking for 'body' returns the same bounded body, with its truncation markers. `id` and `kb_name` are always included.",
                 },
             },
             "required": ["query"],
         },
     },
     "kb_get": {
-        "description": "Get a specific entry by its ID. Returns full content including body, metadata, sources, and links. Bodies over 8000 chars are auto-truncated; use body_offset/body_limit to paginate, or kb_read_body for continuation.",
+        "description": "Get a specific entry by its ID. Returns full content including body, metadata, sources, and links. Bodies over {body_chunk_default} chars are auto-truncated; use body_offset/body_limit to paginate, or kb_read_body for continuation. A truncated body always carries body_truncated, body_length, body_offset and body_chunk_size.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -98,7 +134,7 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields. When specified, body chunking is skipped. `id` and `kb_name` are always included.",
+                    "description": "Return only these fields (e.g. ['id','title','body']). Omit for all fields. Body chunking still applies, and a projection that keeps `body` also keeps the truncation markers. `id` and `kb_name` are always included.",
                 },
                 "body_offset": {
                     "type": "integer",
@@ -106,7 +142,7 @@ READ_TOOLS = {
                 },
                 "body_limit": {
                     "type": "integer",
-                    "description": "Max body chars to return (default 8000, max 50000).",
+                    "description": "Max body chars to return (default {body_chunk_default}, max {body_chunk_max}). Values above the max are clamped to it.",
                 },
             },
             "required": ["entry_id"],
@@ -247,7 +283,7 @@ READ_TOOLS = {
         },
     },
     "kb_batch_read": {
-        "description": "Fetch multiple entries in one call. Faster than sequential kb_get when you need 2+ entries. Returns found entries and lists any IDs not found. Max 50 entries per call. Bodies over 8000 chars are auto-truncated.",
+        "description": "Fetch multiple entries in one call. Faster than sequential kb_get when you need 2+ entries. Returns found entries and lists any IDs not found. Max 50 entries per call. Bodies over {body_chunk_default} chars are auto-truncated, and the whole response carries at most {body_response_budget} body chars: bodies are filled in request order, so entries past the budget come back with an empty body plus body_truncated and their true body_length — read them with kb_read_body.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -267,7 +303,7 @@ READ_TOOLS = {
                 "fields": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Return only these fields per entry. Omit for all fields. When specified, body chunking is skipped. `id` and `kb_name` are always included.",
+                    "description": "Return only these fields per entry. Omit for all fields. Body chunking and the response budget still apply, and a projection that keeps `body` also keeps the truncation markers. `id` and `kb_name` are always included.",
                 },
                 "body_offset": {
                     "type": "integer",
@@ -275,7 +311,7 @@ READ_TOOLS = {
                 },
                 "body_limit": {
                     "type": "integer",
-                    "description": "Max body chars to return per entry (default 8000, max 50000).",
+                    "description": "Max body chars to return per entry (default {body_chunk_default}, max {body_chunk_max}), within the {body_response_budget}-char response budget.",
                 },
             },
             "required": ["entries"],
@@ -300,7 +336,7 @@ READ_TOOLS = {
                 },
                 "body_limit": {
                     "type": "integer",
-                    "description": "Max chars to return (default 8000, max 50000)",
+                    "description": "Max chars to return (default {body_chunk_default}, max {body_chunk_max}). Values above the max are clamped to it.",
                 },
             },
             "required": ["entry_id"],

@@ -301,6 +301,39 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   introduced (deliberately not copying #102's unjoined daemon thread).
   `auto_embed: false` is unchanged: nothing is enqueued and no embedding code
   is reached at all.
+- **MCP reads are bounded by default, and the bound can no longer be
+  defeated (ADR-0034 rules 1, 3, 4).** Two behaviour changes for clients
+  passing large `body_limit`s: the per-body ceiling drops from **50,000 to
+  20,000** characters (92% of measured bodies still fit in one call; the
+  rest continue with `kb_read_body`), and multi-entry reads gain a
+  **per-response budget of 40,000 body characters** — previously the
+  ceiling was per body, so 50 entries at it was a megabyte. Bodies fill in
+  request order; an entry reached after the budget is spent comes back in
+  place with an empty body, `body_truncated: true` and its true
+  `body_length`, never dropped and never reported `not_found`.
+
+  All three numbers are now configuration read at server start —
+  `PYRITE_BODY_CHUNK_DEFAULT` (8000), `PYRITE_BODY_CHUNK_MAX` (20000),
+  `PYRITE_BODY_RESPONSE_BUDGET` (40000). An invalid value (non-integer,
+  ≤ 0, or a default above the max) stops the server with a message naming
+  the variable rather than silently falling back, and the MCP tool
+  descriptions report the effective values instead of compiled-in ones.
+
+- **A `fields` projection no longer skips body chunking** — the documented
+  contract it replaces is retired (ADR-0034 rule 1: a parameter that
+  reduces output never disables another bound). `kb_get` and
+  `kb_batch_read` with `fields=[..., "body"]` and `body_limit=6000`
+  returned 171,189 characters, 28× the explicit cap (#58); the same call
+  now returns 12,369. A projection that keeps `body` also keeps
+  `body_truncated`, `body_length`, `body_offset` and `body_chunk_size`, so
+  a truncated body can still be recognised as one.
+
+  The same hole was open on three read paths the issue did not name, and
+  they are closed with it: `kb_search` returned whole bodies for both
+  `include_body=true` and `fields=[..., "body"]` (it has no `body_limit`
+  at all, so it is bounded at the default chunk within the response
+  budget), and `kb_list_entries` and `kb_recent` returned whole bodies for
+  up to 200 entries whether or not `fields` was passed.
 
 - Three open process findings fixed: `.claude/THEME.md` is no longer tracked
   (it was gitignored but the already-committed blob kept riding every branch,

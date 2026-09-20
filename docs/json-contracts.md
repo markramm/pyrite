@@ -154,6 +154,34 @@ don't assume its absence means anything other than "not truncated".
 Use `kb_read_body` (offset-based continuation) to read past the first
 chunk; stop once `body_offset + body_chunk_size >= body_length`.
 
+The four keys survive a `fields` projection that kept `body`: a bounded
+body always arrives with the means to tell it was bounded (ADR-0034 rule
+2). A projection that excluded `body` carries none of them.
+
+### `body_chunk_size: 0` in a multi-entry read
+
+`kb_batch_read`, and the other tools that return several bodies, spend a
+per-response budget (`PYRITE_BODY_RESPONSE_BUDGET`, default 40,000
+characters) in request order. An entry reached after the budget is spent
+comes back **in place, with an empty body and the full marker**:
+
+```json
+{
+  "id": "some-entry",
+  "body": "",
+  "body_truncated": true,
+  "body_length": 50000,
+  "body_offset": 0,
+  "body_chunk_size": 0
+}
+```
+
+It is not dropped from `entries` and never appears in `not_found` —
+`body_length` is its true length, so a caller can see there was content
+and fetch it with `kb_read_body`. A loop that advances by
+`body_chunk_size` must treat `0` as "this call returned nothing, ask
+again for this entry alone" rather than incrementing by zero forever.
+
 ## Exit codes (CLI)
 
 - `0` — success.

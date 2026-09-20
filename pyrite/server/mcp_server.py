@@ -28,6 +28,7 @@ from ..exceptions import (
     ValidationError,
 )
 from ..schema import generate_entry_id
+from ..services.body_bounds import MARKER_KEYS, BodyBounds, load_body_bounds
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
 from ..services.kb_service import KBService
@@ -39,8 +40,6 @@ logger = logging.getLogger(__name__)
 
 URI_SCHEME = "pyrite://"
 MAX_BATCH_READ_ENTRIES = 50
-DEFAULT_BODY_CHUNK = 8000
-MAX_BODY_CHUNK = 50_000
 _UPDATE_FIELDS = frozenset(
     {
         "title",
@@ -99,33 +98,21 @@ def _project_fields(entry: dict, fields: list[str] | None) -> dict:
 
     `id` and `kb_name` are always kept when present on the entry, even if the
     caller's `fields` list omits them.
+
+    So are the body truncation markers, when the projection kept a `body`:
+    ADR-0034 rule 2 forbids silent truncation, and a projection that dropped
+    `body_truncated` would hand an agent a slice it cannot tell apart from a
+    whole body. A projection that excluded `body` keeps no markers — there is
+    nothing there to have been truncated.
     """
     if not fields:
         return entry
     keys = dict.fromkeys((*_IDENTITY_FIELDS, *fields))
-    return {k: entry[k] for k in keys if k in entry}
-
-
-def _chunk_body(entry: dict, offset: int = 0, limit: int = DEFAULT_BODY_CHUNK) -> dict:
-    """Apply body chunking to an entry dict.
-
-    If the body fits within the offset+limit window, return unchanged.
-    Otherwise return a shallow copy with the body sliced and truncation metadata.
-    """
-    body = entry.get("body")
-    if body is None:
-        return entry
-    body_len = len(body)
-    limit = min(limit, MAX_BODY_CHUNK)
-    chunk = body[offset : offset + limit]
-    if offset == 0 and len(chunk) == body_len:
-        # No truncation needed
-        return entry
-    out = {**entry, "body": chunk}
-    out["body_truncated"] = True
-    out["body_length"] = body_len
-    out["body_offset"] = offset
-    out["body_chunk_size"] = len(chunk)
+    out = {k: entry[k] for k in keys if k in entry}
+    if "body" in out and entry.get("body_truncated"):
+        for key in MARKER_KEYS:
+            if key in entry:
+                out[key] = entry[key]
     return out
 
 
@@ -271,6 +258,10 @@ class PyriteMCPServer:
 
         self.config = config or load_config()
         self.tier = tier
+        # Loaded before anything expensive: ADR-0034 rule 4 wants an invalid
+        # PYRITE_BODY_* to stop the server at start, not to be discovered by
+        # the first oversized read.
+        self.body_bounds: BodyBounds = load_body_bounds()
         self.db = PyriteDB(self.config.settings.index_path)
         self.db.merge_registered_kbs(self.config)
         self.index_mgr = IndexManager(self.db, self.config)
@@ -309,11 +300,27 @@ class PyriteMCPServer:
     # Tool registration by tier
     # =========================================================================
 
+    def _render_schemas(self, schemas: dict[str, Any]) -> dict[str, Any]:
+        """Fill the body-bound placeholders in tool descriptions.
+
+        ADR-0034 rule 4: descriptions report the effective values, not the
+        compiled-in ones, so an agent reading the schema on a tuned
+        deployment is told that deployment's numbers.
+        """
+        from .tool_schemas import render_tool_schemas
+
+        return render_tool_schemas(
+            schemas,
+            body_chunk_default=self.body_bounds.default_chunk,
+            body_chunk_max=self.body_bounds.max_chunk,
+            body_response_budget=self.body_bounds.response_budget,
+        )
+
     def _build_read_tools(self):
         """Register read-only tools (available in all tiers)."""
         from .tool_schemas import READ_TOOLS
 
-        for name, schema in READ_TOOLS.items():
+        for name, schema in self._render_schemas(READ_TOOLS).items():
             self.tools[name] = {**schema, "handler": getattr(self, f"_{name}")}
             self._tool_tiers[name] = "read"
 
@@ -321,7 +328,7 @@ class PyriteMCPServer:
         """Register write tools (available in write and admin tiers)."""
         from .tool_schemas import WRITE_TOOLS
 
-        for name, schema in WRITE_TOOLS.items():
+        for name, schema in self._render_schemas(WRITE_TOOLS).items():
             self.tools[name] = {**schema, "handler": getattr(self, f"_{name}")}
             self._tool_tiers[name] = "write"
 
@@ -329,7 +336,7 @@ class PyriteMCPServer:
         """Register admin tools (available only in admin tier)."""
         from .tool_schemas import ADMIN_TOOLS
 
-        for name, schema in ADMIN_TOOLS.items():
+        for name, schema in self._render_schemas(ADMIN_TOOLS).items():
             self.tools[name] = {**schema, "handler": getattr(self, f"_{name}")}
             self._tool_tiers[name] = "admin"
 
@@ -469,9 +476,16 @@ class PyriteMCPServer:
                 retryable=False,
             )
 
-        if fields:
-            results = [_project_fields(r, fields) for r in results]
-        elif not include_body:
+        if fields or include_body:
+            # kb_search takes no body_limit, so every body it returns is
+            # bounded by the response budget at the default chunk each
+            # (ADR-0034 rule 3: bounded by default on every path, including
+            # `fields`). Before this, `fields=["id","body"]` and
+            # `include_body=True` both returned whole bodies with no marker.
+            results = self.body_bounds.fill_budget(results)
+            if fields:
+                results = [_project_fields(r, fields) for r in results]
+        else:
             # Strip body by default to save tokens — snippet is included instead
             for r in results:
                 r.pop("body", None)
@@ -501,7 +515,7 @@ class PyriteMCPServer:
         kb_name = args.get("kb_name")
         fields = args.get("fields")
         body_offset = args.get("body_offset", 0)
-        body_limit = args.get("body_limit", DEFAULT_BODY_CHUNK)
+        body_limit = args.get("body_limit")
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
         if result and readable_kbs is not None and result.get("kb_name") not in readable_kbs:
@@ -514,10 +528,12 @@ class PyriteMCPServer:
                 suggestion="Use kb_list_entries or kb_search to find entries",
             )
 
-        if fields:
-            result = _project_fields(result, fields)
-        else:
-            result = _chunk_body(result, offset=body_offset, limit=body_limit)
+        # Chunk first, project second (ADR-0034 rules 1 and 3): `fields` is a
+        # token-reduction parameter and must never raise the body bound. #58
+        # was this pair the other way round, where `fields=[...,"body"]`
+        # skipped chunking and returned 28x the caller's explicit body_limit.
+        result = self.body_bounds.chunk_body(result, offset=body_offset, limit=body_limit)
+        result = _project_fields(result, fields)
 
         return {"entry": result}
 
@@ -532,7 +548,7 @@ class PyriteMCPServer:
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         offset = args.get("body_offset", 0)
-        limit = min(args.get("body_limit", DEFAULT_BODY_CHUNK), MAX_BODY_CHUNK)
+        limit = self.body_bounds.effective_limit(args.get("body_limit"))
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
         if result and readable_kbs is not None and result.get("kb_name") not in readable_kbs:
@@ -714,7 +730,7 @@ class PyriteMCPServer:
         entries_spec = args.get("entries", [])
         fields = args.get("fields")
         body_offset = args.get("body_offset", 0)
-        body_limit = args.get("body_limit", DEFAULT_BODY_CHUNK)
+        body_limit = args.get("body_limit")
 
         if not isinstance(entries_spec, list):
             return _error(
@@ -753,10 +769,14 @@ class PyriteMCPServer:
             ids = [(eid, kb) for eid, kb in ids if kb in readable_kbs]
         results = self.svc.get_entries(ids)
 
+        # The per-body ceiling does not bound a response: 50 entries at the
+        # ceiling is a megabyte. fill_budget spends PYRITE_BODY_RESPONSE_BUDGET
+        # in request order, so later entries come back truncated (possibly to
+        # zero) WITH the marker rather than the response growing without limit
+        # (ADR-0034 rule 4). Projection runs after, and keeps the marker.
+        results = self.body_bounds.fill_budget(results, offset=body_offset, limit=body_limit)
         if fields:
             results = [_project_fields(r, fields) for r in results]
-        else:
-            results = [_chunk_body(r, offset=body_offset, limit=body_limit) for r in results]
 
         found_ids = {(r["id"], r["kb_name"]) for r in results}
         # From what was *requested*, not from the filtered `ids`: a pair
@@ -807,6 +827,9 @@ class PyriteMCPServer:
             kb_name=kb_name, kb_names=kb_names, entry_type=entry_type, tag=tag
         )
 
+        # list_entries returns whole bodies from the index; up to 200 of them
+        # was an unbounded response on a browse tool (ADR-0034 rule 3).
+        entries = self.body_bounds.fill_budget(entries)
         if fields:
             entries = [_project_fields(e, fields) for e in entries]
 
@@ -850,6 +873,8 @@ class PyriteMCPServer:
         if since:
             entries = [e for e in entries if (e.get("updated_at") or "") >= since]
 
+        # Same unbounded-browse shape as kb_list_entries (ADR-0034 rule 3).
+        entries = self.body_bounds.fill_budget(entries)
         if fields:
             entries = [_project_fields(e, fields) for e in entries]
 
