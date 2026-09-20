@@ -249,7 +249,9 @@ Nothing yet.
   independently re-verified (#229): `CLAUDE.md` documented a `--title` flag
   `pyrite sw new-adr` does not have (title is positional; same fix applied
   to `.claude/skills/kb/SKILL.md` and `.claude/skills/software-kb/SKILL.md`,
-  which repeated it); `docs/json-contracts.md`'s `has_more`/`total` claims
+  which repeated it) — **@Umar-2026 found and fixed the same `--title` bug
+  independently in #237, fourteen minutes before this sweep merged**;
+  `docs/json-contracts.md`'s `has_more`/`total` claims
   are replaced with a measured per-surface, per-transport table (`search`,
   `list_entries`, `recent`, `tags`, `backlinks` × CLI/MCP/REST — none of
   them uniform); the 29/11/8 MCP tool-tier counts in `docs/getting-started.md`,
