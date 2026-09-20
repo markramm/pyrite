@@ -43,8 +43,22 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   falling back to `CLONE_FAILED`); see `docs/json-contracts.md`. Pull and push
   keep returning git's own words, redacted — a merge conflict or a rejected
   push still says so, and remote URLs the caller supplied are preserved.
-  Success bodies (`RepoInfo.local_path`, `subscribe`'s `path`) still carry
-  absolute server paths; narrowing those is separate work.
+  Success bodies (`RepoInfo.local_path`, `subscribe`'s `path`) narrowed to
+  the workspace-relative form in the entry below.
+- **Repo endpoint *success* bodies disclosed the same absolute server paths
+  #161 removed from error bodies.** `RepoInfo.local_path` (`GET /repos`, `GET
+  /repos/{name}`) and the `path` key in `subscribe`/`fork` responses returned
+  the server's real filesystem path (`/Users/<user>/.pyrite/repos/owner/repo`)
+  at 200. Both are now relative to the workspace root (`owner/repo_name`) —
+  the field stays populated rather than dropped, since `RepoInfo` is public
+  REST response shape an external consumer may already read, but discloses
+  no server layout or usernames; a path outside the workspace root comes back
+  as `"<path>"` rather than leaking the absolute value or raising. Only the
+  HTTP boundary changed — the CLI (`pyrite repo list`/`status`) still shows
+  the real absolute path for the local operator, and every internal caller
+  (fork's `add_remote`, sync, PR, config load) still reads `local_path`
+  absolute off the DB row or the service's own dict, unaffected. See
+  `docs/json-contracts.md`.
 - **Private KBs were readable by any logged-in user, and by anonymous
   visitors on an auth-enabled instance.** Per-KB roles (`default_role: none`,
   explicit grants) were enforced on write routes only; every read route

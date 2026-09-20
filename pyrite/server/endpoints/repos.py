@@ -1,6 +1,7 @@
 """Repo management endpoints — subscribe, fork, sync, unsubscribe, list."""
 
 import logging
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
@@ -97,12 +98,43 @@ router = APIRouter(
 )
 
 
-def _repo_dict_to_info(repo: dict) -> RepoInfo:
+def _relativize_path(svc: object, value: str) -> str:
+    """Narrow an absolute server path to a form that discloses nothing about
+    the server's filesystem layout or usernames, for the HTTP boundary only.
+
+    Issue #195, the success-path twin of #161: `RepoInfo.local_path` and the
+    `path` key in `subscribe`/`fork` success bodies are public REST response
+    shape (an external consumer we cannot see may read them), so the field
+    stays populated rather than being dropped — but relative to the
+    workspace root (``owner/repo_name``), same as
+    ``workspace_path = self.config.settings.workspace_path / owner / repo_name``
+    in `RepoService`.
+
+    Internal callers (repo_service.py, config.py) read `local_path` off the
+    DB row or the service's own dict directly — never through this function —
+    and keep receiving absolute paths, which they resolve against and pass to
+    git. Only what crosses the HTTP boundary is narrowed here.
+
+    A path that is not under the configured workspace root (e.g. legacy data
+    from a moved workspace) cannot be made relative without still disclosing
+    layout, so it is replaced by an opaque marker instead of raising or
+    leaking the absolute value.
+    """
+    try:
+        workspace_path = svc.config.settings.workspace_path
+        return str(Path(value).relative_to(workspace_path))
+    except (ValueError, AttributeError, TypeError, OSError):
+        logger.warning("Path %s could not be relativized to the workspace root", value)
+        return "<path>"
+
+
+def _repo_dict_to_info(repo: dict, svc: object) -> RepoInfo:
     """Convert a repo dict to RepoInfo schema."""
+    local_path = repo.get("local_path", "")
     return RepoInfo(
         id=repo.get("id", 0),
         name=repo.get("name", ""),
-        local_path=repo.get("local_path", ""),
+        local_path=_relativize_path(svc, local_path) if local_path else local_path,
         remote_url=repo.get("remote_url"),
         owner=repo.get("owner"),
         visibility=repo.get("visibility", "public"),
@@ -123,7 +155,7 @@ def list_repos(
 ):
     """List all subscribed/forked repos."""
     repos = svc.list_repos()
-    return RepoListResponse(repos=[_repo_dict_to_info(r) for r in repos])
+    return RepoListResponse(repos=[_repo_dict_to_info(r, svc) for r in repos])
 
 
 @router.get("/repos/{name:path}")
@@ -135,6 +167,8 @@ def get_repo(
     """Get detailed status for a repo."""
     result = svc.get_repo_status(name)
     if result.get("success", True) is not False and "error" not in result:
+        if "local_path" in result:
+            result = {**result, "local_path": _relativize_path(svc, result["local_path"])}
         return result
     if result.get("error"):
         raise HTTPException(
@@ -157,6 +191,8 @@ def subscribe_to_repo(
             status_code=400,
             detail=_error_detail(result, "SUBSCRIBE_FAILED", svc),
         )
+    if "path" in result:
+        result = {**result, "path": _relativize_path(svc, result["path"])}
     return result
 
 
@@ -181,6 +217,8 @@ def fork_repo(
             status_code=400,
             detail=_error_detail(result, "FORK_FAILED", svc),
         )
+    if "path" in result:
+        result = {**result, "path": _relativize_path(svc, result["path"])}
     return result
 
 

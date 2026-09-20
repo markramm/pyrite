@@ -68,6 +68,27 @@ Source of truth: `pyrite/server/endpoints/repos.py` (`_PUBLIC_ERROR_CODES`,
 `_error_detail`) and `pyrite/services/git_service.py` (`sanitize_error`,
 `classify_git_error`).
 
+## Repo endpoint success bodies
+
+`RepoInfo.local_path` (`GET /repos`, `GET /repos/{name}`) and the `path` key
+in a `subscribe`/`fork` success body are **relative to the workspace root**,
+not an absolute server filesystem path — `owner/repo_name`, matching
+`workspace_path = self.config.settings.workspace_path / owner / repo_name`
+in `RepoService`. Issue #195, the success-path twin of #161: the field stays
+populated (it is public response shape an external consumer may already
+depend on) but discloses nothing about the server's directory layout or
+usernames. A path that cannot be expressed relative to the workspace root
+(legacy data from a moved workspace) comes back as the literal string
+`"<path>"` rather than the absolute value.
+
+This applies to the HTTP response only. The `pyrite repo list` /
+`pyrite repo status` CLI output, and every internal caller reading
+`local_path` off the DB row or a service dict directly, still show the real
+absolute path — the CLI operator is not a remote caller.
+
+Source of truth: `pyrite/server/endpoints/repos.py` (`_relativize_path`,
+`_repo_dict_to_info`).
+
 ## Search result envelope
 
 ```json
