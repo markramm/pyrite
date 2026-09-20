@@ -30,6 +30,7 @@ from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
 from ..utils.metadata import parse_metadata
+from .body_bounds import MARKER_KEYS
 from .export_service import ExportService
 from .hook_runner import HookRunner
 from .wikilink_service import WikilinkService
@@ -485,8 +486,15 @@ class KBService:
                 # Resolve type, scoped to this KB's type (see create_entry)
                 entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
 
-                # Build extra kwargs
-                extra = {k: v for k, v in spec.items() if k not in ("entry_type", "title", "body")}
+                # Build extra kwargs. MARKER_KEYS are ADR-0034 read
+                # transport, never entry content: a spec that legitimately
+                # carries `body_truncated: false` must not have it persisted
+                # as frontmatter. (A truthy marker is refused before here.)
+                extra = {
+                    k: v
+                    for k, v in spec.items()
+                    if k not in ("entry_type", "title", "body", *MARKER_KEYS)
+                }
 
                 entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **extra)
                 entry = self._run_hooks("before_save", entry, hook_ctx)

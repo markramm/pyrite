@@ -446,6 +446,23 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   milliseconds instead of failing a 2 s budget, and the entry is
   keyword-searchable at once.
 
+- **Writing back a body that a bounded read had truncated silently destroyed
+  the rest of the entry.** `kb_get`/`kb_batch_read` return the first 8,000
+  characters of a long body plus `body_truncated: true`; nothing refused that
+  body on the way back in, so an agent that edited what it received and saved
+  it replaced a 170,000-character entry with 8,000 — silent, permanent, and
+  produced by the safety feature itself. 21% of entries on the maintainer's
+  index are long enough to be affected. Every write surface that can receive a
+  body now refuses one carrying a truthy `body_truncated` marker, with
+  `VALIDATION_FAILED`, `retryable: false` and a message naming `kb_read_body` /
+  `body_offset` as the way to assemble the whole body first: MCP's write and
+  admin tiers (`kb_create`, `kb_update`, `task_create`, `task_decompose` and
+  any plugin write tool, guarded at the dispatcher), `kb_bulk_create`
+  per-item, and REST `POST`/`PUT`/`PATCH /api/entries` plus
+  `POST /api/entries/import` per-record. A write without the marker, a write
+  carrying `body_truncated: false`, and a metadata-only update that carries the
+  marker but no body are all unaffected. ADR-0034 rule 2.
+
 - **Extension entry classes silently dropped `aliases` and `_schema_version` on
   every load -> save round trip, and rewrote `importance` back to its default**
   — a `writeup` (social), `zettel`/`literature_note` (zettelkasten), or

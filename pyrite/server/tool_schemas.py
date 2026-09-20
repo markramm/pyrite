@@ -699,7 +699,7 @@ READ_TOOLS = {
 
 WRITE_TOOLS = {
     "kb_create": {
-        "description": "Create a new entry in a knowledge base. Validates against kb.yaml schema and returns warnings for unknown vocabulary values. Use kb_schema first to discover valid types and fields.",
+        "description": "Create a new entry in a knowledge base. Validates against kb.yaml schema and returns warnings for unknown vocabulary values. Use kb_schema first to discover valid types and fields. Refuses a body carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -748,7 +748,7 @@ WRITE_TOOLS = {
         },
     },
     "kb_bulk_create": {
-        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. Not best-effort: one malformed entry (e.g. a missing required field) rejects the entire batch before any entry is created (#95). Max 50 entries per call.",
+        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. Not best-effort: one malformed entry (e.g. a missing required field) rejects the entire batch before any entry is created (#95). Max 50 entries per call. Refuses any entry whose body is carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -792,7 +792,7 @@ WRITE_TOOLS = {
         },
     },
     "kb_update": {
-        "description": "Update an existing entry. Only provided fields are updated. Runs schema validation and returns warnings for unknown select/multi-select values.",
+        "description": "Update an existing entry. Only provided fields are updated. Runs schema validation and returns warnings for unknown select/multi-select values. Refuses a body carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
         "inputSchema": {
             "type": "object",
             "properties": {

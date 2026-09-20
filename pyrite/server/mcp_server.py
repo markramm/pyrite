@@ -28,7 +28,13 @@ from ..exceptions import (
     ValidationError,
 )
 from ..schema import generate_entry_id
-from ..services.body_bounds import MARKER_KEYS, BodyBounds, load_body_bounds
+from ..services.body_bounds import (
+    MARKER_KEYS,
+    REFUSAL_SUGGESTION,
+    BodyBounds,
+    load_body_bounds,
+    refuse_truncated_body,
+)
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
 from ..services.kb_service import KBService
@@ -145,6 +151,17 @@ def _error(
 MAX_TIMELINE_EVENTS = 50
 MAX_BULK_CREATE_ENTRIES = 50
 MAX_RESOURCE_LIST_ENTRIES = 200
+
+#: Write tools whose request holds a LIST of bodies AND whose result contract
+#: is per-item ({"created": False, "error": ...}). The dispatcher-level guard
+#: skips their nested specs so one marked item does not refuse the whole call;
+#: the handler refuses that item on its own (ADR-0034 rule 2, acceptance
+#: criterion 4). `task_decompose` is deliberately NOT here: it succeeds or
+#: fails as a whole, so the dispatcher's whole-request guard is its contract.
+_PER_ITEM_BODY_TOOLS = frozenset({"kb_bulk_create"})
+
+#: The argument each per-item tool puts its list of specs under.
+_PER_ITEM_SPEC_KEYS = frozenset({"entries"})
 
 
 # ---------------------------------------------------------------------------
@@ -1101,11 +1118,13 @@ class PyriteMCPServer:
 
         entry_id = generate_entry_id(title)
 
-        # Filter out keys already passed as explicit arguments
+        # Filter out keys already passed as explicit arguments. MARKER_KEYS
+        # go too: they are read-transport metadata (ADR-0034), and an allowed
+        # `body_truncated: false` must not be persisted as frontmatter.
         extra = {
             k: v
             for k, v in args.items()
-            if k not in ("kb_name", "entry_type", "title", "body", "validate")
+            if k not in ("kb_name", "entry_type", "title", "body", "validate", *MARKER_KEYS)
         }
 
         try:
@@ -1137,6 +1156,19 @@ class PyriteMCPServer:
                 "VALIDATION_FAILED", f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call"
             )
 
+        # ADR-0034 rule 2, per item: a spec whose body is marked truncated is
+        # refused on its own and never reaches the service, while its clean
+        # siblings are created -- the tool's existing per-item contract
+        # ({"created": False, "error": ...}), not an all-or-nothing failure.
+        refusals: dict[int, dict[str, Any]] = {}
+        clean: list[dict[str, Any]] = []
+        for i, spec in enumerate(entries):
+            message = refuse_truncated_body(spec)
+            if message is None:
+                clean.append(spec)
+            else:
+                refusals[i] = {"created": False, "error": message}
+
         # Pre-validate each entry against schema
         kb_config = self.config.get_kb(kb_name)
         schema = None
@@ -1144,9 +1176,16 @@ class PyriteMCPServer:
             schema = kb_config.kb_schema
 
         try:
-            results = self.svc.bulk_create_entries(kb_name, entries)
+            clean_results = self.svc.bulk_create_entries(kb_name, clean) if clean else []
         except PyriteError as e:
             return _error("BULK_CREATE_FAILED", str(e), retryable=True)
+
+        # Splice the refusals back into their caller-supplied positions so a
+        # result index still lines up with the request's entries array.
+        results: list[dict[str, Any]] = []
+        clean_iter = iter(clean_results)
+        for i in range(len(entries)):
+            results.append(refusals[i] if i in refusals else next(clean_iter, {"created": False}))
 
         # Attach per-entry validation warnings
         if schema:
@@ -2085,6 +2124,30 @@ class PyriteMCPServer:
             for name, meta in self.tools.items()
         ]
 
+    def _refuse_truncated_write(self, name: str, arguments: dict[str, Any]) -> dict | None:
+        """ADR-0034 rule 2, applied to one MCP call.
+
+        Returns the error envelope when this call is a write carrying both a
+        body and a truthy `body_truncated`, otherwise None. Reads are never
+        guarded: `body_truncated` is a marker a read *produces*, and a read
+        that echoes it back as an argument loses nothing.
+        """
+        if self._tool_tiers.get(name, "read") == "read":
+            return None
+        if name in _PER_ITEM_BODY_TOOLS:
+            payload = {k: v for k, v in arguments.items() if k not in _PER_ITEM_SPEC_KEYS}
+        else:
+            payload = arguments
+        message = refuse_truncated_body(payload)
+        if message is None:
+            return None
+        return _error(
+            "VALIDATION_FAILED",
+            message,
+            suggestion=REFUSAL_SUGGESTION,
+            retryable=False,
+        )
+
     def _dispatch_tool(
         self,
         name: str,
@@ -2154,6 +2217,16 @@ class PyriteMCPServer:
                 f"Tool '{name}' is not available",
                 suggestion="Name a knowledge base you can read, or use kb_search",
             )
+
+        # ADR-0034 rule 2: a truncated body is never valid input to a write.
+        # The check sits here rather than in each handler so that it covers
+        # every write tool -- kb_create, kb_update, task_create and any plugin
+        # tool registered into the write or admin tier -- by construction
+        # rather than by enumeration. Tools in _PER_ITEM_BODY_TOOLS carry a
+        # per-item result contract and refuse marked items inside the handler.
+        refusal = self._refuse_truncated_write(name, arguments)
+        if refusal is not None:
+            return refusal
 
         try:
             handler = self.tools[name]["handler"]
