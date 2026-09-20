@@ -305,16 +305,18 @@ def register_entry_commands(app: typer.Typer) -> None:
             # --allow-undeclared was passed. Mirrors the MCP-side check in
             # _kb_create (commit 435be48). Closes the CLI half of Tier A
             # 1090 (bug-create-silently-accepts-undeclared-types).
+            #
+            # Core types are NOT exempt: a KB that declares a schema declares
+            # the vocabulary for that KB, and exempting core names is how
+            # `-t note` against a software KB skipped this refusal and then had
+            # plugin type resolution rewrite it to its most-derived `note`
+            # subtype -- an ADR with `adr_number: 0` under `kb/adrs/` (#197).
             if not allow_undeclared:
                 kb_config_check = config.get_kb(kb_name)
                 if kb_config_check is not None:
                     schema = kb_config_check.kb_schema
                     declared_types = sorted(schema.types.keys()) if schema and schema.types else []
-                    if (
-                        declared_types
-                        and entry_type not in CORE_TYPES
-                        and entry_type not in schema.types
-                    ):
+                    if declared_types and entry_type not in schema.types:
                         _cli_error(
                             (
                                 f"type '{entry_type}' is not declared in KB "

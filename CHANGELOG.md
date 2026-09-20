@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pyrite create -t <type>` no longer silently files a different type when the
+  KB does not declare the one asked for (#197).** Core types were exempt from
+  the CLI's write-side refusal, so `-t note` against a KB whose schema declares
+  only `adr | backlog_item | component | standard` skipped the guard, and plugin
+  type resolution then promoted it to its most-derived `note` subtype — an ADR
+  with `adr_number: 0` under `kb/adrs/`, from a command that asked for a note.
+  The refusal now covers every type the KB does not declare; `--allow-undeclared`
+  still overrides it.
+
 ## [0.24.3] - 2026-09-20
 
 "Operational" — see `kb/roadmap.md`.
@@ -145,6 +156,10 @@ which Pyrite stops being one person's experiment.
   `/plugins*`, `/settings*`, `/repos*`, `/worktree*`, the remaining git-ops
   routes, MCP over HTTP) are allowlisted pending the same treatment; they
   are tier-guarded today but not per-KB scoped.
+
+### Fixed
+
+- REST field projections now preserve `id` and `kb_name` (Berkay Byte).
 
 ### Added
 
