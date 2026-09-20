@@ -1408,3 +1408,41 @@ class TestInstallCheckMatchesTheTutorial:
         installs = [c for c in calls if c[:2] == ["uv", "pip"]]
         assert installs, "no install was composed"
         assert any(f"pyrite[{release.INSTALL_CHECK_EXTRAS}]" in " ".join(c) for c in installs)
+
+
+class TestDockerBuildIsOptIn:
+    """No image is published, so the build must not gate a release.
+
+    Neither CI nor this script pushes to a registry -- `gh api
+    repos/.../packages` is empty and no workflow runs docker/build-push.
+    The build therefore verified an artifact that never left the machine,
+    while being able to fail the release: on 0.24.3 it did so twice, once on
+    a stale `web/node_modules` and once on a corrupted local container store.
+
+    Maintainer, 2026-09-20: "we are not publishing that image... remove docker
+    builds from the release process for the next couple of releases -- no one
+    is using that path now."
+    """
+
+    def test_no_docker_build_by_default(self, every_composed_command):
+        for cmd in every_composed_command:
+            assert cmd[:2] != ["docker", "build"], (
+                f"a docker build was composed without --docker-check: {cmd}"
+            )
+
+    def test_docker_check_brings_it_back(self, dry_run, monkeypatch, capsys):
+        """The `dry_run` fixture's repo has no Dockerfile, and the
+        no-Dockerfile branch ALSO skips the build -- so assert on the note,
+        which distinguishes the two reasons, rather than on the absent
+        command. A bare `docker build not in calls` would pass for the wrong
+        reason."""
+        monkeypatch.setattr(release.shutil, "which", lambda name: f"/usr/bin/{name}")
+        dry_run(("0.24.2", "--execute", "--docker-check"))
+        out = capsys.readouterr().out
+        assert "pass --docker-check" not in out, (
+            "with --docker-check passed, the opt-out note must not be printed"
+        )
+
+    def test_the_flag_defaults_to_off(self):
+        args = release.parse_args(["0.24.2"])
+        assert args.docker_check is False
