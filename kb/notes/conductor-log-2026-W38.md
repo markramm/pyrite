@@ -2672,7 +2672,11 @@ The loop resumed after the wind-down; the tick itself is in the desk
 green at 4a29d44 with the retro-6/7 skill pastes landed; #180 (read scoping)
 rebased, re-verified and **merged**; #145 (search filters on every leg)
 rebased, verified, armed; #161 and #140 held as drafts by the two-armed PR
-budget; four merged-PR worktrees removed. This branch's long-red `kb` check
+budget, then #161 (a real conftest conflict with #180, both fixtures kept) and
+#140 — all four merged, `dev` green and idle on 43724fd. Nine worktrees left of
+twenty-two. #145 closed #56 and, verified, #152; it does **not** close
+#13/#43/#62 (different subsystems) and only bounds #194, which stays open as a
+design question. This branch's long-red `kb` check
 was 2 duplicate IDs it resurrects after their move to `done/` on dev — fixed
 in the commit above, not by touching the 577 string-priority warnings, which
 are warnings and are the KB's own convention (478 files) rather than a defect.
