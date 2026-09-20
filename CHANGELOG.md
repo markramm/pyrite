@@ -217,6 +217,9 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   `journalism-investigation` and naming a nonexistent `task` extension; the
   hard-coded "1780+ tests" is replaced with the `--collect-only` command
   itself, per the counts-drift backlog item.
+- CONTRIBUTING: the AI-assisted-contribution note now accepts a git
+  `Co-authored-by:` trailer as the declaration (machine-readable, survives
+  squash-merge) alongside the existing, still-welcome PR-body mention.
 - CONTRIBUTING rewritten for a project with contributors: branch flow and
   required checks (ADR-0032), the three hook stages, where bugs vs roadmap
   items live (ADR-0033), a one-week first-response intent, how to run the

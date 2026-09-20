@@ -249,8 +249,12 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
 - The full suite green locally: `pytest tests/ extensions/ -n auto`, plus
   `ruff check` and `ruff format --check`.
 - A line in `CHANGELOG.md` under `[Unreleased]`.
-- If an AI coding agent wrote or co-wrote it, say so in the PR — it is
-  welcome, and it tells the reviewer what to look at first.
+- AI-assisted contributions are welcome here. If an AI coding agent wrote or
+  co-wrote your change, declare it with a `Co-authored-by:` trailer on the
+  commit (most agent tools add this automatically) — it is machine-readable,
+  it survives a squash-merge, and it is the form we'll look for first. A
+  mention in the PR body is welcome too, and helps the reviewer know what to
+  look at first, but it's optional on top of the trailer, not instead of it.
 
 What happens next: every outside PR gets a review within about an hour,
 posted as a comment with a plain recommendation (merge as is, merge after
