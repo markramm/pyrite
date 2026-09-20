@@ -2626,3 +2626,13 @@ Desk-held loop branches from **4 (for ≥5 h)** to **0** within two ticks of the
 ## Tick 2026-09-20T00:32Z (scheduled — quiet)
 
 `dev` 24533f4 green; load 2.3, 66% free. No outside activity since the five posted messages and the #173 push; #202 (Sonnet, #49) and the #131 spike still running (2 of 4 slots). Nothing to absorb; nothing dispatchable within the budgets — every remaining ready theme is behind a desk decision (#145 → #13/#43/#152/#62; ADR-0035 → #13; #180 → #186/#201) or behind an outside PR. Desk unchanged: breaker paragraph, fix-at-review per branch, ADR-0035, 14 closures, 6 decisions, #198 reply, #173 round-3 message, CONTRIBUTING wording.
+
+## Tick 2026-09-20T00:37Z (spike #131 returned; #131 dispatched; #202 reported)
+
+**Spike #131 — hypothesis confirmed with numbers:** one `Session` from `PyriteDB.__init__` (`connection.py:57`) is cached on `app.state` and handed to ~117 `def` handlers running on FastAPI's 40-thread pool, with `check_same_thread: False` silencing sqlite's guard — 16-thread A/B: **131/240 (54.6%) failed** on the current code (`IndexError: tuple index out of range`, `concurrent operations are not permitted`, a `SystemError`), **0/240** with a per-request session; over HTTP on a live server, **9.4% 500s at concurrency 8**. The issue's "unexplained" `IndexError` is the same bug (a row read after another thread advanced the cursor). Second exposure: `verify_api_key` is `async def` and does sync session work on the event loop. Trap measured: per-thread sessions never closed → `QueuePool limit … reached` (pool 5+10 vs 40 threads) — the fix needs per-request sessions *and* pool sizing. Package H must wait on it. Ticket rewritten with 8 acceptance criteria; the `@/tmp` read-back rule held.
+
+**Dispatched:** **#203** `fix/131-per-request-db-session` (Opus, `heavy: yes` — one server allowed; cold read yes) — the value chain puts a 9%-of-requests failure ahead of everything on the desk; the spec keeps the change to session *lifetime* so the rebase over #145/#180's `kb_names` threading in the same backend files stays mechanical. Claim item + draft PR from the issue's Triage + Spike text.
+
+**#202 (#49) reported:** guarded title writer + 9 vitest regimes, 406 unit tests green, mutation-checked; the Unsure explains why the issue's `<svelte:head>` one-liner does not work (a shared `<title>` element re-clobbered on any layout re-render — prototyped) and that the design rests on SvelteKit's `afterNavigate` ordering traced from internals. That is a design decision → cold read at the next tick's absorb. Report appended.
+
+Slots: #203 worker (1, +1 when its server runs) = 2 of 4. PR budget: 0 armed.
