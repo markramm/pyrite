@@ -32,6 +32,7 @@ from ..exceptions import (
     PyriteError,
     ValidationError,
 )
+from ..logging import configure_logging
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
 from ..utils.errors import cli_error
@@ -878,6 +879,7 @@ def generate_readme_cmd(
 
 
 def main():
+    configure_logging()
     app()
 
 

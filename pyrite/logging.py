@@ -106,7 +106,3 @@ db_logger = get_logger("database")
 migration_logger = get_logger("migrations")
 api_logger = get_logger("api")
 cli_logger = get_logger("cli")
-
-
-# Initialize with default config
-configure_logging()

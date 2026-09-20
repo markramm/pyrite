@@ -1,8 +1,13 @@
-"""
-pyrite: Knowledge-as-Code for you and your agents
+"""pyrite: Knowledge-as-Code for you and your agents.
 
 An open-source Knowledge Management System for structured markdown knowledge bases.
 """
+
+import logging
+
+# Applications decide where library logs go. The CLI replaces this inert
+# handler with its own stderr handler at startup.
+logging.getLogger(__name__).addHandler(logging.NullHandler())
 
 
 def _read_version() -> str:

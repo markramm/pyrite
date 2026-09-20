@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
+### Fixed
+
+- The `pyrite` CLI now configures the package logger at startup, so warnings
+  use the standard timestamped stderr format without tracebacks while JSON
+  stdout remains parseable. Library imports install only a `NullHandler` and
+  leave application and root logging configuration untouched (#196).
+
 ### Security
 
 - **`web/` dependency bump closes 16 of 19 open Dependabot alerts.** `vite`
