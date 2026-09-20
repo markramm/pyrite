@@ -284,6 +284,27 @@ KB presets first (`PluginRegistry.get_type_default_subdirectory`), so new items 
 When closing an item you still `git mv` it to `kb/backlog/done/` yourself — that is a
 convention, not something the type's subdirectory encodes.
 
+**Trap 3 — `-f` is not a substitute for a dedicated flag on list-typed fields (#231).**
+`-f status=done` is correct and is the pattern CLAUDE.md shows, so the hand reaches for
+`-f tags=a,b` next. It does not work, and it does not tell you:
+
+```
+$ pyrite update <id> -k pyrite -f tags=mcp,agent-ux
+{"updated": true, ...}                 # looks fine
+$ pyrite get <id> -k pyrite --format json | jq .tags
+["m","c","p",",","a","g","e","n","t","-","u","x"]     # the CHARACTERS
+```
+
+`-f` stores the raw string (`tags: mcp,agent-ux`, not a YAML list), and the reader then
+iterates it as a sequence. The entry drops out of `pyrite tags`, out of tag-filtered
+search and out of every `sw` view keyed on a tag, silently. Use `--tags "a,b"`, which
+parses properly. Assume the same for any other list-typed field reachable through `-f`
+(`participants`, `aliases`, `actors`). Repair by re-running with `--tags`.
+
+**Always read the entry back** after a CLI update that touched a list field:
+`pyrite get <id> -k pyrite --format json` shows what the index will actually serve, which
+is not always what the file looks like at a glance.
+
 ## `pyrite sw new-adr` Takes a Positional TITLE and Misfiles Without `-k`
 
 Two traps in one command:
