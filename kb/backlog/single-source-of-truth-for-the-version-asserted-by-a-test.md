@@ -8,7 +8,7 @@ tags:
 - programmatic-validation
 importance: 5
 kind: improvement
-status: in_progress
+status: done
 priority: high
 effort: S
 rank: 0
@@ -60,3 +60,7 @@ pyproject said 0.24.1).
 **Still open:** `web/package.json` and `pyrite-mcp` agreement (both wait on the
 ADR-0031 packaging question), `.claude-plugin/plugin.json`, the
 `## [Unreleased]` heading plus the top-CHANGELOG-version-has-a-tag assertion.
+
+## Closed 2026-09-20
+
+Verified shipped during the 0.24.2 pre-release review: tests/test_version_consistency.py exists with 3 tests; pyproject.toml is the only place the version is written.

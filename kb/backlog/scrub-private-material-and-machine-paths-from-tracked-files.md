@@ -8,7 +8,7 @@ tags:
 - public-repo
 importance: 5
 kind: task
-status: in_progress
+status: done
 priority: high
 effort: S
 rank: 0
@@ -80,3 +80,7 @@ purge cached views.
 
 **Still open:** the recurrence guard (a test or hook that fails on a new absolute
 home path in a tracked file).
+
+## Closed 2026-09-20
+
+Verified shipped during the 0.24.2 pre-release review: grep for machine home paths across pyrite/ returns nothing.
