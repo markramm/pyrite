@@ -342,18 +342,10 @@ release takes it up.
 
 ### Workstream 1 — Stop the contribution path from costing people evenings
 
-**#243 leads this release, and should land before the org move.** `CHANGELOG.md`
-conflicted five times in one session, three of them on first-time
-contributors' PRs whose changes had nothing to do with each other. It also
-produced a second failure mode during the 0.24.3 cut: two PRs wrote their
-entry into the *published* section, because right after a release
-`[Unreleased]` is a two-line empty heading sitting above 660 lines of real
-content. Changelog fragments (`changelog.d/`, assembled by
-`scripts/release.py`) remove both — a new file cannot conflict, and there is
-no section to choose wrongly. The org move brings a burst of PRs through a new
-queue; landing this first means those contributors never meet it.
+**Changelog fragments (#243) are 0.26, not this release** — the reasoning is
+in that section. What is here is the documentation a contributor reads before
+they write anything.
 
-- **#243** changelog fragments — **first, before #182**
 - **#235** no agent-facing documentation of the write path
 - **#244** `.claude/` ships 3,897 lines of agent instructions with three
   audiences and no separation; `CONTRIBUTING.md:276` sends contributors to a
@@ -413,14 +405,40 @@ community chose.
 
 ---
 
-## 0.26 — The review surface
+## 0.26 — Contribution machinery, from the new org
 
-"What did agents do since I last looked" as the home screen: a change feed per
-agent and per commit with diffs, approve and revert, QA inline, the task board,
-provenance on every entry. [[web-the-review-surface-what-did-agents-do-since-i-last-looked-as-the-home-screen]].
-This is the screen that demonstrates the thesis, and the shell of the local
-daily-driver app that agent integration (ADR-0030) plugs into. Argument in the
-ADR-0031 review response.
+**Theme:** small and near. The first release cut from `pyrite-wiki`, which is
+what proves the release path works from its new home.
+
+- **#243** changelog fragments: `changelog.d/<slug>.<section>.md`, assembled
+  by `scripts/release.py` at release time.
+
+`CHANGELOG.md` conflicted five times in one session, three of them on
+first-time contributors' PRs whose changes had nothing to do with each other.
+It produced a second failure mode during the 0.24.3 cut: two PRs wrote their
+entry into the *published* section, because right after a release
+`[Unreleased]` is a two-line empty heading sitting above 660 lines of real
+content. Fragments remove both — a new file cannot conflict, and there is no
+section to choose wrongly.
+
+**Why not 0.25**, where it was first placed: it changes `compose_notes` and
+the `check_changelog` precondition in `scripts/release.py`, and the next
+release is the first from a new organization. Two unproven things in one
+window is how a release path breaks with nowhere to fall back to. Here it
+gets a normal review cycle and a dry run before it matters. The migration
+also needs context rather than translation — the live `[Unreleased]` entries
+include two that landed inside the published `0.24.3` section.
+
+**The review surface moves to its own release.** "What did agents do since I
+last looked" as the home screen — a change feed per agent and per commit with
+diffs, approve and revert, QA inline, the task board, provenance on every
+entry ([[web-the-review-surface-what-did-agents-do-since-i-last-looked-as-the-home-screen]],
+argument in the ADR-0031 review response). It is the screen that demonstrates
+the thesis and the shell agent integration (ADR-0030) plugs into, and it is
+weeks of work. Three releases shipped in three days (0.24.1, 0.24.2, 0.24.3);
+at that cadence a multi-week product surface is an epic that spans releases,
+not the next one. It keeps its definition of done and is scheduled when it is
+broken down.
 
 ---
 
