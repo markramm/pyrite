@@ -209,8 +209,14 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Documentation
 
-- `docs/configuration.md`: `config.yaml` and every `PYRITE_*` environment
-  variable, in one place (there was none).
+- `kb/runbooks/setting-up-dev-environment.md` (#212): the troubleshooting
+  runbook had drifted from CONTRIBUTING and could not run the suite —
+  `pip install -e ".[dev]"` (no `fastapi`, no CLI deps, cannot collect
+  tests) is now `.[all]`; the extension install is a `for ext in
+  extensions/*/` loop instead of an enumerated list missing `cascade` and
+  `journalism-investigation` and naming a nonexistent `task` extension; the
+  hard-coded "1780+ tests" is replaced with the `--collect-only` command
+  itself, per the counts-drift backlog item.
 - CONTRIBUTING rewritten for a project with contributors: branch flow and
   required checks (ADR-0032), the three hook stages, where bugs vs roadmap
   items live (ADR-0033), a one-week first-response intent, how to run the
