@@ -2648,3 +2648,7 @@ Slots: #203 worker (1, +1 when its server runs) = 2 of 4. PR budget: 0 armed.
 **#203 (#131) in review:** worktree via the script, lint + suite `-n 4` + verify-red running; cold read out on the worker's Unsure (ContextVar and thread-local dead ends; `copy.copy(PyriteDB)`; the event-loop fallback session; `_raw_cursor` under an `RLock`; pool 40+20 for SQLite) with a live-server probe of its own.
 
 Slots: #202 worker (2 when its Playwright runs) + #203 suite (1) + cold read's server (1) = 4 of 4. PR budget: 0 armed.
+
+## Tick 2026-09-20T01:14Z (scheduled)
+
+`dev` 24533f4 green; load 5.7, 64% free. **Two outside pushes:** **#174** added the CHANGELOG clause (`8402621`, plus a merge of `dev`); gate green; nothing left — ready for the maintainer to merge (thank-you note drafted). **#173** pushed `8a89b9b` answering the *posted* second read: the nine `created_at` shapes now all round-trip byte-identical (conductor re-ran the probe), the ADR-`date` case is in the suite, `_unparsed_timestamp_keys` added to `RESERVED_FIELD_NAMES`, lint clean, the two test files 60 passed; the one item the third read found after that message went out — a string `updated_at` crashing after the file is written — is still present (reproduced on `8a89b9b`); suite `-n 4` running; a short round-4 message drafted (`post/c173-round4.md`): merge after that one fix. **Running:** #202 redispatch (guard-in-head), #203 cold read with its live probe. Nothing dispatched.
