@@ -428,6 +428,26 @@ retro trigger; the retro says what the theme needed that it did not get
 (on 2026-09-18: a spike — the root cause of #46/#86/#87 was unknown when a
 worker was dispatched to fix it, and the fix took three passes).
 
+**The bounded second send-back is not a breaker trip — it is a fix at
+review.** When a second cold read on a theme returns findings that are
+(a) each reproduced by the conductor, (b) each a stated, local change (a few
+lines, one test), and (c) none a design decision or a widening of the theme,
+the conductor applies them itself in its review worktree — one commit per
+finding, `fix:` commits touching `tests/`, a cold read on the delta only —
+and flips the PR under the ordinary budgets. The breaker still trips when
+any finding is design-shaped, unbounded, or would be the theme's *third*
+pass, and always on a red `dev` push or a revert. Retro 6 (2026-09-20): four
+themes (#140, #145, #161, #180) tripped the old rule in one window; every one
+had a bounded, reproduced list, and every one waited on the maintainer's desk
+for hours while the loop dispatched nothing — the desk, not the worker, was
+the constraint. The second cold reads were not finding the first finding
+again; they were finding the surface the first fix *widened* (pull/push
+routed through the regex; the `k` cap clamped; the resolver made complete),
+which is exactly the class a fix-at-review closes and a third worker pass
+tends to widen further. The desk's `conductor_tick` entry records each
+fix-at-review with the findings and the delta cold read's verdict, so the
+retro can see whether the exception is being stretched.
+
 ## References
 
 - `poppendiecks` KB, `amplify-learning`: the value stream is knowledge, not

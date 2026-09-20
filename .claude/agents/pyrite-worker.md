@@ -42,7 +42,9 @@ Branch / Worktree / Pushed SHA / Commits / Closes / Evidence / Changed / Unsure 
 ```
 
 `Evidence` ends with **Regimes**: one line per regime the spec named (its
-`Regimes:` field) — the test that enters it and its red line — and a plain
+`Regimes:` field) — the test that enters it, its red line, and the surface it
+runs on (module, rendered component, `TestClient`, live server); a regime
+entered on a surface where the bug cannot appear is "not entered" — and a plain
 "not entered: <why>" for any you could not reach. A spec with no `Regimes:`
 field on a change to storage, the server, a repo-mutating script or a bounded
 loop is a gap to name in `Unsure`, not to fill in silently: on 2026-09-18 two

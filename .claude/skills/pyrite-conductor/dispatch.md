@@ -55,6 +55,21 @@ the review checks the list against the diff before the cold read. A regime
 the conductor cannot name is a question for the architect or a spike, not a
 line to leave blank.
 
+**A regime names the surface as well as the condition.** The test must run
+where the bug can appear, not only where the mechanism is: a web change is
+tested on a *rendered component* (`@testing-library/svelte`), never only the
+extracted module; a change to request lifetime, sessions, threads, startup or
+anything the threadpool touches is tested on a *live server*, never only
+`TestClient`, which runs handlers on the test thread and cannot show
+interleaving. Retro 7 (2026-09-20): two of two second passes had tests that
+exercised the mechanism on a surface where the bug could not appear — #202's
+nine module tests never rendered the component that clobbered the title on a
+same-route navigation; #203's `TestClient` tests passed at a design the live
+server rejected outright. Write the surface into the `Regimes:` line
+("same-route navigation — rendered layout"; "40 concurrent reads — live
+uvicorn"), and if the repo has no fixture for that surface, that is the first
+thing the theme builds.
+
 ## 2. Footprints and sequencing
 
 List the files each theme will modify (new files never conflict). Two
