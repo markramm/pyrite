@@ -65,6 +65,34 @@ app = typer.Typer(
 console = Console()
 
 
+def _version_callback(value: bool) -> None:
+    """Print the version and exit, before anything touches config or a KB.
+
+    Raising `typer.Exit()` here rather than returning is what makes
+    `pyrite --version` work with `no_args_is_help=True`: the callback runs
+    before Typer decides a bare invocation should print help and exit 2.
+    """
+    if value:
+        from pyrite import __version__
+
+        console.print(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        None,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the installed Pyrite version and exit.",
+    ),
+) -> None:
+    """Multi-KB research infrastructure for citizen journalists and AI agents."""
+
+
 def _get_svc():
     """Create a KBService instance for CLI commands.
 
