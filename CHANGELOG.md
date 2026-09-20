@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 "Operational" — see `kb/roadmap.md`.
 
+**The last release from `markramm/pyrite`.** The repository moves to the
+`pyrite-wiki` organization next, and 0.25 will be the first release from its
+new home. Eight of the 86 pull requests merged into this release came from
+outside contributors — @Voyagerroc-Lab, @YaoSong808, @fathirramadhan-web,
+@makiaveli1 and @zhongxiao-chang. That is 9%. Of the pull requests open as
+this release was cut, 11 of 13 are theirs.
+
+The move is not a rename. It is what makes pull request queues, contributor
+permissions and a home for community extensions possible — and the point at
+which Pyrite stops being one person's experiment.
+
 ### Security
 
 - **Private-KB content was readable over MCP-over-HTTP by any logged-in
