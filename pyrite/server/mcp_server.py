@@ -160,6 +160,101 @@ MAX_BULK_CREATE_ENTRIES = 50
 MAX_RESOURCE_LIST_ENTRIES = 200
 
 
+# ---------------------------------------------------------------------------
+# Per-KB read scoping (#201)
+# ---------------------------------------------------------------------------
+#
+# Every argument name by which an MCP tool can name a KB. `_dispatch_tool`
+# checks **every value** found under these names -- not the first -- so that
+# naming a readable KB alongside a private one buys nothing. That is the
+# `_resolve_kb_names` rule from #180, which exists because a request naming
+# two KBs was otherwise checked against one and served from the other.
+#
+# `kb_names` is plural: a *list* of KB names (the journalism-investigation
+# plugin's `investigation_search_all` and `investigation_find_duplicates`).
+# Every element is checked. This name was found by the registry gate in
+# `tests/test_mcp_tool_registry_is_scoped.py`, not by hand -- which is the
+# gate's whole point: a KB-bearing parameter under a name nobody wired up
+# reads private content and breaks no existing test.
+#
+# The gate pins this set. Adding a name here without adding it there (or
+# vice versa) fails `test_the_chokepoint_checks_every_name_this_file_claims`.
+KB_ARGUMENT_NAMES = ("kb_name", "kb", "source_kb", "target_kb", "center_kb", "kb_names")
+
+# The keyword by which `_dispatch_tool` hands the readable set to a handler
+# that spans KBs. A handler opts in by declaring it; handlers that do not --
+# including every plugin handler -- are called exactly as before, so no
+# reserved key ever leaks into a plugin's `args` dict.
+READABLE_KBS_KWARG = "readable_kbs"
+
+# Tools that serve no KB content and therefore need neither a KB refusal nor
+# a readable set. Everything NOT here and not filtering is refused for a
+# scoped caller -- fail closed, so a tool that spans KBs without being able
+# to filter cannot quietly serve private content. Each entry is a claim that
+# the tool reads nothing from any KB; the registry gate holds the matching
+# inventory with a reason apiece.
+NON_KB_CONTENT_TOOLS = frozenset(
+    {
+        "kb_stats",  # index-wide counts, as REST's /api/stats
+        "kb_index_job_status",  # background job state, keyed by job id
+        "kb_registry_remove",  # admin: registration, not content
+        "kb_registry_reindex",
+        "kb_registry_health",
+        "kb_registry_add",
+        "social_reputation",  # a per-user score, no KB rows
+    }
+)
+
+
+def _kbs_named_in(arguments: dict[str, Any]) -> list[str]:
+    """Every KB name the call names, under any of `KB_ARGUMENT_NAMES`.
+
+    Scalars and lists alike; blanks and non-strings are ignored (a missing
+    or malformed value names no KB, and the handler's own validation owns
+    the error message for it).
+    """
+    named: list[str] = []
+    for key in KB_ARGUMENT_NAMES:
+        value = arguments.get(key)
+        if isinstance(value, str):
+            if value:
+                named.append(value)
+        elif isinstance(value, list | tuple):
+            named.extend(v for v in value if isinstance(v, str) and v)
+    return named
+
+
+def _only_readable(rows: list[dict], readable_kbs: set[str] | None) -> list[dict]:
+    """Drop rows from KBs the caller may not read.
+
+    For the handlers whose storage call takes no `kb_names` (the
+    `find_by_*` finders on `PyriteDB`): every row carries `kb_name`, so the
+    filter is exact. Widening the storage signatures would be the tidier fix
+    and belongs with them, not here.
+
+    **Known imprecision, deliberate:** those queries apply `LIMIT` in SQL,
+    so filtering afterwards can return fewer than `limit` rows for a scoped
+    caller -- a short page, never a leak. Counts below are computed from the
+    filtered list, so they stay truthful about what was returned.
+    """
+    if readable_kbs is None:
+        return rows
+    return [r for r in rows if r.get("kb_name") in readable_kbs]
+
+
+def _kb_not_found(kb_name: str) -> dict:
+    """The refusal for a KB the caller may not read.
+
+    Byte-identical to what MCP already returns for a KB that genuinely does
+    not exist (`_kb_schema`, `_kb_manage`). Deliberately **not** a
+    "forbidden": a private KB's existence is itself private, so a caller must
+    not be able to tell the two apart and probe for which private KBs exist.
+    This is the MCP spelling of `api.kb_not_found`, whose REST counterpart
+    404s for the same reason.
+    """
+    return _error("NOT_FOUND", f"KB '{kb_name}' not found")
+
+
 class PyriteMCPServer:
     """
     Three-tier MCP Server for pyrite.
@@ -296,9 +391,17 @@ class PyriteMCPServer:
     # Read handlers
     # =========================================================================
 
-    def _kb_list(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List all knowledge bases."""
+    def _kb_list(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """List all knowledge bases, limited to the ones the caller may read.
+
+        The listing *is* the leak here: naming a private KB reveals its
+        existence even with no entry ever returned.
+        """
         kbs_data = self.registry.list_kbs()
+        if readable_kbs is not None:
+            kbs_data = [k for k in kbs_data if k.get("name") in readable_kbs]
         kbs = [
             {
                 "name": kb["name"],
@@ -313,8 +416,17 @@ class PyriteMCPServer:
         ]
         return {"knowledge_bases": kbs}
 
-    def _kb_search(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Full-text search with optional semantic/hybrid mode."""
+    def _kb_search(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Full-text search with optional semantic/hybrid mode.
+
+        With `kb_name` given, the chokepoint has already refused it if it is
+        unreadable. With `kb_name` omitted the search spans every KB, so the
+        readable set goes to `SearchService.search(kb_names=...)`, which
+        restricts *before* the limit is applied -- so `count` counts only
+        what the caller may see. Same shape as `endpoints/search.py`.
+        """
         query = args.get("query", "")
         limit = args.get("limit", 20)
         fields = args.get("fields")
@@ -328,6 +440,7 @@ class PyriteMCPServer:
             results = self.search_svc.search(
                 query=query,
                 kb_name=args.get("kb_name"),
+                kb_names=None if args.get("kb_name") else readable_kbs,
                 entry_type=args.get("entry_type"),
                 tags=args.get("tags"),
                 date_from=args.get("date_from"),
@@ -373,8 +486,17 @@ class PyriteMCPServer:
             payload["warnings"] = warnings
         return payload
 
-    def _kb_get(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get entry by ID."""
+    def _kb_get(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Get entry by ID.
+
+        With `kb_name` omitted, `KBService.get_entry` walks every KB in
+        config order and returns the first hit -- so omitting it was itself a
+        way to reach private content. A hit in an unreadable KB is reported
+        as a plain entry miss rather than a KB refusal: naming the KB would
+        reveal which private KB holds the entry.
+        """
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         fields = args.get("fields")
@@ -382,6 +504,8 @@ class PyriteMCPServer:
         body_limit = args.get("body_limit", DEFAULT_BODY_CHUNK)
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
+        if result and readable_kbs is not None and result.get("kb_name") not in readable_kbs:
+            result = None
 
         if not result:
             return _error(
@@ -397,14 +521,22 @@ class PyriteMCPServer:
 
         return {"entry": result}
 
-    def _kb_read_body(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Read a chunk of an entry's body text. Lightweight continuation tool."""
+    def _kb_read_body(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Read a chunk of an entry's body text. Lightweight continuation tool.
+
+        This one serves body text directly, so the kb-omitted lookup walking
+        every KB was the most direct read of private content there was.
+        """
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         offset = args.get("body_offset", 0)
         limit = min(args.get("body_limit", DEFAULT_BODY_CHUNK), MAX_BODY_CHUNK)
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
+        if result and readable_kbs is not None and result.get("kb_name") not in readable_kbs:
+            result = None
         if not result:
             return _error(
                 "NOT_FOUND",
@@ -423,8 +555,14 @@ class PyriteMCPServer:
             "has_more": offset + len(chunk) < body_len,
         }
 
-    def _kb_timeline(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get timeline events."""
+    def _kb_timeline(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Get timeline events across every readable KB.
+
+        `count` and `has_more` below are computed from the filtered list, so
+        they never reveal how many private events matched.
+        """
         limit = args.get("limit", 50)
         results = self.svc.get_timeline(
             date_from=args.get("date_from"),
@@ -432,6 +570,7 @@ class PyriteMCPServer:
             min_importance=args.get("min_importance", 1),
             limit=limit,
             offset=args.get("offset", 0),
+            kb_names=readable_kbs,
         )
         return {
             "count": len(results),
@@ -454,18 +593,26 @@ class PyriteMCPServer:
             "backlinks": backlinks,
         }
 
-    def _kb_tags(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get all tags with counts."""
+    def _kb_tags(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Get all tags with counts.
+
+        Tag *names* are KB content: `confidential/operation-zebra` says a
+        great deal without a single entry being returned.
+        """
         kb_name = args.get("kb_name")
         prefix = args.get("prefix") or None
+        kb_names = None if kb_name else readable_kbs
 
         if args.get("tree"):
-            tree = self.svc.get_tag_tree(kb_name=kb_name)
+            tree = self.svc.get_tag_tree(kb_name=kb_name, kb_names=kb_names)
             return {"tree": tree}
 
         limit = args.get("limit", 100)
         tag_dicts = self.svc.get_tags(
             kb_name=kb_name,
+            kb_names=kb_names,
             limit=limit,
             offset=args.get("offset", 0),
             prefix=prefix,
@@ -492,8 +639,15 @@ class PyriteMCPServer:
         schema = kb_config.kb_schema
         return schema.to_agent_schema()
 
-    def _kb_qa_validate(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Validate KB structural integrity."""
+    def _kb_qa_validate(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Validate KB structural integrity.
+
+        The `validate_all` branch (no `kb_name`) sweeps every KB and reports
+        per-entry issues -- entry ids and titles from KBs the caller may not
+        read. Restricted to the readable set.
+        """
         qa = self.qa_svc
 
         entry_id = args.get("entry_id")
@@ -508,7 +662,7 @@ class PyriteMCPServer:
             result = qa.validate_kb(kb_name)
             issues = result["issues"]
         else:
-            result = qa.validate_all()
+            result = qa.validate_all(kb_names=readable_kbs)
             issues = []
             for kb in result["kbs"]:
                 issues.extend(kb["issues"])
@@ -530,10 +684,15 @@ class PyriteMCPServer:
             "truncated": truncated,
         }
 
-    def _kb_qa_status(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _kb_qa_status(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Get QA status dashboard with coverage stats."""
         qa = self.qa_svc
-        status = qa.get_status(kb_name=args.get("kb_name"))
+        status = qa.get_status(
+            kb_name=args.get("kb_name"),
+            kb_names=None if args.get("kb_name") else readable_kbs,
+        )
 
         # Add coverage stats if a specific KB is requested
         kb_name = args.get("kb_name")
@@ -542,8 +701,16 @@ class PyriteMCPServer:
 
         return status
 
-    def _kb_batch_read(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Fetch multiple entries in one call."""
+    def _kb_batch_read(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Fetch multiple entries in one call.
+
+        The KBs are named inside the `entries` array, not by a KB parameter,
+        so the chokepoint cannot see them. Unreadable pairs are dropped and
+        fall through to the existing `not_found` list: an *error* here would
+        itself reveal that the KB exists. Same rule as `/api/entries/batch`.
+        """
         entries_spec = args.get("entries", [])
         fields = args.get("fields")
         body_offset = args.get("body_offset", 0)
@@ -581,6 +748,9 @@ class PyriteMCPServer:
                 )
 
         ids = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
+        if readable_kbs is not None:
+            # Items in KBs the caller may not read are reported as not found.
+            ids = [(eid, kb) for eid, kb in ids if kb in readable_kbs]
         results = self.svc.get_entries(ids)
 
         if fields:
@@ -589,8 +759,13 @@ class PyriteMCPServer:
             results = [_chunk_body(r, offset=body_offset, limit=body_limit) for r in results]
 
         found_ids = {(r["id"], r["kb_name"]) for r in results}
+        # From what was *requested*, not from the filtered `ids`: a pair
+        # dropped by scoping must appear here, indistinguishable from one
+        # that simply does not exist. Dropping it from the response entirely
+        # would be its own signal.
+        requested = [(e["entry_id"], e["kb_name"]) for e in entries_spec]
         not_found = [
-            {"entry_id": eid, "kb_name": kb} for eid, kb in ids if (eid, kb) not in found_ids
+            {"entry_id": eid, "kb_name": kb} for eid, kb in requested if (eid, kb) not in found_ids
         ]
 
         return {
@@ -599,8 +774,15 @@ class PyriteMCPServer:
             "not_found": not_found,
         }
 
-    def _kb_list_entries(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Browse entries with optional filters and pagination."""
+    def _kb_list_entries(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Browse entries with optional filters and pagination.
+
+        `total` (and therefore `has_more`) is counted over the same readable
+        set as the rows, so the pagination metadata cannot reveal entries the
+        listing itself withheld.
+        """
         kb_name = args.get("kb_name")
         entry_type = args.get("entry_type")
         tag = args.get("tag")
@@ -610,8 +792,10 @@ class PyriteMCPServer:
         offset = args.get("offset", 0)
         fields = args.get("fields")
 
+        kb_names = None if kb_name else readable_kbs
         entries = self.svc.list_entries(
             kb_name=kb_name,
+            kb_names=kb_names,
             entry_type=entry_type,
             tag=tag,
             sort_by=sort_by,
@@ -619,7 +803,9 @@ class PyriteMCPServer:
             limit=limit,
             offset=offset,
         )
-        total = self.svc.count_entries(kb_name=kb_name, entry_type=entry_type, tag=tag)
+        total = self.svc.count_entries(
+            kb_name=kb_name, kb_names=kb_names, entry_type=entry_type, tag=tag
+        )
 
         if fields:
             entries = [_project_fields(e, fields) for e in entries]
@@ -641,7 +827,9 @@ class PyriteMCPServer:
         except PyriteError as e:
             return _error("OPERATION_FAILED", str(e))
 
-    def _kb_recent(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _kb_recent(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Get recently changed entries."""
         kb_name = args.get("kb_name")
         entry_type = args.get("entry_type")
@@ -651,6 +839,7 @@ class PyriteMCPServer:
 
         entries = self.svc.list_entries(
             kb_name=kb_name,
+            kb_names=None if kb_name else readable_kbs,
             entry_type=entry_type,
             sort_by="updated_at",
             sort_order="desc",
@@ -707,7 +896,9 @@ class PyriteMCPServer:
     # Protocol query handlers (ADR-0017)
     # =========================================================================
 
-    def _kb_find_by_assignee(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _kb_find_by_assignee(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Find entries assigned to a specific agent/user."""
         assignee = args.get("assignee", "")
         if not assignee:
@@ -719,9 +910,12 @@ class PyriteMCPServer:
             limit=min(args.get("limit", 50), 200),
             offset=args.get("offset", 0),
         )
+        rows = _only_readable(rows, readable_kbs)
         return {"entries": rows, "count": len(rows), "assignee": assignee}
 
-    def _kb_find_overdue(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _kb_find_overdue(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Find entries with overdue due_date."""
         rows = self.db.find_overdue(
             as_of=args.get("as_of"),
@@ -729,9 +923,12 @@ class PyriteMCPServer:
             limit=min(args.get("limit", 50), 200),
             offset=args.get("offset", 0),
         )
+        rows = _only_readable(rows, readable_kbs)
         return {"entries": rows, "count": len(rows)}
 
-    def _kb_find_by_status(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _kb_find_by_status(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Find entries by status across all types."""
         status = args.get("status", "")
         if not status:
@@ -743,9 +940,12 @@ class PyriteMCPServer:
             limit=min(args.get("limit", 50), 200),
             offset=args.get("offset", 0),
         )
+        rows = _only_readable(rows, readable_kbs)
         return {"entries": rows, "count": len(rows), "status": status}
 
-    def _kb_find_by_location(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _kb_find_by_location(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Find entries by location (substring match)."""
         location = args.get("location", "")
         if not location:
@@ -756,16 +956,26 @@ class PyriteMCPServer:
             limit=min(args.get("limit", 50), 200),
             offset=args.get("offset", 0),
         )
+        rows = _only_readable(rows, readable_kbs)
         return {"entries": rows, "count": len(rows), "location": location}
 
-    def _list_edge_types(self, args: dict[str, Any]) -> dict[str, Any]:
-        """List available edge types with their endpoint schemas."""
+    def _list_edge_types(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """List available edge types with their endpoint schemas.
+
+        Iterates config directly, so with `kb_name` omitted it names every
+        KB and counts its entries -- a private KB's name and size, without
+        an entry ever being returned.
+        """
         kb_name = args.get("kb_name")
 
         edge_types = []
 
         for kb_config in self.config.all_kbs():
             if kb_name and kb_config.name != kb_name:
+                continue
+            if readable_kbs is not None and kb_config.name not in readable_kbs:
                 continue
 
             schema = kb_config.kb_schema
@@ -1036,10 +1246,14 @@ class PyriteMCPServer:
     # Task handlers
     # =========================================================================
 
-    def _task_list(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _task_list(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """List tasks with filters."""
+        kb_name = args.get("kb_name")
         tasks = self.task_svc.list_tasks(
-            kb_name=args.get("kb_name"),
+            kb_name=kb_name,
+            kb_names=None if kb_name else readable_kbs,
             status=args.get("status"),
             assignee=args.get("assignee"),
             parent=args.get("parent"),
@@ -1047,63 +1261,80 @@ class PyriteMCPServer:
         return {"count": len(tasks), "tasks": tasks}
 
     def _resolve_task_kb(
-        self, task_id: str, kb_name: str | None
+        self, task_id: str, kb_name: str | None, readable_kbs: set[str] | None = None
     ) -> tuple[str, dict[str, Any] | None]:
         """Resolve the KB a task lives in. Returns (kb_name, error).
 
         The task-graph service methods need a concrete kb_name, but the tool
         schemas make it optional, so look the task up when it is omitted.
+
+        That lookup spans every KB, so it is the shared chokepoint for the
+        four task-graph tools: a task resolved into a KB the caller may not
+        read is reported as a plain task miss, identical to a task id that
+        does not exist. Naming the KB would reveal where the task lives.
         """
         task = self.task_svc.get_task(task_id, kb_name)
+        if task and readable_kbs is not None and task.get("kb_name") not in readable_kbs:
+            task = None
         if not task:
             return "", _error("NOT_FOUND", f"Task '{task_id}' not found")
         return kb_name or task.get("kb_name", ""), None
 
-    def _task_subtree(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _task_subtree(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Get all descendants of a task."""
         task_id = args.get("task_id")
         if not task_id:
             return _error("MISSING_PARAMETER", "task_id is required")
-        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"))
+        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"), readable_kbs)
         if err:
             return err
         result = self.task_svc.get_subtree(task_id, kb_name)
         return {"task_id": task_id, "count": len(result), "subtree": result}
 
-    def _task_ancestors(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _task_ancestors(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Get parent chain from task to root."""
         task_id = args.get("task_id")
         if not task_id:
             return _error("MISSING_PARAMETER", "task_id is required")
-        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"))
+        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"), readable_kbs)
         if err:
             return err
         result = self.task_svc.get_ancestors(task_id, kb_name)
         return {"task_id": task_id, "count": len(result), "ancestors": result}
 
-    def _task_blocked_by(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _task_blocked_by(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Get transitive dependency chain."""
         task_id = args.get("task_id")
         if not task_id:
             return _error("MISSING_PARAMETER", "task_id is required")
-        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"))
+        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"), readable_kbs)
         if err:
             return err
         result = self.task_svc.get_blocked_by(task_id, kb_name)
         return {"task_id": task_id, "count": len(result), "blocked_by": result}
 
-    def _task_critical_path(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _task_critical_path(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Find the longest blocking dependency chain."""
         task_id = args.get("task_id")
         if not task_id:
             return _error("MISSING_PARAMETER", "task_id is required")
-        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"))
+        kb_name, err = self._resolve_task_kb(task_id, args.get("kb_name"), readable_kbs)
         if err:
             return err
         result = self.task_svc.critical_path(task_id, kb_name)
         return {"task_id": task_id, "chain_length": len(result), "critical_path": result}
 
-    def _task_status(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _task_status(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Get task details with children, deps, evidence."""
         import json as _json
 
@@ -1111,6 +1342,8 @@ class PyriteMCPServer:
         kb_name = args.get("kb_name")
 
         task = self.task_svc.get_task(task_id, kb_name)
+        if task and readable_kbs is not None and task.get("kb_name") not in readable_kbs:
+            task = None
         if not task:
             return _error("NOT_FOUND", f"Task '{task_id}' not found")
 
@@ -1121,7 +1354,11 @@ class PyriteMCPServer:
             except (ValueError, TypeError):
                 meta = {}
 
-        children_list = self.task_svc.list_tasks(kb_name=kb_name, parent=task_id)
+        children_list = self.task_svc.list_tasks(
+            kb_name=kb_name,
+            kb_names=None if kb_name else readable_kbs,
+            parent=task_id,
+        )
         children = [
             {"id": c["id"], "title": c["title"], "status": c["status"]} for c in children_list
         ]
@@ -1504,8 +1741,21 @@ class PyriteMCPServer:
             },
         }
 
-    def _get_prompt(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        """Dispatch to the appropriate prompt handler."""
+    def _get_prompt(
+        self, name: str, arguments: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Dispatch to the appropriate prompt handler.
+
+        A **third** KB-content chokepoint, alongside `_dispatch_tool` and
+        `_read_resource`: `prompts/get` embeds whole entries -- bodies and
+        all -- in the prompt text it returns. `summarize_entry`,
+        `find_connections` and `daily_briefing` all read across every KB, so
+        they are scoped here on the same per-connection readable set.
+
+        (Not among #201's nine criteria, which name tools and resources.
+        Found while wiring those two, and closed rather than left as a known
+        hole in a security release.)
+        """
         handlers = {
             "research_topic": self._prompt_research_topic,
             "summarize_entry": self._prompt_summarize_entry,
@@ -1515,6 +1765,14 @@ class PyriteMCPServer:
         handler = handlers.get(name)
         if not handler:
             return _error("OPERATION_FAILED", f"Unknown prompt: {name}")
+        if readable_kbs is not None:
+            for kb_name in _kbs_named_in(arguments):
+                if kb_name not in readable_kbs:
+                    return _kb_not_found(kb_name)
+        import inspect
+
+        if READABLE_KBS_KWARG in inspect.signature(handler).parameters:
+            return handler(arguments, readable_kbs=readable_kbs)
         return handler(arguments)
 
     def _prompt_research_topic(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -1547,12 +1805,16 @@ class PyriteMCPServer:
             ]
         }
 
-    def _prompt_summarize_entry(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _prompt_summarize_entry(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Fetch an entry and generate a summary prompt."""
         entry_id = args.get("entry_id", "")
         kb_name = args.get("kb_name")
 
         entry = self.svc.get_entry(entry_id, kb_name=kb_name)
+        if entry and readable_kbs is not None and entry.get("kb_name") not in readable_kbs:
+            entry = None
         if not entry:
             return {
                 "messages": [
@@ -1582,13 +1844,23 @@ class PyriteMCPServer:
             ]
         }
 
-    def _prompt_find_connections(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _prompt_find_connections(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Fetch two entries and generate a connections analysis prompt."""
         entry_a_id = args.get("entry_a", "")
         entry_b_id = args.get("entry_b", "")
 
-        entry_a = self.svc.get_entry(entry_a_id)
-        entry_b = self.svc.get_entry(entry_b_id)
+        def _readable(entry):
+            if entry and readable_kbs is not None and entry.get("kb_name") not in readable_kbs:
+                return None
+            return entry
+
+        # Both lookups span every KB (no kb parameter at all), so each is
+        # filtered; an unreadable hit reads as "not found", exactly as a
+        # missing id does.
+        entry_a = _readable(self.svc.get_entry(entry_a_id))
+        entry_b = _readable(self.svc.get_entry(entry_b_id))
 
         entry_a_text = (
             json.dumps(entry_a, separators=(",", ":"), default=str)
@@ -1617,7 +1889,9 @@ class PyriteMCPServer:
             ]
         }
 
-    def _prompt_daily_briefing(self, args: dict[str, Any]) -> dict[str, Any]:
+    def _prompt_daily_briefing(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
         """Generate a briefing prompt from recent timeline events."""
         from datetime import datetime, timedelta
 
@@ -1625,7 +1899,7 @@ class PyriteMCPServer:
         date_to = datetime.now().strftime("%Y-%m-%d")
         date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
-        events = self.svc.get_timeline(date_from=date_from, date_to=date_to)
+        events = self.svc.get_timeline(date_from=date_from, date_to=date_to, kb_names=readable_kbs)
         events = events[:MAX_TIMELINE_EVENTS]
 
         if events:
@@ -1682,10 +1956,24 @@ class PyriteMCPServer:
             },
         ]
 
-    def _read_resource(self, uri: str) -> dict[str, Any]:
-        """Read a resource by URI and return contents."""
+    def _read_resource(self, uri: str, *, readable_kbs: set[str] | None = None) -> dict[str, Any]:
+        """Read a resource by URI and return contents.
+
+        The **second** KB-content chokepoint: resources do not pass through
+        `_dispatch_tool`, so scoping them is a separate act. Reached from the
+        same per-connection closure in `build_sdk_server`, so it gets the
+        same readable set.
+
+        `resources/read` is broken on every transport today (#217: this
+        returns a `ReadResourceResult` where the SDK expects an iterable of
+        `ReadResourceContents`), so nothing reaches here over a real session
+        yet. Scoped anyway, so it does not ship unscoped the moment #217
+        lands (#201, criterion 6).
+        """
         if uri == f"{URI_SCHEME}kbs":
             kbs_data = self.svc.list_kbs()
+            if readable_kbs is not None:
+                kbs_data = [k for k in kbs_data if k.get("name") in readable_kbs]
             return {
                 "contents": [
                     {
@@ -1699,6 +1987,8 @@ class PyriteMCPServer:
         # pyrite://kbs/{name}/entries
         if uri.startswith(f"{URI_SCHEME}kbs/") and uri.endswith("/entries"):
             kb_name = uri[len(f"{URI_SCHEME}kbs/") : -len("/entries")]
+            if readable_kbs is not None and kb_name not in readable_kbs:
+                return _kb_not_found(kb_name)
             entries = self.db.list_entries(kb_name=kb_name, limit=MAX_RESOURCE_LIST_ENTRIES)
             return {
                 "contents": [
@@ -1714,6 +2004,12 @@ class PyriteMCPServer:
         if uri.startswith(f"{URI_SCHEME}entries/"):
             entry_id = uri[len(f"{URI_SCHEME}entries/") :]
             entry = self.svc.get_entry(entry_id)
+            if entry and readable_kbs is not None and entry.get("kb_name") not in readable_kbs:
+                # The lookup walks every KB, so it can land in one the caller
+                # may not read. Reported as a plain entry miss, not as a KB
+                # refusal: naming the KB here would reveal which private KB
+                # the entry lives in.
+                entry = None
             if not entry:
                 return _error("NOT_FOUND", f"Entry '{entry_id}' not found")
             return {
@@ -1732,6 +2028,28 @@ class PyriteMCPServer:
     # MCP Protocol
     # =========================================================================
 
+    def _handler_takes_readable_kbs(self, name: str) -> bool:
+        """Does this tool's handler opt in to receiving the readable set?
+
+        Introspected once per tool and cached: a handler that spans KBs
+        declares `readable_kbs` and gets it; every other handler -- including
+        all plugin handlers -- is called with `args` alone, unchanged. Opting
+        in by signature rather than by a name list keeps the two from
+        drifting, and injecting a reserved key into `arguments` was rejected
+        for the same reason: a plugin handler that iterates its args would
+        see it.
+        """
+        cache = self.__dict__.setdefault("_scope_aware_handlers", {})
+        if name not in cache:
+            import inspect
+
+            try:
+                params = inspect.signature(self.tools[name]["handler"]).parameters
+                cache[name] = READABLE_KBS_KWARG in params
+            except (TypeError, ValueError):  # pragma: no cover - exotic callables
+                cache[name] = False
+        return cache[name]
+
     def get_tools_list(self) -> list[dict[str, Any]]:
         """Return list of available tools in MCP format."""
         return [
@@ -1740,9 +2058,26 @@ class PyriteMCPServer:
         ]
 
     def _dispatch_tool(
-        self, name: str, arguments: dict[str, Any], *, client_id: str = "local"
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        *,
+        client_id: str = "local",
+        readable_kbs: set[str] | None = None,
     ) -> dict[str, Any]:
-        """Execute a tool and return result."""
+        """Execute a tool and return result.
+
+        `readable_kbs` is the caller's readable set, or None for an unscoped
+        caller (a global admin, an operator API key, auth disabled, or local
+        stdio). It arrives per call, from the per-connection closure
+        `build_sdk_server` creates -- never from state on this instance,
+        which is shared by every caller at this tier.
+
+        This is the one runtime chokepoint every tool passes through, so it
+        is where scoping is enforced: refuse any KB the call names that the
+        caller may not read, then hand the set to the cross-KB handlers that
+        declare they take it.
+        """
         if name not in self.tools:
             return _error(
                 "UNKNOWN_TOOL",
@@ -1762,8 +2097,43 @@ class PyriteMCPServer:
                     retryable=True,
                 )
 
+        # Per-KB read scoping. Checked before the handler runs, and for
+        # EVERY KB the call names -- naming a readable KB alongside a
+        # private one must buy nothing.
+        named_kbs = _kbs_named_in(arguments) if readable_kbs is not None else []
+        if readable_kbs is not None:
+            for kb_name in named_kbs:
+                if kb_name not in readable_kbs:
+                    return _kb_not_found(kb_name)
+
+        takes_readable = readable_kbs is not None and self._handler_takes_readable_kbs(name)
+
+        # Fail closed. A scoped caller reaching a tool that names no KB, does
+        # not filter, and is not declared content-free would be served across
+        # every KB in the index -- which is exactly the leak this work closes.
+        # Today this is the journalism-investigation plugin's two cross-KB
+        # tools, whose handlers live outside this file's footprint; refusing
+        # is the honest answer until they take a readable set (#201: the
+        # alternative, letting them through, is the bug).
+        if (
+            readable_kbs is not None
+            and not named_kbs
+            and not takes_readable
+            and name not in NON_KB_CONTENT_TOOLS
+        ):
+            return _error(
+                "NOT_FOUND",
+                f"Tool '{name}' is not available",
+                suggestion="Name a knowledge base you can read, or use kb_search",
+            )
+
         try:
             handler = self.tools[name]["handler"]
+            if takes_readable:
+                # A cross-KB handler: nothing was named to refuse, so it must
+                # filter instead. Only handlers that declare the keyword get
+                # it, so plugin handlers are called exactly as before.
+                return handler(arguments, readable_kbs=readable_kbs)
             return handler(arguments)
         except PyriteError as e:
             # A refused request, not a crash: the service said no for a reason
@@ -1777,8 +2147,17 @@ class PyriteMCPServer:
             logger.exception("Tool %s failed with args %s", name, arguments)
             return _error("INTERNAL", str(e), retryable=True)
 
-    def build_sdk_server(self, *, client_id: str = "stdio"):
+    def build_sdk_server(self, *, client_id: str = "stdio", readable_kbs: set[str] | None = None):
         """Build an mcp.server.Server wired to this instance's business logic.
+
+        Called **per connection**, and it constructs a fresh
+        `mcp.server.Server` every time, registering closures over the
+        caller's identity. That is the seam per-KB scoping rides: this
+        `PyriteMCPServer` is cached per *tier* and shared by every caller at
+        that tier, so nothing caller-specific may be stored on it -- but the
+        closures below are per connection, which is where `client_id`
+        already lives. The per-tier cache therefore needs no change at all
+        (#201); its key stays `tier`.
 
         Parameters
         ----------
@@ -1786,6 +2165,12 @@ class PyriteMCPServer:
             Identifier for the connected client, used for rate limiting
             and audit logging. Defaults to "stdio" for local CLI usage.
             SSE transport passes the authenticated username.
+        readable_kbs : set[str] | None
+            The KBs this connection's caller may read, as resolved by
+            `api.readable_kbs_for_user`. None means unscoped -- a global
+            admin, an operator API key, auth disabled -- and is the default,
+            so `run_stdio()` (local CLI, one user, their own machine) is
+            unchanged.
         """
         from mcp.server import Server
         from mcp.types import (
@@ -1805,6 +2190,7 @@ class PyriteMCPServer:
 
         mcp_server = self  # capture for closures
         _client_id = client_id  # capture for closures
+        _readable_kbs = readable_kbs  # capture for closures -- per connection, never on self
 
         @sdk.list_tools()
         async def _list_tools():
@@ -1819,7 +2205,9 @@ class PyriteMCPServer:
 
         @sdk.call_tool()
         async def _call_tool(name: str, arguments: dict):
-            result = mcp_server._dispatch_tool(name, arguments or {}, client_id=_client_id)
+            result = mcp_server._dispatch_tool(
+                name, arguments or {}, client_id=_client_id, readable_kbs=_readable_kbs
+            )
             return [
                 TextContent(
                     type="text", text=json.dumps(result, separators=(",", ":"), default=str)
@@ -1848,7 +2236,7 @@ class PyriteMCPServer:
         async def _get_prompt(name: str, arguments: dict[str, str] | None):
             if name not in mcp_server.prompts:
                 raise ValueError(f"Unknown prompt: {name}")
-            result = mcp_server._get_prompt(name, arguments or {})
+            result = mcp_server._get_prompt(name, arguments or {}, readable_kbs=_readable_kbs)
             if "error" in result:
                 raise ValueError(result["error"])
             return GetPromptResult(
@@ -1887,7 +2275,7 @@ class PyriteMCPServer:
 
         @sdk.read_resource()
         async def _read_resource(uri: AnyUrl):
-            result = mcp_server._read_resource(str(uri))
+            result = mcp_server._read_resource(str(uri), readable_kbs=_readable_kbs)
             if "error" in result:
                 raise ValueError(result["error"])
             return ReadResourceResult(

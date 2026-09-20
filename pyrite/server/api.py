@@ -667,8 +667,55 @@ async def resolve_effective_kb_role(
     return auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
 
 
+def readable_kbs_for_user(
+    config: PyriteConfig,
+    db: PyriteDB,
+    user_id: int | None,
+    role: str | None,
+    *,
+    scoped: bool = True,
+) -> set[str] | None:
+    """The KBs a caller may read, or None when the caller is not scoped.
+
+    The one rule, framework-free: no `Request`, so the MCP transport can
+    apply exactly what the REST routes apply. `readable_kbs()` below is a
+    thin Request-reading wrapper over it, and `mcp_routes._resolve_bearer_auth`
+    is the other caller. **Do not add a second implementation** -- two copies
+    drift, and a grant honoured on one surface but refused on the other is
+    the bug this whole shape exists to prevent (#201).
+
+    Not scoped (returns None): a global admin, and any caller with no user
+    identity to scope by -- an operator API key, or auth disabled entirely.
+    Callers that know the identity question is already settled pass
+    `scoped=False` to say so.
+
+    Scoped: `user_id` is resolved per KB through the same chain the REST
+    routes use (explicit grant → KB default_role → the user's global role),
+    and the KB is readable when that effective role is at least "read".
+    `user_id=None` with `scoped=True` is the anonymous visitor on an
+    auth-enabled instance: the same walk with no grants.
+    """
+    if role == "admin" or not scoped:
+        return None
+
+    from ..services.auth_service import AuthService
+
+    auth_service = AuthService(db, config.settings.auth)
+    result: set[str] = set()
+    for kb in config.all_kbs():
+        default_role = resolve_kb_default_role(config, db, kb.name)
+        effective = auth_service.get_kb_role(user_id, kb.name, default_role)
+        if effective is not None and TIER_LEVELS.get(effective, -1) >= TIER_LEVELS["read"]:
+            result.add(kb.name)
+    return result
+
+
 async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> set[str] | None:
     """The KBs this caller may read, or None when the caller is not scoped.
+
+    Request-reading wrapper over `readable_kbs_for_user`: it pulls the
+    identity off `request.state` and caches the answer on the request. The
+    rule itself lives in the helper, shared with the MCP transport.
 
     Not scoped: global admins, and API-key callers (an API key is the
     operator's credential, not a peer's). A logged-in user is scoped to the KBs
@@ -683,20 +730,14 @@ async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> 
     role = getattr(request.state, "api_role", None)
     auth_user = getattr(request.state, "auth_user", None)
     anonymous = getattr(request.state, "anonymous", False)
-    result: set[str] | None
-    if role == "admin" or (not auth_user and not anonymous):
-        result = None  # an operator API key, or auth disabled
-    else:
-        from ..services.auth_service import AuthService
-
-        auth_service = AuthService(db, config.settings.auth)
-        user_id = auth_user["id"] if auth_user else None
-        result = set()
-        for kb in config.all_kbs():
-            default_role = resolve_kb_default_role(config, db, kb.name)
-            effective = auth_service.get_kb_role(user_id, kb.name, default_role)
-            if effective is not None and TIER_LEVELS.get(effective, -1) >= TIER_LEVELS["read"]:
-                result.add(kb.name)
+    result = readable_kbs_for_user(
+        config,
+        db,
+        auth_user["id"] if auth_user else None,
+        role,
+        # An operator API key, or auth disabled: no user identity to scope by.
+        scoped=bool(auth_user or anonymous),
+    )
     request.state.readable_kbs = result
     return result
 

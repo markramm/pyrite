@@ -11,6 +11,24 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Security
 
+- **Private-KB content was readable over MCP-over-HTTP by any logged-in
+  user.** The `/mcp` mount resolved a global tier from the caller's
+  credential and applied no per-KB read scoping anywhere in its path — the
+  one KB-content surface the REST-side fix did not reach. A plain read-tier
+  user could read entry **bodies** from a KB they had no grant on: `kb_get`,
+  `kb_read_body`, `kb_list_entries` and `kb_search` all served it, and
+  `kb_list` named the KB. MCP now resolves the caller's readable set per
+  connection, through the same helper the REST routes use, and enforces it
+  at all three content chokepoints: tool dispatch, resources and prompts. A
+  KB the caller may not read is reported exactly as one that does not exist,
+  so its existence stays private. Anonymous callers were never exposed —
+  `/mcp` already rejected them. Operator API keys, global admins and local
+  stdio are unscoped, unchanged. Tools that span every KB and cannot yet
+  filter (45 extension tools taking an *optional* `kb_name`) are refused for
+  a scoped caller rather than served across the whole index; naming a
+  readable KB makes them work as before.
+  ([#201](https://github.com/markramm/pyrite/issues/201))
+
 - **`web/` dependency bump closes 16 of 19 open Dependabot alerts.** `vite`
   7.3.1 → 7.3.6 (range pinned to `^6.0.0 || ^7.3.5` so it cannot resolve
   below the patched line; GHSA-4w7w-66w2-5vf9, GHSA-v2wj-q39q-566r,

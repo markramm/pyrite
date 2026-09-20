@@ -27,11 +27,12 @@ genuinely not covered and belong to part 2.
 
 **What the walk cannot see -- recorded, not reviewed.** It visits
 `APIRoute`s under `/api` only. Two surfaces are therefore absent rather
-than approved, and are listed in `UNREACHABLE_BY_THIS_WALK` below:
-`/mcp` is a `Mount` (a whole sub-application: MCP over HTTP resolves a
-global tier and has no per-KB scoping anywhere) and `/ws` is a
-`WebSocketRoute`. Neither is a `FastAPI` route object with a dependant
-tree, so nothing here says anything about them.
+than approved, and are listed in `UNREACHABLE_BY_THIS_WALK` below, each
+with what covers it elsewhere: `/mcp` is a `Mount` (a whole
+sub-application) and `/ws` is a `WebSocketRoute`. Neither is a `FastAPI`
+route object with a dependant tree, so nothing *here* says anything about
+them. `/mcp` is now scoped and covered by its own pair of tests (#201);
+`/ws` is still unscoped and tracked as #218.
 
 **How scoping is detected: the dependency tree, not the handler body.**
 Every route's `route.dependant` is walked recursively and each
@@ -113,15 +114,30 @@ SECONDARY_KB_PARAMETERS: dict[tuple[str, str], dict[str, str]] = {
 }
 
 # Surfaces this walk structurally cannot reach: not `APIRoute`s, so they
-# have no dependant tree to inspect. Recorded here as *unreviewed*, so
-# their absence from the results above is never read as approval.
+# have no dependant tree to inspect. Each entry says what covers it
+# *elsewhere*, or that nothing does -- so their absence from the results
+# above is never read as approval.
 UNREACHABLE_BY_THIS_WALK = {
     "/mcp": (
-        "Mount (a sub-application, mcp_routes.py). MCP over HTTP resolves a "
-        "global tier from the API key and has no per-KB read scoping anywhere "
-        "in its path. Not covered by any test in this file."
+        "Mount (a sub-application, mcp_routes.py), so this walk still cannot "
+        "see it -- but it is no longer unreviewed. MCP over HTTP now resolves "
+        "the caller's readable set per connection through the SAME helper the "
+        "routes above use (api.readable_kbs_for_user -- one rule, two "
+        "callers), and enforces it at its three content chokepoints: "
+        "_dispatch_tool, _read_resource and _get_prompt. What covers it: "
+        "tests/test_mcp_read_scoping.py (behavioural, driving real MCP "
+        "sessions) and tests/test_mcp_tool_registry_is_scoped.py (structural "
+        "-- it enumerates the tool registry, which is what a Mount has "
+        "instead of a dependant tree). #201."
     ),
-    "/ws": ("WebSocketRoute. No dependant tree; its scoping, if any, is unreviewed here."),
+    "/ws": (
+        "WebSocketRoute. No dependant tree, and still NOT scoped. Checked "
+        "during #201 and filed as its own issue rather than widening that "
+        "one: broadcast_event fans (entry_id, kb_name) out to every connected "
+        "socket, so a private KB's *metadata* reaches callers who may not "
+        "read it. Strictly smaller than #201 (names, not entry bodies) and "
+        "unauthenticated besides. See #218."
+    ),
 }
 
 # Routes that serve no KB content, or whose scoping is part 2 of this work.
