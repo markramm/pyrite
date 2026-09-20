@@ -9,7 +9,7 @@ links:
   kb: pyrite
 importance: 5
 kind: tech_debt
-status: in_progress
+status: done
 priority: high
 effort: S
 rank: 0
@@ -66,3 +66,7 @@ between "correct design" and "correct under load."
   race against `PostgresBackend`'s conformance fixture is now
   unblocked but not done. Leaving this item in_progress until that
   lands.
+
+## Closed 2026-09-20
+
+Verified shipped during the 0.24.2 pre-release review: tests/test_task_claim_concurrency.py exists with the start-barrier pattern; roadmap records done 2026-09-17 (-n auto at pre-push, suite 3m37s -> ~45s).

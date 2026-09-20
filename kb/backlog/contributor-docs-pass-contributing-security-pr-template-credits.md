@@ -7,7 +7,7 @@ tags:
 - contributor-experience
 importance: 5
 kind: improvement
-status: in_progress
+status: done
 priority: high
 effort: S
 rank: 0
@@ -85,3 +85,7 @@ docs/getting-started.md model-download note and MCP path. Seven
 (repo Settings → Security). Until then the security links in SECURITY.md and
 the issue-template `config.yml` point at a form that returns 404. This is the
 only unmet acceptance criterion.
+
+## Closed 2026-09-20
+
+Verified shipped during the 0.24.2 pre-release review: CONTRIBUTING, SECURITY.md, the PR template and the credits section all exist; PR #214 and #216 closed the last drift.

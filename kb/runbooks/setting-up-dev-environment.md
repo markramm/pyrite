@@ -21,19 +21,21 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 2. Install pyrite with dev dependencies
+### 2. Install pyrite with all optional dependencies plus dev tooling
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[all]"
 ```
+`dev` alone (pytest, ruff, mypy, build, pre-commit) is tooling only — it has
+no `fastapi` and no CLI deps, so it cannot even collect the suite. `all` is
+the meta-extra `pyrite[server,cli,ai,semantic,dev]` and is what CONTRIBUTING
+uses.
 
 ### 3. Install all extensions
 ```bash
-pip install -e extensions/zettelkasten
-pip install -e extensions/social
-pip install -e extensions/encyclopedia
-pip install -e extensions/software-kb
-pip install -e extensions/task
+for ext in extensions/*/; do pip install -e "$ext"; done
 ```
+This installs every directory under `extensions/` as it exists today, so the
+list here cannot drift out of sync the way an enumerated one has before.
 
 ### 4. Install pre-commit hooks
 ```bash
@@ -42,9 +44,11 @@ pre-commit install
 
 ### 5. Verify
 ```bash
-python -m pytest tests/ extensions/*/tests/ -q
+python -m pytest tests/ extensions/ --collect-only -q
 ```
-Expected: 1780+ tests passing.
+The suite is in the thousands and grows with every PR — run the command
+above rather than trusting a number written here. If it errors instead of
+reporting a collected count, step 2 or 3 above did not take.
 
 ## Troubleshooting
 - If pre-commit pytest fails: ensure extensions are installed in `.venv/` not just system Python

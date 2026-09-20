@@ -17,7 +17,7 @@ links:
   kb: pyrite
 importance: 5
 kind: tech_debt
-status: in_progress
+status: done
 priority: high
 effort: S
 rank: 0
@@ -145,3 +145,7 @@ test that fails on a new bare `subprocess` git call outside `GitService`. Also:
 the commit stage no longer runs pytest at all
 ([[fast-commit-hooks-full-suite-at-pre-push-ci-is-the-gate]]), which removes the
 most common trigger, but pre-push still runs the suite as a child of git.
+
+## Closed 2026-09-20
+
+Verified shipped during the 0.24.2 pre-release review: conftest.py:56 has the autouse fixture; its docstring documents the GIT_DIR-beats-cwd problem it solves.
