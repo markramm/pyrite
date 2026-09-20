@@ -478,7 +478,7 @@ class TestContributorWindow:
 
         monkeypatch.setattr(release, "_check_output", fake_check_output)
         monkeypatch.setattr(release, "_gh_json", fake_gh_json)
-        release._contributor_logins("v0.24.1")
+        release._contributor_logins("v0.24.1", "markramm/pyrite")
 
         assert captured["search"] == "merged:>2026-09-18T09:22:47Z", (
             "the window must keep the time component; a bare date loses a day"
@@ -672,7 +672,7 @@ class TestCiDecision:
             )
 
         monkeypatch.setattr(release, "_check_output", explode)
-        assert release._checks_for("deadbeef") == []
+        assert release._checks_for("deadbeef", "markramm/pyrite") == []
 
     def test_other_gh_errors_still_surface(self, monkeypatch):
         """Only 'no commit' is translated: a network or auth failure must not
@@ -683,7 +683,7 @@ class TestCiDecision:
 
         monkeypatch.setattr(release, "_check_output", explode)
         with pytest.raises(release.ReleaseError, match="401"):
-            release._checks_for("deadbeef")
+            release._checks_for("deadbeef", "markramm/pyrite")
 
 
 # --------------------------------------------------------------------------
@@ -988,20 +988,19 @@ class TestTagAndRemotePreconditions:
         assert any(c.startswith("gh release view v0.24.2") for c in joined), joined
         assert any("merge-base --is-ancestor" in c for c in joined), joined
 
-    def test_the_remote_must_be_the_repo_being_released(self, dry_run, monkeypatch, capsys):
-        """`origin` and the hard-coded REPO_SLUG are never checked to agree, so
-        a fork's checkout would push `main` to the fork and cut the release on
-        markramm/pyrite."""
+    def test_an_unrecognisable_remote_stops_the_release(self, dry_run, monkeypatch, capsys):
+        """The repo now comes FROM `origin`, so a fork releasing itself is
+        legitimate (that is the org move). What must still stop the release is
+        an `origin` the script cannot resolve to a GitHub repo -- it will not
+        guess which repository to cut a release on."""
         code, runner, _calls = self._dry_run_with(
             dry_run,
             monkeypatch,
-            lambda cmd: "https://github.com/someone/fork\n" if "get-url" in cmd else None,
+            lambda cmd: "/srv/git/bare.git\n" if "get-url" in cmd else None,
         )
         assert code != 0
         assert runner.planned == []
-        err = capsys.readouterr().err
-        assert "someone/fork" in err
-        assert release.REPO_SLUG in err
+        assert "origin" in capsys.readouterr().err
 
     @pytest.mark.parametrize(
         "url",
@@ -1013,7 +1012,7 @@ class TestTagAndRemotePreconditions:
         ],
     )
     def test_both_remote_spellings_are_accepted(self, url):
-        assert release.remote_slug(url) == release.REPO_SLUG
+        assert release.remote_slug(url) == "markramm/pyrite"
 
 
 class TestPublishFailureSaysWhatHappened:
@@ -1369,7 +1368,7 @@ class TestWaitCiDefault:
         monkeypatch.setattr(
             release,
             "_checks_for",
-            lambda sha: [{"name": "gate", "status": "in_progress", "conclusion": None}],
+            lambda sha, slug: [{"name": "gate", "status": "in_progress", "conclusion": None}],
         )
         ctx = release.Context(
             repo=REPO,
@@ -1446,3 +1445,83 @@ class TestDockerBuildIsOptIn:
     def test_the_flag_defaults_to_off(self):
         args = release.parse_args(["0.24.2"])
         assert args.docker_check is False
+
+
+class TestTheReleaseRepoIsDerivedFromOrigin:
+    """The script must release whatever `origin` is, not a hard-coded slug.
+
+    `REPO_SLUG` was `markramm/pyrite`, and step (a) refused to run when
+    `origin` disagreed. Correct while the repo lived there; the moment it
+    moved to `pyrite-wiki/pyrite` (#182) that guard fired on the *legitimate*
+    case and there was no release path at all. `gh release view --repo` and
+    `gh label list --repo` also kept reading the old address, which GitHub's
+    redirects make silently appear to work.
+
+    The guard is kept, but it now asserts INTERNAL CONSISTENCY: the repo the
+    `gh` calls name is the repo `git push` will write to. That is the property
+    that actually matters -- a fork releasing itself is fine; a checkout that
+    pushes to one repo and cuts the release on another is not.
+    """
+
+    def test_slug_comes_from_origin_not_a_literal(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            release,
+            "_check_output",
+            lambda cmd, **kw: "git@github.com:pyrite-wiki/pyrite.git\n",
+        )
+        assert release.resolve_repo_slug(tmp_path) == "pyrite-wiki/pyrite"
+
+    def test_a_fork_releases_itself_without_complaint(self, tmp_path, monkeypatch):
+        """The old guard refused this. It is the org move, and it is fine."""
+        monkeypatch.setattr(
+            release,
+            "_check_output",
+            lambda cmd, **kw: "https://github.com/someone/fork.git\n",
+        )
+        assert release.resolve_repo_slug(tmp_path) == "someone/fork"
+
+    def test_an_unrecognisable_remote_is_refused(self, tmp_path, monkeypatch):
+        """Better to stop than to guess which repo a release is cut on."""
+        monkeypatch.setattr(release, "_check_output", lambda cmd, **kw: "/srv/git/bare-repo.git\n")
+        with pytest.raises(release.ReleaseError, match="origin"):
+            release.resolve_repo_slug(tmp_path)
+
+    def test_no_github_url_literal_remains_in_the_module(self):
+        """A second source of truth is how this bug comes back."""
+        source = (REPO / "scripts" / "release.py").read_text()
+        offenders = [
+            line
+            for line in source.splitlines()
+            if "github.com/markramm" in line and not line.strip().startswith("#")
+        ]
+        assert offenders == [], offenders
+
+    def test_the_install_spec_uses_the_derived_remote(self, dry_run, monkeypatch):
+        """Step (c) installs `pyrite[all] @ git+<url>@<sha>`. Pinned to the old
+        URL it would install from the pre-move address -- which redirects, so
+        it would pass while proving nothing about the new one."""
+        monkeypatch.setattr(release.shutil, "which", lambda name: f"/usr/bin/{name}")
+        _code, _runner, calls = dry_run(("0.24.2", "--execute"))
+        installs = [" ".join(c) for c in calls if c[:2] == ["uv", "pip"]]
+        assert installs, "no install was composed"
+        # The fixture's `origin` is markramm/pyrite, so a spec naming it
+        # proves nothing by itself -- that is also what a hard-coded literal
+        # would print. Point `origin` somewhere else and require the spec to
+        # follow it.
+        assert any("git+https://github.com/" in c for c in installs), installs
+
+    def test_the_install_spec_follows_a_moved_origin(self, dry_run, monkeypatch):
+        """The org move, as step (c) would see it."""
+        monkeypatch.setattr(release.shutil, "which", lambda name: f"/usr/bin/{name}")
+        original = release._check_output
+
+        def moved(cmd, **kw):
+            if "get-url" in " ".join(cmd):
+                return "git@github.com:pyrite-wiki/pyrite.git\n"
+            return original(cmd, **kw)
+
+        monkeypatch.setattr(release, "_check_output", moved)
+        _code, _runner, calls = dry_run(("0.24.2", "--execute"))
+        installs = [" ".join(c) for c in calls if c[:2] == ["uv", "pip"]]
+        assert installs, "no install was composed"
+        assert all("pyrite-wiki/pyrite" in c for c in installs), installs

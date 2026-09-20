@@ -14,8 +14,9 @@ cannot be undone.
 The order is the point (ADR-0032 §3a). Six steps, and the only two that can
 change the world come after every check:
 
-  a. preconditions  -- clean `dev` at `origin/dev`; `origin` really is the
-                       repo the `gh` calls name; `v<version>` exists nowhere
+  a. preconditions  -- clean `dev` at `origin/dev`; the repo is taken FROM
+                       `origin` (never hard-coded) and the `gh` calls and the
+                       push agree on it; `v<version>` exists nowhere
                        yet (locally, on origin, or as a GitHub release) and
                        `origin/main` is an ancestor of the SHA, so step d can
                        only ever fast-forward; the version in pyproject.toml is
@@ -79,10 +80,19 @@ from datetime import date
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-REMOTE_URL = "https://github.com/markramm/pyrite"
-MAINTAINER = "markramm"
 BLOCKER_LABEL = "release-blocker"
-REPO_SLUG = f"{MAINTAINER}/pyrite"
+
+# The repository is NOT hard-coded. It is resolved from `origin` at run time by
+# `resolve_repo_slug`, so the script releases whatever checkout it is run from.
+# It used to be the literal `markramm/pyrite`, and step (a) refused to run when
+# `origin` disagreed -- correct while the repo lived there, and a total block on
+# releasing the moment it moved to the pyrite-wiki org (#182, #259). The guard
+# that mattered is kept and sharpened: see `check_remote_is_the_release_repo`.
+
+# Who is filtered out of the contributors line. This is a *person*, not a
+# repository owner, which is why it no longer builds the slug: after the org
+# move the owner is an organisation and the maintainer is still a human.
+MAINTAINER = "markramm"
 
 SEMVER = re.compile(r"^\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$")
 
@@ -514,26 +524,57 @@ def remote_slug(url: str) -> str | None:
     return match.group("slug") if match else None
 
 
-def check_remote_is_the_release_repo(repo: Path) -> None:
-    """`origin` must be the repo the `gh` calls name.
+def resolve_repo_slug(repo: Path) -> str:
+    """The `owner/name` this checkout releases, from `origin`.
 
-    Everything irreversible is split between the two: `git push origin ...`
-    moves `main` and pushes the tag, `gh release create --repo <slug>` cuts the
-    release. Nothing checked that they are the same repo, so a fork's checkout
-    would move the fork's `main` and cut the release on the upstream.
+    Every `gh --repo` call and the install spec read this, so the script
+    releases the repository it is actually run from. Hard-coding it meant the
+    org move (#182) would have left no release path at all: step (a) refused
+    when `origin` disagreed, and `gh release view --repo` kept asking about
+    the old address, which GitHub's redirects make *appear* to work -- the
+    worse failure of the two, because it answers.
+
+    A remote that is not a recognisable GitHub URL is a hard failure: a
+    release cut against a guessed repository is not undoable.
     """
     url = _check_output(["git", "-C", str(repo), "remote", "get-url", "origin"]).strip()
     slug = remote_slug(url)
-    if slug != REPO_SLUG:
+    if not slug:
         raise ReleaseError(
-            f"`origin` is {url!r} ({slug or 'unrecognised'}), but this script "
-            f"releases {REPO_SLUG}: it would push main and the tag to one repo "
-            "and cut the release on the other. Run it from a checkout of "
-            f"{REPO_SLUG}."
+            f"`origin` is {url!r}, which is not a GitHub repository URL. This "
+            "script cuts a GitHub release, so it needs to know which repo "
+            "`origin` is; it will not guess. Point `origin` at the GitHub "
+            "remote, or run it from a checkout that does."
+        )
+    return slug
+
+
+def check_remote_is_the_release_repo(repo: Path, slug: str) -> None:
+    """The push target and the `gh` target must be the same repository.
+
+    Everything irreversible is split between the two: `git push origin ...`
+    moves `main` and pushes the tag, `gh release create --repo <slug>` cuts
+    the release. The guard is about them AGREEING, not about which repo it is
+    -- a fork releasing itself is legitimate, and after the org move so is
+    `pyrite-wiki/pyrite`. What must never happen is pushing to one repo and
+    cutting the release on another.
+
+    Since both now derive from the same `origin`, this re-reads it rather than
+    trusting the value it was handed: the resolve happens once at startup and
+    a release is long enough for a remote to be re-pointed under it.
+    """
+    url = _check_output(["git", "-C", str(repo), "remote", "get-url", "origin"]).strip()
+    current = remote_slug(url)
+    if current != slug:
+        raise ReleaseError(
+            f"`origin` now resolves to {current or 'unrecognised'} ({url!r}), "
+            f"but this run is releasing {slug}: it would push main and the tag "
+            "to one repo and cut the release on the other. Nothing was "
+            "changed; re-run from a settled checkout."
         )
 
 
-def check_tag_is_free(repo: Path, version: str) -> None:
+def check_tag_is_free(repo: Path, version: str, slug: str) -> None:
     """`v<version>` exists nowhere yet -- locally, on the remote, or as a release.
 
     Step d pushes `main` BEFORE it tags. Without this, a tag that already
@@ -557,12 +598,12 @@ def check_tag_is_free(repo: Path, version: str) -> None:
             "That release is cut. Release the next version instead."
         )
     try:
-        _check_output(["gh", "release", "view", tag, "--repo", REPO_SLUG, "--json", "tagName"])
+        _check_output(["gh", "release", "view", tag, "--repo", slug, "--json", "tagName"])
     except ReleaseError:
         pass  # `gh release view` exits non-zero when there is no such release
     else:
         raise ReleaseError(
-            f"a GitHub release for {tag} already exists on {REPO_SLUG}. "
+            f"a GitHub release for {tag} already exists on {slug}. "
             "Release the next version instead."
         )
 
@@ -629,6 +670,11 @@ class Context:
     docker_check: bool = False
     sha: str = ""
     notes: str = ""
+    # `owner/name` from `origin`, resolved once at startup. Every `gh --repo`
+    # call and the install spec read this, so the script releases the repo the
+    # checkout actually points at rather than a literal that goes stale the
+    # day the project moves (#259).
+    slug: str = ""
 
 
 @dataclass
@@ -653,10 +699,14 @@ def step_preconditions(ctx: Context) -> None:
     check_changelog(ctx.repo, ctx.version)
     ctx.runner.note(f"CHANGELOG has `## [{ctx.version}] - {date.today().isoformat()}` with content")
 
-    check_remote_is_the_release_repo(ctx.repo)
-    ctx.runner.note(f"origin is {REPO_SLUG}, the repo this releases")
+    # Resolve the repository here, inside the step, so a bad `origin` reads as
+    # `FAIL at preconditions` with the header above it rather than as a raw
+    # git error printed before the run has announced itself.
+    ctx.slug = resolve_repo_slug(ctx.repo)
+    check_remote_is_the_release_repo(ctx.repo, ctx.slug)
+    ctx.runner.note(f"origin is {ctx.slug}, the repo this releases")
 
-    check_tag_is_free(ctx.repo, ctx.version)
+    check_tag_is_free(ctx.repo, ctx.version, ctx.slug)
     ctx.runner.note(f"v{ctx.version} exists neither locally, on origin, nor as a release")
 
     check_main_can_fast_forward(ctx.repo, ctx.sha)
@@ -665,7 +715,7 @@ def step_preconditions(ctx: Context) -> None:
     # `--repo` on every gh call: it otherwise infers the repo from the cwd,
     # which is not necessarily the repo being released.
     labels = _gh_json(
-        ["gh", "label", "list", "--repo", REPO_SLUG, "--json", "name", "--limit", "200"]
+        ["gh", "label", "list", "--repo", ctx.slug, "--json", "name", "--limit", "200"]
     )
     known = {entry.get("name") for entry in labels} if isinstance(labels, list) else set()
     if BLOCKER_LABEL not in known:
@@ -675,10 +725,10 @@ def step_preconditions(ctx: Context) -> None:
         # This script does not create labels; creating one silently would let a
         # release invent its own permission to proceed.
         raise ReleaseError(
-            f"the {BLOCKER_LABEL!r} label does not exist on {REPO_SLUG}, so the "
+            f"the {BLOCKER_LABEL!r} label does not exist on {ctx.slug}, so the "
             "blocker check cannot be evaluated and the release will not guess. "
             "It is a one-time prerequisite -- create it and run this again:\n"
-            f"    gh label create {BLOCKER_LABEL} --repo {REPO_SLUG} "
+            f"    gh label create {BLOCKER_LABEL} --repo {ctx.slug} "
             "--description 'Must not ship in the next release' --color B60205"
         )
     blockers = _gh_json(
@@ -687,7 +737,7 @@ def step_preconditions(ctx: Context) -> None:
             "pr",
             "list",
             "--repo",
-            REPO_SLUG,
+            ctx.slug,
             "--state",
             "open",
             "--label",
@@ -700,7 +750,7 @@ def step_preconditions(ctx: Context) -> None:
     ctx.runner.note(f"no open PRs labelled {BLOCKER_LABEL}")
 
 
-def _checks_for(sha: str) -> list[dict]:
+def _checks_for(sha: str, slug: str) -> list[dict]:
     """The check runs GitHub reports for a commit, by name.
 
     Check runs, not workflow runs: what a release waits on is the named check
@@ -708,7 +758,7 @@ def _checks_for(sha: str) -> list[dict]:
     the workflow as a whole.
     """
     try:
-        payload = _gh_json(["gh", "api", f"repos/{REPO_SLUG}/commits/{sha}/check-runs"])
+        payload = _gh_json(["gh", "api", f"repos/{slug}/commits/{sha}/check-runs"])
     except ReleaseError as exc:
         # The likeliest real failure is a commit that was never pushed, and the
         # API answers 422 "No commit found". That is exactly CI_MISSING -- the
@@ -735,7 +785,7 @@ def step_ci(ctx: Context) -> None:
     required = tuple(ctx.required_checks)
     deadline = time.monotonic() + ctx.wait_ci_minutes * 60
     while True:
-        checks = _checks_for(ctx.sha)
+        checks = _checks_for(ctx.sha, ctx.slug)
         verdict = ci_decision(checks, required=required)
         if verdict == CI_PASSED:
             ctx.runner.note(
@@ -798,7 +848,7 @@ def step_release_layer(ctx: Context) -> None:
         return
 
     if not (ctx.runner.execute or ctx.rehearse_install_check):
-        spec = f"pyrite[{INSTALL_CHECK_EXTRAS}] @ git+{REMOTE_URL}@{ctx.sha}"
+        spec = f"pyrite[{INSTALL_CHECK_EXTRAS}] @ git+https://github.com/{ctx.slug}@{ctx.sha}"
         print("    WOULD RUN: uv venv <tmp>")
         print(f'    WOULD RUN: uv pip install --python <tmp>/bin/python "{spec}"')
         print(f"    WOULD RUN: <tmp>/bin/pyrite --version    (must contain {ctx.version})")
@@ -821,7 +871,7 @@ def step_release_layer(ctx: Context) -> None:
         )
 
     venv = Path(tempfile.mkdtemp(prefix="pyrite-release-venv-"))
-    spec = f"pyrite[{INSTALL_CHECK_EXTRAS}] @ git+{REMOTE_URL}@{ctx.sha}"
+    spec = f"pyrite[{INSTALL_CHECK_EXTRAS}] @ git+https://github.com/{ctx.slug}@{ctx.sha}"
     try:
         ctx.runner.note(f"temp venv: {venv}")
         print(f"    RUN: uv venv {venv}")
@@ -874,14 +924,14 @@ def step_release_layer(ctx: Context) -> None:
         ctx.runner.note(f"docker image pyrite:{ctx.version} built")
 
 
-def _contributor_logins(since_tag: str | None) -> list[str]:
+def _contributor_logins(since_tag: str | None, slug: str) -> list[str]:
     if not since_tag:
         return []
     merged_at = _check_output(
         [
             "gh",
             "api",
-            f"repos/{REPO_SLUG}/releases/tags/{since_tag}",
+            f"repos/{slug}/releases/tags/{since_tag}",
             "--jq",
             ".published_at",
         ]
@@ -894,7 +944,7 @@ def _contributor_logins(since_tag: str | None) -> list[str]:
             "pr",
             "list",
             "--repo",
-            REPO_SLUG,
+            slug,
             "--state",
             "merged",
             "--base",
@@ -965,7 +1015,7 @@ def step_publish(ctx: Context) -> None:
     no lease, no delete.
     """
     tag = f"v{ctx.version}"
-    logins = _contributor_logins(_previous_tag(ctx.repo, exclude=tag))
+    logins = _contributor_logins(_previous_tag(ctx.repo, exclude=tag), ctx.slug)
     ctx.notes = compose_notes(ctx.repo, ctx.version, logins)
     line = contributors_line(logins)
     ctx.runner.note(
@@ -1011,7 +1061,7 @@ def step_publish(ctx: Context) -> None:
                 "create",
                 tag,
                 "--repo",
-                REPO_SLUG,
+                ctx.slug,
                 "--title",
                 tag,
                 "--notes-file",
