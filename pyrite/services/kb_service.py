@@ -137,17 +137,56 @@ class KBService:
                 parts.append(f"{field}: {rule} (expected {expected}, got {got!r})")
         raise ValidationError(f"Invalid {entry.entry_type} for KB '{kb_name}': " + "; ".join(parts))
 
-    def _auto_embed(self, entry_id: str, kb_name: str) -> None:
-        """Embed an entry — via background queue if worker is set, else synchronously."""
+    def _get_embedding_worker(self):
+        """Lazy `EmbeddingWorker` over this service's index DB.
+
+        Constructing one is a ``CREATE TABLE IF NOT EXISTS`` and nothing else:
+        no thread, no torch import, ~50 ms cold (ADR-0035's spike). It is built
+        here rather than assigned by each caller because #13 *was* the
+        assign-it-yourself design -- ``_embedding_worker`` existed, nothing in
+        production ever set it, so every write on every surface took the
+        synchronous branch. Callers may still inject one by setting
+        ``_embedding_worker`` directly; tests do.
+        """
         if self._embedding_worker is not None:
-            self._embedding_worker.enqueue(entry_id, kb_name)
+            return self._embedding_worker
+        try:
+            from .embedding_worker import EmbeddingWorker
+
+            self._embedding_worker = EmbeddingWorker(self.db)
+        except Exception:
+            # A DB that cannot hold the queue (read-only, missing table
+            # permissions) must not fail the write; the entry is still on disk
+            # and still keyword-searchable, and `index embed` re-derives what
+            # is missing from the index rather than from the queue.
+            logger.warning("Embed queue unavailable; entry will embed on the next index run")
+            return None
+        return self._embedding_worker
+
+    def _auto_embed(self, entry_id: str, kb_name: str) -> None:
+        """Record that an entry needs embedding. Never embeds inline.
+
+        ADR-0035: ``auto_embed: true`` guarantees an entry **will be**
+        embedded, not that it is embedded when the write returns. Loading the
+        sentence-transformers model inside a write is what made the first
+        ``POST /api/entries`` on a fresh install block for over a minute while
+        it downloaded ~90 MB (#13).
+
+        The debt is drained by callers who can afford to wait and who already
+        exist: the server's startup prewarm hook, ``POST /api/index/sync``,
+        and ``pyrite index embed`` / ``sync`` / ``build``. ``auto_embed:
+        false`` still means *nothing happens at all* -- no queue row, no
+        embedding stack touched (ADR-0035 §4).
+        """
+        if not getattr(self.config.settings, "auto_embed", True):
             return
-        svc = self._get_embedding_svc()
-        if svc:
-            try:
-                svc.embed_entry(entry_id, kb_name)
-            except Exception as e:
-                logger.warning("Auto-embed failed for %s: %s", entry_id, e, exc_info=True)
+        worker = self._get_embedding_worker()
+        if worker is None:
+            return
+        try:
+            worker.enqueue(entry_id, kb_name)
+        except Exception as e:
+            logger.warning("Could not queue %s for embedding: %s", entry_id, e, exc_info=True)
 
     @property
     def wikilinks(self) -> WikilinkService:

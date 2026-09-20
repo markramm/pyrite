@@ -178,6 +178,29 @@ def get_kb_service(
     return KBService(config, db)
 
 
+def _drain_embed_queue(db: PyriteDB) -> int:
+    """Embed everything a write left in `embed_queue`. Blocking; never raises.
+
+    ADR-0035 moved the embedding cost off the write path and onto the paths
+    that already have a caller willing to wait. On the server those are
+    startup prewarm and `POST /api/index/sync`, both of which call this.
+    Failures are logged and left in the queue (or marked `failed` after
+    `max_attempts`) so `GET /api/index/embed-status` keeps telling the truth
+    -- a drain that cannot reach a model must not look like a drain that
+    succeeded.
+    """
+    try:
+        from ..services.embedding_worker import EmbeddingWorker
+
+        embedded = EmbeddingWorker(db).drain()
+        if embedded:
+            logger.info("Embedded %d queued entr%s", embedded, "y" if embedded == 1 else "ies")
+        return embedded
+    except Exception:
+        logger.warning("Embed queue drain failed; entries stay queued", exc_info=True)
+        return 0
+
+
 def get_task_service(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
@@ -963,6 +986,14 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
                     "Embedding model pre-warm failed or unavailable "
                     "(sentence-transformers not installed?)"
                 )
+                return
+
+            # ADR-0035: writes enqueue rather than embed, so anything written
+            # while this process (or a previous one) had no model is sitting
+            # in embed_queue. The model is warm now and this hook already owns
+            # a thread that may block -- drain here rather than starting a
+            # background thread of our own (#102).
+            await run_in_threadpool(_drain_embed_queue, _app_get_db())
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins

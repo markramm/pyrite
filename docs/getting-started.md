@@ -100,9 +100,19 @@ pyrite search "algorithm" -k my-research
 pyrite search "mathematics" -k my-research --type person
 ```
 
-**Semantic search** finds conceptually related content, not just keyword matches. It uses a local embedding model (`all-MiniLM-L6-v2`, ~90 MB) that is downloaded the first time it is needed — expect the first semantic search or the first `pyrite-server` write to take a minute, once. Set `PYRITE_AUTO_EMBED=0` to skip embedding on write and keep keyword search only:
+**Semantic search** finds conceptually related content, not just keyword matches. It uses a local embedding model (`all-MiniLM-L6-v2`, ~90 MB) that is downloaded the first time it is needed — expect that one download to take a minute, once.
+
+**Writes never wait on it.** `auto_embed` (on by default) promises that an entry *will be* embedded, not that it is embedded by the time the write returns (ADR-0035): a `pyrite create` or a `POST /api/entries` records the entry, makes it keyword-searchable immediately, and notes the embedding as owed. So on a brand-new KB, a semantic search issued straight after a write may not find that entry yet. Settle the debt — and trigger the download — whenever you like:
 
 ```bash
+pyrite index embed                 # embed everything not yet embedded
+pyrite index sync                  # incremental index update, then embed
+```
+
+`pyrite-server` also drains what is owed at startup (with `prewarm_embeddings` on) and at the end of `POST /api/index/sync`. `GET /api/index/embed-status` reports how much is outstanding. Set `PYRITE_AUTO_EMBED=0` to opt out of embedding entirely and keep keyword search only:
+
+```bash
+pyrite index embed -k my-research
 pyrite search "early computer science pioneers" -k my-research --mode semantic
 ```
 

@@ -84,6 +84,16 @@ def sync_index(
             except Exception:
                 logger.warning("Site cache render failed", exc_info=True)
 
+        # ADR-0035: a write enqueues instead of embedding, and this is one of
+        # the two server paths that pay that debt back (the other is the
+        # startup prewarm hook). `wait=true` is the caller saying they will
+        # block, so the drain is synchronous here; the fire-and-forget branch
+        # below leaves the queue to startup or an explicit `pyrite index
+        # embed`, because there is nobody left to wait for it.
+        from ..api import _drain_embed_queue
+
+        _drain_embed_queue(index_mgr.db)
+
         # Broadcast WebSocket event
         from ..websocket import broadcast_event
 

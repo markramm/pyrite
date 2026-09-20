@@ -111,6 +111,64 @@ class EmbeddingWorker:
         self.db._raw_conn.commit()
         return success_count
 
+    def drain(self, batch_size: int = 10, max_batches: int = 1000) -> int:
+        """Process pending rows until the queue stops making progress.
+
+        Under ADR-0035 a write only *enqueues*; draining is what turns that
+        debt back into embeddings, and it happens on paths that already have a
+        caller willing to wait -- server startup prewarm, ``POST
+        /api/index/sync``, ``pyrite index embed``/``sync``/``build``. No thread
+        is started here, on purpose: #102's unjoined daemon thread holding its
+        own index.db connection is the hazard this design exists not to copy.
+
+        Terminates on the first batch that embeds nothing, so the offline case
+        (no model, every row failing) costs one batch rather than spinning --
+        ``process_batch`` has already recorded the attempt and, at
+        ``max_attempts``, flipped the row to ``failed``. ``max_batches`` is a
+        belt-and-braces stop for a queue that somehow grows as fast as it
+        drains.
+
+        Returns the number of entries successfully embedded.
+        """
+        total = 0
+        for _ in range(max_batches):
+            processed = self.process_batch(batch_size=batch_size)
+            if processed == 0:
+                break
+            total += processed
+        return total
+
+    def clear_embedded(self) -> int:
+        """Drop pending rows whose entry the index already has an embedding for.
+
+        `embed_all` (what `pyrite index embed`/`sync`/`build` call) works from
+        the index, not from this queue: it embeds every entry that lacks a
+        vector, queued or not. Without this the rows it satisfied would stay
+        `pending` forever and `GET /api/index/embed-status` would report debt
+        that has in fact been paid -- an operator watching that number would
+        never see it reach zero. Returns the number of rows removed.
+        """
+        try:
+            rows = self.db._raw_conn.execute(
+                """
+                DELETE FROM embed_queue
+                WHERE status = 'pending'
+                  AND EXISTS (
+                        SELECT 1 FROM entry e
+                        JOIN vec_entry v ON v.rowid = e.rowid
+                        WHERE e.id = embed_queue.entry_id
+                          AND e.kb_name = embed_queue.kb_name
+                  )
+                """
+            ).rowcount
+            self.db._raw_conn.commit()
+            return max(rows, 0)
+        except Exception:
+            # No vec table (sqlite-vec absent) means nothing is embedded, so
+            # there is nothing to clear -- not an error worth failing a CLI on.
+            logger.debug("clear_embedded skipped", exc_info=True)
+            return 0
+
     def get_status(self) -> dict:
         """Get queue status: counts by status."""
         rows = self.db._raw_conn.execute(

@@ -249,6 +249,20 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Changed
 
+- **`auto_embed: true` now guarantees that an entry *will be* embedded, not
+  that it is embedded when the write returns (ADR-0035).** A write records the
+  entry, makes it keyword-searchable immediately, and notes one `pending` row
+  in `embed_queue`; it never imports torch and never touches the network.
+  The debt is paid on paths that already have a caller willing to wait —
+  `pyrite index embed` / `index sync` / `index build`, `pyrite-server`'s
+  startup prewarm hook, and `POST /api/index/sync?wait=true` — and
+  `GET /api/index/embed-status` reports what is outstanding. **Semantic search
+  is therefore eventually-consistent:** an entry written a moment ago may not
+  be findable by meaning until a drain runs. No background thread is
+  introduced (deliberately not copying #102's unjoined daemon thread).
+  `auto_embed: false` is unchanged: nothing is enqueued and no embedding code
+  is reached at all.
+
 - Three open process findings fixed: `.claude/THEME.md` is no longer tracked
   (it was gitignored but the already-committed blob kept riding every branch,
   risking add/add conflicts — #122); `scripts/verify-red.sh` now refuses
@@ -349,6 +363,16 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 - CONTRIBUTING: how to claim an issue
 
 ### Fixed
+
+- **The first write on a fresh install no longer blocks for over a minute
+  downloading the embedding model (#13).** `KBService._auto_embed` took a
+  synchronous branch whenever `self._embedding_worker` was unset — and nothing
+  in production ever set it, so *every* write on *every* surface imported
+  torch and fetched ~90 MB inside the request. Writes now enqueue (see
+  ADR-0035 under Changed): measured on a live `pyrite-server` with an empty
+  `HF_HOME` and the network blocked, `POST /api/entries` returns in
+  milliseconds instead of failing a 2 s budget, and the entry is
+  keyword-searchable at once.
 
 - **Extension entry classes silently dropped `aliases` and `_schema_version` on
   every load -> save round trip, and rewrote `importance` back to its default**

@@ -4,10 +4,12 @@ Tests for the background embedding pipeline: queue table, worker, status endpoin
 Tests cover:
 - embed_queue table creation and operations
 - EmbeddingWorker queue processing with retry logic
-- _auto_embed switched to queue-based when worker is available
+- _auto_embed is queue-based, always (ADR-0035): a write records the debt and
+  returns; it never loads the embedding model. The old "fall back to a
+  synchronous embed when no worker is set" branch was #13 -- nothing in
+  production ever set the worker, so that fall-back was the only path taken.
 - Status endpoint /api/index/embed-status
 - CLI `pyrite index embed --status`
-- Graceful fallback: synchronous embed when no worker is running
 """
 
 import tempfile
@@ -250,43 +252,77 @@ class TestKBServiceQueueIntegration:
         ).fetchone()[0]
         assert count == 1
 
-    def test_auto_embed_falls_back_to_sync(self, tmp_db):
-        """When no worker is set, _auto_embed should use sync embedding (existing behavior)."""
+    def test_auto_embed_builds_its_own_worker_when_none_was_injected(self, tmp_db):
+        """No worker set is no longer a fall-back to synchronous embedding.
+
+        It used to be, and that was #13: `_embedding_worker` existed but
+        nothing in production ever assigned it, so *every* write on *every*
+        surface took the synchronous branch and the first write on a fresh
+        install spent over a minute downloading a ~90 MB model inside the
+        request. ADR-0035 made enqueueing the only behaviour, which means
+        KBService has to be able to produce a worker itself rather than
+        waiting to be handed one.
+        """
         from pyrite.services.kb_service import KBService
 
         db, config, _ = tmp_db
         svc = KBService(config, db)
 
-        # No worker set, mock embedding svc
+        # An embedding service is available and would work -- it still must
+        # not be called, because a write does not embed.
         mock_embed_svc = MagicMock()
         svc._embedding_svc = mock_embed_svc
         svc._embedding_checked = True
-        svc._embedding_worker = None
+        assert svc._embedding_worker is None
 
         svc._auto_embed("entry-1", "test-kb")
 
-        # Should have called embed_entry directly
-        mock_embed_svc.embed_entry.assert_called_once_with("entry-1", "test-kb")
+        mock_embed_svc.embed_entry.assert_not_called()
+        count = db._raw_conn.execute(
+            "SELECT COUNT(*) FROM embed_queue WHERE entry_id = 'entry-1' AND status = 'pending'"
+        ).fetchone()[0]
+        assert count == 1
 
-    def test_auto_embed_logs_warning_on_sync_failure(self, tmp_db, caplog):
-        """A failed synchronous embed should be visible at warning level --
-        an entry saves fine either way, but silent embed failures explain
-        why semantic search can't find something later."""
+    def test_auto_embed_does_nothing_at_all_when_the_setting_is_off(self, tmp_db):
+        """ADR-0035 §4: `auto_embed: false` keeps its exact present meaning."""
+        import dataclasses
+
+        from pyrite.services.kb_service import KBService
+
+        db, config, _ = tmp_db
+        config = dataclasses.replace(
+            config, settings=dataclasses.replace(config.settings, auto_embed=False)
+        )
+        svc = KBService(config, db)
+        mock_embed_svc = MagicMock()
+        svc._embedding_svc = mock_embed_svc
+        svc._embedding_checked = True
+
+        svc._auto_embed("entry-1", "test-kb")
+
+        mock_embed_svc.embed_entry.assert_not_called()
+        rows = db._raw_conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='embed_queue'"
+        ).fetchone()[0]
+        if rows:  # the table may exist from another test on this db
+            assert db._raw_conn.execute("SELECT COUNT(*) FROM embed_queue").fetchone()[0] == 0
+
+    def test_a_queue_failure_is_logged_and_never_fails_the_write(self, tmp_db, caplog):
+        """The entry is on disk and indexed either way; losing the queue row
+        costs semantic freshness, not the write. It must still be visible --
+        a silent drop is how "why can't semantic search find this" starts."""
         import logging
 
         from pyrite.services.kb_service import KBService
 
         db, config, _ = tmp_db
         svc = KBService(config, db)
-
-        mock_embed_svc = MagicMock()
-        mock_embed_svc.embed_entry.side_effect = RuntimeError("embedding backend down")
-        svc._embedding_svc = mock_embed_svc
-        svc._embedding_checked = True
-        svc._embedding_worker = None
+        svc._embedding_worker = MagicMock(
+            **{"enqueue.side_effect": RuntimeError("queue table is read-only")}
+        )
 
         with caplog.at_level(logging.WARNING):
-            svc._auto_embed("entry-1", "test-kb")
+            svc._auto_embed("entry-1", "test-kb")  # must not raise
 
         assert any(
             record.levelno >= logging.WARNING and "entry-1" in record.message

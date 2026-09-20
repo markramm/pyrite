@@ -168,7 +168,8 @@ class TestColdWriteNeverLoadsTheModel:
         """Skipping the embed is only acceptable if the debt is visible."""
         if not cold_write["vec_available"]:
             pytest.skip("sqlite-vec unavailable; nothing would be embeddable anyway")
-        assert cold_write["queued"] == [("kestrel-notes", "t", "pending")], cold_write
+        # JSON round-trip: the probe's tuples come back as lists.
+        assert cold_write["queued"] == [["kestrel-notes", "t", "pending"]], cold_write
 
 
 class TestAutoEmbedOffIsUnchanged:
@@ -278,7 +279,34 @@ class TestDrainingTheQueue:
         assert worker.get_status()["total"] == 0
 
     def test_drain_stops_on_a_batch_that_makes_no_progress(self, tmp_path):
-        """A failing embed must not spin drain() forever."""
+        """A failing embed must not spin drain() forever.
+
+        One batch is attempted and the failure is recorded; drain returns
+        rather than retrying the same row until `max_attempts` inside a single
+        call. Retries belong to the *next* drain (the next sync, the next
+        server start), which is what gives a transient outage time to clear.
+        """
+        from unittest.mock import MagicMock
+
+        from pyrite.services.embedding_worker import EmbeddingWorker
+
+        svc = _svc(tmp_path, auto_embed=True)
+        worker = EmbeddingWorker(svc.db, max_attempts=3)
+        worker.enqueue("one", "t")
+        svc_mock = MagicMock(**{"embed_entry.side_effect": RuntimeError("model unavailable")})
+        worker._embedding_svc = svc_mock
+
+        embedded = worker.drain()
+
+        assert embedded == 0
+        assert svc_mock.embed_entry.call_count == 1, "drain retried inside one call"
+        row = svc.db._raw_conn.execute(
+            "SELECT status, attempts FROM embed_queue WHERE entry_id = 'one'"
+        ).fetchone()
+        assert (row[0], row[1]) == ("pending", 1), tuple(row)
+
+    def test_repeated_drains_eventually_mark_a_row_failed(self, tmp_path):
+        """`failed` is reachable, so `embed-status` can show a dead row."""
         from unittest.mock import MagicMock
 
         from pyrite.services.embedding_worker import EmbeddingWorker
@@ -290,9 +318,9 @@ class TestDrainingTheQueue:
             **{"embed_entry.side_effect": RuntimeError("model unavailable")}
         )
 
-        embedded = worker.drain()
+        for _ in range(3):
+            worker.drain()
 
-        assert embedded == 0
         assert worker.get_status()["failed"] == 1
 
     def test_drain_is_a_noop_without_an_embedding_service(self, tmp_path):
@@ -306,3 +334,47 @@ class TestDrainingTheQueue:
 
         assert worker.drain() == 0
         assert worker.get_status()["pending"] == 1
+
+
+class TestRetiringRowsEmbedAllAlreadySatisfied:
+    """`pyrite index embed`/`sync`/`build` embed from the index, not the queue.
+
+    They call `EmbeddingService.embed_all`, which embeds every entry lacking a
+    vector whether or not a queue row exists. Those rows must then be retired,
+    or `embed-status` reports debt that has already been paid and an operator
+    watching that number never sees zero.
+    """
+
+    def test_clear_embedded_retires_rows_whose_entry_now_has_a_vector(self, tmp_path):
+        from pyrite.services.embedding_worker import EmbeddingWorker
+
+        svc = _svc(tmp_path, auto_embed=True)
+        if not svc.db.vec_available:
+            pytest.skip("sqlite-vec unavailable; nothing can be embedded")
+        svc.create_entry("t", "one", "One", "note", "first")
+        svc.create_entry("t", "two", "Two", "note", "second")
+
+        # Stand in for what embed_all did: a vector for `one` only.
+        dim = 384
+        svc.db.backend.upsert_embedding("one", "t", [0.01] * dim)
+
+        worker = EmbeddingWorker(svc.db)
+        retired = worker.clear_embedded()
+
+        assert retired == 1
+        assert [row[0] for row in queue_rows(svc.db)] == ["two"], queue_rows(svc.db)
+
+    def test_clear_embedded_leaves_failed_rows_alone(self, tmp_path):
+        """A `failed` row is a report, not debt; clearing it would hide it."""
+        from pyrite.services.embedding_worker import EmbeddingWorker
+
+        svc = _svc(tmp_path, auto_embed=True)
+        if not svc.db.vec_available:
+            pytest.skip("sqlite-vec unavailable; nothing can be embedded")
+        svc.create_entry("t", "one", "One", "note", "first")
+        svc.db._raw_conn.execute("UPDATE embed_queue SET status = 'failed'")
+        svc.db._raw_conn.commit()
+        svc.db.backend.upsert_embedding("one", "t", [0.01] * 384)
+
+        assert EmbeddingWorker(svc.db).clear_embedded() == 0
+        assert [row[2] for row in queue_rows(svc.db)] == ["failed"]

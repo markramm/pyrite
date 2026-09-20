@@ -25,6 +25,30 @@ def _format_output(data: dict, fmt: str) -> str | None:
     return format_output(data, fmt)
 
 
+def _settle_embed_queue(db) -> None:
+    """Pay off whatever ADR-0035 writes left in `embed_queue`.
+
+    Under ADR-0035 a write enqueues instead of embedding, so the queue is the
+    record of what a `pyrite index embed`/`sync`/`build` run owes. `embed_all`
+    works from the index rather than from the queue, so it satisfies most of
+    those rows without knowing they exist; `clear_embedded` retires them, and
+    `drain` catches anything `embed_all` skipped (a different KB scope, a
+    `--kb` filter). Without this, `embed-status` reports debt that has already
+    been paid and never reaches zero.
+
+    Never raises: a CLI that indexed successfully must not exit non-zero
+    because the queue bookkeeping could not be finished.
+    """
+    try:
+        from ..services.embedding_worker import EmbeddingWorker
+
+        worker = EmbeddingWorker(db)
+        worker.clear_embedded()
+        worker.drain()
+    except Exception:
+        logger.debug("embed_queue settle skipped", exc_info=True)
+
+
 @index_app.command("build")
 def index_build(
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB to index (all if omitted)"),
@@ -130,6 +154,7 @@ def index_build(
                         f"[green]Embedded {stats['embedded']} entries[/green] "
                         f"(skipped {stats['skipped']})"
                     )
+                _settle_embed_queue(db)
         except Exception:
             logger.debug("Embedding not available, skipping")
 
@@ -172,7 +197,13 @@ def index_sync(
         if len(malformed) > 5:
             console.print(f"    [dim]… and {len(malformed) - 5} more[/dim]")
 
-    # Auto-embed new/updated entries if embeddings are available
+    # Auto-embed new/updated entries if embeddings are available.
+    #
+    # `changed > 0` gates the *file*-driven embed only. Under ADR-0035 a write
+    # indexes the entry itself and leaves an embed_queue row, so a sync can
+    # find nothing changed on disk and still have embedding debt to pay --
+    # which is the whole point of `pyrite index sync` as a drain point. Hence
+    # the settle below sits outside the `changed` branch.
     changed = results["added"] + results["updated"]
     if changed > 0 and not no_embed:
         try:
@@ -185,6 +216,9 @@ def index_sync(
                     console.print(f"  Embedded: {stats['embedded']}")
         except Exception:
             logger.debug("Embedding not available, skipping")
+
+    if not no_embed:
+        _settle_embed_queue(db)
 
 
 @index_app.command("stats")
@@ -283,6 +317,8 @@ def index_embed(
             force=force,
             progress_callback=update_progress,
         )
+
+    _settle_embed_queue(db)
 
     console.print("\n[green]Embedding complete.[/green]")
     console.print(f"  Embedded: {stats['embedded']}")

@@ -36,6 +36,10 @@ pyrite create -k my-kb --type note --title "Switch to async standups" \
 pyrite search "consulting" -k my-kb
 pyrite search "career transition" -k my-kb --mode=semantic  # keyword mode finds exact words only
 # The first semantic search downloads the embedding model (~90 MB, one time).
+# Writes never wait on that download: an entry is keyword-searchable the
+# moment it is written, and gets its embedding on the next `pyrite index
+# embed` / `index sync` (or, on a server, at startup). Run `pyrite index
+# embed` to fetch the model and catch up on demand.
 
 # Connect to Claude Desktop / Claude Code
 # Add to your MCP config:

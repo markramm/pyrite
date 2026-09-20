@@ -131,3 +131,104 @@ def test_the_embedding_debt_is_visible(fresh_install_server, first_write):
         f"Eventually-embedded means queued, not forgotten.\n"
         f"Server output:\n{fresh_install_server.output()}"
     )
+
+
+# ---------------------------------------------------------------------------
+# The other half of the promise: with a model available, the debt gets paid
+# ---------------------------------------------------------------------------
+
+HF_REPO = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+def model_is_cached() -> bool:
+    """Is the embedding model already on this machine? (No network call.)"""
+    try:
+        from huggingface_hub import try_to_load_from_cache
+    except ImportError:
+        return False
+    try:
+        return isinstance(try_to_load_from_cache(HF_REPO, "config.json"), str)
+    except Exception:
+        return False
+
+
+def sentence_transformers_available() -> bool:
+    import importlib.util
+
+    return importlib.util.find_spec("sentence_transformers") is not None
+
+
+@pytest.fixture(scope="module")
+def warm_cache_server(tmp_path_factory):
+    """`auto_embed: true` with the model already on disk.
+
+    The regression guard for the change this theme makes: without it,
+    "the write does not embed" would be satisfied just as well by code that
+    never embeds anything, and semantic search would silently go dark.
+    """
+    if not sentence_transformers_available():
+        pytest.skip("sentence-transformers not installed")
+    if not model_is_cached():
+        pytest.skip(
+            f"embedding model {HF_REPO!r} is not in the local HuggingFace cache "
+            f"and the smoke layer runs offline; warm it with "
+            f"`huggingface-cli download {HF_REPO}` to run this test"
+        )
+
+    data_dir: Path = tmp_path_factory.mktemp("pyrite-warm-cache")
+    kb_dir = data_dir / "smoke-kb"
+    seed_kb(kb_dir, "smoke", title="Analytical Engine", body="A mechanical computer.")
+
+    server = start_server(
+        data_dir,
+        kbs=[{"name": "smoke", "path": str(kb_dir), "kb_type": "generic", "description": "smoke"}],
+        settings={"auto_embed": True},
+        env_extra={"PYRITE_AUTO_EMBED": "1"},
+    )
+    try:
+        yield server
+    finally:
+        stop_server(server)
+
+
+def test_a_sync_drains_the_queue_and_the_entry_becomes_semantically_findable(warm_cache_server):
+    """ADR-0035's "eventually": the entry IS embedded, just not on the write.
+
+    `POST /api/index/sync?wait=true` is one of the two documented drain points
+    (the other is startup prewarm). After it, the debt is zero and the entry
+    answers a query that shares no keywords with it.
+    """
+    client = warm_cache_server.client
+
+    resp = client.post(
+        "/api/entries",
+        json={
+            "kb": "smoke",
+            "title": "Kestrel Notes",
+            "entry_type": "note",
+            "body": "Field notes on a small falcon that hovers while hunting.",
+        },
+    )
+    assert resp.status_code in (200, 201), resp.text
+    assert client.get("/api/index/embed-status").json()["pending"] >= 1
+
+    synced = client.post("/api/index/sync?wait=true", timeout=180.0)
+    assert synced.status_code == 200, synced.text
+
+    status = client.get("/api/index/embed-status").json()
+    assert status["pending"] == 0 and status["failed"] == 0, (
+        f"sync did not drain the embed queue: {status}\n"
+        f"Server output:\n{warm_cache_server.output()}"
+    )
+
+    found = client.get(
+        "/api/search",
+        params={"q": "birds of prey", "kb": "smoke", "mode": "semantic"},
+        timeout=180.0,
+    )
+    assert found.status_code == 200, found.text
+    ids = [r["id"] for r in found.json()["results"]]
+    assert "kestrel-notes" in ids, (
+        f"the queue drained but semantic search still cannot see the entry: {found.json()}\n"
+        f"Server output:\n{warm_cache_server.output()}"
+    )
