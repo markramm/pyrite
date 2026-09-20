@@ -150,6 +150,18 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
 
 ### Changed
 
+- Three open process findings fixed: `.claude/THEME.md` is no longer tracked
+  (it was gitignored but the already-committed blob kept riding every branch,
+  risking add/add conflicts — #122); `scripts/verify-red.sh` now refuses
+  (exit 2) when a reverted production file's top-level package resolves
+  outside the worktree's interpreter, so a review worktree with a symlinked
+  `.venv` can no longer report a suite number measured against the wrong
+  checkout — #189; and the PR gate's `changes` classifier gained an `infra`
+  output that widens the `test` job's matrix to all three interpreters when a
+  PR touches test infrastructure (`conftest.py`, `pyproject.toml`,
+  `.pre-commit-config.yaml`, `ci.yml`, `scripts/*`), so a change whose
+  behaviour is a property of the interpreter — like #81's `@classmethod`
+  fixtures — can't merge green on 3.12 and redden `dev` on 3.13 — #133.
 - `web/` dependency bumps (supersedes Dependabot PRs #23-#29, one reviewable
   change): `@sveltejs/kit` 2.53.0→2.70.3 (security fixes — CSRF protection on
   non-production `NODE_ENV` builds, prototype pollution in file-input

@@ -498,3 +498,64 @@ class TestNoTrackedFileIsGitignored:
             f"tracked but gitignored under .claude/ (add/add-conflict risk): "
             f"{tracked_and_ignored!r}"
         )
+
+
+class TestInfraChangesRunTheFullMatrixOnAPR:
+    """A test-infrastructure change is a property of the interpreter, not the code (#133).
+
+    PR #81 changed class-scoped fixtures to `@classmethod` over `@pytest.fixture`
+    to clear a deprecation warning. It registered and worked on 3.12 -- the PR
+    gate's only interpreter -- and silently failed to register the fixture at
+    all on 3.13, going undetected until the push to `dev` ran the full matrix
+    two minutes after merge. A single-interpreter gate cannot see a change
+    whose behaviour is a property of the interpreter and pytest version, not
+    of the project's own logic -- fixture declarations, collection hooks,
+    pytest config, the hooks and CI that enforce them. Those diffs widen the
+    PR gate's matrix to the same three interpreters `dev` already runs;
+    everything else keeps the fast one-interpreter gate.
+    """
+
+    _INFRA_PATHS = [
+        "tests/conftest.py",
+        "tests/sub/conftest.py",
+        "pyproject.toml",
+        ".pre-commit-config.yaml",
+        ".github/workflows/ci.yml",
+        "scripts/new-worktree.sh",
+        "scripts/check_import_cycles.py",
+    ]
+
+    def test_classifier_has_an_infra_output(self, ci):
+        job = ci["jobs"]["changes"]
+        assert "infra" in job["outputs"]
+
+    @pytest.mark.parametrize("path", _INFRA_PATHS)
+    def test_infra_filter_matches_test_infrastructure_paths(self, ci, path):
+        import fnmatch
+
+        filters = yaml.safe_load(
+            next(
+                s["with"]["filters"]
+                for s in ci["jobs"]["changes"]["steps"]
+                if "with" in s and "filters" in s.get("with", {})
+            )
+        )
+        patterns = filters["infra"]
+        assert any(fnmatch.fnmatch(path, pat.lstrip("- ")) for pat in patterns), (
+            f"{path!r} not matched by any infra pattern: {patterns}"
+        )
+
+    def test_test_job_matrix_widens_on_infra_changes(self, ci):
+        # Normally: one interpreter on a PR, the full matrix on a push. An
+        # infra-touching PR must get the full matrix too, same as a push.
+        matrix = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
+        assert "needs.changes.outputs.infra" in matrix, matrix
+        assert '["3.12"]' in matrix
+        assert '["3.11", "3.12", "3.13"]' in matrix
+
+    def test_dev_push_behaviour_is_unchanged(self, ci):
+        # The push to dev already runs the full matrix unconditionally; the
+        # infra classifier must only ever WIDEN a pull_request's matrix, never
+        # narrow a push's.
+        matrix = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
+        assert "github.event_name == 'pull_request'" in matrix

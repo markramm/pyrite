@@ -41,6 +41,7 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       web: ${{ steps.filter.outputs.web }}
       kb: ${{ steps.filter.outputs.kb }}
+      infra: ${{ steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -62,6 +63,21 @@ jobs:
               - '.github/workflows/**'
             kb:
               - 'kb/**'
+            # A change here is a property of the INTERPRETER and pytest
+            # version, not of the project's own logic -- a single-interpreter
+            # PR gate cannot see it (#133: PR #81's @classmethod fixtures
+            # registered and passed on 3.12, the gate's only interpreter, and
+            # silently failed to register at all on 3.13, going undetected
+            # until the post-merge push to dev ran the full matrix). Widens
+            # the `test` job's matrix to match; see that job's `matrix:`.
+            infra:
+              - 'tests/conftest.py'
+              - 'tests/**/conftest.py'
+              - 'pyproject.toml'
+              - '.pre-commit-config.yaml'
+              - '.github/workflows/ci.yml'
+              - 'scripts/*.sh'
+              - 'scripts/*.py'
 
   # Fast check for KB-only changes: schema validation, seconds.
   kb:
@@ -96,7 +112,14 @@ jobs:
         # breadth (every supported Python, Postgres). main only fast-forwards
         # to a commit dev already proved. Each step costs more only where it
         # tells us something the previous one could not.
-        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
+        #
+        # Exception (#133): a PR that touches test infrastructure -- fixture
+        # declarations, collection hooks, pytest config, the hooks/CI that
+        # enforce them -- gets the full matrix too. That class of change is a
+        # property of the interpreter and pytest version, not of the
+        # project's logic, so the one-interpreter gate cannot see it; #81
+        # merged green on 3.12 and reddened dev on 3.13 two minutes later.
+        python-version: ${{ fromJSON((github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true') && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
 
     # pgvector/pgvector ships the postgres server with the pgvector
     # extension pre-installed (plain postgres:* images don't have it, and
