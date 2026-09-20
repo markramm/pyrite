@@ -2664,3 +2664,15 @@ Maintainer (2026-09-20): "fix all the process issues, and keep those in the pyri
 ## Retro 7 — 2026-09-20T01:48Z — pointer
 
 Retro 7 (window 00:30Z–01:50Z on 2026-09-20: 3 landed, 2 send-backs, the desk built) is the first retro written to the desk: `desk/retros/retro-7-2026-09-20.md` in `pyrite-desk` (`pyrite get retro-7-2026-09-20 -k pyrite-desk`). Constraint: the maintainer's desk, now measured (18 open). Process change: Regimes name the surface (dispatch.md; queued for the maintainer). Quality theme: `a-live-server-test-harness-one-fixture-that-starts-pyrite-server-on-a-derived`. Product bug filed from the #203 cold read: #207 (model-load race on a cold process).
+
+## Tick 2026-09-20T02:20Z — resume — pointer
+
+The loop resumed after the wind-down; the tick itself is in the desk
+(`pyrite get tick-2026-09-20T0220-resume -k pyrite-desk`). In brief: `dev`
+green at 4a29d44 with the retro-6/7 skill pastes landed; #180 (read scoping)
+rebased, re-verified and **merged**; #145 (search filters on every leg)
+rebased, verified, armed; #161 and #140 held as drafts by the two-armed PR
+budget; four merged-PR worktrees removed. This branch's long-red `kb` check
+was 2 duplicate IDs it resurrects after their move to `done/` on dev — fixed
+in the commit above, not by touching the 577 string-priority warnings, which
+are warnings and are the KB's own convention (478 files) rather than a defect.
