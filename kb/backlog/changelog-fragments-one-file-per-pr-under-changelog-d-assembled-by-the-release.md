@@ -22,6 +22,29 @@ rank: 0
 
 The towncrier pattern, hand-rolled or via towncrier: each PR adds `changelog.d/<slug>.<section>.md` (sections: security, added, changed, fixed, process, docs) — a new file never conflicts. `scripts/release.py` (roadmap 0.24.2) assembles the fragments into `CHANGELOG.md` under the version heading at release time and deletes them. A test in `tests/test_dev_process_config.py` asserts that `[Unreleased]` in `CHANGELOG.md` is empty on `dev` (bullets live in fragments) and that every fragment names a valid section. The `single-source-of-truth-for-the-version-asserted-by-a-test` item's `[Unreleased]` discipline moves onto this.
 
+## Evidence, 2026-09-20 (the release-prep window)
+
+The cost is now measurable on outside contributors, not just on the loop's own
+branches. In one session, **three** pull requests conflicted on `CHANGELOG.md`
+and on nothing else:
+
+- **#174** (makiaveli1) — `gh pr update-branch --rebase` failed outright with
+  `RebaseConflictError`; the branch carried merge commits, so the rebase
+  replayed its CHANGELOG entry into a spot `dev` had since filled. It took a
+  merge-style update plus a squash to land.
+- **#177** (Gambit-Checkmate) — blocked on it; the merged result was verified
+  green (5210 passed) with the conflict resolved by keeping both entries.
+- **#175** (makiaveli1) — same, 5215 passed once resolved.
+
+In every case the two entries were pure adjacency: neither touched the other's
+lines, and the resolution was "keep both, either order". No judgement was
+involved, which is the definition of a conflict that should not exist.
+
+The contributor-facing cost is the part that changed the priority: a
+first-time contributor's PR now sits blocked on a merge conflict that has
+nothing to do with their change, and the review has to explain that it is not
+their fault.
+
 ## Acceptance
 
 - Two branches each adding a fragment rebase onto each other with no conflict (a test can simulate with `git` in a temp repo, or the PR shows it).
