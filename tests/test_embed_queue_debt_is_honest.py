@@ -335,13 +335,37 @@ class TestAWriteNeverQueuesIntoADatabaseThatCannotSeeIt:
         assert row is not None, "the row was deleted although nothing was embedded"
         assert (row[0], row[1]) == ("pending", 1), tuple(row)
 
-    def test_a_worktree_write_service_does_not_queue_into_mains_database(self, tmp_path):
-        """The real path: `WorktreeResolver.get_write_service` for a user.
+    def test_the_guard_refuses_a_db_whose_writes_and_queue_disagree(self, tmp_path):
+        """The predicate itself, on both DB shapes.
 
-        Rather than reach for a full worktree fixture, this builds the exact
-        DB shape the resolver produces -- a `WorktreeDB` whose writes go to a
-        diff DB and whose `_raw_conn` is main's -- and asserts a write through
-        it does not leave a row in main's queue for an entry main cannot see.
+        Stated separately from the behavioural test below because that one
+        cannot be red at the branch's merge base: there `_auto_embed` embedded
+        synchronously and never queued at all, so no orphan row could exist.
+        This one is red wherever the guard is absent, which is what a reviewer
+        re-running `verify-red.sh` needs.
+        """
+        main_cfg = _config(tmp_path / "main", auto_embed=True)
+        main_db = PyriteDB(main_cfg.settings.index_path)
+
+        plain = KBService(main_cfg, main_db)
+        assert plain._queue_can_see_our_writes() is True, (
+            "an ordinary PyriteDB writes and queues on the same connection"
+        )
+
+        overlay = KBService(main_cfg, _worktree_db(main_cfg, main_db, tmp_path / "diff"))
+        assert overlay._queue_can_see_our_writes() is False, (
+            "an overlay DB routes writes to the diff database while "
+            "embed_queue lives on main; queueing there files debt against an "
+            "entry the drain cannot reach"
+        )
+
+    def test_a_worktree_write_service_does_not_queue_into_mains_database(self, tmp_path):
+        """The behaviour the guard buys, through a real `create_entry`.
+
+        Builds the exact DB shape `WorktreeResolver.get_write_service`
+        produces -- a `WorktreeDB` whose writes go to a diff DB and whose
+        `_raw_conn` is main's -- and asserts the write leaves no row in main's
+        queue naming an entry main cannot see.
         """
         main_cfg = _config(tmp_path / "main", auto_embed=True)
         main_db = PyriteDB(main_cfg.settings.index_path)
