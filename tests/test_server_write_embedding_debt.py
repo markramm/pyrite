@@ -155,8 +155,17 @@ class TestSyncDrainsTheQueue:
 class TestEveryWriteServiceTheAppBuildsEnqueues:
     """#13's shape was a construction site nobody wired. Cover them all."""
 
-    def test_worktree_write_service_enqueues_too(self, tmp_path):
-        """`WorktreeResolver.get_write_service` builds its own KBService."""
+    def test_the_resolvers_main_db_service_enqueues_too(self, tmp_path):
+        """`WorktreeResolver` on the main DB -- an admin or unauthenticated write.
+
+        This deliberately says *main DB*, not `get_write_service`. An earlier
+        version of this test claimed to cover `get_write_service` while its
+        body called `get_read_service`, which with `auth_user=None` hands back
+        a plain `PyriteDB` -- so the one test aimed at the worktree path never
+        constructed a `WorktreeDB` at all. The genuine worktree shape, where
+        writes and `_raw_conn` point at different databases, is covered in
+        `tests/test_embed_queue_debt_is_honest.py`.
+        """
         from pyrite.server.worktree_resolver import WorktreeResolver
 
         kb_path = tmp_path / "kb"
@@ -168,9 +177,8 @@ class TestEveryWriteServiceTheAppBuildsEnqueues:
         db = PyriteDB(config.settings.index_path)
         resolver = WorktreeResolver(config, db, {})
 
-        # No auth user -> the resolver hands back a service on the main KB;
-        # that is the path an unauthenticated/admin write takes.
         svc = resolver.get_read_service("t", None)
+        assert svc.db is db, "precondition: this is the plain main-DB service"
         svc.create_entry("t", "kestrel-notes", "Kestrel Notes", "note", "about falcons")
 
         assert [row[0] for row in _queue(db)] == ["kestrel-notes"], _queue(db)
