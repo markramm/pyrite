@@ -13,7 +13,7 @@ everything passes a naive test and breaks the product.
 """
 
 import contextlib
-
+import json
 import pytest
 
 pytest.importorskip("fastapi", reason="fastapi not installed")
@@ -417,6 +417,48 @@ def test_rest_put_entries_refuses_marked_body_and_body_survives(rest_api_env, sa
     _rest_refusal(resp)
     after = client.get(f"/api/entries/{entry_id}", params={"kb": kb}).json()["body"]
     assert after == before
+
+
+@pytest.mark.parametrize(
+    "content_type",
+    [
+        "Application/JSON",
+        "APPLICATION/JSON",
+        "application/vnd.api+json",
+        "application/json;charset=UTF-8",
+    ],
+)
+def test_rest_put_refuses_under_every_content_type_fastapi_parses(
+    rest_api_env, sample_events, content_type
+):
+    """The guard's JSON test must be no narrower than FastAPI's own.
+
+    Found by the cold read. The guard compared the media type to the exact
+    lower-case string `application/json`, while FastAPI parses whenever the
+    maintype is `application` and the subtype is `json` or ends `+json`,
+    lower-cased first. So `Content-Type: Application/JSON` -- legal, media
+    types are case-insensitive (RFC 9110 section 8.3) -- was parsed by
+    FastAPI, skipped by the guard, and **written**: a whole entry replaced by
+    the fragment, which is the exact loss rule 2 exists to prevent.
+
+    `TestClient(json=...)` always emits lower-case `application/json`, which
+    is why no existing test could see this. These send the header explicitly.
+    """
+    client = rest_api_env["client"]
+    kb = rest_api_env["events_kb"].name
+    entry_id = sample_events[0].id
+
+    before = client.get(f"/api/entries/{entry_id}", params={"kb": kb}).json()["body"]
+
+    resp = client.put(
+        f"/api/entries/{entry_id}",
+        content=json.dumps({"kb": kb, "body": "A" * 8000, "body_truncated": True}),
+        headers={"content-type": content_type},
+    )
+
+    _rest_refusal(resp)
+    after = client.get(f"/api/entries/{entry_id}", params={"kb": kb}).json()["body"]
+    assert after == before, f"body was overwritten via Content-Type: {content_type}"
 
 
 def test_rest_put_without_marker_still_works(rest_api_env, sample_events):

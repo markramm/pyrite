@@ -62,10 +62,21 @@ async def refuses_truncated_body(request: Request) -> None:
     A request whose payload is not JSON (a multipart upload, an empty body) is
     left alone: there is nothing to inspect, and `/entries/import` does its own
     per-item check on the parsed file.
+
+    **The JSON test mirrors FastAPI's own**, deliberately. FastAPI parses a
+    body whenever the media type's maintype is `application` and its subtype
+    is `json` or ends `+json`, lower-cased by `email.message` first
+    (`fastapi/routing.py::get_request_handler`). A narrower test here does not
+    make the guard conservative -- it makes it *bypassable*, because the
+    handler still runs and still writes. `Content-Type: Application/JSON` is
+    legal (media types are case-insensitive, RFC 9110 section 8.3) and
+    `application/vnd.api+json` is ordinary; both parsed and both skipped this
+    guard until the cold read caught it.
     """
     from ...services.body_bounds import REFUSAL_SUGGESTION, refuse_truncated_body
 
-    if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
+    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    if not (media_type == "application/json" or media_type.endswith("+json")):
         return
     try:
         payload = await request.json()
