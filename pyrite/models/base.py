@@ -141,6 +141,16 @@ def capture_extra_frontmatter(entry: "Entry", meta: dict[str, Any]) -> None:
         for k in _TIMESTAMP_KEYS
         if k not in meta
     )
+    # #173 review: a timestamp key whose source node is PRESENT but does not
+    # parse to an instant (`created_at:` with no value, `created_at: ''`,
+    # `created_at: Jan 15 2026`) gives parse_datetime() nothing to read, so the
+    # attribute holds the "now" fallback. The write path must not mistake that
+    # fallback for an edit: record the keys here so _frontmatter_for_file can
+    # hand the raw node back to the restyle untouched. An explicit assignment
+    # clears the key (see __setattr__), so a real edit still reaches the file.
+    entry._unparsed_timestamp_keys = frozenset(
+        k for k in _TIMESTAMP_KEYS if k in meta and _timestamp_instant(meta[k]) is None
+    )
     # Keep the mapping as ruamel parsed it, for style on the way back out.
     # Stored by reference, not copied: copying is what mangled anchors and
     # merge keys, and the write path only ever READS this. Two entries loaded
@@ -204,6 +214,30 @@ def _keep_sequence_style(old: Any, new: Any) -> Any:
     return new
 
 
+def _timestamp_instant(value: Any) -> datetime | None:
+    """``value`` as a UTC instant, or ``None`` when it is not one.
+
+    Two callers ask different questions of the same answer: whether a source
+    node parses at all (``capture_extra_frontmatter``) and whether a freshly
+    built value still means the same instant as the source node
+    (``_timestamp_same_instant``). ``None``, ``''`` and ``Jan 15 2026`` are not
+    instants. A bare ``date`` is midnight UTC and a naive ``datetime`` is read
+    as UTC, both matching ``parse_datetime``.
+    """
+    value = _plain(value)
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, tzinfo=UTC)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(re.sub(r"Z$", "+00:00", value))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return None
+
+
 def _timestamp_same_instant(old: Any, new: Any) -> bool:
     """True when ``new`` re-serialises the same instant as the raw ``old``
     source node, so the source node (and its style) can be kept.
@@ -222,23 +256,8 @@ def _timestamp_same_instant(old: Any, new: Any) -> bool:
     edit of a title from `"2026-01-15"` to `"2026-01-15T00:00:00Z"` keep the
     old node: the CLI would report success and the file would never change.
     """
-
-    def _as_utc(value: Any) -> datetime | None:
-        value = _plain(value)
-        if isinstance(value, datetime):
-            return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
-        if isinstance(value, date):
-            return datetime(value.year, value.month, value.day, tzinfo=UTC)
-        if isinstance(value, str):
-            try:
-                parsed = datetime.fromisoformat(re.sub(r"Z$", "+00:00", value))
-            except ValueError:
-                return None
-            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
-        return None
-
-    parsed_old = _as_utc(old)
-    parsed_new = _as_utc(new)
+    parsed_old = _timestamp_instant(old)
+    parsed_new = _timestamp_instant(new)
     return parsed_old is not None and parsed_new is not None and parsed_old == parsed_new
 
 
@@ -346,6 +365,16 @@ class Entry(ABC):
         default=frozenset(), init=False, repr=False, compare=False
     )
 
+    # Timestamp keys whose source frontmatter node exists but does not parse
+    # to an instant (`created_at:` with no value, `''`, `Jan 15 2026`).
+    # `parse_datetime` reads those as "now", so the attribute cannot be told
+    # apart from an edit by value alone: `_frontmatter_for_file` keeps the raw
+    # source node instead, and an explicit assignment clears the key here
+    # (see `__setattr__`) so a real edit still lands (#173 review).
+    _unparsed_timestamp_keys: frozenset[str] = field(
+        default=frozenset(), init=False, repr=False, compare=False
+    )
+
     def __setattr__(self, name: str, value: Any) -> None:
         """Assigning a field makes it explicit, whatever value it is given.
 
@@ -364,6 +393,10 @@ class Entry(ABC):
         if name in self._absent_default_keys:
             # frozenset, so rebind rather than mutate a shared instance.
             super().__setattr__("_absent_default_keys", self._absent_default_keys - {name})
+        if name in self._unparsed_timestamp_keys:
+            # Same rule for a timestamp the source carried but did not parse:
+            # the assignment is the user's value and must reach the file.
+            super().__setattr__("_unparsed_timestamp_keys", self._unparsed_timestamp_keys - {name})
         super().__setattr__(name, value)
 
     def touch_updated_at(self) -> None:
@@ -556,8 +589,19 @@ class Entry(ABC):
         deliberately setting `rank = 0` or `status = "proposed"` still
         reaches the file; the value check is a second guard for any writer
         that reaches the field without going through attribute assignment.
+
+        The same reasoning covers a timestamp whose source node did not parse
+        (`created_at:` with no value, `''`, `Jan 15 2026`): the attribute only
+        holds ``parse_datetime``'s "now" fallback, and emitting that would
+        replace a value the file already had with a wrong one -- worse than
+        the drop this branch fixes (#173 review). Those keys get the raw
+        source node back, so the restyle keeps it verbatim.
         """
         meta = self.to_frontmatter()
+        if self._source_frontmatter is not None:
+            for ts_key in self._unparsed_timestamp_keys:
+                if ts_key in meta and ts_key in self._source_frontmatter:
+                    meta[ts_key] = self._source_frontmatter[ts_key]
         absent = self._absent_default_keys
         if not absent:
             return meta

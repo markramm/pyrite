@@ -599,7 +599,9 @@ which Pyrite stops being one person's experiment.
   internal stamp goes through `Entry.touch_updated_at()` so bookkeeping is
   not mistaken for a user edit; and unchanged values keep their source node,
   so a `created_at: 2026-01-15` stays a bare date instead of being rewritten
-  as a timestamp (#151).
+  as a timestamp, and a value the loader cannot parse (`created_at:` with no
+  value, `''`, `Jan 15 2026`) is kept exactly as written rather than replaced
+  with the load time (#151).
 - **Two worktrees running the Playwright e2e suite at once collided on the
   same four ports (8088/5173 base, 8189/5274 auth) and could end up talking
   to each other's world.** Ports and data directories are now derived per

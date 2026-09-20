@@ -877,3 +877,142 @@ def test_an_explicit_updated_at_update_keeps_the_callers_value(swkb_env):
 
     after = _read_frontmatter(path)
     assert after["updated_at"] == explicit
+
+
+ADR_WITH_BARE_DATE = """---
+id: sample-adr-with-bare-date
+type: adr
+title: An ADR whose date is a bare YAML date
+adr_number: 1
+status: accepted
+date: 2025-06-01
+---
+
+Decision body.
+"""
+
+
+def test_a_timestamp_looking_title_edit_through_update_entry_reaches_the_file(swkb_env):
+    """#173 review: the same-instant shortcut must never run for a title.
+
+    The reviewer's case, on the service path the CLI, REST and MCP all take:
+    a title edited from `"2026-01-15"` to `"2026-01-15T00:00:00Z"` reported
+    success and left the old node, so the next index sync silently reverted
+    the edit.
+    """
+    path = swkb_env["note_file"]
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "title: A core-type note with an undeclared key",
+            'title: "2026-01-15"',
+        ),
+        encoding="utf-8",
+    )
+
+    swkb_env["service"].update_entry("sample-note", "swkb", title="2026-01-15T00:00:00Z")
+
+    assert "2026-01-15T00:00:00Z" in path.read_text(encoding="utf-8"), (
+        "the title edit was swallowed -- the write path kept the old node"
+    )
+
+
+def test_a_date_edit_through_update_entry_reaches_the_file(swkb_env):
+    """#173 review: editing an ADR's `date` to the SAME instant, in a fuller
+    representation, must reach disk.
+
+    `date: 2025-06-01` loads as midnight UTC and the edit supplies the same
+    instant as a datetime. The unscoped same-instant check kept the old node
+    -- the CLI reported success, the file never changed and the index then
+    flipped back to the file's value. Scoped to the timestamp keys, `date` is
+    written like any other changed field.
+    """
+    path = swkb_env["note_file"].parent / "sample-adr-with-bare-date.md"
+    path.write_text(ADR_WITH_BARE_DATE, encoding="utf-8")
+
+    swkb_env["service"].update_entry(
+        "sample-adr-with-bare-date", "swkb", date=datetime(2025, 6, 1, tzinfo=UTC)
+    )
+
+    after = path.read_text(encoding="utf-8")
+    assert "\ndate: 2025-06-01\n" not in after, (
+        "the date edit was swallowed -- the write path kept the bare-date node"
+    )
+    assert "date: 2025-06-01 00:00:00+00:00" in after
+
+
+UNPARSEABLE_CREATED_AT_NODES = {
+    "null": "created_at:\n",
+    "empty-string": "created_at: ''\n",
+    "non-iso-string": "created_at: Jan 15 2026\n",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(UNPARSEABLE_CREATED_AT_NODES))
+def test_a_created_at_that_does_not_parse_is_kept_verbatim(tmp_path, shape):
+    """#173 review: `created_at:` null / `''` / `Jan 15 2026` survive a no-op
+    round trip byte for byte.
+
+    `parse_datetime` falls back to "now" for all three, and the write path
+    emitted that fallback -- replacing a value the file already had with a
+    wrong one, which is worse than the drop this branch fixes. The rule is: a
+    source node that did not parse is kept verbatim.
+    """
+    from pyrite.storage.repository import KBRepository
+
+    kb_path = tmp_path / f"unparseable-created-at-{shape}"
+    kb_path.mkdir(parents=True)
+    path = kb_path / "created-at.md"
+    text = (
+        "---\n"
+        "id: unparseable-created-at\n"
+        "type: note\n"
+        "title: A created_at the loader cannot parse\n"
+        f"{UNPARSEABLE_CREATED_AT_NODES[shape]}"
+        "---\n"
+        "\n"
+        "Body.\n"
+    )
+    path.write_text(text, encoding="utf-8")
+    repo = KBRepository(KBConfig(name=f"unparseable-created-at-{shape}", path=kb_path))
+
+    entry = repo.load_entry_from_file(path)
+    assert entry.created_at is not None  # the in-memory fallback still happens
+    out = repo.save(entry)
+
+    assert out.read_text(encoding="utf-8") == text, (
+        "the write path replaced an unparseable created_at node with its parse fallback"
+    )
+
+
+def test_an_explicit_created_at_assignment_still_reaches_the_file(tmp_path):
+    """The escape hatch for the verbatim rule: an edit is not a no-op.
+
+    A key kept verbatim must still be writable -- assigning `created_at`
+    clears the verbatim flag, exactly as an assignment clears
+    `_absent_default_keys`.
+    """
+    from pyrite.storage.repository import KBRepository
+
+    kb_path = tmp_path / "unparseable-created-at-edit"
+    kb_path.mkdir(parents=True)
+    path = kb_path / "created-at.md"
+    path.write_text(
+        "---\n"
+        "id: unparseable-created-at\n"
+        "type: note\n"
+        "title: A created_at the loader cannot parse\n"
+        "created_at:\n"
+        "---\n"
+        "\n"
+        "Body.\n",
+        encoding="utf-8",
+    )
+    repo = KBRepository(KBConfig(name="unparseable-created-at-edit", path=kb_path))
+
+    entry = repo.load_entry_from_file(path)
+    entry.created_at = datetime(2030, 1, 2, 3, 4, 5, tzinfo=UTC)
+    out = repo.save(entry)
+
+    assert "2030-01-02 03:04:05+00:00" in out.read_text(encoding="utf-8"), (
+        "an explicit created_at assignment was swallowed by the verbatim rule"
+    )
