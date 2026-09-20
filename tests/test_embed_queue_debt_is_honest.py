@@ -325,8 +325,12 @@ class TestAWriteNeverQueuesIntoADatabaseThatCannotSeeIt:
         from pyrite.services.embedding_worker import EmbeddingWorker
 
         svc = _svc(tmp_path, auto_embed=True)
+        # A real entry, not a bare enqueue of an id that was never created:
+        # an absent entry is *void* debt and is now retired on sight
+        # (TestADeletedEntrysDebtIsVoid). What this test pins is the other
+        # case -- the entry exists and the embed refused -- which stays queued.
+        svc.create_entry("t", "ghost", "Ghost", "note", "a body")
         worker = EmbeddingWorker(svc.db, max_attempts=3)
-        worker.enqueue("ghost", "t")
         worker._embedding_svc = MagicMock(**{"embed_entry.return_value": False})
 
         processed = worker.process_batch()
