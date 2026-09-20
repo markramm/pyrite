@@ -155,12 +155,20 @@ tracked: bugs and requests on GitHub, roadmap here).
 
 ---
 
-## 0.24.2 — Operational (next; target ~3 weeks)
+## 0.24.3 — Operational (shipped 2026-09-20)
+
+Planned and worked as 0.24.2; **cut as 0.24.3** because `v0.24.2` was already
+taken by an accidental tag — it pointed at a mid-development commit whose own
+`pyproject.toml` said 0.24.1, carried an empty GitHub release, and `main` never
+moved to it. A tag is immutable by convention, so the number was spent; the
+content is unchanged.
 
 **Theme:** a release should be an unremarkable event, and the tool should be
 boring for its operator. No new product surface. Definition of done: the
 release is cut by one script from a CI-verified commit under ADR-0032's rules,
-and every GitHub issue in the 0.24.2 milestone is closed.
+and every GitHub issue in the milestone is closed. **Met** — 58 issues closed,
+the tag cut by `scripts/release.py` on its first real use, which caught six
+defects across seven dry runs that neither the tests nor CI could see.
 
 **How this list was chosen:** GitHub issues #9–#21 (the migrated bugs) plus the
 2026-09-17 review's process findings. Under ADR-0033, "what is broken" lives in
@@ -304,19 +312,104 @@ open until a name is chosen).
 
 ---
 
-## 0.25 — Shared-Instance Pilot (item set to be re-chosen after 0.24.2)
+## 0.25 — The community's first release (next)
 
-The definition of done is unchanged: one or two invited peers, logged in,
-reading the corpus read-only for two weeks with zero operator interventions.
-The **2026-07-03 scope freeze is superseded** — much of its Workstream 1 shipped
-in 0.24.1, its process items are now 0.24.2, and it could not know two things:
-the per-KB read-scoping gap (fixed in 0.24.2) and that the web UI is not
-packaged. The item set is re-chosen when 0.24.2 ships, from:
-[[epic-shared-instance-readiness]]; the web first-visit fixes
-([[web-kb-context-single-authority]], [[web-fix-dropped-kb-seams]],
+**Theme:** the project moves to its own organization, and the contribution
+path is made good enough that the people already sending patches do not have
+to work around it. No new product surface.
+
+**Definition of done:** the repository is at `pyrite-wiki/pyrite`, a release
+can be cut from there, and a contributor can land a PR without hitting the
+potholes this milestone names.
+
+**How this list was chosen.** 0.24.3 merged 86 PRs, 8 of them from five
+outside contributors. Of the 13 PRs open when it was cut, **11 were theirs**.
+The queue has already inverted, so the release that follows is chosen from
+what contributors are actually doing plus what is in their way — not from a
+scope freeze written before any of them arrived. Under ADR-0033 the bugs live
+in GitHub: check `gh issue list --milestone 0.25` alongside this file.
+
+**The Shared-Instance Pilot moves out**, unscheduled. Its definition of done
+— one or two invited peers reading the corpus read-only for two weeks with
+zero operator interventions — is unchanged and still wanted, but it is a
+product goal and this release is about the project's own machinery. Its item
+set ([[epic-shared-instance-readiness]]; the web first-visit fixes
+[[web-kb-context-single-authority]], [[web-fix-dropped-kb-seams]],
 [[web-sidebar-ia-regroup]], [[web-graph-default-scope-and-guards]],
-[[web-light-mode-chrome-repair]]); [[oauth-state-store-persistence]]; the hosting-security static audit; the
-invite doc. (Playwright moved to 0.24.2.)
+[[web-light-mode-chrome-repair]]; [[oauth-state-store-persistence]]; the
+hosting-security static audit; the invite doc) is held intact for whichever
+release takes it up.
+
+### Workstream 1 — Stop the contribution path from costing people evenings
+
+**#243 leads this release, and should land before the org move.** `CHANGELOG.md`
+conflicted five times in one session, three of them on first-time
+contributors' PRs whose changes had nothing to do with each other. It also
+produced a second failure mode during the 0.24.3 cut: two PRs wrote their
+entry into the *published* section, because right after a release
+`[Unreleased]` is a two-line empty heading sitting above 660 lines of real
+content. Changelog fragments (`changelog.d/`, assembled by
+`scripts/release.py`) remove both — a new file cannot conflict, and there is
+no section to choose wrongly. The org move brings a burst of PRs through a new
+queue; landing this first means those contributors never meet it.
+
+- **#243** changelog fragments — **first, before #182**
+- **#235** no agent-facing documentation of the write path
+- **#244** `.claude/` ships 3,897 lines of agent instructions with three
+  audiences and no separation; `CONTRIBUTING.md:276` sends contributors to a
+  skill whose own description tells them PRs are someone else's job
+- **#248** release notes credit only merged-PR authors, so a contributor whose
+  patch lands via someone else's PR is invisible to the script
+
+### Workstream 2 — The move to `pyrite-wiki`
+
+The org is the enabler: PR queues, contributor permissions, and a place for
+extensions to live — including ones that migrate out of core, and ones the
+community writes.
+
+- **#259** `scripts/release.py` hardcodes `markramm/pyrite` and step (a)
+  *refuses to release* when `origin` disagrees. **Must land before or with
+  #182**, or the first release from the new org is blocked on an emergency
+  patch to the release script.
+- **#182** the transfer itself, and the checklist of what has to survive it
+  (rulesets, secrets, CodeQL, Discussions, labels, milestones, open PRs)
+
+### Workstream 3 — The loop stops poisoning its own evidence
+
+Four failure modes where something reasonable returns a wrong answer silently
+— the same family as the product bugs in Workstream 4, applied to the
+development process.
+
+- **#209** a long-lived weekly branch resurrects backlog items already merged
+  to `done/`
+- **#210** the conductor's main checkout goes stale, so every verification
+  grep reads pre-merge code and reports a landed fix as not landed
+- **#236** a venv per worktree costs 1 GB, and disk pressure surfaces as
+  `3 failed, 1088 errors` on branches that passed minutes earlier — the
+  machine budget counts suite slots and memory, and nothing counts disk
+- **#242** a worktree's `.venv` can vanish mid-session; three agents lost
+  theirs in one night and all three noticed by luck
+
+### Workstream 4 — The answer is wrong and nothing errors
+
+Every one of these was found by someone using the tool, and every one of them
+already has a contributor's PR against it. This is the workstream the
+community chose.
+
+- **#19** `kb remove` permanently refuses a KB whose `config.yaml` is gone
+- **#44** `index health` false-positives on a declared subdirectory's trailing
+  slash — a KB built exactly as the getting-started guide instructs reports
+  `warning` on every entry
+- **#149** `GenericEntry` duplicates undeclared frontmatter keys into a
+  `metadata:` block
+- **#151** `created_at` / `updated_at` are read from frontmatter and never
+  written back, so an explicit key is dropped on the next save
+- **#196** Pyrite never configures logging, so `logger.warning` falls through
+  to the root handler *(shipped: #225)*
+- **#197** `pyrite create -t note` silently creates an ADR *(shipped: #252)*
+- **#231** `pyrite update -f tags=a,b` writes a bare string the reader then
+  iterates character by character, silently dropping the entry out of every
+  tag-keyed view
 
 ---
 
