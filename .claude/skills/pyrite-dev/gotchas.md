@@ -426,3 +426,47 @@ Two related rules the fix established:
 
 Still open: an entry whose on-disk value is already off-enum (`kind: refactor`)
 cannot be updated at all until hand-repaired (#47).
+
+## The suite silently disables write-time embedding, so embedding tests can pass vacuously
+
+The **root** `conftest.py` (repo root, not `tests/conftest.py`) has an autouse
+fixture `_no_auto_embed_unless_marked`. For every test that does **not** carry
+`@pytest.mark.embeddings` it does two things:
+
+```python
+monkeypatch.setattr(KBService, "_get_embedding_svc", _no_model)  # returns None
+monkeypatch.setenv("PYRITE_AUTO_EMBED", "0")
+```
+
+That is correct and load-bearing — it is the 3m37s → 45 s suite win — but it
+means **an in-process test asserting anything about whether a write loads the
+embedding model is asserting nothing**, unless it opts back in.
+
+This bites in a way that looks like success. Writing the regression test for
+#13, a test asserting "`create_entry` imports no torch" **passed on the
+unfixed code**, because the stub had already removed the embedding service the
+bug runs through. The same code, run as a plain script, took 9.9 s and
+imported 1277 `torch`/`sentence_transformers` modules. A green test, a live
+bug, and nothing in the output to tell them apart.
+
+Note also that the env var and the stub cover *different* things: the stub
+reaches any `KBService`, while `PYRITE_AUTO_EMBED=0` is applied by
+`_apply_env_overrides` during `load_config()` only — a test that constructs
+`Settings(auto_embed=True)` by hand is not covered by it at all.
+
+Two honest ways out, both used by
+`tests/test_writes_never_block_on_embedding.py`:
+
+- **Run the write in a subprocess.** A cold interpreter has none of the
+  suite's stubs, and its `sys.modules` is a clean measurement. Bonus: it is
+  the only way to ask "did *this one write* import torch", since once any test
+  in a worker imports it the in-process answer is permanently yes.
+- **Mark the test `@pytest.mark.embeddings`** when you genuinely want the real
+  path in-process — but then you own the ~10 s model load for that worker.
+
+And to simulate a fresh install without downloading 90 MB: point `HF_HOME`
+(plus `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`) at an empty directory and
+set `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`. The model load then fails
+the way it would on a machine that has never seen it, in about 7 s instead of
+a minute. **A timing bound alone is never enough** — every developer machine
+has the model cached, which is precisely why no test ever caught #13.
