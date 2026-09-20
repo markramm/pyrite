@@ -130,6 +130,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`pyrite --version` (also `-V`), which had never existed.** The CLI
+  answered `Error: No such option: --version` for every release up to this
+  one. The version itself was never wrong — `pyrite.__version__` reads from
+  `pyproject.toml` with an installed-metadata fallback, and a test has pinned
+  it since it drifted to `0.12.0` while `pyproject.toml` said `0.24.1`. That
+  test covered the package attribute; nothing covered the command line, which
+  is the surface a user meets first. Found by the release script's own
+  release-layer step on its first real run, against a clean install from the
+  release SHA.
+
 - **`scripts/release.py`: a release is one command.** Six ordered steps, with
   every check in front of the first thing that cannot be undone —
   preconditions (clean `dev` at `origin/dev`; `origin` really being the repo
