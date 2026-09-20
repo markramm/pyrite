@@ -1159,7 +1159,14 @@ class PyriteMCPServer:
         # ADR-0034 rule 2, per item: a spec whose body is marked truncated is
         # refused on its own and never reaches the service, while its clean
         # siblings are created -- the tool's existing per-item contract
-        # ({"created": False, "error": ...}), not an all-or-nothing failure.
+        # ({"created": False, "error": ...}).
+        #
+        # This does not contradict #95/#239's "one malformed entry rejects the
+        # entire batch": that is SCHEMA validation, which fails the call. A
+        # truncated body is not malformed -- it is a well-formed entry carrying
+        # a fragment -- so dropping just that spec loses nothing the caller
+        # wanted written, while rejecting its siblings would punish records
+        # that were never at risk.
         refusals: dict[int, dict[str, Any]] = {}
         clean: list[dict[str, Any]] = []
         for i, spec in enumerate(entries):

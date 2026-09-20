@@ -18,11 +18,15 @@ import pytest
 
 pytest.importorskip("fastapi", reason="fastapi not installed")
 
-from pyrite.server.mcp_server import DEFAULT_BODY_CHUNK
+from pyrite.services.body_bounds import DEFAULT_BODY_CHUNK, MAX_BODY_CHUNK
 
 from .test_mcp_server import _make_mcp_server
 
-BIG = "A" * 20000
+#: Longer than the per-body ceiling, so every read of it truncates no matter
+#: what `body_limit` the caller asks for -- ADR-0034 (i) clamps the limit to
+#: MAX_BODY_CHUNK, so a body merely longer than the DEFAULT chunk could be
+#: fetched whole by a caller passing a bigger limit, and would not be marked.
+BIG = "A" * (MAX_BODY_CHUNK + 5000)
 
 
 # ---------------------------------------------------------------------------
@@ -48,13 +52,27 @@ def _create(server, title, body):
 
 
 def _stored_body(server, entry_id):
-    """The full body on disk, bypassing any read-side bound."""
-    res = server._dispatch_tool(
-        "kb_read_body",
-        {"entry_id": entry_id, "kb_name": "test", "body_limit": 1_000_000},
-    )
-    assert "error" not in res, res
-    return res["body"]
+    """The full body on disk, reassembled the way an agent is told to.
+
+    No single read can return it: ADR-0034 (i) clamps any `body_limit` to
+    MAX_BODY_CHUNK, so this pages with `body_offset` until `has_more` is
+    false -- exactly the continuation the refusal message names. That makes
+    this helper a live check that the advice we give actually works.
+    """
+    parts: list[str] = []
+    offset = 0
+    while True:
+        res = server._dispatch_tool(
+            "kb_read_body",
+            {"entry_id": entry_id, "kb_name": "test", "body_offset": offset},
+        )
+        assert "error" not in res, res
+        parts.append(res["body"])
+        if not res["has_more"]:
+            return "".join(parts)
+        advanced = res["body_chunk_size"]
+        assert advanced > 0, f"has_more with no progress at offset {offset}: {res}"
+        offset += advanced
 
 
 def _assert_refusal(res):
@@ -116,6 +134,74 @@ def test_mcp_round_trip_kb_batch_read_into_kb_create_is_refused():
         listed = server._dispatch_tool("kb_list_entries", {"kb_name": "test"})
         titles = [e.get("title") for e in listed.get("entries", [])]
         assert "Copy of Batch Source" not in titles
+
+
+# ---------------------------------------------------------------------------
+# The seam between ADR-0034 (i)'s read-side bounds and (ii)'s write refusal.
+# These two landed on separate branches; the only place they meet is the
+# marker, so these pin that they agree about it.
+# ---------------------------------------------------------------------------
+
+
+def test_budget_exhausted_entry_is_refused_on_write():
+    """An entry emptied by (i)'s per-RESPONSE budget still refuses on write.
+
+    `fill_budget` spends PYRITE_BODY_RESPONSE_BUDGET in request order, so a
+    later entry can come back with `body: ""` and the marker. That is the most
+    dangerous shape on this branch: writing it back replaces a whole body with
+    the EMPTY STRING. The guard must treat an empty marked body as a body --
+    `has_body` tests `is not None`, not truthiness, for exactly this reason.
+    """
+    from pyrite.services.body_bounds import BODY_RESPONSE_BUDGET
+
+    with _mcp() as server:
+        # Each entry takes the DEFAULT chunk (no body_limit passed), so it
+        # takes budget/default entries to spend the budget -- plus two to be
+        # sure at least one arrives with nothing left.
+        n = (BODY_RESPONSE_BUDGET // DEFAULT_BODY_CHUNK) + 2
+        ids = [_create(server, f"Budget Entry {i}", BIG) for i in range(n)]
+
+        got = server._dispatch_tool(
+            "kb_batch_read",
+            {"entries": [{"entry_id": i, "kb_name": "test"} for i in ids]},
+        )
+        starved = [e for e in got["entries"] if e.get("body") == ""]
+        assert starved, f"budget never ran out across {n} entries: {got}"
+        entry = starved[0]
+        assert entry["body_truncated"] is True
+        assert entry["body_length"] > 0, "a starved entry still reports its true length"
+
+        res = server._dispatch_tool("kb_update", {**entry, "entry_id": entry["id"]})
+
+        _assert_refusal(res)
+        assert _stored_body(server, entry["id"]) == BIG
+
+
+def test_fields_projected_marker_is_still_refused_on_write():
+    """(i) keeps the marker through a `fields` projection; (ii) must catch it.
+
+    ADR-0034 rule 2 requires a projection that kept `body` to keep the marker
+    keys, so a caller cannot be handed a slice it cannot tell is a slice. The
+    write side has to refuse that projected shape -- otherwise the read side's
+    promise is kept and the write side's is not.
+    """
+    with _mcp() as server:
+        entry_id = _create(server, "Projected Source", BIG)
+
+        got = server._dispatch_tool(
+            "kb_batch_read",
+            {
+                "entries": [{"entry_id": entry_id, "kb_name": "test"}],
+                "fields": ["title", "body"],
+            },
+        )
+        entry = got["entries"][0]
+        assert entry["body_truncated"] is True, f"(i) must keep the marker: {entry}"
+
+        res = server._dispatch_tool("kb_update", {**entry, "entry_id": entry_id})
+
+        _assert_refusal(res)
+        assert _stored_body(server, entry_id) == BIG
 
 
 # ---------------------------------------------------------------------------

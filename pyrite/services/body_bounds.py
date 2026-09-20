@@ -262,6 +262,12 @@ def has_body(payload: Any, *, body_key: str = "body") -> bool:
     body here to lose. Nested shapes count because some write tools carry
     their bodies one level down (a list of child-task specs, an import's
     parsed entries).
+
+    The test is ``is not None``, deliberately, **not** truthiness. An entry
+    that :meth:`BodyBounds.fill_budget` reached after the per-response budget
+    was spent comes back with ``body: ""`` and the full marker; that empty
+    string is the most destructive thing on this branch to write back, since
+    it replaces a whole stored body with nothing. ``""`` is a body.
     """
     if isinstance(payload, dict):
         if payload.get(body_key) is not None:

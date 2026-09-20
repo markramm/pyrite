@@ -697,8 +697,7 @@ async def import_entries(
             extra = {
                 k: v
                 for k, v in entry_data.items()
-                if k not in ("id", "title", "entry_type", "body", *MARKER_KEYS)
-                and v is not None
+                if k not in ("id", "title", "entry_type", "body", *MARKER_KEYS) and v is not None
             }
             entry = svc.create_entry(
                 kb, entry_id, entry_data["title"], entry_type, entry_data.get("body", ""), **extra

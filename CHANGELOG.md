@@ -447,12 +447,13 @@ Target: 0.24.2 "Operational" — see `kb/roadmap.md`.
   keyword-searchable at once.
 
 - **Writing back a body that a bounded read had truncated silently destroyed
-  the rest of the entry.** `kb_get`/`kb_batch_read` return the first 8,000
-  characters of a long body plus `body_truncated: true`; nothing refused that
-  body on the way back in, so an agent that edited what it received and saved
-  it replaced a 170,000-character entry with 8,000 — silent, permanent, and
-  produced by the safety feature itself. 21% of entries on the maintainer's
-  index are long enough to be affected. Every write surface that can receive a
+  the rest of the entry.** `kb_get`/`kb_batch_read` return at most the default
+  chunk (8,000 characters, `PYRITE_BODY_CHUNK_DEFAULT`) of a long body plus
+  `body_truncated: true`; nothing refused that body on the way back in, so an
+  agent that edited what it received and saved it replaced a
+  170,000-character entry with that fragment — silent, permanent, and produced
+  by the safety feature itself. 21% of entries on the maintainer's index are
+  long enough to be affected. Every write surface that can receive a
   body now refuses one carrying a truthy `body_truncated` marker, with
   `VALIDATION_FAILED`, `retryable: false` and a message naming `kb_read_body` /
   `body_offset` as the way to assemble the whole body first: MCP's write and

@@ -409,7 +409,7 @@ def test_importer_marker_passthrough_is_pinned():
     The audit #230 asked for, measured rather than read off the source, and
     kept executable so the answer cannot rot:
 
-    - **json** carries it (this branch's `TRUNCATION_KEYS` change).
+    - **json** carries it (this branch's `MARKER_KEYS` passthrough).
     - **markdown** carries it, and always has: `_parse_single_md` splats every
       frontmatter key it does not consume, so a saved bounded read has been an
       unguarded write input on REST's `/entries/import` since before this

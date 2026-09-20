@@ -74,9 +74,9 @@ def _strip_truncation_keys(values: dict[str, Any]) -> dict[str, Any]:
     `create_entry`/`update_entry` as an extra field would be persisted as
     frontmatter, come back on the next read, and be echoed into a later write.
     """
-    from ..services.body_bounds import TRUNCATION_KEYS
+    from ..services.body_bounds import MARKER_KEYS
 
-    return {k: v for k, v in values.items() if k not in TRUNCATION_KEYS}
+    return {k: v for k, v in values.items() if k not in MARKER_KEYS}
 
 
 def _parse_field_value(value: str) -> Any:
