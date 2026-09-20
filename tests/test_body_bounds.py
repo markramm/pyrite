@@ -154,6 +154,32 @@ class TestChunkBody:
         assert out["body_offset"] == 500
         assert out["body_chunk_size"] == 0
 
+    def test_negative_offset_is_clamped_to_zero(self):
+        """A negative offset must not slice from the END of the body.
+
+        Python's `body[-3:]` returns the last three characters; reporting
+        those as `body_offset: -3` would hand a caller the tail of an entry
+        while telling it it read the head.
+        """
+        bounds = BodyBounds(default_chunk=8000, max_chunk=20000, response_budget=40000)
+        out = bounds.chunk_body({"id": "e", "body": "abcdefghij"}, offset=-3)
+        assert out["body"] == "abcdefghij"
+        assert "body_truncated" not in out
+
+    def test_negative_offset_clamped_on_a_truncated_body(self):
+        bounds = BodyBounds(default_chunk=10, max_chunk=20000, response_budget=40000)
+        out = bounds.chunk_body({"id": "e", "body": "abcdefghij" * 3}, offset=-5)
+        assert out["body"] == "abcdefghij"
+        assert out["body_offset"] == 0
+        assert out["body_truncated"] is True
+
+    def test_negative_limit_yields_empty_not_reversed_slice(self):
+        bounds = BodyBounds(default_chunk=8000, max_chunk=20000, response_budget=40000)
+        out = bounds.chunk_body({"id": "e", "body": "x" * 100}, limit=-5)
+        assert out["body"] == ""
+        assert out["body_chunk_size"] == 0
+        assert out["body_length"] == 100
+
     def test_zero_length_remaining_budget_still_marks(self):
         bounds = BodyBounds(default_chunk=8000, max_chunk=20000, response_budget=40000)
         out = bounds.chunk_body({"id": "e", "body": "x" * 100}, limit=0)
@@ -415,6 +441,26 @@ class TestFieldsNeverDefeatsTheBound:
             for entry in entries:
                 if entry.get("body"):
                     assert len(entry["body"]) <= 8000
+
+    def test_kb_get_negative_body_offset_does_not_return_the_tail(self):
+        with _server() as server:
+            eid = _create(server, "Tail Probe", "HEAD" + "m" * 29992 + "TAIL")
+            entry = server._dispatch_tool(
+                "kb_get", {"entry_id": eid, "kb_name": "test", "body_offset": -4}
+            )["entry"]
+            assert entry["body"].startswith("HEAD")
+            assert entry["body_offset"] == 0
+
+    def test_kb_read_body_negative_offset_does_not_return_the_tail(self):
+        """The continuation tool slices directly; it needs the same clamp."""
+        with _server() as server:
+            eid = _create(server, "Continuation Tail", "HEAD" + "m" * 29992 + "TAIL")
+            result = server._dispatch_tool(
+                "kb_read_body", {"entry_id": eid, "kb_name": "test", "body_offset": -4}
+            )
+            assert result["body"].startswith("HEAD")
+            assert result["body_offset"] == 0
+            assert result["has_more"] is True
 
     def test_kb_read_body_clamps_to_the_ceiling(self):
         with _server() as server:

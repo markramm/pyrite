@@ -129,6 +129,11 @@ class BodyBounds:
         if body is None:
             return entry
         body_len = len(body)
+        # A negative offset would slice from the END: `body[-5 : -5 + 10]` is
+        # the tail of a short body and EMPTY on a long one, either way
+        # reported as a read from `body_offset: -5`. Clamp it, so an offset
+        # always means "characters from the start".
+        offset = max(0, int(offset))
         limit = self.effective_limit(limit)
         if budget is not None:
             limit = min(limit, max(0, budget))

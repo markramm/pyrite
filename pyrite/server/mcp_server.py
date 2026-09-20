@@ -547,7 +547,10 @@ class PyriteMCPServer:
         """
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
-        offset = args.get("body_offset", 0)
+        # Same clamp as chunk_body: a negative offset slices from the end,
+        # which on a long body returns an empty chunk AND has_more: false —
+        # stopping a paginating agent dead on a body it has not read.
+        offset = max(0, int(args.get("body_offset", 0)))
         limit = self.body_bounds.effective_limit(args.get("body_limit"))
 
         result = self.svc.get_entry(entry_id, kb_name=kb_name)
