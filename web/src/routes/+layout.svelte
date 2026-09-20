@@ -16,42 +16,19 @@
 	import { brandStore } from '$lib/stores/brand.svelte';
 	import { useStarred } from '$lib/stores/starred.svelte';
 	import { registerShortcut } from '$lib/utils/keyboard';
-	import { goto, afterNavigate, onNavigate } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
-	import { applyBrandTitle, beginNavigation, createBrandTitleState } from './brand-title';
+	import { UNTITLED_ROUTES } from './brand-title-routes';
 
 	let { children } = $props();
 
 	let shortcutsOpen = $state(false);
 
-	// #49: gives document.title a brand-name default without ever
-	// clobbering a route's own <svelte:head><title>. See brand-title.ts.
-	const brandTitleState = createBrandTitleState(
-		typeof document !== 'undefined' ? document.title : 'Pyrite'
-	);
-
 	const starredStore = useStarred();
 
 	const AUTH_ROUTES = ['/login', '/register'];
-
-	// #49: onNavigate fires immediately before a client-side navigation
-	// replaces the current route's DOM (never on the initial load, where
-	// there's no outgoing route to be confused with). It snapshots
-	// document.title so applyBrandTitle can tell the outgoing route's
-	// leftover title apart from a claim made by the incoming one.
-	onNavigate(() => {
-		beginNavigation(brandTitleState);
-	});
-
-	// afterNavigate fires once the destination route's DOM — including any
-	// <svelte:head><title> it mounted — has settled (also once, for the
-	// initial load). Apply the brand-name default; it no-ops if the route
-	// already claimed the title.
-	afterNavigate(() => {
-		applyBrandTitle(brandTitleState, brandStore.loaded ? brandStore.name : brandTitleState.staticDefault);
-	});
 
 	onMount(() => {
 		// Load branding early — non-blocking; display-only fallback is fine.
@@ -135,21 +112,33 @@
 		};
 	});
 
-	// Push branding into the DOM as it loads:
-	//   --brand-primary      — accent color referenced by chrome components
-	//   document.title       — default for a route that declares none (#49);
-	//                          applyBrandTitle no-ops once a route has its
-	//                          own <svelte:head><title>, so this never
-	//                          clobbers it, however this effect's timing
-	//                          relative to the page mount lands.
+	// Push the brand color into the DOM as it loads.
 	$effect(() => {
 		if (typeof document === 'undefined') return;
 		document.documentElement.style.setProperty('--brand-primary', brandStore.primary_color);
-		if (brandStore.loaded) {
-			applyBrandTitle(brandTitleState, brandStore.name);
-		}
 	});
 </script>
+
+<!--
+  #49: a brand-name default document.title, for the routes that declare
+  none of their own (UNTITLED_ROUTES, pinned against the routes on disk by
+  untitled-routes.test.ts). Svelte compiles a <title> tag to a bare
+  document.title = … assignment inside an effect -- there is no shared
+  element a later-mounting title "wins" against, so the only way this
+  layout can guarantee it never clobbers a route's own title is to render
+  NO title effect at all when the route has one. An earlier version of
+  this fix instead wrote an unconditional title guarded by comparing
+  document.title to a navigation snapshot; a same-route re-render (e.g.
+  entries/+page.svelte's goto(url, { replaceState: true }) on every filter
+  change) doesn't re-run the destination's static <title> effect, so that
+  comparison can't tell "re-claimed the same title" from "claimed
+  nothing" and clobbered it. See the conductor review on PR #202.
+-->
+<svelte:head>
+	{#if UNTITLED_ROUTES.includes($page.route.id ?? '')}
+		<title>{brandStore.name}</title>
+	{/if}
+</svelte:head>
 
 {#if authStore.loading}
 	<div class="flex h-screen items-center justify-center bg-zinc-900">

@@ -2,11 +2,6 @@ import { test, expect } from '@playwright/test';
 
 import { SEEDED_DAILY_DATES, SEEDED_ENTRIES } from './fixtures';
 
-// No toHaveTitle assertion here: the root layout overwrites every route's
-// <title> with the bare brand name (#49, pre-existing). Following package F
-// (timeline.spec.ts, graph.spec.ts), the assertion is dropped rather than
-// skipped.
-
 // status.total_entries is the seeded KB's non-daily entries plus the seeded
 // daily notes (see fixtures.ts SEEDED_ENTRIES / SEEDED_DAILY_DATES).
 const EXPECTED_TOTAL_ENTRIES = SEEDED_ENTRIES.length + SEEDED_DAILY_DATES.length;
@@ -17,6 +12,7 @@ test.describe('QA Dashboard Page', () => {
 		// Topbar rendered via the `title` prop (no breadcrumbs), which already
 		// carries data-testid="page-title" — no page edit needed here.
 		await expect(page.getByTestId('page-title')).toHaveText('QA Dashboard');
+		await expect(page).toHaveTitle(/QA Dashboard — Pyrite/);
 	});
 
 	test('loading ends and shows the seeded entry count', async ({ page }) => {

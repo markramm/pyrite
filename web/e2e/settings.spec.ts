@@ -6,22 +6,10 @@ test.describe('Settings Page', () => {
 		await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
 	});
 
-	// #49 (github.com/pyrite-wiki/pyrite/issues/49): web/src/routes/+layout.svelte
-	// sets `document.title = brandStore.name` in an unconditional `$effect`
-	// once branding finishes loading, clobbering this route's own
-	// <svelte:head><title>Settings — Pyrite</title>. Reproduced live before
-	// this rewrite: `toHaveTitle` receives "Pyrite", never "Settings —
-	// Pyrite", on every run. +layout.svelte is outside this package's
-	// footprint (not +page.svelte, not settings/**, not a lib component) so
-	// it is not fixed here — see the theme's report for the conductor to
-	// file/track.
-	test.fixme(
-		'sets the document title',
-		async ({ page }) => {
-			await page.goto('/settings');
-			await expect(page).toHaveTitle(/Settings — Pyrite/);
-		}
-	);
+	test('sets the document title', async ({ page }) => {
+		await page.goto('/settings');
+		await expect(page).toHaveTitle(/Settings — Pyrite/);
+	});
 
 	test('shows the General section with a Default KB input', async ({ page }) => {
 		await page.goto('/settings');

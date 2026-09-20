@@ -2,12 +2,6 @@ import { test, expect } from '@playwright/test';
 
 import { E2E_KB, SEEDED_NOTES, SEEDED_PEOPLE } from './fixtures';
 
-// No toHaveTitle assertion here: the root layout overwrites every route's
-// <title> with the bare brand name (#49, pre-existing). Following package F
-// (timeline.spec.ts, graph.spec.ts), the assertion is dropped rather than
-// skipped — the page's own assertions (input, result links) already prove
-// the route rendered.
-
 // The one seeded note the #9 assertion (below) keys on.
 const ALPHA = SEEDED_NOTES.find((n) => n.id === 'e2e-note-alpha')!;
 
@@ -16,6 +10,7 @@ test.describe('Search Page', () => {
 		await page.goto('/search');
 		const input = page.getByPlaceholder('Search entries...');
 		await expect(input).toBeVisible();
+		await expect(page).toHaveTitle(/Search — Pyrite/);
 	});
 
 	test('has mode selector', async ({ page }) => {
