@@ -2,7 +2,17 @@
 .venv
 __pycache__
 *.pyc
-node_modules
+# `node_modules` alone matches only the repository root. `web/node_modules`
+# was therefore COPYied into the frontend stage, shadowing what `npm ci` had
+# just installed from the lockfile -- the container built against whatever
+# the host happened to have. Harmless while the two agreed; a hard build
+# failure the moment they did not:
+#
+#   Cannot start service: Host version "0.27.3" does not match binary
+#   version "0.28.2"
+#
+# `**/node_modules` matches at any depth, which is what was meant.
+**/node_modules
 web/dist
 web/.svelte-kit
 tests/
