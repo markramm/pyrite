@@ -59,11 +59,24 @@ def ensure_schema(engine) -> None:
             $$ LANGUAGE plpgsql;
         """)
         )
+        # The guard is scoped to *this* schema's `entry` table. `pg_trigger` is
+        # cluster-wide and `tgname` is not unique across tables, so asking only
+        # whether a trigger named `trg_entry_fts` exists anywhere answers "yes"
+        # for some other schema's copy: this schema then silently gets no
+        # trigger, `entry.fts_vector` is never populated, and keyword search
+        # returns nothing with no error. `'entry'::regclass` resolves through
+        # the connection's search_path, so it names the table this call is
+        # actually setting up. Two instances sharing one database in separate
+        # schemas is an ordinary deployment, and it is how the backend
+        # conformance tests isolate xdist workers.
         conn.execute(
             text("""
             DO $$ BEGIN
                 IF NOT EXISTS (
-                    SELECT 1 FROM pg_trigger WHERE tgname = 'trg_entry_fts'
+                    SELECT 1 FROM pg_trigger t
+                    JOIN pg_class c ON c.oid = t.tgrelid
+                    WHERE t.tgname = 'trg_entry_fts'
+                      AND c.oid = 'entry'::regclass
                 ) THEN
                     CREATE TRIGGER trg_entry_fts
                     BEFORE INSERT OR UPDATE ON entry
