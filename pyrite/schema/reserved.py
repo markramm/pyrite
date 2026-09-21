@@ -31,6 +31,8 @@ RESERVED_FIELD_NAMES: frozenset[str] = frozenset(
         "extra_frontmatter",
         "_absent_default_keys",
         "_source_frontmatter",
+        "_nested_metadata_keys",
+        "_raw_metadata",
         # Frontmatter-only keys
         "type",
     }

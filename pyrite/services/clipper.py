@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 def _check_url_safe(url: str) -> None:
-    """Reject URLs that would let the clipper act as an SSRF gadget.
+    """Reject one URL that would let the clipper act as an SSRF gadget.
+
+    This validates the URL it is handed and nothing else: it does not see
+    redirects. The fetch path applies it to every hop through
+    ``_reject_blocked_request`` (#219).
 
     Raises ClipperBlockedHostError if:
       - the scheme is not http(s);
@@ -84,6 +88,18 @@ def _reject_if_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address, host: 
         raise ClipperBlockedHostError(
             f"Refusing to fetch {host!r}: resolved IP {ip} is on the SSRF blocklist"
         )
+
+
+async def _reject_blocked_request(request: httpx.Request) -> None:
+    """Validate every request in the chain, redirect hops included (#219).
+
+    httpx awaits a request hook before each request it sends, so a redirect to
+    a blocked address is refused rather than followed, and the response the
+    attacker aimed for is never fetched. The refusal is the same
+    ``ClipperBlockedHostError`` a directly blocked URL raises, so a caller
+    cannot tell "blocked directly" from "blocked after a redirect".
+    """
+    _check_url_safe(str(request.url))
 
 
 @dataclass
@@ -176,7 +192,8 @@ class ClipperService:
         Raises:
             ClipperBlockedHostError: if ``url`` uses a non-http(s) scheme
                 or resolves to a loopback / link-local / RFC1918 private /
-                reserved address. The check runs before any HTTP request.
+                reserved address. The check runs before the first request, and
+                again for every redirect hop via ``_reject_blocked_request``.
         """
         _check_url_safe(url)
 
@@ -184,6 +201,7 @@ class ClipperService:
             timeout=self.timeout,
             follow_redirects=True,
             headers={"User-Agent": "Pyrite-Clipper/1.0"},
+            event_hooks={"request": [_reject_blocked_request]},
         ) as client:
             response = await client.get(url)
             response.raise_for_status()

@@ -17,7 +17,9 @@ suite has no async fixtures wired up.
 from __future__ import annotations
 
 import asyncio
+import socket
 
+import httpx
 import pytest
 
 from pyrite.exceptions import ClipperBlockedHostError
@@ -91,3 +93,95 @@ class TestSSRFDefense:
         with pytest.raises(ClipperBlockedHostError) as excinfo:
             _clip("http://127.0.0.1/")
         assert excinfo.value.error_code == "CLIPPER_BLOCKED_HOST"
+
+
+def _client_with(handler):
+    """An AsyncClient factory that answers every request through `handler`."""
+    real = httpx.AsyncClient
+
+    def factory(**kwargs):
+        kwargs["transport"] = httpx.MockTransport(handler)
+        return real(**kwargs)
+
+    return factory
+
+
+def _public_dns(monkeypatch):
+    """Make any hostname resolve to a public IP, so the first hop passes."""
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda host, port: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))],
+    )
+
+
+class TestRedirectBypass:
+    """A redirect to a blocked address is refused, not followed (#219).
+
+    `_check_url_safe` guards the URL the caller supplies; before this change
+    every hop after it was unchecked, because httpx followed redirects itself.
+    """
+
+    def test_redirect_to_loopback_is_refused(self, monkeypatch):
+        _public_dns(monkeypatch)
+        monkeypatch.setattr(
+            httpx,
+            "AsyncClient",
+            _client_with(
+                lambda request: httpx.Response(
+                    302, headers={"Location": "http://127.0.0.1:8000/api/kbs"}
+                )
+            ),
+        )
+
+        with pytest.raises(ClipperBlockedHostError):
+            _clip("https://evil.example/x")
+
+    def test_redirect_to_link_local_metadata_is_refused(self, monkeypatch):
+        _public_dns(monkeypatch)
+        monkeypatch.setattr(
+            httpx,
+            "AsyncClient",
+            _client_with(
+                lambda request: httpx.Response(
+                    302, headers={"Location": "http://169.254.169.254/latest/meta-data/"}
+                )
+            ),
+        )
+
+        with pytest.raises(ClipperBlockedHostError):
+            _clip("https://evil.example/x")
+
+    def test_the_refusal_matches_a_direct_block(self, monkeypatch):
+        """Same exception type and error code as a URL blocked up front, so a
+        caller cannot tell whether the internal host answered."""
+        _public_dns(monkeypatch)
+        monkeypatch.setattr(
+            httpx,
+            "AsyncClient",
+            _client_with(
+                lambda request: httpx.Response(302, headers={"Location": "http://10.0.0.1/"})
+            ),
+        )
+
+        with pytest.raises(ClipperBlockedHostError) as via_redirect:
+            _clip("https://evil.example/x")
+        with pytest.raises(ClipperBlockedHostError) as direct:
+            _clip("http://10.0.0.1/")
+
+        assert via_redirect.value.error_code == direct.value.error_code
+
+    def test_an_ordinary_redirect_is_still_followed(self, monkeypatch):
+        """The hook must not break redirects to public addresses."""
+        _public_dns(monkeypatch)
+
+        def handler(request):
+            if request.url.path == "/start":
+                return httpx.Response(302, headers={"Location": "https://public.example/final"})
+            return httpx.Response(200, text="<html><title>Final</title><body>ok</body></html>")
+
+        monkeypatch.setattr(httpx, "AsyncClient", _client_with(handler))
+
+        result = _clip("https://public.example/start")
+
+        assert result.title == "Final"

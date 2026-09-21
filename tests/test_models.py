@@ -18,6 +18,7 @@ from pyrite.models.core_types import (
     QAAssessmentEntry,
     RelationshipEntry,
 )
+from pyrite.models.generic import GenericEntry
 from pyrite.schema import EventStatus, ResearchStatus
 
 
@@ -615,6 +616,96 @@ class TestLoadExistingKBs:
         assert actor.id is not None
         assert actor.title is not None
         assert actor.entry_type == "person"
+
+
+class TestGenericEntryFrontmatterRoundTrip:
+    """`GenericEntry` must not duplicate undeclared keys into `metadata:` (#149)."""
+
+    def test_undeclared_keys_are_promoted_not_duplicated(self):
+        meta = {
+            "id": "design-one",
+            "type": "design",
+            "title": "A design",
+            "status": "draft",
+            "author": "someone",
+        }
+
+        out = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+
+        assert out["status"] == "draft"
+        assert out["author"] == "someone"
+        assert "metadata" not in out, out
+
+    def test_explicit_metadata_block_stays_nested(self):
+        meta = {
+            "id": "design-two",
+            "type": "design",
+            "title": "A design",
+            "status": "draft",
+            "metadata": {"owner": "team"},
+        }
+
+        out = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+
+        assert out["status"] == "draft"
+        assert out["metadata"] == {"owner": "team"}
+        assert "owner" not in out, out
+
+    def test_no_op_load_save_is_stable(self):
+        meta = {"id": "design-three", "type": "design", "title": "T", "status": "draft"}
+
+        first = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+        second = GenericEntry.from_frontmatter(first, "body").to_frontmatter()
+
+        assert first == second
+        assert "metadata" not in first
+
+    @pytest.mark.parametrize("value", [None, "owner", ["owner"], 7, True])
+    def test_non_mapping_metadata_is_kept_verbatim(self, value):
+        """A non-mapping `metadata:` is kept and written back (review of #175).
+
+        On `dev` a null `metadata:` raised out of the merge, so the loader fell
+        back to another class and the file was saved back as `type: event`; a
+        string/list/number took the same path. Treating the value as empty for
+        `self.metadata` must not delete it from the file: it round-trips
+        verbatim through `_raw_metadata`.
+        """
+        meta = {"id": "design-four", "type": "design", "title": "T", "metadata": value}
+
+        entry = GenericEntry.from_frontmatter(meta, "body")
+        out = entry.to_frontmatter()
+
+        assert entry.entry_type == "design"
+        assert entry.metadata == {}
+        assert out["metadata"] == value, out
+
+    def test_metadata_key_colliding_with_a_base_key_is_kept_nested(self):
+        """A metadata key that collides with a base key must not vanish (#149).
+
+        Built in memory, `_nested_metadata_keys` is empty, so the promotion path
+        used to run for every key and dropped the ones `_base_frontmatter`
+        already emitted. `title` here must survive somewhere rather than being
+        silently discarded.
+        """
+        entry = GenericEntry(
+            id="s1",
+            title="T",
+            body="b",
+            metadata={"title": "shadow", "status": "draft"},
+        )
+
+        out = entry.to_frontmatter()
+
+        assert out["title"] == "T"
+        assert out["status"] == "draft"
+        assert out["metadata"] == {"title": "shadow"}, out
+
+    def test_empty_metadata_mapping_is_treated_as_empty(self):
+        meta = {"id": "design-five", "type": "design", "title": "T", "metadata": {}}
+
+        out = GenericEntry.from_frontmatter(meta, "body").to_frontmatter()
+
+        assert "metadata" not in out, out
 
 
 class TestParseDatetime:
