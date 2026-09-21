@@ -1171,7 +1171,7 @@ def step_publish(ctx: Context) -> None:
     ctx.notes = compose_notes(ctx.repo, ctx.version, logins)
     line = contributors_line(logins)
     ctx.runner.note(
-        "release notes: the CHANGELOG section"
+        "release notes: the CHANGELOG section and the assembled fragments (printed in step a)"
         + (f" + {line}" if line else " (no outside contributors this cycle)")
     )
 
