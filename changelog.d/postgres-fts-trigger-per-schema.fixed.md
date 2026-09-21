@@ -1,0 +1,1 @@
+- Postgres: `ensure_schema()` now creates the full-text-search trigger in every schema it sets up. Its guard asked whether a trigger named `trg_entry_fts` existed anywhere in the cluster, so a second Pyrite instance sharing one database in its own schema silently got no trigger — `entry.fts_vector` was never populated and keyword search returned no results, with no error.
