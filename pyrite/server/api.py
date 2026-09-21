@@ -1102,7 +1102,13 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     async def _drain_embed_queue_on_startup() -> None:
         from starlette.concurrency import run_in_threadpool
 
-        db = _app_get_db()
+        # `_app_db()`, not the `_app_get_db` dependency: this runs at startup,
+        # outside any request, and the dependency is a generator FastAPI is
+        # meant to open and close around a handler. Calling it directly returns
+        # the generator object itself, and the first attribute access on it
+        # fails with `'generator' object has no attribute '_raw_conn'`, so the
+        # drain never runs and a stock install embeds nothing.
+        db = _app_db()
         await run_in_threadpool(lambda: _drain_embed_queue(db, label="startup"))
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)

@@ -245,7 +245,7 @@ class ConnectionMixin:
                 logger.warning("Failed to close scoped session", exc_info=True)
 
     @contextmanager
-    def _raw_cursor(self):
+    def _raw_cursor(self, conn=None):
         """Serialise raw sqlite3 access and hand out a private cursor.
 
         ``_raw_conn`` is one sqlite3 connection shared by every caller, the
@@ -257,9 +257,16 @@ class ConnectionMixin:
         own cursor under a lock makes the FTS/vec paths safe without opening a
         second connection per request (a sqlite3 connection cannot be shared
         across the pool the way the ORM's can).
+
+        ``conn`` lets a caller name the connection to take the cursor from
+        while still taking this object's lock. A backend passes its own
+        ``_raw_conn``, which is normally this same object but may have been
+        substituted — ``_spy_on_sql`` in the conformance suite wraps it to
+        record SQL. Ignoring that argument would hand back a cursor on the
+        unwrapped connection and make the substitution silently ineffective.
         """
         with self._raw_lock:
-            cursor = self._raw_conn.cursor()
+            cursor = (conn if conn is not None else self._raw_conn).cursor()
             try:
                 yield cursor
             finally:

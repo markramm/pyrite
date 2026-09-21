@@ -718,12 +718,34 @@ def _spy_on_sql(backend, monkeypatch):
     backends with no raw sqlite3 connection (Postgres), whose semantic leg puts
     the predicates in the same ``WHERE`` as the ordering and has no KNN budget
     to escalate.
+
+    ``cursor()`` is wrapped as well as ``execute()``. The backend runs its raw
+    SQL through a private cursor taken under a lock (#131) rather than through
+    ``Connection.execute``, and ``__getattr__`` would forward ``cursor()`` to
+    the real connection -- leaving this spy recording nothing at all while the
+    queries still ran, which reads as "the loop never executed" rather than as
+    a broken spy.
     """
     conn = getattr(backend, "_raw_conn", None)
     if conn is None:
         pytest.skip("backend has no raw sqlite3 connection / no KNN budget")
 
     log: list[tuple[str, Any]] = []
+
+    class _SpyCursor:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def execute(self, sql, params=()):
+            log.append((sql, params))
+            self._inner.execute(sql, params)
+            return self
+
+        def __iter__(self):
+            return iter(self._inner)
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
 
     class _SpyConn:
         def __init__(self, inner):
@@ -732,6 +754,9 @@ def _spy_on_sql(backend, monkeypatch):
         def execute(self, sql, params=()):
             log.append((sql, params))
             return self._inner.execute(sql, params)
+
+        def cursor(self, *args, **kwargs):
+            return _SpyCursor(self._inner.cursor(*args, **kwargs))
 
         def __getattr__(self, name):
             return getattr(self._inner, name)

@@ -102,11 +102,19 @@ class SQLiteBackend(BaseBackend):
         fetch on one implicit cursor. A private cursor under the owner's lock
         removes that without opening a second connection per request.
 
+        The cursor comes from *this backend's* ``_raw_conn``, while the lock
+        comes from the owner. They are normally the same connection, but a
+        caller may substitute the backend's -- the conformance suite's
+        ``_spy_on_sql`` wraps it to record the SQL the KNN escalation loop
+        sends. Delegating wholesale to the owner would take a cursor from the
+        unwrapped connection and silently ignore the substitution, so the two
+        are kept separate.
+
         Falls back to the bare connection when no owner supplied a lock (a
         backend constructed directly in a test).
         """
         if self._owner is not None:
-            return self._owner._raw_cursor()
+            return self._owner._raw_cursor(self._raw_conn)
 
         from contextlib import nullcontext
 
