@@ -76,7 +76,9 @@ jobs:
       # tested nothing -- strictly worse than having no merge queue.
       #
       # So we do not ask the action. A merge group is classified here, as
-      # everything-changed, and runs the full matrix. Running too much for a
+      # everything-changed, so every gated job runs. (Which interpreters the
+      # `test` job then uses is a separate decision -- see its matrix
+      # comment; a queued group takes the narrow one.) Running too much for a
       # queued commit costs one runner; running nothing and calling it green
       # merges untested code to dev.
       - id: all
@@ -163,7 +165,17 @@ jobs:
         # property of the interpreter and pytest version, not of the
         # project's logic, so the one-interpreter gate cannot see it; #81
         # merged green on 3.12 and reddened dev on 3.13 two minutes later.
-        python-version: ${{ fromJSON((github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true') && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
+        #
+        # A merge group is narrow too (maintainer, 2026-09-21: "narrow it for
+        # now, it is easy to add back later if we have matrix failures"). It
+        # sits between a PR and the push to dev, and the push that follows the
+        # queue's merge still runs all three -- so breadth is delayed by one
+        # step, not lost. Note the `infra` test cannot carry this: the
+        # fail-closed step sets every output to 'true' on a merge group, so
+        # `infra != 'true'` is never satisfied there and the event has to be
+        # named. If a queued batch ever reddens dev on 3.11 or 3.13, drop the
+        # merge_group clause and the queue pays for the full matrix.
+        python-version: ${{ fromJSON(((github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true') || github.event_name == 'merge_group') && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
 
     # pgvector/pgvector ships the postgres server with the pgvector
     # extension pre-installed (plain postgres:* images don't have it, and

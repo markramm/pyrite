@@ -26,11 +26,18 @@ matrix and reports the one required check GREEN having tested nothing -- which
 is strictly worse than having no merge queue at all.
 
 So `changes` must not depend on that action's merge_group behaviour. On
-`merge_group` it reports EVERYTHING changed and runs the full matrix. Running
+`merge_group` it reports EVERYTHING changed, so every gated job runs. Running
 too much for a queued group is correct and cheap; running nothing and saying
 so in green is not.
+
+The interpreter *matrix* is a separate decision from which jobs run, and a
+queued group takes the narrow one (maintainer, 2026-09-21): it sits between a
+pull request and the push to `dev`, and that push still runs all three, so
+breadth is delayed by one step rather than lost. `TestTheMatrixNarrowsWhereItShould`
+evaluates that expression per event instead of grepping it.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -156,15 +163,20 @@ class TestChangesFailsClosedOnAMergeGroup:
         )
         assert ids <= step_ids, f"output {output!r} references unknown step ids: {ids - step_ids}"
 
-    def test_a_merge_group_runs_the_full_interpreter_matrix(self, ci):
-        # The narrow one-interpreter leg is keyed on `pull_request`, so a
-        # merge group falls to the full matrix. That is the right default for
-        # the commit that actually lands: #133's bug passed on 3.12 and broke
-        # dev on 3.13.
-        matrix = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
-        assert "github.event_name == 'pull_request'" in matrix, matrix
-        narrow, _, wide = matrix.partition("||")
-        assert '["3.12"]' in narrow and '["3.11", "3.12", "3.13"]' in wide, matrix
+    def test_a_merge_group_still_runs_every_gated_job(self, ci):
+        # Fail-closed is about WHICH JOBS run, and that is not negotiable: the
+        # classifier reports everything changed so nothing skips. How many
+        # interpreters the `test` job then uses is a separate, reversible
+        # decision -- narrow as of 2026-09-21, pinned in
+        # TestTheMatrixNarrowsWhereItShould.
+        #
+        # The risk that buys: #133's bug passed on 3.12 and reddened dev on
+        # 3.13, and a narrow queue finds that class one step later, on the
+        # push to dev, rather than before the merge. Accepted deliberately;
+        # the remedy if it bites is one clause in the matrix expression.
+        for job in ("kb", "test", "frontend"):
+            cond = str(ci["jobs"][job]["if"])
+            assert "needs.changes.outputs" in cond, (job, cond)
 
     @pytest.mark.parametrize("job", ["kb", "test", "frontend"])
     def test_every_gated_job_runs_on_a_merge_group(self, ci, job):
@@ -230,6 +242,59 @@ class TestPullRequestAndPushBehaviourIsUnchanged:
 
     def test_smoke_still_never_runs_on_a_pull_request(self, ci):
         assert "pull_request" not in str(ci["jobs"]["smoke"]["if"])
+
+
+class TestTheMatrixNarrowsWhereItShould:
+    """Which events pay for all three interpreters, evaluated not grepped.
+
+    The other tests in this file assert that substrings appear in the matrix
+    expression, which a logic inversion would survive: swapping the two JSON
+    arrays leaves every one of them green. This one evaluates the condition
+    the way GitHub would and checks the interpreter list that comes out.
+    """
+
+    #: (event_name, infra_output) -> the interpreters that should run.
+    #: A merge group forces every classifier output to 'true' (fail closed),
+    #: so `infra != 'true'` cannot narrow it -- the event must be named.
+    CASES = [
+        ("pull_request", "false", ["3.12"]),
+        ("pull_request", "true", ["3.11", "3.12", "3.13"]),  # #133 exception
+        ("merge_group", "true", ["3.12"]),
+        ("push", "true", ["3.11", "3.12", "3.13"]),
+        ("workflow_dispatch", "false", ["3.11", "3.12", "3.13"]),
+    ]
+
+    @staticmethod
+    def _evaluate(expression: str, event: str, infra: str) -> list[str]:
+        """Evaluate the `fromJSON(...)` matrix expression for one event."""
+        inner = expression.strip()
+        assert inner.startswith("${{") and inner.endswith("}}"), inner
+        inner = inner[3:-2].strip()
+        assert inner.startswith("fromJSON(") and inner.endswith(")"), inner
+        inner = inner[len("fromJSON(") : -1]
+
+        python = (
+            inner.replace("&&", " and ")
+            .replace("||", " or ")
+            .replace("github.event_name", repr(event))
+            .replace("needs.changes.outputs.infra", repr(infra))
+        )
+        # GitHub's `a && b || c` is Python's, and both JSON arrays are
+        # truthy literals, so the expression evaluates directly.
+        return json.loads(eval(python))  # noqa: S307 - a literal from our own repo
+
+    @pytest.mark.parametrize(("event", "infra", "expected"), CASES)
+    def test_the_matrix_for_each_event(self, ci, event, infra, expected):
+        expression = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
+        assert self._evaluate(expression, event, infra) == expected
+
+    def test_a_queued_group_does_not_pay_for_three_interpreters(self, ci):
+        # The point of narrowing (maintainer, 2026-09-21). The push to dev
+        # that follows the queue's merge still runs all three, so breadth is
+        # delayed by one step rather than lost.
+        expression = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
+        assert self._evaluate(expression, "merge_group", "true") == ["3.12"]
+        assert self._evaluate(expression, "push", "true") == ["3.11", "3.12", "3.13"]
 
 
 class TestNoNewDependencies:
