@@ -1015,11 +1015,31 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         return application.state.pyrite_index_mgr
 
     def _app_get_kb_registry() -> KBRegistryService:
+        """The startup/seeding registry, bound to the shared ``PyriteDB``.
+
+        Not a request dependency -- see ``_request_kb_registry`` below. This
+        one exists for ``seed_from_config()`` at startup, where there is no
+        request and so no per-request session to bind to.
+        """
         if application.state.pyrite_kb_registry is None:
             application.state.pyrite_kb_registry = KBRegistryService(
                 _app_get_config(), _app_db(), _app_get_index_mgr()
             )
         return application.state.pyrite_kb_registry
+
+    def _request_kb_registry(db: PyriteDB = Depends(_app_get_db)) -> KBRegistryService:
+        """A registry bound to *this request's* handle.
+
+        The cached app-state registry holds the shared ``PyriteDB``, so its
+        ORM reads resolve to the thread-local fallback session -- which opens
+        a transaction per request that nothing closes, and the connection is
+        never returned to the pool. Measured before this: five requests to
+        ``GET /api/kbs`` produced five checkouts and zero check-ins, and
+        request 58 died with ``QueuePool limit of size 40 overflow 20
+        reached``. Building it per request from the handle costs one object
+        and keeps the engine, pool and backend shared.
+        """
+        return KBRegistryService(_app_get_config(), db, _app_get_index_mgr())
 
     def _app_get_index_worker() -> IndexWorker:
         if application.state.pyrite_index_worker is None:
@@ -1043,7 +1063,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     application.dependency_overrides[get_db] = _app_get_db
     application.dependency_overrides[get_index_mgr] = _app_get_index_mgr
     application.dependency_overrides[get_index_worker] = _app_get_index_worker
-    application.dependency_overrides[get_kb_registry] = _app_get_kb_registry
+    application.dependency_overrides[get_kb_registry] = _request_kb_registry
 
     # Seed config KBs into DB registry
     try:

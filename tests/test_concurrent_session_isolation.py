@@ -384,3 +384,53 @@ def test_verify_api_key_does_no_sync_db_work_on_the_event_loop() -> None:
         "verify_api_key is async and calls synchronous DB work inline; it must "
         "either be a plain `def` or offload the blocking call"
     )
+
+
+def test_every_request_returns_its_connection_to_the_pool(make_client) -> None:
+    """A request must not leave a connection checked out when it ends.
+
+    The per-request session covers endpoints that take `db`, but the services
+    cached on `app.state` are built once from the *shared* `PyriteDB`. A
+    cached `KBRegistryService` therefore read through the thread-local
+    fallback session, opening a transaction per request that nothing closed --
+    so `GET /api/kbs` leaked one pooled connection every call and request 58
+    died with `QueuePool limit of size 40 overflow 20 reached`.
+
+    Counting checkouts against check-ins is the direct assertion. Wall-clock
+    or "does it 500" tests miss it until the pool is exhausted, which is late
+    and looks like a load problem rather than a leak.
+    """
+    from sqlalchemy import event
+
+    client, _config, _db = make_client()
+    counts = {"out": 0, "in": 0}
+
+    def _out(*_args: object) -> None:
+        counts["out"] += 1
+
+    def _in(*_args: object) -> None:
+        counts["in"] += 1
+
+    # Watch the engine the APP serves from. `create_app` opens its own
+    # `PyriteDB` on the same file and parks it on `app.state`, and that is the
+    # one the cached registry held -- the fixture's own handle sees no traffic
+    # from these requests at all, so a test watching it cannot fail. Found by
+    # reverting the fix and finding this test still green.
+    engine = client.app.state.pyrite_db.engine
+    event.listen(engine, "checkout", _out)
+    event.listen(engine, "checkin", _in)
+    try:
+        for _ in range(5):
+            assert client.get("/api/kbs").status_code == 200
+    finally:
+        event.remove(engine, "checkout", _out)
+        event.remove(engine, "checkin", _in)
+
+    outstanding = counts["out"] - counts["in"]
+    assert outstanding == 0, (
+        f"{outstanding} pooled connection(s) still checked out after 5 requests "
+        f"(checkout={counts['out']}, checkin={counts['in']}). Something served "
+        "from the request is holding a session past the response -- most likely "
+        "a service cached on app.state holding the shared PyriteDB rather than "
+        "the per-request handle."
+    )
