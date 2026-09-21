@@ -97,7 +97,8 @@ produce a PR that conflicts with both.
 
 **Note:** I could not find a KB entry for the planned read-shaping module —
 `pyrite search "read shaping" -k pyrite` surfaces only this week's conductor log
-(`kb/notes/conductor-log-2026-W38.md`). Before filing, confirm with the
+(`desk/notes/conductor-log-2026-W38.md` — moved to the gitignored
+`pyrite-desk` KB on 2026-09-21). Before filing, confirm with the
 maintainer where that module is meant to live; if the design is only in the log,
 this issue should name it rather than assume it.
 

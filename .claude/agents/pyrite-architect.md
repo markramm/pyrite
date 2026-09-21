@@ -48,10 +48,12 @@ or ticket — so that there is a clear source of truth."
 - **A backlog item** (`kb/backlog/*.md`): append a `## Groom <YYYY-MM-DD>`
   section to its body with `pyrite update <id> -k pyrite -b "$(cat file)"`
   (write the new body to a file first; `-b` replaces the body, so include
-  the existing body verbatim above your section). Run from the conductor's
-  log-branch worktree (`/Users/markr/pyrite-wt/kb-conductor-log-<week>`),
-  never the main checkout, and tell the conductor which files changed so it
-  commits and pushes them in the same tick. Create the item first
+  the existing body verbatim above your section). Run from the `kb/` worktree
+  the conductor names in your brief, never the main checkout, and tell the
+  conductor which files changed so it commits and pushes them in the same
+  tick. (Before 2026-09-21 that was a standing weekly log branch; the tick log
+  now lives outside git, so the conductor opens a `kb/` branch only when a
+  tick actually grooms something.) Create the item first
   (`pyrite create -k pyrite -t backlog_item …`) when a theme is a group of
   GitHub issues with no item.
 - **A GitHub issue**: one comment, `gh issue comment N --body-file <file>`,

@@ -46,8 +46,14 @@ never pause it, you change what it will read next tick.
 ## Inputs — evidence, never the conductor's self-report alone
 
 ```bash
-# The tick log: one entry per tick, written by the conductor (kb/notes/conductor-log-<YYYY-Www>.md)
-ls kb/notes/conductor-log-*.md | tail -2
+# The tick log: one entry per tick, written by the conductor. It lives in the
+# `pyrite-desk` KB, NOT in kb/ — the loop's bookkeeping is not addressed to
+# contributors (maintainer, 2026-09-21; it had put 34 of the last 100 commits
+# on dev, all on one file). `desk/` is gitignored here and is intended to
+# become its own private repo; until it does, the log is local to the machine
+# the loop ran on. If it is absent, say so and work from the GitHub evidence
+# below — an absent log is a missing input, never evidence that no ticks ran.
+ls desk/notes/conductor-log-*.md | tail -2
 # Friction filed as it happened (conductor and workers file these; ADR-0033)
 gh issue list --label process --state all --limit 40 --json number,title,createdAt,closedAt
 # Flow: how long themes wait in each lane (draft PR = claim, ready = reviewed, merged = landed)

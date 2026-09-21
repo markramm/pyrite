@@ -363,30 +363,48 @@ setting only they can change), say so and stop rather than ticking idle.
 
 **Read the tick log by timestamp, not by position.** Entries are appended
 by whichever conductor finishes first, so the newest tick can sit above an
-older retro; before absorbing anything, `grep -n "^## " kb/notes/conductor-log-*.md`
+older retro; before absorbing anything, `grep -n "^## " desk/notes/conductor-log-*.md`
 and read the latest *timestamp*.
 
-**Append the same report to the tick log** — `kb/notes/conductor-log-<YYYY-Www>.md`
-(one note per ISO week; create it with `pyrite create -k pyrite -t note
---title "Conductor log <YYYY-Www>"` on the week's first tick, then append a
-`## Tick <timestamp>` section and `pyrite index sync`). The retro reads this
-log, not your memory; a tick that leaves no entry did not happen. The `dev`
-ruleset takes nothing without a PR (#71), so the log lives on a weekly
-branch: `scripts/new-worktree.sh kb/conductor-log-<YYYY-Www>` on the first
-tick, one draft PR held open for the week, each tick commits and pushes
-there; the retro flips it to ready. Never a PR per tick — each merge puts
-every other open PR `BEHIND`.
+**Append the same report to the tick log** — `desk/notes/conductor-log-<YYYY-Www>.md`
+in the **`pyrite-desk` KB** (one note per ISO week; create it with
+`pyrite create -k pyrite-desk -t note --title "Conductor log <YYYY-Www>"` on
+the week's first tick, then append a `## Tick <timestamp>` section and
+`pyrite index sync`). The retro reads this log, not your memory; a tick that
+leaves no entry did not happen.
+
+**The log does not go in *this* repo** (maintainer, 2026-09-21). `desk/` is
+gitignored here, so a tick writes the file and stops — no worktree, no branch,
+no PR, no commit. It was on a weekly branch because the `dev` ruleset takes
+nothing without a PR (#71); that produced **34 commits in the last 100 on
+`dev`, all touching one file**, one of them reading "conductor tick — quiet".
+A record of a tick that did nothing is not worth a commit on the branch every
+contributor reads, and the value of the log — the retro reads it, the next tick
+resumes from it — is unchanged by its living somewhere else.
+
+The distinction is *audience*, not durability: `pyrite/pyrite` is what
+contributors read, and the loop's own bookkeeping is not addressed to them. The
+maintainer intends to make `desk/` a **private repository of its own**, at
+which point the log is versioned and backed up again without ever appearing in
+the history a contributor reads. Until that lands, treat the log as local to
+this machine: it is not backed up, and a tick that produces something worth
+keeping past the week — a decision, a process finding, an ADR — must still lift
+it out of the log into a KB entry or an ADR, which do go in `pyrite/pyrite`.
+That rule does not change when `desk/` gets its own remote; the log is a
+working surface either way, not the project's record of itself.
 
 **The dispatch spec is the groomed ticket.** The draft PR's body is the
 backlog item's body (its `## Groom` section included), not a spec written
 from memory; an item without a `## Groom` section is not ready, and a
 theme composed from titles is a groom-lane defect (retro 1).
 
-**Anything a tick creates in `kb/` outside a theme branch goes on the log
-branch in the same tick** — a backlog item groomed for later, a note, a
-spike's ticket change — committed and pushed before the tick reports. A
-record that is not pushed is not a record: tick 5 reported creating the
-Playwright A.1 item and tick 6 found no such file anywhere (#141).
+**Anything a tick creates in `kb/` outside a theme branch still needs a PR**
+— a backlog item groomed for later, a note, a spike's ticket change. Those are
+project record and they belong in git, unlike the tick log. Batch them onto one
+`kb/<what-it-records>` branch per tick that produces any, and open the PR
+before the tick reports; a record that is not pushed is not a record (tick 5
+reported creating the Playwright A.1 item and tick 6 found no such file
+anywhere, #141). A tick that grooms nothing opens no branch at all.
 
 **File friction as it happens.** When you, a worker or a reviewer had to
 detour, wait, guess, look something up or redo work because of the
