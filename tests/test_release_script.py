@@ -1525,3 +1525,302 @@ class TestTheReleaseRepoIsDerivedFromOrigin:
         installs = [" ".join(c) for c in calls if c[:2] == ["uv", "pip"]]
         assert installs, "no install was composed"
         assert all("pyrite-wiki/pyrite" in c for c in installs), installs
+
+
+# --------------------------------------------------------------------------
+# changelog fragments: assembly, validation, and the section they land in (#243)
+# --------------------------------------------------------------------------
+
+
+def write_fragment(repo, name, body):
+    directory = repo / "changelog.d"
+    directory.mkdir(exist_ok=True)
+    (directory / name).write_text(body)
+    return directory / name
+
+
+class TestFragmentCollection:
+    def test_no_directory_means_no_fragments(self, repo):
+        assert release.collect_fragments(repo) == []
+
+    def test_an_empty_directory_means_no_fragments(self, repo):
+        (repo / "changelog.d").mkdir()
+        assert release.collect_fragments(repo) == []
+
+    def test_a_fragment_is_collected_with_its_section_and_body(self, repo):
+        write_fragment(repo, "a-thing.fixed.md", "- A thing was fixed.\n")
+        (fragment,) = release.collect_fragments(repo)
+        assert fragment.slug == "a-thing"
+        assert fragment.section == "fixed"
+        assert fragment.body == "- A thing was fixed."
+
+    def test_the_readme_is_skipped(self, repo):
+        write_fragment(repo, "README.md", "how to write a fragment\n")
+        write_fragment(repo, "a-thing.fixed.md", "- A thing.\n")
+        assert [f.slug for f in release.collect_fragments(repo)] == ["a-thing"]
+
+    def test_a_gitkeep_is_skipped(self, repo):
+        write_fragment(repo, ".gitkeep", "")
+        assert release.collect_fragments(repo) == []
+
+    def test_an_unknown_section_is_a_release_error(self, repo):
+        """A dropped entry is how a security fix goes unannounced: the release
+        must stop, not skip the file."""
+        write_fragment(repo, "a-thing.fixd.md", "- A thing.\n")
+        with pytest.raises(release.ReleaseError) as exc:
+            release.collect_fragments(repo)
+        assert "a-thing.fixd.md" in str(exc.value)
+
+    def test_an_empty_fragment_is_a_release_error(self, repo):
+        """An empty file would assemble to a heading with nothing under it --
+        the author meant to say something."""
+        write_fragment(repo, "a-thing.fixed.md", "   \n\n")
+        with pytest.raises(release.ReleaseError, match="empty"):
+            release.collect_fragments(repo)
+
+
+class TestFragmentAssembly:
+    def test_sections_come_out_in_keep_a_changelog_order(self, repo):
+        write_fragment(repo, "s.security.md", "- Security.\n")
+        write_fragment(repo, "f.fixed.md", "- Fixed.\n")
+        write_fragment(repo, "a.added.md", "- Added.\n")
+        assembled = release.assemble_fragments(repo)
+        order = [assembled.index(h) for h in ("### Added", "### Fixed", "### Security")]
+        assert order == sorted(order), assembled
+
+    def test_only_the_sections_with_fragments_get_a_heading(self, repo):
+        write_fragment(repo, "a.added.md", "- Added.\n")
+        assembled = release.assemble_fragments(repo)
+        assert "### Added" in assembled
+        assert "### Fixed" not in assembled
+        assert "### Security" not in assembled
+
+    def test_fragments_in_one_section_are_ordered_by_slug(self, repo):
+        """Deterministic output: the same fragments must assemble the same way
+        on any machine, whatever order the filesystem lists them in."""
+        write_fragment(repo, "zebra.fixed.md", "- Zebra.\n")
+        write_fragment(repo, "apple.fixed.md", "- Apple.\n")
+        assembled = release.assemble_fragments(repo)
+        assert assembled.index("- Apple.") < assembled.index("- Zebra.")
+
+    def test_a_multi_line_fragment_keeps_its_shape(self, repo):
+        write_fragment(repo, "a.fixed.md", "- One thing (#1).\n  Continued here.\n- Another.\n")
+        assembled = release.assemble_fragments(repo)
+        assert "- One thing (#1).\n  Continued here.\n- Another." in assembled
+
+    def test_no_fragments_assembles_to_nothing(self, repo):
+        assert release.assemble_fragments(repo) == ""
+
+    def test_two_fragments_with_the_same_slug_in_one_section_both_appear(self, repo):
+        """Same slug, different sections is legitimate (one change that both
+        adds and fixes); nothing may be dropped."""
+        write_fragment(repo, "a-theme.added.md", "- Added by the theme.\n")
+        write_fragment(repo, "a-theme.fixed.md", "- Fixed by the theme.\n")
+        assembled = release.assemble_fragments(repo)
+        assert "- Added by the theme." in assembled
+        assert "- Fixed by the theme." in assembled
+
+
+class TestNotesIncludeFragments:
+    """`release_notes_for` is the seam the script's own docstring names as the
+    one place that knows where the notes come from."""
+
+    def test_fragments_are_appended_to_the_section_body(self, repo):
+        write_fragment(repo, "a-thing.fixed.md", "- A thing was fixed.\n")
+        notes = release.release_notes_for(repo, "0.24.2")
+        assert "- A release script." in notes  # the hand-written section body
+        assert "### Fixed" in notes
+        assert "- A thing was fixed." in notes
+
+    def test_with_no_fragments_the_notes_are_the_section_alone(self, repo):
+        notes = release.release_notes_for(repo, "0.24.2")
+        assert notes.strip() == "### Added\n\n- A release script."
+
+    def test_a_section_with_only_fragments_still_has_notes(self, repo):
+        """The expected steady state once fragments are the habit: the release
+        commit dates an empty heading and every bullet is a fragment."""
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [Unreleased]\n\n## [0.24.2] - {date.today().isoformat()}\n\n"
+            "## [0.24.1] - 2026-09-17\n\n- Older.\n"
+        )
+        write_fragment(repo, "a-thing.fixed.md", "- A thing was fixed.\n")
+        assert "- A thing was fixed." in release.release_notes_for(repo, "0.24.2")
+
+    def test_a_bad_fragment_fails_the_notes_rather_than_being_skipped(self, repo):
+        write_fragment(repo, "a-thing.nonsense.md", "- A thing.\n")
+        with pytest.raises(release.ReleaseError):
+            release.release_notes_for(repo, "0.24.2")
+
+    def test_the_contributors_line_still_comes_last(self, repo):
+        write_fragment(repo, "a-thing.fixed.md", "- A thing was fixed.\n")
+        notes = release.compose_notes(repo, "0.24.2", ["someone"])
+        assert notes.rstrip().endswith("Thanks to @someone for their contributions.")
+        assert notes.index("- A thing was fixed.") < notes.index("Thanks to")
+
+
+class TestChangelogPreconditionWithFragments:
+    """Step (a) has to accept the state fragments create and keep refusing the
+    state they were meant to remove."""
+
+    def test_an_empty_version_section_passes_when_fragments_supply_it(self, repo):
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n"
+            "## [0.24.1] - 2026-09-17\n\n- Older.\n"
+        )
+        write_fragment(repo, "a-thing.fixed.md", "- A thing.\n")
+        release.check_changelog(repo, "0.24.2")  # no raise
+
+    def test_an_empty_section_with_no_fragments_is_still_an_error(self, repo):
+        """A release with empty notes tells users nothing -- the original rule,
+        which fragments must not quietly disable."""
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n"
+            "## [0.24.1] - 2026-09-17\n\n- Older.\n"
+        )
+        with pytest.raises(release.ReleaseError, match="no content"):
+            release.check_changelog(repo, "0.24.2")
+
+    def test_the_empty_section_error_mentions_fragments(self, repo):
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n"
+            "## [0.24.1] - 2026-09-17\n\n- Older.\n"
+        )
+        with pytest.raises(release.ReleaseError, match="changelog.d"):
+            release.check_changelog(repo, "0.24.2")
+
+    def test_an_unreleased_bullet_is_still_refused(self, repo):
+        """Fragments do not make the old mistake safe: a bullet under
+        `[Unreleased]` would still be left out of the notes."""
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [Unreleased]\n\n- Stranded.\n\n"
+            f"## [0.24.2] - {date.today().isoformat()}\n\n- Thing.\n"
+        )
+        with pytest.raises(release.ReleaseError, match="Unreleased"):
+            release.check_changelog(repo, "0.24.2")
+
+    def test_a_malformed_fragment_fails_the_precondition(self, repo):
+        """Before anything irreversible: a misspelled section is caught in step
+        (a), not discovered when the notes are composed in step (d)."""
+        write_fragment(repo, "a-thing.fixd.md", "- A thing.\n")
+        with pytest.raises(release.ReleaseError, match="fixd"):
+            release.check_changelog(repo, "0.24.2")
+
+
+class TestFragmentsAreConsumedByTheRelease:
+    """Step (e) writes the assembled bullets into CHANGELOG.md and removes the
+    fragments. Leaving them would republish every entry in the next release."""
+
+    @pytest.fixture
+    def repo_with_fragments(self, tmp_path_factory):
+        repo = tmp_path_factory.mktemp("release-repo-fragments")
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [0.24.2] - {date.today().isoformat()}\n\n"
+            "## [0.24.1] - 2026-09-17\n\n- Older.\n"
+        )
+        (repo / "pyproject.toml").write_text(GOOD_PYPROJECT)
+        write_fragment(repo, "a-thing.fixed.md", "- A thing was fixed.\n")
+        write_fragment(repo, "another.added.md", "- Something new.\n")
+        return repo
+
+    def _post_release(self, repo, execute):
+        runner = release.Runner(execute=execute)
+        ctx = release.Context(
+            repo=repo,
+            version="0.24.2",
+            runner=runner,
+            wait_ci_minutes=0,
+            sha=FAKE_SHA,
+        )
+        release.step_post_release(ctx)
+        return runner
+
+    def test_a_dry_run_changes_nothing_on_disk(self, repo_with_fragments):
+        before = sorted(p.name for p in (repo_with_fragments / "changelog.d").iterdir())
+        text_before = (repo_with_fragments / "CHANGELOG.md").read_text()
+        self._post_release(repo_with_fragments, execute=False)
+        after = sorted(p.name for p in (repo_with_fragments / "changelog.d").iterdir())
+        assert after == before
+        assert (repo_with_fragments / "CHANGELOG.md").read_text() == text_before
+
+    def test_a_dry_run_says_which_fragments_it_would_remove(self, repo_with_fragments, capsys):
+        """Named one by one, not counted: the maintainer reading a dry run is
+        checking that the release consumes exactly what it should."""
+        self._post_release(repo_with_fragments, execute=False)
+        out = capsys.readouterr().out
+        assert "WOULD RUN: remove changelog.d/a-thing.fixed.md" in out, out
+        assert "WOULD RUN: remove changelog.d/another.added.md" in out, out
+
+    def test_executing_writes_the_bullets_into_the_version_section(
+        self, repo_with_fragments, monkeypatch
+    ):
+        monkeypatch.setattr(release, "_check_output", lambda cmd, **kw: "")
+        self._post_release(repo_with_fragments, execute=True)
+        text = (repo_with_fragments / "CHANGELOG.md").read_text()
+        assert "- A thing was fixed." in text
+        assert "- Something new." in text
+        # Under the released version, not under the reopened [Unreleased].
+        assert text.index("## [0.24.2]") < text.index("- Something new.")
+        assert text.index("- A thing was fixed.") < text.index("## [0.24.1]")
+
+    def test_executing_deletes_the_fragment_files(self, repo_with_fragments, monkeypatch):
+        monkeypatch.setattr(release, "_check_output", lambda cmd, **kw: "")
+        self._post_release(repo_with_fragments, execute=True)
+        assert list((repo_with_fragments / "changelog.d").glob("*.md")) == []
+
+    def test_the_readme_survives(self, repo_with_fragments, monkeypatch):
+        write_fragment(repo_with_fragments, "README.md", "how to write a fragment\n")
+        monkeypatch.setattr(release, "_check_output", lambda cmd, **kw: "")
+        self._post_release(repo_with_fragments, execute=True)
+        assert (repo_with_fragments / "changelog.d" / "README.md").is_file()
+
+    def test_the_commit_names_both_paths(self, repo_with_fragments):
+        runner = self._post_release(repo_with_fragments, execute=False)
+        commits = [c for c in runner.planned if "commit" in c]
+        assert commits, runner.planned
+        assert any("CHANGELOG.md" in arg for arg in commits[0])
+        assert any("changelog.d" in arg for arg in commits[0])
+
+    def test_reopening_unreleased_still_happens(self, repo_with_fragments, monkeypatch):
+        monkeypatch.setattr(release, "_check_output", lambda cmd, **kw: "")
+        self._post_release(repo_with_fragments, execute=True)
+        text = (repo_with_fragments / "CHANGELOG.md").read_text()
+        assert "## [Unreleased]" in text
+        assert text.index("## [Unreleased]") < text.index("## [0.24.2]")
+
+    def test_it_is_still_a_branch_and_never_dev(self, repo_with_fragments):
+        runner = self._post_release(repo_with_fragments, execute=False)
+        planned = [" ".join(c) for c in runner.planned]
+        checkout = [i for i, p in enumerate(planned) if "checkout -b" in p]
+        commits = [i for i, p in enumerate(planned) if "commit -m" in p]
+        assert checkout and commits and checkout[0] < commits[0], planned
+
+    def test_with_no_fragments_the_step_is_unchanged(self, repo, monkeypatch):
+        """The existing no-op path: an `[Unreleased]` already present and no
+        fragments to consume means nothing to do."""
+        monkeypatch.setattr(release, "_check_output", lambda cmd, **kw: "")
+        runner = self._post_release(repo, execute=True)
+        assert runner.planned == []
+
+
+class TestDryRunPrintsTheAssembledSection:
+    """The acceptance criterion: `scripts/release.py --dry-run` prints the
+    assembled section, so the maintainer reads the notes before the tag."""
+
+    def test_the_assembled_bullets_are_printed(self, dry_run, capsys, monkeypatch):
+        repo_arg = None
+
+        def capture(repo, version):
+            nonlocal repo_arg
+            repo_arg = repo
+            return "### Fixed\n\n- A thing was fixed.\n"
+
+        monkeypatch.setattr(release, "release_notes_for", capture)
+        dry_run()
+        out = capsys.readouterr().out
+        assert "- A thing was fixed." in out, out
+        assert repo_arg is not None
+
+    def test_the_printed_notes_are_labelled(self, dry_run, capsys):
+        dry_run()
+        out = capsys.readouterr().out
+        assert "release notes" in out

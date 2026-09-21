@@ -5,7 +5,7 @@ type: backlog_item
 tags:
 - process
 importance: 5
-status: proposed
+status: done
 priority: medium
 rank: 0
 ---

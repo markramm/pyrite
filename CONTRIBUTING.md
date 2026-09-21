@@ -199,7 +199,7 @@ test per command").
 
 A claim with no PR after 5 days lapses. Two people on one issue is fine — the
 first PR that meets the acceptance criteria merges, and we credit the other
-in the CHANGELOG line.
+in the changelog entry for the change.
 
 A placeholder commit or file is not a claim, and we don't merge placeholders.
 
@@ -248,7 +248,12 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   <test> <impl files>` to check exactly that; you can run it too.
 - The full suite green locally: `pytest tests/ extensions/ -n auto`, plus
   `ruff check` and `ruff format --check`.
-- A line in `CHANGELOG.md` under `[Unreleased]`.
+- A changelog fragment: a **new file** `changelog.d/<slug>.<section>.md`
+  containing the bullet as it should read in the release notes. Do **not** edit
+  `CHANGELOG.md` — it is the one file every pull request used to conflict on,
+  and a fragment has a name nobody else picks, so two branches in flight cannot
+  collide. `changelog.d/README.md` lists the sections and shows an example; the
+  release script assembles the fragments when the release is cut.
 - AI-assisted contributions are welcome here. If an AI coding agent wrote or
   co-wrote your change, declare it with a `Co-authored-by:` trailer on the
   commit (most agent tools add this automatically) — it is machine-readable,
@@ -288,7 +293,7 @@ names, for anything that is not yours to publish; no absolute home paths.
 
 Maintainer: Mark Ramm (BDFL; see ADR-0032). Contributors are credited by
 name in the release notes of the release their work ships in (the runbook
-lists every outside author of a merged PR), in the CHANGELOG line for the
+lists every outside author of a merged PR), in the changelog entry for the
 change, and in the README.
 
 ## License

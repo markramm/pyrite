@@ -53,7 +53,9 @@ code nobody had pushed).
       were both 3.11-vs-3.13 artefacts) — or the number is struck from the PR
 - [ ] ruff check . && ruff format --check .
 - [ ] theme complete? nothing in "Left:" that belongs to this PR
-- [ ] CHANGELOG [Unreleased] has a line per user-visible change; KB updated via CLI where the theme touched it
+- [ ] a changelog fragment `changelog.d/<slug>.<section>.md` per user-visible change, and CHANGELOG.md
+      NOT edited (a bullet under [Unreleased] is the conflict #243 removed; tests/test_changelog_fragments.py
+      fails on one); KB updated via CLI where the theme touched it
 - [ ] no private material, no absolute home paths (git grep -n "/Users/" -- the branch's new files)
 - [ ] the diff stays inside the theme's footprint: nothing from another theme's out-of-scope list (#119 — 18
       foreign commits were one push from the wrong PR; the worker caught it, the reviewer must too)

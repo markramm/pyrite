@@ -18,9 +18,10 @@ was split, a README paragraph the README no longer needs.
   the last docs pass (`gh pr list --state merged --base dev --search
   "merged:>=<date>"`). Read each PR's description and diff summary; find
   every document that describes what it changed.
-- **Before a release.** The CHANGELOG `[Unreleased]` section, the README's
-  install and Quick Start, and `docs/getting-started.md` must be true for the
-  tag about to be cut; run the commands they show.
+- **Before a release.** The fragments under `changelog.d/` — they *are* the
+  release notes, and `CHANGELOG.md` `[Unreleased]` is empty by design — plus
+  the README's install and Quick Start and `docs/getting-started.md` must be
+  true for the tag about to be cut; run the commands they show.
 - **A single stale document** someone found. Fix it and look for the same
   drift class elsewhere (a stale count is never alone).
 

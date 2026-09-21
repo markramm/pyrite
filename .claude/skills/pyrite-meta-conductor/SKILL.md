@@ -101,7 +101,7 @@ list finds only the waste that was loud.
 
 | Waste | What it looks like in this loop | Where to look |
 |---|---|---|
-| Partially done work | branches with no PR; draft PRs whose worker stopped; specs groomed but never dispatched; a merged change with no docs, no CHANGELOG line, no closed ticket | `gh pr list --draft`, `git branch -r`, the architect's last breakdown vs what was dispatched |
+| Partially done work | branches with no PR; draft PRs whose worker stopped; specs groomed but never dispatched; a merged change with no docs, no `changelog.d/` fragment, no closed ticket | `gh pr list --draft`, `git branch -r`, the architect's last breakdown vs what was dispatched |
 | Extra features | a worker's diff beyond its acceptance criteria; a theme pulled forward that the release did not need; skill text nobody reads | the diff vs the spec; the pool vs the DoD; skill lines never cited in a tick |
 | Relearning | a tick re-deriving what the last tick knew; a worker rediscovering a gotcha; the same `process` issue filed twice; the host re-reading a PR because the report did not say | tick-log repetition, `gotchas.md` gaps, `Unsure` lines that an earlier report answered |
 | Handoffs | spec → worker → report → review → PR: each hop where context was lost — a redispatch quoting what the spec "did not say", a review that had to re-run what the report claimed | redispatch reasons, review-lane time vs report quality |

@@ -27,9 +27,10 @@ inside it, act without asking.
 - Compose themes from the roadmap and GitHub issues, dispatch workers, review
   their branches, open PRs, and **land them on `dev`** through the required
   checks and auto-merge. No check-in per PR.
-- **Work the release queue**: keep `[Unreleased]` true, prepare the release
-  commit (version, changelog date), run the release-layer checks, and
-  present a release plan.
+- **Work the release queue**: keep the `changelog.d/` fragments true (each
+  merged theme leaves one; `CHANGELOG.md` `[Unreleased]` stays empty), prepare
+  the release commit (version, changelog date), run the release-layer checks,
+  and present a release plan.
 - **Iterate on ADRs**: draft new ones (`status: proposed`), amend existing
   ones in response to review, record decisions the maintainer has made.
 

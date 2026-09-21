@@ -5,44 +5,13 @@ All notable changes to Pyrite will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+Unreleased changes are **not** listed below. Each one is a separate file under
+[`changelog.d/`](changelog.d/README.md), named `<slug>.<section>.md`, so that no
+two pull requests conflict on this file; `scripts/release.py` assembles them
+under the version heading when the release is cut. `tests/test_changelog_fragments.py`
+asserts that `[Unreleased]` stays empty.
+
 ## [Unreleased]
-
-### Security
-
-- **The web clipper re-validates every redirect hop, not just the URL it was
-  handed (#219).** `_check_url_safe` refused loopback, link-local, RFC1918 and
-  reserved addresses for the first request, and httpx then followed
-  `follow_redirects=True` without checking where it landed: a public host could
-  answer `302 Location: http://127.0.0.1:8000/api/kbs`, or the cloud metadata
-  address, and the clipper returned the internal response to the caller. A
-  request hook now runs the same check for every request in the chain, and the
-  refusal is the same `ClipperBlockedHostError` a directly blocked URL raises,
-  so the two cannot be told apart.
-
-### Fixed
-
-- **A `GenericEntry` no longer duplicates its undeclared frontmatter keys into
-  a `metadata:` block on save.** `Entry._base_frontmatter` serialized the whole
-  `self.metadata` mapping as a nested block while `GenericEntry.to_frontmatter`
-  also promoted the same keys to top level, so a no-op load→save grew a
-  `metadata:` block the source file never had. Only keys that came from an
-  explicit `metadata:` block stay nested now; the rest are promoted once
-  (#149). A `metadata:` value that is not a mapping (null, a string, a list, a
-  number) is kept verbatim and written back on the next save, with a warning,
-  instead of failing the load and saving the file back as a different entry
-  type. Deliberate behaviour change: an entry *created* with `metadata={…}` now
-  writes those keys top-level only, where `dev` also wrote a nested block --
-  except a key the base frontmatter already emits (`title`, `id`, …), which
-  stays nested under `metadata:` rather than being dropped.
-
-- **`pyrite create -t <type>` no longer silently files a different type when the
-  KB does not declare the one asked for (#197).** Core types were exempt from
-  the CLI's write-side refusal, so `-t note` against a KB whose schema declares
-  only `adr | backlog_item | component | standard` skipped the guard, and plugin
-  type resolution then promoted it to its most-derived `note` subtype — an ADR
-  with `adr_number: 0` under `kb/adrs/`, from a command that asked for a note.
-  The refusal now covers every type the KB does not declare; `--allow-undeclared`
-  still overrides it.
 
 ## [0.24.3] - 2026-09-20
 

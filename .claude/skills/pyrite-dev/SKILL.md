@@ -136,7 +136,13 @@ conductor reviews it with the code.
   or `pyrite sw new-adr "Title" -k pyrite --status proposed`
 - Hit a surprising behaviour? Append to [gotchas.md](gotchas.md).
 - Then `.venv/bin/pyrite index sync` and check `pyrite search` finds it.
-- `CHANGELOG.md` under `## [Unreleased]`: one line per user-visible change.
+- One user-visible change, one **changelog fragment**: a new file
+  `changelog.d/<slug>.<section>.md` (sections: `added changed deprecated
+  removed fixed security`) holding the bullet as it should read in the release
+  notes. **Never edit `CHANGELOG.md`** — `[Unreleased]` is empty on `dev` and a
+  test asserts it. Every branch appending to one file is why five PRs
+  conflicted in a session (#243); a fragment's path is yours alone, so a rebase
+  has nothing to resolve. See `changelog.d/README.md`.
 
 ## Finishing: the report
 

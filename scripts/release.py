@@ -122,6 +122,28 @@ CI_FAILED = "failed"
 CI_PENDING = "pending"
 CI_MISSING = "missing"
 
+# --- changelog fragments (#243) --------------------------------------------
+#
+# `CHANGELOG.md` conflicted five times in one session and on nothing else --
+# three of them on first-time contributors' PRs -- because every `[Unreleased]`
+# bullet is appended at the same spot, so any two PRs in flight collide there
+# by construction. The resolution was always "keep both, either order": no
+# judgement, which is the definition of a conflict that should not exist.
+#
+# The towncrier pattern, hand-rolled rather than depended on: each change adds
+# `changelog.d/<slug>.<section>.md`, a path no other PR writes. This script
+# assembles them under the version heading at release time and deletes them.
+FRAGMENT_DIR_NAME = "changelog.d"
+
+# Keep a Changelog's sections, because that is the format CHANGELOG.md declares
+# and the assembled headings land in that file. A section outside this tuple is
+# a hard error, never a skipped file: a dropped entry is how a security fix
+# goes unannounced.
+FRAGMENT_SECTIONS = ("added", "changed", "deprecated", "removed", "fixed", "security")
+
+# Files that live in the directory without being entries.
+FRAGMENT_NON_ENTRIES = frozenset({"README.md", ".gitkeep", ".gitignore"})
+
 
 class ReleaseError(Exception):
     """A check said no. The message is what the maintainer needs to do."""
@@ -271,6 +293,109 @@ def check_version_matches(repo: Path, version: str) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# changelog fragments (pure, over the files in `changelog.d/`)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Fragment:
+    """One `changelog.d/<slug>.<section>.md`, parsed."""
+
+    slug: str
+    section: str
+    body: str = ""
+    path: Path | None = None
+
+
+def parse_fragment_name(name: str) -> Fragment:
+    """`<slug>.<section>.md` -> Fragment(slug, section), or a ReleaseError.
+
+    The slug may itself contain dots (`pyrite.cli.fixed.md`), so the section is
+    the *last* component before `.md` -- and it must be one this project knows.
+    Every failure names the file and the sections, because the person reading
+    it is a contributor who has just had their fragment refused.
+    """
+    shape = (
+        f"a fragment is named `<slug>.<section>.md`, where <section> is one of "
+        f"{', '.join(FRAGMENT_SECTIONS)} (see {FRAGMENT_DIR_NAME}/README.md)."
+    )
+    if not name.endswith(".md"):
+        raise ReleaseError(f"{name!r} is not a changelog fragment: {shape}")
+    stem = name[: -len(".md")]
+    slug, _, section = stem.rpartition(".")
+    if not section or not _:
+        raise ReleaseError(f"{name!r} names no section: {shape}")
+    if not slug:
+        raise ReleaseError(f"{name!r} has an empty slug: {shape}")
+    if section not in FRAGMENT_SECTIONS:
+        raise ReleaseError(
+            f"{name!r} names the section {section!r}, which is not a changelog "
+            f"section. {shape} Rename the file -- this is refused rather than "
+            "skipped, because an entry silently dropped from the release notes "
+            "is how a security fix goes unannounced."
+        )
+    return Fragment(slug=slug, section=section)
+
+
+def fragment_paths(repo: Path) -> list[Path]:
+    """Every file under `changelog.d/` that is meant to be an entry, sorted.
+
+    The README and a `.gitkeep` live there without being entries; assembling
+    the README would put the instructions into the release notes.
+    """
+    directory = repo / FRAGMENT_DIR_NAME
+    if not directory.is_dir():
+        return []
+    return sorted(
+        path
+        for path in directory.iterdir()
+        if path.is_file() and path.name not in FRAGMENT_NON_ENTRIES
+    )
+
+
+def collect_fragments(repo: Path) -> list[Fragment]:
+    """Every fragment, parsed and read, or a ReleaseError naming the bad one.
+
+    Sorted by (section order, slug) so the assembled notes are byte-identical
+    on any machine: `iterdir` order is the filesystem's, not the project's.
+    """
+    fragments: list[Fragment] = []
+    for path in fragment_paths(repo):
+        parsed = parse_fragment_name(path.name)
+        try:
+            body = path.read_text().strip()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise ReleaseError(f"cannot read the changelog fragment {path}: {exc}") from exc
+        if not body:
+            raise ReleaseError(
+                f"the changelog fragment {path.name} is empty. It would assemble "
+                "to a heading with nothing under it; write the entry or delete "
+                "the file."
+            )
+        fragments.append(Fragment(slug=parsed.slug, section=parsed.section, body=body, path=path))
+    return sorted(fragments, key=lambda f: (FRAGMENT_SECTIONS.index(f.section), f.slug))
+
+
+def assemble_fragments(repo: Path) -> str:
+    """The fragments as CHANGELOG markdown: `### Section` then its entries.
+
+    Only sections with fragments get a heading -- an empty `### Removed` in
+    every release is noise -- and the order is Keep a Changelog's, not the
+    order the files happened to be written in.
+    """
+    fragments = collect_fragments(repo)
+    if not fragments:
+        return ""
+    chunks: list[str] = []
+    for section in FRAGMENT_SECTIONS:
+        entries = [f for f in fragments if f.section == section]
+        if not entries:
+            continue
+        chunks.append(f"### {section.capitalize()}\n\n" + "\n\n".join(f.body for f in entries))
+    return "\n\n".join(chunks) + "\n"
+
+
 def _read_changelog(repo: Path) -> str:
     """The CHANGELOG text, or a ReleaseError naming the file it wanted."""
     path = repo / "CHANGELOG.md"
@@ -371,11 +496,18 @@ def check_changelog(repo: Path, version: str) -> None:
             "that commit) before releasing."
         )
 
+    # Parse the fragments here, in the first check, rather than when the notes
+    # are composed in step (d): a misspelled section discovered there would be
+    # discovered after `main` has already moved.
+    fragments = collect_fragments(repo)
+
     body = text[heading.end() : end].strip()
-    if not body:
+    if not body and not fragments:
         raise ReleaseError(
-            f"`## [{version}]` has no content. A release with empty notes tells "
-            "users nothing; write the section on dev first."
+            f"`## [{version}]` has no content and there are no fragments under "
+            f"{FRAGMENT_DIR_NAME}/. A release with empty notes tells users "
+            f"nothing; add the entries as fragments (see {FRAGMENT_DIR_NAME}/README.md) "
+            "on dev first."
         )
 
     masked = mask_fenced_blocks(text)
@@ -393,16 +525,20 @@ def check_changelog(repo: Path, version: str) -> None:
 
 
 def release_notes_for(repo: Path, version: str) -> str:
-    """The body of this version's CHANGELOG section, and nothing else.
+    """This version's notes: its CHANGELOG section, then the fragments.
 
-    THE seam for where release notes come from. A later theme moves the source
-    to per-PR fragments under `changelog.d/`; when it does, this function's
-    body changes and nothing above it needs to. Keep it the only place that
-    knows the notes' origin.
+    THE seam for where release notes come from, and now it has two sources
+    (#243). The hand-written section body is the lede a release sometimes
+    carries ("Operational -- see kb/roadmap.md"); the fragments are the
+    per-change entries every PR contributed without touching a shared file.
+    Keep this the only place that knows the notes' origin.
     """
     text = _read_changelog(repo)
     heading, end = _section_span(text, version)
-    return text[heading.end() : end].strip() + "\n"
+    written = text[heading.end() : end].strip()
+    assembled = assemble_fragments(repo).strip()
+    parts = [part for part in (written, assembled) if part]
+    return "\n\n".join(parts) + "\n"
 
 
 def contributors_line(logins: list[str]) -> str | None:
@@ -698,6 +834,22 @@ def step_preconditions(ctx: Context) -> None:
 
     check_changelog(ctx.repo, ctx.version)
     ctx.runner.note(f"CHANGELOG has `## [{ctx.version}] - {date.today().isoformat()}` with content")
+
+    # Print the notes here rather than in step (d): by step (d) the next thing
+    # to happen is the push, and "the release notes are wrong" is a reason to
+    # stop. Fragments make this the only place the assembled section can be
+    # read before the tag -- CHANGELOG.md does not contain it yet.
+    fragments = collect_fragments(ctx.repo)
+    ctx.runner.note(
+        f"{len(fragments)} changelog fragment(s) under {FRAGMENT_DIR_NAME}/"
+        if fragments
+        else f"no fragments under {FRAGMENT_DIR_NAME}/; the notes are the section as written"
+    )
+    ctx.runner.note(f"release notes for v{ctx.version} (the section plus the fragments):")
+    print()
+    for line in release_notes_for(ctx.repo, ctx.version).rstrip().splitlines():
+        print(f"      {line}" if line else "")
+    print()
 
     # Resolve the repository here, inside the step, so a bad `origin` reads as
     # `FAIL at preconditions` with the header above it rather than as a raw
@@ -1070,12 +1222,35 @@ def step_publish(ctx: Context) -> None:
         )
 
 
-def step_post_release(ctx: Context) -> None:
-    """IRREVERSIBLE (a commit, on a fresh branch). Reopen `[Unreleased]`.
+def _inline_fragments(text: str, version: str, assembled: str) -> str:
+    """The CHANGELOG with the assembled fragments written under `## [version]`.
 
-    A NO-OP when the CHANGELOG already carries an `## [Unreleased]` heading:
-    the section is reopened on dev by whoever writes the next entry, and a
-    second empty one would only be noise.
+    The fragments are the release's entries: once the tag carries them in its
+    notes, the file has to carry them too, or CHANGELOG.md documents every
+    release except the ones cut since fragments existed. They go under the
+    *released* heading, not under the reopened `[Unreleased]` -- they shipped.
+    """
+    heading, end = _section_span(text, version)
+    written = text[heading.end() : end].strip()
+    body = "\n\n".join(part for part in (written, assembled.strip()) if part)
+    return text[: heading.end()] + "\n\n" + body + "\n\n" + text[end:]
+
+
+def step_post_release(ctx: Context) -> None:
+    """IRREVERSIBLE (a commit, on a fresh branch). Consume the fragments that
+    shipped, and reopen `[Unreleased]`.
+
+    Two edits to one file, so one commit:
+
+    * The fragments assembled into the released section. Leaving them under
+      `changelog.d/` would republish every entry in the *next* release, and
+      leaving CHANGELOG.md without them would mean the file documents every
+      release except this one.
+    * A fresh `## [Unreleased]` heading, when the file does not already carry
+      one -- a second empty one would only be noise.
+
+    A NO-OP when there is neither work to do: nothing to consume and the
+    heading already there.
 
     The commit goes on `release/reopen-unreleased-<version>`, cut from the
     released commit, never on local `dev`. `dev` takes pull requests only (the
@@ -1090,23 +1265,61 @@ def step_post_release(ctx: Context) -> None:
     """
     changelog = ctx.repo / "CHANGELOG.md"
     text = _read_changelog(ctx.repo)
-    if re.search(r"^##\s*\[Unreleased\]", mask_fenced_blocks(text), re.M):
-        ctx.runner.note("CHANGELOG already has an `[Unreleased]` section; nothing to do")
+
+    consumed = fragment_paths(ctx.repo)
+    assembled = assemble_fragments(ctx.repo)
+    has_unreleased = bool(re.search(r"^##\s*\[Unreleased\]", mask_fenced_blocks(text), re.M))
+
+    if not consumed and has_unreleased:
+        ctx.runner.note(
+            "CHANGELOG already has an `[Unreleased]` section and there are no "
+            "fragments to consume; nothing to do"
+        )
         return
 
-    marker = re.search(rf"^##\s*\[{re.escape(ctx.version)}\]", mask_fenced_blocks(text), re.M)
-    if not marker:
-        raise ReleaseError("cannot reopen [Unreleased]: the released section vanished")
-    updated = text[: marker.start()] + "## [Unreleased]\n\n" + text[marker.start() :]
+    updated = text
+    if assembled:
+        updated = _inline_fragments(updated, ctx.version, assembled)
+    if not has_unreleased:
+        marker = re.search(
+            rf"^##\s*\[{re.escape(ctx.version)}\]", mask_fenced_blocks(updated), re.M
+        )
+        if not marker:
+            raise ReleaseError("cannot reopen [Unreleased]: the released section vanished")
+        updated = updated[: marker.start()] + "## [Unreleased]\n\n" + updated[marker.start() :]
 
     branch = f"release/reopen-unreleased-{ctx.version}"
     ctx.runner.run_write(["git", "-C", str(ctx.repo), "checkout", "-b", branch, ctx.sha])
 
+    described = []
+    if assembled:
+        described.append(f"{len(consumed)} fragment(s) assembled into `## [{ctx.version}]`")
+    if not has_unreleased:
+        described.append("a fresh `## [Unreleased]`")
+    what = " and ".join(described)
     if ctx.runner.execute:
         changelog.write_text(updated)
-        print("    RUN: write CHANGELOG.md with a fresh `## [Unreleased]`")
+        print(f"    RUN: write CHANGELOG.md with {what}")
     else:
-        print("    WOULD RUN: write CHANGELOG.md with a fresh `## [Unreleased]`")
+        print(f"    WOULD RUN: write CHANGELOG.md with {what}")
+
+    # Removing the files is a write like writing the CHANGELOG above, and is
+    # printed the same way: a dry run removes nothing. Plain `unlink` rather
+    # than `git rm`, because the commit below names `changelog.d/` in its
+    # pathspec and `git commit -- <path>` stages the deletions it finds there
+    # -- while `git rm` would fail outright on a fragment that was never added
+    # to the index, in the middle of an irreversible step.
+    for path in consumed:
+        rendered = f"remove {FRAGMENT_DIR_NAME}/{path.name} (assembled above)"
+        if ctx.runner.execute:
+            path.unlink(missing_ok=True)
+            print(f"    RUN: {rendered}")
+        else:
+            print(f"    WOULD RUN: {rendered}")
+
+    paths = ["CHANGELOG.md"]
+    if consumed:
+        paths.append(f"{FRAGMENT_DIR_NAME}/")
     ctx.runner.run_write(
         [
             "git",
@@ -1114,9 +1327,9 @@ def step_post_release(ctx: Context) -> None:
             str(ctx.repo),
             "commit",
             "-m",
-            f"chore: open [Unreleased] after v{ctx.version}",
+            f"chore: consume changelog fragments and open [Unreleased] after v{ctx.version}",
             "--",
-            "CHANGELOG.md",
+            *paths,
         ]
     )
     ctx.runner.note(

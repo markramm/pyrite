@@ -30,8 +30,8 @@ change stopped seeing. You read; you run; you do not edit.
    Would they fail if the fix were reverted? Is the "happy path" the only
    path?
 4. Look for what is missing: the case the change implies but does not handle,
-   the caller that still uses the old behaviour, the doc or changelog line
-   that should exist.
+   the caller that still uses the old behaviour, the doc or the
+   `changelog.d/<slug>.<section>.md` fragment that should exist.
 
 ## Output format
 

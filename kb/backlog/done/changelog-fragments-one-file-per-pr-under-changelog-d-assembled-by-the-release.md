@@ -8,7 +8,7 @@ tags:
 - release
 importance: 5
 kind: tech_debt
-status: proposed
+status: done
 priority: high
 effort: S
 rank: 0

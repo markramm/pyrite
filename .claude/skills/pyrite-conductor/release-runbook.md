@@ -32,14 +32,23 @@ one commit, pushed and green *before* you release:
 - `pyproject.toml` `version` — the ONLY place it is written;
   `pyrite.__version__` reads it and `tests/test_version_consistency.py` checks
   it.
-- `CHANGELOG.md` — date the section being released, `## [X.Y.Z] - YYYY-MM-DD`
-  (today), with content, and nothing stranded under `[Unreleased]`.
+- `CHANGELOG.md` — open the section being released, `## [X.Y.Z] - YYYY-MM-DD`
+  (today). Its **entries do not go here**: they are the fragments under
+  `changelog.d/`, which the script assembles into this section in step (e).
+  Write only the lede if the release has one ("Operational — see
+  `kb/roadmap.md`"). A section that is empty *and* has no fragments to fill it
+  is refused; `[Unreleased]` must still be empty (it always is — see
+  `changelog.d/README.md`).
 - `SECURITY.md` supported-versions table, if the minor changed.
 
 ```bash
 git commit -m "release: prepare vX.Y.Z" -- pyproject.toml CHANGELOG.md
 git push -u origin release-prep && gh pr create --base dev --fill   # dev takes PRs only
 ```
+
+Read the notes before you cut: step (a) prints the assembled section (the lede
+plus every fragment, in Keep a Changelog order) — that is the whole point of a
+dry run, and it is the last place the notes can be corrected cheaply.
 
 One-time prerequisite: the `release-blocker` label must exist. The script
 refuses to release while an open PR carries it — and refuses to release at all
@@ -55,11 +64,11 @@ gh label create release-blocker --repo pyrite-wiki/pyrite \
 
 | Step | Checks | Irreversible |
 |------|--------|--------------|
-| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `origin` resolves to `pyrite-wiki/pyrite` (the repo the `gh` calls name); `vX.Y.Z` exists neither locally, on `origin`, nor as a GitHub release; `origin/main` is an ancestor of the SHA, so step d's push can only fast-forward; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content and no stranded `[Unreleased]`; the `release-blocker` label exists and no open PR carries it | no |
+| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `origin` resolves to `pyrite-wiki/pyrite` (the repo the `gh` calls name); `vX.Y.Z` exists neither locally, on `origin`, nor as a GitHub release; `origin/main` is an ancestor of the SHA, so step d's push can only fast-forward; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content *or* fragments under `changelog.d/` to fill it, every fragment naming a known section, and no stranded `[Unreleased]`; the `release-blocker` label exists and no open PR carries it. **Prints the assembled release notes** | no |
 | b. CI | the **required checks** for that exact SHA concluded success — `gate` by default, newest run per check name so a rerun to green counts. Never starts a run; `--wait-ci MINUTES` waits out a pending one (default 15) | no |
 | c. release layer | what a *user* gets, **before the tag exists** (ADR-0032 §3a): install from the SHA into a throwaway `uv` venv, `pyrite --version` equals X.Y.Z, `scripts/run_tutorial.sh` (the Quick Start) run against that install, `docker build` when docker is present — a loud note when it is not | no |
-| d. publish | fast-forward `main` to the SHA (`git push origin <sha>:refs/heads/main`; the ruleset allows only a fast-forward), tag `vX.Y.Z`, push the tag, `gh release create` with the CHANGELOG section plus the contributors line | **yes** |
-| e. post-release | reopen `## [Unreleased]` in `CHANGELOG.md` on a fresh `release/reopen-unreleased-X.Y.Z` branch cut from the release commit (local `dev` is never committed on), and print the `git push -u origin …` / `gh pr create --base dev --fill` lines. A no-op when `[Unreleased]` is already there | **yes** |
+| d. publish | fast-forward `main` to the SHA (`git push origin <sha>:refs/heads/main`; the ruleset allows only a fast-forward), tag `vX.Y.Z`, push the tag, `gh release create` with the CHANGELOG section, the assembled fragments, and the contributors line | **yes** |
+| e. post-release | **consume the fragments** — write the assembled sections into `CHANGELOG.md` under `## [X.Y.Z]` and delete the files from `changelog.d/` — and reopen `## [Unreleased]`, in one commit on a fresh `release/reopen-unreleased-X.Y.Z` branch cut from the release commit (local `dev` is never committed on); print the `git push -u origin …` / `gh pr create --base dev --fill` lines. A no-op only when there are no fragments *and* `[Unreleased]` is already there | **yes** |
 | f. handoff | prints what the release does *not* do and cannot: **pyrite.wiki** (below), the deploys the tag does not trigger, the `[Unreleased]` PR, the announcement. Changes nothing | no |
 
 **pyrite.wiki is not automated and cannot be.** The marketing site lives
@@ -150,7 +159,8 @@ Prefer a normal patch release (above): if `dev` is releasable, fast-forward it.
 Only when `dev` carries work that must not ship yet:
 
 1. Branch `hotfix/vX.Y.Z` from the release tag, cherry-pick the fix from `dev`,
-   bump the patch version and CHANGELOG there, push, and wait for CI.
+   bump the patch version there and open the CHANGELOG section (the fix's own
+   fragment comes across with the cherry-pick), push, and wait for CI.
 2. Fast-forward `main` to the hotfix branch, tag, release, deploy.
 3. Merge `main` back into `dev` immediately, so `main` is an ancestor of `dev`
    again and the next release can fast-forward.
