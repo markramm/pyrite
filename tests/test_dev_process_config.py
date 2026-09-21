@@ -95,6 +95,34 @@ class TestCIWorkflow:
     def test_superseded_runs_are_cancelled(self, ci):
         assert ci["concurrency"]["cancel-in-progress"] is True
 
+    def test_protected_branches_get_a_run_per_commit(self, ci):
+        """`dev` and `main` must not cancel each other's runs.
+
+        The group key decides what counts as "the same run". Keyed on the ref
+        alone, a second merge to `dev` cancels the first one's matrix: on
+        2026-09-21 #173 merged seven minutes after #276 and killed its run, so
+        38beda9 -- the commit that changed the release path -- never got a
+        verdict, and `gate` went red meaning only "superseded" (#279).
+
+        That matters on `dev` and `main` specifically, because every PR rebases
+        onto `dev`, and `main` only ever fast-forwards to a commit CI has
+        proven. A commit nothing verified breaks both promises, and a red
+        `gate` that means "superseded" teaches people to ignore red.
+
+        Including the SHA for protected refs gives each commit its own group;
+        PR branches keep cancelling, which is what makes CI answer quickly.
+        """
+        group = ci["concurrency"]["group"]
+        assert "github.ref_protected" in group, (
+            "the concurrency group does not distinguish protected branches, so "
+            "a merge to dev cancels the previous merge's matrix and leaves that "
+            "commit unverified (#279)"
+        )
+        assert "github.sha" in group, (
+            "the concurrency group has no per-commit component, so two commits "
+            "on dev share one group and the older run is cancelled (#279)"
+        )
+
     def test_ci_runs_the_checks_that_local_hooks_run(self, ci):
         # Outside contributors' PRs never run local hooks; CI has to.
         steps = "\n".join(

@@ -19,12 +19,29 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same ref makes the older run's answer irrelevant. CI is
-# the gate (the full suite no longer runs at commit time -- see
-# .pre-commit-config.yaml), so it has to answer quickly, not queue behind
-# superseded runs.
+# On a pull-request branch a newer push makes the older run's answer
+# irrelevant. CI is the gate (the full suite no longer runs at commit time --
+# see .pre-commit-config.yaml), so it has to answer quickly rather than queue
+# behind superseded runs.
+#
+# On `dev` and `main` it is NOT irrelevant. Every PR rebases onto `dev`, and
+# `main` only ever fast-forwards to a commit CI has proven, so each commit
+# there is something other work depends on having been verified. Keyed on the
+# ref alone, a second merge cancels the first one's matrix: on 2026-09-21 #173
+# merged seven minutes after #276 and killed its run, leaving 38beda9 -- the
+# commit that changed the release path -- with no verdict and a red `gate`
+# that meant only "superseded" (#279). A break introduced there and masked by
+# the next commit is invisible, because the later run covers the accumulated
+# code rather than each commit; and red-that-means-nothing teaches people to
+# ignore red.
+#
+# `github.ref_protected` is true for `dev` and `main` (both carry rulesets),
+# so those get the SHA in the group key -- one group per commit, nothing
+# cancelled. Everything else keeps the old behaviour. The merge queue makes
+# this more likely, not less: it lands PRs in quick succession, which is
+# exactly the pattern that triggered it.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.ref_protected && github.sha || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -276,6 +293,27 @@ jobs:
         run: >-
           python scripts/check_fix_commit_has_tests.py --range
           ${{ github.event.pull_request.base.sha }} ${{ github.sha }}
+
+      # Advisory, never blocking (#278). #173 merged with its entry appended to
+      # CHANGELOG.md under the already-released 0.24.3 heading, so the
+      # [Unreleased] invariant test had nothing to catch and the fix was absent
+      # from the assembled release notes. This prints a warning annotation when
+      # a PR touches pyrite/ or extensions/ and records no fragment.
+      #
+      # It warns rather than fails on purpose: whether a change is
+      # user-visible is the author's judgement, and a blocking check that
+      # newcomers hit on their first PR is the friction #276 set out to remove
+      # (maintainer, 2026-09-22). `Changelog: none` in the PR body opts out.
+      - name: Warn if no changelog fragment (pull_request only, advisory)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$PR_BODY" > /tmp/pr-body.txt
+          python scripts/check_changelog_fragment.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.sha }}" \
+            --body-file /tmp/pr-body.txt
 
       - name: Type check with mypy
         continue-on-error: true
