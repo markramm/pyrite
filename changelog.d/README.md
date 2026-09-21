@@ -78,3 +78,16 @@ changing anything, which is the way to check how your entry will read.
   is a separate thing (a typo fix), not how a change is recorded.
 - **Changes nobody using Pyrite would notice** — a refactor with no behaviour
   change, a test-only change, a tweak to CI. No fragment needed.
+
+  There is deliberately **no `process` or `docs` section** (maintainer,
+  2026-09-21). The six sections above are the Keep a Changelog set, which is
+  the format `CHANGELOG.md` declares at the top of the file; a `### Process`
+  heading there would belong to no format and would put the loop's own
+  bookkeeping in front of people reading release notes to find out what
+  changed for *them*. Process work is recorded in the KB and in GitHub issues
+  (ADR-0033), which is where the retro looks for it.
+
+  If a process change *does* alter something a user sees — a CLI flag, an
+  error message, a documented workflow — that is not a process change for this
+  purpose. Write the fragment under the section describing what the user
+  experiences.
