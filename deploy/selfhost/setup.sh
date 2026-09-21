@@ -19,7 +19,7 @@ useradd -m -s /bin/bash -G docker deploy
 
 echo "=== Cloning repo and starting services ==="
 su - deploy -c "
-  git clone https://github.com/markramm/pyrite.git ~/pyrite
+  git clone https://github.com/pyrite-wiki/pyrite.git ~/pyrite
   cd ~/pyrite
   PYRITE_DOMAIN=$DOMAIN docker compose -f deploy/selfhost/docker-compose.yml up -d --build
 

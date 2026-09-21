@@ -7,7 +7,7 @@ Pyrite is a Knowledge-as-Code platform. You keep structured knowledge in markdow
 No PyPI wheel yet — install from source:
 
 ```bash
-git clone https://github.com/markramm/pyrite.git && cd pyrite
+git clone https://github.com/pyrite-wiki/pyrite.git && cd pyrite
 pip install -e ".[all]"   # Core + AI + semantic search + dev tools
 ```
 

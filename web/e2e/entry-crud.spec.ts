@@ -65,7 +65,7 @@ test.describe('Entries Page', () => {
 		await expect(search).toHaveAttribute('placeholder', 'Search...');
 	});
 
-	// #45 (github.com/markramm/pyrite/issues/45): while `kbStore.activeKB` is
+	// #45 (github.com/pyrite-wiki/pyrite/issues/45): while `kbStore.activeKB` is
 	// still resolving, EntryList briefly renders its own EmptyState "New Entry"
 	// action link, colliding with the toolbar's permanent one. `toHaveCount(1)`
 	// (an auto-retrying assertion) waits out that race instead of grabbing

@@ -10,7 +10,7 @@
 	function reportIssueUrl(): string {
 		const errorText = encodeURIComponent(message);
 		const page = typeof window !== 'undefined' ? encodeURIComponent(window.location.pathname) : '';
-		return `https://github.com/markramm/pyrite/issues/new?title=Bug:+Error+on+page&body=**Page:** ${page}%0A**Error:** ${errorText}%0A%0A**Steps to reproduce:**%0A1. %0A`;
+		return `https://github.com/pyrite-wiki/pyrite/issues/new?title=Bug:+Error+on+page&body=**Page:** ${page}%0A**Error:** ${errorText}%0A%0A**Steps to reproduce:**%0A1. %0A`;
 	}
 </script>
 

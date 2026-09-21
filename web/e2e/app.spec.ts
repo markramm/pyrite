@@ -93,7 +93,7 @@ test.describe('Sidebar Navigation', () => {
 });
 
 test.describe('Entries Page', () => {
-	// #45 (github.com/markramm/pyrite/issues/45): the KB store resolves
+	// #45 (github.com/pyrite-wiki/pyrite/issues/45): the KB store resolves
 	// `activeKB` asynchronously in +layout.svelte's onMount, and the entries
 	// $effect is a no-op until it does, so EntryList briefly renders its
 	// "No entries found" empty state before the real list loads. Playwright's
@@ -203,7 +203,7 @@ test.describe('Page-load: Search, Timeline, Daily, Graph, Settings', () => {
 		await expect(page.getByPlaceholder('Search nodes...')).toBeVisible();
 	});
 
-	// #49 (github.com/markramm/pyrite/issues/49): the root layout's
+	// #49 (github.com/pyrite-wiki/pyrite/issues/49): the root layout's
 	// `$effect` sets `document.title = brandStore.name` unconditionally once
 	// branding loads, clobbering every route's own <svelte:head><title>. That
 	// effect lives in web/src/routes/+layout.svelte, which is outside this

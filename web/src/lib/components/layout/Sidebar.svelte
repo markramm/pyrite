@@ -197,7 +197,7 @@
 	<div class="border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
 		<div class="flex items-center gap-3">
 			<a
-				href="https://github.com/markramm/pyrite/issues/new"
+				href="https://github.com/pyrite-wiki/pyrite/issues/new"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -206,7 +206,7 @@
 			</a>
 			<span class="text-zinc-700">&middot;</span>
 			<a
-				href="https://github.com/markramm/pyrite/releases"
+				href="https://github.com/pyrite-wiki/pyrite/releases"
 				target="_blank"
 				rel="noopener noreferrer"
 				class="text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"

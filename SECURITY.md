@@ -15,7 +15,7 @@ If you discover a security vulnerability in Pyrite, please report it responsibly
 
 Instead, use GitHub's private vulnerability reporting feature:
 
-1. Go to the [Security tab](https://github.com/markramm/pyrite/security) of this repository
+1. Go to the [Security tab](https://github.com/pyrite-wiki/pyrite/security) of this repository
 2. Click "Report a vulnerability"
 3. Provide a detailed description of the vulnerability
 

@@ -2,7 +2,7 @@
 
 ## Repository Information
 
-- **Repository**: https://github.com/markramm/pyrite
+- **Repository**: https://github.com/pyrite-wiki/pyrite
 - **License**: MIT
 - **Language**: Python 3.11+
 - **MCP Transport**: STDIO
@@ -39,7 +39,7 @@ pip install pyrite
 Or from source:
 
 ```bash
-git clone https://github.com/markramm/pyrite
+git clone https://github.com/pyrite-wiki/pyrite
 cd pyrite
 pip install -e ".[all]"
 ```

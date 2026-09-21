@@ -4,7 +4,7 @@ Curated list of Pyrite plugins. Plugins add custom entry types, MCP tools, CLI c
 
 ## Official Plugins
 
-These plugins ship in-tree in the [`extensions/`](https://github.com/markramm/pyrite/tree/main/extensions) directory and are installable as separate packages.
+These plugins ship in-tree in the [`extensions/`](https://github.com/pyrite-wiki/pyrite/tree/main/extensions) directory and are installable as separate packages.
 
 ---
 
@@ -25,7 +25,7 @@ Structured knowledge management for software teams -- ADRs, design docs, coding 
 
 **Use case:** Engineering teams that want to keep architecture decisions, coding standards, component docs, and backlogs in version-controlled markdown alongside their code.
 
-[Full docs](https://github.com/markramm/pyrite/tree/main/extensions/software-kb)
+[Full docs](https://github.com/pyrite-wiki/pyrite/tree/main/extensions/software-kb)
 
 ---
 
@@ -45,7 +45,7 @@ Example plugin. `zettelkasten` exists to show how a Pyrite plugin adds entry typ
 
 **Use case:** What this example shows a plugin author -- a `NoteEntry` subclass with domain-specific maturity fields, two read-tier MCP tools, a dedicated Typer sub-app, and custom relationship types wired through `get_relationship_types()`.
 
-[Full docs](https://github.com/markramm/pyrite/tree/main/extensions/zettelkasten)
+[Full docs](https://github.com/pyrite-wiki/pyrite/tree/main/extensions/zettelkasten)
 
 ---
 
@@ -66,7 +66,7 @@ Example plugin. `encyclopedia` exists to show how a Pyrite plugin adds entry typ
 
 **Use case:** What this example shows a plugin author -- tier-gated MCP tool registration (read/write/admin), a `get_workflows()` state machine, and plugin-owned DB tables prefixed to avoid collisions.
 
-[Full docs](https://github.com/markramm/pyrite/tree/main/extensions/encyclopedia)
+[Full docs](https://github.com/pyrite-wiki/pyrite/tree/main/extensions/encyclopedia)
 
 ---
 
@@ -87,7 +87,7 @@ Example plugin. `social` exists to show how a Pyrite plugin adds entry types, CL
 
 **Use case:** What this example shows a plugin author -- lifecycle hooks (`before_save`, `after_save`, `after_delete`) enforcing authorship and keeping derived counts in sync, plus a full read/write MCP tool split.
 
-[Full docs](https://github.com/markramm/pyrite/tree/main/extensions/social)
+[Full docs](https://github.com/pyrite-wiki/pyrite/tree/main/extensions/social)
 
 ---
 
@@ -106,7 +106,7 @@ Investigative journalism knowledge management covering actors, organizations, ev
 
 **Use case:** Investigative journalists and researchers mapping networks of actors, organizations, events, and power structures across large-scale investigations.
 
-[Full docs](https://github.com/markramm/pyrite/tree/main/extensions/cascade)
+[Full docs](https://github.com/pyrite-wiki/pyrite/tree/main/extensions/cascade)
 
 ---
 
@@ -122,10 +122,10 @@ Pyrite plugins are standard Python packages that expose entry types, MCP tools, 
 
 - **Plugin writing tutorial:** [`docs/tutorials/plugin-writing.md`](tutorials/plugin-writing.md)
 - **Claude Code skill:** Use the `extension-builder` skill in Claude Code to scaffold a new plugin interactively
-- **Reference implementations:** Browse the [extensions/](https://github.com/markramm/pyrite/tree/main/extensions) directory for working examples
+- **Reference implementations:** Browse the [extensions/](https://github.com/pyrite-wiki/pyrite/tree/main/extensions) directory for working examples
 
 **Submitting a community plugin:**
 
 1. Build and test your plugin against the latest Pyrite release
-2. Open a PR to [markramm/pyrite](https://github.com/markramm/pyrite) adding your plugin to the Community Plugins section of this page
+2. Open a PR to [pyrite-wiki/pyrite](https://github.com/pyrite-wiki/pyrite) adding your plugin to the Community Plugins section of this page
 3. Include a link to your plugin's repository, a one-line description, and what it adds

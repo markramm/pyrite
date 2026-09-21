@@ -19,7 +19,7 @@ Your AI agents have no memory. Your knowledge is trapped in platform silos. Ever
 
 ```bash
 # Install (no PyPI wheel yet -- from source)
-git clone https://github.com/markramm/pyrite.git && cd pyrite
+git clone https://github.com/pyrite-wiki/pyrite.git && cd pyrite
 pip install -e ".[all]"
 
 # Initialize a knowledge base
@@ -251,9 +251,9 @@ kb/                  # Pyrite's own KB (ADRs, backlog, components, standards)
 
 ### One-Click Deploy
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repo=markramm/pyrite&referralCode=pyrite)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/template/new?repo=pyrite-wiki/pyrite&referralCode=pyrite)
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/markramm/pyrite)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/pyrite-wiki/pyrite)
 
 **Fly.io** — create a volume and deploy:
 
@@ -270,7 +270,7 @@ All three platforms use the included Dockerfile, persist data at `/data`, and ex
 Run your own Pyrite instance on any VPS ($6/month, unlimited users, you own your data):
 
 ```bash
-git clone https://github.com/markramm/pyrite.git && cd pyrite
+git clone https://github.com/pyrite-wiki/pyrite.git && cd pyrite
 bash deploy/selfhost/setup.sh kb.example.com
 ```
 
@@ -296,7 +296,7 @@ docker compose up -d  # http://localhost:8088
 No PyPI wheel yet. From source (CLI, server, MCP **and** the web UI):
 
 ```bash
-git clone https://github.com/markramm/pyrite.git && cd pyrite
+git clone https://github.com/pyrite-wiki/pyrite.git && cd pyrite
 pip install -e ".[all]"      # Core + AI + semantic search + dev tools
 cd web && npm ci && npm run build && cd ..   # the web UI (optional)
 ```
@@ -304,11 +304,12 @@ cd web && npm ci && npm run build && cd ..   # the web UI (optional)
 Or straight from a release tag, no clone:
 
 ```bash
-pip install "pyrite[server,cli] @ git+https://github.com/markramm/pyrite@v0.24.1"
+pip install "pyrite[server,cli] @ git+https://github.com/pyrite-wiki/pyrite@v0.24.3"
 ```
 
 That gives you the CLI, the REST API and the MCP server, but **not the web
-UI** — the built frontend is not packaged yet (tracked; planned for 0.24.2).
+UI** — the built frontend is not packaged yet (tracked in the roadmap; clone
+and `npm run build` above if you want it).
 
 Narrower extras: `pip install -e ".[server]"` (REST API + web UI),
 `pip install -e ".[ai]"` (OpenAI + Anthropic SDKs),
@@ -381,7 +382,7 @@ It is still used in production for that work, and it has since grown past it int
 **Contributors.** [AsyncLegs](https://github.com/AsyncLegs) deployed Pyrite as
 a server for agents and found, then fixed, three bugs the test suite had never
 seen (MCP over SSE, KB registry cache, embedding prewarm — v0.24.1). Bug reports
-go to [GitHub issues](https://github.com/markramm/pyrite/issues); see
+go to [GitHub issues](https://github.com/pyrite-wiki/pyrite/issues); see
 [CONTRIBUTING.md](CONTRIBUTING.md) for how the project works.
 
 Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5 + vector search, REST API with tier enforcement, SvelteKit frontend, service layer, schema-as-config, content negotiation, collections, block references, web clipper, AI integration. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.

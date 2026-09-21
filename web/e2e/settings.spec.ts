@@ -6,7 +6,7 @@ test.describe('Settings Page', () => {
 		await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
 	});
 
-	// #49 (github.com/markramm/pyrite/issues/49): web/src/routes/+layout.svelte
+	// #49 (github.com/pyrite-wiki/pyrite/issues/49): web/src/routes/+layout.svelte
 	// sets `document.title = brandStore.name` in an unconditional `$effect`
 	// once branding finishes loading, clobbering this route's own
 	// <svelte:head><title>Settings — Pyrite</title>. Reproduced live before

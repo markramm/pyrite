@@ -24,8 +24,8 @@ dependencies = [
 pyrite-mcp = "pyrite_mcp.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/markramm/pyrite"
-Repository = "https://github.com/markramm/pyrite"
+Homepage = "https://github.com/pyrite-wiki/pyrite"
+Repository = "https://github.com/pyrite-wiki/pyrite"
 
 [tool.setuptools.packages.find]
 where = ["."]

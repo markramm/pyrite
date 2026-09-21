@@ -1,6 +1,6 @@
 # pyrite-mcp
 
-Standalone MCP (Model Context Protocol) server for [Pyrite](https://github.com/markramm/pyrite) knowledge bases.
+Standalone MCP (Model Context Protocol) server for [Pyrite](https://github.com/pyrite-wiki/pyrite) knowledge bases.
 
 Provides a lightweight package for running the Pyrite MCP server without the full web server or CLI dependencies.
 

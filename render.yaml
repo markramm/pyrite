@@ -3,7 +3,7 @@ services:
     name: pyrite
     runtime: docker
     dockerfilePath: ./Dockerfile
-    repo: https://github.com/markramm/pyrite
+    repo: https://github.com/pyrite-wiki/pyrite
     plan: starter
     healthCheckPath: /health
     envVars:

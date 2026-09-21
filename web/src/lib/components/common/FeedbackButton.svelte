@@ -2,7 +2,7 @@
 	function openFeedback() {
 		const page = encodeURIComponent(window.location.pathname);
 		const browser = encodeURIComponent(navigator.userAgent);
-		const url = `https://github.com/markramm/pyrite/issues/new?title=Bug:+&body=**Page:** ${page}%0A**Browser:** ${browser}%0A%0A**Description:**%0A`;
+		const url = `https://github.com/pyrite-wiki/pyrite/issues/new?title=Bug:+&body=**Page:** ${page}%0A**Browser:** ${browser}%0A%0A**Description:**%0A`;
 		window.open(url, '_blank', 'noopener,noreferrer');
 	}
 </script>

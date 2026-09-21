@@ -47,7 +47,7 @@ while the label is *missing*, because it cannot ask the question. It never
 creates labels; it fails with the command to run:
 
 ```bash
-gh label create release-blocker --repo markramm/pyrite \
+gh label create release-blocker --repo pyrite-wiki/pyrite \
   --description 'Must not ship in the next release' --color B60205
 ```
 
@@ -55,7 +55,7 @@ gh label create release-blocker --repo markramm/pyrite \
 
 | Step | Checks | Irreversible |
 |------|--------|--------------|
-| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `origin` resolves to `markramm/pyrite` (the repo the `gh` calls name); `vX.Y.Z` exists neither locally, on `origin`, nor as a GitHub release; `origin/main` is an ancestor of the SHA, so step d's push can only fast-forward; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content and no stranded `[Unreleased]`; the `release-blocker` label exists and no open PR carries it | no |
+| a. preconditions | clean checkout, on `dev`, HEAD exactly `origin/dev`; `origin` resolves to `pyrite-wiki/pyrite` (the repo the `gh` calls name); `vX.Y.Z` exists neither locally, on `origin`, nor as a GitHub release; `origin/main` is an ancestor of the SHA, so step d's push can only fast-forward; `pyproject.toml` version == X.Y.Z; CHANGELOG section dated today with content and no stranded `[Unreleased]`; the `release-blocker` label exists and no open PR carries it | no |
 | b. CI | the **required checks** for that exact SHA concluded success — `gate` by default, newest run per check name so a rerun to green counts. Never starts a run; `--wait-ci MINUTES` waits out a pending one (default 15) | no |
 | c. release layer | what a *user* gets, **before the tag exists** (ADR-0032 §3a): install from the SHA into a throwaway `uv` venv, `pyrite --version` equals X.Y.Z, `scripts/run_tutorial.sh` (the Quick Start) run against that install, `docker build` when docker is present — a loud note when it is not | no |
 | d. publish | fast-forward `main` to the SHA (`git push origin <sha>:refs/heads/main`; the ruleset allows only a fast-forward), tag `vX.Y.Z`, push the tag, `gh release create` with the CHANGELOG section plus the contributors line | **yes** |
@@ -104,7 +104,7 @@ it, and then the clean-venv check is yours by hand:
 
 ```bash
 python -m venv /tmp/relcheck && /tmp/relcheck/bin/pip install -q \
-  "pyrite[all] @ git+https://github.com/markramm/pyrite@vX.Y.Z"
+  "pyrite[all] @ git+https://github.com/pyrite-wiki/pyrite@vX.Y.Z"
 /tmp/relcheck/bin/python -c "import pyrite; print(pyrite.__version__)"   # X.Y.Z
 ```
 
@@ -117,7 +117,7 @@ Version numbers follow the roadmap, not the calendar: a minor (0.25) names a
 milestone with a definition of done. Do not tag it until that is met; ship
 fixes as patch releases of the current minor meanwhile.
 
-**PyPI**: not reachable. The `pyrite` name is held by a locked pre-2FA account (ADR-0025, amended 2026-09-17), so `publish.yml` is `workflow_dispatch`-only and a GitHub release publishes nothing. Install path is `pip install git+https://github.com/markramm/pyrite@<tag>`.
+**PyPI**: not reachable. The `pyrite` name is held by a locked pre-2FA account (ADR-0025, amended 2026-09-17), so `publish.yml` is `workflow_dispatch`-only and a GitHub release publishes nothing. Install path is `pip install git+https://github.com/pyrite-wiki/pyrite@<tag>`.
 
 ## Deploying
 

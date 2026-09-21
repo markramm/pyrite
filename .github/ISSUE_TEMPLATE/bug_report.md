@@ -27,7 +27,7 @@ error or traceback — the text, not a screenshot.
 
 If this involves a knowledge base you cannot share, describe its shape (entry
 types, rough size) rather than pasting content. Security problems go to the
-[private report form](https://github.com/markramm/pyrite/security/advisories/new),
+[private report form](https://github.com/pyrite-wiki/pyrite/security/advisories/new),
 not here.
 
 ---

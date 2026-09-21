@@ -405,4 +405,4 @@ This tutorial covered entry types, validators, and presets. Plugins can also pro
 - **Workflows** via `get_workflows()` -- define state machines for entry fields
 - **Custom DB tables** via `get_db_tables()` -- store engagement-tier data locally
 
-See the full plugin protocol in [`pyrite/plugins/protocol.py`](https://github.com/markramm/pyrite/blob/main/pyrite/plugins/protocol.py) and the existing extensions in [`extensions/`](https://github.com/markramm/pyrite/tree/main/extensions) for real-world examples.
+See the full plugin protocol in [`pyrite/plugins/protocol.py`](https://github.com/pyrite-wiki/pyrite/blob/main/pyrite/plugins/protocol.py) and the existing extensions in [`extensions/`](https://github.com/pyrite-wiki/pyrite/tree/main/extensions) for real-world examples.

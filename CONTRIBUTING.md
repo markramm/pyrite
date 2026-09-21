@@ -14,7 +14,7 @@ Thank you for considering contributing to Pyrite! This guide will help you get s
 
 ```bash
 # Clone the repository
-git clone https://github.com/markramm/pyrite.git
+git clone https://github.com/pyrite-wiki/pyrite.git
 cd pyrite
 
 # Create virtual environment and install dependencies
@@ -222,9 +222,9 @@ Commit messages use conventional commits (`feat:`, `fix:`, `docs:`, `test:`,
 
 Two places, one rule — an item lives in exactly one of them (ADR-0033):
 
-- **Bugs and requests → [GitHub Issues](https://github.com/markramm/pyrite/issues).**
+- **Bugs and requests → [GitHub Issues](https://github.com/pyrite-wiki/pyrite/issues).**
   Anyone can file one; use the templates. Issues labelled
-  [`good first issue`](https://github.com/markramm/pyrite/labels/good%20first%20issue)
+  [`good first issue`](https://github.com/pyrite-wiki/pyrite/labels/good%20first%20issue)
   are small, well-specified and a fine place to start.
 - **The roadmap → `kb/`** in this repo: epics, planned work and architecture
   decisions, browsable with the tool itself:

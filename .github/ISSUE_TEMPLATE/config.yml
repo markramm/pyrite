@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/markramm/pyrite/security/advisories/new
+    url: https://github.com/pyrite-wiki/pyrite/security/advisories/new
     about: Report privately. Please do not open a public issue for a security problem.
   - name: Roadmap and architecture decisions
-    url: https://github.com/markramm/pyrite/blob/dev/kb/roadmap.md
+    url: https://github.com/pyrite-wiki/pyrite/blob/dev/kb/roadmap.md
     about: Planned work lives in the repo's own knowledge base (kb/), not in issues.
