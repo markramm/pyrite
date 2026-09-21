@@ -79,6 +79,18 @@ changing anything, which is the way to check how your entry will read.
 - **Changes nobody using Pyrite would notice** — a refactor with no behaviour
   change, a test-only change, a tweak to CI. No fragment needed.
 
+  CI prints a **warning** (never a failure) when a pull request touches
+  `pyrite/` or `extensions/` and adds no fragment — a missing entry is
+  otherwise silent, which is how #173's fix came to be absent from the release
+  notes with nothing complaining (#278). It is advisory because whether a
+  change is user-visible is your call, not a script's. If it is a refactor
+  with no behaviour change, put a line in the pull-request description and the
+  warning goes away:
+
+  ```
+  Changelog: none
+  ```
+
   There is deliberately **no `process` or `docs` section** (maintainer,
   2026-09-21). The six sections above are the Keep a Changelog set, which is
   the format `CHANGELOG.md` declares at the top of the file; a `### Process`

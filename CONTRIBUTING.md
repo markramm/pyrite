@@ -254,6 +254,17 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   and a fragment has a name nobody else picks, so two branches in flight cannot
   collide. `changelog.d/README.md` lists the sections and shows an example; the
   release script assembles the fragments when the release is cut.
+
+  If your change touches `pyrite/` or `extensions/` and adds no fragment, CI
+  leaves a **warning** on the pull request. It is a reminder, not a gate —
+  nothing is blocked, and no one has to argue with a script about whether a
+  change is user-visible. When it genuinely isn't one (a refactor with no
+  behaviour change), say so in the pull-request description and the warning
+  goes away:
+
+  ```
+  Changelog: none
+  ```
 - AI-assisted contributions are welcome here. If an AI coding agent wrote or
   co-wrote your change, declare it with a `Co-authored-by:` trailer on the
   commit (most agent tools add this automatically) — it is machine-readable,
