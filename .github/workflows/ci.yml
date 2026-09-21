@@ -5,6 +5,12 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  # GitHub's merge queue. Without this trigger the queue cannot be enabled at
+  # all: a queued PR waits on the required check (`gate`) and a workflow that
+  # does not run on merge_group never produces one (#273). The queue is what
+  # ends the O(N^2) drain the `dev` ruleset's "up to date" requirement imposes
+  # -- one docs-only merge put all 12 open PRs BEHIND on 2026-09-21.
+  merge_group:
   workflow_dispatch:
 
 # Least privilege by default: checkout only. Any job that needs more says so
@@ -37,14 +43,52 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    # Each output reads the fallback FIRST, then the filter. Exactly one of the
+    # two steps runs per event, and a skipped step's outputs are the empty
+    # string -- which `== 'true'` reads as "not changed", i.e. skip. Listing
+    # both with `||` is what makes a merge group classify as everything-changed
+    # instead of falling off the end into a silent all-skip (#273).
     outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      web: ${{ steps.filter.outputs.web }}
-      kb: ${{ steps.filter.outputs.kb }}
-      infra: ${{ steps.filter.outputs.infra }}
+      backend: ${{ steps.all.outputs.backend || steps.filter.outputs.backend }}
+      web: ${{ steps.all.outputs.web || steps.filter.outputs.web }}
+      kb: ${{ steps.all.outputs.kb || steps.filter.outputs.kb }}
+      infra: ${{ steps.all.outputs.infra || steps.filter.outputs.infra }}
     steps:
       - uses: actions/checkout@v4
+
+      # ---------------------------------------------------------------------
+      # FAIL CLOSED on a merge group. dorny/paths-filter reads the PR's
+      # changed-file list only for the events in its own `prEvents` list
+      # (pull_request, pull_request_target, pull_request_review,
+      # pull_request_review_comment). merge_group is NOT one of them
+      # (dorny/paths-filter#280), so there it falls through to
+      # getChangedFilesFromGit(base, ref) with `base` unset -- which resolves
+      # to the repository's default_branch (`dev`) and diffs the
+      # gh-readonly-queue/... ref against it over a fetch-depth: 1 checkout
+      # that does not contain that history. That path either errors or yields
+      # an arbitrary classification.
+      #
+      # Either way the downstream shape is the same and it is the dangerous
+      # one: every heavy job is `if: needs.changes.outputs.<x> == 'true'`, a
+      # SKIPPED job satisfies a required check, and `gate` is `if: always()`
+      # failing only on failure|cancelled. So an all-false classification
+      # skips the whole matrix and reports the one required check GREEN having
+      # tested nothing -- strictly worse than having no merge queue.
+      #
+      # So we do not ask the action. A merge group is classified here, as
+      # everything-changed, and runs the full matrix. Running too much for a
+      # queued commit costs one runner; running nothing and calling it green
+      # merges untested code to dev.
+      - id: all
+        if: github.event_name == 'merge_group'
+        run: |
+          echo "backend=true" >> "$GITHUB_OUTPUT"
+          echo "web=true" >> "$GITHUB_OUTPUT"
+          echo "kb=true" >> "$GITHUB_OUTPUT"
+          echo "infra=true" >> "$GITHUB_OUTPUT"
+
       - id: filter
+        if: github.event_name != 'merge_group'
         uses: dorny/paths-filter@v3
         with:
           filters: |
