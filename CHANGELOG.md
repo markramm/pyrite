@@ -688,15 +688,6 @@ which Pyrite stops being one person's experiment.
 - Pre-push hooks: every non-pytest hook is pinned to the commit stage, so a
   push runs only the test suite (the file fixers had been running over the
   whole pushed range and aborted the v0.24.1 push of a CI-verified commit)
-- **A route's own page title was always overwritten with the brand name.**
-  The root layout assigned `document.title = brandStore.name` unconditionally
-  in a `$effect`, clobbering whatever `<svelte:head><title>` a route had set,
-  regardless of which finished first — a race against when
-  `/config/branding` returns. The layout now renders `<svelte:head><title>
-  {brandStore.name}</title>` only for the handful of routes that declare no
-  title of their own (`UNTITLED_ROUTES` in `web/src/routes/brand-title-routes.ts`,
-  pinned against the routes on disk by a structural test); every other route
-  never has a layout title effect to be clobbered by. (#49)
 
 ## [0.24.1] - 2026-09-17
 
