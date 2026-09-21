@@ -541,6 +541,59 @@ def release_notes_for(repo: Path, version: str) -> str:
     return "\n\n".join(parts) + "\n"
 
 
+def co_author_logins(trailers: list[str]) -> list[str]:
+    """Outside people named in `Co-authored-by:` trailers, as logins.
+
+    Crediting only the authors of *merged* PRs misses two real cases (#248):
+
+    - a contributor whose PR is closed rather than merged because someone
+      else's branch carried the same fix first -- #237 (Umar-2026) fixed the
+      `sw new-adr --title` bug fourteen minutes before #239 merged the
+      character-identical line, so their work shipped in 0.24.2 uncredited;
+    - anyone whose commit was squashed into another PR, which is now the
+      normal path: the merge queue squashes, and a squash keeps the trailers
+      and drops the individual commits.
+
+    CONTRIBUTING asks for the trailer precisely because it is machine-readable
+    and survives a squash, so this reads what it already tells people to write.
+
+    A GitHub noreply address (`12345+octocat@users.noreply.github.com`) carries
+    the login, so it is unwrapped; anything else falls back to the email, which
+    a human checks before the notes go out.
+    """
+    logins: list[str] = []
+    for trailer in trailers:
+        email = trailer.rpartition("<")[2].rstrip(">").strip()
+        if not email:
+            continue
+        local = email.partition("@")[0]
+        login = local.partition("+")[2] if "+" in local else local
+        if email.endswith("users.noreply.github.com") and "+" in local:
+            candidate = login
+        elif "noreply" in email or "no-reply" in email:
+            # A bot address with no login in it (opencode, anthropic): skip.
+            continue
+        else:
+            candidate = email
+        if not candidate:
+            continue
+        # Match against the WHOLE trailer, not just the address: the maintainer
+        # appears as `markramm <mark.ramm@gmail.com>` (login in the name, not
+        # the email) and `dependabot[bot] <support@github.com>` puts the bot
+        # name outside the address entirely.
+        whole = trailer.lower()
+        if (
+            MAINTAINER.lower() in whole
+            or "dependabot" in whole
+            or "copilot" in whole
+            or "noreply@anthropic.com" in whole
+        ):
+            continue
+        if candidate not in logins:
+            logins.append(candidate)
+    return sorted(logins)
+
+
 def contributors_line(logins: list[str]) -> str | None:
     """Every outside author of a merged PR since the previous tag, credited.
 
@@ -1115,7 +1168,32 @@ def _contributor_logins(since_tag: str | None, slug: str) -> list[str]:
     )
     if not isinstance(prs, list):
         return []
-    return [pr.get("author", {}).get("login", "") for pr in prs]
+    logins = [pr.get("author", {}).get("login", "") for pr in prs]
+    return logins + _co_author_logins_since(since_tag)
+
+
+def _co_author_logins_since(since_tag: str) -> list[str]:
+    """Co-authors named in the commits this release ships.
+
+    A PR author is not the only person whose work is in a release (#248). This
+    reads `Co-authored-by:` trailers over `<since_tag>..HEAD` -- the form
+    CONTRIBUTING asks for, and the only one that survives the merge queue's
+    squash. Failure here must not block a release: a missing credit is a thing
+    a human can add to the notes, and `git log` failing is not a reason to stop
+    shipping.
+    """
+    try:
+        out = _check_output(
+            [
+                "git",
+                "log",
+                f"{since_tag}..HEAD",
+                "--format=%(trailers:key=Co-authored-by,valueonly)",
+            ]
+        )
+    except ReleaseError:
+        return []
+    return co_author_logins([line for line in out.splitlines() if line.strip()])
 
 
 def _tag_is_released(repo: Path, tag: str) -> bool:

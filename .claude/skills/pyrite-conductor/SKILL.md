@@ -223,17 +223,37 @@ the claims on the board and the tick log are the whole state.
 ### 1. Health
 
 ```bash
+# FIRST, before reading any file: the main checkout poisons every grep,
+# pytest and `pyrite` call run in it while it is behind (#210). A stale tree
+# always argues AGAINST a fix having landed, and the answer looks plausible.
+git -C /Users/markr/pyrite fetch -q origin
+git -C /Users/markr/pyrite merge --ff-only origin/dev   # or say how far behind it is
+
 gh run list --branch dev --limit 3                      # is dev green?
 gh pr list --state open --json number,title,mergeStateStatus
 git -C /Users/markr/pyrite worktree list; git branch --list 'fix/*' 'feature/*' 'kb/*' 'process/*'
 gh issue list --milestone "<next version>" --state open
+df -h /Users/markr | tail -1                            # free disk, see the budget
 ```
 
+- **The main checkout is current** — the `merge --ff-only` above. It went 35
+  commits behind during one tick and produced a wrong answer stated to the
+  maintainer (#210); on 2026-09-21 a 6-commit lag made `extensions/software-kb`
+  report `15 failed, 270 passed` on code that gives `285 passed` when current.
 - `dev` red: nothing merges until it is fixed. That is the first theme —
   and under a tripped breaker it is the one theme the host may dispatch
   without the maintainer, because leaving `dev` red is the worse default.
 - A PR `BEHIND`: `gh pr update-branch N --rebase` (auto-merge does not do it).
-- A merged branch with a worktree still present: `git worktree remove`, `git branch -d`.
+- **Reap merged worktrees, every tick.** A worktree whose PR has merged is
+  pure cost: `git worktree remove <path> && git branch -d <branch>`. Nothing
+  ran this rule before, and the count reached 15 with 9 of them dead (#236).
+  Leave a dirty tree alone and list it instead — it may hold unpushed work.
+- **Free disk is a dispatch budget, alongside load and memory.** Below ~5 GB,
+  stop dispatching: a full disk surfaces as tests unable to write temp files
+  (`3 failed, 1088 errors` on a pre-push hook, release night) on branches that
+  passed clean minutes earlier, which reads as a code failure and is not one.
+  Note `du` overstates a worktree venv by ~8x on APFS — it reports ~1 GB where
+  removing it frees ~112 MB — so judge by `df`, never by `du` (#236).
 - More than ~4 PRs open: stop dispatching; the gate is serialized.
 
 ### 2. Absorb: review before it becomes a PR

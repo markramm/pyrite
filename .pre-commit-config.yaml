@@ -86,7 +86,23 @@ repos:
         stages: [pre-commit]
       - id: pytest-full
         name: pytest full suite (pre-push, code changes only)
-        entry: bash -c 'PY=.venv/bin/python; [ -x "$PY" ] || PY=python; exec "$PY" -m pytest tests/ extensions/ -n auto -q --tb=short'
+        # Refuse rather than fall back. This used to end `|| PY=python`, and in
+        # a worktree created with a bare `git worktree add` (no venv) that
+        # resolved to the main checkout's interpreter -- whose editable
+        # installs point at the MAIN CHECKOUT. The suite then reported on code
+        # the push did not contain: on 2026-09-21 extensions/software-kb gave
+        # "15 failed, 270 passed" against a stale main checkout and "285
+        # passed" against the worktree's own source, and a contributor PR's
+        # push was blocked by 93 errors that were not in the tree being pushed
+        # (#210, #242). scripts/new-worktree.sh creates the venv; this says so
+        # when it is missing instead of quietly answering the wrong question.
+        entry: >-
+          bash -c 'PY=.venv/bin/python; if [ ! -x "$PY" ]; then
+          echo "no .venv in $PWD -- the suite would run against another
+          checkout, so this push is refused. Create one with
+          scripts/new-worktree.sh, or run
+          uv venv && uv pip install -e \".[all,dev]\"" >&2; exit 1; fi;
+          exec "$PY" -m pytest tests/ extensions/ -n auto -q --tb=short'
         language: system
         pass_filenames: false
         # Matched against the files changed in the pushed range: a docs- or

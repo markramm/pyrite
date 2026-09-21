@@ -37,6 +37,17 @@ cd "$wt_dir"
 
 # A venv per worktree: an editable install points at one checkout, so a
 # shared venv would import whichever tree was installed last.
+#
+# It is cheaper than it looks, and `du` will tell you otherwise. On APFS `uv`
+# clones blocks rather than copying them, so a venv `du` reports as 1.0 GB
+# costs about 112 MB of real disk -- measured 2026-09-21 from free space
+# before and after removing one, and 12 MB to rebuild it (#236).
+# `UV_LINK_MODE=hardlink` changes nothing here: 3 MB against 5 MB for a second
+# torch. So do not collapse this into a shared venv on the strength of a `du`
+# number: the saving is not there, and the isolation is the whole point (#189).
+#
+# The cost that IS real is worktree *count*. The conductor's health step reaps
+# a worktree once its PR merges.
 if command -v uv >/dev/null 2>&1; then
   uv venv -q .venv
   uv pip install -q --python .venv/bin/python -e ".[all]"

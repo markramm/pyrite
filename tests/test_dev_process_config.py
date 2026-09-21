@@ -229,6 +229,32 @@ class TestParallelSuite:
         assert "-n auto" in hook["entry"]
         assert "extensions/" in hook["entry"]
 
+    def test_pre_push_refuses_a_worktree_with_no_venv(self, precommit):
+        """No `.venv` here means the suite would test another checkout's code.
+
+        The hook used to fall back to whatever `python` was on PATH. In a
+        worktree made with a bare `git worktree add` -- no venv -- that
+        resolves to the main checkout's interpreter, whose editable installs
+        point at the MAIN CHECKOUT. The suite then passes or fails on code the
+        push does not contain.
+
+        Seen twice on 2026-09-21: `extensions/software-kb` reported
+        `15 failed, 270 passed` against a stale main checkout and `285 passed`
+        against the worktree's own source, and #269's push was blocked by
+        `14 failed, 93 errors` that did not exist in the tree being pushed
+        (#210, #242). Failing loudly is the whole fix: the wrong answer was
+        silent, and silence is what cost the time.
+        """
+        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
+        entry = hook["entry"]
+        assert "|| PY=python" not in entry, (
+            "the pre-push hook still falls back to system python when a "
+            "worktree has no .venv, which silently runs the suite against the "
+            "main checkout's code (#210)"
+        )
+        assert ".venv/bin/python" in entry
+        assert "exit 1" in entry, "the hook must refuse rather than continue when .venv is missing"
+
     def test_ci_runs_the_suite_in_parallel(self, ci):
         runs = [
             str(step.get("run", ""))

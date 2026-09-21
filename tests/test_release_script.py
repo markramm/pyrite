@@ -439,6 +439,34 @@ class TestContributorsLine:
     def test_one_author_reads_naturally(self):
         assert release.contributors_line(["amy"]) == ("Thanks to @amy for their contributions.")
 
+    def test_co_authors_in_the_range_are_credited(self):
+        """A contributor whose patch landed inside someone else's commit.
+
+        CONTRIBUTING asks for a `Co-authored-by:` trailer precisely so this is
+        machine-readable, and it survives a squash -- which, now that the merge
+        queue squashes, is how most outside work lands. Crediting only PR
+        authors drops them (#248).
+        """
+        trailers = [
+            "Ada Lovelace <ada@example.com>",
+            "markramm <mark.ramm@gmail.com>",
+            "Claude Opus 5 (1M context) <noreply@anthropic.com>",
+        ]
+        assert release.co_author_logins(trailers) == ["ada@example.com"]
+
+    def test_bots_and_the_maintainer_are_dropped_from_co_authors(self):
+        trailers = [
+            "Copilot App <223556219+Copilot@users.noreply.github.com>",
+            "opencode <noreply@opencode.ai>",
+            "dependabot[bot] <support@github.com>",
+        ]
+        assert release.co_author_logins(trailers) == []
+
+    def test_a_github_noreply_address_yields_the_login(self):
+        """`12345+octocat@users.noreply.github.com` is octocat, not an email."""
+        trailers = ["Octocat <12345+octocat@users.noreply.github.com>"]
+        assert release.co_author_logins(trailers) == ["octocat"]
+
     def test_notes_with_contributors_appends_the_line(self, repo):
         notes = release.compose_notes(repo, "0.24.2", ["amy"])
         assert notes.rstrip().endswith("Thanks to @amy for their contributions.")

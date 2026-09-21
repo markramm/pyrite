@@ -329,6 +329,11 @@ what contributors are actually doing plus what is in their way — not from a
 scope freeze written before any of them arrived. Under ADR-0033 the bugs live
 in GitHub: check `gh issue list --milestone 0.25` alongside this file.
 
+**That premise held.** On 2026-09-21, the first full day in the new org,
+**21 PRs merged and 13 of them were from outside contributors** — one of whom
+opened 16. Workstream 4 is entirely theirs. The release is what the community
+fixed, which is what this milestone was named for.
+
 **The Shared-Instance Pilot moves out**, unscheduled. Its definition of done
 — one or two invited peers reading the corpus read-only for two weeks with
 zero operator interventions — is unchanged and still wanted, but it is a
@@ -342,9 +347,15 @@ release takes it up.
 
 ### Workstream 1 — Stop the contribution path from costing people evenings
 
-**Changelog fragments (#243) are 0.26, not this release** — the reasoning is
-in that section. What is here is the documentation a contributor reads before
-they write anything.
+**Changelog fragments (#243) landed here after all** *(shipped: #276,
+2026-09-21)*. They were scheduled for 0.26 on the argument that two unproven
+things in one window — a new organization and a new release path — is how a
+release breaks. The org move landed first and held, and the file went on
+conflicting: six times in a week, three of them on first-time contributors'
+branches. So the cost of waiting exceeded the risk of moving, and the
+migration was done with a dry run and every open contributor PR converted by
+hand. `CHANGELOG.md` has appeared in 2 PRs since, against six conflicts in
+the week before.
 
 - **#235** no agent-facing documentation of the write path
 - **#244** `.claude/` ships 3,897 lines of agent instructions with three
@@ -352,6 +363,7 @@ they write anything.
   skill whose own description tells them PRs are someone else's job
 - **#248** release notes credit only merged-PR authors, so a contributor whose
   patch lands via someone else's PR is invisible to the script
+  *(shipped: co-author trailers are read too)*
 
 ### Workstream 2 — The move to `pyrite-wiki`
 
@@ -359,12 +371,21 @@ The org is the enabler: PR queues, contributor permissions, and a place for
 extensions to live — including ones that migrate out of core, and ones the
 community writes.
 
+**Both shipped, in the required order.**
+
 - **#259** `scripts/release.py` hardcodes `markramm/pyrite` and step (a)
-  *refuses to release* when `origin` disagrees. **Must land before or with
-  #182**, or the first release from the new org is blocked on an emergency
-  patch to the release script.
+  *refuses to release* when `origin` disagrees *(shipped 2026-09-20, before
+  the transfer, exactly as this item required)*
 - **#182** the transfer itself, and the checklist of what has to survive it
   (rulesets, secrets, CodeQL, Discussions, labels, milestones, open PRs)
+  *(shipped 2026-09-21)*
+
+What the move actually bought, measured on the first full day in the new org:
+the **merge queue** (#273/#274), which is the thing the org was the enabler
+for. 7 PRs merged in the six hours before it took its first PR; 14 in the
+thirteen hours after, including a six-PR batch that landed in 36 minutes. Two
+`merge_group` runs started 22 seconds apart and both passed — the overlap that
+a serialized "up to date" gate makes impossible.
 
 ### Workstream 3 — The loop stops poisoning its own evidence
 
@@ -373,14 +394,24 @@ Four failure modes where something reasonable returns a wrong answer silently
 development process.
 
 - **#209** a long-lived weekly branch resurrects backlog items already merged
-  to `done/`
+  to `done/` *(outlived: #275 moved the tick log to the gitignored `desk/`,
+  so no weekly `kb/` branch is created any more and the mechanism cannot
+  recur; two abandoned branches remain to delete)*
 - **#210** the conductor's main checkout goes stale, so every verification
   grep reads pre-merge code and reports a landed fix as not landed
+  *(shipped: the pre-push hook refuses a worktree with no `.venv` instead of
+  falling back to the main checkout's interpreter, and the health step
+  fast-forwards before reading anything)*
 - **#236** a venv per worktree costs 1 GB, and disk pressure surfaces as
   `3 failed, 1088 errors` on branches that passed minutes earlier — the
   machine budget counts suite slots and memory, and nothing counts disk
+  *(shipped, and the premise was wrong: `du` reports ~1 GB where removing a
+  worktree venv frees ~112 MB, because APFS clones blocks. The real cost is
+  worktree **count**, so the health step now reaps merged worktrees and treats
+  free disk as a dispatch budget.)*
 - **#242** a worktree's `.venv` can vanish mid-session; three agents lost
-  theirs in one night and all three noticed by luck
+  theirs in one night and all three noticed by luck *(shipped with #210 — a
+  vanished venv now stops the push instead of silently testing another tree)*
 
 ### Workstream 4 — The answer is wrong and nothing errors
 
@@ -388,20 +419,32 @@ Every one of these was found by someone using the tool, and every one of them
 already has a contributor's PR against it. This is the workstream the
 community chose.
 
+**All seven shipped** — the whole workstream, by outside contributors.
+
 - **#19** `kb remove` permanently refuses a KB whose `config.yaml` is gone
+  *(shipped)*
 - **#44** `index health` false-positives on a declared subdirectory's trailing
   slash — a KB built exactly as the getting-started guide instructs reports
-  `warning` on every entry
+  `warning` on every entry *(shipped: #255)*
 - **#149** `GenericEntry` duplicates undeclared frontmatter keys into a
-  `metadata:` block
+  `metadata:` block *(shipped: #175)*
 - **#151** `created_at` / `updated_at` are read from frontmatter and never
   written back, so an explicit key is dropped on the next save
+  *(shipped: #171, #173)*
 - **#196** Pyrite never configures logging, so `logger.warning` falls through
   to the root handler *(shipped: #225)*
 - **#197** `pyrite create -t note` silently creates an ADR *(shipped: #252)*
 - **#231** `pyrite update -f tags=a,b` writes a bare string the reader then
   iterates character by character, silently dropping the entry out of every
-  tag-keyed view
+  tag-keyed view *(shipped: #254)*
+
+Not in the original list, found and fixed in the same window: read-scoping
+holes on the link-discovery routes (#186) and in two MCP extension tools
+(#223, two of six done), a Postgres FTS trigger that silently gave a second
+instance no keyword search at all (#282), `?fields=` projections that differed
+across REST, MCP and the CLI (#193), network tools that returned every
+neighbour at once (#63), and block-sequence indentation lost on a round trip
+(#148).
 
 ---
 
@@ -410,24 +453,31 @@ community chose.
 **Theme:** small and near. The first release cut from `pyrite-wiki`, which is
 what proves the release path works from its new home.
 
-- **#243** changelog fragments: `changelog.d/<slug>.<section>.md`, assembled
-  by `scripts/release.py` at release time.
+**Changelog fragments (#243) moved forward into 0.25** and shipped there
+(#276, 2026-09-21). The argument for holding them here was that changing
+`compose_notes` and the `check_changelog` precondition in the same window as a
+new organization is two unproven things at once. The org move landed first and
+held, the file kept conflicting — six times in a week, half on first-time
+contributors' branches — and the migration got its dry run and a hand
+conversion of every open contributor PR. That reasoning is kept above rather
+than deleted, because the *rule* it came from is sound; it was the schedule
+that moved, not the principle.
 
-`CHANGELOG.md` conflicted five times in one session, three of them on
-first-time contributors' PRs whose changes had nothing to do with each other.
-It produced a second failure mode during the 0.24.3 cut: two PRs wrote their
-entry into the *published* section, because right after a release
-`[Unreleased]` is a two-line empty heading sitting above 660 lines of real
-content. Fragments remove both — a new file cannot conflict, and there is no
-section to choose wrongly.
+So this release needs a scope of its own. Candidates, from what 0.25 left and
+what the first full day in the new org surfaced:
 
-**Why not 0.25**, where it was first placed: it changes `compose_notes` and
-the `check_changelog` precondition in `scripts/release.py`, and the next
-release is the first from a new organization. Two unproven things in one
-window is how a release path breaks with nowhere to fall back to. Here it
-gets a normal review cycle and a dry run before it matters. The migration
-also needs context rather than translation — the live `[Unreleased]` entries
-include two that landed inside the published `0.24.3` section.
+- **#244** `.claude/` ships 3,897 lines of agent instructions with three
+  audiences and no separation *(carried from 0.25)*
+- **#235** no agent-facing documentation of the write path *(carried from
+  0.25)*
+- **#223** the remaining four of six MCP extension tools still refuse a scoped
+  caller rather than narrowing (`social` and `zettelkasten` are done)
+- **#282**'s sibling: the Postgres conformance tests now isolate per xdist
+  worker, but the same shared-database shape exists anywhere else a test
+  suite talks to one Postgres
+- the `#209` validator improvement: name which side is stale when one copy of
+  a backlog item is under `done/`, so a duplicate-id failure reads as "this
+  branch is stale" rather than "the KB is broken"
 
 **The review surface moves to its own release.** "What did agents do since I
 last looked" as the home screen — a change feed per agent and per commit with
