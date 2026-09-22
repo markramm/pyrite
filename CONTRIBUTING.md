@@ -212,8 +212,9 @@ and "it's in a local commit" has cost a round trip more than once.
 2. Write the failing test, then the fix
 3. Push; the pre-push hook runs the suite
 4. Open the PR against `dev` and fill in the template (`Fixes #N` for bugs)
-5. Expect a first response **within a week**. If you have heard nothing after
-   that, comment on the PR — it is a lapse, not a verdict.
+5. Expect a first response **within 72 hours**. If you have heard nothing
+   after that, comment on the PR — it is a lapse, not a verdict, and saying
+   so is doing us a favour.
 
 Commit messages use conventional commits (`feat:`, `fix:`, `docs:`, `test:`,
 `refactor:`, `ci:`, `kb:`).
@@ -272,11 +273,20 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   mention in the PR body is welcome too, and helps the reviewer know what to
   look at first, but it's optional on top of the trailer, not instead of it.
 
-What happens next: every outside PR gets a review within about an hour,
-posted as a comment with a plain recommendation (merge as is, merge after
-listed changes, or which of two competing PRs and what to credit from the
-other). First-time contributors' CI runs wait for a maintainer to approve
-them; that is a GitHub safety default, not a judgement. A maintainer may
+What happens next: an outside PR is reviewed ahead of the maintainer's own
+work, and the review is posted as a comment with a plain recommendation (merge
+as is, merge after listed changes, or which of two competing PRs and what to
+credit from the other). In practice that has often been within the hour, but
+the hour is a happy accident of when you caught us — this is one maintainer
+in one timezone who sleeps. **72 hours is the limit**, and it is borrowed from
+the Apache Way: there, a proposal that draws no objection in 72 hours is taken
+as having consent, on the principle that silence must have a deadline or it
+becomes a veto. Here the same clock runs the other direction — it bounds how
+long *you* should have to wait for an answer, rather than how long we may
+wait for one. Past 72 hours, ping the PR.
+
+First-time contributors' CI runs wait for a maintainer to approve them; that
+is a GitHub safety default, not a judgement. A maintainer may
 rebase your branch or push one small, credited fixup commit to it with a
 comment saying what changed — your commits and authorship stay yours. The
 merge itself is the maintainer's click.
