@@ -13,6 +13,10 @@ asserts that `[Unreleased]` stays empty.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-09-22
+
+The community's first release — see the announcement and `kb/roadmap.md`.
+
 ## [0.24.3] - 2026-09-20
 
 "Operational" — see `kb/roadmap.md`.
