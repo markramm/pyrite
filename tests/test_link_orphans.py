@@ -91,6 +91,25 @@ def orphan_env():
             tags=["cooking"],
         )
 
+        # High-importance entry with FTS-column-colliding vocabulary and special characters (#304)
+        svc.create_entry(
+            "kb-a",
+            "fts-orphan-concept",
+            "Regulatory capture and legalism: cross-link 18:1 v1.2.3",
+            body="Analysis of regulatory capture, legalism, and cross-link patterns.",
+            entry_type="concept",
+            tags=["capture", "legalism", "cross-link", "18:1", "1.2.3"],
+        )
+        svc.update_entry("fts-orphan-concept", "kb-a", importance=8)
+        svc.create_entry(
+            "kb-b",
+            "fts-orphan-match",
+            "Legalism and Cross-Link Patterns",
+            body="Cross-KB matching concept discussing capture, legalism, and cross-link.",
+            entry_type="concept",
+            tags=["capture", "legalism", "cross-link"],
+        )
+
         yield {"config": config, "db": db, "svc": svc}
         db.close()
 
@@ -159,17 +178,56 @@ class TestFindOrphans:
         )
         assert len(results) <= 1
 
+    def test_find_orphans_fts_quoting_regression(self, orphan_env):
+        """Regression test for #304: entries with FTS-column-colliding vocabulary
+        (capture, legalism) or special characters (cross-link, 18:1, 1.2.3) in titles
+        or tags must be quoted so discover_neighbors / find_orphans does not raise
+        OperationalError / QuerySyntaxError.
+        """
+        results = _find_orphans(
+            kb_name="kb-a",
+            min_importance=7,
+            limit=10,
+            config=orphan_env["config"],
+            db=orphan_env["db"],
+        )
+        ids = [r["id"] for r in results]
+        assert "fts-orphan-concept" in ids
+
 
 class TestOrphansCLI:
     def test_cli_json_output(self, orphan_env, monkeypatch):
+        orig_close = orphan_env["db"].close
         monkeypatch.setattr(
             "pyrite.cli.link_commands.get_config_and_db",
             lambda: (orphan_env["config"], orphan_env["db"]),
         )
         orphan_env["db"].close = lambda: None
+        try:
+            result = runner.invoke(app, ["links", "orphans", "--kb", "kb-a", "--format", "json"])
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert "orphans" in data
+            assert data["kb_name"] == "kb-a"
+        finally:
+            orphan_env["db"].close = orig_close
 
-        result = runner.invoke(app, ["links", "orphans", "--kb", "kb-a", "--format", "json"])
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert "orphans" in data
-        assert data["kb_name"] == "kb-a"
+    def test_cli_orphans_fts_quoting_regression(self, orphan_env, monkeypatch):
+        """Regression test for #304: CLI links orphans succeeds without OperationalError
+        when entry vocabulary contains FTS column names and special characters.
+        """
+        orig_close = orphan_env["db"].close
+        monkeypatch.setattr(
+            "pyrite.cli.link_commands.get_config_and_db",
+            lambda: (orphan_env["config"], orphan_env["db"]),
+        )
+        orphan_env["db"].close = lambda: None
+        try:
+            result = runner.invoke(app, ["links", "orphans", "--kb", "kb-a", "--format", "json"])
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert "orphans" in data
+            orphan_ids = [o["id"] for o in data["orphans"]]
+            assert "fts-orphan-concept" in orphan_ids
+        finally:
+            orphan_env["db"].close = orig_close
