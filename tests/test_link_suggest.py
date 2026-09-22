@@ -84,6 +84,23 @@ def suggest_env():
             body="Italian pasta recipes and cooking techniques.",
             tags=["cooking", "food"],
         )
+        # Entry with FTS column names and special characters for regression testing (#304)
+        svc.create_entry(
+            "test-notes",
+            "fts-adversarial",
+            "Regulatory capture and legalism: cross-link 18:1 v1.2.3",
+            "note",
+            body="Analysis of regulatory capture, legalism, and cross-link standards.",
+            tags=["capture", "legalism", "cross-link", "18:1", "1.2.3"],
+        )
+        svc.create_entry(
+            "test-notes",
+            "fts-match",
+            "Legalism and Cross-Link Dynamics",
+            "note",
+            body="Discussion of legalism, regulatory capture, and cross-link connections.",
+            tags=["capture", "cross-link"],
+        )
 
         IndexManager(db, config).index_all()
         db.close()
@@ -312,3 +329,27 @@ class TestLinksSuggest:
                 ],
             )
             assert result.exit_code == 0
+
+    def test_suggest_fts_quoting_regression(self, suggest_env):
+        """Regression test for #304: entries with FTS-column-colliding vocabulary
+        (capture, legalism) or special characters (cross-link, 18:1, 1.2.3) in titles
+        or tags must be quoted so FTS5 does not raise OperationalError / QuerySyntaxError.
+        """
+        with _patch_config(suggest_env):
+            result = runner.invoke(
+                app,
+                [
+                    "links",
+                    "suggest",
+                    "fts-adversarial",
+                    "--kb",
+                    "test-notes",
+                    "--format",
+                    "json",
+                ],
+            )
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["entry_id"] == "fts-adversarial"
+            assert isinstance(data["suggestions"], list)
+            assert any(s["id"] == "fts-match" for s in data["suggestions"])
