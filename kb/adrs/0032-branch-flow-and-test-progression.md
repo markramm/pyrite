@@ -124,6 +124,8 @@ layer repeats work a cheaper layer already did.
 - `main` moves **only by fast-forward to a SHA that passed layer 3**, and the tag
   points at that SHA (release runbook, rewritten 2026-09-17). Required linear
   history and `enforce_admins` on `main` make that a rule rather than a habit.
+  (**Amended 2026-09-22** — `main` still moves only by fast-forward to a
+  layer-3 SHA, but it moves *more often* than a release; see 3b.)
 - `v*` tags are protected from update and deletion.
 - The local pre-push hook stays on and runs the full suite (**amended in
   migration, 2026-09-17:** it was written as opt-in when the suite took 8 min;
@@ -172,11 +174,71 @@ a red `dev` already blocks every PR through the up-to-date rule.
 what a *user gets* — install from the tag, the Docker image — belongs to the
 release, not to the push that preceded it.
 
+### 3b. Snapshot versions on `main` between releases (amended 2026-09-22)
+
+The row above already says not every merge to `main` is a release. This makes
+that useful: **`main` moves forward as work lands, and between releases it
+carries a PEP 440 development version naming the commit it was built from.**
+
+Immediately after a release is cut, the release script bumps `dev` to the next
+version's snapshot form:
+
+```
+0.25.0                      the release, a real semver version
+0.26.0.dev0+a34ab48         what dev and main carry until 0.26.0 is cut
+0.26.0                      the next release
+```
+
+**PEP 440, not semver-with-a-suffix.** The first spelling tried was
+`0.26.0-pre-release-snapshot-<sha>`, which `packaging.version.Version()`
+rejects outright — `pip install` fails and no wheel builds. `.dev0+<sha>` is
+the valid form with the same meaning, and its ordering is what the scheme
+needs:
+
+```
+0.25.0 < 0.26.0.dev0+a34ab48 < 0.26.0.dev0+f1e2d3c < 0.26.0
+```
+
+The `+<sha>` is a *local version identifier*. It identifies the build, and it
+does participate in ordering — PEP 440 compares local segments, so two
+snapshots of the same target version sort by their SHA rather than by which
+was built first. That ordering is meaningless and should not be relied on:
+the only comparisons that matter here are `release < snapshot < next release`,
+and those hold. Released versions remain plain semver, so anyone reading a tag
+sees an ordinary version number.
+
+**`pip install pyrite` still resolves to the last release.** Development
+versions are pre-releases under PEP 440, and pip skips those unless asked, so
+a user has to opt in with `--pre` or by installing from `main` directly. The
+snapshot is available to whoever wants it and invisible to everyone else.
+
+Three things this buys:
+
+1. **Users can run from `main` and get a version string that identifies the
+   commit**, rather than a stale release number that lies about what is
+   installed.
+2. **Merging back to `main` becomes continuous** rather than a release-day
+   event, so `main` never sits far behind `dev` and the fast-forward in step
+   (d) is never a surprise.
+3. **The release machinery gets exercised on every merge to `main`, not once
+   a release.** This is the real reason. A release path used weekly is a path
+   whose breakage is discovered at the worst moment — the 0.24.2 cut found
+   `scripts/release.py` hardcoding `markramm/pyrite` (#259) only because
+   someone tried to release from the new org. Running the same code on every
+   merge means the next such defect surfaces on an ordinary Tuesday.
+
+What `main` means therefore changes from *"the last release"* to *"the last
+commit that passed layer 3"*. The fast-forward-only rule, the required checks
+and the tag protections are unchanged; only the frequency changes.
+
 ### 4. What does not change
 
 `dev` is still the default branch, the integration branch, and what
-demo.pyrite.wiki tracks. `main` is still releases only. Tagged releases still
-drive the production sites. Version numbers still follow roadmap milestones.
+demo.pyrite.wiki tracks. Tagged releases still drive the production sites.
+Version numbers still follow roadmap milestones.
+
+(**Amended 2026-09-22:** "`main` is still releases only" no longer holds —
+see 3b. Everything else in this section stands.)
 
 ## Consequences
 
@@ -244,3 +306,37 @@ amended: pre-push stays on.
    authorship (and lets the `fix:`-needs-a-test rule keep checking commits), and
    keeps `dev` linear without merge commits. Squash stays available for a branch
    whose history is noise. Merge commits are disabled.
+
+---
+
+## Open questions on 3b (proposed 2026-09-22, not yet decided)
+
+The snapshot-version amendment above is `proposed`. Three things need the
+maintainer's answer before it is implemented:
+
+1. **Who bumps to the snapshot, and when.** The natural place is step (e) of
+   `scripts/release.py`, which already commits to `dev` after a release to
+   consume the fragments and reopen `[Unreleased]`. Adding the version bump
+   there makes it one commit and one decision. The alternative — a separate
+   manual step — is more visible and more forgettable.
+
+2. **Does the SHA update on every merge, or once per release?** Updating it on
+   every merge to `main` makes the version string always true, at the cost of a
+   commit per merge that exists only to change a version. Setting it once after
+   the release means the string names the commit the *cycle* started from, not
+   the one installed. The first is more useful and noisier; the second is
+   cheaper and slightly dishonest.
+
+3. **Does `main` still need a tag per move?** Today `v*` tags and `main` moves
+   coincide. Under 3b they do not, so either `main` moves untagged between
+   releases (simplest, and the tags keep meaning "release"), or every move gets
+   a snapshot tag (more traceable, many more tags).
+
+A fourth thing, noticed while writing this: **item 3 under "Decisions on the
+open questions" above says rebase is the default merge method. As of
+2026-09-21 the merge queue is set to squash**, because outside PRs kept
+arriving with a merge commit from `origin/dev` and a rebase-merge queue
+ejects those without running anything. Three contributor PRs needed a
+maintainer-side rebase in one day; after the change, zero. That decision
+should be written into this ADR properly rather than left as a repo setting
+nobody reading here would know about.
