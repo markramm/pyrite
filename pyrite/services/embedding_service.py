@@ -249,6 +249,14 @@ class EmbeddingService:
                 return cached
 
             model = _load_model(self.model_name)
+            # Warm the model before any other thread can see it. Its first
+            # forward pass does lazy, thread-unsafe setup inside torch and
+            # transformers: on a live server, 8 concurrent first semantic
+            # searches segfaulted in transformers' mask setup *after* a single,
+            # correctly locked load, while the same 8 on a warm model
+            # succeeded 24/24 (#207). One encode here, still under the lock,
+            # makes that setup happen exactly once, serialized.
+            model.encode(["warm-up"], show_progress_bar=False)
             _MODEL_CACHE[self.model_name] = model
             self._model = model
             return model

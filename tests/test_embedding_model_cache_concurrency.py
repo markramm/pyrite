@@ -41,6 +41,9 @@ def _clear_model_cache():
 class _StubModel:
     """Stands in for a loaded SentenceTransformer instance."""
 
+    def encode(self, texts, **kwargs):  # the load path warms the model once
+        return [[0.0]] * len(texts)
+
 
 def _make_slow_constructor(call_count: list[int], lock: threading.Lock, delay: float = 0.05):
     """A stub model constructor that sleeps briefly, so concurrent callers
@@ -168,3 +171,62 @@ class TestModelLoadIsLocked:
         recovered = EmbeddingService(db=None)._get_model()
         assert isinstance(recovered, _StubModel)
         assert embedding_service._MODEL_CACHE.get("all-MiniLM-L6-v2") is recovered
+
+
+class _FirstForwardIsUnsafeModel:
+    """Stands in for a real SentenceTransformer whose FIRST forward pass does
+    lazy, thread-unsafe setup (measured 2026-09-23 on a live server: 8
+    concurrent first semantic searches after a single, correctly locked load
+    segfaulted inside transformers' mask setup; the same 8 on a warm model
+    succeeded 24/24). Records how many encode() calls overlap while the model
+    has not yet completed its first forward."""
+
+    def __init__(self):
+        self._first_done = False
+        self._inflight = 0
+        self._guard = threading.Lock()
+        self.overlapping_cold_calls = 0
+        self.encode_calls = 0
+
+    def encode(self, texts, **kwargs):
+        with self._guard:
+            self.encode_calls += 1
+            self._inflight += 1
+            if not self._first_done and self._inflight > 1:
+                self.overlapping_cold_calls += 1
+        time.sleep(0.05)
+        with self._guard:
+            self._inflight -= 1
+            self._first_done = True
+        return [[0.0]] * (len(texts) if isinstance(texts, list) else 1)
+
+
+def test_model_is_warmed_before_any_caller_can_encode(monkeypatch):
+    """The first forward runs once, inside the load lock, before the model is
+    published -- so no two callers can overlap on a cold model."""
+    model = _FirstForwardIsUnsafeModel()
+    monkeypatch.setattr(embedding_service, "_load_model", lambda name: model)
+
+    barrier = threading.Barrier(N_CALLERS, timeout=_BARRIER_TIMEOUT)
+    errors: list[BaseException] = []
+
+    def caller():
+        try:
+            barrier.wait()
+            m = EmbeddingService.__new__(EmbeddingService)
+            m.model_name = "stub-model"
+            m._model = None
+            m._get_model().encode(["query"])
+        except BaseException as e:  # noqa: BLE001 -- surface anything
+            errors.append(e)
+
+    threads = [threading.Thread(target=caller) for _ in range(N_CALLERS)]
+    for t in threads:
+        t.start()
+    deadline = time.monotonic() + _GROUP_DEADLINE
+    for t in threads:
+        t.join(max(0.0, deadline - time.monotonic()))
+    assert not any(t.is_alive() for t in threads), "callers hung"
+    assert not errors, errors
+    assert model.overlapping_cold_calls == 0, "callers overlapped on a cold model"
+    assert model.encode_calls == N_CALLERS + 1  # one warm-up, then each caller
