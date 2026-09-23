@@ -5,7 +5,7 @@ type: backlog_item
 tags:
 - process
 importance: 5
-status: proposed
+status: done
 priority: medium
 rank: 0
 ---
@@ -46,3 +46,7 @@ Leaving open. Note it is the same family as #101 (a number measured in the wrong
 
 
 _Migrated from GitHub issue #189 on 2026-09-20 (maintainer: process findings live in the KB)._
+
+## Done 2026-09-23 (retro 8)
+
+Fixed by #206 (merged 2026-09-20); verified on dev at 6e505be. Left `proposed` for three days because nothing moves a KB item when the PR that fixes it merges.
