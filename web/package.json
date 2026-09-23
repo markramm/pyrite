@@ -52,5 +52,8 @@
     "dompurify": "^3.4.15",
     "fuse.js": "^7.1.0",
     "marked": "^15.0.0"
+  },
+  "overrides": {
+    "cookie": "^0.7.0"
   }
 }
