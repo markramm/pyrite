@@ -1,5 +1,7 @@
 """Tests for NotebookLM renderer and bundler."""
 
+from pathlib import Path
+
 import pytest
 
 from pyrite.models.core_types import (
@@ -352,6 +354,76 @@ class TestBundler:
         content = list(files.values())[0]
         for entry in many_entries:
             assert entry.title in content
+
+    def test_bundle_none_entry_id_absolute_path_is_safe_filename(self, tmp_path):
+        """CodeQL-class path injection: bundle_entries (NONE strategy) returns
+        {filename: content}; export_service joins output_dir / filename
+        unmodified. An entry.id that is an absolute path must not produce a
+        filename that escapes when joined."""
+        outside = tmp_path / "outside"
+        evil = NoteEntry(id=str(outside), title="Evil", body="pwned")
+
+        files = bundle_entries([evil], strategy=BundleStrategy.NONE)
+
+        assert len(files) == 1
+        filename = next(iter(files))
+        assert not Path(filename).is_absolute()
+        joined = (tmp_path / "site" / filename).resolve()
+        assert joined.is_relative_to((tmp_path / "site").resolve())
+
+    def test_bundle_none_entry_id_traversal_is_safe_filename(self, tmp_path):
+        evil = NoteEntry(id="../../outside", title="Evil", body="pwned")
+
+        files = bundle_entries([evil], strategy=BundleStrategy.NONE)
+
+        assert len(files) == 1
+        filename = next(iter(files))
+        assert ".." not in filename
+        joined = (tmp_path / "site" / filename).resolve()
+        assert joined.is_relative_to((tmp_path / "site").resolve())
+
+    def test_bundle_by_type_entry_type_absolute_path_is_safe_filename(self, tmp_path):
+        """The by-type filename in _bundle_by_type is built from entry_type
+        directly (notebooklm.py ~:214); an absolute-path type must not
+        produce an absolute filename."""
+        from pyrite.models.generic import GenericEntry
+
+        outside = tmp_path / "outside"
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": str(outside)},
+            body="pwned",
+        )
+
+        files = bundle_entries([evil], strategy=BundleStrategy.BY_TYPE)
+
+        assert len(files) == 1
+        filename = next(iter(files))
+        assert not Path(filename).is_absolute()
+        joined = (tmp_path / "site" / filename).resolve()
+        assert joined.is_relative_to((tmp_path / "site").resolve())
+
+    def test_bundle_by_type_entry_type_traversal_is_safe_filename(self, tmp_path):
+        from pyrite.models.generic import GenericEntry
+
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": "../../outside"},
+            body="pwned",
+        )
+
+        files = bundle_entries([evil], strategy=BundleStrategy.BY_TYPE)
+
+        assert len(files) == 1
+        filename = next(iter(files))
+        assert ".." not in filename
+        joined = (tmp_path / "site" / filename).resolve()
+        assert joined.is_relative_to((tmp_path / "site").resolve())
+
+    def test_bundle_by_type_normal_type_filename_unchanged(self, many_entries):
+        """A normal plugin type name must still produce the expected filename."""
+        files = bundle_entries(many_entries, strategy=BundleStrategy.BY_TYPE)
+        filenames = list(files.keys())
+        assert "note.md" in filenames
+        assert "person.md" in filenames
 
 
 # ---------------------------------------------------------------------------

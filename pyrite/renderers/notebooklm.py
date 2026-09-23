@@ -12,6 +12,7 @@ from typing import Any
 
 from ..models.base import Entry
 from ..schema import Source
+from ..utils.sanitize import sanitize_filename
 
 
 class SourceMode(Enum):
@@ -191,15 +192,21 @@ def bundle_entries(
 
 def _bundle_none(entries: list[Entry], source_mode: SourceMode) -> dict[str, str]:
     """One file per entry."""
+    # entry.id is a stored, caller-controlled value (ids indexed from git
+    # frontmatter are not slugified) -- sanitize it before it becomes a
+    # filename the caller joins onto output_dir (#221).
     files: dict[str, str] = {}
     for entry in entries:
-        filename = f"{entry.id}.md"
+        filename = f"{sanitize_filename(entry.id)}.md"
         files[filename] = render_entry(entry, source_mode=source_mode)
     return files
 
 
 def _bundle_by_type(entries: list[Entry], source_mode: SourceMode) -> dict[str, str]:
     """Group entries by type into one file per type."""
+    # entry_type is a stored, caller-controlled value (unknown types pass
+    # through verbatim for GenericEntry/plugin support) -- sanitize it
+    # before it becomes a filename the caller joins onto output_dir (#221).
     groups: dict[str, list[Entry]] = defaultdict(list)
     for entry in entries:
         groups[entry.entry_type].append(entry)
@@ -211,7 +218,7 @@ def _bundle_by_type(entries: list[Entry], source_mode: SourceMode) -> dict[str, 
             parts.append(render_entry(entry, source_mode=source_mode))
             parts.append("---")
             parts.append("")
-        filename = f"{entry_type}.md"
+        filename = f"{sanitize_filename(entry_type)}.md"
         files[filename] = "\n".join(parts).rstrip() + "\n"
     return files
 

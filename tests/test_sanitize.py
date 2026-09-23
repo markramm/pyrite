@@ -48,3 +48,20 @@ class TestSanitizeFilename:
     def test_no_leading_dot_in_result(self):
         result = sanitize_filename(".hidden")
         assert not result.startswith(".")
+
+    def test_absolute_unix_path_becomes_single_component(self):
+        """Used as the path-component sanitizer for entry_type and entry.id
+        at export/site-renderer joins (#221): pathlib discards the left
+        operand when the right is absolute, so an absolute value must never
+        reach a `/` join unsanitized."""
+        result = sanitize_filename("/etc/passwd")
+        assert "/" not in result
+        assert result != ""
+        assert not result.startswith("/")
+
+    def test_absolute_path_used_as_type_dir_is_relative(self, tmp_path):
+        from pathlib import Path
+
+        result = sanitize_filename(str(tmp_path / "outside"))
+        joined = Path("/safe/export/dir") / result
+        assert joined.is_relative_to("/safe/export/dir")

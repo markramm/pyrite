@@ -78,8 +78,12 @@ class ExportService:
             title = entry.get("title", "")
             body = entry.get("body", "")
 
-            # Organize by entry_type subdirectory
-            type_dir = target_dir / entry_type
+            # Organize by entry_type subdirectory. entry_type is a stored,
+            # caller-controlled value (unknown types pass through verbatim
+            # for GenericEntry/plugin support) -- sanitize it before it
+            # becomes a path component so an absolute or `..`-bearing type
+            # cannot write outside target_dir (#221).
+            type_dir = target_dir / sanitize_filename(entry_type)
             type_dir.mkdir(parents=True, exist_ok=True)
 
             # Build YAML frontmatter

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..models.base import Entry
+from ..utils.sanitize import sanitize_filename
 from ..utils.yaml import dump_yaml
 
 # Frontmatter fields to carry through to Quartz (from to_frontmatter output)
@@ -172,14 +173,18 @@ def export_site(
 
     files_created = 0
 
-    # Write entries organized by type subdirectory
+    # Write entries organized by type subdirectory. entry_type and entry.id
+    # are stored, caller-controlled values (unknown types pass through
+    # verbatim; ids indexed from git frontmatter are not slugified) --
+    # sanitize both where they become path components so an absolute or
+    # `..`-bearing value cannot write outside output_dir (#221).
     for entry_type, type_entries in sorted(by_type.items()):
-        type_dir = output_dir / entry_type
+        type_dir = output_dir / sanitize_filename(entry_type)
         type_dir.mkdir(parents=True, exist_ok=True)
 
         for entry in type_entries:
             content = render_entry(entry)
-            file_path = type_dir / f"{entry.id}.md"
+            file_path = type_dir / f"{sanitize_filename(entry.id)}.md"
             file_path.write_text(content, encoding="utf-8")
             files_created += 1
 

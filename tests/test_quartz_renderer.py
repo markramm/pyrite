@@ -332,6 +332,71 @@ class TestExportSite:
         # entries + folder indexes + landing page
         assert result["files_created"] > result["entries_exported"]
 
+    def test_entry_type_absolute_path_stays_inside_output_dir(self, tmp_path):
+        """CodeQL-class path injection: an entry.entry_type that is an
+        absolute path must not become an absolute-path join -- it must land
+        inside output_dir."""
+        from pyrite.models.generic import GenericEntry
+
+        outside = tmp_path / "outside"
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": str(outside)},
+            body="pwned",
+        )
+
+        out = tmp_path / "site"
+        result = export_site([evil], out)
+
+        assert not outside.exists()
+        assert result["files_created"] >= 1
+        written = list(out.rglob("*.md"))
+        assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
+
+    def test_entry_type_traversal_stays_inside_output_dir(self, tmp_path):
+        from pyrite.models.generic import GenericEntry
+
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": "../../outside"},
+            body="pwned",
+        )
+
+        out = tmp_path / "site"
+        result = export_site([evil], out)
+
+        # Where an unsanitized "../../outside" join from out/entry_type would
+        # actually resolve to -- assert nothing was written there.
+        escape_target = (out / "../../outside").resolve()
+        assert not escape_target.exists()
+        assert result["files_created"] >= 1
+        written = list(out.rglob("*.md"))
+        assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
+
+    def test_entry_id_absolute_path_stays_inside_output_dir(self, tmp_path):
+        """The sibling finding folded into this theme: entry.id used
+        unsanitized at quartz.py's file-write join."""
+        outside = tmp_path / "outside"
+        evil = NoteEntry(id=str(outside), title="Evil", body="pwned")
+
+        out = tmp_path / "site"
+        export_site([evil], out)
+
+        assert not outside.with_suffix(".md").exists()
+        assert not outside.exists()
+        written = list(out.rglob("*.md"))
+        assert len(written) >= 1
+        assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
+
+    def test_entry_id_traversal_stays_inside_output_dir(self, tmp_path):
+        evil = NoteEntry(id="../../outside", title="Evil", body="pwned")
+
+        out = tmp_path / "site"
+        export_site([evil], out)
+
+        assert not (tmp_path / "outside.md").exists()
+        written = list(out.rglob("*.md"))
+        assert len(written) >= 1
+        assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
+
 
 # ---------------------------------------------------------------------------
 # scaffold_quartz_project
