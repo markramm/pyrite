@@ -71,6 +71,7 @@ def task_create(
         None, "--assignee", "-a", help="Assignee (e.g. agent:claude-code-7a3f)"
     ),
     body: str | None = typer.Option(None, "--body", "-b", help="Task description"),
+    tags: str = typer.Option("", "--tags", help="Comma-separated tags"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Create a new task.
@@ -101,6 +102,7 @@ def task_create(
             parent=parent or "",
             priority=priority,
             assignee=assignee or "",
+            tags=[t.strip() for t in tags.split(",")] if tags else None,
         )
 
         formatted = _format_output(result, fmt)
