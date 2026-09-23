@@ -24,6 +24,11 @@ from ..storage.database import PyriteDB
 logger = logging.getLogger(__name__)
 
 
+# Events that name no KB and carry nothing KB-specific: delivered to every
+# accepted socket. Anything else without a kb_name goes to unscoped sockets only.
+GLOBAL_EVENTS = frozenset({"kb_synced"})
+
+
 class HandshakeRejectedError(Exception):
     """The socket's credential (or lack of one) does not admit it."""
 
@@ -124,11 +129,19 @@ class ConnectionManager:
         if not self._connections:
             return
         kb_name = event.get("kb_name")
+        # An event that names no KB reaches a scoped socket only when it is on
+        # the explicit global list. Failing closed keeps a future emitter
+        # without a kb_name (index_progress carries admin job ids and counts)
+        # from reaching anonymous sockets once it starts delivering (#326).
+        is_global = event.get("type") in GLOBAL_EVENTS
         message = json.dumps(event)
         dead: list[WebSocket] = []
         for ws, readable in list(self._connections.items()):
-            if kb_name and readable is not None and kb_name not in readable:
-                continue
+            if readable is not None:
+                if kb_name and kb_name not in readable:
+                    continue
+                if not kb_name and not is_global:
+                    continue
             try:
                 await ws.send_text(message)
             except Exception:

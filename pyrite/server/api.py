@@ -1225,6 +1225,14 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
         cfg = application.state.pyrite_config
         if not origin_allowed(ws, cfg):
+            # Logged: behind a proxy that rewrites Host, this is the only
+            # trace of why the web UI's socket never connects.
+            logger.warning(
+                "Refused /ws handshake: Origin %r is neither this server's Host %r "
+                "nor listed in cors_origins",
+                ws.headers.get("origin"),
+                ws.headers.get("host"),
+            )
             await ws.close(code=1008)
             return
 
@@ -1235,6 +1243,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         try:
             readable = await run_in_threadpool(_resolve)
         except HandshakeRejectedError:
+            logger.info("Refused /ws handshake: no credential admits this socket")
             await ws.close(code=1008)
             return
 

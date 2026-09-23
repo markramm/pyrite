@@ -21,6 +21,7 @@ accepted socket, so each socket's *next* message says whether the private
 event reached it first.
 """
 
+import logging
 import tempfile
 from pathlib import Path
 
@@ -30,7 +31,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app
-from pyrite.server.websocket import manager
+from pyrite.server.websocket import manager, origin_allowed
 from pyrite.services.auth_service import AuthService
 from pyrite.services.clipper import ClipperService, ClipResult
 from pyrite.storage.database import PyriteDB
@@ -257,3 +258,62 @@ class TestOtherIdentities:
                     "entry_id": public_id,
                     "kb_name": PUBLIC,
                 }
+
+
+class TestEventsWithoutAKb:
+    """An event that names no KB fails closed: only GLOBAL_EVENTS reach a
+    scoped socket (cold read of #323; index_progress carries admin job ids)."""
+
+    def test_non_global_kbless_event_skips_a_scoped_socket(self, secured):
+        app, tokens = secured["app"], secured["tokens"]
+        with TestClient(app) as c:
+            with c.websocket_connect("/ws", headers=_cookie(tokens["peer"])) as peer:
+                c.portal.call(manager.broadcast, {"type": "index_progress", "job_id": "j1"})
+                _broadcast_marker(c)
+                assert peer.receive_json() == MARKER  # index_progress was skipped
+
+    def test_non_global_kbless_event_reaches_an_unscoped_socket(self, secured):
+        app, tokens = secured["app"], secured["tokens"]
+        with TestClient(app) as c:
+            with c.websocket_connect("/ws", headers=_cookie(tokens["admin-user"])) as admin:
+                c.portal.call(manager.broadcast, {"type": "index_progress", "job_id": "j1"})
+                assert admin.receive_json()["type"] == "index_progress"
+
+
+class _Conn:
+    def __init__(self, **headers):
+        self.headers = headers
+
+
+class TestOriginRule:
+    """origin_allowed's edges, pinned directly (cold read of #323)."""
+
+    def _cfg(self, tmp_path, origins):
+        cfg = _config(tmp_path, auth=True)
+        cfg.settings.cors_origins = origins
+        return cfg
+
+    def test_star_is_not_a_wildcard(self, tmp_path):
+        cfg = self._cfg(tmp_path, ["*"])
+        assert not origin_allowed(_Conn(origin="https://evil.example", host="pyrite.test"), cfg)
+
+    def test_null_origin_is_refused(self, tmp_path):
+        cfg = self._cfg(tmp_path, [])
+        assert not origin_allowed(_Conn(origin="null", host="pyrite.test"), cfg)
+
+    def test_host_comparison_is_case_insensitive(self, tmp_path):
+        cfg = self._cfg(tmp_path, [])
+        assert origin_allowed(_Conn(origin="https://PYRITE.test", host="pyrite.test"), cfg)
+
+    def test_absent_origin_leaves_it_to_the_credential(self, tmp_path):
+        cfg = self._cfg(tmp_path, [])
+        assert origin_allowed(_Conn(host="pyrite.test"), cfg)
+
+    def test_a_refused_origin_is_logged(self, secured, caplog):
+        headers = {**_cookie(secured["tokens"]["peer"]), "origin": "https://evil.example"}
+        with caplog.at_level(logging.WARNING, logger="pyrite.server.api"):
+            with TestClient(secured["app"]) as c:
+                with pytest.raises(WebSocketDisconnect):
+                    with c.websocket_connect("/ws", headers=headers):
+                        pass
+        assert any("evil.example" in r.getMessage() for r in caplog.records)
