@@ -1,0 +1,1 @@
+- **`pyrite schema validate --changed` no longer treats every changed Markdown file as a KB entry when no KB is configured (#346).** With zero KBs registered, it now validates nothing instead of failing on ordinary repo files like `CHANGELOG.md`, `README.md`, or `docs/**` for lacking KB frontmatter.

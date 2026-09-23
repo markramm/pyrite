@@ -405,8 +405,13 @@ def _get_git_changed_md_files(kbs: list | None = None) -> list[Path]:
     When ``kbs`` (a list of ``KBConfig``, e.g. from ``config.all_kbs()``) is
     given, results are filtered to paths under one of those KBs -- a
     changed .md file outside every configured KB (a doc, a skill file) is
-    not a KB entry and must not be validated as one. An empty/None ``kbs``
-    preserves the old unfiltered behavior.
+    not a KB entry and must not be validated as one. ``kbs=None`` (no filter
+    argument at all) preserves the old unfiltered behavior for callers that
+    want every changed .md file regardless of KB configuration. An *empty
+    list* is a real answer, not an absent one -- it means "zero KBs are
+    configured", so results are filtered to nothing (see #346: with no KB
+    configured, ``schema validate --changed`` must not treat every changed
+    .md file in the repo, e.g. CHANGELOG.md, as a KB entry).
     """
     try:
         output = subprocess.run(
@@ -436,8 +441,10 @@ def _get_git_changed_md_files(kbs: list | None = None) -> list[Path]:
         all_files = set(staged + unstaged + untracked)
         md_files = [Path(f) for f in all_files if f.endswith(".md") and Path(f).exists()]
 
-        if not kbs:
+        if kbs is None:
             return md_files
+        if not kbs:
+            return []
 
         kb_roots = [kb.path.resolve() for kb in kbs]
 
