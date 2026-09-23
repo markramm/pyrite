@@ -1,0 +1,1 @@
+- `pyrite task list --priority N` filters tasks by exact priority and combines with the existing status, assignee, parent, and KB filters (#309).

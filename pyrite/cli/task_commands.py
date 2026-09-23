@@ -128,6 +128,7 @@ def task_list(
     assignee: str | None = typer.Option(None, "--assignee", "-a", help="Filter by assignee"),
     parent: str | None = typer.Option(None, "--parent", "-p", help="Filter by parent task"),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
+    priority: int | None = typer.Option(None, "--priority", help="Filter by priority"),
 ):
     """List tasks with optional filters."""
     svc, db = _get_service()
@@ -137,6 +138,7 @@ def task_list(
             status=status,
             assignee=assignee,
             parent=parent,
+            priority=priority,
         )
 
         formatted = _format_output({"count": len(items), "tasks": items}, fmt)

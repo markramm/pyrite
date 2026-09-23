@@ -255,6 +255,7 @@ class TaskService:
         assignee: str | None = None,
         parent: str | None = None,
         kb_names: set[str] | list[str] | None = None,
+        priority: int | None = None,
     ) -> list[dict[str, Any]]:
         """List tasks with optional filters.
 
@@ -262,7 +263,7 @@ class TaskService:
         ``None`` means unrestricted, an empty set means no rows.
         """
         query = "SELECT id, title, kb_name, status, assignee, priority, metadata, updated_at FROM entry WHERE entry_type = 'task'"
-        params: dict[str, str] = {}
+        params: dict[str, Any] = {}
         if kb_name:
             query += " AND kb_name = :kb_name"
             params["kb_name"] = kb_name
@@ -286,6 +287,9 @@ class TaskService:
         if assignee:
             query += " AND assignee = :assignee"
             params["assignee"] = assignee
+        if priority is not None:
+            query += " AND priority = :priority"
+            params["priority"] = priority
         if parent:
             query += " AND json_extract(metadata, '$.parent') = :parent"
             params["parent"] = parent
