@@ -41,8 +41,12 @@ a `--help` test without mentioning it.
   `CliRunner` invocations run with colour forced (so the trap fails locally
   too), or a structural test flags `"--…" in result.stdout/output` assertions
   that do not go through the helper. Pick the one that is cheaper to keep true;
-  forcing colour everywhere must not break unrelated tests (measure: the
-  2026-09-23 full run of #318 under `FORCE_COLOR=1` is the baseline).
+  forcing colour everywhere is not free: the 2026-09-23 full run of #318's
+  branch under `FORCE_COLOR=1` gave **27 failed, 5762 passed** — 16 ANSI-split
+  substring assertions across `tests/` and one in software-kb, plus 10
+  journalism-investigation `--json` tests whose output Rich colours, which
+  is a product bug (#321), not a test bug. Fixing #321 first shrinks the
+  guard's blast radius.
 - The good-first-issue groom standard (pyrite-conductor SKILL.md, groom lane)
   and CONTRIBUTING's testing section name the helper when an issue asks for a
   `--help` test.
