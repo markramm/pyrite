@@ -21,6 +21,7 @@ from .config import (
     load_config,
     save_config,
 )
+from .utils.json_utils import echo_json
 
 app = typer.Typer(
     name="pyrite-admin",
@@ -553,8 +554,6 @@ def config_set(
 @app.command("schema")
 def schema_show(kb_name: str = typer.Argument(..., help="KB name")):
     """Show schema for a KB (agent-friendly output)."""
-    import json
-
     config = load_config()
     kb = config.get_kb(kb_name)
 
@@ -565,7 +564,7 @@ def schema_show(kb_name: str = typer.Argument(..., help="KB name")):
     schema = kb.kb_schema
     agent_schema = schema.to_agent_schema()
 
-    console.print(json.dumps(agent_schema, indent=2))
+    echo_json(agent_schema)
 
 
 # =============================================================================

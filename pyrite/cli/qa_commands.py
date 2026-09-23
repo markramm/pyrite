@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..utils.json_utils import echo_json
 from .context import cli_context
 
 qa_app = typer.Typer(help="Quality assurance validation and assessment")
@@ -764,9 +765,7 @@ def qa_check_urls(
     report = checker.build_report(url_entries, results)
 
     if output_format == "json":
-        import json
-
-        console.print(json.dumps(report, indent=2))
+        echo_json(report)
         return
 
     console.print(

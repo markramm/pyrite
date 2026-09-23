@@ -8,6 +8,7 @@ from rich.table import Table
 
 from pyrite.config import load_config
 from pyrite.storage.database import PyriteDB
+from pyrite.utils.json_utils import echo_json
 
 from .plugin import JournalismInvestigationPlugin
 
@@ -63,7 +64,7 @@ def timeline(
         result = plugin._mcp_timeline(args)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if not result["events"]:
@@ -115,7 +116,7 @@ def entities(
         result = plugin._mcp_entities(args)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if not result["entities"]:
@@ -163,7 +164,7 @@ def sources(
         result = plugin._mcp_sources(args)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if not result["sources"]:
@@ -217,7 +218,7 @@ def claims(
         result = plugin._mcp_claims(args)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if not result["claims"]:
@@ -258,7 +259,7 @@ def network(
         result = plugin._mcp_network({"entry_id": entry_id, "kb_name": kb_name})
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if "error" in result:
@@ -297,7 +298,7 @@ def evidence_chain(
         result = plugin._mcp_evidence_chain({"claim_id": claim_id, "kb_name": kb_name})
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if "error" in result:
@@ -350,7 +351,7 @@ def qa_report(
         result = compute_qa_metrics(db, kb_name, stale_days=stale_days)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         score = result["quality_score"]
@@ -434,7 +435,7 @@ def search_all(
             flat = [r for g in result["groups"] for r in g["results"]]
             correlated = correlate_results(flat)
             if output_json:
-                console.print(json_mod.dumps({"query": query, "correlated": correlated}, indent=2))
+                echo_json({"query": query, "correlated": correlated})
                 return
 
             if not correlated:
@@ -456,7 +457,7 @@ def search_all(
             return
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if result["total_count"] == 0:
@@ -510,7 +511,7 @@ def start_investigation(
         )
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if "error" in result:
@@ -541,7 +542,7 @@ def investigation_status(
         result = build_investigation_status(db, kb_name)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         console.print(f"[bold]Investigation Status: {kb_name}[/bold]")
@@ -584,7 +585,7 @@ def ownership_chain(
         result = trace_ownership_chain(db, kb_name, entity_id, max_depth=depth)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         entity = result["entity"]
@@ -647,7 +648,7 @@ def money_flow(
         )
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         entity = result["entity"]
@@ -793,7 +794,7 @@ def bulk_edges(
         result = create_edge_batch(db, kb_name, edges, dry_run=dry_run)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if dry_run:
@@ -874,7 +875,7 @@ def ftm_import(
         result = import_ftm(db, kb_name, entities, dry_run=dry_run)
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if dry_run:
@@ -977,7 +978,7 @@ def promote_claim(
         )
 
         if output_json:
-            console.print(json_mod.dumps(result, indent=2))
+            echo_json(result)
             return
 
         if "error" in result:
@@ -1026,7 +1027,7 @@ def dedup(
         )
 
         if output_json:
-            console.print(json_mod.dumps(groups, indent=2))
+            echo_json(groups)
             if link:
                 _auto_link_groups(db, groups, dry_run=dry_run)
             return
