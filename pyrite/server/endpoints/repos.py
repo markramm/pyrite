@@ -125,6 +125,16 @@ def _requires_github_token(svc: RepoService = Depends(get_repo_service)) -> None
         )
 
 
+def _repo_kb_names(db: PyriteDB, repo: dict) -> list[str]:
+    """The KBs a repository holds, as recorded when it was subscribed."""
+    return [row["name"] for row in db.get_kbs_for_repo(repo["id"])]
+
+
+def _repo_is_readable(kb_names: list[str], readable: set[str] | None) -> bool:
+    """A repository is readable when every KB it holds is (`None`: unscoped)."""
+    return readable is None or all(kb in readable for kb in kb_names)
+
+
 def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_error: str):
     """Dependency: the caller needs `tier` on **every** KB the repository holds.
 
@@ -154,9 +164,9 @@ def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_er
         repo = db.get_repo(name=name)
         if not repo:
             return
-        kb_names = [row["name"] for row in db.get_kbs_for_repo(repo["id"])]
+        kb_names = _repo_kb_names(db, repo)
 
-        if readable is not None and any(kb not in readable for kb in kb_names):
+        if not _repo_is_readable(kb_names, readable):
             raise HTTPException(
                 status_code=missing_status,
                 detail=_error_detail({"error": missing_error.format(name=name)}, missing_code, svc),
@@ -240,9 +250,17 @@ def _repo_dict_to_info(repo: dict, svc: object) -> RepoInfo:
 def list_repos(
     request: Request,
     svc: RepoService = Depends(get_repo_service),
+    readable: set[str] | None = Depends(get_readable_kbs),
+    db: PyriteDB = Depends(get_db),
 ):
-    """List all subscribed/forked repos."""
+    """List the subscribed/forked repos whose KBs the caller may read.
+
+    A repository holding a KB the caller may not read is left out, exactly
+    as if it did not exist -- the rule `GET /repos/{name}` applies.
+    """
     repos = svc.list_repos()
+    if readable is not None:
+        repos = [r for r in repos if _repo_is_readable(_repo_kb_names(db, r), readable)]
     return RepoListResponse(repos=[_repo_dict_to_info(r, svc) for r in repos])
 
 

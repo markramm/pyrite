@@ -192,7 +192,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("GET", "/api/settings/{key}"): "part 2: settings_ep.py",
     ("PUT", "/api/settings/{key}"): "part 2: settings_ep.py",
     ("DELETE", "/api/settings/{key}"): "part 2: settings_ep.py",
-    ("GET", "/api/repos"): "part 2: repos.py -- open PR #161 touches it",
     ("POST", "/api/repos/fork"): "part 2: repos.py -- open PR #161 touches it",
     ("POST", "/api/repos/subscribe"): "part 2: repos.py -- open PR #161 touches it",
     ("GET", "/api/github/repos"): "part 2: repos.py -- GitHub account listing, not KB content",

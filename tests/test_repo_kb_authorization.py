@@ -170,3 +170,22 @@ def test_global_admin_is_unscoped(env):
     r = _call(env["admin"], "get", SECRET_REPO)
     assert r.status_code == 200, r.text
     assert r.json()["kb_names"] == [PRIVATE]
+
+
+def _listed(client) -> set[str]:
+    r = client.get("/api/repos")
+    assert r.status_code == 200, r.text
+    return {repo["name"] for repo in r.json()["repos"]}
+
+
+def test_list_omits_a_repo_whose_kbs_the_caller_cannot_read(env):
+    """`GET /api/repos` answers as if the repository did not exist."""
+    r = env["peer"].get("/api/repos")
+    assert _listed(env["peer"]) == {OPEN_REPO}
+    assert SECRET_REPO not in r.text
+    assert PRIVATE not in r.text
+
+
+def test_list_includes_it_for_a_grantee_and_a_global_admin(env):
+    assert _listed(env["reader"]) == {SECRET_REPO, OPEN_REPO}
+    assert _listed(env["admin"]) == {SECRET_REPO, OPEN_REPO}
