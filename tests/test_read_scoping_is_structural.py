@@ -212,7 +212,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("POST", "/api/kbs/{kb_name}/commit"): "part 2: git_ops.py",
     ("POST", "/api/kbs/{kb_name}/publish"): "part 2: git_ops.py",
     ("POST", "/api/kbs/{kb_name}/push"): "part 2: git_ops.py",
-    ("POST", "/api/kbs/{kb_name}/export"): "part 2: export route, kbs.py",
 }
 
 HOW_TO_FIX = """

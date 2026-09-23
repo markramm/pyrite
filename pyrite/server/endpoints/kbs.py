@@ -146,9 +146,16 @@ def orient_kb(
     return result
 
 
-# write tier: this clones and pushes to a caller-chosen URL using the caller's
-# GitHub token, the same capability the /repos router gates at write.
-@router.post("/kbs/{kb_name}/export", dependencies=[Depends(requires_tier("write"))])
+# Two gates. The write tier: this clones and pushes to a caller-chosen URL
+# using the caller's GitHub token, the same capability the /repos router gates
+# at write. Per-KB read: the push carries the KB's whole content, so a caller
+# who cannot read the KB must not be able to export it -- and gets the same 404
+# as for a KB that does not exist. Per-KB write is not required: export does
+# not change the KB, and anything it carries out a reader can already fetch.
+@router.post(
+    "/kbs/{kb_name}/export",
+    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
+)
 @limiter.limit("5/minute")
 def export_kb_to_repo(
     kb_name: str,
