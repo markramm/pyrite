@@ -5,7 +5,7 @@ type: backlog_item
 kind: process
 tags:
 - process
-status: proposed
+status: superseded
 priority: high
 effort: M
 ---
@@ -52,3 +52,7 @@ the machine budget and the machine being awake); and the per-review cost.
 - No sweep review is contradicted by a later conductor review on the same head
   (the sweep's verdicts are as trustworthy as the tick's).
 - Revert to session-only review if either fails over those 10.
+
+## Superseded 2026-09-23
+
+Declined by the maintainer: sub-10-hour first response is not an expectation for this project, and cloud routine runs are limited to a few a day. Replaced by `outside-prs-screen-before-anything-runs-review-after-ci-one-daily-routine`.
