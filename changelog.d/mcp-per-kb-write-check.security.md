@@ -10,7 +10,8 @@
   (`FORBIDDEN`) unless each KB it names is writable. Operator API keys and
   global admins are unaffected. Plugin read tools are now registered at the
   read tier on write- and admin-tier servers, so they are rate-limited as
-  reads. **Operators:** if you run the HTTP MCP endpoint with users whose
+  reads, and the journalism-investigation plugin's `investigation_search_all`
+  and `investigation_status`, which only read, are now read-tier tools. **Operators:** if you run the HTTP MCP endpoint with users whose
   per-KB role is narrower than their global role, review recent changes to
   those KBs (`git log` in each KB) for writes those users should not have
   made.

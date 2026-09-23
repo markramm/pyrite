@@ -259,6 +259,12 @@ def _args_naming(tool_schema: dict, kb: str) -> dict:
     return {p: ([kb] if p == "kb_names" else kb) for p in props if p in KB_ARGUMENT_NAMES}
 
 
+# Tools that write nothing, named here so the reverse walk covers them even
+# if a plugin registers them above the read tier (as the journalism plugin
+# once did).
+KNOWN_READ_ONLY_TOOLS = frozenset({"investigation_search_all", "investigation_status"})
+
+
 class TestEveryWriteToolIsChecked:
     def test_inventory_is_nonempty_and_includes_plugins(self, env):
         tools = _tools_above_read(env)
@@ -268,6 +274,9 @@ class TestEveryWriteToolIsChecked:
         )
 
     def test_every_write_tool_refuses_a_read_only_kb(self, env):
+        """Guarded means *the write check* refused it -- FORBIDDEN, which only
+        that check emits. A NOT_FOUND from an earlier gate (the read scoping's
+        fail-closed branch, say) would hide a write tool the check misses."""
         unguarded = []
         for name, tier in sorted(_tools_above_read(env).items()):
             server = env["server"](tier)
@@ -275,11 +284,9 @@ class TestEveryWriteToolIsChecked:
             out = server._dispatch_tool(
                 name, args, client_id=f"gate-{name}", readable_kbs={PUB, TEAM}, writable_kbs=set()
             )
-            if out.get("error_code") not in ("FORBIDDEN", "NOT_FOUND"):
+            if out.get("error_code") != "FORBIDDEN":
                 unguarded.append((name, out))
-        assert not unguarded, (
-            f"write-tier tools reached their handler on a read-only KB: {unguarded}"
-        )
+        assert not unguarded, f"write-tier tools not refused by the per-KB write check: {unguarded}"
 
     def test_every_write_tool_refuses_when_writable_set_is_missing(self, env):
         # A scoped caller whose writable set was never resolved fails closed.
@@ -291,7 +298,49 @@ class TestEveryWriteToolIsChecked:
                 client_id=f"gate2-{name}",
                 readable_kbs={PUB, TEAM},
             )
-            assert out.get("error_code") in ("FORBIDDEN", "NOT_FOUND"), (name, out)
+            assert out.get("error_code") == "FORBIDDEN", (name, out)
+
+    def test_every_read_tool_passes_the_write_check_for_a_read_only_user(self, env):
+        """The reverse walk: a read-only scoped user is never refused a
+        read-tier tool by the write check. Other refusals (missing required
+        arguments, a KB of the wrong type) are the handler's business."""
+        server = env["server"]("write")
+        refused = []
+        # The read tier's own registry, plus the tools known to only read
+        # wherever a plugin registers them -- the walk must not trust the
+        # registration it is checking.
+        names = set(env["server"]("read").tools) | (KNOWN_READ_ONLY_TOOLS & set(server.tools))
+        for name in sorted(names):
+            out = server._dispatch_tool(
+                name,
+                _args_naming(server.tools[name], PUB),
+                client_id=f"rev-{name}",
+                readable_kbs={PUB, TEAM},
+                writable_kbs=set(),
+            )
+            if out.get("error_code") == "FORBIDDEN":
+                refused.append((name, out))
+        assert not refused, f"read-tier tools refused to a read-only user: {refused}"
+
+    @pytest.mark.parametrize(
+        ("tool", "args"),
+        [
+            ("investigation_search_all", {"query": "note", "kb_names": [PUB]}),
+            ("investigation_search_all", {"query": "note"}),
+            ("investigation_status", {"kb_name": PUB}),
+        ],
+    )
+    def test_journalism_read_tools_run_for_a_read_only_user(self, env, tool, args):
+        """These two only read (#223 narrowed them to the readable set) but
+        were registered in the plugin's write-tier block."""
+        server = env["server"]("write")
+        if tool not in server.tools:
+            pytest.skip("journalism-investigation extension not installed")
+        assert server._tool_tiers[tool] == "read"
+        out = server._dispatch_tool(
+            tool, args, client_id=f"j-{tool}", readable_kbs={PUB, TEAM}, writable_kbs=set()
+        )
+        assert "error_code" not in out, out
 
     def test_plugin_read_tools_are_classified_read(self, env):
         # The write check keys off each tool's tier, so a plugin's read tool

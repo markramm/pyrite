@@ -523,6 +523,44 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_ftm_export,
             }
+            # Read-only tools: they take the readable set and write nothing, so
+            # they belong at the read tier (MCP write tools need per-KB write).
+            tools["investigation_search_all"] = {
+                "description": "Search across all your investigation KBs at once. Returns results grouped by KB so you can see where an entity or topic appears across investigations",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "kb_names": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Specific KBs to search (omit for all)",
+                        },
+                        "entry_type": {"type": "string", "description": "Filter by entry type"},
+                        "correlate": {
+                            "type": "boolean",
+                            "description": "Group results by entity identity across KBs (default false)",
+                        },
+                        "limit": {"type": "integer", "description": "Max results (default 50)"},
+                    },
+                    "required": ["query"],
+                },
+                "handler": self._mcp_search_all,
+            }
+            tools["investigation_status"] = {
+                "description": "Get a comprehensive status report for the investigation — entity/event/claim counts, unverified claims, and evidence gaps. Use this to rebuild context when returning to an investigation",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "kb_name": {
+                            "type": "string",
+                            "description": "KB name (auto-detected if omitted)",
+                        },
+                    },
+                    "required": [],
+                },
+                "handler": self._mcp_investigation_status,
+            }
         if tier in ("write", "admin"):
             tools["investigation_create_entity"] = {
                 "description": "Add a new person, organization, or asset to your investigation. Provide a type and title at minimum",
@@ -625,28 +663,6 @@ class JournalismInvestigationPlugin:
                 },
                 "handler": self._mcp_create_claim,
             }
-            tools["investigation_search_all"] = {
-                "description": "Search across all your investigation KBs at once. Returns results grouped by KB so you can see where an entity or topic appears across investigations",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Search query"},
-                        "kb_names": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Specific KBs to search (omit for all)",
-                        },
-                        "entry_type": {"type": "string", "description": "Filter by entry type"},
-                        "correlate": {
-                            "type": "boolean",
-                            "description": "Group results by entity identity across KBs (default false)",
-                        },
-                        "limit": {"type": "integer", "description": "Max results (default 50)"},
-                    },
-                    "required": ["query"],
-                },
-                "handler": self._mcp_search_all,
-            }
             tools["investigation_start"] = {
                 "description": "Start a new investigation — create the investigation entry with scope, key questions, and initial entities to research",
                 "inputSchema": {
@@ -684,20 +700,6 @@ class JournalismInvestigationPlugin:
                     "required": ["title"],
                 },
                 "handler": self._mcp_investigation_start,
-            }
-            tools["investigation_status"] = {
-                "description": "Get a comprehensive status report for the investigation — entity/event/claim counts, unverified claims, and evidence gaps. Use this to rebuild context when returning to an investigation",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "kb_name": {
-                            "type": "string",
-                            "description": "KB name (auto-detected if omitted)",
-                        },
-                    },
-                    "required": [],
-                },
-                "handler": self._mcp_investigation_status,
             }
             tools["investigation_promote_claim"] = {
                 "description": "Promote a corroborated or partially-verified claim to a structured edge-entity (ownership, membership, funding) in the investigation graph",
