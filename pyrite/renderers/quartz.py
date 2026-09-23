@@ -261,7 +261,7 @@ def _write_landing_page(
     for entry_type in sorted(by_type.keys()):
         display = entry_type.replace("_", " ").title()
         count = len(by_type[entry_type])
-        lines.append(f"- **[{display}]({entry_type}/)** — {count} entries")
+        lines.append(f"- **[{display}]({sanitize_filename(entry_type)}/)** — {count} entries")
 
     lines.append("")
     (output_dir / "index.md").write_text("\n".join(lines), encoding="utf-8")

@@ -371,6 +371,23 @@ class TestExportSite:
         written = list(out.rglob("*.md"))
         assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
 
+    def test_index_links_each_section_to_the_folder_actually_written(self, tmp_path):
+        """The site index linked the RAW entry_type, so an unsafe type's
+        section link pointed at a folder that was never written (and put the
+        raw value into the page)."""
+        from pyrite.models.generic import GenericEntry
+
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": "../../outside"}, body="x"
+        )
+        out = tmp_path / "site"
+        export_site([evil], out)
+
+        index = (out / "index.md").read_text(encoding="utf-8")
+        assert "../../outside" not in index
+        linked = [d for d in out.iterdir() if d.is_dir() and f"]({d.name}/)" in index]
+        assert linked, index
+
     def test_entry_id_absolute_path_stays_inside_output_dir(self, tmp_path):
         """The sibling finding folded into this theme: entry.id used
         unsanitized at quartz.py's file-write join."""
