@@ -1,0 +1,1 @@
+- `pyrite task create --tags a,b` sets tags on the new task, parsed like `pyrite create --tags` (comma-separated, whitespace stripped) (#308, thanks @ShivanshShukla).
