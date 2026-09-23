@@ -418,7 +418,7 @@ def _discover_neighbors(
     config=None,
     db=None,
 ) -> list[dict]:
-    """Find semantically similar entries in other KBs, optionally excluding already-linked.
+    """Find related entries in all KBs, including the source KB, unless narrowed.
 
     Delegates to LinkDiscoveryService.discover_neighbors.
     """
@@ -449,7 +449,7 @@ def links_discover(
     entry_id: str = typer.Argument(..., help="Entry ID to find neighbors for"),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB containing the source entry"),
     target_kb: str | None = typer.Option(
-        None, "--target-kb", help="KB to search (default: all KBs)"
+        None, "--target-kb", help="KB to search (default: all KBs, including the source KB)"
     ),
     limit: int = typer.Option(10, "--limit", "-n", help="Max results"),
     mode: str = typer.Option(
@@ -464,11 +464,10 @@ def links_discover(
         "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
-    """Discover semantically similar entries in other KBs.
+    """Discover related entries across KBs, including the source KB.
 
-    Finds entries that are conceptually related to the source entry
-    but don't have an existing link. Useful for cross-KB knowledge
-    discovery and gap-finding.
+    Searches all KBs unless --target-kb is set. Excludes the source entry
+    and, by default, entries already linked to it.
 
     \\b
     Examples:

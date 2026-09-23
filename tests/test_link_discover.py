@@ -14,6 +14,7 @@ from pyrite.cli import app
 from pyrite.cli.link_commands import _discover_neighbors
 from pyrite.config import KBConfig, KBType, PyriteConfig, Settings
 from pyrite.services.kb_service import KBService
+from pyrite.server.tool_schemas import READ_TOOLS
 from pyrite.storage.database import PyriteDB
 
 runner = CliRunner()
@@ -110,6 +111,44 @@ def discover_env():
 
 class TestDiscoverNeighbors:
     """Test the _discover_neighbors function directly."""
+
+    def test_default_search_includes_source_kb(self, discover_env):
+        """Without a target KB, neighbors can come from the source KB too."""
+        discover_env["svc"].create_entry(
+            "kb-a",
+            "shared-trust",
+            "Shared Trust and Coordination",
+            body="Trust supports coordination across teams.",
+            entry_type="concept",
+            tags=["trust", "coordination"],
+        )
+
+        def discover(target_kb):
+            return _discover_neighbors(
+                entry_id="trust-mechanisms",
+                kb_name="kb-a",
+                target_kb=target_kb,
+                limit=10,
+                mode="keyword",
+                exclude_linked=True,
+                config=discover_env["config"],
+                db=discover_env["db"],
+            )
+
+        all_results = discover(None)
+        assert ("kb-a", "shared-trust") in {
+            (result["kb_name"], result["id"]) for result in all_results
+        }
+        assert ("kb-a", "trust-mechanisms") not in {
+            (result["kb_name"], result["id"]) for result in all_results
+        }
+        assert {result["kb_name"] for result in discover("kb-a")} == {"kb-a"}
+        assert {result["kb_name"] for result in discover("kb-b")} == {"kb-b"}
+
+    def test_tool_description_mentions_same_kb_results(self):
+        description = READ_TOOLS["kb_discover_neighbors"]["description"]
+        assert "including the source KB" in description
+        assert "target_kb" in description
 
     def test_finds_related_entries_in_other_kb(self, discover_env):
         """Keyword-based discovery finds entries with shared vocabulary."""

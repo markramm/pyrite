@@ -140,7 +140,7 @@ class LinkDiscoveryService:
         exclude_linked: bool = True,
         readable_kbs: set[str] | None = None,
     ) -> list[dict]:
-        """Find semantically similar entries in other KBs, optionally excluding already-linked.
+        """Find related entries in all KBs, including the source KB, unless narrowed.
 
         Supports keyword, semantic, and hybrid modes. Falls back to keyword
         if semantic embeddings are not available.
