@@ -77,13 +77,11 @@ def resolve_socket_scope(
     from .mcp_routes import _resolve_credential
 
     settings = config.settings
-    # With auth enabled and no keys configured, the key resolvers answer
-    # "admin" for ANY key value. That must not admit a socket: a key is an
-    # operator credential only when keys are configured (or auth is off).
-    keys_trusted = bool(settings.api_key or settings.api_keys) or not settings.auth.enabled
 
+    # An operator key, which `resolve_api_key_role` accepts only when keys are
+    # configured or auth is disabled (#331).
     key = conn.query_params.get("api_key")
-    if key and keys_trusted and resolve_api_key_role(key, config) is not None:
+    if key and resolve_api_key_role(key, config) is not None:
         return None
 
     try:
@@ -93,7 +91,7 @@ def resolve_socket_scope(
 
     if ctx is not None and ctx.get("user_id") is not None:
         return readable_kbs_for_user(config, db, ctx["user_id"], ctx["role"])
-    if ctx is not None and keys_trusted:
+    if ctx is not None:
         return None  # an operator key, or auth disabled with no keys
 
     if settings.auth.enabled and settings.auth.anonymous_tier:

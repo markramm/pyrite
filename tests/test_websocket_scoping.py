@@ -174,9 +174,8 @@ class TestHandshakeAuthentication:
         ],
     )
     def test_arbitrary_key_is_refused_when_no_keys_are_configured(self, secured, path, headers):
-        # Auth enabled, no API keys configured: the key resolvers answer
-        # "admin" for any key value there. A socket must not take that as an
-        # operator credential.
+        # Auth enabled, no API keys configured: no key is valid (#331), so an
+        # arbitrary key must not admit a socket as an operator.
         with TestClient(secured["app"]) as c:
             with pytest.raises(WebSocketDisconnect):
                 with c.websocket_connect(path, headers=headers):
