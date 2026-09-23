@@ -312,7 +312,7 @@ open until a name is chosen).
 
 ---
 
-## 0.25 — The community's first release (next)
+## 0.25 — The community's first release (shipped 2026-09-23)
 
 **Theme:** the project moves to its own organization, and the contribution
 path is made good enough that the people already sending patches do not have
@@ -448,51 +448,108 @@ neighbour at once (#63), and block-sequence indentation lost on a round trip
 
 ---
 
-## 0.26 — Contribution machinery, from the new org
+## 0.26 — Multi-user you can trust (next; still alpha)
 
-**Theme:** small and near. The first release cut from `pyrite-wiki`, which is
-what proves the release path works from its new home.
+**Theme:** the multi-user path gets the security review and the manual testing
+it has never had. Decided 2026-09-23, after one day turned up three separate
+holes:
+- with auth enabled and no API keys configured, **any** key was answered
+  "admin" on REST and `/mcp` (v0.21.0–v0.25.0, #331);
+- `kb_delete` could remove `.md` files outside the KB;
+- `/ws` broadcast private-KB names to every socket (#218).
 
-**Changelog fragments (#243) moved forward into 0.25** and shipped there
-(#276, 2026-09-21). The argument for holding them here was that changing
-`compose_notes` and the `check_changelog` precondition in the same window as a
-new organization is two unproven things at once. The org move landed first and
-held, the file kept conflicting — six times in a week, half on first-time
-contributors' branches — and the migration got its dry run and a hand
-conversion of every open contributor PR. That reasoning is kept above rather
-than deleted, because the *rule* it came from is sound; it was the schedule
-that moved, not the principle.
+Each was found by accident, one at a time. The automated tests had not caught
+them.
 
-So this release needs a scope of its own. Candidates, from what 0.25 left and
-what the first full day in the new org surfaced:
+**Definition of done:**
+- The multi-user security review
+  ([[multi-user-security-review-threat-model-surface-audits-live-personas-and-a-structural-guard]])
+  is complete: a threat model, per-surface audits, and live testing with three
+  personas.
+- Every exploitable finding is fixed, with a regression test that fails
+  without the fix.
+- A **structural authorization guard** is on `dev`. It enumerates every REST
+  route and MCP tool and fails when one lacks a covering read **and** write
+  authorization test.
+- The README states the multi-user status honestly: alpha, the review date,
+  and the known gaps.
+- No open issue labelled `security` lacks a disposition (fixed, scheduled, or
+  accepted with a reason).
 
-- **#244** `.claude/` ships 3,897 lines of agent instructions with three
-  audiences and no separation *(carried from 0.25)*
-- **#235** no agent-facing documentation of the write path *(carried from
-  0.25)*
-- **#223** the remaining four of six MCP extension tools still refuse a scoped
-  caller rather than narrowing (`social` and `zettelkasten` are done)
-- **#282**'s sibling: the Postgres conformance tests now isolate per xdist
-  worker, but the same shared-database shape exists anywhere else a test
-  suite talks to one Postgres
-- the `#209` validator improvement: name which side is stale when one copy of
-  a backlog item is under `done/`, so a duplicate-id failure reads as "this
-  branch is stale" rather than "the KB is broken"
+The review starts once the in-flight security fixes have landed, so it audits
+current code rather than a moving target.
 
-**The review surface moves to its own release.** "What did agents do since I
-last looked" as the home screen — a change feed per agent and per commit with
-diffs, approve and revert, QA inline, the task board, provenance on every
-entry ([[web-the-review-surface-what-did-agents-do-since-i-last-looked-as-the-home-screen]],
-argument in the ADR-0031 review response). It is the screen that demonstrates
-the thesis and the shell agent integration (ADR-0030) plugs into, and it is
-weeks of work. Three releases shipped in three days (0.24.1, 0.24.2, 0.24.3);
-at that cadence a multi-week product surface is an epic that spans releases,
-not the next one. It keeps its definition of done and is scheduled when it is
-broken down.
+### Workstream 1 — Security (the theme)
+
+- In flight on 2026-09-23:
+  - the key-role bypass (#331);
+  - `find_file` / `kb_delete` containment;
+  - `/ws` authentication and scoping (#218, #323);
+  - export path segments (#221, #324).
+- **#330** admin user management always returns 403 (fails closed).
+- **#223** the remaining extension MCP tools that span every KB.
+- **The write-path audit.** Reads were made structural in 0.25; writes still
+  rely on per-endpoint checks. This is the review's largest surface.
+- **#228** and the 56 open CodeQL alerts: triage them, and treat MCP tool
+  arguments as untrusted.
+- Recorded by the 2026-09-23 cold reads, for the review: unguarded path joins
+  in `template_service`, `site_cache`, the export clone path and a
+  collection's `folder_path`; exports aborted by NUL or overlong names;
+  Windows drive-relative names; symlinks out of a KB; `POST /mcp/messages/`
+  trusting the SDK session id; REST ignoring `Bearer <valid key>`.
+
+### Workstream 2 — Multi-user correctness the review will touch
+
+- **#326 / #322** WebSocket events are never delivered: one root cause, no
+  event loop on the worker thread.
+- **#217** MCP `resources/read` is broken on every transport.
+- **#234** MCP tool tiers are reported inconsistently.
+- **#207** concurrent first searches each load an embedding model (#325, in
+  review).
+
+### Workstream 3 — The contribution path
+
+- **Outside PRs are screened before any of their code runs, and reviewed after
+  CI**
+  ([[outside-prs-screen-before-anything-runs-review-after-ci-one-daily-routine]]).
+  One daily routine. It also closes the gap where the review lane ran
+  untrusted suites next to the maintainer's credentials.
+- **#278** a missing changelog fragment fails the check instead of warning.
+- **#320 / #321** the `--help` colour trap and `--json` wrapping at 80
+  columns. Each cost first-time contributors a red gate.
+- **#244** separate `.claude/` by audience; **#235** agent-facing write-path
+  docs. Both carried from 0.25.
+
+### Workstream 4 — Keep the door open
+
+At least five `good first issue` items open at all times (eleven on
+2026-09-23), each written to the standard: the error verbatim, steps,
+acceptance criteria, files. Security-adjacent work never gets the label.
+
+**Out of 0.26:**
+- the review surface (a multi-release epic, kept below);
+- PyPI and packaging;
+- the web graph and sidebar work;
+- the KB registry collapse.
+
+These move to "Later" unless a contributor picks one up. The earlier 0.26 draft
+("contribution machinery, from the new org") was overtaken: 0.25.0 was already
+cut from `pyrite-wiki`. Its candidates are carried above (#244, #235, #223) or
+into Later (the #209 validator message, the Postgres test-isolation sibling of
+#282).
+
+**The review surface stays its own epic.** "What did agents do since I last
+looked" as the home screen
+([[web-the-review-surface-what-did-agents-do-since-i-last-looked-as-the-home-screen]])
+keeps its definition of done and is scheduled once it is broken down. A
+trusted multi-user path is a prerequisite for showing it to anyone but the
+maintainer.
 
 ---
 
 ## Later, unscheduled
+
+PyPI and packaging; web graph scoping and sidebar regrouping; collapse the KB registry to one source of truth; the #209 validator message (name the stale side); Postgres test isolation beyond the conformance suite (#282's sibling).
 
 Type-aware views via a declarative manifest (ADR-0031 open question 4);
 agent run control (ADR-0030 Phase 1, Claude adapter first); the GitHub-issues
