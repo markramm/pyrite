@@ -420,8 +420,8 @@ class OverlaySearchBackend:
 
     # ── global counts → delegate to main ────────────────────────────
 
-    def get_global_counts(self) -> dict[str, int]:
-        return self._main.get_global_counts()
+    def get_global_counts(self, kb_names: set[str] | list[str] | None = None) -> dict[str, int]:
+        return self._main.get_global_counts(kb_names=kb_names)
 
     # ── internal merge helper ───────────────────────────────────────
 

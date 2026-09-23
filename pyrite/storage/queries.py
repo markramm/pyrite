@@ -197,9 +197,9 @@ class QueryMixin:
             kb_names=kb_names,
         )
 
-    def get_global_counts(self) -> dict[str, int]:
-        """Get global tag and link counts."""
-        return self._backend.get_global_counts()
+    def get_global_counts(self, kb_names: set[str] | list[str] | None = None) -> dict[str, int]:
+        """Get tag and link counts, restricted to ``kb_names`` when given."""
+        return self._backend.get_global_counts(kb_names=kb_names)
 
     def get_tags_as_dicts(
         self,

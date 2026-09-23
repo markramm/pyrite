@@ -318,6 +318,6 @@ class SearchBackend(Protocol):
 
     # ── global counts ────────────────────────────────────────────────
 
-    def get_global_counts(self) -> dict[str, int]:
-        """Get global tag and link counts."""
+    def get_global_counts(self, kb_names: set[str] | list[str] | None = None) -> dict[str, int]:
+        """Get tag and link counts, restricted to ``kb_names`` when given."""
         ...

@@ -157,8 +157,23 @@ class KBOpsMixin:
             return None
         return dict(row._mapping)
 
-    def get_type_counts(self, kb_name: str | None = None) -> list[dict[str, Any]]:
-        """Get entry counts grouped by entry_type."""
+    def get_type_counts(
+        self, kb_name: str | None = None, kb_names: set[str] | list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        """Get entry counts grouped by entry_type, restricted to ``kb_names`` when given."""
+        if kb_names is not None:
+            from .backends.base_backend import kb_names_clause
+
+            params: dict[str, Any] = {}
+            scope = kb_names_clause("kb_name", kb_names, params)
+            rows = self.session.execute(
+                text(
+                    f"SELECT entry_type, COUNT(*) as count FROM entry WHERE {scope} "
+                    "GROUP BY entry_type ORDER BY count DESC"
+                ),
+                params,
+            ).fetchall()
+            return [dict(r._mapping) for r in rows]
         if kb_name:
             rows = self.session.execute(
                 text(

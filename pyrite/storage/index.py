@@ -549,8 +549,14 @@ class IndexManager:
         """Remove a KB and all its entries from the index."""
         self.db.unregister_kb(kb_name)
 
-    def get_index_stats(self) -> dict[str, Any]:
-        """Get statistics about the index."""
+    def get_index_stats(self, kb_names: set[str] | None = None) -> dict[str, Any]:
+        """Get statistics about the index.
+
+        ``kb_names`` restricts every part of the answer -- the per-KB map and
+        each total -- to those KBs; ``None`` means the whole index. The REST
+        route passes the caller's readable set, so a private KB contributes
+        neither its name nor its rows to a caller without a grant.
+        """
         stats = {
             "kbs": {},
             "total_entries": 0,
@@ -559,17 +565,18 @@ class IndexManager:
         }
 
         for kb in self.config.all_kbs():
+            if kb_names is not None and kb.name not in kb_names:
+                continue
             kb_stats = self.db.get_kb_stats(kb.name)
             if kb_stats:
                 stats["kbs"][kb.name] = kb_stats
                 stats["total_entries"] += kb_stats.get("actual_count", 0)
 
-        # Get global counts
-        global_counts = self.db.get_global_counts()
+        global_counts = self.db.get_global_counts(kb_names=kb_names)
         stats["total_tags"] = global_counts["total_tags"]
         stats["total_links"] = global_counts["total_links"]
 
-        stats["type_counts"] = self.db.get_type_counts()
+        stats["type_counts"] = self.db.get_type_counts(kb_names=kb_names)
 
         return stats
 

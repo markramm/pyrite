@@ -23,6 +23,7 @@ from ..api import (
     get_kb_registry,
     get_llm_service,
     get_llm_usage_service,
+    get_readable_kbs,
     limiter,
     requires_tier,
     resolve_kb_default_role,
@@ -41,9 +42,13 @@ router = APIRouter(tags=["Admin"])
 
 @router.get("/stats", response_model=StatsResponse)
 @limiter.limit("100/minute")
-def get_stats(request: Request, index_mgr: IndexManager = Depends(get_index_mgr)):
-    """Get index statistics."""
-    stats = index_mgr.get_index_stats()
+def get_stats(
+    request: Request,
+    index_mgr: IndexManager = Depends(get_index_mgr),
+    readable: set[str] | None = Depends(get_readable_kbs),
+):
+    """Get index statistics, over the KBs the caller may read."""
+    stats = index_mgr.get_index_stats(kb_names=readable)
     return StatsResponse(**stats)
 
 

@@ -165,7 +165,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("POST", "/api/reviews"): "write route: requires_kb_tier('write') subsumes read",
     ("DELETE", "/api/reviews/{review_id}"): "write route: requires_kb_tier('write') subsumes read",
     # -- part 2: meta/admin surfaces ------------------------------------
-    ("GET", "/api/stats"): "part 2: admin.py -- index-wide counts, no per-KB scoping today",
     ("GET", "/api/plugins"): "part 2: admin.py",
     ("GET", "/api/plugins/{name}"): "part 2: admin.py",
     ("GET", "/api/ai/status"): "part 2: admin.py",

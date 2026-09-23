@@ -1064,9 +1064,33 @@ class BaseBackend(ABC):
     # Global counts (raw SQL — shared via _exec)
     # =====================================================================
 
-    def get_global_counts(self) -> dict[str, int]:
-        tag_count = self._exec_scalar("SELECT COUNT(*) FROM tag") or 0
-        link_count = self._exec_scalar("SELECT COUNT(*) FROM link") or 0
+    def get_global_counts(self, kb_names: set[str] | list[str] | None = None) -> dict[str, int]:
+        if kb_names is None:
+            tag_count = self._exec_scalar("SELECT COUNT(*) FROM tag") or 0
+            link_count = self._exec_scalar("SELECT COUNT(*) FROM link") or 0
+        else:
+            # Scoped: a tag counts when an entry in a readable KB carries it,
+            # and a link counts when both of its ends are in readable KBs --
+            # the same rule /api/graph applies to edges.
+            params: dict[str, Any] = {}
+            tag_scope = kb_names_clause("et.kb_name", kb_names, params)
+            tag_count = (
+                self._exec_scalar(
+                    f"SELECT COUNT(DISTINCT et.tag_id) FROM entry_tag et WHERE {tag_scope}",
+                    params,
+                )
+                or 0
+            )
+            params = {}
+            source_scope = kb_names_clause("source_kb", kb_names, params)
+            target_scope = kb_names_clause("target_kb", kb_names, params)
+            link_count = (
+                self._exec_scalar(
+                    f"SELECT COUNT(*) FROM link WHERE {source_scope} AND {target_scope}",
+                    params,
+                )
+                or 0
+            )
         return {
             "total_tags": tag_count,
             "total_links": link_count,
