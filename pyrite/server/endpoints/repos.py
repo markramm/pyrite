@@ -5,9 +5,19 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from ...config import PyriteConfig
 from ...services.git_service import GitService
 from ...services.repo_service import RepoService
-from ..api import get_repo_service, requires_tier
+from ...storage.database import PyriteDB
+from ..api import (
+    TIER_LEVELS,
+    get_config,
+    get_db,
+    get_readable_kbs,
+    get_repo_service,
+    requires_tier,
+    resolve_effective_kb_role,
+)
 from ..schemas import ForkRequest, PRRequest, RepoInfo, RepoListResponse, SubscribeRequest
 
 logger = logging.getLogger(__name__)
@@ -98,6 +108,84 @@ router = APIRouter(
 )
 
 
+def _requires_github_token(svc: RepoService = Depends(get_repo_service)) -> None:
+    """400 unless the caller has a connected GitHub account.
+
+    A dependency rather than an inline check so that, on `/pr`, it runs before
+    `_repo_kb_guard`: a caller with no token gets this answer whether or not
+    the repository exists or is readable, exactly as before the guard.
+    """
+    if not getattr(svc, "_github_token", None):
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "GITHUB_NOT_CONNECTED",
+                "message": "Connect your GitHub account first",
+            },
+        )
+
+
+def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_error: str):
+    """Dependency: the caller needs `tier` on **every** KB the repository holds.
+
+    A repository is a container of KBs, so the per-KB rule applies to it
+    through its contents -- the same helpers the KB routes use
+    (`get_readable_kbs`, `resolve_effective_kb_role`), no second rule:
+
+    - a KB the caller may not read makes the repository answer **exactly as a
+      repository that does not exist** answers on this route (`missing_*` is
+      that answer, as the service would produce it), because its existence
+      and the names of its KBs are private too;
+    - a readable KB on which the caller lacks `tier` is a 403.
+
+    A repository that does not exist passes through to the handler, which
+    answers as it always has. One that holds no KBs has nothing to scope and
+    is governed by the router's global `write` tier alone.
+    """
+
+    async def _check(
+        name: str,
+        request: Request,
+        readable: set[str] | None = Depends(get_readable_kbs),
+        config: PyriteConfig = Depends(get_config),
+        db: PyriteDB = Depends(get_db),
+        svc: RepoService = Depends(get_repo_service),
+    ) -> None:
+        repo = db.get_repo(name=name)
+        if not repo:
+            return
+        kb_names = [row["name"] for row in db.get_kbs_for_repo(repo["id"])]
+
+        if readable is not None and any(kb not in readable for kb in kb_names):
+            raise HTTPException(
+                status_code=missing_status,
+                detail=_error_detail({"error": missing_error.format(name=name)}, missing_code, svc),
+            )
+
+        if tier == "read":
+            return
+        for kb in kb_names:
+            role = await resolve_effective_kb_role(request, config, db, kb)
+            if role is None or TIER_LEVELS.get(role, -1) < TIER_LEVELS[tier]:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Insufficient permissions on KB '{kb}': requires '{tier}' tier",
+                )
+
+    return _check
+
+
+# The answer each route gives for a repository that does not exist -- what
+# `RepoService` returns for an unknown name -- which is also what a caller
+# gets for one whose KBs it may not read.
+_GUARD_GET = _repo_kb_guard("read", 404, "REPO_NOT_FOUND", "Repo '{name}' not found")
+_GUARD_SYNC = _repo_kb_guard("write", 400, "SYNC_FAILED", "No repos found")
+_GUARD_PR = _repo_kb_guard("write", 400, "PR_FAILED", "Repo '{name}' not found")
+# Admin, not write: unsubscribing removes the repository's KBs from the
+# instance, which is what `DELETE /api/kbs/{name}` does at admin tier.
+_GUARD_DELETE = _repo_kb_guard("admin", 400, "UNSUBSCRIBE_FAILED", "Repo '{name}' not found")
+
+
 def _relativize_path(svc: object, value: str) -> str:
     """Narrow an absolute server path to a form that discloses nothing about
     the server's filesystem layout or usernames, for the HTTP boundary only.
@@ -158,7 +246,7 @@ def list_repos(
     return RepoListResponse(repos=[_repo_dict_to_info(r, svc) for r in repos])
 
 
-@router.get("/repos/{name:path}")
+@router.get("/repos/{name:path}", dependencies=[Depends(_GUARD_GET)])
 def get_repo(
     name: str,
     request: Request,
@@ -222,7 +310,7 @@ def fork_repo(
     return result
 
 
-@router.post("/repos/{name:path}/sync")
+@router.post("/repos/{name:path}/sync", dependencies=[Depends(_GUARD_SYNC)])
 def sync_repo(
     name: str,
     request: Request,
@@ -239,7 +327,7 @@ def sync_repo(
     return _sanitize_sync_result(result, svc)
 
 
-@router.delete("/repos/{name:path}")
+@router.delete("/repos/{name:path}", dependencies=[Depends(_GUARD_DELETE)])
 def unsubscribe_repo(
     name: str,
     request: Request,
@@ -314,7 +402,11 @@ def list_github_repos(
     return {"repos": repos}
 
 
-@router.post("/repos/{name:path}/pr")
+@router.post(
+    "/repos/{name:path}/pr",
+    # Order matters: the token check answers first, as it did before the guard.
+    dependencies=[Depends(_requires_github_token), Depends(_GUARD_PR)],
+)
 def create_pull_request(
     name: str,
     body: PRRequest,
@@ -322,16 +414,6 @@ def create_pull_request(
     svc: RepoService = Depends(get_repo_service),
 ):
     """Create a pull request from a fork to its upstream."""
-    token = getattr(svc, "_github_token", None)
-    if not token:
-        raise HTTPException(
-            status_code=400,
-            detail={
-                "code": "GITHUB_NOT_CONNECTED",
-                "message": "Connect your GitHub account first",
-            },
-        )
-
     result = svc.create_pr(name, body.title, body.body, branch=body.branch)
     if not result.get("success"):
         raise HTTPException(
