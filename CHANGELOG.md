@@ -13,6 +13,10 @@ asserts that `[Unreleased]` stays empty.
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-09-23
+
+Security release. It fixes authorization gaps in the multi-user path (auth enabled, several users): API-key handling, per-KB checks on export, MCP writes, settings, statistics and repositories, and path handling for entry ids, ephemeral KBs and exports. **If you run Pyrite with auth enabled and more than one user, upgrade**, and read the Security section for what to check on an existing install. Multi-user remains alpha; the 0.26 security review continues (see `kb/roadmap.md`).
+
 ## [0.25.0] - 2026-09-22
 
 The community's first release — see the announcement and `kb/roadmap.md`.
