@@ -565,7 +565,7 @@ def schema_show(kb_name: str = typer.Argument(..., help="KB name")):
     schema = kb.kb_schema
     agent_schema = schema.to_agent_schema()
 
-    console.print(json.dumps(agent_schema, indent=2))
+    typer.echo(json.dumps(agent_schema, indent=2))
 
 
 # =============================================================================

@@ -746,10 +746,11 @@ def qa_check_urls(
     cache_path = Path(cache_file) if cache_file else None
     checker = URLChecker(ctx.db, cache_path=cache_path)
 
-    console.print(f"Collecting URLs from '{kb_name}'...")
+    if output_format != "json":
+        console.print(f"Collecting URLs from '{kb_name}'...")
     url_entries = checker.collect_urls(kb_name)
 
-    if not url_entries:
+    if not url_entries and output_format != "json":
         console.print("[green]No source URLs found.[/green]")
         return
 
@@ -759,14 +760,15 @@ def qa_check_urls(
 
         urls = random.sample(urls, sample)
 
-    console.print(f"Checking {len(urls)} unique URL(s)...")
-    results = checker.check_urls(urls)
+    if output_format != "json":
+        console.print(f"Checking {len(urls)} unique URL(s)...")
+    results = checker.check_urls(urls) if urls else []
     report = checker.build_report(url_entries, results)
 
     if output_format == "json":
         import json
 
-        console.print(json.dumps(report, indent=2))
+        typer.echo(json.dumps(report, indent=2))
         return
 
     console.print(

@@ -89,6 +89,30 @@ class TestTimelineCommand:
         assert "events" in data
         assert data["count"] >= 1
 
+    @pytest.mark.parametrize("force_color", [False, True])
+    def test_timeline_json_preserves_long_title(self, populated_kb, monkeypatch, force_color):
+        from rich.console import Console
+
+        if force_color:
+            monkeypatch.setenv("FORCE_COLOR", "1")
+        else:
+            monkeypatch.delenv("FORCE_COLOR", raising=False)
+        # Recreate the console after setting the environment, as a CLI process would.
+        monkeypatch.setattr("pyrite_journalism_investigation.cli.console", Console(width=40))
+        title = "[bold]Evidence[/bold] " + "long investigation title " * 8
+        populated_kb["svc"].create_entry(
+            "test", "long-event", title, "investigation_event", date="2023-01-01"
+        )
+
+        result = runner.invoke(investigation_app, ["timeline", "-k", "test", "--json"])
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.stdout)
+        assert (
+            next(event for event in data["events"] if event["id"] == "long-event")["title"] == title
+        )
+        assert "\x1b" not in result.stdout
+
     def test_timeline_date_filter(self, populated_kb):
         result = runner.invoke(
             investigation_app,
