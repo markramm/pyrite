@@ -382,7 +382,10 @@ def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
     """Resolve an API key to its role (read/write/admin).
 
     Returns:
-        - "admin" when auth is disabled (no api_key and no api_keys)
+        - "admin" when no keys are configured and auth is disabled (open access)
+        - None when no keys are configured and auth is enabled: no key is
+          valid, so the caller falls through to its session or the anonymous
+          tier (any key used to answer "admin" here)
         - "admin" when key matches the legacy single api_key
         - The configured role when key hash matches an api_keys entry
         - None when key is invalid or missing (auth enabled but key wrong)
@@ -392,9 +395,10 @@ def resolve_api_key_role(key: str | None, config: PyriteConfig) -> str | None:
     has_single_key = bool(config.settings.api_key)
     has_key_list = bool(config.settings.api_keys)
 
-    # No auth configured → everyone is admin
+    # No keys configured: open access only when auth is also disabled.
+    # With auth enabled there is no valid key, so any key is refused.
     if not has_single_key and not has_key_list:
-        return "admin"
+        return None if config.settings.auth.enabled else "admin"
 
     if not key:
         return None
@@ -1175,7 +1179,10 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     # MCP SSE transport (mounted outside /api — handles its own Bearer auth)
     from .mcp_routes import mount_mcp_routes
 
-    mount_mcp_routes(application, _app_get_config, _app_get_db)
+    # The shared PyriteDB, not the `_app_get_db` generator dependency: the MCP
+    # routes are plain Starlette handlers, so no DI runs the generator; they
+    # open their own per-request handle (#131) around the auth lookup.
+    mount_mcp_routes(application, _app_get_config, _app_db)
 
     # Collect endpoint routers under /api with auth + read-tier baseline
     api_router = APIRouter(

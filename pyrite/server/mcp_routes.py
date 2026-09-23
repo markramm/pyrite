@@ -12,7 +12,6 @@ Endpoints:
 
 import hashlib
 import logging
-import secrets
 from collections.abc import Callable
 from typing import Any
 
@@ -130,29 +129,32 @@ def _resolve_credential(
 
 
 def _resolve_api_key_role(key: str, config: PyriteConfig) -> str | None:
-    """Resolve an API key to its role (read/write/admin)."""
-    has_single_key = bool(config.settings.api_key)
-    has_key_list = bool(config.settings.api_keys)
+    """Resolve an API key to its role -- the REST rule, not a copy of it.
 
-    if not has_single_key and not has_key_list:
-        return "admin"
+    There were two copies of this rule, and a bug in the "no keys configured"
+    branch (any key answered "admin" with auth enabled) had to be fixed in
+    both. Delegating keeps one implementation, as `readable_kbs_for_user` does.
+    """
+    from .api import resolve_api_key_role
 
-    if not key:
-        return None
+    return resolve_api_key_role(key, config)
 
-    key_hash = hashlib.sha256(key.encode()).hexdigest()
 
-    if has_key_list:
-        for entry in config.settings.api_keys:
-            if secrets.compare_digest(key_hash, entry.get("key_hash", "")):
-                return entry.get("role", "read")
+async def _authenticate(request: Request, config: PyriteConfig, shared_db: PyriteDB) -> dict:
+    """Resolve the caller on a worker thread, with a per-request DB handle.
 
-    if has_single_key:
-        stored_hash = hashlib.sha256(config.settings.api_key.encode()).hexdigest()
-        if secrets.compare_digest(key_hash, stored_hash):
-            return "admin"
+    The session lookup is synchronous DB work, so it runs off the event loop
+    (as REST's ``verify_api_key`` does, #131) on a handle whose Session closes
+    as soon as auth is resolved -- an SSE connection may stay open for hours
+    and must not pin a pooled connection for its lifetime.
+    """
+    from starlette.concurrency import run_in_threadpool
 
-    return None
+    def _run() -> dict:
+        with shared_db.request_handle() as db:
+            return _resolve_bearer_auth(request, config, db)
+
+    return await run_in_threadpool(_run)
 
 
 def mount_mcp_routes(
@@ -198,10 +200,8 @@ def mount_mcp_routes(
         then hands off to the MCP SSE transport for the session lifetime.
         """
         config = app_get_config()
-        db = app_get_db()
-
         try:
-            user_ctx = _resolve_bearer_auth(request, config, db)
+            user_ctx = await _authenticate(request, config, app_get_db())
         except HTTPException as exc:
             return JSONResponse(
                 status_code=exc.status_code,
@@ -249,8 +249,6 @@ def mount_mcp_routes(
     async def handle_info(request: Request) -> Response:
         """Return MCP connection info for frontends and documentation."""
         config = app_get_config()
-        db = app_get_db()
-
         base_url = str(request.base_url).rstrip("/")
         endpoint_url = f"{base_url}/mcp/sse"
 
@@ -262,7 +260,7 @@ def mount_mcp_routes(
 
         # Try to resolve user context for tier-specific info
         try:
-            user_ctx = _resolve_bearer_auth(request, config, db)
+            user_ctx = await _authenticate(request, config, app_get_db())
             tier = user_ctx["role"] if user_ctx["role"] in ("read", "write", "admin") else "read"
             mcp_server = _get_mcp_server(tier)
             info["tools_count"] = len(mcp_server.tools)
