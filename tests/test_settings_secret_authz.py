@@ -140,3 +140,55 @@ class TestSecretsNeverReadBack:
         r = env.admin.put("/api/settings", json={"settings": {"ai.apiKey": masked}})
         assert r.status_code == 200, r.text
         assert env.app.state.pyrite_db.get_setting("ai.apiKey") == SECRET
+
+
+class TestSecretKeyList:
+    def test_explicit_list_names_the_ai_key(self):
+        from pyrite.server.endpoints import settings_ep
+
+        assert "ai.apiKey" in settings_ep.SECRET_SETTINGS
+
+    def test_listed_key_is_secret_even_when_the_name_does_not_say_so(self, monkeypatch):
+        from pyrite.server.endpoints import settings_ep
+
+        assert not settings_ep.is_secret_setting("ai.orgHandle")
+        monkeypatch.setattr(
+            settings_ep, "SECRET_SETTINGS", settings_ep.SECRET_SETTINGS | {"ai.orgHandle"}
+        )
+        assert settings_ep.is_secret_setting("ai.orgHandle")
+
+    def test_name_heuristic_is_the_fallback(self):
+        from pyrite.server.endpoints.settings_ep import is_secret_setting
+
+        assert is_secret_setting("embedding.apiToken")
+        assert not is_secret_setting("appearance.theme")
+
+
+BASE_URL = "https://svc-user:url-password@llm.example.com/v1?api_key=url-key-value&region=eu"
+
+
+class TestBaseUrlCredentials:
+    def _seed(self, env):
+        r = env.admin.put("/api/settings/ai.baseUrl", json={"value": BASE_URL})
+        assert r.status_code == 200, r.text
+
+    @pytest.mark.parametrize("who", ["anon", "reader", "writer"])
+    def test_non_admin_never_sees_url_credentials(self, env, who):
+        self._seed(env)
+        client = getattr(env, who)
+        for r in (client.get("/api/settings"), client.get("/api/settings/ai.baseUrl")):
+            assert r.status_code == 200, r.text
+            for secret in ("url-password", "url-key-value", "svc-user"):
+                assert secret not in r.text, (who, r.text)
+            assert "llm.example.com" in r.text
+            assert "region=eu" in r.text
+
+    def test_admin_sees_the_full_url(self, env):
+        self._seed(env)
+        assert env.admin.get("/api/settings").json()["settings"]["ai.baseUrl"] == BASE_URL
+        assert env.admin.get("/api/settings/ai.baseUrl").json()["value"] == BASE_URL
+
+    def test_plain_url_is_returned_unchanged(self, env):
+        env.admin.put("/api/settings/ai.baseUrl", json={"value": "http://localhost:11434/v1"})
+        r = env.anon.get("/api/settings/ai.baseUrl")
+        assert r.json()["value"] == "http://localhost:11434/v1"

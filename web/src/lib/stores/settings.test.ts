@@ -71,6 +71,28 @@ describe('SettingsStore', () => {
 			await settingsStore.set('theme', 'light');
 			expect(settingsStore.error).toBe('Save failed');
 		});
+
+		it('rolls back to the previous value when the save is refused', async () => {
+			settingsStore.settings = { 'ai.model': 'old-model' };
+			mockSetSetting.mockRejectedValueOnce(new Error('Insufficient permissions'));
+
+			await settingsStore.set('ai.model', 'new-model');
+			expect(settingsStore.settings['ai.model']).toBe('old-model');
+		});
+
+		it('removes a key that did not exist before a refused save', async () => {
+			mockSetSetting.mockRejectedValueOnce(new Error('Insufficient permissions'));
+
+			await settingsStore.set('ai.baseUrl', 'https://elsewhere.example');
+			expect('ai.baseUrl' in settingsStore.settings).toBe(false);
+		});
+
+		it('keeps the value the server returns, so a secret is not held in the page', async () => {
+			mockSetSetting.mockResolvedValueOnce({ key: 'ai.apiKey', value: '********' });
+
+			await settingsStore.set('ai.apiKey', 'sk-typed-by-admin');
+			expect(settingsStore.settings['ai.apiKey']).toBe('********');
+		});
 	});
 
 	describe('get', () => {

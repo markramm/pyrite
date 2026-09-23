@@ -8,7 +8,10 @@
   admin tier; `GET /api/settings` and `GET /api/settings/{key}` return a
   fixed mask for a secret that is set (listed under `masked`), to every
   caller including admins, and writing the mask back leaves the stored value
-  unchanged. The web settings page shows the key as "set on the server".
+  unchanged. Credentials embedded in `ai.baseUrl` (a `user:password@`
+  part, or a key or token query parameter) are masked for non-admins. The
+  web settings page shows the key as "set on the server", and a change the
+  server refuses no longer appears to stick.
   **Operators:** if your instance allowed anonymous or write-tier access and
   an AI API key was stored through the settings page, treat that key as
   exposed and rotate it with your provider, then set the new one as an
