@@ -660,6 +660,16 @@ class AuthService:
         )
         return rowcount > 0
 
+    def revoke_all_kb_permissions(self, kb_name: str) -> int:
+        """Delete every per-KB grant on `kb_name`. Returns how many there were.
+
+        For a KB that is going away: a grant outliving its KB is inherited by
+        the next KB registered under the same name.
+        """
+        return self.db.execute_write_sql(
+            "DELETE FROM kb_permission WHERE kb_name = :kb_name", {"kb_name": kb_name}
+        )
+
     def list_kb_permissions(self, kb_name: str) -> list[dict]:
         """List all permission grants for a KB."""
         return self.db.execute_sql(

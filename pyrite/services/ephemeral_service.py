@@ -147,14 +147,28 @@ class EphemeralKBService:
             )
         return result
 
+    def _remove(self, kb: KBConfig) -> None:
+        """Remove an ephemeral KB: its index rows, its grants, its files, its config.
+
+        The per-KB grants go too. `AuthService.create_user_ephemeral_kb`
+        records an admin grant for the creator, and a grant left behind is
+        inherited by the next KB registered under the same name. Does not
+        save the config; callers do, once.
+        """
+        from .auth_service import AuthService
+
+        self.db.unregister_kb(kb.name)
+        AuthService(self.db, self.config.settings.auth).revoke_all_kb_permissions(kb.name)
+        # Never outside the ephemeral root (see _remove_dir).
+        self._remove_dir(kb)
+        self.config.remove_kb(kb.name)
+
     def force_expire_kb(self, name: str) -> bool:
         """Force-expire a specific ephemeral KB. Returns True if removed."""
         kb = next((k for k in self.config.knowledge_bases if k.name == name), None)
         if not kb or not kb.ephemeral:
             return False
-        self.db.unregister_kb(kb.name)
-        self._remove_dir(kb)
-        self.config.remove_kb(kb.name)
+        self._remove(kb)
         save_config(self.config)
         return True
 
@@ -167,12 +181,7 @@ class EphemeralKBService:
             if not kb.ephemeral or not kb.ttl or not kb.created_at_ts:
                 continue
             if now - kb.created_at_ts > kb.ttl:
-                # Remove from index
-                self.db.unregister_kb(kb.name)
-                # Remove files (never outside the ephemeral root)
-                self._remove_dir(kb)
-                # Remove from config
-                self.config.remove_kb(kb.name)
+                self._remove(kb)
                 removed.append(kb.name)
 
         if removed:

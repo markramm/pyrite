@@ -196,3 +196,51 @@ class TestEphemeralKBCreation:
         eph_svc = EphemeralKBService(config, db)
         result = auth.create_user_ephemeral_kb(admin["id"], eph_svc)
         assert result["ephemeral"] is True
+
+
+class TestEphemeralKBRemovalDropsGrants:
+    """An ephemeral KB's per-KB grants go with it.
+
+    `create_user_ephemeral_kb` records an admin grant for the creator, and an
+    admin may grant others on it. Expiry and removal dropped the KB but left
+    every `kb_permission` row behind, so a later KB registered under the same
+    name -- ephemeral or not -- inherited them: the former grantees could read
+    or administer a KB nobody had granted them.
+    """
+
+    def _make(self, setup):
+        auth, db, config, admin, user = setup
+        auth.set_role(user["id"], "write")
+        from pyrite.services.ephemeral_service import EphemeralKBService
+
+        eph_svc = EphemeralKBService(config, db)
+        name = auth.create_user_ephemeral_kb(user["id"], eph_svc)["name"]
+        auth.grant_kb_permission(admin["id"], name, "read", admin["id"])
+        assert len(auth.list_kb_permissions(name)) == 2
+        return auth, db, eph_svc, name
+
+    def _grant_rows(self, db, name):
+        return db.execute_sql("SELECT user_id FROM kb_permission WHERE kb_name = :kb", {"kb": name})
+
+    def test_force_expire_deletes_the_grants(self, setup):
+        auth, db, eph_svc, name = self._make(setup)
+        assert eph_svc.force_expire_kb(name) is True
+        assert self._grant_rows(db, name) == []
+
+    def test_gc_of_an_expired_kb_deletes_the_grants(self, setup):
+        auth, db, eph_svc, name = self._make(setup)
+        kb = eph_svc.config.get_kb(name)
+        kb.created_at_ts = kb.created_at_ts - kb.ttl - 1  # expired
+        assert eph_svc.gc_ephemeral_kbs() == [name]
+        assert self._grant_rows(db, name) == []
+
+    def test_a_kb_later_registered_under_the_same_name_inherits_nothing(self, setup):
+        auth, db, eph_svc, name = self._make(setup)
+        user_id = auth.list_kb_permissions(name)[0]["user_id"]
+        eph_svc.force_expire_kb(name)
+        assert auth.get_kb_role(user_id, name, "none") is None
+
+    def test_gc_leaves_a_live_kbs_grants_alone(self, setup):
+        auth, db, eph_svc, name = self._make(setup)
+        assert eph_svc.gc_ephemeral_kbs() == []
+        assert len(self._grant_rows(db, name)) == 2
