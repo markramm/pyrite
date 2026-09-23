@@ -604,13 +604,27 @@ def contributors_line(logins: list[str]) -> str | None:
         {
             login
             for login in logins
-            if login and login != MAINTAINER and "dependabot" not in login.lower()
+            if login
+            and "@" not in login  # an email is never published (see below)
+            and login != MAINTAINER
+            and "dependabot" not in login.lower()
         }
     )
     if not outside:
         return None
     names = ", ".join(f"@{login}" for login in outside)
     return f"Thanks to {names} for their contributions."
+
+
+def unresolved_contributors(logins: list[str]) -> list[str]:
+    """Co-authors known only by email: never published, shown to the releaser.
+
+    `co_author_logins` falls back to the email when a trailer carries no GitHub
+    login. Release notes are public, so a personal address must not reach them
+    (0.25.1's dry run would have printed one); the releaser credits the person
+    by hand, or confirms they are already credited by login as a PR author.
+    """
+    return sorted({login for login in logins if login and "@" in login})
 
 
 def compose_notes(repo: Path, version: str, logins: list[str]) -> str:
@@ -1252,6 +1266,13 @@ def step_publish(ctx: Context) -> None:
         "release notes: the CHANGELOG section and the assembled fragments (printed in step a)"
         + (f" + {line}" if line else " (no outside contributors this cycle)")
     )
+    unresolved = unresolved_contributors(logins)
+    if unresolved:
+        ctx.runner.note(
+            "NOT credited (co-author with no GitHub login; emails are never published): "
+            + ", ".join(unresolved)
+            + " -- credit by hand if they are not already named above"
+        )
 
     ctx.runner.run_write(
         ["git", "-C", str(ctx.repo), "push", "origin", f"{ctx.sha}:refs/heads/main"]

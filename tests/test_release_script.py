@@ -467,6 +467,17 @@ class TestContributorsLine:
         trailers = ["Octocat <12345+octocat@users.noreply.github.com>"]
         assert release.co_author_logins(trailers) == ["octocat"]
 
+    def test_an_email_is_never_published_as_a_credit(self):
+        """A co-author trailer without a GitHub noreply address yields an email.
+        The notes are public, so an email must never be printed as a credit;
+        it goes to `unresolved_contributors` for a human to credit by hand."""
+        logins = ["amy", "ada@example.com"]
+        assert release.contributors_line(logins) == "Thanks to @amy for their contributions."
+        assert release.unresolved_contributors(logins) == ["ada@example.com"]
+
+    def test_only_emails_yields_no_line(self):
+        assert release.contributors_line(["ada@example.com"]) is None
+
     def test_notes_with_contributors_appends_the_line(self, repo):
         notes = release.compose_notes(repo, "0.24.2", ["amy"])
         assert notes.rstrip().endswith("Thanks to @amy for their contributions.")
