@@ -26,7 +26,9 @@ def layout(tmp_path: Path):
     return KBRepository(KBConfig(name="t", path=kb, kb_type="generic")), tmp_path, victim
 
 
-@pytest.mark.parametrize("bad", ["../victim", "notes/../../victim"])
+# "..\\victim", NUL and "" also passed on dev (no such file on POSIX); they
+# stay as guards for the refusals find_file now makes explicitly.
+@pytest.mark.parametrize("bad", ["../victim", "notes/../../victim", "..\\victim", "a\x00b", ""])
 def test_find_file_refuses_ids_that_are_not_plain_names(layout, bad):
     repo, _, _ = layout
     assert repo.find_file(bad) is None
@@ -75,6 +77,17 @@ def test_a_collection_id_cannot_name_a_folder_outside_or_the_root(layout, folder
     assert repo.find_file(f"collection-{folder}") is None
     assert not repo.delete(f"collection-{folder}")
     assert outside.exists()
+
+
+def test_lexical_containment_itself(layout):
+    """The backstop on every filename-lookup result, pinned directly: nothing
+    else fails if it is removed while the folder-name guard holds."""
+    repo, _, _ = layout
+    assert repo._lexically_inside(repo.path / "notes" / "a.md")
+    assert repo._lexically_inside(repo.path)
+    assert not repo._lexically_inside(repo.path / ".." / "x.md")
+    assert not repo._lexically_inside(repo.path / "notes" / ".." / ".." / "x.md")
+    assert not repo._lexically_inside(repo.path.parent / (repo.path.name + "-other") / "x.md")
 
 
 def test_names_with_glob_characters_still_resolve(layout):

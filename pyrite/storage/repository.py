@@ -274,7 +274,7 @@ class KBRepository:
         """
         root = os.path.normpath(os.path.abspath(self.path))
         target = os.path.normpath(os.path.abspath(path))
-        return target == root or target.startswith(root + os.sep)
+        return os.path.commonpath([root, target]) == root
 
     def _find_by_filename(self, entry_id: str) -> Path | None:
         """Filename-based lookups; ``entry_id`` must already be a plain stem."""
