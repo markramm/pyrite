@@ -49,9 +49,8 @@
 
 {#if stats && stats.total_entries === 0}
 	<div class="flex flex-1 flex-col items-center justify-center py-16 text-center">
-		<div class="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-gold-400 to-gold-600">
-			<span class="text-2xl font-bold text-zinc-900">Py</span>
-		</div>
+		<img src="/pyrite-mark-light.svg" alt="" class="mb-6 h-16 w-16 dark:hidden" />
+		<img src="/pyrite-mark.svg" alt="" class="mb-6 hidden h-16 w-16 dark:block" />
 		<h2 class="mb-2 text-2xl font-bold">Welcome to Pyrite</h2>
 		<p class="mb-6 max-w-md text-sm text-zinc-400">
 			Your knowledge infrastructure is ready. Start by creating your first entry
