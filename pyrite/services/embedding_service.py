@@ -167,7 +167,34 @@ def _best_passage(body: str, query: str, max_len: int = 200) -> str:
 # the prewarm path, CLI commands) and every instance loading its own copy was
 # a second-per-instance tax that showed up as 30 s in the embedding tests alone.
 _MODEL_CACHE: dict[str, Any] = {}
+# Held across the *entire* load (double-checked below), not just the cache
+# dict access -- see EmbeddingService._get_model for why (#207).
 _MODEL_CACHE_LOCK = threading.Lock()
+
+
+def _load_model(name: str) -> Any:
+    """Construct a sentence-transformers model. A patchable seam so tests can
+    stub the (slow, non-thread-safe) constructor without importing torch or
+    sentence-transformers (#207)."""
+    import logging
+
+    # Suppress noisy output during model loading:
+    # - transformers.disable_progress_bar() silences weight-loading tqdm bars
+    # - Log levels silence the HF load report and auth warnings
+    import transformers.utils.logging as tf_logging
+    from sentence_transformers import SentenceTransformer
+
+    tf_logging.disable_progress_bar()
+    loggers = ["transformers", "huggingface_hub"]
+    old_levels = {logger_name: logging.getLogger(logger_name).level for logger_name in loggers}
+    for logger_name in loggers:
+        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    try:
+        return SentenceTransformer(name)
+    finally:
+        for logger_name, level in old_levels.items():
+            logging.getLogger(logger_name).setLevel(level)
+        tf_logging.enable_progress_bar()
 
 
 class EmbeddingService:
@@ -196,35 +223,35 @@ class EmbeddingService:
         self.max_body_chars = max_body_chars
 
     def _get_model(self):
-        """Lazy-load the sentence-transformers model (shared per process)."""
-        if self._model is None:
-            with _MODEL_CACHE_LOCK:
-                cached = _MODEL_CACHE.get(self.model_name)
+        """Lazy-load the sentence-transformers model (shared per process).
+
+        Double-checked locking (#207): the fast path (cache already
+        populated) only ever takes the lock for a dict lookup. The slow path
+        -- a cold model name -- holds the lock across the *entire* load, not
+        just the cache read/write around it, so N concurrent first callers
+        for one model name serialize on the constructor instead of each
+        building their own copy at once (torch is not safe under that; it
+        segfaults or hangs). A second check after acquiring the lock avoids a
+        redundant load when another thread won the race and already cached
+        the model while this one was waiting.
+
+        A failed load must poison nothing: the `finally` always releases the
+        lock, and the cache is only written on success, so the next caller
+        (this instance retried, or a fresh one) simply tries again.
+        """
+        if self._model is not None:
+            return self._model
+
+        with _MODEL_CACHE_LOCK:
+            cached = _MODEL_CACHE.get(self.model_name)
             if cached is not None:
                 self._model = cached
                 return cached
-            import logging
 
-            # Suppress noisy output during model loading:
-            # - transformers.disable_progress_bar() silences weight-loading tqdm bars
-            # - Log levels silence the HF load report and auth warnings
-            import transformers.utils.logging as tf_logging
-            from sentence_transformers import SentenceTransformer
-
-            tf_logging.disable_progress_bar()
-            loggers = ["transformers", "huggingface_hub"]
-            old_levels = {name: logging.getLogger(name).level for name in loggers}
-            for name in loggers:
-                logging.getLogger(name).setLevel(logging.ERROR)
-            try:
-                self._model = SentenceTransformer(self.model_name)
-                with _MODEL_CACHE_LOCK:
-                    _MODEL_CACHE[self.model_name] = self._model
-            finally:
-                for name, level in old_levels.items():
-                    logging.getLogger(name).setLevel(level)
-                tf_logging.enable_progress_bar()
-        return self._model
+            model = _load_model(self.model_name)
+            _MODEL_CACHE[self.model_name] = model
+            self._model = model
+            return model
 
     def prewarm(self) -> bool:
         """Pre-load the embedding model to avoid cold-start latency.

@@ -6,7 +6,7 @@ tags:
 - concurrency
 importance: 5
 kind: bug
-status: in_progress
+status: review
 priority: high
 assignee: agent:pyrite-worker-207
 effort: M
