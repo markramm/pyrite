@@ -17,6 +17,101 @@ asserts that `[Unreleased]` stays empty.
 
 Security release. It fixes authorization gaps in the multi-user path (auth enabled, several users): API-key handling, per-KB checks on export, MCP writes, settings, statistics and repositories, and path handling for entry ids, ephemeral KBs and exports. **If you run Pyrite with auth enabled and more than one user, upgrade**, and read the Security section for what to check on an existing install. Multi-user remains alpha; the 0.26 security review continues (see `kb/roadmap.md`).
 
+### Added
+
+The MCP `task_create` tool now accepts an optional `tags` array and writes it through to the new task, matching the CLI and `TaskService.create_task()`.
+
+### Fixed
+
+- **Concurrent first semantic/hybrid searches on a cold process no longer race to load the embedding model (#207).** `EmbeddingService._get_model()` checked the model cache under a lock but built the (slow, non-thread-safe) `SentenceTransformer` model unlocked, so several concurrent first callers each built their own copy at once — a segfault or hang under real load. The model load now happens inside a double-checked lock: the first caller for a cold model name loads it once, every other concurrent caller waits and reuses the same object, and a failed load leaves the cache empty so the next caller can retry.
+
+### Security
+
+- With auth enabled and no API keys configured (the usual multi-user setup), any `X-API-Key` or `Bearer` value was accepted as an admin key on REST and `/mcp`, giving an anonymous caller read and write access to every KB, private ones included. A key is now accepted only when keys are configured; otherwise the request falls through to the session cookie or the anonymous tier. Installs with auth disabled are unchanged.
+  With auth enabled **and** keys configured, every `/mcp` request that was not a valid key (a session cookie, a session-token Bearer, or a bad Bearer) failed with a 500; those now resolve the user or answer 401.
+  **Operators:** every release from v0.21.0 through v0.25.0 is affected. If you run a server with auth enabled, upgrade, and check your KBs' git history for entries you did not write.
+
+- **Expiring or removing an ephemeral KB deletes the per-KB permission grants recorded for it.** Garbage collection and forced expiry removed the KB's index rows, files and config but left its `kb_permission` rows — including the admin grant its creator receives — so a KB later registered under the same name inherited them, and the former grantees could read, write or administer a KB nobody had granted them.
+
+- **An ephemeral KB's name can no longer point it at another KB's directory.** `POST /api/kbs/ephemeral` (open to write-role users) used the requested name as a directory under the workspace without validating it, so a name containing `..` or an absolute path created an "ephemeral" KB aliasing an existing directory, including a private KB's, with the caller as its admin. Names are now 1-64 letters, digits, `-` or `_`, starting with a letter or digit, and a name already used by another KB (in config or the KB registry), or whose directory already exists, is refused; both answer 400. A create never overwrites an existing KB registration. Expiring an ephemeral KB (garbage collection or `DELETE /api/kbs/ephemeral/{name}`) now never deletes a directory outside `<workspace>/ephemeral/`.
+  **Operators:** if you run a multi-user server, upgrade, then check your config for ephemeral KBs whose `path` is outside `<workspace>/ephemeral/` and remove them; after upgrading they are unregistered on expiry without their directory being deleted.
+
+- **Export and site renderers no longer let a stored `entry_type` or `id` write outside the output directory, or let two distinct unsafe values collide onto the same output file (#221).** `pyrite/services/export_service.py`, `pyrite/renderers/quartz.py`, and `pyrite/renderers/notebooklm.py` each joined a stored, caller-controlled value (an entry's `type` or `id`) directly into a filesystem path. An entry whose `type` or `id` was an absolute path or contained `../` could make `pyrite export` (to a directory, to a repo, `export site`, or `export collection --bundle by-type`) write attacker-controlled content outside the intended directory — reachable via two ordinary write-tier API calls (create an entry, then export) or an id indexed from git frontmatter that was never slugified. A safe `type` or `id` (one that needed no sanitizing) still produces exactly the same file or folder name as before — but a value that needed sanitizing (e.g. `note_`, `note/`, `a/b`) is no longer merged onto the name of another value that sanitizes the same way (e.g. `note`, `a_b`); it now gets a short hash suffix so both survive. `GenericEntry` and plugin types are unaffected functionally, and the exported frontmatter's `type:` still carries the raw value.
+
+- **Exporting a KB to a repository now requires being able to read that KB.** `POST /api/kbs/{kb}/export` checked only the caller's global write tier, so a write-role user with no access to a private KB could push that KB's entries into a repository of their choosing. The route now applies the same per-KB read rule as every read route, and a KB the caller cannot read answers exactly as one that does not exist (404). Admins, operator API keys and installs with auth disabled are unchanged.
+  **Operators:** if you run a multi-user server with private KBs (`default_role: none`), upgrade, and review your logs for `POST /api/kbs/*/export` calls by users without access to that KB.
+
+- **An entry id could name a file outside its KB on lookup.** `KBRepository.find_file` turned the id into `<kb>/<id>.md` unvalidated, so the write-tier MCP tool `kb_delete` with `entry_id: "../x"` deleted a `.md` file outside the KB, and an id such as `*` was treated as a glob and deleted whichever entry matched first. Writes were already guarded; lookups (and so delete, load and rename's source) no longer turn a non-plain id into a path, treat an id as a name rather than a glob pattern, and refuse any path that would land outside the KB (including `collection-..`). Ids from frontmatter that are not plain names are still found by the frontmatter scan, inside the KB.
+  **Operators:** anyone with write access over MCP could delete `.md` files the server process can reach. Check for missing files outside your KB directories if you exposed `/mcp` with write access.
+
+- **Deleting any KB, or unsubscribing a repository, deletes the per-KB permission grants recorded for its KBs.** Removing a KB through the registry (`DELETE /api/kbs/{name}`, the MCP `kb_registry_remove` tool, `pyrite kb remove`) or unsubscribing a repository (`DELETE /api/repos/{name}`) removed the KB and its entries but left its `kb_permission` rows behind, so a KB later registered under the same name inherited them and the former grantees could read, write or administer it. Grants are now deleted with the KB in the same transaction, on every deletion path. Removing a KB from `config.yaml` alone does not delete it (it stays registered as a user-managed KB), so its grants are kept.
+
+- **The MCP `kb_stats` tool reports only the KBs the connection may read.** Over `/mcp` it returned index-wide statistics to every caller — a private KB's name and row, and totals that counted its entries, tags, links and types — after `GET /api/stats` had been scoped. It now applies the same scoping as the REST route: a scoped connection gets the per-KB map and every total from its readable KBs only; admins, operator API keys and local stdio are unchanged.
+
+- **MCP write tools now enforce the per-KB write permission REST enforces.**
+  Over `/mcp`, a session user's global role chose which tools were offered,
+  but nothing checked their role on the KB a write tool targeted, so a user
+  whose effective role on a KB was `read` (through its `default_role` or an
+  explicit grant) could still create, update and delete entries in it --
+  `kb_create`, `kb_update`, `kb_delete`, task tools and every write-tier
+  plugin tool. The same writes over REST were already refused. A scoped MCP
+  connection now resolves the KBs it may write through the same per-KB rule
+  REST uses, and every tool registered above the read tier is refused
+  (`FORBIDDEN`) unless each KB it names is writable. Operator API keys and
+  global admins are unaffected. Plugin read tools are now registered at the
+  read tier on write- and admin-tier servers, so they are rate-limited as
+  reads, and the journalism-investigation plugin's `investigation_search_all`
+  and `investigation_status`, which only read, are now read-tier tools. **Operators:** if you run the HTTP MCP endpoint with users whose
+  per-KB role is narrower than their global role, review recent changes to
+  those KBs (`git log` in each KB) for writes those users should not have
+  made.
+
+- **Operator settings are admin-only, and secret settings are never read
+  back.** The settings API let any write-tier caller change instance-wide
+  operator settings -- the AI provider, model, base URL and API key -- and
+  returned stored credentials such as `ai.apiKey` in plain text to every
+  caller who could read settings, including the anonymous tier. Changing an
+  `ai.*` setting, or any setting whose name marks it as a credential
+  (`apiKey`, `token`, `secret`, `password`, `credential`), now requires the
+  admin tier; `GET /api/settings` and `GET /api/settings/{key}` return a
+  fixed mask for a secret that is set (listed under `masked`), to every
+  caller including admins, and writing the mask back leaves the stored value
+  unchanged. Credentials embedded in `ai.baseUrl` (a `user:password@`
+  part, or a key or token query parameter) are masked for non-admins. The
+  web settings page shows the key as "set on the server", and a change the
+  server refuses no longer appears to stick.
+  **Operators:** if your instance allowed anonymous or write-tier access and
+  an AI API key was stored through the settings page, treat that key as
+  exposed and rotate it with your provider, then set the new one as an
+  admin. Check that `ai.baseUrl` and `ai.provider` hold the values you
+  expect.
+
+- **`GET /api/repos` lists only repositories whose KBs the caller may read.** It listed every subscribed repository to any write-tier user, including those holding a private KB, with their KB names and entry totals. A repository holding a KB the caller may not read is now left out, exactly as if it did not exist — the same rule `GET /api/repos/{name}` applies. Global admins, operator API keys and instances with auth disabled see every repository as before.
+
+- **The `/api/repos/{name}` routes apply per-KB authorization to the KBs a repository contains.** They were guarded by the global `write` tier only, so any write-tier user could read the status of a repository holding a private KB (its KB names, entry count and contributors), sync it, open a pull request from it, or unsubscribe it — which removes its KBs from the instance. Now `GET` requires read on every KB the repository holds, `POST .../sync` and `POST .../pr` require write, and `DELETE` requires admin (the tier `DELETE /api/kbs/{name}` requires, since unsubscribing removes those KBs). A caller who may not read one of the KBs gets exactly the response a nonexistent repository gets on that route; one who may read them but lacks the tier gets 403. A write-tier operator API key can no longer unsubscribe a repository that holds KBs; that now needs an admin key.
+
+- **`GET /api/stats` reports only the KBs the caller may read.** It returned index-wide statistics to every caller, including a logged-in user or anonymous visitor with no grant on a private KB: that KB's name and row in `kbs`, and `total_entries`, `total_tags`, `total_links` and `type_counts` that counted its rows. A scoped caller now gets the per-KB map and every total computed from its readable KBs only (a link counts when both its ends are readable). Global admins, operator API keys and instances with auth disabled see the same index-wide numbers as before.
+
+- The web frontend's transitive `cookie` dependency (under `@sveltejs/kit`) is forced to `^0.7.0` with an npm override, closing CVE-2024-47764 / GHSA-pxg6-pf52-xh8x (low). Pyrite's production web build uses `adapter-static` and never runs SvelteKit's cookie code, so no install was exploitable; this clears the alert and protects `vite dev` / `vite preview`. Even the latest SvelteKit (2.70.3) still pins `cookie ^0.6.0`, so drop the override when it moves.
+
+- **`/ws` now authenticates its handshake and sends each socket only the KBs its
+  owner may read (#218).** Before this, anyone who could reach the server could
+  open `/ws` with no credential and receive the *names* of private KBs and the
+  ids of entries created in them, as they happened (no titles or bodies). The
+  handshake now accepts the same credentials as the REST API (an operator API
+  key as a header or `?api_key=`, the `pyrite_session` cookie, or the
+  anonymous tier when one is configured) and is refused otherwise; a handshake
+  whose `Origin` is neither the server's own host nor in `cors_origins` is
+  refused too. A socket's readable KBs are fixed when it connects, so a revoked
+  grant or a logout takes effect on reconnect. A default local install (auth
+  off, no API keys) still needs no credential, but the `Origin` check applies
+  there too, so another site open in the same browser can no longer read the
+  event stream. If the web UI is served from an origin other than the API's
+  host, or a reverse proxy rewrites the `Host` header, add the UI's origin to
+  `cors_origins`; a refused handshake is logged as a warning naming both. An
+  event that names no KB reaches a scoped socket only if it is a global event
+  (`kb_synced`).
+
 ## [0.25.0] - 2026-09-22
 
 The community's first release — see the announcement and `kb/roadmap.md`.
