@@ -1211,9 +1211,34 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     # WebSocket endpoint for multi-tab awareness
     @application.websocket("/ws")
     async def websocket_endpoint(ws: WebSocket):
-        from .websocket import manager
+        """Authenticate the handshake, then register the socket with its scope.
 
-        await manager.connect(ws)
+        Rejected handshakes are closed *before* ``accept`` and never reach the
+        manager (#218). The readable set is fixed for the connection's life.
+        The resolution runs on a worker thread with its own short-lived DB
+        handle -- not a ``Depends(get_db)`` session, which would stay open for
+        as long as the socket does.
+        """
+        from starlette.concurrency import run_in_threadpool
+
+        from .websocket import HandshakeRejectedError, manager, origin_allowed, resolve_socket_scope
+
+        cfg = application.state.pyrite_config
+        if not origin_allowed(ws, cfg):
+            await ws.close(code=1008)
+            return
+
+        def _resolve() -> set[str] | None:
+            with _app_db().request_handle() as db:
+                return resolve_socket_scope(ws, cfg, db)
+
+        try:
+            readable = await run_in_threadpool(_resolve)
+        except HandshakeRejectedError:
+            await ws.close(code=1008)
+            return
+
+        await manager.connect(ws, readable)
         try:
             while True:
                 # Keep connection alive; clients can send pings

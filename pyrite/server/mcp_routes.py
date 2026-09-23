@@ -16,6 +16,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from starlette.requests import HTTPConnection
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Mount, Route
 
@@ -63,11 +64,19 @@ def _resolve_bearer_auth(
 
 
 def _resolve_credential(
-    request: Request,
+    request: HTTPConnection,
     config: PyriteConfig,
     db: PyriteDB,
 ) -> dict[str, Any]:
-    """The credential half of `_resolve_bearer_auth`: role, username, user_id."""
+    """The credential half of `_resolve_bearer_auth`: role, username, user_id.
+
+    Reads only headers and cookies, so it takes any `HTTPConnection` -- a
+    `Request` here, a `WebSocket` handshake in `websocket.resolve_socket_scope`
+    (#218). One credential resolver for both transports, not two.
+
+    Synchronous and may query the DB (session lookup): callers on the event
+    loop run it in a threadpool.
+    """
     # 1. Bearer token in Authorization header
     auth_header = request.headers.get("authorization", "")
     if auth_header.lower().startswith("bearer "):
