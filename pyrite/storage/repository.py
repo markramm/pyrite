@@ -5,6 +5,7 @@ Handles reading and writing entries to/from markdown files.
 Each KB is a directory of markdown files with YAML frontmatter.
 """
 
+import glob
 import logging
 from collections.abc import Iterator
 from pathlib import Path
@@ -262,19 +263,17 @@ class KBRepository:
         """Check if an entry exists."""
         return self.find_file(entry_id) is not None
 
-    def find_file(self, entry_id: str) -> Path | None:
-        """Find the file path for an entry.
-
-        Searches by filename first (fast), then falls back to scanning
-        frontmatter IDs (handles cases where filename != entry ID).
-        """
+    def _find_by_filename(self, entry_id: str) -> Path | None:
+        """Filename-based lookups; ``entry_id`` must already be a plain stem."""
         # Check root by filename
         root_path = self.path / f"{entry_id}.md"
         if root_path.exists():
             return root_path
 
         # Check all subdirectories recursively by filename
-        filename = f"{entry_id}.md"
+        # glob.escape: an id is a name, not a pattern -- `*` must not match
+        # (and so let `kb_delete` remove) whichever entry globs first.
+        filename = glob.escape(f"{entry_id}.md")
         for match in self.path.rglob(filename):
             if not any(part.startswith(".") for part in match.relative_to(self.path).parts):
                 return match
@@ -282,11 +281,38 @@ class KBRepository:
         # Check for collection entries (collection-<folder_name>)
         if entry_id.startswith("collection-"):
             folder_name = entry_id[len("collection-") :]
-            for subdir in self.path.rglob(folder_name):
+            for subdir in self.path.rglob(glob.escape(folder_name)):
                 if subdir.is_dir():
                     yaml_path = subdir / "__collection.yaml"
                     if yaml_path.exists():
                         return yaml_path
+        return None
+
+    def find_file(self, entry_id: str) -> Path | None:
+        """Find the file path for an entry.
+
+        Searches by filename first (fast), then falls back to scanning
+        frontmatter IDs (handles cases where filename != entry ID).
+
+        An id that is not a plain filename stem (a path separator, a leading
+        '.', NUL, empty) is never turned into a path: writes were already
+        guarded by ``_validate_entry_id``, lookups were not, so ``delete`` and
+        ``load`` accepted ``../x`` and reached outside the KB. Such an id can
+        still match a file's *frontmatter* id below -- that scan only returns
+        files it found inside the KB.
+        """
+        if not isinstance(entry_id, str) or not entry_id:
+            return None
+        try:
+            self._validate_entry_id(entry_id)
+            plain = True
+        except ValidationError:
+            plain = False
+
+        if plain:
+            found = self._find_by_filename(entry_id)
+            if found is not None:
+                return found
 
         # Fallback: scan frontmatter IDs (handles filename != entry ID)
         # This is slower but catches entries like ADRs where the file is
