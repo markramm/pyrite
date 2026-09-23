@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .models import KB
 
@@ -52,6 +52,32 @@ class KBOpsMixin:
             )
             self.session.add(kb)
         self.session.commit()
+
+    def insert_new_kb(
+        self,
+        name: str,
+        kb_type: str,
+        path: str,
+        description: str = "",
+        source: str = "user",
+    ) -> bool:
+        """Register a KB only if no row has this name; never overwrite one.
+
+        Returns False when the name is already registered. The primary key
+        makes this atomic: of two concurrent inserts, one fails.
+        """
+        type_str = kb_type.value if hasattr(kb_type, "value") else kb_type
+        if self.session.get(KB, name) is not None:
+            return False
+        self.session.add(
+            KB(name=name, kb_type=type_str, path=path, description=description, source=source)
+        )
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            return False
+        return True
 
     def merge_registered_kbs(self, config: "PyriteConfig") -> int:
         """Merge DB-registered KBs (from ``pyrite kb add``) into ``config``.

@@ -35,41 +35,69 @@ class EphemeralKBService:
     def create_ephemeral_kb(self, name: str, ttl: int = 3600, description: str = "") -> KBConfig:
         """Create an ephemeral KB with TTL.
 
-        Raises InvalidEphemeralKBNameError, before touching the disk, for a
-        name that is not a plain name or that another KB already uses.
+        Raises InvalidEphemeralKBNameError for a name that is not a plain
+        name, that another KB uses (in config or in the registry table), or
+        whose directory already exists. The directory is created with
+        exist_ok=False, so it is the claim: of two concurrent creates of one
+        name, or of two names one case-insensitive filesystem folds together,
+        exactly one gets it, and a leftover directory is never adopted.
         """
         if not isinstance(name, str) or not _EPHEMERAL_NAME_RE.fullmatch(name):
             raise InvalidEphemeralKBNameError(
                 "Invalid ephemeral KB name: use 1-64 letters, digits, '-' or '_', "
                 "starting with a letter or digit"
             )
-        if self.config.get_kb(name) is not None:
+        if self._name_in_use(name):
             raise InvalidEphemeralKBNameError("That KB name is not available")
         ephemeral_dir = self._root() / name
         if not self._inside_root(ephemeral_dir):
             raise InvalidEphemeralKBNameError("Invalid ephemeral KB name")
-        ephemeral_dir.mkdir(parents=True, exist_ok=True)
+        self._root().mkdir(parents=True, exist_ok=True)
+        try:
+            ephemeral_dir.mkdir(exist_ok=False)
+        except FileExistsError:
+            raise InvalidEphemeralKBNameError("That KB name is not available") from None
 
+        try:
+            return self._register(name, ephemeral_dir, ttl, description)
+        except BaseException:
+            # The directory is ours (we just created it); do not leave a
+            # leftover that would block the name forever.
+            shutil.rmtree(ephemeral_dir, ignore_errors=True)
+            raise
+
+    def _name_in_use(self, name: str) -> bool:
+        """True when config or the KB registry table already has this name."""
+        if self.config.get_kb(name) is not None:
+            return True
+        rows = self.db.execute_sql("SELECT 1 FROM kb WHERE name = :name", {"name": name})
+        return bool(rows)
+
+    def _register(self, name: str, ephemeral_dir: Path, ttl: int, description: str) -> KBConfig:
+        description = description or f"Ephemeral KB (TTL: {ttl}s)"
+        # Insert-only: another process may have registered the name since the
+        # check above, and that row must not be overwritten.
+        if not self.db.insert_new_kb(
+            name=name, kb_type="generic", path=str(ephemeral_dir), description=description
+        ):
+            raise InvalidEphemeralKBNameError("That KB name is not available")
         kb = KBConfig(
             name=name,
             path=ephemeral_dir,
             kb_type="generic",
-            description=description or f"Ephemeral KB (TTL: {ttl}s)",
+            description=description,
             ephemeral=True,
             ttl=ttl,
             created_at_ts=time.time(),
         )
-        self.config.add_kb(kb)
-        save_config(self.config)
-
-        # Register in DB
-        self.db.register_kb(
-            name=name,
-            kb_type="generic",
-            path=str(ephemeral_dir),
-            description=kb.description,
-        )
-
+        try:
+            self.config.add_kb(kb)
+            save_config(self.config)
+        except BaseException:
+            if self.config.get_kb(name) is kb:
+                self.config.remove_kb(name)
+            self.db.unregister_kb(name)
+            raise
         return kb
 
     def _root(self) -> Path:

@@ -14,7 +14,9 @@ outside the ephemeral root (a KB persisted to config before this fix may
 still point elsewhere).
 """
 
+import os
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -24,7 +26,7 @@ from fastapi.testclient import TestClient
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.auth_service import AuthService
-from pyrite.services.ephemeral_service import EphemeralKBService
+from pyrite.services.ephemeral_service import EphemeralKBService, InvalidEphemeralKBNameError
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.index import IndexManager
@@ -216,3 +218,111 @@ class TestEphemeralEndpoint:
         r = server["writer"].post("/api/kbs/ephemeral", json={})
         assert r.status_code == 200, r.text
         assert r.json()["name"].startswith(f"ephemeral-{server['writer_id']}-")
+
+
+class TestNameInUseOnEveryPath:
+    """ "Already used by another KB" must hold beyond the in-memory config."""
+
+    def test_name_registered_only_in_the_database_is_refused(self, svc):
+        service, config, tmp = svc
+        other = tmp / "db-only"
+        other.mkdir()
+        # A KB known to the registry table but absent from config and its
+        # DB-KB cache (e.g. added by another process since this one loaded).
+        service.db.register_kb(name="db-only", kb_type="generic", path=str(other))
+        assert config.get_kb("db-only") is None
+
+        with pytest.raises(InvalidEphemeralKBNameError):
+            service.create_ephemeral_kb("db-only", ttl=3600)
+
+        rows = service.db.execute_sql("SELECT path FROM kb WHERE name = 'db-only'")
+        assert [r["path"] for r in rows] == [str(other)]
+        assert not (tmp / "ws" / "ephemeral" / "db-only").exists()
+
+    def test_row_registered_after_the_check_is_not_overwritten(self, svc, monkeypatch):
+        # Another process registers the name between the in-use check and the
+        # registration: the check saw nothing, and the row must survive.
+        service, config, tmp = svc
+        other = tmp / "late"
+        other.mkdir()
+        service.db.register_kb(name="late", kb_type="generic", path=str(other))
+        real_execute_sql = service.db.execute_sql
+
+        def check_sees_nothing(sql, params=None):
+            if sql.lstrip().upper().startswith("SELECT 1 FROM KB"):
+                return []
+            return real_execute_sql(sql, params) if params is not None else real_execute_sql(sql)
+
+        monkeypatch.setattr(service.db, "execute_sql", check_sees_nothing)
+
+        with pytest.raises(InvalidEphemeralKBNameError):
+            service.create_ephemeral_kb("late", ttl=3600)
+
+        monkeypatch.undo()
+        rows = service.db.execute_sql("SELECT path FROM kb WHERE name = 'late'")
+        assert [r["path"] for r in rows] == [str(other)]
+        assert config.get_kb("late") is None
+        assert not (tmp / "ws" / "ephemeral" / "late").exists()
+
+    def test_leftover_directory_is_not_reused(self, svc):
+        service, config, tmp = svc
+        leftover = tmp / "ws" / "ephemeral" / "leftover"
+        leftover.mkdir(parents=True)
+        (leftover / "old.md").write_text("someone else's")
+
+        with pytest.raises(InvalidEphemeralKBNameError):
+            service.create_ephemeral_kb("leftover", ttl=3600)
+
+        assert config.get_kb("leftover") is None
+        assert (leftover / "old.md").read_text() == "someone else's"
+
+    def test_names_differing_only_by_case_never_share_a_directory(self, svc):
+        # On a case-insensitive filesystem (macOS, Windows defaults) the two
+        # names are one directory, so the second create must be refused. On a
+        # case-sensitive one they are distinct directories and both may exist.
+        service, config, tmp = svc
+        first = service.create_ephemeral_kb("Scratch", ttl=3600)
+        try:
+            second = service.create_ephemeral_kb("scratch", ttl=3600)
+        except InvalidEphemeralKBNameError:
+            return
+        assert not os.path.samefile(first.path, second.path)
+
+    def test_concurrent_creates_of_one_name_admit_exactly_one(self, svc, monkeypatch):
+        service, config, tmp = svc
+        name = "contested"
+        barrier = threading.Barrier(2, timeout=30)
+        real_get_kb = config.get_kb
+
+        def get_kb_then_wait(kb_name):
+            result = real_get_kb(kb_name)
+            if kb_name == name:
+                # Both creates pass the in-use checks before either proceeds.
+                barrier.wait()
+            return result
+
+        monkeypatch.setattr(config, "get_kb", get_kb_then_wait)
+        outcomes: list = []
+
+        def create():
+            # Each caller has its own DB handle, as two requests or two server
+            # processes would; the contested state is config and the disk.
+            db = PyriteDB(config.settings.index_path)
+            try:
+                outcomes.append(EphemeralKBService(config, db).create_ephemeral_kb(name, ttl=3600))
+            except Exception as e:
+                outcomes.append(e)
+            finally:
+                db.close()
+
+        threads = [threading.Thread(target=create) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=60)
+
+        won = [o for o in outcomes if isinstance(o, KBConfig)]
+        lost = [o for o in outcomes if not isinstance(o, KBConfig)]
+        assert len(won) == 1, outcomes
+        assert len(lost) == 1 and isinstance(lost[0], InvalidEphemeralKBNameError), outcomes
+        assert [k.name for k in config.knowledge_bases].count(name) == 1
