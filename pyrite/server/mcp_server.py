@@ -1483,7 +1483,7 @@ class PyriteMCPServer:
     def _kb_discover_neighbors(
         self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
     ) -> dict[str, Any]:
-        """Find semantically similar but unlinked entries across KBs."""
+        """Find related entries in all KBs, including the source KB, unless narrowed."""
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
         if not entry_id or not kb_name:

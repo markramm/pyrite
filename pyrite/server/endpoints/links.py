@@ -20,14 +20,18 @@ def discover_neighbors(
     request: Request,
     entry_id: str = Query(..., description="Entry to find neighbors for"),
     kb: str = Query(..., description="KB the entry belongs to"),
-    target_kb: str | None = Query(None, description="Limit candidates to this KB"),
+    target_kb: str | None = Query(
+        None, description="Limit candidates to this KB; omit to include the source KB and others"
+    ),
     limit: int = Query(10, ge=1, le=100),
     mode: str = Query("hybrid", description="Search mode: keyword, semantic, hybrid"),
     exclude_linked: bool = Query(True, description="Exclude entries already linked"),
     svc: LinkDiscoveryService = Depends(get_link_discovery_service),
     readable: set[str] | None = Depends(get_readable_kbs),
 ):
-    """Find semantically similar but unlinked entries across KBs.
+    """Find related entries across all KBs, including the source KB by default.
+
+    Excludes the source entry and, by default, already-linked entries.
 
     `requires_kb_read()` refuses any KB this call names that the caller may
     not read; `readable` keeps the *candidates* to readable KBs as well.

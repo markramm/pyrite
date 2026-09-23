@@ -662,7 +662,7 @@ READ_TOOLS = {
         },
     },
     "kb_discover_neighbors": {
-        "description": "Find entries in other KBs that are semantically similar to a source entry but not yet linked. Useful for cross-KB knowledge discovery and gap-finding.",
+        "description": "Find related entries across all KBs, including the source KB, unless target_kb limits the search. Excludes the source entry and, by default, already-linked entries.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -676,7 +676,7 @@ READ_TOOLS = {
                 },
                 "target_kb": {
                     "type": "string",
-                    "description": "KB to search in (omit to search all KBs)",
+                    "description": "Limit candidates to this KB (omit to search all KBs, including the source KB)",
                 },
                 "limit": {
                     "type": "integer",
