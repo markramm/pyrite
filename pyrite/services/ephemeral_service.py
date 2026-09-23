@@ -5,13 +5,24 @@ Lifecycle management for temporary knowledge bases with TTL.
 """
 
 import logging
+import re
 import shutil
 import time
+from pathlib import Path
 
 from ..config import KBConfig, PyriteConfig, save_config
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
+
+# An ephemeral KB's name becomes a directory under <workspace>/ephemeral/ and
+# is chosen by any write-role user, so it must be a plain name: no separators,
+# no dot segments, not absolute.
+_EPHEMERAL_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
+
+
+class InvalidEphemeralKBNameError(ValueError):
+    """The requested ephemeral KB name is unsafe or already in use."""
 
 
 class EphemeralKBService:
@@ -22,9 +33,21 @@ class EphemeralKBService:
         self.db = db
 
     def create_ephemeral_kb(self, name: str, ttl: int = 3600, description: str = "") -> KBConfig:
-        """Create an ephemeral KB with TTL."""
-        # Create temp directory for ephemeral KB
-        ephemeral_dir = self.config.settings.workspace_path / "ephemeral" / name
+        """Create an ephemeral KB with TTL.
+
+        Raises InvalidEphemeralKBNameError, before touching the disk, for a
+        name that is not a plain name or that another KB already uses.
+        """
+        if not isinstance(name, str) or not _EPHEMERAL_NAME_RE.fullmatch(name):
+            raise InvalidEphemeralKBNameError(
+                "Invalid ephemeral KB name: use 1-64 letters, digits, '-' or '_', "
+                "starting with a letter or digit"
+            )
+        if self.config.get_kb(name) is not None:
+            raise InvalidEphemeralKBNameError("That KB name is not available")
+        ephemeral_dir = self._root() / name
+        if not self._inside_root(ephemeral_dir):
+            raise InvalidEphemeralKBNameError("Invalid ephemeral KB name")
         ephemeral_dir.mkdir(parents=True, exist_ok=True)
 
         kb = KBConfig(
@@ -48,6 +71,33 @@ class EphemeralKBService:
         )
 
         return kb
+
+    def _root(self) -> Path:
+        return self.config.settings.workspace_path / "ephemeral"
+
+    def _inside_root(self, path: Path) -> bool:
+        """True when path resolves strictly inside the ephemeral root."""
+        root = self._root().resolve()
+        resolved = Path(path).resolve()
+        return resolved != root and resolved.is_relative_to(root)
+
+    def _remove_dir(self, kb: KBConfig) -> None:
+        """Delete an expired KB's directory -- only ever inside the ephemeral root.
+
+        A KB persisted to config before names were validated can point at any
+        directory (another KB's, say); expiring it must not delete that.
+        """
+        if not kb.path.exists():
+            return
+        if not self._inside_root(kb.path):
+            logger.warning(
+                "Ephemeral KB %r points outside %s; unregistering it without deleting %s",
+                kb.name,
+                self._root(),
+                kb.path,
+            )
+            return
+        shutil.rmtree(kb.path, ignore_errors=True)
 
     def list_ephemeral_kbs(self) -> list[dict]:
         """List all active ephemeral KBs with metadata."""
@@ -75,8 +125,7 @@ class EphemeralKBService:
         if not kb or not kb.ephemeral:
             return False
         self.db.unregister_kb(kb.name)
-        if kb.path.exists():
-            shutil.rmtree(kb.path, ignore_errors=True)
+        self._remove_dir(kb)
         self.config.remove_kb(kb.name)
         save_config(self.config)
         return True
@@ -92,9 +141,8 @@ class EphemeralKBService:
             if now - kb.created_at_ts > kb.ttl:
                 # Remove from index
                 self.db.unregister_kb(kb.name)
-                # Remove files
-                if kb.path.exists():
-                    shutil.rmtree(kb.path, ignore_errors=True)
+                # Remove files (never outside the ephemeral root)
+                self._remove_dir(kb)
                 # Remove from config
                 self.config.remove_kb(kb.name)
                 removed.append(kb.name)

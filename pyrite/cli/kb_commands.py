@@ -394,10 +394,18 @@ def kb_create(
     """Create a new knowledge base."""
     with cli_registry_context() as (config, db, svc, registry):
         if ephemeral:
-            from ..services.ephemeral_service import EphemeralKBService
+            from ..services.ephemeral_service import (
+                EphemeralKBService,
+                InvalidEphemeralKBNameError,
+            )
 
             eph_svc = EphemeralKBService(config, db)
-            kb = eph_svc.create_ephemeral_kb(name, ttl=ttl, description=description)
+            try:
+                kb = eph_svc.create_ephemeral_kb(name, ttl=ttl, description=description)
+            except InvalidEphemeralKBNameError as e:
+                from ..utils.errors import cli_error
+
+                cli_error(str(e), error_code="VALIDATION_FAILED")
             console.print(f"[green]Created ephemeral KB:[/green] {name} (TTL: {ttl}s) at {kb.path}")
             return
 
