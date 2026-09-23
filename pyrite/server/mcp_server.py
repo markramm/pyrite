@@ -195,7 +195,6 @@ READABLE_KBS_KWARG = "readable_kbs"
 # inventory with a reason apiece.
 NON_KB_CONTENT_TOOLS = frozenset(
     {
-        "kb_stats",  # index-wide counts, as REST's /api/stats
         "kb_index_job_status",  # background job state, keyed by job id
         "kb_registry_remove",  # admin: registration, not content
         "kb_registry_reindex",
@@ -665,10 +664,15 @@ class PyriteMCPServer:
             "tags": tags,
         }
 
-    def _kb_stats(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get index statistics."""
-        stats = self.index_mgr.get_index_stats()
-        return stats
+    def _kb_stats(
+        self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
+    ) -> dict[str, Any]:
+        """Get index statistics over the KBs the caller may read.
+
+        As REST's /api/stats: the per-KB map and every total are computed
+        from the readable set; `None` (unscoped) is the whole index.
+        """
+        return self.index_mgr.get_index_stats(kb_names=readable_kbs)
 
     def _kb_schema(self, args: dict[str, Any]) -> dict[str, Any]:
         """Get KB schema for agent discoverability."""

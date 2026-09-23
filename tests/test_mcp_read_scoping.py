@@ -240,6 +240,18 @@ class TestPeerCannotReachPrivateKBOverMCP:
         assert {e["id"] for e in out["events"]} == {"public-event"}
         assert out["count"] == len(out["events"])
 
+    def test_kb_stats_counts_only_readable_kbs(self, env):
+        # Index-wide before: the private KB's name, row and rows in every total.
+        out = _call(env, "peer", "kb_stats", {})
+        assert set(out["kbs"]) == {PUBLIC}
+        assert out["total_entries"] == 2
+        assert out["total_tags"] == 1
+        assert {t["entry_type"]: t["count"] for t in out["type_counts"]} == {
+            "note": 1,
+            "event": 1,
+        }
+        assert PRIVATE not in json.dumps(out)
+
     def test_kb_tags_does_not_leak_private_tag_names(self, env):
         out = _call(env, "peer", "kb_tags", {})
         tags = {t["tag"] for t in out["tags"]}
@@ -342,6 +354,11 @@ class TestGrantedPeerStillGetsThrough:
     def test_kb_get_succeeds(self, env):
         out = _call(env, "peer-granted", "kb_get", {"entry_id": "secret-note", "kb_name": PRIVATE})
         assert out["entry"]["body"] == "zebra behind the wall"
+
+    def test_kb_stats_includes_the_private_kb(self, env):
+        out = _call(env, "peer-granted", "kb_stats", {})
+        assert set(out["kbs"]) == {PUBLIC, PRIVATE}
+        assert out["total_entries"] == 5
 
     def test_kb_list_includes_the_private_kb(self, env):
         out = _call(env, "peer-granted", "kb_list")

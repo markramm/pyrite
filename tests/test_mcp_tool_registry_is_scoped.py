@@ -85,12 +85,13 @@ CROSS_KB_TOOLS: dict[str, str] = {
         "dropped into the existing not_found list -- an *error* would itself "
         "reveal that the KB exists."
     ),
-    # -- serves no KB content ----------------------------------------------
     "kb_stats": (
-        "serves no KB content: index-wide counts. Unscoped, matching REST's "
-        "/api/stats, which test_read_scoping_is_structural.py allowlists as "
-        "'part 2: admin.py -- index-wide counts, no per-KB scoping today'."
+        "filters. Spans every KB: per-KB rows and totals (entries, tags, "
+        "links, type counts), via IndexManager.get_index_stats(kb_names=...) "
+        "-- the same scoping as REST's /api/stats, so a private KB adds "
+        "neither its name nor its rows."
     ),
+    # -- serves no KB content ----------------------------------------------
     "kb_index_job_status": "serves no KB content: background index job state, keyed by job id.",
     "kb_registry_add": "serves no KB content: admin-tier KB registration.",
     "kb_registry_remove": "serves no KB content: admin-tier KB registration.",
