@@ -303,6 +303,66 @@ class TestPathTraversalPrevention:
 
         assert (target / "cascade_event" / "widget-1.md").exists()
 
+    def test_colliding_ids_produce_two_files(self, export_svc, mock_config, mock_db, tmp_path):
+        """Two distinct raw ids that sanitize to the same filename ("a/b" and
+        "a_b" both -> note/a_b.md) must not let one entry's export silently
+        overwrite the other's (#221 redispatch cold read)."""
+        kb_cfg = MagicMock()
+        kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
+        kb_cfg.kb_yaml_path.write_text("name: test")
+        mock_config.get_kb.return_value = kb_cfg
+
+        mock_db.list_entries.return_value = [
+            {"id": "a/b", "entry_type": "note", "title": "One", "body": "one content", "tags": []},
+            {"id": "a_b", "entry_type": "note", "title": "Two", "body": "two content", "tags": []},
+        ]
+
+        target = tmp_path / "export"
+        result = export_svc.export_kb_to_directory("test", target)
+
+        assert result["entries_exported"] == 2
+        written = list((target / "note").glob("*.md"))
+        assert len(written) == 2
+        all_content = "\n".join(p.read_text() for p in written)
+        assert "one content" in all_content
+        assert "two content" in all_content
+
+    def test_colliding_types_produce_two_dirs(self, export_svc, mock_config, mock_db, tmp_path):
+        """Two distinct raw types that sanitize to the same directory
+        ("note" and "note_" both -> note/) must not let one type's export
+        silently overwrite the other's (#221 redispatch cold read)."""
+        kb_cfg = MagicMock()
+        kb_cfg.kb_yaml_path = tmp_path / "kb.yaml"
+        kb_cfg.kb_yaml_path.write_text("name: test")
+        mock_config.get_kb.return_value = kb_cfg
+
+        mock_db.list_entries.return_value = [
+            {
+                "id": "real-note",
+                "entry_type": "note",
+                "title": "Real",
+                "body": "real content",
+                "tags": [],
+            },
+            {
+                "id": "evil-entry",
+                "entry_type": "note_",
+                "title": "Evil",
+                "body": "EVIL",
+                "tags": [],
+            },
+        ]
+
+        target = tmp_path / "export"
+        result = export_svc.export_kb_to_directory("test", target)
+
+        assert result["entries_exported"] == 2
+        written = list(target.rglob("*.md"))
+        assert len(written) == 2
+        all_content = "\n".join(p.read_text() for p in written)
+        assert "real content" in all_content
+        assert "EVIL" in all_content
+
     def test_frontmatter_type_keeps_raw_value_when_type_is_malicious(
         self, export_svc, mock_config, mock_db, tmp_path
     ):

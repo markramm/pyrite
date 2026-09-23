@@ -371,6 +371,26 @@ class TestExportSite:
         written = list(out.rglob("*.md"))
         assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
 
+    def test_entry_id_index_is_not_overwritten_by_folder_index(self, tmp_path):
+        """An entry whose id is literally "index" would sanitize to the same
+        note/index.md path _write_folder_index() writes -- the folder index
+        must not silently overwrite that entry's content, and the folder
+        index itself must still be a folder index (#221 redispatch,
+        pre-existing in the same function)."""
+        entry = NoteEntry(id="index", title="An Entry Named Index", body="entry content")
+
+        out = tmp_path / "site"
+        export_site([entry], out)
+
+        written = list((out / "note").glob("*.md"))
+        all_content = "\n".join(p.read_text() for p in written)
+        assert "entry content" in all_content
+
+        # The folder index at note/index.md must remain a folder index
+        # (listing entries), not have been overwritten by the entry.
+        folder_index = (out / "note" / "index.md").read_text()
+        assert "This section contains" in folder_index
+
     def test_index_links_each_section_to_the_folder_actually_written(self, tmp_path):
         """The site index linked the RAW entry_type, so an unsafe type's
         section link pointed at a folder that was never written (and put the
@@ -413,6 +433,70 @@ class TestExportSite:
         written = list(out.rglob("*.md"))
         assert len(written) >= 1
         assert all(p.resolve().is_relative_to(out.resolve()) for p in written)
+
+    def test_colliding_ids_produce_two_files(self, tmp_path):
+        """Two distinct raw ids that sanitize to the same filename ("a/b" and
+        "a_b" both -> note/a_b.md) must not let one overwrite the other
+        (#221 redispatch cold read)."""
+        one = NoteEntry(id="a/b", title="One", body="one content")
+        two = NoteEntry(id="a_b", title="Two", body="two content")
+
+        out = tmp_path / "site"
+        result = export_site([one, two], out)
+
+        assert result["entries_exported"] == 2
+        written = [p for p in (out / "note").glob("*.md") if p.name != "index.md"]
+        assert len(written) == 2
+        all_content = "\n".join(p.read_text() for p in written)
+        assert "one content" in all_content
+        assert "two content" in all_content
+
+    def test_colliding_types_produce_two_folders_and_two_indexes(self, tmp_path):
+        """Two distinct raw types that sanitize to the same folder name
+        ("note" and "note_" both -> note/) must not let one's folder index
+        overwrite the other's -- both entries must be findable and both
+        folder indexes must exist (#221 redispatch cold read)."""
+        from pyrite.models.generic import GenericEntry
+
+        real = NoteEntry(id="real-note", title="Real Note", body="real content")
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": "note_"},
+            body="EVIL",
+        )
+
+        out = tmp_path / "site"
+        result = export_site([real, evil], out)
+
+        assert result["entries_exported"] == 2
+        note_dirs = [d for d in out.iterdir() if d.is_dir() and d.name.startswith("note")]
+        assert len(note_dirs) == 2, [d.name for d in note_dirs]
+
+        all_index_content = "\n".join((d / "index.md").read_text() for d in note_dirs)
+        assert "real-note" in all_index_content
+        assert "evil-entry" in all_index_content
+
+        all_entry_files = [p for d in note_dirs for p in d.glob("*.md") if p.name != "index.md"]
+        assert len(all_entry_files) == 2
+
+    def test_site_index_links_each_output_folder_once(self, tmp_path):
+        """Two colliding types produce two output folders; the site index
+        must link both, once each -- not merge them into one link."""
+        from pyrite.models.generic import GenericEntry
+
+        real = NoteEntry(id="real-note", title="Real Note", body="real content")
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": "note_"},
+            body="EVIL",
+        )
+
+        out = tmp_path / "site"
+        export_site([real, evil], out)
+
+        index = (out / "index.md").read_text(encoding="utf-8")
+        note_dirs = [d for d in out.iterdir() if d.is_dir() and d.name.startswith("note")]
+        assert len(note_dirs) == 2
+        for d in note_dirs:
+            assert index.count(f"]({d.name}/)") == 1, index
 
 
 # ---------------------------------------------------------------------------

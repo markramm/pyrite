@@ -13,8 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from ..models.base import Entry
-from ..utils.sanitize import sanitize_filename
+from ..utils.sanitize import unique_path_component
 from ..utils.yaml import dump_yaml
+
+# Reserved by _write_folder_index() -- an entry whose sanitized id is exactly
+# this would otherwise collide with the folder's own index.md (#221
+# redispatch: pre-existing in this function, same shape as the entry_type/id
+# collisions this theme fixes).
+_RESERVED_INDEX_ID = "index"
 
 # Frontmatter fields to carry through to Quartz (from to_frontmatter output)
 _QUARTZ_FIELDS = frozenset(
@@ -166,34 +172,59 @@ def export_site(
             continue
         filtered.append(entry)
 
-    # Group by entry type for folder structure
+    # Group by entry type for folder structure. entry_type is a stored,
+    # caller-controlled value (unknown types pass through verbatim for
+    # GenericEntry/plugin support). Two distinct raw types can sanitize to
+    # the same OUTPUT folder (e.g. "note" and "note_" both -> note/) -- group
+    # by that output folder name (not the raw type) so both types' entries
+    # land together instead of one type's folder write and folder index
+    # silently overwriting the other's (#221 redispatch cold read).
+    folders: dict[str, list[tuple[str, list[Entry]]]] = {}
     by_type: dict[str, list[Entry]] = {}
     for entry in filtered:
         by_type.setdefault(entry.entry_type, []).append(entry)
+    for entry_type, type_entries in by_type.items():
+        folder_name = unique_path_component(entry_type)
+        folders.setdefault(folder_name, []).append((entry_type, type_entries))
 
     files_created = 0
 
-    # Write entries organized by type subdirectory. entry_type and entry.id
-    # are stored, caller-controlled values (unknown types pass through
-    # verbatim; ids indexed from git frontmatter are not slugified) --
-    # sanitize both where they become path components so an absolute or
-    # `..`-bearing value cannot write outside output_dir (#221).
-    for entry_type, type_entries in sorted(by_type.items()):
-        type_dir = output_dir / sanitize_filename(entry_type)
+    for folder_name, type_groups in sorted(folders.items()):
+        type_dir = output_dir / folder_name
         type_dir.mkdir(parents=True, exist_ok=True)
 
-        for entry in type_entries:
+        all_entries_in_folder: list[Entry] = []
+        for _entry_type, type_entries in type_groups:
+            all_entries_in_folder.extend(type_entries)
+
+        # entry.id is a stored, caller-controlled value (ids indexed from git
+        # frontmatter are not slugified). unique_path_component (not
+        # sanitize_filename directly) so distinct ids that sanitize alike
+        # (e.g. "a/b" and "a_b") get distinct filenames instead of one
+        # silently overwriting the other (#221 redispatch), and an entry
+        # whose id is literally "index" does not collide with this folder's
+        # own index.md.
+        for entry in all_entries_in_folder:
             content = render_entry(entry)
-            file_path = type_dir / f"{sanitize_filename(entry.id)}.md"
+            component = unique_path_component(entry.id)
+            if component == _RESERVED_INDEX_ID:
+                # An id that sanitizes to exactly "index" would otherwise
+                # collide with this folder's own index.md -- force the
+                # hash-suffixed form by feeding unique_path_component a
+                # raw value it must change.
+                component = unique_path_component(f"{entry.id}/")
+            file_path = type_dir / f"{component}.md"
             file_path.write_text(content, encoding="utf-8")
             files_created += 1
 
-        # Generate folder index
-        _write_folder_index(type_dir, entry_type, type_entries)
+        # One folder index per OUTPUT folder, listing every entry that
+        # landed in it regardless of which raw type it came from.
+        display_type = type_groups[0][0] if len(type_groups) == 1 else folder_name
+        _write_folder_index(type_dir, display_type, all_entries_in_folder)
         files_created += 1
 
-    # Generate landing page
-    _write_landing_page(output_dir, kb_name, kb_description, by_type)
+    # Generate landing page -- one link per output folder.
+    _write_landing_page(output_dir, kb_name, kb_description, folders)
     files_created += 1
 
     return {
@@ -233,11 +264,11 @@ def _write_landing_page(
     output_dir: Path,
     kb_name: str,
     kb_description: str,
-    by_type: dict[str, list[Entry]],
+    folders: dict[str, list[tuple[str, list[Entry]]]],
 ) -> None:
-    """Write the root index.md landing page."""
+    """Write the root index.md landing page, one link per output folder."""
     title = kb_name or "Knowledge Base"
-    total = sum(len(v) for v in by_type.values())
+    total = sum(len(entries) for groups in folders.values() for _t, entries in groups)
 
     lines = [
         "---",
@@ -253,15 +284,17 @@ def _write_landing_page(
         lines.append("")
 
     lines.append(
-        f"This knowledge base contains **{total}** entries across **{len(by_type)}** categories."
+        f"This knowledge base contains **{total}** entries across **{len(folders)}** categories."
     )
     lines.append("")
 
-    # Section links
-    for entry_type in sorted(by_type.keys()):
-        display = entry_type.replace("_", " ").title()
-        count = len(by_type[entry_type])
-        lines.append(f"- **[{display}]({sanitize_filename(entry_type)}/)** — {count} entries")
+    # Section links -- one per output folder.
+    for folder_name in sorted(folders.keys()):
+        type_groups = folders[folder_name]
+        display_type = type_groups[0][0] if len(type_groups) == 1 else folder_name
+        display = display_type.replace("_", " ").title()
+        count = sum(len(entries) for _t, entries in type_groups)
+        lines.append(f"- **[{display}]({folder_name}/)** — {count} entries")
 
     lines.append("")
     (output_dir / "index.md").write_text("\n".join(lines), encoding="utf-8")

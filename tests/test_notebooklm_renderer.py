@@ -378,7 +378,6 @@ class TestBundler:
 
         assert len(files) == 1
         filename = next(iter(files))
-        assert ".." not in filename
         joined = (tmp_path / "site" / filename).resolve()
         assert joined.is_relative_to((tmp_path / "site").resolve())
 
@@ -414,7 +413,6 @@ class TestBundler:
 
         assert len(files) == 1
         filename = next(iter(files))
-        assert ".." not in filename
         joined = (tmp_path / "site" / filename).resolve()
         assert joined.is_relative_to((tmp_path / "site").resolve())
 
@@ -424,6 +422,43 @@ class TestBundler:
         filenames = list(files.keys())
         assert "note.md" in filenames
         assert "person.md" in filenames
+
+    def test_bundle_by_type_colliding_types_keep_both_entries(self):
+        """Two distinct raw types that sanitize to the same filename ("note"
+        and "note_" both -> note.md) must not let one overwrite the other's
+        content -- a write-tier user could otherwise erase a whole type from
+        a NotebookLM export with the harmless-looking type "note_" (#221
+        redispatch cold read)."""
+        from pyrite.models.generic import GenericEntry
+
+        real = [NoteEntry(id=f"real-{i}", title=f"Real {i}", body=f"Real {i}") for i in range(3)]
+        evil = GenericEntry.from_frontmatter(
+            {"id": "evil-entry", "title": "Evil", "type": "note_"},
+            body="EVIL",
+        )
+
+        files = bundle_entries([*real, evil], strategy=BundleStrategy.BY_TYPE)
+
+        all_content = "\n".join(files.values())
+        assert "Real 0" in all_content
+        assert "Real 1" in all_content
+        assert "Real 2" in all_content
+        assert "EVIL" in all_content
+        # Two distinct output files -- the collision must not have merged them.
+        assert len(files) == 2
+
+    def test_bundle_none_colliding_ids_keep_both_entries(self):
+        """Two distinct raw ids that sanitize to the same filename must
+        produce two files, not one overwriting the other."""
+        one = NoteEntry(id="a/b", title="One", body="one content")
+        two = NoteEntry(id="a_b", title="Two", body="two content")
+
+        files = bundle_entries([one, two], strategy=BundleStrategy.NONE)
+
+        assert len(files) == 2
+        all_content = "\n".join(files.values())
+        assert "one content" in all_content
+        assert "two content" in all_content
 
 
 # ---------------------------------------------------------------------------

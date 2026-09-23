@@ -12,7 +12,7 @@ from pathlib import Path
 from ..config import PyriteConfig
 from ..exceptions import KBNotFoundError, PyriteError
 from ..storage.database import PyriteDB
-from ..utils.sanitize import sanitize_filename
+from ..utils.sanitize import sanitize_filename, unique_path_component
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,11 @@ class ExportService:
 
             content = "\n".join(fm_lines) + (body or "")
 
-            file_path = type_dir / f"{sanitize_filename(entry_id)}.md"
+            # unique_path_component (not sanitize_filename directly) so
+            # distinct ids that sanitize alike (e.g. "a/b" and "a_b") get
+            # distinct filenames instead of one silently overwriting the
+            # other (#221 redispatch cold read).
+            file_path = type_dir / f"{unique_path_component(entry_id)}.md"
             file_path.write_text(content, encoding="utf-8")
             files_created += 1
 

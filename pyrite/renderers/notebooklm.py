@@ -12,7 +12,7 @@ from typing import Any
 
 from ..models.base import Entry
 from ..schema import Source
-from ..utils.sanitize import sanitize_filename
+from ..utils.sanitize import unique_path_component
 
 
 class SourceMode(Enum):
@@ -194,10 +194,13 @@ def _bundle_none(entries: list[Entry], source_mode: SourceMode) -> dict[str, str
     """One file per entry."""
     # entry.id is a stored, caller-controlled value (ids indexed from git
     # frontmatter are not slugified) -- sanitize it before it becomes a
-    # filename the caller joins onto output_dir (#221).
+    # filename the caller joins onto output_dir (#221). unique_path_component
+    # (not sanitize_filename directly) so distinct ids that sanitize alike
+    # (e.g. "a/b" and "a_b") get distinct filenames instead of one silently
+    # overwriting the other (#221 redispatch).
     files: dict[str, str] = {}
     for entry in entries:
-        filename = f"{sanitize_filename(entry.id)}.md"
+        filename = f"{unique_path_component(entry.id)}.md"
         files[filename] = render_entry(entry, source_mode=source_mode)
     return files
 
@@ -207,6 +210,11 @@ def _bundle_by_type(entries: list[Entry], source_mode: SourceMode) -> dict[str, 
     # entry_type is a stored, caller-controlled value (unknown types pass
     # through verbatim for GenericEntry/plugin support) -- sanitize it
     # before it becomes a filename the caller joins onto output_dir (#221).
+    # Grouping keys on the raw entry_type (never the sanitized form) so that
+    # distinct raw types (e.g. "note" and "note_") are never merged into one
+    # group -- only the output filename is deduplicated via
+    # unique_path_component (#221 redispatch: a write-tier user could erase
+    # a whole type's export output with a type like "note_").
     groups: dict[str, list[Entry]] = defaultdict(list)
     for entry in entries:
         groups[entry.entry_type].append(entry)
@@ -218,7 +226,7 @@ def _bundle_by_type(entries: list[Entry], source_mode: SourceMode) -> dict[str, 
             parts.append(render_entry(entry, source_mode=source_mode))
             parts.append("---")
             parts.append("")
-        filename = f"{sanitize_filename(entry_type)}.md"
+        filename = f"{unique_path_component(entry_type)}.md"
         files[filename] = "\n".join(parts).rstrip() + "\n"
     return files
 
