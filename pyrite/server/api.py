@@ -691,12 +691,54 @@ async def resolve_effective_kb_role(
     if not kb_name:
         return role
 
-    kb_default_role = resolve_kb_default_role(config, db, kb_name)
+    return effective_kb_role_for_user(config, db, auth_user["id"], kb_name)
+
+
+def effective_kb_role_for_user(
+    config: PyriteConfig, db: PyriteDB, user_id: int | None, kb_name: str, auth_service=None
+) -> str | None:
+    """The per-KB role rule, framework-free: grant → KB default_role → global role.
+
+    The one implementation. `resolve_effective_kb_role` (REST's per-KB tier
+    check), `kbs_for_user_at_tier` (the readable and writable sets MCP and
+    `/ws` resolve per connection) all call it. `user_id=None` is the anonymous
+    visitor on an auth-enabled instance.
+    """
+    if auth_service is None:
+        from ..services.auth_service import AuthService
+
+        auth_service = AuthService(db, config.settings.auth)
+    default_role = resolve_kb_default_role(config, db, kb_name)
+    return auth_service.get_kb_role(user_id, kb_name, default_role)
+
+
+def kbs_for_user_at_tier(
+    config: PyriteConfig,
+    db: PyriteDB,
+    user_id: int | None,
+    role: str | None,
+    tier: str,
+    *,
+    scoped: bool = True,
+) -> set[str] | None:
+    """The KBs where the caller's effective role is at least `tier`, or None
+    when the caller is not scoped (a global admin, an operator API key, auth
+    disabled). See `readable_kbs_for_user` for the scoping rules; this is the
+    same walk at any tier, so the read and write sets cannot drift apart.
+    """
+    if role == "admin" or not scoped:
+        return None
 
     from ..services.auth_service import AuthService
 
     auth_service = AuthService(db, config.settings.auth)
-    return auth_service.get_kb_role(auth_user["id"], kb_name, kb_default_role)
+    wanted = TIER_LEVELS[tier]
+    result: set[str] = set()
+    for kb in config.all_kbs():
+        effective = effective_kb_role_for_user(config, db, user_id, kb.name, auth_service)
+        if effective is not None and TIER_LEVELS.get(effective, -1) >= wanted:
+            result.add(kb.name)
+    return result
 
 
 def readable_kbs_for_user(
@@ -727,19 +769,7 @@ def readable_kbs_for_user(
     `user_id=None` with `scoped=True` is the anonymous visitor on an
     auth-enabled instance: the same walk with no grants.
     """
-    if role == "admin" or not scoped:
-        return None
-
-    from ..services.auth_service import AuthService
-
-    auth_service = AuthService(db, config.settings.auth)
-    result: set[str] = set()
-    for kb in config.all_kbs():
-        default_role = resolve_kb_default_role(config, db, kb.name)
-        effective = auth_service.get_kb_role(user_id, kb.name, default_role)
-        if effective is not None and TIER_LEVELS.get(effective, -1) >= TIER_LEVELS["read"]:
-            result.add(kb.name)
-    return result
+    return kbs_for_user_at_tier(config, db, user_id, role, "read", scoped=scoped)
 
 
 async def readable_kbs(request: Request, config: PyriteConfig, db: PyriteDB) -> set[str] | None:

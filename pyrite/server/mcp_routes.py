@@ -33,9 +33,10 @@ def _resolve_bearer_auth(
 ) -> dict[str, Any]:
     """Validate Bearer token, X-API-Key header, or session cookie.
 
-    Returns a dict with keys: role, username, user_id (optional), and
-    `readable_kbs` -- the KBs this caller may read, or None when the caller
-    is not scoped.
+    Returns a dict with keys: role, username, user_id (optional),
+    `readable_kbs` -- the KBs this caller may read -- and `writable_kbs` --
+    the KBs a write-tier tool may target; each None when the caller is not
+    scoped.
 
     The readable set comes from `api.readable_kbs_for_user`, the same helper
     the REST routes resolve through, so a grant honoured over REST is
@@ -51,14 +52,16 @@ def _resolve_bearer_auth(
     `anonymous_tier`.
     """
     ctx = _resolve_credential(request, config, db)
-    from .api import readable_kbs_for_user
+    from .api import kbs_for_user_at_tier, readable_kbs_for_user
 
+    scoped = ctx.get("user_id") is not None
     ctx["readable_kbs"] = readable_kbs_for_user(
-        config,
-        db,
-        ctx.get("user_id"),
-        ctx["role"],
-        scoped=ctx.get("user_id") is not None,
+        config, db, ctx.get("user_id"), ctx["role"], scoped=scoped
+    )
+    # The KBs a write-tier tool may target: the same per-KB rule REST's
+    # `requires_kb_tier("write")` applies, resolved once per connection.
+    ctx["writable_kbs"] = kbs_for_user_at_tier(
+        config, db, ctx.get("user_id"), ctx["role"], "write", scoped=scoped
     )
     return ctx
 
@@ -221,6 +224,7 @@ def mount_mcp_routes(
         client_id = user_ctx["username"]
         tier = role if role in ("read", "write", "admin") else "read"
         readable = user_ctx["readable_kbs"]
+        writable = user_ctx["writable_kbs"]
 
         logger.info(
             "MCP SSE connection: user=%s tier=%s scoped=%s",
@@ -235,7 +239,9 @@ def mount_mcp_routes(
         # for client_id. Two callers at one tier share this instance and
         # still get correctly different answers (#201).
         mcp_server = _get_mcp_server(tier)
-        sdk = mcp_server.build_sdk_server(client_id=client_id, readable_kbs=readable)
+        sdk = mcp_server.build_sdk_server(
+            client_id=client_id, readable_kbs=readable, writable_kbs=writable
+        )
 
         async with sse_transport.connect_sse(request.scope, request.receive, request._send) as (
             read_stream,
