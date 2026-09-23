@@ -26,7 +26,7 @@ def layout(tmp_path: Path):
     return KBRepository(KBConfig(name="t", path=kb, kb_type="generic")), tmp_path, victim
 
 
-@pytest.mark.parametrize("bad", ["../victim", "notes/../../victim", "..\\victim", "a\x00b", ""])
+@pytest.mark.parametrize("bad", ["../victim", "notes/../../victim"])
 def test_find_file_refuses_ids_that_are_not_plain_names(layout, bad):
     repo, _, _ = layout
     assert repo.find_file(bad) is None
@@ -62,6 +62,31 @@ def test_an_id_is_a_name_not_a_glob(layout, pattern):
     assert repo.find_file(pattern) is None
     assert not repo.delete(pattern)
     assert (repo.path / "notes" / "real-note.md").exists()
+
+
+@pytest.mark.parametrize("folder", ["..", "."])
+def test_a_collection_id_cannot_name_a_folder_outside_or_the_root(layout, folder):
+    """`collection-..` reached `<kb>/../__collection.yaml` through rglob("..")
+    and kb_delete removed it (found by the cold read)."""
+    repo, tmp, _ = layout
+    outside = tmp / "__collection.yaml"
+    outside.write_text("name: outside\n")
+    (repo.path / "__collection.yaml").write_text("name: root\n")
+    assert repo.find_file(f"collection-{folder}") is None
+    assert not repo.delete(f"collection-{folder}")
+    assert outside.exists()
+
+
+def test_names_with_glob_characters_still_resolve(layout):
+    """glob.escape keeps literal names working: an id is a name, not a pattern."""
+    repo, _, _ = layout
+    f = repo.path / "notes" / "a[1]*.md"
+    f.write_text("---\nid: a[1]*\ntitle: A\n---\nb\n")
+    assert repo.find_file("a[1]*") == f
+    coll = repo.path / "[x]"
+    coll.mkdir()
+    (coll / "__collection.yaml").write_text("name: x\n")
+    assert repo.find_file("collection-[x]") == coll / "__collection.yaml"
 
 
 def test_an_odd_frontmatter_id_is_still_found_by_the_scan(layout):

@@ -7,6 +7,7 @@ Each KB is a directory of markdown files with YAML frontmatter.
 
 import glob
 import logging
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -263,6 +264,18 @@ class KBRepository:
         """Check if an entry exists."""
         return self.find_file(entry_id) is not None
 
+    def _lexically_inside(self, path: Path) -> bool:
+        """``path`` stays under the KB root once ``..`` is collapsed.
+
+        Lexical, not ``resolve()``: it refuses ``<kb>/../x`` (a ``collection-..``
+        lookup reached one level up through ``rglob("..")``) without changing
+        how symlinks placed inside a KB behave -- that question belongs to the
+        multi-user security review, not to this fix.
+        """
+        root = os.path.normpath(os.path.abspath(self.path))
+        target = os.path.normpath(os.path.abspath(path))
+        return target == root or target.startswith(root + os.sep)
+
     def _find_by_filename(self, entry_id: str) -> Path | None:
         """Filename-based lookups; ``entry_id`` must already be a plain stem."""
         # Check root by filename
@@ -281,6 +294,8 @@ class KBRepository:
         # Check for collection entries (collection-<folder_name>)
         if entry_id.startswith("collection-"):
             folder_name = entry_id[len("collection-") :]
+            if folder_name in ("", ".", ".."):
+                return None
             for subdir in self.path.rglob(glob.escape(folder_name)):
                 if subdir.is_dir():
                     yaml_path = subdir / "__collection.yaml"
@@ -311,7 +326,7 @@ class KBRepository:
 
         if plain:
             found = self._find_by_filename(entry_id)
-            if found is not None:
+            if found is not None and self._lexically_inside(found):
                 return found
 
         # Fallback: scan frontmatter IDs (handles filename != entry ID)
