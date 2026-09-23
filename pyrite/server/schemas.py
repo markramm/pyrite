@@ -624,9 +624,14 @@ class VersionListResponse(BaseModel):
 
 
 class SettingsResponse(BaseModel):
-    """Response for all settings."""
+    """Response for all settings.
+
+    ``masked`` names the secret settings that are set; their value in
+    ``settings`` is a fixed mask, never the secret itself.
+    """
 
     settings: dict[str, str]
+    masked: list[str] = []
 
 
 class SettingResponse(BaseModel):

@@ -357,7 +357,10 @@ export interface DailyDatesResponse {
 // Settings
 
 export interface SettingsResponse {
+	/** Secret settings (e.g. ai.apiKey) carry a fixed mask here, never their value. */
 	settings: Record<string, string>;
+	/** Keys whose value in `settings` is the mask: set on the server, not readable. */
+	masked?: string[];
 }
 
 export interface SettingResponse {

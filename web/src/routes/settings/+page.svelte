@@ -265,7 +265,11 @@
 								>API Key</label
 							>
 							<p class="text-xs text-zinc-500">
-								{aiProvider === 'ollama' ? 'Not required for local Ollama' : 'Authentication key for the provider'}
+								{aiProvider === 'ollama'
+									? 'Not required for local Ollama'
+									: aiApiKey
+										? 'Set on the server (hidden). Type a new key to replace it.'
+										: 'Authentication key for the provider'}
 							</p>
 						</div>
 						<input
