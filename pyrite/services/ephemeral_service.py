@@ -150,16 +150,13 @@ class EphemeralKBService:
     def _remove(self, kb: KBConfig) -> None:
         """Remove an ephemeral KB: its index rows, its grants, its files, its config.
 
-        The per-KB grants go too. `AuthService.create_user_ephemeral_kb`
-        records an admin grant for the creator, and a grant left behind is
-        inherited by the next KB registered under the same name. Does not
-        save the config; callers do, once.
+        `unregister_kb` deletes the per-KB grants with the KB, including the
+        admin grant `AuthService.create_user_ephemeral_kb` records for the
+        creator. Does not save the config; callers do, once.
         """
-        from .auth_service import AuthService
-
         self.db.unregister_kb(kb.name)
-        AuthService(self.db, self.config.settings.auth).revoke_all_kb_permissions(kb.name)
-        # Never outside the ephemeral root (see _remove_dir).
+        # Grants go with the KB inside db.unregister_kb; the directory is
+        # never deleted outside the ephemeral root (see _remove_dir).
         self._remove_dir(kb)
         self.config.remove_kb(kb.name)
 

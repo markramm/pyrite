@@ -135,11 +135,21 @@ class KBOpsMixin:
         return True
 
     def unregister_kb(self, name: str) -> None:
-        """Remove a KB and all its entries from the index."""
+        """Remove a KB, all its entries, and every per-KB grant on it.
+
+        The one place a KB is deleted -- registry removal (REST, MCP, CLI),
+        repo unsubscribe and ephemeral expiry all come through here -- so the
+        grants go here too. A `kb_permission` row outliving its KB is
+        inherited by the next KB registered under the same name. Deleted
+        even when the KB row is already gone, and in the same transaction.
+        """
         kb = self.session.get(KB, name)
         if kb:
             self.session.delete(kb)
-            self.session.commit()
+        self.session.execute(
+            text("DELETE FROM kb_permission WHERE kb_name = :kb_name"), {"kb_name": name}
+        )
+        self.session.commit()
 
     def get_kb_stats(self, name: str) -> dict[str, Any] | None:
         """Get statistics for a KB."""

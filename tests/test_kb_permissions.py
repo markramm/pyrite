@@ -244,3 +244,56 @@ class TestEphemeralKBRemovalDropsGrants:
         auth, db, eph_svc, name = self._make(setup)
         assert eph_svc.gc_ephemeral_kbs() == []
         assert len(self._grant_rows(db, name)) == 2
+
+
+class TestAnyKBRemovalDropsGrants:
+    """Every way a KB is deleted takes its per-KB grants with it, not only
+    ephemeral expiry: a grant outliving its KB is inherited by the next KB
+    registered under the same name."""
+
+    def _grants(self, db, name):
+        return db.execute_sql("SELECT user_id FROM kb_permission WHERE kb_name = :kb", {"kb": name})
+
+    def test_registry_remove_deletes_the_grants(self, setup, tmpdir):
+        """The path behind DELETE /api/kbs/{name}, MCP kb_registry_remove and
+        `pyrite kb remove`."""
+        auth, db, config, admin, user = setup
+        from pyrite.services.kb_registry_service import KBRegistryService
+        from pyrite.storage.index import IndexManager
+
+        (tmpdir / "user-kb").mkdir()
+        registry = KBRegistryService(config, db, IndexManager(db, config))
+        registry.add_kb("user-kb", str(tmpdir / "user-kb"))
+        auth.grant_kb_permission(user["id"], "user-kb", "admin", admin["id"])
+
+        registry.remove_kb("user-kb")
+
+        assert self._grants(db, "user-kb") == []
+        assert auth.get_kb_role(user["id"], "user-kb", "none") is None
+
+    def test_repo_unsubscribe_deletes_the_grants_of_its_kbs(self, setup, tmpdir):
+        auth, db, config, admin, user = setup
+        from unittest.mock import patch
+
+        from pyrite.services.repo_service import RepoService
+
+        repo = db.register_repo("owner/repo", str(tmpdir / "clone"))
+        db.register_kb("repo-kb", "generic", str(tmpdir / "clone"))
+        db.link_kb_to_repo("repo-kb", repo["id"], "")
+        auth.grant_kb_permission(user["id"], "repo-kb", "write", admin["id"])
+
+        svc = RepoService(config, db)
+        with patch.object(svc.user_service, "get_current_user", return_value=admin):
+            assert svc.unsubscribe("owner/repo")["success"] is True
+
+        assert self._grants(db, "repo-kb") == []
+
+    def test_grants_on_other_kbs_are_kept(self, setup, tmpdir):
+        auth, db, config, admin, user = setup
+        db.register_kb("doomed", "generic", str(tmpdir))
+        auth.grant_kb_permission(user["id"], "doomed", "read", admin["id"])
+        auth.grant_kb_permission(user["id"], "test-kb", "write", admin["id"])
+
+        db.unregister_kb("doomed")
+
+        assert auth.get_user_kb_permissions(user["id"]) == {"test-kb": "write"}
