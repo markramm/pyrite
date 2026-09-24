@@ -11,6 +11,11 @@ import { searchStore } from './search.svelte';
 
 const mockSearch = vi.mocked(api.search);
 
+function response(title: string) {
+	const result = { id: title, kb_name: 'kb', entry_type: 'note', title, tags: [] };
+	return { query: title, count: 1, results: [result] };
+}
+
 beforeEach(() => {
 	vi.clearAllMocks();
 	vi.useFakeTimers();
@@ -46,6 +51,40 @@ describe('SearchStore', () => {
 			mockSearch.mockRejectedValueOnce(new Error('Search failed'));
 			await searchStore.execute();
 			expect(searchStore.error).toBe('Search failed');
+		});
+
+		it('ignores older responses and keeps loading until the latest settles', async () => {
+			const first = Promise.withResolvers<ReturnType<typeof response>>();
+			const second = Promise.withResolvers<ReturnType<typeof response>>();
+			mockSearch.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+			searchStore.query = 'abc';
+			const firstSearch = searchStore.execute();
+			searchStore.query = 'abcdef';
+			const secondSearch = searchStore.execute();
+			first.resolve(response('abc'));
+			await firstSearch;
+			expect(searchStore.loading).toBe(true);
+			expect(searchStore.results).toHaveLength(0);
+			second.resolve(response('abcdef'));
+			await secondSearch;
+			expect(searchStore.loading).toBe(false);
+			expect(searchStore.results[0].title).toBe('abcdef');
+		});
+
+		it('ignores an older error after the latest response succeeds', async () => {
+			const first = Promise.withResolvers<ReturnType<typeof response>>();
+			const second = Promise.withResolvers<ReturnType<typeof response>>();
+			mockSearch.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+			searchStore.query = 'abc';
+			const firstSearch = searchStore.execute();
+			searchStore.query = 'abcdef';
+			const secondSearch = searchStore.execute();
+			second.resolve(response('abcdef'));
+			await secondSearch;
+			first.reject(new Error('Old search failed'));
+			await firstSearch;
+			expect(searchStore.error).toBeNull();
+			expect(searchStore.results[0].title).toBe('abcdef');
 		});
 	});
 
