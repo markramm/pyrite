@@ -459,6 +459,21 @@ class TestPushedRange:
         assert "tests/test_b.py" in out.stdout.split()
 
 
+class TestNoBase:
+    def test_a_missing_base_fails_closed_with_a_hint(self, repo):
+        _git(repo, "init", "-q", "-b", "main")  # neither origin/dev nor dev
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-qm", "base")
+        out = subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(repo), "--run", "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        assert out.returncode != 0
+        assert "Traceback" not in out.stderr
+        assert "fetch origin dev" in out.stderr and "PYRITE_PUSH_FULL=1" in out.stderr
+
+
 class TestCLI:
     def _run(self, repo: Path, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(

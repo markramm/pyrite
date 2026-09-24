@@ -713,15 +713,25 @@ def main(argv: list[str] | None = None) -> int:
         selection = Selection(files={}, core=[], full="--full")
     else:
         to_ref = os.environ.get("PRE_COMMIT_TO_REF")
-        if opts.files is not None:
-            changed = opts.files
-        elif to_ref:
-            # Under the pre-push hook: what is being pushed, not the tree.
-            changed = pushed_files(
-                root, os.environ.get("PRE_COMMIT_FROM_REF"), to_ref, _default_base(root, opts.base)
+        try:
+            if opts.files is not None:
+                changed = opts.files
+            elif to_ref:
+                # Under the pre-push hook: what is being pushed, not the tree.
+                base = _default_base(root, opts.base)
+                changed = pushed_files(root, os.environ.get("PRE_COMMIT_FROM_REF"), to_ref, base)
+            else:
+                changed = changed_files(root, _default_base(root, opts.base), opts.committed)
+        except subprocess.CalledProcessError as exc:
+            # Fail closed: selecting nothing would pass a push untested.
+            detail = (exc.stderr or "").strip().splitlines()
+            print(
+                f"test-affected: could not diff against {opts.base!r}"
+                + (f" ({detail[-1]})" if detail else "")
+                + " -- fetch origin dev, or push with PYRITE_PUSH_FULL=1",
+                file=sys.stderr,
             )
-        else:
-            changed = changed_files(root, _default_base(root, opts.base), opts.committed)
+            return 2
         selection = select(root, changed, opts.helper_threshold)
 
     if opts.explain:
