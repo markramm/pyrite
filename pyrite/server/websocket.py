@@ -10,6 +10,7 @@ socket reconnects. Events carry metadata only (KB name, entry id), and
 re-resolving per event would put a DB walk per socket per event on the loop.
 """
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -130,9 +131,9 @@ class ConnectionManager:
             return
         kb_name = event.get("kb_name")
         # An event that names no KB reaches a scoped socket only when it is on
-        # the explicit global list. Failing closed keeps a future emitter
-        # without a kb_name (index_progress carries admin job ids and counts)
-        # from reaching anonymous sockets once it starts delivering (#326).
+        # the explicit global list. Failing closed keeps an emitter without a
+        # kb_name (an all-KB index_progress carries admin job ids and counts)
+        # from reaching scoped or anonymous sockets (#322).
         is_global = event.get("type") in GLOBAL_EVENTS
         message = json.dumps(event)
         dead: list[WebSocket] = []
@@ -157,15 +158,61 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def broadcast_event(event_type: str, **data):
-    """Broadcast a WebSocket event, swallowing errors if no event loop is running.
+# The server's event loop, captured at startup (`bind_loop`). Sync code --
+# a plain ``def`` route on a worker thread, an IndexWorker thread -- has no
+# running loop of its own; it hands events to this one (#326, #322).
+_loop: asyncio.AbstractEventLoop | None = None
 
-    Safe to call from sync endpoints and CLI contexts where no event loop exists.
+
+def bind_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Record the loop that owns the sockets; called by the startup hook."""
+    global _loop
+    _loop = loop
+
+
+def unbind_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Forget ``loop`` if it is still the bound one; called at shutdown.
+
+    Leaves a loop bound by a later app alone (``manager`` is module-global,
+    shared by every ``create_app()`` in a process).
     """
-    import asyncio
+    global _loop
+    if _loop is loop:
+        _loop = None
 
+
+def _schedule_broadcast(event: dict[str, Any]) -> None:
+    """Runs *on* the loop: only here is the coroutine created."""
+    asyncio.get_running_loop().create_task(manager.broadcast(event))
+
+
+def broadcast_event(event_type: str, **data):
+    """Broadcast a WebSocket event from any thread.
+
+    On the loop (an ``async def`` route), the fan-out is scheduled as a task.
+    Off it (a sync route on a worker thread, an IndexWorker thread), the event
+    is handed to the loop captured at startup with ``call_soon_threadsafe``.
+    The coroutine is created on the loop, never here, so a loop that closes
+    before the hand-off runs leaves no coroutine unawaited.
+
+    No bound loop, or one that has closed or stopped (a CLI process, a test
+    after its ``TestClient`` context ended): there is no socket to deliver to,
+    and the event is dropped.
+    """
+    event = {"type": event_type, **data}
     try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(manager.broadcast({"type": event_type, **data}))
+        asyncio.get_running_loop()
     except RuntimeError:
-        pass  # No event loop (CLI context, sync test, etc.)
+        pass
+    else:
+        _schedule_broadcast(event)
+        return
+
+    loop = _loop
+    if loop is None or loop.is_closed() or not loop.is_running():
+        return
+    try:
+        loop.call_soon_threadsafe(_schedule_broadcast, event)
+    except RuntimeError:
+        # Closed between the check and the call.
+        logger.debug("Event loop closed; dropped %s event", event_type)

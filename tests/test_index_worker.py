@@ -148,8 +148,8 @@ class TestProgress:
         """on_progress callback is called during sync."""
         progress_calls = []
 
-        def track_progress(job_id, current, total):
-            progress_calls.append((job_id, current, total))
+        def track_progress(job_id, current, total, kb_name):
+            progress_calls.append((job_id, current, total, kb_name))
 
         worker.on_progress = track_progress
         job_id = worker.submit_sync(kb_name="test-events")
@@ -160,9 +160,12 @@ class TestProgress:
                 break
             time.sleep(0.1)
 
-        # Progress may or may not fire depending on entry count vs batch size
-        # but the job should complete successfully
         assert job["status"] == "completed"
+        # sync_incremental always reports a final tick; each carries the
+        # job's KB so the WebSocket bridge can scope it (#322).
+        assert progress_calls
+        assert {c[0] for c in progress_calls} == {job_id}
+        assert {c[3] for c in progress_calls} == {"test-events"}
 
 
 class TestGetActiveJobs:

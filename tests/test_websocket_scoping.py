@@ -4,15 +4,14 @@
 event out to every socket, so an unauthenticated caller learned the *names*
 of private KBs and the *ids* of entries written in them, live.
 
-**Which path these tests drive.** The one emitter that actually delivers
-today is `POST /api/clip`: it is an ``async def`` handler, so
-`broadcast_event` finds the running loop and schedules the fan-out. The sync
-entry routes (`POST /api/entries` and friends) run on a worker thread where
-`get_running_loop()` raises, so their events are silently dropped before they
-reach the manager (#326; not this theme). The leak test therefore
-goes through the clipper route with only the network fetch stubbed, on a
-single `TestClient` in context so that REST calls and sockets share one event
-loop, as they do under uvicorn.
+**Which path these tests drive.** `POST /api/clip`, an ``async def``
+handler: `broadcast_event` finds the running loop and schedules the fan-out
+there. The sync routes (`POST /api/entries` and friends) and IndexWorker
+threads reach the same `ConnectionManager.broadcast` through the loop
+captured at startup (#326, #322); `tests/test_websocket_delivery.py` covers
+that path and its scoping. Either way the tests here run on a single
+`TestClient` in context, with only the network fetch stubbed, so that REST
+calls and sockets share one event loop, as they do under uvicorn.
 
 **No receive timeouts.** A TestClient socket's `receive` blocks forever, so
 "did not arrive" is proved with a marker: after the event under test, an
