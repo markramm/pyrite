@@ -77,3 +77,22 @@ def _no_auto_embed_unless_marked(request, monkeypatch):
 
     monkeypatch.setattr(KBService, "_get_embedding_svc", _no_model)
     monkeypatch.setenv("PYRITE_AUTO_EMBED", "0")
+
+
+@pytest.fixture(autouse=True)
+def _allow_testclient_host(monkeypatch):
+    """Admit TestClient's default Host, ``testserver``, on an auth-disabled app.
+
+    A server with auth disabled answers only the hosts in
+    ``pyrite.server.request_guard.LOCAL_HOSTS`` (plus configured names), and
+    TestClient addresses every request to ``http://testserver``. Hundreds of
+    tests build such an app and say nothing about hosts; this adds that one
+    name for them, in tests only. The production default never contains it:
+    ``tests/test_request_guard.py`` overrides this fixture with a no-op and
+    asserts ``testserver`` gets 421.
+    """
+    try:
+        from pyrite.server import request_guard
+    except ImportError:  # server extras not installed
+        return
+    monkeypatch.setattr(request_guard, "LOCAL_HOSTS", request_guard.LOCAL_HOSTS | {"testserver"})

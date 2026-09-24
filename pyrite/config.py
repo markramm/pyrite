@@ -357,6 +357,10 @@ class Settings:
             "http://localhost:8088",
         ]
     )
+    # Extra hostnames a credential-free server (auth disabled) answers, beyond
+    # localhost, 127.0.0.1, ::1 and a non-wildcard `host`. Requests addressed to
+    # any other Host get 421 (pyrite/server/request_guard.py).
+    allowed_hosts: list[str] = field(default_factory=list)
     api_key: str = ""  # Empty = auth disabled (backwards-compatible)
     api_keys: list[dict[str, str]] = field(default_factory=list)  # [{key_hash, role, label}]
     auth: AuthConfig = field(default_factory=AuthConfig)
@@ -628,6 +632,11 @@ class PyriteConfig:
             "port": self.settings.port,
             "cors_origins": self.settings.cors_origins,
             **(
+                {"allowed_hosts": self.settings.allowed_hosts}
+                if self.settings.allowed_hosts
+                else {}
+            ),
+            **(
                 {"site_csp_extra": self.settings.site_csp_extra}
                 if self.settings.site_csp_extra
                 else {}
@@ -775,6 +784,7 @@ class PyriteConfig:
                 "cors_origins",
                 ["http://localhost:3000", "http://localhost:5173", "http://localhost:8088"],
             ),
+            allowed_hosts=list(settings_data.get("allowed_hosts") or []),
             api_key=settings_data.get("api_key", ""),
             api_keys=settings_data.get("api_keys", []),
             auth=AuthConfig(
@@ -896,6 +906,8 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         config.settings.auth.allow_registration = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_CORS_ORIGINS"):
         config.settings.cors_origins = [s.strip() for s in val.split(",")]
+    if val := env("PYRITE_ALLOWED_HOSTS"):
+        config.settings.allowed_hosts = [s.strip() for s in val.split(",") if s.strip()]
     if val := env("PYRITE_API_KEY"):
         config.settings.api_key = val
     if val := env("PYRITE_AI_PROVIDER"):

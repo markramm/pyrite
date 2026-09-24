@@ -21,6 +21,7 @@ config file at all.
 | `PYRITE_HOST` | `127.0.0.1` | Bind address. Containers need `0.0.0.0`. |
 | `PYRITE_PORT` | `8088` | Port |
 | `PYRITE_CORS_ORIGINS` | localhost dev ports | Comma-separated allowed origins |
+| `PYRITE_ALLOWED_HOSTS` | unset | Comma-separated extra hostnames an auth-disabled server answers (see below) |
 | `PYRITE_API_KEY` | unset | Single admin API key (legacy single-key mode). Prefer `api_keys` in `config.yaml` — hashed keys with a role each. |
 
 `config.yaml`:
@@ -34,6 +35,37 @@ settings:
       role: read          # read | write | admin
       label: "Reader"
 ```
+
+### Allowed hosts and origins (auth disabled)
+
+With auth disabled, every request is treated as admin, so the server trusts
+the browser less:
+
+- It answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`,
+  to the bind `host` when that is not a wildcard (`0.0.0.0`, `::`), and to any
+  name in `allowed_hosts`. A request for any other `Host` gets
+  `421 Misdirected Request` and does nothing.
+- A state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) from a browser
+  must come from the server's own origin or one listed in `cors_origins`.
+  Otherwise it gets `403`. Requests that send no `Origin` or `Referer`, such as
+  the CLI, `curl` and agents, are not affected.
+
+These rules cover the whole app, including `/mcp` and `/ws`. If you serve an
+auth-disabled instance under another name, such as a LAN hostname or a reverse
+proxy's public name, add that name to `allowed_hosts`. If the web UI is served
+from another origin, add the origin to `cors_origins`:
+
+```yaml
+settings:
+  allowed_hosts: [pyrite.lan]            # or PYRITE_ALLOWED_HOSTS=pyrite.lan
+  cors_origins: ["http://pyrite.lan:8088"]
+```
+
+`pyrite serve --host <addr>` adds `<addr>` automatically. The Vite dev server
+(`npm run dev` on port 5173) is already in the default `cors_origins`. If you
+run it on another port, add `http://localhost:<port>`. With auth enabled these
+rules are off, and a reverse proxy's public hostname does not need to be
+listed.
 
 ## Authentication (multi-user)
 

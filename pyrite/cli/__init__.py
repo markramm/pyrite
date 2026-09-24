@@ -463,7 +463,10 @@ def serve(
 
     from ..server.api import create_app
 
-    application = create_app()
+    # The bind host is one the app must answer (request_guard admits a
+    # non-wildcard `settings.host`), so a --host flag reaches the config too.
+    config.settings.host = host
+    application = create_app(config=config)
     uvicorn.run(application, host=host, port=port, access_log=False)
 
 

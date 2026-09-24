@@ -1317,6 +1317,13 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Host allow-list and cross-origin write refusal for the credential-free
+    # (auth disabled) mode. Added after CORS so it is the outermost layer: a
+    # request to an unexpected Host is refused before anything else runs.
+    from .request_guard import RequestGuardMiddleware
+
+    application.add_middleware(RequestGuardMiddleware, get_config=_app_get_config)
+
     # Rate limiting
     application.state.limiter = limiter
     application.add_exception_handler(
