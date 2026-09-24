@@ -206,6 +206,19 @@ class TestAffectedByImports:
         sel = _select(repo, "kb/backlog/some-item.md")
         assert "tests/test_backlog_words.py" not in sel.files
 
+    def test_a_changed_test_file_is_not_matched_by_its_directory_name(self, repo):
+        # tests/test_x.py must not select every test that says "tests"
+        # (#362 evaluation: 109 extra files for a one-test PR).
+        _write(repo, "tests/test_says_tests.py", "ROOT = 'tests'\n")
+        sel = _select(repo, "tests/test_unrelated.py")
+        assert "tests/test_says_tests.py" not in sel.files
+
+    def test_an_unreferenced_script_is_not_matched_by_the_scripts_directory(self, repo):
+        _write(repo, "scripts/lonely.py", "print('x')\n")
+        _write(repo, "tests/test_says_scripts.py", "ROOT = 'scripts'\n")
+        sel = _select(repo, "scripts/lonely.py")
+        assert "tests/test_says_scripts.py" not in sel.files
+
     def test_other_trees_fall_back_to_the_directory_name(self, repo):
         _write(repo, "tests/test_fragments.py", "DIR = 'changelog.d'\n")
         sel = _select(repo, "changelog.d/some-change.fixed.md")

@@ -79,6 +79,9 @@ _FULL_SUITE_PREFIXES = (".github/workflows/",)
 # Content trees: a change here is matched by basename only, never by its
 # directory's name ("backlog", "docs" are words half the suite uses).
 _CONTENT_TOPS = {"kb", "docs", "web"}
+# Directory names too common to stand for a file in them: "tests" and
+# "scripts" appear in a third of the suite.
+_GENERIC_DIRS = {"tests", "scripts"}
 _SKIP_DIRS = {"__pycache__", ".venv", "node_modules", ".git", "build", "dist"}
 # A change inside an extension's package also selects the tests that load
 # plugins through entry points, which no import names.
@@ -543,7 +546,11 @@ def _referencing_files(graph: Graph, rel: str) -> tuple[list[str], str]:
     needles = [path.name]
     if path.suffix == ".py":
         needles.append(path.stem)
-    if len(path.parts) > 1 and path.parts[0] not in _CONTENT_TOPS:
+    if (
+        len(path.parts) > 1
+        and path.parts[0] not in _CONTENT_TOPS
+        and path.parent.name not in _GENERIC_DIRS
+    ):
         needles.append(path.parent.name)
     for needle in needles:
         word = re.compile(rf"(?<![\w.-]){re.escape(needle)}(?![\w-])")
