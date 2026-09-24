@@ -414,3 +414,14 @@ class TestNoRefspecMeaning:
         finally:
             db.close()
         assert _remote_main(repo) == pushed
+
+
+def test_rest_export_answers_invalid_ref(repo):
+    """POST /api/kbs/{kb}/export maps a rejected branch to 400 INVALID_REF."""
+    pushed = _rewrite_history(repo)
+    r = TestClient(create_app(config=repo["config"])).post(
+        f"/api/kbs/{KB}/export", json={"repo_url": str(repo["bare"]), "branch": "+main"}
+    )
+    assert r.status_code == 400, r.text
+    assert r.json()["detail"]["code"] == "INVALID_REF"
+    assert _remote_main(repo) == pushed
