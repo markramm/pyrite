@@ -283,6 +283,35 @@ class TestParallelSuite:
         (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
         assert re.search(hook["files"], path), (path, hook["files"])
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            # every path scripts/test-affected answers with the full suite ...
+            "conftest.py",
+            "tests/conftest.py",
+            "pyproject.toml",
+            "extensions/foo/pyproject.toml",
+            ".pre-commit-config.yaml",
+            ".github/workflows/ci.yml",
+            "pytest.ini",
+            "setup.cfg",
+            "tox.ini",
+            "tests/fixtures/roundtrip/entry.md",
+            # ... and non-Python code and data it selects tests for
+            "pyrite/server/templates/page.html",
+            "pyrite/storage/alembic.ini",
+            "pyrite/storage/alembic/script.py.mako",
+            "extensions/foo/src/foo/types.yaml",
+        ],
+    )
+    def test_pre_push_runs_for_everything_test_affected_acts_on(self, precommit, path):
+        # A path the selector would act on but the hook's files: filter does not
+        # match is a push that runs no tests at all, reported only as "Skipped".
+        import re
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert re.search(hook["files"], path), (path, hook["files"])
+
     @pytest.mark.parametrize("path", ["docs/guide.md", "kb/backlog/x.md", "README.md"])
     def test_pre_push_still_skips_docs_only_pushes(self, precommit, path):
         import re

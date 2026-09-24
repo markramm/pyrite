@@ -116,8 +116,11 @@ repos:
         language: system
         pass_filenames: false
         # Matched against the files changed in the pushed range: a docs- or
-        # KB-only push skips the suite. CI still runs it.
-        files: '(\.py$|^scripts/|(^|/)pyproject\.toml$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
+        # KB-only push skips the suite. CI still runs it. Must cover every
+        # path scripts/test-affected treats as meaningful (code and data under
+        # pyrite/, extensions/, tests/, scripts/, and the root test config),
+        # or a push of only those runs no tests at all.
+        files: '(\.py$|^(pyrite|extensions|tests|scripts)/|(^|/)(pyproject\.toml|pytest\.ini|setup\.cfg|tox\.ini)$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
         stages: [pre-push]
       - id: fix-commit-has-tests
         name: "fix: commits must touch tests/"
