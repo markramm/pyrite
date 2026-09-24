@@ -117,8 +117,8 @@ ruff check pyrite/
 
 ## Two skills: worker and conductor
 
-- **pyrite-dev** — for an agent writing Pyrite code: one theme, one branch, one worktree, TDD, evidence, a report. It does not choose work or open PRs.
-- **pyrite-conductor** — for orchestrating: reads GitHub issues and the roadmap, composes **reviewable themes**, creates a worktree and dispatches a `pyrite-worker` per theme (Sonnet 5 for well-specified work, Opus 5 for design-shaped work), reviews each branch (diff, suite, a `pyrite-reviewer` cold read for risky changes), opens the PR, shepherds it, keeps the repo healthy. Also releases and deploys.
+- **pyrite-dev** — for an agent writing Pyrite code: one theme, one branch, one worktree, TDD, evidence, a report. It opens a draft PR after its first push so CI starts; it does not choose work or mark the PR ready.
+- **pyrite-conductor** — for orchestrating: reads GitHub issues and the roadmap, composes **reviewable themes**, creates a worktree and dispatches a `pyrite-worker` per theme (Sonnet 5 for well-specified work, Opus 5 for design-shaped work), reviews each branch (diff, the draft PR's CI, a `pyrite-reviewer` cold read for risky changes), flips the PR ready, shepherds it, keeps the repo healthy. Also releases and deploys.
 - Dispatchable agents (`.claude/agents/`): `pyrite-worker`, `pyrite-reviewer` (cold read), `pyrite-architect` (breakdown), `pyrite-explorer` (browser, exploratory), `pyrite-docs` (documentation drift), `pyrite-spike` (a time-boxed investigation whose only deliverable is a ticket with acceptance criteria, an ADR draft, or "not feasible").
 - **pyrite-meta-conductor** — run by the strongest model after every ~5 landed themes (a human team's week is a few features, so the unit is themes, not days): watches the conductor's loops for the constraint (PR timings, rebases, redispatches, CI, the maintainer's queue) and proposes one measured change to the skills, an ADR or a ticket. Hallway testing applied to the process.
 - A session with a single agent is both: do the work under pyrite-dev, then load pyrite-conductor for review and the PR.
@@ -146,7 +146,7 @@ One-time setup on a fresh clone: `.venv/bin/pip install -e ".[dev]"` (installs `
 |-------|-----------|
 | commit | ruff, ruff-format, trailing-whitespace, end-of-file, check-yaml, check-large-files, check-merge-conflict, debug-statements, import-cycle check, KB schema validation. Seconds. **No pytest.** |
 | commit-msg | `fix:` commits must touch `tests/` |
-| pre-push | full pytest suite incl. `extensions/`, `-n auto`, only when the pushed range touches code or config; runtime varies by machine and load |
+| pre-push | `scripts/test-affected --run`: the `core` tests plus every test importing what the push changed, `-n 4` (`PYRITE_PUSH_WORKERS`); the full suite for conftest/config/CI changes or `PYRITE_PUSH_FULL=1`; only when the pushed range touches code, scripts or config |
 | CI | the authority — everything above plus the full matrix |
 
 If ruff-format modifies files, re-stage and commit again.

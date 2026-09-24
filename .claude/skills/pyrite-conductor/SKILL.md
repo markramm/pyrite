@@ -263,7 +263,9 @@ For each worker that reported done — protocol in [review.md](review.md):
 1. Claim it (`in-review`). Check out the **pushed** head in your own review
    worktree — never the worker's. `git log origin/dev..HEAD --oneline`; read
    the **diff**, not the report.
-2. Re-run `.venv/bin/pytest tests/ extensions/ -n auto` there yourself.
+2. Read the draft PR's CI for the pushed SHA (`gh pr checks N`: `test (3.12)`
+   and `gate`); locally, `scripts/test-affected --run` is enough. Run the
+   full suite yourself only to reproduce a CI failure (#356).
 3. `scripts/verify-red.sh` on every regression-named test (exit 2 = no claim).
 4. Is the theme complete? Would a reviewer see one coherent change?
 5. Does it need a **cold read**? Yes if the diff touches `pyrite/server/`,
