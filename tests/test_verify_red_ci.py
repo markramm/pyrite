@@ -206,6 +206,98 @@ def test_a_missing_report_is_an_infrastructure_error(vr, tmp_path: Path) -> None
         vr.read_junit(tmp_path / "absent.xml", "tests/test_x.py")
 
 
+MONKEYPATCH_TESTS = """\
+import json
+
+import pytest
+
+import t_mp
+
+
+@pytest.fixture
+def patched_in_setup(monkeypatch):
+    monkeypatch.setattr("json.nope_helper", 1)
+
+
+def test_string_target(monkeypatch):
+    monkeypatch.setattr("json.nope_helper", 1)
+
+
+def test_class_target(monkeypatch):
+    monkeypatch.setattr(t_mp.C, "helper", 1)
+
+
+def test_module_object_target(monkeypatch):
+    monkeypatch.setattr(json, "nope_helper", 1)
+
+
+def test_module_attribute_read():
+    json.nope_helper
+
+
+def test_in_setup(patched_in_setup):
+    pass
+
+
+def test_class_attribute_read():
+    t_mp.C.helper
+
+
+def test_object_attribute_read():
+    None.title
+"""
+
+
+@pytest.fixture(scope="module")
+def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
+    """The failure messages the job actually parses: a real pytest run, its JUnit report."""
+    d = tmp_path_factory.mktemp("attr")
+    (d / "pytest.ini").write_text("[pytest]\npythonpath = .\n")
+    (d / "t_mp.py").write_text("class C:\n    pass\n")
+    (d / "test_mp.py").write_text(MONKEYPATCH_TESTS)
+    env = {k: v for k, v in os.environ.items() if k != "PYTEST_ADDOPTS"}
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "test_mp.py",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            f"--junitxml={d / 'r.xml'}",
+            "-o",
+            "junit_family=xunit1",
+        ],
+        cwd=d,
+        env=env,
+        capture_output=True,
+    )
+    report = vr.read_junit(d / "r.xml", "test_mp.py")
+    return {nodeid.split("::")[-1]: outcome for nodeid, outcome in report.outcomes.items()}
+
+
+@pytest.mark.parametrize(
+    ("test", "weak"),
+    [
+        ("test_string_target", True),  # 'module' object at json has no attribute
+        ("test_class_target", True),  # <class 't_mp.C'> has no attribute
+        ("test_module_object_target", True),  # <module 'json' ...> has no attribute
+        ("test_module_attribute_read", True),  # module 'json' has no attribute
+        ("test_in_setup", True),  # the same, raised in a fixture: an <error>
+        ("test_class_attribute_read", False),  # type object 'C' has no attribute: behaviour
+        ("test_object_attribute_read", False),  # 'NoneType' object has no attribute
+    ],
+)
+def test_attribute_errors_as_the_junit_report_carries_them(
+    vr, junit_attribute_errors, test: str, weak: bool
+) -> None:
+    outcome = junit_attribute_errors[test]
+    assert outcome[0] in ("failed", "error"), outcome
+    label, _ = vr.classify(("passed", ""), outcome, collection_error=False)
+    assert label == (vr.RED_IMPORT if weak else vr.RED), outcome
+
+
 # ---------------------------------------------------------------------------
 # End to end against a real repository: a base commit with a broken
 # implementation in `pyrite/`, a PR branch that fixes it and adds tests.

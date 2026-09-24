@@ -58,12 +58,19 @@ PASSES = "passes without the fix"
 NOT_VERIFIABLE = "not verifiable"
 
 VERIFY_RED = Path(__file__).resolve().parent / "verify-red.sh"
-# A name the fix adds is missing: an import of it, or an attribute lookup on a
-# MODULE (monkeypatch.setattr in a fixture or the body). An AttributeError on
-# an ordinary object is behaviour, and stays a real red.
+# A name the fix adds is missing: an import of it, a lookup on a module, or a
+# monkeypatch.setattr of it (in a fixture or the body). The forms, as they reach
+# the JUnit message:
+#   module 'pkg.mod' has no attribute 'x'              Python, module lookup
+#   <module 'pkg.mod' from '...'> has no attribute 'x' monkeypatch, module object
+#   'module' object at pkg.mod has no attribute 'x'    monkeypatch, "pkg.mod.x" string
+#   <class 'pkg.mod.C'> has no attribute 'x'           monkeypatch, class target
+# Python's own class lookup ("type object 'C' has no attribute") and any lookup
+# on an instance are behaviour, and stay a real red.
 _IMPORT_ERROR = re.compile(
     r"\b(ImportError|ModuleNotFoundError)\b"
-    r"|AttributeError: (module '[^']+'|<module [^>]+>) has no attribute"
+    r"|AttributeError: (module '[^']+'|<module [^>]+>|'module' object at \S+"
+    r"|<class '[^']+'>) has no attribute"
 )
 
 Outcome = tuple[str, str]  # (passed|failed|error|skipped, message)
