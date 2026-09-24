@@ -737,7 +737,13 @@ class MigrationManager:
         }
         if "user_id" in existing:
             return
-        self.conn.executescript("""
+        # One transaction: a failure anywhere after DROP TABLE would otherwise
+        # leave the stars in a renamed copy, or a half-built starred_entry_v24
+        # that blocks every later attempt. executescript() commits whatever is
+        # pending before it runs, so the BEGIN below opens a fresh transaction;
+        # on error it is still open, and is rolled back here.
+        script = """
+            BEGIN;
             CREATE TABLE starred_entry_v24 (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL DEFAULT 0,
@@ -755,7 +761,14 @@ class MigrationManager:
                 ON starred_entry (user_id, sort_order);
             CREATE INDEX IF NOT EXISTS idx_starred_entry_kb ON starred_entry (kb_name);
             CREATE INDEX IF NOT EXISTS idx_starred_entry_sort ON starred_entry (sort_order);
-        """)
+            COMMIT;
+        """
+        try:
+            self.conn.executescript(script)
+        except Exception:
+            if self.conn.in_transaction:
+                self.conn.execute("ROLLBACK")
+            raise
 
     def _apply_v21(self) -> None:
         """Conditionally add content_hash column to entry for hash-based staleness."""

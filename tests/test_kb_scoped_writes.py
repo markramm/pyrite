@@ -340,3 +340,52 @@ def test_anonymous_visitor_has_no_star_list(tmp_path):
     r = client.post("/api/starred", json={"entry_id": "x", "kb_name": OPEN})
     assert r.status_code == 401, r.text
     assert client.get("/api/starred").json() == {"count": 0, "starred": []}
+
+
+def test_a_failed_v24_rebuild_leaves_the_old_table_intact(tmp_path):
+    """The rebuild is one transaction: a failure after the old table is dropped
+    (here, the last index cannot be created because a view holds its name)
+    rolls everything back -- the old table, its rows, no leftover copy, and
+    v24 not recorded -- so the next start can simply try again."""
+    import sqlite3
+
+    from pyrite.storage.migrations import MigrationError, MigrationManager
+
+    path = tmp_path / "index.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE starred_entry (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entry_id VARCHAR NOT NULL,
+            kb_name VARCHAR NOT NULL,
+            sort_order INTEGER,
+            created_at VARCHAR NOT NULL,
+            CONSTRAINT uq_starred_entry UNIQUE (entry_id, kb_name)
+        );
+        INSERT INTO starred_entry (entry_id, kb_name, sort_order, created_at)
+            VALUES ('a', 'kb1', 1, '2026-01-01');
+        CREATE VIEW idx_starred_entry_sort AS SELECT 1;
+        """
+    )
+    conn.commit()
+    mgr = MigrationManager(conn)
+    for version in range(1, 24):
+        conn.execute(
+            "INSERT INTO schema_version (version, description, applied_at) VALUES (?, 'x', 'x')",
+            (version,),
+        )
+    conn.commit()
+
+    with pytest.raises(MigrationError):
+        mgr.migrate()
+
+    columns = [row[1] for row in conn.execute("PRAGMA table_info(starred_entry)")]
+    assert "user_id" not in columns, "the old table was replaced"
+    assert conn.execute("SELECT entry_id, kb_name FROM starred_entry").fetchall() == [("a", "kb1")]
+    assert (
+        conn.execute("SELECT name FROM sqlite_master WHERE name = 'starred_entry_v24'").fetchone()
+        is None
+    ), "a half-built copy was left behind"
+    assert mgr.get_current_version() == 23
+    conn.close()
