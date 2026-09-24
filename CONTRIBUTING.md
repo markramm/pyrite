@@ -156,7 +156,6 @@ at once ran a 16 GB machine out of memory (#168) and filled its disk (#356).
 scripts/test-affected --list          # what your branch affects, against origin/dev's merge base
 scripts/test-affected --explain       # ... and why each test was chosen
 scripts/test-affected --run           # run it: core + affected, -n 4 (-n N or -n auto)
-scripts/test-affected --run --base HEAD   # nothing changed: the core set alone
 ```
 
 `test-affected` diffs your working tree, uncommitted and untracked files
@@ -238,7 +237,7 @@ uv pip install --python .venv/bin/python -e ".[all,dev]"
 |---|---|---|
 | commit | ruff, formatting, file hygiene, import-cycle check, KB schema validation | seconds |
 | commit-msg | a `fix:` commit must touch `tests/` | — |
-| pre-push | `scripts/test-affected --run`: core + affected tests on `PYRITE_PUSH_WORKERS` (default 4) workers, only when the push touches code or config; `PYRITE_PUSH_FULL=1` runs the full suite | Seconds to minutes, depending on what changed |
+| pre-push | `scripts/test-affected --run`: core + affected tests on `PYRITE_PUSH_WORKERS` (default 4) workers, only when the push touches code, tests, scripts or test config (a docs- or KB-only push skips it); `PYRITE_PUSH_FULL=1` runs the full suite | Seconds to minutes, depending on what changed |
 
 CI runs the same checks plus the full Python matrix, Postgres, the frontend
 build and Playwright. `--no-verify` is for a documented emergency, not for a
