@@ -343,6 +343,74 @@ def test_push_and_diff_arguments_are_after_end_of_options():
         values = [e.value if isinstance(e, ast.Constant) else ast.unparse(e) for e in node.elts]
         lists.setdefault(func, []).append(values)
     push = next(v for v in lists["push"] if v[:2] == ["git", "push"])
-    assert push.index("--end-of-options") < push.index("remote") < push.index("branch")
+    assert push.index("--end-of-options") < push.index("remote") < push.index("refspec")
     diff_tail = next(v for v in lists["diff_branches"] if v[0] == "--end-of-options")
     assert diff_tail[1] == "f'{base}...{head}'"
+
+
+# ---------------------------------------------------------------------------
+# A branch value names a branch and nothing else: no refspec meaning
+# ---------------------------------------------------------------------------
+
+
+def _rewrite_history(repo) -> str:
+    """Push main, then give the KB an unrelated main, so only a forced push lands.
+
+    Returns the commit the remote's main holds.
+    """
+    kb_dir = repo["kb_dir"]
+    _git(kb_dir, "push", "-q", "origin", "main")
+    pushed = _git(repo["bare"], "rev-parse", "refs/heads/main").strip()
+    _git(kb_dir, "checkout", "-q", "--orphan", "rewrite")
+    _commit(kb_dir, "other.md")
+    _git(kb_dir, "branch", "-f", "main", "rewrite")
+    _git(kb_dir, "checkout", "-q", "main")
+    return pushed
+
+
+def _remote_main(repo) -> str:
+    return _git(repo["bare"], "rev-parse", "refs/heads/main").strip()
+
+
+class TestNoRefspecMeaning:
+    def test_rest_push_refuses_a_forcing_branch(self, repo):
+        pushed = _rewrite_history(repo)
+        r = TestClient(create_app(config=repo["config"])).post(
+            f"/api/kbs/{KB}/push", json={"remote": "origin", "branch": "+main"}
+        )
+        assert r.status_code == 400, r.text
+        assert r.json()["detail"]["code"] == "INVALID_REF"
+        assert _remote_main(repo) == pushed
+
+    def test_mcp_push_refuses_a_forcing_branch(self, repo):
+        pushed = _rewrite_history(repo)
+        server = PyriteMCPServer(repo["config"], tier="admin")
+        try:
+            result = server._dispatch_tool(
+                "kb_push", {"kb": KB, "remote": "origin", "branch": "+main"}
+            )
+        finally:
+            server.close()
+        assert result.get("error_code") == "VALIDATION_ERROR", result
+        assert _remote_main(repo) == pushed
+
+    def test_a_branch_value_never_pushes_a_tag_of_that_name(self, repo):
+        """The pushed refspec is built by the server: refs/heads/<b>:refs/heads/<b>."""
+        _git(repo["kb_dir"], "tag", "release")
+        r = TestClient(create_app(config=repo["config"])).post(
+            f"/api/kbs/{KB}/push", json={"remote": "origin", "branch": "release"}
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["success"] is False
+        assert _heads(repo["bare"]) == ""
+
+    def test_export_to_repo_refuses_a_forcing_branch(self, repo):
+        pushed = _rewrite_history(repo)
+        db = PyriteDB(repo["config"].settings.index_path)
+        try:
+            svc = ExportService(repo["config"], db)
+            with pytest.raises(InvalidGitRefError):
+                svc.export_kb_to_repo(KB, str(repo["bare"]), branch="+main")
+        finally:
+            db.close()
+        assert _remote_main(repo) == pushed

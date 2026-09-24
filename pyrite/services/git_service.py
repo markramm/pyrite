@@ -695,8 +695,12 @@ class GitService:
 
     @staticmethod
     def is_valid_branch_name(name: object) -> bool:
-        """True for a valid branch name that git cannot read as an option."""
-        if not isinstance(name, str) or name.startswith("-"):
+        """True for a valid branch name that git cannot read as an option.
+
+        Nor as anything but a branch: a leading "+" is a forced update in a
+        push refspec, and `git check-ref-format` accepts it.
+        """
+        if not isinstance(name, str) or name.startswith(("-", "+")):
             return False
         # `git check-ref-format` accepts "refs/heads/-x", hence the check
         # above; it rejects whitespace, control characters, "..", "@{" and
@@ -783,6 +787,10 @@ class GitService:
             branch = GitService.get_current_branch(local_path)
         GitService.validate_remote_name(local_path, remote)
         GitService.validate_branch_name(branch)
+        # The refspec is built here, never taken from the caller: a branch
+        # value names that branch on both sides and nothing else (not a tag
+        # of the same name, not a forced update).
+        refspec = f"refs/heads/{branch}:refs/heads/{branch}"
 
         extra = {}
         if token:
@@ -793,7 +801,7 @@ class GitService:
 
         try:
             result = subprocess.run(
-                ["git", "push", "-u", "--end-of-options", remote, branch],
+                ["git", "push", "-u", "--end-of-options", remote, refspec],
                 cwd=str(local_path),
                 capture_output=True,
                 text=True,
