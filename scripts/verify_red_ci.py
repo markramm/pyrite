@@ -19,15 +19,23 @@ reads the two JUnit reports. Each test is classified:
   checks what the code does.
 - **passes without the fix** -- it does not test the change. A warning
   annotation on the PR, for a test the PR adds or edits; never a failure.
-- **not verifiable** -- it did not pass with the fix (skipped, failed), or was
-  skipped without it. No claim either way.
+- **not verifiable** -- it did not pass with the fix (skipped, failed), was
+  skipped without it, or its file timed out (``--timeout``, 120 s per run) or
+  produced no report (a conftest importing a name the fix adds). No claim
+  either way; the other files still run.
+
+Implementation paths include the old side of a rename and deleted files, so
+the reverted run sees the merge base's layout and the restore puts the PR's
+back. Both runs set PYTHONDONTWRITEBYTECODE (see ``_RUN_ENV``).
 
 Tests the PR did not add or edit (compared by AST, so formatting does not
 count) are listed separately and never warned about.
 
-The table goes to ``$GITHUB_STEP_SUMMARY`` (and stdout). Exit 0 whatever the
-verdicts; exit 2 only when the check itself could not run -- verify-red.sh
-refused, a report is missing, git failed. It is a signal, not a gate.
+The table goes to ``$GITHUB_STEP_SUMMARY`` (and stdout) one file at a time, so
+a job killed part-way keeps what it found. A PR that changes implementation but
+no test file gets a warning. Exit 0 whatever the verdicts; exit 2 only when the
+check itself could not run -- verify-red.sh refused, git failed, the tree was
+not restored. It is a signal, not a gate.
 """
 
 from __future__ import annotations
@@ -36,6 +44,7 @@ import argparse
 import ast
 import os
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -49,7 +58,13 @@ PASSES = "passes without the fix"
 NOT_VERIFIABLE = "not verifiable"
 
 VERIFY_RED = Path(__file__).resolve().parent / "verify-red.sh"
-_IMPORT_ERROR = re.compile(r"\b(ImportError|ModuleNotFoundError)\b")
+# A name the fix adds is missing: an import of it, or an attribute lookup on a
+# MODULE (monkeypatch.setattr in a fixture or the body). An AttributeError on
+# an ordinary object is behaviour, and stays a real red.
+_IMPORT_ERROR = re.compile(
+    r"\b(ImportError|ModuleNotFoundError)\b"
+    r"|AttributeError: (module '[^']+'|<module [^>]+>) has no attribute"
+)
 
 Outcome = tuple[str, str]  # (passed|failed|error|skipped, message)
 
@@ -186,6 +201,8 @@ def read_junit(path: Path, test_file: str) -> Report:
 # Running
 # ---------------------------------------------------------------------------
 
+DEFAULT_TIMEOUT = 120  # seconds per pytest run, so one hung file is a row, not a killed job
+
 
 def _git(*args: str) -> str:
     result = subprocess.run(["git", *args], capture_output=True, text=True)
@@ -199,31 +216,116 @@ def _show(rev: str, path: str) -> str | None:
     return result.stdout if result.returncode == 0 else None
 
 
+def changed_since(mb: str) -> tuple[list[str], list[str]]:
+    """(test files to run, implementation paths to revert) since the merge base.
+
+    --no-renames turns a rename into delete + add, so the old path is reverted
+    (restored from the merge base) and the new one removed. A deleted test file
+    cannot be run; a deleted implementation file is put back for the run.
+    """
+    status = _git("diff", "--name-status", "--no-renames", "--diff-filter=ACMD", mb, "HEAD")
+    present, every = [], []
+    for line in status.splitlines():
+        code, _, path = line.partition("\t")
+        every.append(path)
+        if code != "D":
+            present.append(path)
+    tests, _ = split_changed(present)
+    _, impl = split_changed(every)
+    return tests, impl
+
+
+# PYTHONDONTWRITEBYTECODE: CPython validates a .pyc by the source's mtime (whole
+# seconds) and size. A fix and its reverted source of the same size, swapped
+# inside one second, would otherwise serve one run the other's bytecode -- the
+# next file's with-fix run then fails on the reverted code, and a local tree is
+# left importing it.
+_RUN_ENV = {"PYTHONDONTWRITEBYTECODE": "1"}
+
+
+def _run(cmd: list[str], env: dict[str, str], timeout: float) -> tuple[int | None, str]:
+    """(exit code or None on timeout, stderr). A timeout TERMs the whole process
+    group -- bash and the pytest under it -- so verify-red.sh's restore trap runs;
+    KILL follows only if that does not end it."""
+    proc = subprocess.Popen(
+        cmd,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        _, err = proc.communicate(timeout=timeout)
+        return proc.returncode, err
+    except subprocess.TimeoutExpired:
+        for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
+            try:
+                os.killpg(proc.pid, sig)
+            except ProcessLookupError:
+                break
+            try:
+                proc.communicate(timeout=grace)
+                break
+            except subprocess.TimeoutExpired:
+                continue
+        return None, ""
+
+
+def _restore(impl: list[str]) -> None:
+    """Put the implementation back as committed, whatever state a killed run left."""
+    for path in impl:
+        if _show("HEAD", path) is not None:
+            subprocess.run(["git", "checkout", "-q", "HEAD", "--", path], capture_output=True)
+        else:
+            subprocess.run(
+                ["git", "rm", "-q", "--cached", "--ignore-unmatch", "--", path],
+                capture_output=True,
+            )
+            Path(path).unlink(missing_ok=True)
+
+
 def _junit_args(path: Path) -> list[str]:
     return [f"--junitxml={path}", "-o", "junit_family=xunit1"]
 
 
-def run_with_fix(python: str, test_file: str, junit: Path) -> Report:
-    subprocess.run(
+class NoVerdictError(Exception):
+    """One file produced no verdict; it becomes a row, the run goes on."""
+
+
+def run_with_fix(python: str, test_file: str, junit: Path, timeout: float) -> Report:
+    code, _ = _run(
         [python, "-m", "pytest", test_file, "-q", "-p", "no:cacheprovider", *_junit_args(junit)],
-        capture_output=True,
-        text=True,
+        {**os.environ, **_RUN_ENV},
+        timeout,
     )
+    if code is None:
+        raise NoVerdictError(f"timed out with the fix ({timeout:g} s)")
+    if not junit.exists():
+        raise NoVerdictError("no report with the fix")
     return read_junit(junit, test_file)
 
 
-def run_without_fix(python: str, base: str, test_file: str, impl: list[str], junit: Path) -> Report:
+def run_without_fix(
+    python: str, base: str, test_file: str, impl: list[str], junit: Path, timeout: float
+) -> Report:
     env = {
         **os.environ,
+        **_RUN_ENV,
         "VERIFY_RED_BASE": base,
         "VERIFY_RED_PYTHON": python,
         "VERIFY_RED_JUNITXML": str(junit),
     }
-    result = subprocess.run(
-        ["bash", str(VERIFY_RED), test_file, *impl], env=env, capture_output=True, text=True
-    )
-    if result.returncode not in (0, 1):
-        raise InfraError(result.stderr.strip() or f"verify-red.sh exited {result.returncode}")
+    code, err = _run(["bash", str(VERIFY_RED), test_file, *impl], env, timeout)
+    if code is None:
+        _restore(impl)
+        raise NoVerdictError(f"timed out without the fix ({timeout:g} s)")
+    if code not in (0, 1):
+        # verify-red.sh refused (wrong tree, uncommitted edits): true of every file.
+        raise InfraError(err.strip() or f"verify-red.sh exited {code}")
+    if not junit.exists():
+        # e.g. a conftest that imports a name the fix adds: pytest stops before any test.
+        raise NoVerdictError("no report without the fix (pytest stopped before running a test)")
     return read_junit(junit, test_file)
 
 
@@ -236,37 +338,36 @@ class Row:
     touched: bool
 
 
-def verify(base: str, python: str) -> tuple[list[Row], list[str], list[str], str]:
-    mb = _git("merge-base", base, "HEAD").strip()
-    changed = _git("diff", "--name-only", "--diff-filter=ACMR", mb, "HEAD").split()
-    tests, impl = split_changed(changed)
-    rows: list[Row] = []
-    if not tests or not impl:
-        return rows, tests, impl, mb
-    with tempfile.TemporaryDirectory(prefix="verify-red-") as tmp:
-        for i, test_file in enumerate(tests):
-            touched = touched_tests(_show(mb, test_file), Path(test_file).read_text())
-            head = run_with_fix(python, test_file, Path(tmp) / f"head-{i}.xml")
-            reverted = run_without_fix(python, base, test_file, impl, Path(tmp) / f"base-{i}.xml")
-            if head.collection_error and not head.outcomes:
-                rows.append(
-                    Row(test_file, test_file, NOT_VERIFIABLE, "does not collect with the fix", True)
-                )
-            for nodeid, outcome in head.outcomes.items():
-                label, detail = classify(
-                    outcome,
-                    reverted.outcomes.get(nodeid),
-                    collection_error=reverted.collection_error,
-                )
-                rows.append(Row(nodeid, test_file, label, detail, head.keys[nodeid] in touched))
-    dirty = _git("status", "--porcelain", "--", *impl).strip()
-    if dirty:
-        raise InfraError(f"the implementation files were not restored:\n{dirty}")
-    return rows, tests, impl, mb
+def verify_file(
+    test_file: str,
+    i: int,
+    *,
+    mb: str,
+    base: str,
+    impl: list[str],
+    python: str,
+    tmp: Path,
+    timeout: float,
+) -> list[Row]:
+    touched = touched_tests(_show(mb, test_file), Path(test_file).read_text())
+    try:
+        head = run_with_fix(python, test_file, tmp / f"head-{i}.xml", timeout)
+        if head.collection_error and not head.outcomes:
+            raise NoVerdictError("does not collect with the fix")
+        reverted = run_without_fix(python, base, test_file, impl, tmp / f"base-{i}.xml", timeout)
+    except NoVerdictError as exc:
+        return [Row(test_file, test_file, NOT_VERIFIABLE, str(exc), True)]
+    rows = []
+    for nodeid, outcome in head.outcomes.items():
+        label, detail = classify(
+            outcome, reverted.outcomes.get(nodeid), collection_error=reverted.collection_error
+        )
+        rows.append(Row(nodeid, test_file, label, detail, head.keys[nodeid] in touched))
+    return rows
 
 
 # ---------------------------------------------------------------------------
-# Output
+# Output -- written file by file, so a job killed part-way keeps what it found
 # ---------------------------------------------------------------------------
 
 
@@ -280,37 +381,43 @@ def _table(rows: list[Row]) -> list[str]:
     return lines
 
 
-def render(rows: list[Row], tests: list[str], impl: list[str], mb: str) -> str:
-    out = ["## verify-red: do this PR's tests fail without its fix?", ""]
-    if not tests or not impl:
-        missing = (
-            "test files" if not tests else "implementation files (`pyrite/`, `extensions/*/src/`)"
-        )
-        out.append(f"verify-red: nothing to verify -- the PR changes no {missing}.")
-        return "\n".join(out) + "\n"
+TITLE = "## verify-red: do this PR's tests fail without its fix?"
+LEGEND = (
+    f"*{RED}*: the evidence a review asks for. *{RED_IMPORT}*: weak -- the test needs "
+    f"the new code (a name it imports or patches), not necessarily what it does. *{PASSES}*: "
+    f"the test does not exercise the change (a warning, not a failure). *{NOT_VERIFIABLE}*: "
+    "skipped, failing, timed out or unreported -- no claim."
+)
+
+
+def render_header(impl: list[str], mb: str) -> str:
     reverted = ", ".join(f"`{f}`" for f in impl)
-    out += [f"Reverted to the merge base `{mb[:10]}`: {reverted}.", ""]
+    return f"{TITLE}\n\nReverted to the merge base `{mb[:10]}`: {reverted}.\n\n"
+
+
+def render_file(test_file: str, rows: list[Row]) -> str:
+    out = [f"### `{test_file}`", ""]
     mine = [r for r in rows if r.touched]
     rest = [r for r in rows if not r.touched]
     if mine:
-        out += ["Tests this PR adds or edits:", "", *_table(mine), ""]
+        out += [*_table(mine), ""]
     else:
-        out += ["This PR adds or edits no test functions in the changed test files.", ""]
+        out += ["This PR adds or edits no test functions here.", ""]
     if rest:
         out += [
-            f"<details><summary>{len(rest)} other tests in the same files (not a signal)</summary>",
+            f"<details><summary>{len(rest)} other tests in this file (not a signal)</summary>",
             "",
             *_table(rest),
             "",
             "</details>",
             "",
         ]
-    out += [
-        f"*{RED}*: the evidence a review asks for. *{RED_IMPORT}*: weak -- the test needs "
-        f"the new code, not necessarily what it does. *{PASSES}*: the test does not exercise "
-        f"the change (a warning, not a failure). *{NOT_VERIFIABLE}*: skipped or failing, no claim.",
-    ]
     return "\n".join(out) + "\n"
+
+
+def render_nothing(tests: list[str], impl: list[str]) -> str:
+    missing = "test files" if not tests else "implementation files (`pyrite/`, `extensions/*/src/`)"
+    return f"{TITLE}\n\nverify-red: nothing to verify -- the PR changes no {missing}.\n"
 
 
 def annotations(rows: list[Row]) -> list[str]:
@@ -322,24 +429,66 @@ def annotations(rows: list[Row]) -> list[str]:
     ]
 
 
+NO_TEST_WARNING = (
+    "::warning title=verify-red::this PR changes implementation files but no test file"
+    " -- nothing shows the change is tested"
+)
+
+
+class Sink:
+    """stdout plus $GITHUB_STEP_SUMMARY, appended and flushed chunk by chunk."""
+
+    def __init__(self, summary: str | None) -> None:
+        self.summary = summary
+
+    def write(self, text: str) -> None:
+        print(text, flush=True)
+        if self.summary:
+            with open(self.summary, "a", encoding="utf-8") as fh:
+                fh.write(text)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
     parser.add_argument("--base", required=True, help="the integration ref or the PR's base sha")
     parser.add_argument("--python", default=os.environ.get("VERIFY_RED_PYTHON", sys.executable))
     parser.add_argument("--summary", default=os.environ.get("GITHUB_STEP_SUMMARY"))
+    parser.add_argument(
+        "--timeout", type=float, default=DEFAULT_TIMEOUT, help="seconds per pytest run"
+    )
     args = parser.parse_args(argv)
+    sink = Sink(args.summary)
     try:
-        rows, tests, impl, mb = verify(args.base, args.python)
+        mb = _git("merge-base", args.base, "HEAD").strip()
+        tests, impl = changed_since(mb)
+        if not tests or not impl:
+            sink.write(render_nothing(tests, impl))
+            if impl and not tests:
+                print(NO_TEST_WARNING, flush=True)
+            return 0
+        sink.write(render_header(impl, mb))
+        with tempfile.TemporaryDirectory(prefix="verify-red-") as tmp:
+            for i, test_file in enumerate(tests):
+                rows = verify_file(
+                    test_file,
+                    i,
+                    mb=mb,
+                    base=args.base,
+                    impl=impl,
+                    python=args.python,
+                    tmp=Path(tmp),
+                    timeout=args.timeout,
+                )
+                sink.write(render_file(test_file, rows))
+                for line in annotations(rows):
+                    print(line, flush=True)
+        dirty = _git("status", "--porcelain", "--", *impl).strip()
+        if dirty:
+            raise InfraError(f"the implementation files were not restored:\n{dirty}")
+        sink.write(LEGEND + "\n")
     except InfraError as exc:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)
         return 2
-    text = render(rows, tests, impl, mb)
-    print(text)
-    for line in annotations(rows):
-        print(line)
-    if args.summary:
-        with open(args.summary, "a", encoding="utf-8") as fh:
-            fh.write(text)
     return 0
 
 

@@ -46,8 +46,8 @@ code nobody had pushed).
       named for a regression or a "still works" case, not one at random (PR #69: a class named for the
       exact regression it reintroduced covered only cases that already passed, and read as tested).
       TRIAL (#352, from 2026-09-23): the PR's CI `verify-red` job does this for every changed test file
-      and puts a table in the run summary (`gh run view <id>` / the Checks tab). When that table ran on
-      the PR's head SHA and every test the PR names for the fix reads "red without the fix", it replaces
+      and puts a table in the run summary (`gh run view <id>` / the Checks tab). When that table is from
+      the run for the PR's latest push and every test the PR names for the fix reads "red without the fix", it replaces
       the manual run; "red by import/collection error", "passes without the fix" on a test that is not a
       "still works" guard, "not verifiable", or implementation outside `pyrite/`/`extensions/*/src/`
       (e.g. `scripts/`) still need the manual step. After ~15-20 PRs, decide whether to make the job

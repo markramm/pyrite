@@ -138,6 +138,24 @@ class TestClassify:
             label, _ = vr.classify(self.P, ("failed", msg), collection_error=False)
             assert label == vr.RED_IMPORT, msg
 
+    def test_a_missing_module_attribute_is_a_weak_red(self, vr):
+        # monkeypatch.setattr on a name the fix adds, in a fixture or the body.
+        for state, msg in (
+            (
+                "error",
+                "failed on setup with \"AttributeError: <module 'pyrite.a' from "
+                "'/x/pyrite/a.py'> has no attribute '_loop'\"",
+            ),
+            ("failed", "AttributeError: module 'pyrite.a' has no attribute 'new_helper'"),
+        ):
+            label, _ = vr.classify(self.P, (state, msg), collection_error=False)
+            assert label == vr.RED_IMPORT, msg
+
+    def test_an_attribute_error_on_an_object_is_a_real_red(self, vr):
+        msg = "AttributeError: 'NoneType' object has no attribute 'title'"
+        label, _ = vr.classify(self.P, ("failed", msg), collection_error=False)
+        assert label == vr.RED
+
     def test_a_collection_error_is_a_weak_red_for_every_test_in_the_file(self, vr):
         label, _ = vr.classify(self.P, None, collection_error=True)
         assert label == vr.RED_IMPORT
@@ -227,7 +245,7 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def run_ci(repo: Path, tmp_path: Path) -> tuple[subprocess.CompletedProcess[str], str]:
+def run_ci(repo: Path, tmp_path: Path, *extra: str) -> tuple[subprocess.CompletedProcess[str], str]:
     summary = tmp_path / "summary.md"
     env = {
         **os.environ,
@@ -236,7 +254,7 @@ def run_ci(repo: Path, tmp_path: Path) -> tuple[subprocess.CompletedProcess[str]
     }
     env.pop("PYTEST_ADDOPTS", None)
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--base", "dev"],
+        [sys.executable, str(SCRIPT), "--base", "dev", *extra],
         cwd=repo,
         env=env,
         capture_output=True,
@@ -294,6 +312,10 @@ def test_no_test_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None
     result, summary = run_ci(repo, tmp_path)
     assert result.returncode == 0, result.stderr
     assert "nothing to verify" in summary
+    # Implementation changed and no test did: worth a warning on the PR.
+    warnings = [ln for ln in result.stdout.splitlines() if ln.startswith("::warning")]
+    assert len(warnings) == 1, result.stdout
+    assert "no test file" in warnings[0]
 
 
 def test_an_infrastructure_error_fails_the_job(repo: Path, tmp_path: Path) -> None:
@@ -307,6 +329,129 @@ def test_an_infrastructure_error_fails_the_job(repo: Path, tmp_path: Path) -> No
     assert result.returncode == 2, (result.stdout, result.stderr)
     assert "uncommitted" in result.stderr
     assert (repo / "pyrite" / "__init__.py").read_text() == FIXED + "# wip\n"
+
+
+PINNED_MTIME = 1_700_000_000
+
+
+def _pin_mtimes(repo: Path) -> None:
+    """Every checkout leaves every .py at ONE mtime -- the worst case for bytecode.
+
+    CPython validates a .pyc by the source's mtime (whole seconds) and size. A
+    revert and a restore inside the same second, between two sources of the same
+    size, is what the cold read hit; pinning the mtime makes it happen every run
+    instead of most runs.
+    """
+    hook = repo / ".git" / "hooks" / "post-checkout"
+    hook.write_text(
+        "#!/usr/bin/env bash\n"
+        f'exec "{sys.executable}" -c "import os, pathlib\n'
+        "for f in pathlib.Path('.').rglob('*.py'):\n"
+        f"    '.git' in f.parts or os.utime(f, ({PINNED_MTIME}, {PINNED_MTIME}))\"\n"
+    )
+    hook.chmod(0o755)
+    for f in repo.rglob("*.py"):
+        os.utime(f, (PINNED_MTIME, PINNED_MTIME))
+
+
+SAME_SIZE_FIX = "def add(a, b):\n    return a + b\n"  # same size as BROKEN
+
+
+def test_a_same_size_fix_leaves_no_stale_bytecode(vr, repo: Path, tmp_path: Path) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(SAME_SIZE_FIX)
+    real = "from pyrite import add\n\n\ndef test_real():\n    assert add(2, 2) == 4\n"
+    (repo / "tests" / "test_a.py").write_text(real)
+    (repo / "tests" / "test_b.py").write_text(real)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: add adds")
+    _pin_mtimes(repo)
+
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    # The second file's with-fix run must see the fix, not the reverted bytecode.
+    assert vr.RED in row(summary, "tests/test_a.py::test_real")
+    assert vr.RED in row(summary, "tests/test_b.py::test_real")
+    # And the tree left behind runs the fix.
+    out = subprocess.run(
+        [sys.executable, "-c", "from pyrite import add; print(add(2, 2))"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert out == "4"
+
+
+def test_a_file_with_no_report_without_the_fix_is_a_row(vr, repo: Path, tmp_path: Path) -> None:
+    # A conftest that imports a name the fix adds: without the fix pytest cannot
+    # even load it, and writes no report. That file gets a row; the table survives.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "conftest.py").write_text("from pyrite import helper  # noqa: F401\n")
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: add adds")
+
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    for f in ("tests/test_add.py", "tests/test_helper.py"):
+        line = row(summary, f)
+        assert vr.NOT_VERIFIABLE in line and "no report without the fix" in line, line
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_renamed_and_deleted_implementation_is_reverted_and_restored(
+    vr, repo: Path, tmp_path: Path
+) -> None:
+    body = "".join(f"\n\ndef unused_{i}():\n    return {i}\n" for i in range(20))
+    (repo / "pyrite" / "calc.py").write_text("def add(a, b):\n    return a - b\n" + body)
+    (repo / "pyrite" / "legacy.py").write_text("def add(a, b):\n    return a + b\n")
+    (repo / "pyrite" / "__init__.py").write_text("from pyrite.calc import add  # noqa: F401\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+
+    git(repo, "mv", "pyrite/calc.py", "pyrite/arith.py")
+    (repo / "pyrite" / "arith.py").write_text("def add(a, b):\n    return a + b\n" + body)
+    git(repo, "rm", "-q", "pyrite/legacy.py")
+    (repo / "pyrite" / "__init__.py").write_text("from pyrite.arith import add  # noqa: F401\n")
+    (repo / "tests" / "test_add.py").write_text(
+        PR_TESTS.replace("from pyrite import helper", "from pyrite import add as helper")
+    )
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: rename calc to arith, drop legacy")
+    assert "R" in git(repo, "diff", "--name-status", "-M", "dev", "HEAD")  # git sees a rename
+
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert vr.RED in row(summary, "tests/test_add.py::test_real")
+    assert "`pyrite/calc.py`" in summary and "`pyrite/legacy.py`" in summary
+    # Restored exactly: the renamed-away and deleted files are gone again.
+    assert not (repo / "pyrite" / "calc.py").exists()
+    assert not (repo / "pyrite" / "legacy.py").exists()
+    assert (repo / "pyrite" / "arith.py").exists()
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_a_hung_file_is_a_row_not_a_killed_job(vr, repo: Path, tmp_path: Path) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(
+        "import time\n\n\ndef add(a, b):\n    time.sleep(60)\n    return a - b\n"
+    )
+    git(repo, "commit", "-q", "--amend", "-am", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: add adds, promptly")
+
+    result, summary = run_ci(repo, tmp_path, "--timeout", "5")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    line = row(summary, "tests/test_add.py")
+    assert vr.NOT_VERIFIABLE in line and "timed out without the fix" in line, line
+    # The next file still ran.
+    assert vr.RED_IMPORT in row(summary, "tests/test_helper.py::test_helper")
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert git(repo, "status", "--porcelain") == ""
 
 
 # ---------------------------------------------------------------------------
