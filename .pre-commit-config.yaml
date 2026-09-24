@@ -117,7 +117,7 @@ repos:
         pass_filenames: false
         # Matched against the files changed in the pushed range: a docs- or
         # KB-only push skips the suite. CI still runs it.
-        files: '(\.py$|(^|/)pyproject\.toml$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
+        files: '(\.py$|^scripts/|(^|/)pyproject\.toml$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
         stages: [pre-push]
       - id: fix-commit-has-tests
         name: "fix: commits must touch tests/"

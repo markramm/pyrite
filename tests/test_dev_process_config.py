@@ -246,6 +246,31 @@ class TestParallelSuite:
         (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
         assert "PYRITE_PUSH_FULL" in hook["entry"] and "--full" in hook["entry"], hook["entry"]
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "scripts/test-affected",
+            "scripts/verify-red.sh",
+            "scripts/new-worktree.sh",
+            "pyrite/x.py",
+        ],
+    )
+    def test_pre_push_runs_for_scripts_without_a_py_suffix(self, precommit, path):
+        # The hook's files: filter decides whether it runs at all. It matched
+        # `\.py$`, so a push changing only scripts/test-affected (no suffix)
+        # skipped the tests of the script that selects the tests.
+        import re
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert re.search(hook["files"], path), (path, hook["files"])
+
+    @pytest.mark.parametrize("path", ["docs/guide.md", "kb/backlog/x.md", "README.md"])
+    def test_pre_push_still_skips_docs_only_pushes(self, precommit, path):
+        import re
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert not re.search(hook["files"], path), (path, hook["files"])
+
     def test_the_full_selection_covers_extensions(self):
         # --full (and every fallback) must still mean tests/ AND extensions/.
         script = (REPO / "scripts" / "test-affected").read_text()
