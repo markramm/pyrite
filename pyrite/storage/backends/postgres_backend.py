@@ -13,7 +13,8 @@ from __future__ import annotations
 import logging
 from typing import Any, ClassVar
 
-from sqlalchemy import text
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.engine import URL, make_url
 from sqlalchemy.orm import Session
 
 from ...exceptions import StorageError
@@ -22,6 +23,39 @@ from .base_backend import BaseBackend
 from .capabilities import BackendCapability
 
 logger = logging.getLogger(__name__)
+
+
+# The DBAPI the ``postgres`` extra installs (``psycopg2-binary``). A bare
+# ``postgresql://`` URL leaves the choice to SQLAlchemy, and SQLAlchemy 2.1
+# changed its default from psycopg2 to psycopg (v3) -- which the extra does not
+# install -- so every bare URL failed with ``No module named 'psycopg'``.
+_DEFAULT_DRIVER = "psycopg2"
+
+
+def postgres_url(url: str | URL) -> URL:
+    """Resolve a Postgres URL to one whose driver the ``postgres`` extra installs.
+
+    A bare ``postgresql://`` or ``postgres://`` URL is pinned to
+    ``postgresql+psycopg2://``, the same on SQLAlchemy 2.0 and 2.1. A driver
+    the user named (``postgresql+psycopg://``, ``+asyncpg`` ...) is theirs and
+    is left alone; only the ``postgres`` alias, which SQLAlchemy does not
+    accept as a dialect name, is spelled ``postgresql``. Returns a ``URL`` object rather than a string: rendering a
+    URL to text masks its password.
+    """
+    parsed = make_url(url)
+    backend, _, driver = parsed.drivername.partition("+")
+    if backend not in ("postgresql", "postgres"):
+        raise ValueError(f"not a PostgreSQL URL: {parsed.drivername}://...")
+    return parsed.set(drivername=f"postgresql+{driver or _DEFAULT_DRIVER}")
+
+
+def create_postgres_engine(url: str | URL, **kwargs: Any) -> Engine:
+    """``create_engine`` for Postgres, through ``postgres_url``.
+
+    Every Postgres engine is built here, so the driver choice lives in one
+    place. ``kwargs`` go to ``create_engine`` unchanged.
+    """
+    return create_engine(postgres_url(url), **kwargs)
 
 
 def ensure_schema(engine) -> None:

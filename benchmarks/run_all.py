@@ -17,7 +17,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import shutil
 import statistics
 import tempfile
 import time
@@ -42,17 +41,20 @@ def _make_postgres_backend(tmpdir: Path):
     """
     import os
 
-    from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
-    from pyrite.storage.backends.postgres_backend import PostgresBackend, ensure_schema
+    from pyrite.storage.backends.postgres_backend import (
+        PostgresBackend,
+        create_postgres_engine,
+        ensure_schema,
+    )
     from pyrite.storage.models import KB, Base
 
     url = os.environ.get("PYRITE_BENCH_PG_URL")
     if not url:
         raise RuntimeError("PYRITE_BENCH_PG_URL not set")
 
-    engine = create_engine(url)
+    engine = create_postgres_engine(url)
     # Reset schema for clean benchmark
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
@@ -82,6 +84,7 @@ def _make_postgres_backend(tmpdir: Path):
 def _generate_fake_embedding(entry_id: str, dim: int = 384) -> list[float]:
     """Deterministic pseudo-embedding from entry ID hash."""
     import hashlib
+
     h = hashlib.sha256(entry_id.encode()).digest()
     # Use hash bytes to seed values
     values = []
@@ -96,6 +99,7 @@ def _generate_fake_embedding(entry_id: str, dim: int = 384) -> list[float]:
 
 
 # --------------- Quality Metrics ---------------
+
 
 def recall_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int = 10) -> float:
     if not relevant_ids:
@@ -117,6 +121,7 @@ def ndcg_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int = 10) -> 
             (1.0 if rid in relevant_ids else 0.0) / math.log2(i + 2)
             for i, rid in enumerate(ids[:k])
         )
+
     actual = dcg(retrieved_ids)
     # Ideal: all relevant first
     ideal_ids = [rid for rid in retrieved_ids if rid in relevant_ids]
@@ -128,6 +133,7 @@ def ndcg_at_k(retrieved_ids: list[str], relevant_ids: set[str], k: int = 10) -> 
 
 
 # --------------- Benchmark Functions ---------------
+
 
 def bench_index(backend_factory, entries: list[dict], label: str) -> dict:
     """Measure time to index all entries."""
@@ -265,7 +271,10 @@ def bench_disk(backend_factory, entries: list[dict], label: str) -> dict:
 
 # --------------- Main ---------------
 
-def run_benchmarks(sizes: list[int], n_queries: int, repeats: int, backend_filter: list[str] | None = None) -> dict:
+
+def run_benchmarks(
+    sizes: list[int], n_queries: int, repeats: int, backend_filter: list[str] | None = None
+) -> dict:
     all_backends = {
         "sqlite": _make_sqlite_backend,
         "postgres": _make_postgres_backend,
@@ -294,9 +303,7 @@ def run_benchmarks(sizes: list[int], n_queries: int, repeats: int, backend_filte
             )
 
             print(f"  [{label}] {size} entries: search quality...")
-            results["quality"].append(
-                bench_search_quality(factory, entries, queries, label)
-            )
+            results["quality"].append(bench_search_quality(factory, entries, queries, label))
 
             print(f"  [{label}] {size} entries: disk footprint...")
             results["disk"].append(bench_disk(factory, entries, label))
@@ -311,19 +318,29 @@ def format_markdown(results: dict) -> str:
     lines.append("| Backend | Entries | Time (s) | Entries/sec |")
     lines.append("|---------|---------|----------|-------------|")
     for r in results["index"]:
-        lines.append(f"| {r['backend']} | {r['entries']} | {r['index_time_s']} | {r['entries_per_sec']} |")
+        lines.append(
+            f"| {r['backend']} | {r['entries']} | {r['index_time_s']} | {r['entries_per_sec']} |"
+        )
 
     lines.append("\n## Query Latency\n")
-    lines.append("| Backend | Entries | Keyword p50 (ms) | Keyword p95 (ms) | Semantic p50 (ms) | Semantic p95 (ms) |")
-    lines.append("|---------|---------|------------------|------------------|-------------------|-------------------|")
+    lines.append(
+        "| Backend | Entries | Keyword p50 (ms) | Keyword p95 (ms) | Semantic p50 (ms) | Semantic p95 (ms) |"
+    )
+    lines.append(
+        "|---------|---------|------------------|------------------|-------------------|-------------------|"
+    )
     for r in results["latency"]:
-        lines.append(f"| {r['backend']} | {r['entries']} | {r['keyword_p50_ms']} | {r['keyword_p95_ms']} | {r['semantic_p50_ms']} | {r['semantic_p95_ms']} |")
+        lines.append(
+            f"| {r['backend']} | {r['entries']} | {r['keyword_p50_ms']} | {r['keyword_p95_ms']} | {r['semantic_p50_ms']} | {r['semantic_p95_ms']} |"
+        )
 
     lines.append("\n## Search Quality (Keyword FTS)\n")
     lines.append("| Backend | Queries | Recall@10 | MRR | nDCG@10 |")
     lines.append("|---------|---------|-----------|-----|---------|")
     for r in results["quality"]:
-        lines.append(f"| {r['backend']} | {r['queries_evaluated']} | {r['recall_at_10']} | {r['mrr']} | {r['ndcg_at_10']} |")
+        lines.append(
+            f"| {r['backend']} | {r['queries_evaluated']} | {r['recall_at_10']} | {r['mrr']} | {r['ndcg_at_10']} |"
+        )
 
     lines.append("\n## Disk Footprint\n")
     lines.append("| Backend | Entries | Size (MB) |")
@@ -339,7 +356,9 @@ def main():
     parser.add_argument("--sizes", default="500,1000", help="Comma-separated corpus sizes")
     parser.add_argument("--queries", type=int, default=25, help="Number of test queries")
     parser.add_argument("--repeats", type=int, default=10, help="Latency measurement repeats")
-    parser.add_argument("--backends", default=None, help="Comma-separated backends (sqlite,postgres)")
+    parser.add_argument(
+        "--backends", default=None, help="Comma-separated backends (sqlite,postgres)"
+    )
     parser.add_argument("--output", default=None, help="Output JSON path")
     args = parser.parse_args()
 

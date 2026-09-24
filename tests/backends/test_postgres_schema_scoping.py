@@ -19,9 +19,12 @@ import pytest
 
 pytest.importorskip("psycopg2")
 
-from sqlalchemy import create_engine, text  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
-from pyrite.storage.backends.postgres_backend import ensure_schema  # noqa: E402
+from pyrite.storage.backends.postgres_backend import (  # noqa: E402
+    create_postgres_engine,
+    ensure_schema,
+)
 from pyrite.storage.models import Base  # noqa: E402
 
 
@@ -51,7 +54,7 @@ def two_schemas():
 
     schema_names = _two_schema_names()
 
-    admin = create_engine(url)
+    admin = create_postgres_engine(url)
     with admin.connect() as conn:
         # The extension is per-database and must live somewhere both schemas
         # can see, or `vector` does not resolve for the second one.
@@ -62,7 +65,7 @@ def two_schemas():
         conn.commit()
 
     engines = {
-        name: create_engine(url, connect_args={"options": f"-csearch_path={name},public"})
+        name: create_postgres_engine(url, connect_args={"options": f"-csearch_path={name},public"})
         for name in schema_names
     }
     # Both schemas fully built BEFORE any assertion: the bug only appears when

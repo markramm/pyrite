@@ -50,17 +50,21 @@ def _make_postgres_backend():
 
     Returns (backend, engine, session) — caller must drop tables on teardown.
     """
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import text
     from sqlalchemy.orm import sessionmaker
 
-    from pyrite.storage.backends.postgres_backend import PostgresBackend, ensure_schema
+    from pyrite.storage.backends.postgres_backend import (
+        PostgresBackend,
+        create_postgres_engine,
+        ensure_schema,
+    )
     from pyrite.storage.models import Base
 
     url = _pg_url()
     worker = _worker_schema()
 
     if worker:
-        with create_engine(url).connect() as conn:
+        with create_postgres_engine(url).connect() as conn:
             # The extension is per-database, not per-schema, and must be
             # somewhere every worker can see: pin it to public and keep public
             # on the search_path below, or the `vector` type fails to resolve
@@ -68,9 +72,11 @@ def _make_postgres_backend():
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector SCHEMA public"))
             conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{worker}"'))
             conn.commit()
-        engine = create_engine(url, connect_args={"options": f"-csearch_path={worker},public"})
+        engine = create_postgres_engine(
+            url, connect_args={"options": f"-csearch_path={worker},public"}
+        )
     else:
-        engine = create_engine(url)
+        engine = create_postgres_engine(url)
 
     # Create all ORM tables + Postgres-specific columns/triggers
     Base.metadata.create_all(engine)
