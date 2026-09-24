@@ -11,8 +11,10 @@ services:
         value: "0.0.0.0"
       - key: PYRITE_DATA_DIR
         value: /data
+      # A public hostname: require accounts. The first account registered
+      # becomes admin, so register yours right after the first deploy.
       - key: PYRITE_AUTH_ENABLED
-        value: "false"
+        value: "true"
       - key: PYRITE_OPENAI_API_KEY
         sync: false
       - key: PYRITE_ANTHROPIC_API_KEY
