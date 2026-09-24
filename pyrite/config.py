@@ -694,6 +694,7 @@ class PyriteConfig:
                     default_role=kb_data.get("default_role"),
                 )
             )
+            _repair_ephemeral_default_role(knowledge_bases[-1])
 
         repositories = []
         for repo_data in data.get("repositories", []):
@@ -944,6 +945,21 @@ def load_config() -> PyriteConfig:
         kb.load_kb_yaml()
 
     return config
+
+
+def _repair_ephemeral_default_role(kb: KBConfig) -> None:
+    """Make an ephemeral KB without an access policy private.
+
+    Versions before this one set a user's ephemeral KB private only in the
+    memory of the process that created it, so config.yaml can hold ephemeral
+    KBs with no default_role -- readable by every user at their global role.
+    Ephemeral KBs are private by default; restore that on every load.
+    """
+    if kb.ephemeral and kb.default_role is None:
+        logger.warning(
+            "Ephemeral KB %r has no default_role; treating it as private ('none')", kb.name
+        )
+        kb.default_role = "none"
 
 
 def save_config(config: PyriteConfig) -> None:

@@ -916,27 +916,31 @@ class AuthService:
             name = f"ephemeral-{user_id}-{secrets.token_hex(4)}"
 
         ttl = self.config.ephemeral_default_ttl
+        # Private from the moment it exists: create_ephemeral_kb persists
+        # default_role "none" with the KB (registry row and config.yaml).
         kb = ephemeral_service.create_ephemeral_kb(
             name, ttl=ttl, description=f"Ephemeral KB for user {user_id}"
         )
 
-        # Set KB as private by default
-        kb.default_role = "none"
-
-        # Grant creator admin on the KB
+        # The creator's admin grant and the per-user count commit together.
+        # If either fails, the KB goes too, and with it any grant row for it
+        # (force_expire_kb -> db.unregister_kb deletes the KB's grants).
         now = datetime.now(UTC).isoformat()
-        self.db.execute_write_sql(
-            """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
-            VALUES (:user_id, :kb_name, 'admin', :granted_by, :now)""",
-            {"user_id": user_id, "kb_name": name, "granted_by": user_id, "now": now},
-            commit=False,
-        )
-
-        # Increment ephemeral_kb_count
-        self.db.execute_write_sql(
-            "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1 WHERE id = :user_id",
-            {"user_id": user_id},
-        )
+        try:
+            self.db.execute_write_sql(
+                """INSERT INTO kb_permission (user_id, kb_name, role, granted_by, created_at)
+                VALUES (:user_id, :kb_name, 'admin', :granted_by, :now)""",
+                {"user_id": user_id, "kb_name": name, "granted_by": user_id, "now": now},
+                commit=False,
+            )
+            self.db.execute_write_sql(
+                "UPDATE local_user SET ephemeral_kb_count = ephemeral_kb_count + 1"
+                " WHERE id = :user_id",
+                {"user_id": user_id},
+            )
+        except BaseException:
+            ephemeral_service.force_expire_kb(name)
+            raise
 
         return {
             "name": kb.name,

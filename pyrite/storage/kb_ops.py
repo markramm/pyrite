@@ -60,17 +60,27 @@ class KBOpsMixin:
         path: str,
         description: str = "",
         source: str = "user",
+        default_role: str | None = None,
     ) -> bool:
         """Register a KB only if no row has this name; never overwrite one.
 
         Returns False when the name is already registered. The primary key
         makes this atomic: of two concurrent inserts, one fails.
+        `default_role` is written with the row, so a KB's access policy exists
+        from the moment the KB does.
         """
         type_str = kb_type.value if hasattr(kb_type, "value") else kb_type
         if self.session.get(KB, name) is not None:
             return False
         self.session.add(
-            KB(name=name, kb_type=type_str, path=path, description=description, source=source)
+            KB(
+                name=name,
+                kb_type=type_str,
+                path=path,
+                description=description,
+                source=source,
+                default_role=default_role,
+            )
         )
         try:
             self.session.commit()

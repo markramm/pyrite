@@ -1,0 +1,238 @@
+"""An ephemeral KB's private access policy survives a restart.
+
+A user's ephemeral KB is created with ``default_role: none``: only the creator
+(through their per-KB admin grant) and global admins may use it. That policy
+must be written with the KB -- to the registry row and to ``config.yaml`` --
+in the same step that creates it, so that every process (a restarted server,
+a second worker, the CLI) resolves the same policy.
+
+The restart is simulated by constructing the app a second time from the
+config file and database the first app wrote.
+"""
+
+import logging
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+import pyrite.config as config_module
+from pyrite.config import AuthConfig, PyriteConfig, Settings, load_config, save_config
+from pyrite.server.api import create_app
+from pyrite.services.auth_service import AuthService
+from pyrite.services.ephemeral_service import EphemeralKBService
+from pyrite.storage.database import PyriteDB
+
+
+def _fresh_config(tmp: Path) -> PyriteConfig:
+    config = PyriteConfig(
+        knowledge_bases=[],
+        settings=Settings(
+            index_path=tmp / "index.db",
+            workspace_path=tmp / "workspace",
+            auth=AuthConfig(enabled=True, allow_registration=True),
+        ),
+    )
+    save_config(config)
+    return config
+
+
+def _register(app, username) -> dict:
+    client = TestClient(app)
+    r = client.post("/auth/register", json={"username": username, "password": "password123"})
+    assert r.status_code == 200, r.text
+    return {"pyrite_session": r.cookies["pyrite_session"]}
+
+
+@pytest.fixture
+def first_boot(tmp_path):
+    """Boot 1: alice (write) creates an ephemeral KB and writes an entry in it."""
+    config = _fresh_config(tmp_path)
+    app = create_app(config=config)
+    cookies = {name: _register(app, name) for name in ("admin", "alice", "bob")}
+    db = PyriteDB(config.settings.index_path)
+    try:
+        auth = AuthService(db, config.settings.auth)
+        users = {u["username"]: u["id"] for u in auth.list_users()}
+        auth.set_role(users["alice"], "write")
+        auth.set_role(users["bob"], "write")
+    finally:
+        db.close()
+
+    alice = TestClient(app, cookies=cookies["alice"])
+    r = alice.post("/api/kbs/ephemeral", json={"name": "scratch"})
+    assert r.status_code == 200, r.text
+    # A non-admin's REST write goes through a per-user git worktree, which an
+    # ephemeral KB does not have; index the entry directly instead.
+    db = PyriteDB(config.settings.index_path)
+    try:
+        db.upsert_entry(
+            {
+                "id": "private-note",
+                "kb_name": "scratch",
+                "entry_type": "note",
+                "title": "Private note",
+                "body": "x",
+                "file_path": str(config.get_kb("scratch").path / "private-note.md"),
+            }
+        )
+    finally:
+        db.close()
+
+    # Before the restart the KB is already private to alice.
+    bob = TestClient(app, cookies=cookies["bob"])
+    assert bob.get("/api/kbs/scratch").status_code == 404
+    return {"tmp": tmp_path, "cookies": cookies}
+
+
+def _restart():
+    """A new process: config from the file on disk, a new app over the same DB."""
+    return create_app(config=load_config())
+
+
+def test_other_user_cannot_read_ephemeral_kb_after_restart(first_boot):
+    app = _restart()
+    bob = TestClient(app, cookies=first_boot["cookies"]["bob"])
+
+    assert bob.get("/api/kbs/scratch").status_code == 404
+    assert bob.get("/api/entries", params={"kb": "scratch"}).status_code == 404
+
+
+def test_other_user_cannot_write_ephemeral_kb_after_restart(first_boot):
+    app = _restart()
+    bob = TestClient(app, cookies=first_boot["cookies"]["bob"])
+
+    r = bob.post("/api/entries", json={"kb": "scratch", "title": "Intruder", "body": "x"})
+    assert r.status_code == 404, r.text
+
+
+def test_creator_keeps_access_after_restart(first_boot):
+    app = _restart()
+    alice = TestClient(app, cookies=first_boot["cookies"]["alice"])
+
+    assert alice.get("/api/kbs/scratch").status_code == 200
+    r = alice.get("/api/entries", params={"kb": "scratch"})
+    assert r.status_code == 200, r.text
+
+
+def test_policy_is_in_the_registry_row_and_the_config_file(first_boot):
+    """Each of the two stores carries the policy on its own."""
+    db = PyriteDB(first_boot["tmp"] / "index.db")
+    try:
+        rows = db.execute_sql("SELECT default_role FROM kb WHERE name = 'scratch'")
+    finally:
+        db.close()
+    assert rows and rows[0]["default_role"] == "none"
+
+    data = config_module.load_yaml_file(config_module.current_config_file())
+    kb = next(k for k in data["knowledge_bases"] if k["name"] == "scratch")
+    assert kb.get("default_role") == "none"
+
+
+class TestGrantCommitsWithTheKB:
+    """The creator's grant and the KB row land together, or neither does."""
+
+    def _setup(self, tmp_path):
+        config = _fresh_config(tmp_path)
+        db = PyriteDB(config.settings.index_path)
+        auth = AuthService(db, config.settings.auth)
+        user = auth.register("alice", "password123")
+        auth.set_role(user["id"], "write")
+        return config, db, auth, user
+
+    def test_failure_after_create_leaves_no_kb_and_no_grant(self, tmp_path):
+        config, db, auth, user = self._setup(tmp_path)
+        try:
+            # A real database failure on the second of the two writes, so the
+            # session is left needing a rollback, as it would be in production.
+            db.execute_write_sql(
+                "CREATE TRIGGER fail_count BEFORE UPDATE OF ephemeral_kb_count ON local_user"
+                " BEGIN SELECT RAISE(ABORT, 'simulated failure'); END"
+            )
+            with pytest.raises(Exception, match="simulated failure"):
+                auth.create_user_ephemeral_kb(user["id"], EphemeralKBService(config, db), "gone")
+
+            assert config.get_kb("gone") is None
+            assert db.execute_sql("SELECT 1 FROM kb WHERE name = 'gone'") == []
+            assert db.execute_sql("SELECT 1 FROM kb_permission WHERE kb_name = 'gone'") == []
+            assert not (tmp_path / "workspace" / "ephemeral" / "gone").exists()
+            names = [k["name"] for k in load_config().to_dict()["knowledge_bases"]]
+            assert "gone" not in names
+        finally:
+            db.close()
+
+    def test_success_commits_grant_and_count(self, tmp_path):
+        config, db, auth, user = self._setup(tmp_path)
+        try:
+            auth.create_user_ephemeral_kb(user["id"], EphemeralKBService(config, db), "kept")
+        finally:
+            db.close()
+        # A second connection sees both: nothing is left pending in the first.
+        db2 = PyriteDB(tmp_path / "index.db")
+        try:
+            grants = db2.execute_sql("SELECT role FROM kb_permission WHERE kb_name = 'kept'")
+            count = db2.execute_sql(
+                "SELECT ephemeral_kb_count FROM local_user WHERE id = :u", {"u": user["id"]}
+            )
+        finally:
+            db2.close()
+        assert grants == [{"role": "admin"}]
+        assert count[0]["ephemeral_kb_count"] == 1
+
+
+class TestRepairOfEphemeralKBsWithoutPolicy:
+    """Ephemeral KBs written by an earlier version have no default_role at all."""
+
+    def _write_legacy_config(self, tmp_path):
+        (tmp_path / "workspace" / "ephemeral" / "old").mkdir(parents=True)
+        config = _fresh_config(tmp_path)
+        data = config.to_dict()
+        data["knowledge_bases"] = [
+            {
+                "name": "old",
+                "path": str(tmp_path / "workspace" / "ephemeral" / "old"),
+                "kb_type": "generic",
+                "ephemeral": True,
+                "ttl": 3600,
+                "created_at_ts": 9999999999.0,
+            },
+            {"name": "plain", "path": str(tmp_path / "plain"), "kb_type": "generic"},
+        ]
+        config_module.dump_yaml_file(data, config_module.current_config_file())
+
+    def test_legacy_ephemeral_kb_is_private_on_load(self, tmp_path, caplog):
+        self._write_legacy_config(tmp_path)
+        with caplog.at_level(logging.WARNING, logger="pyrite.config"):
+            config = load_config()
+        assert config.get_kb("old").default_role == "none"
+        assert any("old" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+
+    def test_repair_leaves_non_ephemeral_kbs_alone(self, tmp_path):
+        self._write_legacy_config(tmp_path)
+        config = load_config()
+        assert config.get_kb("plain").default_role is None
+
+    def test_legacy_ephemeral_kb_is_hidden_from_other_users_through_the_app(self, tmp_path):
+        self._write_legacy_config(tmp_path)
+        app = create_app(config=load_config())
+        bob = TestClient(app, cookies=_register(app, "admin") and _register(app, "bob"))
+        assert bob.get("/api/kbs/old").status_code == 404
+
+
+def test_ephemeral_kb_created_without_a_user_is_persisted_private(tmp_path):
+    """The admin endpoint and the CLI create ephemeral KBs with no creator grant.
+
+    They are private by default too, and the default is persisted, not
+    applied later: the registry row and config.yaml carry "none".
+    """
+    config = _fresh_config(tmp_path)
+    db = PyriteDB(config.settings.index_path)
+    try:
+        EphemeralKBService(config, db).create_ephemeral_kb("adminscratch")
+        rows = db.execute_sql("SELECT default_role FROM kb WHERE name = 'adminscratch'")
+    finally:
+        db.close()
+    assert rows[0]["default_role"] == "none"
+    data = config_module.load_yaml_file(config_module.current_config_file())
+    kb = next(k for k in data["knowledge_bases"] if k["name"] == "adminscratch")
+    assert kb.get("default_role") == "none"
