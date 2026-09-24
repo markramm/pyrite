@@ -288,6 +288,30 @@ class UsageTierConfig:
     daily_llm_requests: int | None = None
 
 
+ANONYMOUS_TIERS = ("read", "write")
+
+
+def normalize_anonymous_tier(value: str | None, source: str = "auth.anonymous_tier") -> str | None:
+    """The validated `anonymous_tier`: None, "read" or "write".
+
+    "none" (any case) is accepted as None -- no anonymous access -- because
+    shipped deploy configs set `PYRITE_AUTH_ANONYMOUS_TIER=none`. Anything
+    else is refused: an unknown string used to be carried through as the
+    visitor's role, and `admin` would have made every visitor an admin.
+    """
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in ("", "none"):
+        return None
+    if normalized in ANONYMOUS_TIERS:
+        return normalized
+    raise ValueError(
+        f"{source} must be one of 'read', 'write' or 'none' (no anonymous access), "
+        f"got {value!r}. Anonymous visitors can never be given 'admin'."
+    )
+
+
 @dataclass
 class AuthConfig:
     """Authentication configuration."""
@@ -304,6 +328,9 @@ class AuthConfig:
     ephemeral_default_ttl: int = 86400
     ephemeral_max_ttl: int = 604800
     usage_tiers: dict[str, UsageTierConfig] = field(default_factory=dict)
+
+    def __post_init__(self):
+        self.anonymous_tier = normalize_anonymous_tier(self.anonymous_tier)
 
 
 @dataclass
@@ -861,7 +888,9 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
     if val := env("PYRITE_AUTH_ENABLED"):
         config.settings.auth.enabled = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_AUTH_ANONYMOUS_TIER"):
-        config.settings.auth.anonymous_tier = val
+        config.settings.auth.anonymous_tier = normalize_anonymous_tier(
+            val, "PYRITE_AUTH_ANONYMOUS_TIER"
+        )
     if val := env("PYRITE_AUTH_ALLOW_REGISTRATION"):
         config.settings.auth.allow_registration = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_CORS_ORIGINS"):

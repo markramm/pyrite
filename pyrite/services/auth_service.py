@@ -594,7 +594,8 @@ class AuthService:
         2. Explicit kb_permission grant
         3. KB default_role
         4. User global role
-        5. Anonymous tier (when user_id is None)
+        5. Anonymous visitor (user_id None): the lower of anonymous_tier and
+           the KB default_role; None for a `none` KB or no anonymous_tier
         """
         if user_id is not None:
             # Check if global admin
@@ -624,12 +625,18 @@ class AuthService:
                     return None
                 return rows[0]["role"]
 
-        # Anonymous user
-        if kb_default_role is not None and kb_default_role != "none":
-            return kb_default_role
-        if kb_default_role == "none":
+        # Anonymous visitor: `anonymous_tier` is a ceiling that a KB's
+        # default_role can lower but never raise. A `default_role: write` KB
+        # does not make a read-tier visitor a writer; `none` hides the KB.
+        # The read side (readable_kbs), REST writes, /ws and MCP all resolve
+        # the visitor here, so the ceiling holds on every surface.
+        ceiling = self.config.anonymous_tier
+        if ceiling is None or kb_default_role == "none":
             return None
-        return self.config.anonymous_tier
+        if kb_default_role is None:
+            return ceiling
+        levels = {"read": 0, "write": 1, "admin": 2}
+        return min(ceiling, kb_default_role, key=lambda r: levels.get(r, -1))
 
     def grant_kb_permission(self, user_id: int, kb_name: str, role: str, granted_by: int) -> None:
         """Grant or update a per-KB permission."""

@@ -662,8 +662,10 @@ async def resolve_effective_kb_role(
 
     Resolution chain:
     1. Global admins always pass (returns "admin")
-    2. No authenticated user (API key mode) → global `request.state.api_role`
-    3. Explicit KB grant → KB default_role → user global role → anonymous tier
+    2. No user identity and not anonymous (an operator API key, or auth
+       disabled) → global `request.state.api_role`
+    3. A signed-in user or the anonymous visitor: explicit KB grant → KB
+       default_role → user global role / anonymous tier
 
     Returns None only if no role could be determined at all (e.g. no
     `api_role` set on the request, which normally means auth failed
@@ -685,7 +687,9 @@ async def resolve_effective_kb_role(
         return "admin"
 
     auth_user = getattr(request.state, "auth_user", None)
-    if not auth_user:
+    anonymous = getattr(request.state, "anonymous", False)
+    if not auth_user and not anonymous:
+        # An operator API key, or auth disabled: no identity to scope by.
         return role
 
     if kb_name is None:
@@ -693,7 +697,11 @@ async def resolve_effective_kb_role(
     if not kb_name:
         return role
 
-    return effective_kb_role_for_user(config, db, auth_user["id"], kb_name)
+    # A signed-in user, or the anonymous visitor (user_id None): the one
+    # per-KB rule -- grant, then the KB's default_role, then the global role
+    # or anonymous_tier. `readable_kbs` uses the same rule, so an anonymous
+    # visitor's write check can never be looser than their read check.
+    return effective_kb_role_for_user(config, db, auth_user["id"] if auth_user else None, kb_name)
 
 
 def effective_kb_role_for_user(
@@ -911,11 +919,16 @@ async def _enforce_kb_tier(
     for private KB names -- and 403 when the caller can read it but not
     write it.
     """
+    if not kb_exists(config, db, kb_name):
+        # Before the role: a missing KB must answer exactly like a private
+        # one, for every caller and on every write route -- not with whatever
+        # the handler behind this guard happens to say about a missing KB.
+        raise not_found
     effective = await resolve_effective_kb_role(request, config, db, kb_name)
     level = TIER_LEVELS.get(effective, -1) if effective is not None else -1
     if level >= TIER_LEVELS.get(tier, 99):
         return
-    if level < TIER_LEVELS["read"] or not kb_exists(config, db, kb_name):
+    if level < TIER_LEVELS["read"]:
         raise not_found
     raise HTTPException(
         status_code=403,
@@ -952,18 +965,20 @@ def requires_kb_tier(tier: str, *, resolve_kb=None):
         async def _identityless_floor(request: Request) -> None:
             """Refuse before the row is looked up when no KB could change the answer.
 
-            A caller with no user identity -- an API key, or auth disabled --
-            has the same role on every KB, so a tier it lacks is refused
-            here: before the resolver validates the id or reveals whether the
-            row exists. A logged-in user may hold a per-KB grant above their
-            global role, so for them the row's KB decides, below.
+            A caller with no user identity -- an operator API key, or auth
+            disabled -- has the same role on every KB, so a tier it lacks is
+            refused here: before the resolver validates the id or reveals
+            whether the row exists. A signed-in user may hold a per-KB grant,
+            and an anonymous visitor a KB's default_role, above the global
+            role, so for them the row's KB decides, below.
             """
             role = getattr(request.state, "api_role", None)
             if role is None:
                 raise HTTPException(status_code=401, detail="Invalid or missing API key")
-            if not getattr(request.state, "auth_user", None) and TIER_LEVELS.get(
-                role, -1
-            ) < TIER_LEVELS.get(tier, 99):
+            identityless = not getattr(request.state, "auth_user", None) and not getattr(
+                request.state, "anonymous", False
+            )
+            if identityless and TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
                 raise HTTPException(
                     status_code=403,
                     detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
