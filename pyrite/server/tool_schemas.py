@@ -1126,11 +1126,12 @@ ADMIN_TOOLS = {
                 },
                 "remote": {
                     "type": "string",
-                    "description": "Remote name (default: origin)",
+                    "description": "Name of a remote configured in the KB's repository "
+                    "(default: origin); URLs and paths are refused",
                 },
                 "branch": {
                     "type": "string",
-                    "description": "Branch to push (default: current branch)",
+                    "description": "Branch name to push (default: current branch)",
                 },
             },
             "required": ["kb"],

@@ -20,6 +20,7 @@ from ..config import PyriteConfig, load_config
 from ..exceptions import (
     ConfigError,
     EntryNotFoundError,
+    InvalidGitRefError,
     KBNotFoundError,
     KBProtectedError,
     KBReadOnlyError,
@@ -1724,6 +1725,8 @@ class PyriteMCPServer:
 
         try:
             return self.export_svc.push_kb(kb_name, remote=remote, branch=branch)
+        except InvalidGitRefError as e:
+            return _error("VALIDATION_ERROR", str(e))
         except PyriteError as e:
             return _error("OPERATION_FAILED", str(e))
 

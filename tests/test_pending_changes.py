@@ -186,11 +186,13 @@ class TestPublishChanges:
         assert "see the server log" not in result["push_error"], (
             f"push_error is a canned string, not git's own words: {result['push_error']!r}"
         )
-        # git's actual wording for a missing local remote. It must NOT be
-        # reported as "Repository not found, or the configured credentials
-        # cannot see it" -- false on both halves for a KB with no remote.
-        assert "does not appear to be a git repository" in result["push_error"], (
-            f"expected git's own no-remote wording: {result['push_error']!r}"
+        # The real cause. A repository with no remotes is detected before git
+        # runs (push accepts only a configured remote's name), so the message
+        # is Pyrite's, and it names the cause. It must NOT be reported as
+        # "Repository not found, or the configured credentials cannot see
+        # it" -- false on both halves for a KB with no remote.
+        assert "no remotes configured" in result["push_error"], (
+            f"expected the no-remote cause: {result['push_error']!r}"
         )
         assert "credentials cannot see it" not in result["push_error"]
 
