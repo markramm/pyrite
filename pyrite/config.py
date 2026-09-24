@@ -348,6 +348,11 @@ class Settings:
     # Embed entries on write. Off = keyword search only, no torch import, no
     # model download; `pyrite index embed` can backfill later. Env: PYRITE_AUTO_EMBED
     auto_embed: bool = True
+    # Extra Content-Security-Policy sources for the public /site pages, in CSP
+    # syntax, appended to the built-in policy (script-src 'self' ...), e.g.
+    # "script-src https://plausible.io 'sha256-...'; connect-src https://plausible.io"
+    # for a reverse proxy that injects an analytics script. Env: PYRITE_SITE_CSP_EXTRA
+    site_csp_extra: str = ""
     # White-label branding folder. None = use built-in Pyrite defaults.
     # Env override: PYRITE_BRANDING_DIR
     branding_dir: Path | None = field(
@@ -595,6 +600,11 @@ class PyriteConfig:
             "host": self.settings.host,
             "port": self.settings.port,
             "cors_origins": self.settings.cors_origins,
+            **(
+                {"site_csp_extra": self.settings.site_csp_extra}
+                if self.settings.site_csp_extra
+                else {}
+            ),
             "api_key": self.settings.api_key,
             **({"api_keys": self.settings.api_keys} if self.settings.api_keys else {}),
             "auth": {
@@ -763,6 +773,7 @@ class PyriteConfig:
             embedding_dimensions=settings_data.get("embedding_dimensions", 384),
             search_mode=settings_data.get("search_mode", "keyword"),
             auto_embed=settings_data.get("auto_embed", True),
+            site_csp_extra=settings_data.get("site_csp_extra", "") or "",
         )
 
         return cls(
@@ -869,6 +880,8 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         config.settings.prewarm_embeddings = val.lower() in ("true", "1", "yes")
     if val := env("PYRITE_AUTO_EMBED"):
         config.settings.auto_embed = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_SITE_CSP_EXTRA"):
+        config.settings.site_csp_extra = val
 
     # When PYRITE_DATA_DIR is set, derive index_path and workspace_path from it
     data_dir = env("PYRITE_DATA_DIR")

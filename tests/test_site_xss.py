@@ -277,3 +277,74 @@ class TestNoOtherUnescapedHtmlRenderers:
     def test_site_cache_never_embeds_raw_json_dumps_in_script(self):
         src = (Path(__file__).resolve().parent.parent / "pyrite/services/site_cache.py").read_text()
         assert "{json.dumps(" not in src
+
+
+class TestOperatorCspExtension:
+    """Operators whose reverse proxy injects a script (deploy/demo/Caddyfile
+    adds Plausible) extend the /site policy with `site_csp_extra`."""
+
+    EXTRA = "script-src https://plausible.io 'sha256-abc='; connect-src https://plausible.io"
+
+    def _client(self, env, monkeypatch, extra):
+        pytest.importorskip("fastapi")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        monkeypatch.setenv("PYRITE_DATA_DIR", str(env["tmp"]))
+        env["config"].settings.site_csp_extra = extra
+        _put(env["db"], "ok", body="fine")
+        env["svc"].render_all()
+        return TestClient(create_app(config=env["config"]))
+
+    def test_extra_sources_appended_to_directives(self, env, monkeypatch):
+        client = self._client(env, monkeypatch, self.EXTRA)
+        for path in ("/site", f"/site/{KB}/ok", "/site/search", "/site/no-such-kb/x"):
+            csp = client.get(path).headers["content-security-policy"]
+            directives = {d.split()[0]: d.split()[1:] for d in csp.split(";") if d.strip()}
+            assert directives["script-src"] == ["'self'", "https://plausible.io", "'sha256-abc='"]
+            assert directives["connect-src"] == ["'self'", "https://plausible.io"]
+            assert directives["object-src"] == ["'none'"], path
+
+    def test_new_directive_is_added(self, env, monkeypatch):
+        client = self._client(env, monkeypatch, "worker-src 'none'")
+        csp = client.get(f"/site/{KB}/ok").headers["content-security-policy"]
+        assert "worker-src 'none'" in csp
+        assert "script-src 'self';" in csp
+
+    @pytest.mark.parametrize(
+        "bad",
+        [
+            "script-src https://a.example\r\nX-Evil: 1",
+            "script-src https://a.example, default-src *",
+            "Script_Src https://a.example",
+        ],
+    )
+    def test_malformed_extra_is_ignored(self, env, monkeypatch, bad):
+        client = self._client(env, monkeypatch, bad)
+        r = client.get(f"/site/{KB}/ok")
+        assert r.status_code == 200
+        assert "a.example" not in r.headers["content-security-policy"]
+        assert "x-evil" not in r.headers
+
+    def test_setting_loads_from_yaml_and_env(self, monkeypatch):
+        from pyrite.config import _apply_env_overrides
+
+        cfg = PyriteConfig.from_dict({"settings": {"site_csp_extra": self.EXTRA}})
+        assert cfg.settings.site_csp_extra == self.EXTRA
+        assert cfg.to_dict()["settings"]["site_csp_extra"] == self.EXTRA
+        monkeypatch.setenv("PYRITE_SITE_CSP_EXTRA", "connect-src https://x.example")
+        _apply_env_overrides(cfg)
+        assert cfg.settings.site_csp_extra == "connect-src https://x.example"
+        assert Settings(index_path="x").site_csp_extra == ""
+
+    def test_demo_caddyfile_hash_matches_its_injected_script(self):
+        """The Caddyfile comment tells the operator which hash to allow;
+        it must be the hash of the inline script the proxy injects."""
+        import base64
+        import hashlib
+
+        caddy = (Path(__file__).resolve().parent.parent / "deploy/demo/Caddyfile").read_text()
+        inline = re.search(r"<script>(.*?)</script>", caddy).group(1)
+        digest = base64.b64encode(hashlib.sha256(inline.encode()).digest()).decode()
+        assert f"'sha256-{digest}'" in caddy

@@ -10,34 +10,77 @@ Serves the built SvelteKit app from web/dist/ with SPA fallback:
 - Everything else → index.html (SPA client-side routing)
 """
 
+import logging
 import os
+import re
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+logger = logging.getLogger(__name__)
+
 # Defence in depth for /site (pre-rendered KB content on the app's own origin):
 # no inline script and no event-handler attributes run, even if a renderer
 # ever emits one. The pages' behaviour lives in /site/_static/*.js. Inline
 # styles stay allowed; the pages use style attributes throughout.
-SITE_CSP = (
-    "default-src 'self'; "
-    "script-src 'self'; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com; "
-    "img-src 'self' data:; "
-    "connect-src 'self'; "
-    "object-src 'none'; "
-    "base-uri 'self'; "
-    "form-action 'self'; "
-    "frame-ancestors 'self'"
+# Operators extend it with `settings.site_csp_extra` (see build_site_csp).
+_SITE_CSP_DIRECTIVES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("default-src", ("'self'",)),
+    ("script-src", ("'self'",)),
+    ("style-src", ("'self'", "'unsafe-inline'", "https://fonts.googleapis.com")),
+    ("font-src", ("'self'", "https://fonts.gstatic.com")),
+    ("img-src", ("'self'", "data:")),
+    ("connect-src", ("'self'",)),
+    ("object-src", ("'none'",)),
+    ("base-uri", ("'self'",)),
+    ("form-action", ("'self'",)),
+    ("frame-ancestors", ("'self'",)),
 )
+_CSP_NAME = re.compile(r"^[a-z][a-z-]*$")
+# A source expression: printable ASCII, no separators (";" "," or space).
+_CSP_SOURCE = re.compile(r"^[\x21-\x2b\x2d-\x3a\x3c-\x7e]+$")
+
+
+@lru_cache(maxsize=16)
+def build_site_csp(extra: str = "") -> str:
+    """The /site Content-Security-Policy, with ``extra`` merged in.
+
+    ``extra`` is CSP syntax ("script-src https://a.example; connect-src ...").
+    Its sources are appended to the built-in directive of the same name, or
+    a new directive is added. A malformed directive (bad name, or a source
+    with a separator or control character) is skipped with a warning, so a
+    typo can neither break the header nor inject another one.
+    """
+    merged: dict[str, list[str]] = {name: list(srcs) for name, srcs in _SITE_CSP_DIRECTIVES}
+    for raw in (extra or "").split(";"):
+        tokens = raw.strip().split(" ")
+        tokens = [t for t in tokens if t]
+        if not tokens:
+            continue
+        name, sources = tokens[0], tokens[1:]
+        if (
+            not _CSP_NAME.match(name)
+            or not sources
+            or not all(_CSP_SOURCE.match(src) for src in sources)
+            or any(c in raw for c in "\r\n\t\x00")
+        ):
+            logger.warning("Ignoring malformed site_csp_extra directive: %r", raw.strip())
+            continue
+        target = merged.setdefault(name, [])
+        target.extend(src for src in sources if src not in target)
+    return "; ".join(f"{name} {' '.join(srcs)}" for name, srcs in merged.items())
+
+
+SITE_CSP = build_site_csp()
 SITE_SECURITY_HEADERS = {
     "Content-Security-Policy": SITE_CSP,
     "X-Content-Type-Options": "nosniff",
 }
+
 
 # The only files /site/_static serves: the /site pages' scripts.
 _SITE_STATIC_DIR = Path(__file__).parent / "templates"
@@ -61,6 +104,14 @@ def mount_site_routes(app: FastAPI) -> None:
 
         config = getattr(request.app.state, "pyrite_config", None)
         return set(public_kb_names(config)) if config is not None else set()
+
+    def _csp(request: Request, response: Response) -> Response:
+        # The built-in policy is already on the response; apply the
+        # operator's `site_csp_extra`, read per request like _public().
+        config = getattr(request.app.state, "pyrite_config", None)
+        extra = config.settings.site_csp_extra if config is not None else ""
+        response.headers["Content-Security-Policy"] = build_site_csp(extra)
+        return response
 
     # Sitemap
     @app.get("/site/sitemap.xml", include_in_schema=False)
@@ -91,37 +142,46 @@ def mount_site_routes(app: FastAPI) -> None:
 
     # Scripts for the /site pages (CSP: script-src 'self')
     @app.get("/site/_static/{name}", include_in_schema=False)
-    async def site_static(name: str):
+    async def site_static(request: Request, name: str):
         if name not in _SITE_STATIC_FILES:
-            return _site_404()
-        return FileResponse(
-            str(_SITE_STATIC_DIR / name),
-            media_type="text/javascript",
-            headers={"Cache-Control": "public, max-age=3600", **SITE_SECURITY_HEADERS},
+            return _csp(request, _site_404())
+        return _csp(
+            request,
+            FileResponse(
+                str(_SITE_STATIC_DIR / name),
+                media_type="text/javascript",
+                headers={"Cache-Control": "public, max-age=3600", **SITE_SECURITY_HEADERS},
+            ),
         )
 
     # Search page
     @app.get("/site/search", include_in_schema=False)
     async def site_search(request: Request):
-        return _serve_search_page(site_cache_dir)
+        return _csp(request, _serve_search_page(site_cache_dir))
 
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
-        return _serve_site_cached(
-            site_cache_dir,
-            path,
-            "<html><body>Page not yet rendered. Run site cache render.</body></html>",
-            public=_public(request),
+        return _csp(
+            request,
+            _serve_site_cached(
+                site_cache_dir,
+                path,
+                "<html><body>Page not yet rendered. Run site cache render.</body></html>",
+                public=_public(request),
+            ),
         )
 
     @app.get("/site", include_in_schema=False)
     async def site_index(request: Request):
-        return _serve_site_cached(
-            site_cache_dir,
-            "",
-            "<html><body>Site not yet rendered. Run site cache render.</body></html>",
-            public=_public(request),
+        return _csp(
+            request,
+            _serve_site_cached(
+                site_cache_dir,
+                "",
+                "<html><body>Site not yet rendered. Run site cache render.</body></html>",
+                public=_public(request),
+            ),
         )
 
 
