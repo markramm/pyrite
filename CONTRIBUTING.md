@@ -116,7 +116,12 @@ pyrite/
 ## Testing
 
 ```bash
-# Everything, in parallel. This is what the pre-push hook and CI run.
+# While you work: the core smoke set plus every test that imports what your
+# branch changed (against origin/dev). This is what the pre-push hook runs.
+scripts/test-affected --run            # -n 4 by default
+scripts/test-affected --explain        # which tests, and why
+
+# Everything, in parallel. Optional locally; CI runs it on every PR.
 .venv/bin/pytest tests/ extensions/ -n auto
 
 # One file, or tests matching a pattern
@@ -135,7 +140,13 @@ serially — `tests/test_task_claim_concurrency.py` shows the pattern for
 process-spawning tests.
 
 The full suite can take several minutes; runtime varies with available CPU
-cores and system load.
+cores and system load. `scripts/test-affected` selects statically from the
+import graph (a test is chosen if it imports, through any chain, a module you
+changed, or uses a conftest fixture that does), always adds the tests marked
+`@pytest.mark.core`, and runs the full suite instead when you touch
+`conftest.py`, `pyproject.toml`, pytest or hook configuration, CI workflows or
+shared test fixtures. It is a fast feedback loop, not the gate: CI on the pull
+request runs the full suite, so a test it missed shows up there.
 
 **The runner itself is pinned.** `pytest`, `pytest-cov` and `pytest-xdist`
 are exact `==` pins in the `dev` extra (#128) — not a floor like the rest of
@@ -182,7 +193,7 @@ uv pip install --python .venv/bin/python -e ".[all,dev]"
 |---|---|---|
 | commit | ruff, formatting, file hygiene, import-cycle check, KB schema validation | seconds |
 | commit-msg | a `fix:` commit must touch `tests/` | — |
-| pre-push | `pytest tests/ extensions/ -n auto`, only when the push touches code or config | Several minutes; varies by machine and load |
+| pre-push | `scripts/test-affected --run`: core + affected tests on `PYRITE_PUSH_WORKERS` (default 4) workers, only when the push touches code or config; `PYRITE_PUSH_FULL=1` runs the full suite | Seconds to minutes, depending on what changed |
 
 CI runs the same checks plus the full Python matrix, Postgres, the frontend
 build and Playwright. `--no-verify` is for a documented emergency, not for a
@@ -210,7 +221,7 @@ and "it's in a local commit" has cost a round trip more than once.
 
 1. `git checkout -b fix/what-it-fixes dev` (or `feature/...`)
 2. Write the failing test, then the fix
-3. Push; the pre-push hook runs the suite
+3. Push; the pre-push hook runs the affected tests (CI runs the full suite)
 4. Open the PR against `dev` and fill in the template (`Fixes #N` for bugs)
 5. Expect a first response **within 72 hours**. If you have heard nothing
    after that, comment on the PR — it is a lapse, not a verdict, and saying
@@ -264,8 +275,8 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   job is advisory: it is not a required check and fails only when it could
   not run (`python scripts/verify_red_ci.py --base origin/dev` runs it
   locally).
-- The full suite green locally: `pytest tests/ extensions/ -n auto`, plus
-  `ruff check` and `ruff format --check`.
+- The affected tests green locally (`scripts/test-affected --run`), plus
+  `ruff check` and `ruff format --check`. CI runs the full suite on the PR.
 - A changelog fragment: a **new file** `changelog.d/<slug>.<section>.md`
   containing the bullet as it should read in the release notes. Do **not** edit
   `CHANGELOG.md` — it is the one file every pull request used to conflict on,

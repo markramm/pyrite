@@ -151,7 +151,8 @@ Agent(
   description="theme: write-path correctness",
   prompt=<the spec above, plus:>
     "Work in /Users/markr/pyrite-wt/fix-<slug> on branch fix/<slug>. Use its
-     .venv. Load the pyrite-dev skill and follow it. Do not open a PR. When
+     .venv. Load the pyrite-dev skill and follow it. Open a draft PR to dev
+     right after your first push so CI starts; do not mark it ready. When
      the theme is complete, reply with the report format from pyrite-dev."
 )
 ```
