@@ -461,11 +461,13 @@ class TestResourcesAreScoped:
     `pyrite://kbs`, `pyrite://kbs/{name}/entries` and `pyrite://entries/{id}`
     **without** passing through `_dispatch_tool`.
 
-    It is reached here directly rather than through `resources/read`, because
-    that SDK path is broken on every transport today (#217: the handler
-    returns a `ReadResourceResult` where the SDK expects an iterable of
-    `ReadResourceContents`). Scoping it now means it does not ship unscoped
-    the moment #217 lands.
+    It is reached here directly, at the internal method, to isolate the
+    scoping logic from the SDK transport. The transport itself -- whether
+    `resources/read` actually reaches this method and serves its result over
+    a real session -- is covered end-to-end by
+    `tests/test_mcp_resources_session.py` (#217: the SDK adapter used to
+    return a `ReadResourceResult` where the installed SDK expects an
+    iterable of `ReadResourceContents`, so nothing reached here at all).
     """
 
     def test_kbs_resource_lists_only_readable_kbs(self, env):
