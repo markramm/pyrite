@@ -91,12 +91,14 @@ def changed_files(root: Path, base: str = DEFAULT_BASE, committed_only: bool = F
     you want run is the one for the edit you have not committed yet.
     """
     merge_base = _git(root, "merge-base", base, "HEAD").strip()
+    # -z: without it git quotes and octal-escapes non-ASCII paths, which
+    # then match nothing.
     if committed_only:
-        out = _git(root, "diff", "--name-only", "--no-renames", merge_base, "HEAD")
+        out = _git(root, "diff", "-z", "--name-only", "--no-renames", merge_base, "HEAD")
     else:
-        out = _git(root, "diff", "--name-only", "--no-renames", merge_base)
-        out += _git(root, "ls-files", "--others", "--exclude-standard")
-    return sorted({line for line in out.splitlines() if line.strip()})
+        out = _git(root, "diff", "-z", "--name-only", "--no-renames", merge_base)
+        out += _git(root, "ls-files", "-z", "--others", "--exclude-standard")
+    return sorted({path for path in out.split("\0") if path.strip()})
 
 
 # --------------------------------------------------------------------------

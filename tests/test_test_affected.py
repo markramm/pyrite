@@ -366,6 +366,15 @@ class TestChangedFiles:
         _git(git_repo, "checkout", "-q", "feature/x")
         assert ta.changed_files(git_repo, "dev", committed_only=True) == ["pyrite/b.py"]
 
+    def test_non_ascii_paths_are_not_quoted(self, git_repo):
+        # Without -z, git prints "tests/test_caf\303\251.py" in quotes and
+        # the path matches nothing.
+        _write(git_repo, "tests/test_café.py", "def test_x():\n    pass\n")
+        _git(git_repo, "add", ".")
+        _git(git_repo, "commit", "-qm", "unicode")
+        assert "tests/test_café.py" in ta.changed_files(git_repo, "dev", committed_only=True)
+        assert "tests/test_café.py" in ta.changed_files(git_repo, "dev")
+
     def test_renames_report_both_paths(self, git_repo):
         _git(git_repo, "mv", "pyrite/c.py", "pyrite/c_new.py")
         _git(git_repo, "commit", "-qm", "rename")
