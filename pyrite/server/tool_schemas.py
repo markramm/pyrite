@@ -748,7 +748,7 @@ WRITE_TOOLS = {
         },
     },
     "kb_bulk_create": {
-        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. Not best-effort: one malformed entry (e.g. a missing required field) rejects the entire batch before any entry is created (#95). Max 50 entries per call. Refuses any entry whose body is carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
+        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. After parameter validation, entries succeed or fail independently: a missing or empty title is reported per entry without rejecting valid siblings. The results list preserves input order. Invalid parameter types, an unavailable KB, or an invalid batch size still reject the call. Max 50 entries per call. Refuses any entry whose body is carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -784,7 +784,6 @@ WRITE_TOOLS = {
                                 "description": "Additional fields",
                             },
                         },
-                        "required": ["title"],
                     },
                 },
             },

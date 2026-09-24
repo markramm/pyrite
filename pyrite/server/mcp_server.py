@@ -1174,12 +1174,6 @@ class PyriteMCPServer:
         # siblings are created -- the tool's existing per-item contract
         # ({"created": False, "error": ...}).
         #
-        # This does not contradict #95/#239's "one malformed entry rejects the
-        # entire batch": that is SCHEMA validation, which fails the call. A
-        # truncated body is not malformed -- it is a well-formed entry carrying
-        # a fragment -- so dropping just that spec loses nothing the caller
-        # wanted written, while rejecting its siblings would punish records
-        # that were never at risk.
         refusals: dict[int, dict[str, Any]] = {}
         clean: list[dict[str, Any]] = []
         for i, spec in enumerate(entries):
