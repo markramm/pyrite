@@ -26,6 +26,8 @@
 #
 #   VERIFY_RED_BASE    integration ref (default origin/dev, then dev)
 #   VERIFY_RED_PYTHON  interpreter (default .venv/bin/python, then python)
+#   VERIFY_RED_JUNITXML  also write the reverted run's per-test JUnit report
+#                        here (scripts/verify_red_ci.py, the CI job, reads it)
 set -euo pipefail
 test_id="${1:?usage: $0 <pytest node id> <impl file>...}"; shift
 [ $# -gt 0 ] || { echo "name the implementation files to revert" >&2; exit 2; }
@@ -81,8 +83,34 @@ for f in "$@"; do
   esac
 done
 
-restore() { git checkout -q HEAD -- "$@" 2>/dev/null || true; }
+# Drop a file's cached bytecode. A .pyc from one version can be same-size/
+# same-second as the other version that replaces it on disk, which fools
+# CPython's mtime check into serving stale bytecode -- to the reverted run
+# below, or, after the restore, to the next run against the fix.
+drop_pyc() {
+  local b
+  b="$(basename "$1" .py)"
+  rm -f "$(dirname "$1")/__pycache__/${b}".cpython-*.pyc 2>/dev/null || true
+}
+
+# Restore each file on its own: one `git checkout HEAD -- a b` with a path HEAD
+# does not have (the old side of a rename, a deleted file put back for the run)
+# fails as a whole and restores nothing.
+restore() {
+  local f
+  for f in "$@"; do
+    if git cat-file -e "HEAD:$f" 2>/dev/null; then
+      git checkout -q HEAD -- "$f" 2>/dev/null || true
+    else
+      git rm -q --cached --ignore-unmatch -- "$f" >/dev/null 2>&1 || true
+      rm -f -- "$f"
+    fi
+    drop_pyc "$f"
+  done
+}
 trap 'restore "$@"' EXIT
+# A timeout (scripts/verify_red_ci.py) TERMs this script: exit through the EXIT trap.
+trap 'exit 143' TERM INT
 
 # Revert each file to its merge-base content; a file that did not exist there is removed.
 for f in "$@"; do
@@ -91,12 +119,7 @@ for f in "$@"; do
   else
     rm -f -- "$f"
   fi
-  # A .pyc from the pre-revert (fixed) source can be same-size/same-second as
-  # the reverted source that just replaced it, which fools CPython's mtime
-  # check into serving stale bytecode to the pytest run below. Force a
-  # recompile from the file actually on disk.
-  base="$(basename "$f" .py)"
-  rm -f "$(dirname "$f")/__pycache__/${base}".cpython-*.pyc 2>/dev/null || true
+  drop_pyc "$f"
 done
 
 # `git checkout <rev> -- f` updates the index too, so compare against HEAD, not the index.
@@ -105,7 +128,10 @@ if git diff --quiet HEAD -- "$@"; then
   exit 2
 fi
 
-if "$py" -m pytest "$test_id" -q -p no:cacheprovider >/dev/null 2>&1; then
+# Bash 3.2 (macOS) treats "${arr[@]}" of an empty array as unbound under set -u.
+junit=()
+[ -z "${VERIFY_RED_JUNITXML:-}" ] || junit=("--junitxml=$VERIFY_RED_JUNITXML" -o junit_family=xunit1)
+if "$py" -m pytest "$test_id" -q -p no:cacheprovider ${junit[@]+"${junit[@]}"} >/dev/null 2>&1; then
   echo "verify-red: $test_id PASSED without the fix -- it does not test the change" >&2
   exit 1
 fi

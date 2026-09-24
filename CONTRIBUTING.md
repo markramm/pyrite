@@ -247,6 +247,23 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   review asks to remove.
 - A test that fails without the fix. Reviews run `scripts/verify-red.sh
   <test> <impl files>` to check exactly that; you can run it too.
+
+  CI does it for you as well: the **`verify-red`** job reverts the pull
+  request's changes under `pyrite/` and `extensions/*/src/` to the merge base,
+  runs each changed test file, and writes a table to the run's summary page.
+  *red without the fix* is what a review wants to see. *red by
+  import/collection error* is weaker — the test needs your new code, which is
+  not the same as checking what it does. *passes without the fix* leaves a
+  warning on the test: either it does not exercise the change, or it is a
+  deliberate "this still works" guard, which is fine — say so in the PR.
+  *not verifiable* means the test skipped, failed with the fix, timed out
+  (120 s per run), was not reached before the job's time budget ran out,
+  or produced no report, so no claim is made. Tests you did
+  not add or edit are listed apart and never warned about, and a PR that
+  changes implementation but no test file gets a warning of its own. The
+  job is advisory: it is not a required check and fails only when it could
+  not run (`python scripts/verify_red_ci.py --base origin/dev` runs it
+  locally).
 - The full suite green locally: `pytest tests/ extensions/ -n auto`, plus
   `ruff check` and `ruff format --check`.
 - A changelog fragment: a **new file** `changelog.d/<slug>.<section>.md`

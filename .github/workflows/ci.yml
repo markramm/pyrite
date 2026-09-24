@@ -566,6 +566,64 @@ jobs:
         run: bash scripts/run_tutorial.sh
 
   # ===========================================================================
+  # verify-red (#352): do the PR's changed tests fail with its implementation
+  # changes reverted to the merge base? The same check the review lane runs by
+  # hand with scripts/verify-red.sh, on every PR, as a table in the job
+  # summary: red without the fix / red by import-collection error (weak) /
+  # passes without the fix (a ::warning, never a failure) / not verifiable.
+  #
+  # A SIGNAL, NOT A GATE -- on trial (maintainer, 2026-09-23). Deliberately
+  # absent from `gate`'s needs and not a required check; it fails only when
+  # the check itself could not run. pull_request only: a push or a merge group
+  # has no fix to take away. Bounded: only the changed test files, serially,
+  # never the full suite.
+  #
+  # The install is editable from the PR tree and the revert happens in that
+  # same tree, so `import pyrite` and every extension package resolve to the
+  # REVERTED sources (#189 -- verify-red.sh refuses if they do not).
+  # ===========================================================================
+  verify-red:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    # 20 min for the job, 15 of them (--budget below) for the runs: a file the
+    # budget cannot cover becomes a "not verifiable" row, so a few slow files
+    # give a partial table instead of a cancelled job with no legend.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The merge base with the PR's base must be in history.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            extensions/*/pyproject.toml
+
+      - name: Install dependencies (editable, from the PR tree)
+        run: |
+          uv pip install --system -e ".[all]"
+          for ext in extensions/*/; do
+            if [ -f "$ext/pyproject.toml" ]; then uv pip install --system -e "$ext"; fi
+          done
+
+      - name: Run the changed tests without the fix
+        env:
+          HF_HUB_OFFLINE: "1"
+        run: >-
+          python scripts/verify_red_ci.py --budget 900
+          --base "${{ github.event.pull_request.base.sha }}"
+
+  # ===========================================================================
   # The one required check. A skipped matrix job reports as `test`, not
   # `test (3.12)`, so requiring the matrix legs by name hangs every docs-only
   # PR (the classifier skipped the matrix, the required context never
