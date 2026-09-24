@@ -340,6 +340,12 @@ def run_with_fix(python: str, test_file: str, junit: Path, timeout: float) -> Re
     return read_junit(junit, test_file)
 
 
+# True only while a reverted run may have the merge-base implementation checked
+# out: the one window in which main()'s finally must put the fix back. Outside it
+# the tree holds either the commit or someone's edit, and neither may be overwritten.
+_reverted: list[bool] = [False]
+
+
 def run_without_fix(
     python: str, base: str, test_file: str, impl: list[str], junit: Path, timeout: float
 ) -> Report:
@@ -350,9 +356,14 @@ def run_without_fix(
         "VERIFY_RED_PYTHON": python,
         "VERIFY_RED_JUNITXML": str(junit),
     }
+    _reverted[0] = True
     code, err = _run(["bash", str(VERIFY_RED), test_file, *impl], env, timeout)
     if code is None:
         _restore(impl)
+    # A run that returned restored its own tree (verify-red.sh's EXIT trap), or
+    # refused before reverting; an interrupt leaves the flag set for main().
+    _reverted[0] = False
+    if code is None:
         raise NoVerdictError(f"timed out without the fix ({timeout:g} s)")
     if code not in (0, 1):
         # verify-red.sh refused (wrong tree, uncommitted edits): true of every file.
@@ -515,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
     # so _run kills its child and the finally below restores the tree.
     signal.signal(signal.SIGTERM, _terminated)
     impl: list[str] = []
-    started = False
+    _reverted[0] = False
     try:
         mb = _git("merge-base", args.base, "HEAD").strip()
         tests, impl = changed_since(mb)
@@ -524,13 +535,12 @@ def main(argv: list[str] | None = None) -> int:
             if impl and not tests:
                 print(NO_TEST_WARNING, flush=True)
             return 0
-        # Refused here, before anything is reverted, so the restore in `finally`
-        # can never overwrite work that was not committed.
+        # Refused here, before anything is reverted. An edit made later is kept
+        # too: the finally below restores only a run it interrupted.
         dirty = _git("status", "--porcelain", "--", *impl).strip()
         if dirty:
             raise InfraError(f"{', '.join(impl)} have uncommitted changes; commit them first")
         sink.write(render_header(impl, mb))
-        started = True
         with tempfile.TemporaryDirectory(prefix="verify-red-") as tmp:
             for i, test_file in enumerate(tests):
                 rows = verify_file(
@@ -555,7 +565,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)
         return 2
     finally:
-        if started:
+        if _reverted[0]:
             _restore(impl)
     return 0
 

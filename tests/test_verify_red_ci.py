@@ -426,6 +426,29 @@ def test_an_infrastructure_error_fails_the_job(repo: Path, tmp_path: Path) -> No
     assert (repo / "pyrite" / "__init__.py").read_text() == FIXED + "# wip\n"
 
 
+EDITS_DURING_THE_RUN = OLD_TESTS + (
+    "\n\ndef test_real():\n"
+    "    from pathlib import Path\n\n"
+    "    impl = Path('pyrite/__init__.py')\n"
+    "    if '# edited during the run' not in impl.read_text():\n"
+    "        impl.write_text(impl.read_text() + '# edited during the run\\n')\n"
+    "    assert add(2, 2) == 4\n"
+)
+
+
+def test_an_edit_made_during_the_run_survives_the_refusal(repo: Path, tmp_path: Path) -> None:
+    # An editor autosave or another session changes an implementation file after
+    # the up-front check. The reverted run refuses (uncommitted edits); nothing was
+    # reverted, so nothing may be "restored" over the edit on the way out.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(EDITS_DURING_THE_RUN)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+    result, _ = run_ci(repo, tmp_path)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "uncommitted" in result.stderr
+    assert "# edited during the run" in (repo / "pyrite" / "__init__.py").read_text()
+
+
 PINNED_MTIME = 1_700_000_000
 
 
