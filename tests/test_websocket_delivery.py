@@ -169,7 +169,12 @@ def _worker(app):
 
 
 class TestIndexProgress:
-    """IndexWorker threads deliver `index_progress`, scoped by the job's KB."""
+    """IndexWorker threads deliver `index_progress` to unscoped sockets only.
+
+    It carries whole-index job ids and counts, admin information whichever KB
+    the job covers (the rule recorded in kb/backlog/authenticate-and-scope-ws-218.md),
+    so a socket that may read the job's KB still does not receive it.
+    """
 
     def test_open_install_receives_progress(self, open_app):
         with TestClient(open_app) as c, c.websocket_connect("/ws") as ws:
@@ -181,38 +186,23 @@ class TestIndexProgress:
             assert first["type"] == "index_progress"
             assert first["job_id"] == r.json()["job_id"]
 
-    def test_kb_job_reaches_sockets_that_read_the_kb(self, secured):
-        app, tokens = secured["app"], secured["tokens"]
-        with TestClient(app) as c:
-            with (
-                c.websocket_connect("/ws", headers=_cookie(tokens["granted"])) as granted,
-                c.websocket_connect("/ws", headers=_cookie(tokens["peer"])) as peer,
-            ):
-                worker = _worker(app)
-                job_id = worker.submit_sync(kb_name=PRIVATE)
-                worker.wait_for_idle()
-                _marker(c)
-                first = granted.receive_json()
-                assert first["type"] == "index_progress"
-                assert first["job_id"] == job_id
-                assert first["kb_name"] == PRIVATE
-                assert peer.receive_json() == MARKER
-
-    def test_all_kb_job_reaches_unscoped_sockets_only(self, secured):
+    @pytest.mark.parametrize("kb_name", [PRIVATE, None], ids=["kb-job", "all-kb-job"])
+    def test_reaches_unscoped_sockets_only(self, secured, kb_name):
         app, tokens = secured["app"], secured["tokens"]
         with TestClient(app) as c:
             with (
                 c.websocket_connect("/ws", headers=_cookie(tokens["admin-user"])) as admin,
+                # `granted` may read PRIVATE, and still gets no progress.
                 c.websocket_connect("/ws", headers=_cookie(tokens["granted"])) as granted,
             ):
                 worker = _worker(app)
-                job_id = worker.submit_sync(kb_name=None)
+                job_id = worker.submit_sync(kb_name=kb_name)
                 worker.wait_for_idle()
                 _marker(c)
                 first = admin.receive_json()
                 assert first["type"] == "index_progress"
                 assert first["job_id"] == job_id
-                assert first["kb_name"] is None
+                assert first["kb_name"] == kb_name
                 assert granted.receive_json() == MARKER
 
 
@@ -242,7 +232,7 @@ class TestLoopLifetime:
                 broadcast_event("entry_created", entry_id="x", kb_name=PUBLIC)
                 assert _no_unawaited_coroutine(record) == []
 
-    def test_a_closed_captured_loop_is_no_loop(self):
+    def test_a_closed_captured_loop_is_no_loop(self, saved_loop):
         loop = asyncio.new_event_loop()
         ws_module.bind_loop(loop)
         loop.close()
@@ -261,12 +251,104 @@ class TestLoopLifetime:
         finally:
             ws_module.unbind_loop(loop)
 
+    def test_a_later_app_keeps_its_loop_when_an_earlier_one_shuts_down(self, tmp_path):
+        a, b = tmp_path / "a", tmp_path / "b"
+        a.mkdir()
+        b.mkdir()
+        first = TestClient(create_app(config=_config(a, auth=False)))
+        second = TestClient(create_app(config=_config(b, auth=False)))
+        first.__enter__()
+        try:
+            with second as c:
+                # The first app shuts down while the second is serving: its
+                # shutdown must not unbind the second app's loop.
+                first.__exit__(None, None, None)
+                first = None
+                with c.websocket_connect("/ws") as ws:
+                    entry_id = _create(c, PUBLIC, "Survivor")
+                    _marker(c)
+                    _event_then_marker(
+                        ws, {"type": "entry_created", "entry_id": entry_id, "kb_name": PUBLIC}
+                    )
+        finally:
+            if first is not None:
+                first.__exit__(None, None, None)
+
+    def test_a_sync_event_from_a_foreign_running_loop_reaches_the_server_loop(self, open_app):
+        # Code running under some other loop (asyncio.run on a worker thread)
+        # must still hand off: a task on that loop would be cancelled when it
+        # ends, or would drive the server's sockets from the wrong loop.
+        async def emit():
+            broadcast_event("entry_created", entry_id="foreign", kb_name=PUBLIC)
+
+        with TestClient(open_app) as c, c.websocket_connect("/ws") as ws:
+            t = threading.Thread(target=lambda: asyncio.run(emit()))
+            t.start()
+            t.join()
+            _marker(c)
+            _event_then_marker(
+                ws, {"type": "entry_created", "entry_id": "foreign", "kb_name": PUBLIC}
+            )
+
     def test_no_captured_loop_is_a_quiet_no_op(self):
         # A CLI process never starts the server; nothing to deliver to.
         with warnings.catch_warnings(record=True) as record:
             warnings.simplefilter("always")
             broadcast_event("entry_created", entry_id="x", kb_name=PUBLIC)
             assert _no_unawaited_coroutine(record) == []
+
+
+@pytest.fixture
+def saved_loop():
+    """Restore the module's bound loop after a test that rebinds it."""
+    before = ws_module._loop
+    yield
+    ws_module._loop = before
+
+
+class TestBindUnbind:
+    def test_unbind_clears_only_its_own_loop(self, saved_loop):
+        mine, other = asyncio.new_event_loop(), asyncio.new_event_loop()
+        try:
+            ws_module.bind_loop(mine)
+            ws_module.unbind_loop(other)
+            assert ws_module._loop is mine
+            ws_module.unbind_loop(mine)
+            assert ws_module._loop is None
+        finally:
+            mine.close()
+            other.close()
+
+    def test_a_later_bind_survives_the_earlier_unbind(self, saved_loop):
+        earlier, later = asyncio.new_event_loop(), asyncio.new_event_loop()
+        try:
+            ws_module.bind_loop(earlier)
+            ws_module.bind_loop(later)
+            ws_module.unbind_loop(earlier)
+            assert ws_module._loop is later
+        finally:
+            earlier.close()
+            later.close()
+
+
+class TestFanOutTaskIsHeld:
+    """The loop keeps only a weak reference to a task; an unreferenced
+    fan-out can be garbage-collected mid-send. The module holds each one
+    until it completes."""
+
+    def test_task_is_held_until_done(self, saved_loop):
+        async def main():
+            ws_module.bind_loop(asyncio.get_running_loop())
+            broadcast_event("kb_synced", entry_id="", kb_name="")
+            held = set(ws_module._pending_broadcasts)
+            assert len(held) == 1
+            await asyncio.gather(*held)
+            await asyncio.sleep(0)  # let the done-callback run
+            return held
+
+        held = asyncio.run(main())
+        assert all(t.done() for t in held)
+        assert not held & ws_module._pending_broadcasts
 
 
 def _call_capturing(errors):

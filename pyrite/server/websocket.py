@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 # accepted socket. Anything else without a kb_name goes to unscoped sockets only.
 GLOBAL_EVENTS = frozenset({"kb_synced"})
 
+# Events for operators only, whatever KB they name: delivered to unscoped
+# sockets and never to a scoped one. `index_progress` carries index job ids
+# and whole-index counts (the rule in kb/backlog/authenticate-and-scope-ws-218.md).
+UNSCOPED_ONLY_EVENTS = frozenset({"index_progress"})
+
 
 class HandshakeRejectedError(Exception):
     """The socket's credential (or lack of one) does not admit it."""
@@ -131,14 +136,16 @@ class ConnectionManager:
             return
         kb_name = event.get("kb_name")
         # An event that names no KB reaches a scoped socket only when it is on
-        # the explicit global list. Failing closed keeps an emitter without a
-        # kb_name (an all-KB index_progress carries admin job ids and counts)
-        # from reaching scoped or anonymous sockets (#322).
+        # the explicit global list. Failing closed keeps a future emitter
+        # without a kb_name from reaching scoped or anonymous sockets.
         is_global = event.get("type") in GLOBAL_EVENTS
+        unscoped_only = event.get("type") in UNSCOPED_ONLY_EVENTS
         message = json.dumps(event)
         dead: list[WebSocket] = []
         for ws, readable in list(self._connections.items()):
             if readable is not None:
+                if unscoped_only:
+                    continue
                 if kb_name and kb_name not in readable:
                     continue
                 if not kb_name and not is_global:
@@ -181,34 +188,45 @@ def unbind_loop(loop: asyncio.AbstractEventLoop) -> None:
         _loop = None
 
 
+# Fan-out tasks in flight. The loop holds only a weak reference to a task,
+# so an otherwise unreferenced one can be garbage-collected before it has
+# sent anything; each is held here until it completes.
+_pending_broadcasts: set[asyncio.Task] = set()
+
+
 def _schedule_broadcast(event: dict[str, Any]) -> None:
     """Runs *on* the loop: only here is the coroutine created."""
-    asyncio.get_running_loop().create_task(manager.broadcast(event))
+    task = asyncio.get_running_loop().create_task(manager.broadcast(event))
+    _pending_broadcasts.add(task)
+    task.add_done_callback(_pending_broadcasts.discard)
 
 
 def broadcast_event(event_type: str, **data):
     """Broadcast a WebSocket event from any thread.
 
-    On the loop (an ``async def`` route), the fan-out is scheduled as a task.
-    Off it (a sync route on a worker thread, an IndexWorker thread), the event
-    is handed to the loop captured at startup with ``call_soon_threadsafe``.
-    The coroutine is created on the loop, never here, so a loop that closes
+    On the server's loop (an ``async def`` route), the fan-out is scheduled
+    as a task. Anywhere else -- a sync route on a worker thread, an
+    IndexWorker thread, or code running under some other loop -- the event is
+    handed to the loop captured at startup with ``call_soon_threadsafe``.
+    The coroutine is created on that loop, never here, so a loop that closes
     before the hand-off runs leaves no coroutine unawaited.
 
-    No bound loop, or one that has closed or stopped (a CLI process, a test
-    after its ``TestClient`` context ended): there is no socket to deliver to,
-    and the event is dropped.
+    With no loop bound (a CLI process, or ``asyncio`` code with no server),
+    an event raised under a running loop is scheduled there, as before; one
+    raised with no running loop is dropped. A bound loop that has closed or
+    stopped (a test after its ``TestClient`` context ended) counts as none.
     """
     event = {"type": event_type, **data}
     try:
-        asyncio.get_running_loop()
+        running = asyncio.get_running_loop()
     except RuntimeError:
-        pass
-    else:
+        running = None
+
+    loop = _loop
+    if running is not None and (loop is None or running is loop):
         _schedule_broadcast(event)
         return
 
-    loop = _loop
     if loop is None or loop.is_closed() or not loop.is_running():
         return
     try:

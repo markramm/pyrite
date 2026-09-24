@@ -1082,9 +1082,9 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
 
             # Wire WebSocket broadcast for progress updates. The callback runs
             # on an IndexWorker thread; broadcast_event hands it to the loop
-            # captured at startup (#322). The job's kb_name scopes the event:
-            # only sockets that may read that KB receive it, and an all-KB job
-            # (kb_name=None) reaches unscoped sockets only.
+            # captured at startup (#322). index_progress is operator
+            # information and reaches unscoped sockets only, whatever the
+            # job's KB (UNSCOPED_ONLY_EVENTS); kb_name is carried for them.
             def _ws_progress(job_id: str, current: int, total: int, kb_name: str | None):
                 from .websocket import broadcast_event
 
@@ -1177,6 +1177,7 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
     # because the loop that serves the sockets exists only once the server
     # starts; released at shutdown so a later app in the same process (the
     # manager is module-global) never hands events to a dead loop.
+    # Pinned by tests/test_websocket_delivery.py (TestLoopLifetime, TestBindUnbind).
     @application.on_event("startup")
     async def _bind_websocket_loop() -> None:
         import asyncio
