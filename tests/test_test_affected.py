@@ -41,9 +41,11 @@ ta = _load()
 @pytest.fixture(autouse=True)
 def _not_under_a_push(monkeypatch):
     # The pre-push hook runs this file with PRE_COMMIT_*_REF naming commits
-    # of the real repository; the CLI subprocesses here must not inherit them.
+    # of the real repository (and maybe PYRITE_PUSH_FULL); the CLI
+    # subprocesses here must not inherit them.
     monkeypatch.delenv("PRE_COMMIT_FROM_REF", raising=False)
     monkeypatch.delenv("PRE_COMMIT_TO_REF", raising=False)
+    monkeypatch.delenv("PYRITE_PUSH_FULL", raising=False)
 
 
 def _write(root: Path, rel: str, text: str = "") -> None:

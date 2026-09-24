@@ -90,7 +90,8 @@ repos:
         # Runs scripts/test-affected: the core set plus every test that
         # imports what the branch changed, on ${PYRITE_PUSH_WORKERS:-4}
         # workers; the full suite when the branch touches conftest, pytest
-        # config, this file or CI. PYRITE_PUSH_FULL=1 forces the full suite.
+        # config, this file or CI. PYRITE_PUSH_FULL=1 (or true/yes; read by the
+        # script) forces the full suite.
         # The full suite at every push filled the disk and pushed load past 25
         # on 2026-09-24 with several worktrees pushing (#356); CI on the PR
         # runs everything, so this is feedback, not the gate.
@@ -111,8 +112,7 @@ repos:
           checkout, so this push is refused. Create one with
           scripts/new-worktree.sh, or run
           uv venv && uv pip install -e \".[all,dev]\"" >&2; exit 1; fi;
-          exec "$PY" scripts/test-affected --run -n "${PYRITE_PUSH_WORKERS:-4}"
-          ${PYRITE_PUSH_FULL:+--full}'
+          exec "$PY" scripts/test-affected --run -n "${PYRITE_PUSH_WORKERS:-4}"'
         language: system
         pass_filenames: false
         # Matched against the files changed in the pushed range: a docs- or

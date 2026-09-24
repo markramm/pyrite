@@ -242,9 +242,28 @@ class TestParallelSuite:
         assert "-n auto" not in hook["entry"], "uncapped workers per push (#356)"
         assert "${PYRITE_PUSH_WORKERS:-4}" in hook["entry"], hook["entry"]
 
-    def test_pre_push_full_suite_is_one_variable_away(self, precommit):
+    @pytest.mark.parametrize(
+        ("value", "full"),
+        [("1", True), ("true", True), ("yes", True), ("0", False), ("false", False)],
+    )
+    def test_pre_push_full_suite_is_one_variable_away(self, precommit, value, full):
+        # PYRITE_PUSH_FULL=1 forces the full suite; 0/false do not (a shell
+        # `${VAR:+--full}` would have treated any non-empty value as yes).
+        import os
+        import subprocess
+        import sys
+
         (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
-        assert "PYRITE_PUSH_FULL" in hook["entry"] and "--full" in hook["entry"], hook["entry"]
+        assert "${PYRITE_PUSH_FULL:+" not in hook["entry"]
+        out = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "test-affected"), "--run", "--dry-run"]
+            + ["--files", "docs/index.md"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYRITE_PUSH_FULL": value},
+        )
+        assert out.returncode == 0, out.stderr
+        assert ("tests/ extensions/" in out.stdout) is full, out.stdout
 
     @pytest.mark.parametrize(
         "path",

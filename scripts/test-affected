@@ -42,6 +42,7 @@ Usage
   scripts/test-affected --explain              why each one was selected
   scripts/test-affected --run [-n N]           run them (default -n 4)
   scripts/test-affected --run --full           run the full suite instead
+                                               (or PYRITE_PUSH_FULL=1|true|yes)
   --base REF          compare against REF's merge base (default origin/dev)
   --committed         ignore uncommitted and untracked changes
   --files A B ...     use these changed paths instead of asking git
@@ -709,8 +710,9 @@ def main(argv: list[str] | None = None) -> int:
     opts = parser.parse_args(argv)
 
     root = Path(opts.root or Path(__file__).resolve().parent.parent).resolve()
-    if opts.full:
-        selection = Selection(files={}, core=[], full="--full")
+    env_full = os.environ.get("PYRITE_PUSH_FULL", "").strip().lower() in {"1", "true", "yes"}
+    if opts.full or env_full:
+        selection = Selection(files={}, core=[], full="--full" if opts.full else "PYRITE_PUSH_FULL")
     else:
         to_ref = os.environ.get("PRE_COMMIT_TO_REF")
         try:
