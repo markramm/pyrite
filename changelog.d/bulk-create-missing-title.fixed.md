@@ -1,0 +1,1 @@
+- **MCP bulk create preserves valid entries when a sibling has no title.** Missing or empty titles return per-entry failures in input order instead of rejecting the batch at parameter validation (#95).
