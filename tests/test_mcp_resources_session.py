@@ -26,9 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
+from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.server.mcp_server import PyriteMCPServer
-from pyrite.services.auth_service import AuthService
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
 
@@ -37,10 +36,13 @@ PUBLIC, PRIVATE = "public-kb", "private-kb"
 
 @pytest.fixture
 def env():
-    """One public KB, one private KB, a plain read-tier peer and a granted one.
+    """One public KB, one private KB.
 
-    Mirrors the fixture in `test_mcp_read_scoping.py` so #201 criterion 6 is
-    exercised against the same world the tool-scoping tests use.
+    Every test here passes `readable_kbs` directly (as the per-connection
+    closure `build_sdk_server` builds it already resolved), so there is no
+    caller to authenticate -- unlike `test_mcp_read_scoping.py`, which drives
+    calls *as* a named user and so needs `AuthService` to resolve that user's
+    readable set. No auth setup here.
     """
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
@@ -51,28 +53,17 @@ def env():
                 KBConfig(name=PUBLIC, path=tmp / PUBLIC, kb_type="generic", default_role="read"),
                 KBConfig(name=PRIVATE, path=tmp / PRIVATE, kb_type="generic", default_role="none"),
             ],
-            settings=Settings(
-                index_path=tmp / "index.db",
-                auth=AuthConfig(enabled=True, allow_registration=True, anonymous_tier="read"),
-            ),
+            settings=Settings(index_path=tmp / "index.db"),
         )
         db = PyriteDB(config.settings.index_path)
         svc = KBService(config, db)
         svc.create_entry(PUBLIC, "public-note", "Public note", "note", "zebra in the open")
         svc.create_entry(PRIVATE, "secret-note", "Secret note", "note", "zebra behind the wall")
 
-        auth = AuthService(db, config.settings.auth)
-        auth.register("admin-user", "password123")  # first user is admin
-        auth.register("peer", "password123")  # plain read-tier
-
         server = PyriteMCPServer(config=config, tier="read")
 
         try:
-            yield {
-                "server": server,
-                "auth": auth,
-                "users": {u["username"]: u for u in auth.list_users()},
-            }
+            yield {"server": server}
         finally:
             server.close()
             db.close()
@@ -134,7 +125,21 @@ class TestResourcesReadOverARealSession:
 class TestResourcesAreScopedOverARealSession:
     """#201 criterion 6, over the session that was dead until now: a plain
     read-tier peer without a grant on the private KB does not see it listed,
-    and reading it directly is refused -- not served."""
+    and reading it directly is refused -- not served.
+
+    Each refusal asserts the *specific* message `_read_resource` (the
+    internal method) returns for an unreadable KB, not just "some McpError
+    was raised". Before #217's fix, every resource read -- refused or not --
+    raised `McpError` (the internal method's `{"error": ...}` payload was
+    turned into a bare `ValueError` and re-raised, which the SDK reports as a
+    protocol error same as any other exception from the handler): a bare
+    `pytest.raises(McpError)` passed just as well against the broken
+    pre-#217 code, proving nothing about scoping. Matching the message pins
+    it to the *refusal* specifically, and to the same message a genuinely
+    absent KB gets (`_kb_not_found`'s byte-identical-to-absent contract,
+    covered directly in `test_mcp_read_scoping.py`), not some other error
+    that happens to also raise.
+    """
 
     def test_kbs_list_omits_the_private_kb(self, env):
         result = _read_resource(env, "pyrite://kbs", readable_kbs={PUBLIC})
@@ -145,14 +150,29 @@ class TestResourcesAreScopedOverARealSession:
     def test_kb_entries_on_the_private_kb_is_refused(self, env):
         from mcp import McpError
 
-        with pytest.raises(McpError):
+        with pytest.raises(McpError, match=r"KB 'private-kb' not found"):
             _read_resource(env, f"pyrite://kbs/{PRIVATE}/entries", readable_kbs={PUBLIC})
 
     def test_entry_in_the_private_kb_is_refused(self, env):
         from mcp import McpError
 
-        with pytest.raises(McpError):
+        with pytest.raises(McpError, match=r"Entry 'secret-note' not found"):
             _read_resource(env, "pyrite://entries/secret-note", readable_kbs={PUBLIC})
+
+    def test_a_missing_kb_and_a_private_kb_give_the_same_message_shape(self, env):
+        """The refusal must be indistinguishable from genuine absence (the
+        `_kb_not_found` contract): same wording, whether the KB does not
+        exist at all or exists but is unreadable."""
+        from mcp import McpError
+
+        with pytest.raises(McpError, match=r"KB 'no-such-kb' not found") as absent:
+            _read_resource(env, "pyrite://kbs/no-such-kb/entries", readable_kbs={PUBLIC})
+        with pytest.raises(McpError, match=r"KB 'private-kb' not found") as private:
+            _read_resource(env, f"pyrite://kbs/{PRIVATE}/entries", readable_kbs={PUBLIC})
+
+        absent_shape = str(absent.value).replace("no-such-kb", "{kb}")
+        private_shape = str(private.value).replace(PRIVATE, "{kb}")
+        assert absent_shape == private_shape
 
     def test_a_readable_entry_still_works(self, env):
         result = _read_resource(env, "pyrite://entries/public-note", readable_kbs={PUBLIC})
