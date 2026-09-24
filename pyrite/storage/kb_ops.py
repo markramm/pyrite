@@ -6,6 +6,7 @@ Mixin class for KB management operations.
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
@@ -106,6 +107,7 @@ class KBOpsMixin:
 
         Returns the number of KBs merged (0 on failure or none pending).
         """
+        self._repair_ephemeral_rows_without_policy(config)
         try:
             rows = self.session.execute(
                 text(
@@ -134,6 +136,46 @@ class KBOpsMixin:
             for r in rows
         ]
         return config.register_db_kbs(db_kbs)
+
+    def _repair_ephemeral_rows_without_policy(self, config: "PyriteConfig") -> None:
+        """Make registry rows of ephemeral KBs without a policy private.
+
+        Versions before this one never wrote an ephemeral KB's private policy
+        to its registry row. If the KB's config.yaml entry is also gone, the
+        row alone brought it back with no default_role -- readable by every
+        user at their global role. A row whose path is under
+        <workspace>/ephemeral/ is an ephemeral KB's; with no default_role it
+        gets "none", logged at WARNING.
+        """
+        root = (config.settings.workspace_path / "ephemeral").resolve()
+        try:
+            rows = self.session.execute(
+                text("SELECT name, path FROM kb WHERE default_role IS NULL")
+            ).fetchall()
+        except SQLAlchemyError:
+            logger.warning("Could not check ephemeral KB rows for a policy", exc_info=True)
+            return
+        repaired = []
+        for name, path in rows:
+            if not path:
+                continue
+            resolved = Path(path).expanduser().resolve()
+            if resolved != root and resolved.is_relative_to(root):
+                repaired.append(name)
+        if not repaired:
+            return
+        for name in repaired:
+            logger.warning(
+                "Ephemeral KB %r has no default_role in the registry; making it private ('none')",
+                name,
+            )
+            self.session.execute(
+                text(
+                    "UPDATE kb SET default_role = 'none' WHERE name = :n AND default_role IS NULL"
+                ),
+                {"n": name},
+            )
+        self.session.commit()
 
     def update_kb_default_role(self, name: str, default_role: str | None) -> bool:
         """Update a KB's default_role. Returns True if KB was found."""

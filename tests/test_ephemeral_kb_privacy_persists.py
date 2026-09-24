@@ -236,3 +236,93 @@ def test_ephemeral_kb_created_without_a_user_is_persisted_private(tmp_path):
     data = config_module.load_yaml_file(config_module.current_config_file())
     kb = next(k for k in data["knowledge_bases"] if k["name"] == "adminscratch")
     assert kb.get("default_role") == "none"
+
+
+class TestRepairOfEphemeralRegistryRowsWithoutConfig:
+    """A pre-fix ephemeral KB whose config.yaml entry was lost.
+
+    Only its registry row survives: no ephemeral flag, default_role NULL. The
+    registry merge brought it back readable at every user's global role. A
+    registry row whose path is under <workspace>/ephemeral/ is an ephemeral
+    KB's, and one without a policy is made private when it is loaded.
+    """
+
+    def _orphan(self, tmp_path, monkeypatch):
+        # The workspace is not stored in config.yaml; a deployment sets it with
+        # PYRITE_DATA_DIR (index at <dir>/index.db, workspace at <dir>/repos),
+        # which both processes here share.
+        monkeypatch.setenv("PYRITE_DATA_DIR", str(tmp_path))
+        config = PyriteConfig(
+            knowledge_bases=[],
+            settings=Settings(
+                index_path=tmp_path / "index.db",
+                workspace_path=tmp_path / "repos",
+                auth=AuthConfig(enabled=True, allow_registration=True),
+            ),
+        )
+        save_config(config)
+        app = create_app(config=config)
+        cookies = {name: _register(app, name) for name in ("admin", "alice", "bob")}
+        db = PyriteDB(config.settings.index_path)
+        try:
+            auth = AuthService(db, config.settings.auth)
+            users = {u["username"]: u["id"] for u in auth.list_users()}
+            auth.set_role(users["alice"], "write")
+            auth.set_role(users["bob"], "write")
+            auth.create_user_ephemeral_kb(users["alice"], EphemeralKBService(config, db), "lost")
+            # The state an earlier version leaves: no policy in the row, and
+            # the config entry gone (hand-edited, or written by another process).
+            db.execute_write_sql("UPDATE kb SET default_role = NULL WHERE name = 'lost'")
+            outside = tmp_path / "elsewhere"
+            outside.mkdir()
+            db.register_kb("open-kb", "generic", str(outside))
+            # A KB at the ephemeral root itself is not an ephemeral KB.
+            db.register_kb("root-kb", "generic", str(tmp_path / "repos" / "ephemeral"))
+        finally:
+            db.close()
+        config.remove_kb("lost")
+        save_config(config)
+        return cookies
+
+    def test_orphaned_row_is_private_after_restart(self, tmp_path, monkeypatch, caplog):
+        cookies = self._orphan(tmp_path, monkeypatch)
+        with caplog.at_level(logging.WARNING):
+            config = load_config()
+            assert config.settings.workspace_path == (tmp_path / "repos").resolve()
+            assert config.get_kb("lost") is None
+            app = create_app(config=config)
+            bob = TestClient(app, cookies=cookies["bob"])
+            assert bob.get("/api/kbs/lost").status_code == 404
+            assert bob.get("/api/entries", params={"kb": "lost"}).status_code == 404
+        assert any("lost" in r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+        alice = TestClient(app, cookies=cookies["alice"])
+        assert alice.get("/api/kbs/lost").status_code == 200
+
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            rows = db.execute_sql("SELECT default_role FROM kb WHERE name = 'lost'")
+            other = db.execute_sql("SELECT default_role FROM kb WHERE name = 'open-kb'")
+            root_row = db.execute_sql("SELECT default_role FROM kb WHERE name = 'root-kb'")
+        finally:
+            db.close()
+        assert rows[0]["default_role"] == "none"
+        # A registry row outside the ephemeral root is left alone.
+        assert other[0]["default_role"] is None
+        assert root_row[0]["default_role"] is None
+
+    def test_repair_is_committed_by_the_process_that_loads(self, tmp_path, monkeypatch):
+        """A read-only process (the CLI, MCP stdio) also persists the repair."""
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            db.merge_registered_kbs(config)
+            assert config.get_kb("lost").default_role == "none"
+        finally:
+            db.close()
+        other = PyriteDB(tmp_path / "index.db")
+        try:
+            rows = other.execute_sql("SELECT default_role FROM kb WHERE name = 'lost'")
+        finally:
+            other.close()
+        assert rows[0]["default_role"] == "none"
