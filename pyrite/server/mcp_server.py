@@ -2058,11 +2058,14 @@ class PyriteMCPServer:
         same per-connection closure in `build_sdk_server`, so it gets the
         same readable set.
 
-        `resources/read` is broken on every transport today (#217: this
-        returns a `ReadResourceResult` where the SDK expects an iterable of
-        `ReadResourceContents`), so nothing reaches here over a real session
-        yet. Scoped anyway, so it does not ship unscoped the moment #217
-        lands (#201, criterion 6).
+        Fixed by #217: `build_sdk_server`'s `@sdk.read_resource()` closure now
+        adapts this method's return value into
+        `Iterable[mcp.server.lowlevel.helper_types.ReadResourceContents]`, the
+        shape the installed SDK's `read_resource` decorator expects, so
+        `resources/read` serves content over a real session
+        (`tests/test_mcp_resources_session.py`). Scoping was added ahead of
+        that fix so it did not ship unscoped the moment #217 landed (#201,
+        criterion 6).
         """
         if uri == f"{URI_SCHEME}kbs":
             kbs_data = self.svc.list_kbs()
@@ -2339,16 +2342,15 @@ class PyriteMCPServer:
             write nowhere.
         """
         from mcp.server import Server
+        from mcp.server.lowlevel.helper_types import ReadResourceContents
         from mcp.types import (
             GetPromptResult,
             Prompt,
             PromptArgument,
             PromptMessage,
-            ReadResourceResult,
             Resource,
             ResourceTemplate,
             TextContent,
-            TextResourceContents,
             Tool,
         )
 
@@ -2449,16 +2451,10 @@ class PyriteMCPServer:
             result = mcp_server._read_resource(str(uri), readable_kbs=_readable_kbs)
             if "error" in result:
                 raise ValueError(result["error"])
-            return ReadResourceResult(
-                contents=[
-                    TextResourceContents(
-                        uri=AnyUrl(c["uri"]),
-                        mimeType=c.get("mimeType"),
-                        text=c["text"],
-                    )
-                    for c in result["contents"]
-                ]
-            )
+            return [
+                ReadResourceContents(content=c["text"], mime_type=c.get("mimeType"))
+                for c in result["contents"]
+            ]
 
         return sdk
 
