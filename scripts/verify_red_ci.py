@@ -306,10 +306,30 @@ def _killpg(proc: subprocess.Popen[str], sig: int) -> bool:
     return True
 
 
-def _restore(impl: list[str]) -> None:
-    """Put the implementation back as committed, whatever state a killed run left."""
+def _on_disk(path: str) -> str | None:
+    try:
+        return Path(path).read_text()
+    except FileNotFoundError:
+        return None
+    except UnicodeDecodeError:
+        return "\0undecodable"  # matches no git content, so it is never restored over
+
+
+def _restore(impl: list[str], mb: str) -> None:
+    """Put back, as committed, every implementation file a run left reverted.
+
+    Decided by content, not by what the run was doing when it ended: a file is
+    restored only when it holds exactly its merge-base content and that differs
+    from the commit. A trap that failed silently, a SIGKILL, an interrupt at any
+    point are all covered by one rule, and an edit made during the run matches
+    neither side, so it is never overwritten.
+    """
     for path in impl:
-        if _show("HEAD", path) is not None:
+        base, head = _show(mb, path), _show("HEAD", path)
+        now = _on_disk(path) if Path(path).exists() else None
+        if base == head or now != base:
+            continue
+        if head is not None:
             subprocess.run(["git", "checkout", "-q", "HEAD", "--", path], capture_output=True)
         else:
             subprocess.run(
@@ -340,14 +360,8 @@ def run_with_fix(python: str, test_file: str, junit: Path, timeout: float) -> Re
     return read_junit(junit, test_file)
 
 
-# True only while a reverted run may have the merge-base implementation checked
-# out: the one window in which main()'s finally must put the fix back. Outside it
-# the tree holds either the commit or someone's edit, and neither may be overwritten.
-_reverted: list[bool] = [False]
-
-
 def run_without_fix(
-    python: str, base: str, test_file: str, impl: list[str], junit: Path, timeout: float
+    python: str, base: str, mb: str, test_file: str, impl: list[str], junit: Path, timeout: float
 ) -> Report:
     env = {
         **os.environ,
@@ -356,13 +370,11 @@ def run_without_fix(
         "VERIFY_RED_PYTHON": python,
         "VERIFY_RED_JUNITXML": str(junit),
     }
-    _reverted[0] = True
     code, err = _run(["bash", str(VERIFY_RED), test_file, *impl], env, timeout)
-    if code is None:
-        _restore(impl)
-    # A run that returned restored its own tree (verify-red.sh's EXIT trap), or
-    # refused before reverting; an interrupt leaves the flag set for main().
-    _reverted[0] = False
+    # Normally verify-red.sh's EXIT trap has already restored the tree; this
+    # covers a timeout, a kill, and a trap whose checkout failed silently, so the
+    # next file's "with the fix" run never sees the merge-base code.
+    _restore(impl, mb)
     if code is None:
         raise NoVerdictError(f"timed out without the fix ({timeout:g} s)")
     if code not in (0, 1):
@@ -407,7 +419,9 @@ def verify_file(
         head = run_with_fix(python, test_file, tmp / f"head-{i}.xml", budgeted())
         if head.collection_error and not head.outcomes:
             raise NoVerdictError("does not collect with the fix")
-        reverted = run_without_fix(python, base, test_file, impl, tmp / f"base-{i}.xml", budgeted())
+        reverted = run_without_fix(
+            python, base, mb, test_file, impl, tmp / f"base-{i}.xml", budgeted()
+        )
     except NoVerdictError as exc:
         return [Row(test_file, test_file, NOT_VERIFIABLE, str(exc), True)]
     rows = []
@@ -526,7 +540,7 @@ def main(argv: list[str] | None = None) -> int:
     # so _run kills its child and the finally below restores the tree.
     signal.signal(signal.SIGTERM, _terminated)
     impl: list[str] = []
-    _reverted[0] = False
+    mb = ""
     try:
         mb = _git("merge-base", args.base, "HEAD").strip()
         tests, impl = changed_since(mb)
@@ -536,7 +550,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(NO_TEST_WARNING, flush=True)
             return 0
         # Refused here, before anything is reverted. An edit made later is kept
-        # too: the finally below restores only a run it interrupted.
+        # too: _restore puts back only files holding exactly the merge-base code.
         dirty = _git("status", "--porcelain", "--", *impl).strip()
         if dirty:
             raise InfraError(f"{', '.join(impl)} have uncommitted changes; commit them first")
@@ -565,8 +579,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)
         return 2
     finally:
-        if _reverted[0]:
-            _restore(impl)
+        if mb and impl:
+            _restore(impl, mb)
     return 0
 
 

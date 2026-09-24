@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import re
 import signal
 import subprocess
@@ -340,12 +341,15 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-def run_ci(repo: Path, tmp_path: Path, *extra: str) -> tuple[subprocess.CompletedProcess[str], str]:
+def run_ci(
+    repo: Path, tmp_path: Path, *extra: str, env_extra: dict[str, str] | None = None
+) -> tuple[subprocess.CompletedProcess[str], str]:
     summary = tmp_path / "summary.md"
     env = {
         **os.environ,
         "GITHUB_STEP_SUMMARY": str(summary),
         "VERIFY_RED_PYTHON": sys.executable,
+        **(env_extra or {}),
     }
     env.pop("PYTEST_ADDOPTS", None)
     result = subprocess.run(
@@ -447,6 +451,33 @@ def test_an_edit_made_during_the_run_survives_the_refusal(repo: Path, tmp_path: 
     assert result.returncode == 2, (result.stdout, result.stderr)
     assert "uncommitted" in result.stderr
     assert "# edited during the run" in (repo / "pyrite" / "__init__.py").read_text()
+
+
+def test_a_restore_that_fails_silently_is_put_right(repo: Path, tmp_path: Path) -> None:
+    # verify-red.sh's EXIT trap restores with `git checkout ... || true`: a
+    # transient failure (an index.lock held by an IDE) is silent and the script
+    # still exits 0/1. The driver must not trust that; it checks the content.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+    bin_dir, once = tmp_path / "bin", tmp_path / "failed-once"
+    bin_dir.mkdir()
+    real_git = shutil.which("git")
+    wrapper = bin_dir / "git"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        f'if [ "$1 $2 $3" = "checkout -q HEAD" ] && [ ! -e "{once}" ]; then\n'
+        f'  touch "{once}"; exit 1\n'
+        "fi\n"
+        f'exec "{real_git}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+    path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+    result, _ = run_ci(repo, tmp_path, env_extra={"PATH": path})
+    assert once.exists(), "the wrapper never failed a restore; the test proves nothing"
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert git(repo, "status", "--porcelain") == ""
 
 
 PINNED_MTIME = 1_700_000_000
