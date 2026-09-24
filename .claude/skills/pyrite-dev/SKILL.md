@@ -113,9 +113,17 @@ claim, run it in full, read the output, then claim.
 |---|---|---|
 | Backend tests pass | `.venv/bin/pytest tests/ extensions/ -n auto` | `N passed, 0 failed` |
 | The fix is real | the new test, with the fix reverted (`git stash`) | it fails |
+| Each guard is tested | delete **that guard alone** (one condition, one early return, one check) and run the tests | at least one test fails -- for every guard you added |
 | Frontend passes | `cd web && npm run check && npm run test:unit && npm run build` | all green |
 | Lint passes | `.venv/bin/ruff check . && .venv/bin/ruff format --check .` | clean |
 | KB content findable | `.venv/bin/pyrite search "<feature>" -k pyrite` | it appears |
+
+Why guard by guard (retro 9, 2026-09-24): reverting the whole fix proves
+*some* test goes red, not that *each* check is pinned. In one window, 6 of 11
+cold reads found a guard or a test that stayed green with its target removed
+(a resolved-path check, loop-lifetime guards, refusal tests matching any
+error, a tier test that held under the bug). Each cost a send-back and a full
+push cycle. Deleting one guard at a time before you report is minutes.
 
 Forbidden without evidence: "should work", "looks correct", "probably
 passes", "I'm confident".
@@ -162,6 +170,8 @@ Pushed:   <sha> == origin/<branch>
 Commits:  <n>, listed with one line each
 Closes:   #N, #M  (or the backlog item ids)
 Evidence: full suite output line; the RED run of each new test; lint
+Guards:   each check you added -> the test that fails when that check alone
+          is removed (a guard no test catches is not done)
 Changed:  files touched, new vs existing
 Unsure:   anything a reviewer should look at twice, or a decision that could
           have gone another way
