@@ -432,6 +432,18 @@ class TestCLI:
         assert out.returncode == 0, out.stderr
         assert out.stdout.startswith(f"{venv_python} -m pytest"), out.stdout
 
+    def test_workers_accept_auto(self, repo):
+        # PYRITE_PUSH_WORKERS=auto must not turn into an argparse error that
+        # blocks the push.
+        out = self._run(repo, "--run", "--dry-run", "-n", "auto", "--files", "pyrite/b.py")
+        assert out.returncode == 0, out.stderr
+        assert "pytest -n auto " in out.stdout
+
+    def test_workers_reject_nonsense(self, repo):
+        out = self._run(repo, "--run", "--dry-run", "-n", "lots", "--files", "pyrite/b.py")
+        assert out.returncode != 0
+        assert "auto" in out.stderr
+
     def test_full_flag_forces_the_full_suite(self, repo):
         out = self._run(repo, "--run", "--dry-run", "--full", "-n", "3", "--files", "pyrite/b.py")
         assert out.returncode == 0, out.stderr

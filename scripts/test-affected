@@ -636,7 +636,13 @@ def _tests_reaching(graph: Graph, names: list[str]) -> set[str]:
     return tests
 
 
-def pytest_args(selection: Selection, workers: int = DEFAULT_WORKERS) -> list[str]:
+def _workers(value: str) -> str:
+    if value == "auto" or (value.isdigit() and int(value) > 0):
+        return value
+    raise argparse.ArgumentTypeError(f"{value!r}: a positive number or 'auto'")
+
+
+def pytest_args(selection: Selection, workers: int | str = DEFAULT_WORKERS) -> list[str]:
     args = ["-n", str(workers)]
     if selection.full is not None:
         return [*args, "tests/", "extensions/"]
@@ -674,7 +680,9 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--list", action="store_true", help="print selected paths (default)")
     mode.add_argument("--explain", action="store_true", help="print why each test was selected")
     mode.add_argument("--run", action="store_true", help="run the selection with pytest")
-    parser.add_argument("-n", "--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument(
+        "-n", "--workers", type=_workers, default=str(DEFAULT_WORKERS), help="N or auto"
+    )
     parser.add_argument("--base", default=DEFAULT_BASE)
     parser.add_argument("--committed", action="store_true")
     parser.add_argument("--files", nargs="*", help="changed paths (skip git)")
