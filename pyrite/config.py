@@ -357,9 +357,10 @@ class Settings:
             "http://localhost:8088",
         ]
     )
-    # Extra hostnames a credential-free server (auth disabled) answers, beyond
-    # localhost, 127.0.0.1, ::1 and a non-wildcard `host`. Requests addressed to
-    # any other Host get 421 (pyrite/server/request_guard.py).
+    # Extra hostnames a credential-free server answers (auth disabled with no
+    # API keys, or anonymous_tier "write"), beyond localhost, 127.0.0.1, ::1
+    # and a non-wildcard `host`. Requests addressed to any other Host get 421
+    # (pyrite/server/request_guard.py).
     allowed_hosts: list[str] = field(default_factory=list)
     api_key: str = ""  # Empty = auth disabled (backwards-compatible)
     api_keys: list[dict[str, str]] = field(default_factory=list)  # [{key_hash, role, label}]

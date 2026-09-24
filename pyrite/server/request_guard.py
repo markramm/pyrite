@@ -1,8 +1,9 @@
 """Host and Origin checks for a server that grants access without a credential.
 
-With ``auth.enabled`` false, every request to the API is admin. A browser is
-then the only thing between a web page the user visits and their KBs, and two
-browser rules do not hold on their own:
+With auth disabled and no API keys, every request to the API is admin; with
+``anonymous_tier: write``, every visitor can write. A browser is then the only
+thing between a web page the user visits and their KBs, and two browser rules
+do not hold on their own:
 
 - **Host.** A page on a name its owner controls can re-point that name at
   127.0.0.1. The browser then treats this server as same-origin with the page,
@@ -16,10 +17,12 @@ browser rules do not hold on their own:
   403. Requests with neither header are not browser-initiated cross-site
   requests (CLI, curl, agents) and are unaffected.
 
-A server with auth enabled is not restricted by this middleware: every useful
-request there carries a credential a foreign page cannot supply (the session
-cookie is ``SameSite=Lax``), and it typically sits behind a proxy with a
-public hostname.
+The middleware applies only while a request can act without a credential
+(``acts_without_credential``): auth disabled with no API keys, or auth enabled
+with ``anonymous_tier: write``. In API-key mode, or with auth enabled and no
+anonymous writes, every request that acts carries a credential a foreign page
+cannot supply (the session cookie is ``SameSite=Lax``), and such servers
+usually sit behind a proxy with a public hostname.
 
 ``origin_permitted`` is the one Origin rule; ``/ws`` uses it too.
 """
@@ -63,6 +66,20 @@ def allowed_hosts(settings: Settings) -> set[str]:
         hosts.add(bind)
     hosts.update(_hostname(h) for h in settings.allowed_hosts)
     return hosts
+
+
+def acts_without_credential(settings: Settings) -> bool:
+    """A request can change something here without presenting a credential.
+
+    (a) Auth disabled and no API keys: ``verify_api_key`` makes every request
+    admin. (b) Auth enabled with ``anonymous_tier: write``: anonymous visitors
+    can write. Everywhere else a request that acts needs a credential a
+    foreign page cannot supply, so the guard stays off -- a keyed or proxied
+    deployment answers whatever hostname its proxy sends.
+    """
+    if settings.auth.enabled:
+        return settings.auth.anonymous_tier == "write"
+    return not settings.api_key and not settings.api_keys
 
 
 def origin_permitted(origin: str, host: str, cors_origins: list[str]) -> bool:
@@ -114,7 +131,7 @@ class RequestGuardMiddleware:
             await self.app(scope, receive, send)
             return
         settings = self.get_config().settings
-        if settings.auth.enabled:
+        if not acts_without_credential(settings):
             await self.app(scope, receive, send)
             return
 

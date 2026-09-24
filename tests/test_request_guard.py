@@ -1,8 +1,9 @@
 """A server that needs no credential answers only local hosts and refuses
 cross-origin writes.
 
-With ``auth.enabled`` false every caller is admin, so two things stand between
-a web page the user happens to visit and their KBs:
+With auth disabled and no API keys every caller is admin (and with
+``anonymous_tier: write`` every visitor can write), so two things stand
+between a web page the user happens to visit and their KBs:
 
 - **Host**: a request must be addressed to a host this server expects
   (``localhost``, ``127.0.0.1``, ``::1``, the configured bind host when it is
@@ -126,11 +127,63 @@ class TestHostAllowList:
         assert make("attacker.example:8088").get("/health").status_code == 421
         assert make("localhost:8088").get("/health").status_code == 200
 
-    def test_auth_enabled_server_is_not_host_restricted(self, make):
-        """The guard protects the credential-free mode; a server that
-        requires a credential answers any hostname its proxy sends."""
-        r = make("pyrite.example.org", auth=AuthConfig(enabled=True)).get("/health")
-        assert r.status_code == 200
+
+# ---------------------------------------------------------------------------
+# When the guard applies: exactly when a request can act without a credential
+# ---------------------------------------------------------------------------
+
+KEY = "operator-key"
+
+
+class TestGuardAppliesOnlyWithoutACredential:
+    """Four modes. The guard is on for (a) auth disabled with no API keys --
+    every request is admin -- and (b) auth enabled with anonymous_tier
+    "write" -- anonymous visitors can write. Everywhere else a request that
+    acts needs a credential a foreign page cannot supply, so the guard is off
+    and a keyed or proxied deployment answers any hostname."""
+
+    def test_auth_disabled_without_keys_is_guarded(self, make, tmp_path):
+        assert make("attacker.example").get("/health").status_code == 421
+        assert _import(make(), {"Origin": EVIL}).status_code == 403
+
+    def test_legacy_single_api_key_mode_is_not_guarded(self, make, tmp_path):
+        headers = {"X-API-Key": KEY}
+        client = make("pyrite.example.org", api_key=KEY)
+        assert client.get("/api/kbs", headers=headers).status_code == 200
+        r = _import(client, {**headers, "Origin": "https://ui.example.org"})
+        assert r.status_code == 200, r.text
+
+    def test_api_keys_list_mode_is_not_guarded(self, make):
+        import hashlib
+
+        keys = [{"key_hash": hashlib.sha256(KEY.encode()).hexdigest(), "role": "admin"}]
+        client = make("pyrite.example.org", api_keys=keys)
+        headers = {"X-API-Key": KEY}
+        assert client.get("/api/kbs", headers=headers).status_code == 200
+        r = _import(client, {**headers, "Origin": "https://ui.example.org"})
+        assert r.status_code == 200, r.text
+
+    def test_anonymous_write_tier_is_guarded(self, make, tmp_path):
+        auth = AuthConfig(enabled=True, anonymous_tier="write")
+        assert make("attacker.example", auth=auth).get("/health").status_code == 421
+        r = _import(make(auth=AuthConfig(enabled=True, anonymous_tier="write")), {"Origin": EVIL})
+        assert r.status_code == 403
+        assert _entry_files(tmp_path) == []
+
+    def test_anonymous_write_tier_answers_its_allowed_public_name(self, make):
+        auth = AuthConfig(enabled=True, anonymous_tier="write")
+        client = make("wiki.example.org", auth=auth, allowed_hosts=["wiki.example.org"])
+        assert client.get("/health").status_code == 200
+
+    @pytest.mark.parametrize("tier", [None, "read"])
+    def test_auth_enabled_without_anonymous_writes_is_not_guarded(self, make, tier):
+        """A server that requires a credential to write answers any hostname
+        its proxy sends, and cross-origin requests fall to the credential."""
+        auth = AuthConfig(enabled=True, anonymous_tier=tier)
+        client = make("pyrite.example.org", auth=auth)
+        assert client.get("/health").status_code == 200
+        r = client.post("/auth/logout", headers={"Origin": EVIL})
+        assert r.status_code == 200, r.text
 
 
 # ---------------------------------------------------------------------------
