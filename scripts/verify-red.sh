@@ -26,6 +26,8 @@
 #
 #   VERIFY_RED_BASE    integration ref (default origin/dev, then dev)
 #   VERIFY_RED_PYTHON  interpreter (default .venv/bin/python, then python)
+#   VERIFY_RED_JUNITXML  also write the reverted run's per-test JUnit report
+#                        here (scripts/verify_red_ci.py, the CI job, reads it)
 set -euo pipefail
 test_id="${1:?usage: $0 <pytest node id> <impl file>...}"; shift
 [ $# -gt 0 ] || { echo "name the implementation files to revert" >&2; exit 2; }
@@ -105,7 +107,10 @@ if git diff --quiet HEAD -- "$@"; then
   exit 2
 fi
 
-if "$py" -m pytest "$test_id" -q -p no:cacheprovider >/dev/null 2>&1; then
+# Bash 3.2 (macOS) treats "${arr[@]}" of an empty array as unbound under set -u.
+junit=()
+[ -z "${VERIFY_RED_JUNITXML:-}" ] || junit=("--junitxml=$VERIFY_RED_JUNITXML" -o junit_family=xunit1)
+if "$py" -m pytest "$test_id" -q -p no:cacheprovider ${junit[@]+"${junit[@]}"} >/dev/null 2>&1; then
   echo "verify-red: $test_id PASSED without the fix -- it does not test the change" >&2
   exit 1
 fi
