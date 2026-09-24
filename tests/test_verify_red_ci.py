@@ -453,30 +453,80 @@ def test_an_edit_made_during_the_run_survives_the_refusal(repo: Path, tmp_path: 
     assert "# edited during the run" in (repo / "pyrite" / "__init__.py").read_text()
 
 
+def _failing_restores(tmp_path: Path, times: int) -> tuple[dict[str, str], Path]:
+    """A `git` on PATH whose first `times` `checkout -q HEAD --` calls fail."""
+    bin_dir, count = tmp_path / "bin", tmp_path / "failed-restores"
+    bin_dir.mkdir()
+    count.write_text("0")
+    wrapper = bin_dir / "git"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1 $2 $3" = "checkout -q HEAD" ]; then\n'
+        f'  n=$(cat "{count}")\n'
+        f'  if [ "$n" -lt {times} ]; then echo $((n + 1)) > "{count}"; exit 1; fi\n'
+        "fi\n"
+        f'exec "{shutil.which("git")}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+    return {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}, count
+
+
+def _commit_fix(repo: Path) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+
+
 def test_a_restore_that_fails_silently_is_put_right(repo: Path, tmp_path: Path) -> None:
     # verify-red.sh's EXIT trap restores with `git checkout ... || true`: a
     # transient failure (an index.lock held by an IDE) is silent and the script
     # still exits 0/1. The driver must not trust that; it checks the content.
+    _commit_fix(repo)
+    env, count = _failing_restores(tmp_path, 1)
+    result, _ = run_ci(repo, tmp_path, env_extra=env)
+    assert count.read_text().strip() == "1", "no restore failed; the test proves nothing"
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_a_restore_the_driver_cannot_make_is_reported(repo: Path, tmp_path: Path) -> None:
+    # The trap's restore and the driver's own both fail: say so, instead of running
+    # the next file against the merge-base code; the finally's retry puts it right.
+    _commit_fix(repo)
+    env, count = _failing_restores(tmp_path, 2)
+    result, _ = run_ci(repo, tmp_path, env_extra=env)
+    assert count.read_text().strip() == "2", "fewer restores failed than the test needs"
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "could not restore pyrite/__init__.py" in result.stderr
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_a_refusal_leaves_a_staged_revert_alone(repo: Path, tmp_path: Path) -> None:
+    # A developer checking red by hand has the merge-base code staged. The driver
+    # refuses ("commit them first") before running anything, and must leave that
+    # state exactly as it found it -- not "restore" the fix over it.
     (repo / "pyrite" / "__init__.py").write_text(FIXED)
     (repo / "tests" / "test_add.py").write_text(PR_TESTS)
     git(repo, "commit", "-q", "-am", "fix: add adds")
-    bin_dir, once = tmp_path / "bin", tmp_path / "failed-once"
-    bin_dir.mkdir()
-    real_git = shutil.which("git")
-    wrapper = bin_dir / "git"
-    wrapper.write_text(
-        "#!/bin/sh\n"
-        f'if [ "$1 $2 $3" = "checkout -q HEAD" ] && [ ! -e "{once}" ]; then\n'
-        f'  touch "{once}"; exit 1\n'
-        "fi\n"
-        f'exec "{real_git}" "$@"\n'
-    )
-    wrapper.chmod(0o755)
-    path = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
-    result, _ = run_ci(repo, tmp_path, env_extra={"PATH": path})
-    assert once.exists(), "the wrapper never failed a restore; the test proves nothing"
+    git(repo, "checkout", "-q", "dev", "--", "pyrite/__init__.py")
+    result, _ = run_ci(repo, tmp_path)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "uncommitted" in result.stderr
+    assert (repo / "pyrite" / "__init__.py").read_text() == BROKEN
+    assert git(repo, "status", "--porcelain") == "M  pyrite/__init__.py"
+
+
+def test_a_non_utf8_implementation_file_is_compared_as_bytes(repo: Path, tmp_path: Path) -> None:
+    impl = repo / "pyrite" / "__init__.py"
+    impl.write_bytes(b"# -*- coding: latin-1 -*-\n# caf\xe9\n" + FIXED.encode())
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+    result, summary = run_ci(repo, tmp_path)
     assert result.returncode == 0, (result.stdout, result.stderr)
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert "red without the fix" in summary
+    assert impl.read_bytes().startswith(b"# -*- coding: latin-1")
     assert git(repo, "status", "--porcelain") == ""
 
 

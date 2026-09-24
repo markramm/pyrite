@@ -306,13 +306,18 @@ def _killpg(proc: subprocess.Popen[str], sig: int) -> bool:
     return True
 
 
-def _on_disk(path: str) -> str | None:
+def _blob(rev: str, path: str) -> bytes | None:
+    """The file's bytes at `rev`: compared as bytes, so encodings and line endings
+    cannot make two different files look alike (or crash the comparison)."""
+    result = subprocess.run(["git", "show", f"{rev}:{path}"], capture_output=True)
+    return result.stdout if result.returncode == 0 else None
+
+
+def _on_disk(path: str) -> bytes | None:
     try:
-        return Path(path).read_text()
+        return Path(path).read_bytes()
     except FileNotFoundError:
         return None
-    except UnicodeDecodeError:
-        return "\0undecodable"  # matches no git content, so it is never restored over
 
 
 def _restore(impl: list[str], mb: str) -> None:
@@ -325,17 +330,17 @@ def _restore(impl: list[str], mb: str) -> None:
     neither side, so it is never overwritten.
     """
     for path in impl:
-        base, head = _show(mb, path), _show("HEAD", path)
-        now = _on_disk(path) if Path(path).exists() else None
-        if base == head or now != base:
+        base, head = _blob(mb, path), _blob("HEAD", path)
+        if base == head or _on_disk(path) != base:
             continue
         if head is not None:
-            subprocess.run(["git", "checkout", "-q", "HEAD", "--", path], capture_output=True)
+            cmd = ["git", "checkout", "-q", "HEAD", "--", path]
         else:
-            subprocess.run(
-                ["git", "rm", "-q", "--cached", "--ignore-unmatch", "--", path],
-                capture_output=True,
-            )
+            cmd = ["git", "rm", "-q", "-f", "--cached", "--ignore-unmatch", "--", path]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise InfraError(f"could not restore {path}: {result.stderr.strip()}")
+        if head is None:
             Path(path).unlink(missing_ok=True)
 
 
@@ -541,6 +546,7 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGTERM, _terminated)
     impl: list[str] = []
     mb = ""
+    started = False
     try:
         mb = _git("merge-base", args.base, "HEAD").strip()
         tests, impl = changed_since(mb)
@@ -549,12 +555,15 @@ def main(argv: list[str] | None = None) -> int:
             if impl and not tests:
                 print(NO_TEST_WARNING, flush=True)
             return 0
-        # Refused here, before anything is reverted. An edit made later is kept
-        # too: _restore puts back only files holding exactly the merge-base code.
+        # Refused here, before anything is reverted -- and the finally below does
+        # nothing on this path, so what the user is told to commit is still there.
+        # An edit made later is kept too: _restore puts back only files holding
+        # exactly the merge-base code.
         dirty = _git("status", "--porcelain", "--", *impl).strip()
         if dirty:
             raise InfraError(f"{', '.join(impl)} have uncommitted changes; commit them first")
         sink.write(render_header(impl, mb))
+        started = True
         with tempfile.TemporaryDirectory(prefix="verify-red-") as tmp:
             for i, test_file in enumerate(tests):
                 rows = verify_file(
@@ -579,8 +588,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)
         return 2
     finally:
-        if mb and impl:
-            _restore(impl, mb)
+        if started:
+            try:
+                _restore(impl, mb)
+            except InfraError as exc:
+                print(f"verify-red: {exc}", file=sys.stderr)
+                return 2  # noqa: B012 -- the tree is wrong; that outranks any verdict
     return 0
 
 
