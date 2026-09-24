@@ -201,6 +201,39 @@ class TestStaleCache:
         r = _client(site_env).get(path)
         assert r.status_code == 404, (path, r.status_code)
 
+    def test_file_symlink_from_public_into_private_is_refused(self, site_env):
+        """The URL names a public KB; the file it resolves to does not."""
+        site_env["svc"].render_all()
+        _plant_stale(site_env["cache_dir"])
+        cache = site_env["cache_dir"]
+        (cache / PUBLIC / "leak.html").symlink_to(cache / PRIVATE / "secret-1.html")
+        r = _client(site_env).get(f"/site/{PUBLIC}/leak")
+        assert SECRET not in r.text
+        assert r.status_code == 404
+
+    def test_directory_symlink_from_public_into_private_is_refused(self, site_env):
+        site_env["svc"].render_all()
+        _plant_stale(site_env["cache_dir"])
+        cache = site_env["cache_dir"]
+        (cache / PUBLIC / "sub").symlink_to(cache / PRIVATE, target_is_directory=True)
+        r = _client(site_env).get(f"/site/{PUBLIC}/sub/secret-1")
+        assert SECRET not in r.text
+        assert r.status_code == 404
+
+    def test_public_kb_dir_replaced_by_link_to_private_is_refused(self, site_env):
+        import shutil
+
+        site_env["svc"].render_all()
+        _plant_stale(site_env["cache_dir"])
+        cache = site_env["cache_dir"]
+        shutil.rmtree(cache / PUBLIC)
+        (cache / PUBLIC).symlink_to(cache / PRIVATE, target_is_directory=True)
+        client = _client(site_env)
+        for path in (f"/site/{PUBLIC}/secret-1", f"/site/{PUBLIC}", f"/site/{PUBLIC}/"):
+            r = client.get(path)
+            assert SECRET not in r.text, path
+            assert r.status_code == 404, path
+
     def test_unknown_first_segment_is_404(self, site_env):
         r = _client(site_env).get("/site/no-such-kb/x")
         assert r.status_code == 404
