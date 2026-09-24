@@ -108,13 +108,29 @@ class AuthService:
 
     _OAUTH_STATE_TTL_SECONDS = 300  # 5 minutes, matches the prior in-memory TTL
 
+    @staticmethod
+    def _oauth_state_key(state: str, binding: str) -> str:
+        """The row key for a state bound to a browser.
+
+        Only this digest is stored: the database holds neither the public
+        ``state`` (it travels through the provider) nor the ``binding``
+        (it lives in an HttpOnly cookie), so a row can be found only by a
+        request that carries both.
+        """
+        return hashlib.sha256(f"{state}\x00{binding}".encode()).hexdigest()
+
     def create_oauth_state(
         self,
         flow: str = "login",
         user_id: int | None = None,
         ttl_seconds: int | None = None,
-    ) -> str:
-        """Generate a CSRF state token and persist it with flow metadata.
+    ) -> tuple[str, str]:
+        """Generate a CSRF state bound to the requesting browser.
+
+        Returns ``(state, binding)``: ``state`` goes to the provider in the
+        authorize URL; ``binding`` must be set by the caller in a
+        short-lived HttpOnly cookie on the browser that started the flow,
+        and handed back to ``verify_oauth_state`` on the callback.
 
         ``ttl_seconds`` defaults to 5 minutes; pass a negative value in
         tests to create an already-expired token.
@@ -126,36 +142,45 @@ class AuthService:
 
         ttl = self._OAUTH_STATE_TTL_SECONDS if ttl_seconds is None else ttl_seconds
         state = secrets.token_urlsafe(32)
+        binding = secrets.token_urlsafe(32)
         now = datetime.now(UTC)
         expires_at = (now + timedelta(seconds=ttl)).isoformat()
         self.db.execute_write_sql(
             """INSERT INTO oauth_state (state, flow, user_id, created_at, expires_at)
-            VALUES (:state, :flow, :user_id, :now, :expires_at)""",
+            VALUES (:key, :flow, :user_id, :now, :expires_at)""",
             {
-                "state": state,
+                "key": self._oauth_state_key(state, binding),
                 "flow": flow,
                 "user_id": user_id,
                 "now": now.isoformat(),
                 "expires_at": expires_at,
             },
         )
-        return state
+        return state, binding
 
-    def verify_oauth_state(self, state: str) -> dict | None:
-        """Verify and consume a CSRF state token. Returns
-        ``{"flow": ..., "user_id": ...}`` or ``None`` if the token is
-        unknown, already consumed, or expired.
+    def verify_oauth_state(self, state: str, binding: str) -> dict | None:
+        """Verify and consume a browser-bound CSRF state. Returns
+        ``{"flow": ..., "user_id": ...}`` or ``None`` if the pair is
+        unknown (wrong or missing binding included), already consumed, or
+        expired.
 
-        Single-use: the row is deleted whether or not it was expired, so a
-        replayed token always fails on the second attempt.
+        Single-use and race-free: the DELETE decides. Of two callbacks
+        presenting the same pair at once, only the one whose DELETE removed
+        the row succeeds. A mismatched binding finds no row and consumes
+        nothing, so it cannot burn the legitimate browser's flow.
         """
+        key = self._oauth_state_key(state, binding)
         rows = self.db.execute_sql(
-            "SELECT flow, user_id, expires_at FROM oauth_state WHERE state = :state",
-            {"state": state},
+            "SELECT flow, user_id, expires_at FROM oauth_state WHERE state = :key",
+            {"key": key},
         )
         if not rows:
             return None
-        self.db.execute_write_sql("DELETE FROM oauth_state WHERE state = :state", {"state": state})
+        deleted = self.db.execute_write_sql(
+            "DELETE FROM oauth_state WHERE state = :key", {"key": key}
+        )
+        if deleted != 1:
+            return None
         row = rows[0]
         if datetime.now(UTC).isoformat() >= row["expires_at"]:
             return None
