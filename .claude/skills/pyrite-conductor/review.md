@@ -44,7 +44,14 @@ code nobody had pushed).
 - [ ] fix reverted to the merge base, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...`
       (exit 0 = red without the fix; exit 1 = passes anyway; exit 2 = nothing was reverted, NO claim — #121) — EVERY test
       named for a regression or a "still works" case, not one at random (PR #69: a class named for the
-      exact regression it reintroduced covered only cases that already passed, and read as tested)
+      exact regression it reintroduced covered only cases that already passed, and read as tested).
+      TRIAL (#352, from 2026-09-23): the PR's CI `verify-red` job does this for every changed test file
+      and puts a table in the run summary (`gh run view <id>` / the Checks tab). When that table ran on
+      the PR's head SHA and every test the PR names for the fix reads "red without the fix", it replaces
+      the manual run; "red by import/collection error", "passes without the fix" on a test that is not a
+      "still works" guard, "not verifiable", or implementation outside `pyrite/`/`extensions/*/src/`
+      (e.g. `scripts/`) still need the manual step. After ~15-20 PRs, decide whether to make the job
+      required for `fix:` commits
 - [ ] any number in the report (faster, slower, N% fewer rewrites, a flake rate) was measured against the
       MERGE BASE, under ONE interpreter with the source tree pinned, and the sentence that reports it states
       the condition — two sessions each published a confident wrong number about #69 in one window (one

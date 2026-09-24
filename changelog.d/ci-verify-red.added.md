@@ -1,0 +1,1 @@
+- CI's new advisory `verify-red` job reverts a pull request's implementation changes to the merge base and reports, test by test in the run summary, whether each changed test fails without the fix; a test that passes anyway gets a warning annotation (#352).
