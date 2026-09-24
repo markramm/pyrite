@@ -163,8 +163,42 @@ class TestAffectedByImports:
         assert "tests/test_unrelated.py" not in sel.files
 
     def test_autouse_fixture_imports_do_not_select_everything(self, repo):
+        # _auto (autouse) imports pyrite.b and wraps every test; a test that
+        # does not name it is not selected by it.
         sel = _select(repo, "pyrite/b.py")
         assert "tests/test_unrelated.py" not in sel.files
+        assert "tests/test_c.py" not in sel.files
+
+    def test_an_autouse_fixture_requested_by_name_is_attributed(self, repo):
+        _write(repo, "tests/test_names_auto.py", "def test_x(_auto):\n    pass\n")
+        sel = _select(repo, "pyrite/b.py")
+        assert "tests/test_names_auto.py" in sel.files
+
+    def test_usefixtures_counts_as_using_the_fixture(self, repo):
+        _write(
+            repo,
+            "tests/test_usefixtures.py",
+            "import pytest\n\n@pytest.mark.usefixtures('thing')\ndef test_x():\n    pass\n",
+        )
+        sel = _select(repo, "pyrite/c.py")
+        assert "tests/test_usefixtures.py" in sel.files
+
+    def test_a_file_that_does_not_parse_is_skipped_not_fatal(self, repo):
+        _write(repo, "tests/test_broken.py", "def (:\n")
+        _write(repo, "pyrite/broken.py", "import pyrite.b\nclass :\n")
+        sel = _select(repo, "pyrite/b.py")
+        assert "tests/test_b.py" in sel.files
+
+    def test_content_trees_match_by_basename_not_directory(self, repo):
+        # kb/backlog/x.md must not select every test that says "backlog".
+        _write(repo, "tests/test_backlog_words.py", "KIND = 'backlog'\n")
+        sel = _select(repo, "kb/backlog/some-item.md")
+        assert "tests/test_backlog_words.py" not in sel.files
+
+    def test_other_trees_fall_back_to_the_directory_name(self, repo):
+        _write(repo, "tests/test_fragments.py", "DIR = 'changelog.d'\n")
+        sel = _select(repo, "changelog.d/some-change.fixed.md")
+        assert "tests/test_fragments.py" in sel.files
 
     def test_changed_test_file_is_always_selected(self, repo):
         sel = _select(repo, "tests/test_unrelated.py")
@@ -242,6 +276,7 @@ class TestFullSuiteFallback:
             "pytest.ini",
             "setup.cfg",
             "tests/fixtures/roundtrip/entry.md",
+            "tox.ini",
         ],
     )
     def test_infrastructure_changes_run_everything(self, repo, path):
@@ -336,6 +371,23 @@ class TestChangedFiles:
         _git(git_repo, "commit", "-qm", "rename")
         changed = ta.changed_files(git_repo, "dev", committed_only=True)
         assert {"pyrite/c.py", "pyrite/c_new.py"} <= set(changed)
+
+
+class TestBaseFallback:
+    def test_default_base_falls_back_to_local_dev_without_a_remote(self, repo):
+        _git(repo, "init", "-q", "-b", "dev")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-qm", "base")
+        _git(repo, "checkout", "-qb", "feature/x")
+        (repo / "pyrite" / "b.py").write_text("def func():\n    return 2\n")
+        _git(repo, "commit", "-qam", "change b")
+        out = subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(repo), "--list", "--committed"],
+            capture_output=True,
+            text=True,
+        )
+        assert out.returncode == 0, out.stderr
+        assert "tests/test_b.py" in out.stdout.split()
 
 
 class TestCLI:

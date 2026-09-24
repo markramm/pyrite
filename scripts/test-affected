@@ -447,7 +447,9 @@ class Graph:
                     continue
                 seen.add(name)
                 fixture = lookup(name)
-                if fixture is None or fixture.autouse:
+                # An autouse fixture is attributed only to a test that names
+                # it; it is never "used" by the tests it silently wraps.
+                if fixture is None:
                     continue
                 for dep in fixture.imports:
                     f.deps.setdefault(dep, f"fixture {fixture.name} ({fixture.conftest})")
