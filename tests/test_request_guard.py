@@ -75,6 +75,51 @@ def _import(client: TestClient, headers: dict | None = None):
     )
 
 
+def _first_status(app, method: str, path: str, host: str, deadline: float = 10.0) -> int:
+    """Run one request through the ASGI app and return the first response
+    status, cancelling the app as soon as it is sent (a stream never ends).
+    ``deadline`` is a backstop so no outcome can hang the suite."""
+    import anyio
+
+    status: dict[str, int] = {}
+
+    async def main() -> None:
+        with anyio.fail_after(deadline):
+            async with anyio.create_task_group() as tg:
+                sent_body = False
+
+                async def receive():
+                    nonlocal sent_body
+                    if not sent_body:
+                        sent_body = True
+                        return {"type": "http.request", "body": b"", "more_body": False}
+                    await anyio.sleep_forever()
+
+                async def send(message):
+                    if message["type"] == "http.response.start" and "code" not in status:
+                        status["code"] = message["status"]
+                        tg.cancel_scope.cancel()
+
+                scope = {
+                    "type": "http",
+                    "asgi": {"version": "3.0"},
+                    "http_version": "1.1",
+                    "method": method,
+                    "scheme": "http",
+                    "path": path,
+                    "raw_path": path.encode(),
+                    "root_path": "",
+                    "query_string": b"",
+                    "headers": [(b"host", host.encode())],
+                    "client": ("127.0.0.1", 50000),
+                    "server": ("127.0.0.1", 8088),
+                }
+                tg.start_soon(app, scope, receive, send)
+
+    anyio.run(main)
+    return status["code"]
+
+
 # ---------------------------------------------------------------------------
 # Host
 # ---------------------------------------------------------------------------
@@ -262,10 +307,18 @@ class TestCrossOriginWrites:
 
 class TestMcpAndWebSocket:
     def test_mcp_sse_refuses_unexpected_host(self, make):
-        # Before the guard this request opens the event stream and never
-        # returns: the red run of this test is a hang, not an assertion.
-        r = make("attacker.example:8088").get("/mcp/sse")
-        assert r.status_code == 421
+        # An admitted /mcp/sse request opens an event stream that never ends,
+        # and TestClient waits for the app to finish. So this drives the ASGI
+        # app directly and stops at the first response status, whatever it
+        # is: the red run fails on the status in well under a second.
+        app = make("attacker.example:8088").app
+        assert _first_status(app, "GET", "/mcp/sse", "attacker.example:8088") == 421
+
+    def test_mcp_sse_status_probe_sees_an_admitted_stream(self, make):
+        """The probe above is not vacuous: on an allowed host it sees the
+        stream's own 200 and returns instead of hanging."""
+        app = make("localhost:8088").app
+        assert _first_status(app, "GET", "/mcp/sse", "localhost:8088") == 200
 
     def test_mcp_messages_refuses_unexpected_host(self, make):
         r = make("attacker.example:8088").post("/mcp/messages/?session_id=x", json={})
