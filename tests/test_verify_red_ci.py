@@ -658,3 +658,11 @@ class TestTheJobsShape:
         run = "\n".join(s.get("run", "") for s in ci["jobs"]["verify-red"]["steps"])
         assert 'install --system -e ".[all]"' in run
         assert 'uv pip install --system -e "$ext"' in run
+
+
+def test_review_md_does_not_trust_a_table_the_pr_itself_can_rewrite():
+    # The job runs the PR's own copy of the script and the workflow: a PR that
+    # changes either produces a table the review cannot take on trust.
+    review = (REPO / ".claude" / "skills" / "pyrite-conductor" / "review.md").read_text()
+    text = " ".join(review.split())
+    assert "the PR itself touches `scripts/verify*red*` or the `verify-red` job" in text

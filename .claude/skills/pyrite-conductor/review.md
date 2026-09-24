@@ -50,7 +50,9 @@ code nobody had pushed).
       the run for the PR's latest push and every test the PR names for the fix reads "red without the fix", it replaces
       the manual run; "red by import/collection error", "passes without the fix" on a test that is not a
       "still works" guard, "not verifiable", or implementation outside `pyrite/`/`extensions/*/src/`
-      (e.g. `scripts/`) still need the manual step. After ~15-20 PRs, decide whether to make the job
+      (e.g. `scripts/`) still need the manual step. So does any PR where
+      the PR itself touches `scripts/verify*red*` or the `verify-red` job in `.github/workflows/ci.yml`: the
+      job runs the PR's own copy, so its table cannot vouch for itself. After ~15-20 PRs, decide whether to make the job
       required for `fix:` commits
 - [ ] any number in the report (faster, slower, N% fewer rewrites, a flake rate) was measured against the
       MERGE BASE, under ONE interpreter with the source tree pinned, and the sentence that reports it states
