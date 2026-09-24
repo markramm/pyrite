@@ -123,7 +123,8 @@
 					class:brand-invert-on-dark={brandStore.invert_on_dark}
 				/>
 			{:else}
-				<span class="flex h-7 w-7 items-center justify-center rounded bg-gradient-to-br from-gold-400 to-gold-600 text-xs font-bold text-zinc-900">Py</span>
+				<img src="/pyrite-mark-light.svg" alt="" class="h-7 w-7 dark:hidden" />
+				<img src="/pyrite-mark.svg" alt="" class="hidden h-7 w-7 dark:block" />
 			{/if}
 			<span class="font-display text-lg tracking-tight text-zinc-100">{brandStore.name}</span>
 			<span class="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-400">Alpha</span>

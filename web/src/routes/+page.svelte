@@ -45,9 +45,8 @@
 						class:brand-invert-on-dark={brandStore.invert_on_dark}
 					/>
 				{:else}
-					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-gold-400 to-gold-600">
-						<span class="text-lg font-bold text-zinc-900">Py</span>
-					</div>
+					<img src="/pyrite-mark-light.svg" alt="" class="h-10 w-10 dark:hidden" />
+					<img src="/pyrite-mark.svg" alt="" class="hidden h-10 w-10 dark:block" />
 				{/if}
 				<h1 class="text-3xl font-bold text-zinc-900 dark:text-zinc-100">{brandStore.name}</h1>
 			</div>

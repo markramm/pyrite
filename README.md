@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo/pyrite-mark.svg">
+    <img src="docs/assets/logo/pyrite-mark-light.svg" alt="Pyrite logo: an isometric cube inside a hexagonal frame, drawn as a graph of nodes and edges" width="120">
+  </picture>
+</p>
+
 # Pyrite
 
 **A second brain for you, your agents, and your teams.**
