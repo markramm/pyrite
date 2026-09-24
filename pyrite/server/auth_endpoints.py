@@ -358,6 +358,16 @@ async def _github_oauth_callback(
     if not gh_config or not gh_config.client_id:
         return RedirectResponse(url="/login?error=oauth_failed", status_code=302)
 
+    # A connect callback completes only for the session user who started it.
+    # Checked before the exchange, so a refused callback never spends the code.
+    if state_data.get("flow") == "connect":
+        connect_user_id = state_data.get("user_id")
+        session_token = request.cookies.get(COOKIE_NAME)
+        session_user = auth_service.verify_session(session_token) if session_token else None
+        if not connect_user_id or not session_user or session_user["id"] != connect_user_id:
+            logger.warning("GitHub connect callback without the initiating user's session")
+            return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
+
     provider = GitHubOAuthProvider(gh_config.client_id, gh_config.client_secret)
     callback_url = str(request.url_for("github_oauth_callback"))
 
@@ -372,12 +382,7 @@ async def _github_oauth_callback(
 
     # Handle "connect" flow — store token for existing user, don't create session
     if state_data.get("flow") == "connect":
-        connect_user_id = state_data.get("user_id")
-        session_token = request.cookies.get(COOKIE_NAME)
-        session_user = auth_service.verify_session(session_token) if session_token else None
-        if not connect_user_id or not session_user or session_user["id"] != connect_user_id:
-            logger.warning("GitHub connect callback without the initiating user's session")
-            return RedirectResponse(url="/settings/kbs?error=connect_failed", status_code=302)
+        connect_user_id = state_data["user_id"]
         try:
             auth_service.store_github_token(connect_user_id, token.access_token, token.scope)
             return RedirectResponse(url="/settings/kbs?github=connected", status_code=302)

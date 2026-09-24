@@ -224,6 +224,33 @@ class TestConnectFlowBinding:
         assert world["auth"].get_github_token_for_user(attacker_id)[0] is None
 
 
+class TestRefusedConnectNeverExchangesTheCode:
+    """A connect callback refused for its session never spends the code at
+    GitHub: the exchange (a network call that yields a live token) is not
+    made at all."""
+
+    @pytest.mark.parametrize("session", ["other-user", "none"])
+    def test_exchange_not_called(self, world, session):
+        starter = world["browser"]()
+        _login_local(starter, "starter")
+        state = _state_of(starter.get("/auth/github/connect", follow_redirects=False))
+        binding = starter.cookies.get(OAUTH_BINDING_COOKIE)
+
+        caller = world["browser"]()
+        if session == "other-user":
+            _login_local(caller, "other")
+        caller.cookies.set(OAUTH_BINDING_COOKIE, binding, path="/auth/github")
+
+        with patch(
+            "pyrite.server.auth_endpoints.GitHubOAuthProvider.exchange_code",
+            new_callable=AsyncMock,
+            return_value=OAuthToken(access_token="gho_x", scope="public_repo"),
+        ) as exchange:
+            r = caller.get(f"/auth/github/callback?code=c&state={state}", follow_redirects=False)
+        assert r.headers["location"] == "/settings/kbs?error=connect_failed"
+        exchange.assert_not_called()
+
+
 # ---------------------------------------------------------------------------
 # The binding cookie itself
 # ---------------------------------------------------------------------------
