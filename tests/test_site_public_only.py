@@ -167,6 +167,40 @@ class TestStaleCache:
             assert r.status_code == 404, path
             assert SECRET not in r.text, path
 
+    @pytest.mark.parametrize(
+        "path",
+        [
+            # Dot segments after a public KB name, percent-encoded so the
+            # client does not normalise them away before the request.
+            f"/site/{PUBLIC}/%2e%2e/{PRIVATE}/secret-1",
+            f"/site/{PUBLIC}/%2E%2E/{PRIVATE}/secret-1",
+            f"/site/{PUBLIC}/.%2e/{PRIVATE}/secret-1",
+            f"/site/{PUBLIC}/%2e%2e/{PRIVATE}/index",
+            f"/site/{PUBLIC}/%2e/%2e%2e/{PRIVATE}/secret-1",
+            # Encoded separators: one URL segment that decodes to several.
+            f"/site/{PUBLIC}/..%2F{PRIVATE}%2Fsecret-1",
+            f"/site/{PUBLIC}/..%2f{PRIVATE}%2fsecret-1",
+            f"/site/{PUBLIC}%2F..%2F{PRIVATE}%2Fsecret-1",
+            f"/site/{PUBLIC}%2f%2e%2e%2f{PRIVATE}",
+        ],
+    )
+    def test_dot_segment_after_public_kb_cannot_reach_private(self, site_env, path):
+        site_env["svc"].render_all()
+        _plant_stale(site_env["cache_dir"])
+        r = _client(site_env).get(path)
+        assert SECRET not in r.text, path
+        assert r.status_code == 404, (path, r.status_code)
+
+    @pytest.mark.parametrize(
+        "path",
+        [f"/site/{PUBLIC}/%2e/pub-1", f"/site/{PUBLIC}/.%2Fpub-1"],
+    )
+    def test_single_dot_segment_is_refused(self, site_env, path):
+        """`.` segments are refused outright, not normalised."""
+        site_env["svc"].render_all()
+        r = _client(site_env).get(path)
+        assert r.status_code == 404, (path, r.status_code)
+
     def test_unknown_first_segment_is_404(self, site_env):
         r = _client(site_env).get("/site/no-such-kb/x")
         assert r.status_code == 404

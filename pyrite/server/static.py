@@ -108,12 +108,11 @@ def mount_site_routes(app: FastAPI) -> None:
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
-        if path.split("/", 1)[0] not in _public(request):
-            return _site_404()
         return _serve_site_cached(
             site_cache_dir,
             path,
             "<html><body>Page not yet rendered. Run site cache render.</body></html>",
+            public=_public(request),
         )
 
     @app.get("/site", include_in_schema=False)
@@ -122,6 +121,7 @@ def mount_site_routes(app: FastAPI) -> None:
             site_cache_dir,
             "",
             "<html><body>Site not yet rendered. Run site cache render.</body></html>",
+            public=_public(request),
         )
 
 
@@ -271,27 +271,45 @@ def _serve_search_page(cache_dir: Path) -> HTMLResponse:
     )
 
 
-def _serve_site_cached(cache_dir: Path, path: str, fallback_html: str) -> HTMLResponse:
+def _serve_site_cached(
+    cache_dir: Path, path: str, fallback_html: str, *, public: set[str]
+) -> HTMLResponse:
     """Serve a /site page from the cache directory.
 
     Cache layout:
         /site           → cache_dir/index.html
         /site/boyd      → cache_dir/boyd/index.html
         /site/boyd/ooda → cache_dir/boyd/ooda.html
+
+    Anything below the landing page is served only when the *resolved* file
+    lies in a public KB's directory. ``path`` arrives percent-decoded, so
+    ``%2e%2e`` and ``%2F`` are already ``..`` and ``/`` here: a path with a
+    ``.``, ``..`` or empty segment is refused before it is joined, and the
+    check runs again on the resolved path (symlinks included), because a
+    first-segment check alone let ``public-kb/%2e%2e/private-kb/x`` through.
     """
     if not path:
         cache_path = cache_dir / "index.html"
     else:
         parts = path.rstrip("/").split("/")
+        if any(p in ("", ".", "..") or "\\" in p or "\x00" in p for p in parts):
+            return _site_404()
+        if parts[0] not in public:
+            return _site_404()
         if len(parts) == 1:
             cache_path = cache_dir / parts[0] / "index.html"
         else:
             cache_path = cache_dir / parts[0] / ("/".join(parts[1:]) + ".html")
 
-    # Security: ensure resolved path is within cache_dir
+    # Security: the resolved file must be inside cache_dir, and (below the
+    # landing page) inside a public KB's directory.
     try:
+        root = cache_dir.resolve()
         resolved = cache_path.resolve()
-        if not resolved.is_relative_to(cache_dir.resolve()):
+        if not resolved.is_relative_to(root):
+            return _site_404()
+        rel = resolved.relative_to(root).parts
+        if path and (len(rel) < 2 or rel[0] not in public):
             return _site_404()
     except (ValueError, OSError):
         return _site_404()
