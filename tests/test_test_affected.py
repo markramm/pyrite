@@ -173,6 +173,19 @@ class TestAffectedByImports:
         assert "tests/test_c2.py" in sel.files
         assert "tests/test_unrelated.py" not in sel.files
 
+    def test_a_fixture_chain_across_conftests_carries_imports(self, repo):
+        # tests/sub/conftest.py's sub_thing requests tests/conftest.py's
+        # `thing`, which imports pyrite.c: the dependency crosses files.
+        _write(repo, "tests/sub/__init__.py")
+        _write(
+            repo,
+            "tests/sub/conftest.py",
+            "import pytest\n\n@pytest.fixture\ndef sub_thing(thing):\n    return 1\n",
+        )
+        _write(repo, "tests/sub/test_sub.py", "def test_s(sub_thing):\n    pass\n")
+        sel = _select(repo, "pyrite/c.py")
+        assert "tests/sub/test_sub.py" in sel.files
+
     def test_autouse_fixture_imports_do_not_select_everything(self, repo):
         # _auto (autouse) imports pyrite.b and wraps every test; a test that
         # does not name it is not selected by it.
