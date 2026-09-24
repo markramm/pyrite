@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.machinery
 import importlib.util
+import os
 import subprocess
 import sys
 import textwrap
@@ -35,6 +36,14 @@ def _load():
 
 
 ta = _load()
+
+
+@pytest.fixture(autouse=True)
+def _not_under_a_push(monkeypatch):
+    # The pre-push hook runs this file with PRE_COMMIT_*_REF naming commits
+    # of the real repository; the CLI subprocesses here must not inherit them.
+    monkeypatch.delenv("PRE_COMMIT_FROM_REF", raising=False)
+    monkeypatch.delenv("PRE_COMMIT_TO_REF", raising=False)
 
 
 def _write(root: Path, rel: str, text: str = "") -> None:
@@ -395,6 +404,57 @@ class TestBaseFallback:
             capture_output=True,
             text=True,
         )
+        assert out.returncode == 0, out.stderr
+        assert "tests/test_b.py" in out.stdout.split()
+
+
+class TestPushedRange:
+    """Under the pre-push hook, select from what is being pushed.
+
+    pre-commit exports PRE_COMMIT_FROM_REF / PRE_COMMIT_TO_REF. The working
+    tree is not what is pushed: an uncommitted edit, a committed change
+    reverted in the tree, or a push of another branch all differ from it.
+    """
+
+    @pytest.fixture
+    def pushed(self, repo):
+        _git(repo, "init", "-q", "-b", "dev")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-qm", "base")
+        base = _git(repo, "rev-parse", "HEAD").strip()
+        _git(repo, "checkout", "-qb", "feature/x")
+        (repo / "pyrite" / "b.py").write_text("def func():\n    return 2\n")
+        _git(repo, "commit", "-qam", "change b")
+        return repo, base, _git(repo, "rev-parse", "HEAD").strip()
+
+    def _list(self, repo, **env):
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--root", str(repo), "--list"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, **env},
+        )
+
+    def test_selects_the_pushed_range_not_the_working_tree(self, pushed):
+        repo, base, head = pushed
+        (repo / "pyrite" / "b.py").write_text("def func():\n    return 1\n")  # reverted in tree
+        (repo / "pyrite" / "c.py").write_text("VALUE = 4\n")  # not being pushed
+        out = self._list(repo, PRE_COMMIT_FROM_REF=base, PRE_COMMIT_TO_REF=head)
+        assert out.returncode == 0, out.stderr
+        selected = out.stdout.split()
+        assert "tests/test_b.py" in selected
+        assert "tests/test_c.py" not in selected
+
+    def test_a_branch_other_than_the_checked_out_one(self, pushed):
+        repo, base, head = pushed
+        _git(repo, "checkout", "-q", "dev")
+        out = self._list(repo, PRE_COMMIT_FROM_REF=base, PRE_COMMIT_TO_REF=head)
+        assert out.returncode == 0, out.stderr
+        assert "tests/test_b.py" in out.stdout.split()
+
+    def test_an_all_zero_from_ref_diffs_against_the_base(self, pushed):
+        repo, _, head = pushed
+        out = self._list(repo, PRE_COMMIT_FROM_REF="0" * 40, PRE_COMMIT_TO_REF=head)
         assert out.returncode == 0, out.stderr
         assert "tests/test_b.py" in out.stdout.split()
 

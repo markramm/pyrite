@@ -45,6 +45,9 @@ Usage
   --base REF          compare against REF's merge base (default origin/dev)
   --committed         ignore uncommitted and untracked changes
   --files A B ...     use these changed paths instead of asking git
+
+Under the pre-push hook (PRE_COMMIT_FROM_REF / PRE_COMMIT_TO_REF set) the
+changed paths are those of the pushed range, not the working tree.
 """
 
 from __future__ import annotations
@@ -98,6 +101,16 @@ def changed_files(root: Path, base: str = DEFAULT_BASE, committed_only: bool = F
     else:
         out = _git(root, "diff", "-z", "--name-only", "--no-renames", merge_base)
         out += _git(root, "ls-files", "-z", "--others", "--exclude-standard")
+    return sorted({path for path in out.split("\0") if path.strip()})
+
+
+def pushed_files(root: Path, from_ref: str | None, to_ref: str, base: str) -> list[str]:
+    """Paths changed by a push of ``from_ref..to_ref`` (pre-commit's
+    PRE_COMMIT_FROM_REF / PRE_COMMIT_TO_REF). With no usable ``from_ref``
+    (a new branch, all zeros), from the merge base of ``base`` and ``to_ref``."""
+    if not from_ref or not from_ref.strip("0"):
+        from_ref = _git(root, "merge-base", base, to_ref).strip()
+    out = _git(root, "diff", "-z", "--name-only", "--no-renames", from_ref, to_ref)
     return sorted({path for path in out.split("\0") if path.strip()})
 
 
@@ -699,11 +712,16 @@ def main(argv: list[str] | None = None) -> int:
     if opts.full:
         selection = Selection(files={}, core=[], full="--full")
     else:
-        changed = (
-            opts.files
-            if opts.files is not None
-            else changed_files(root, _default_base(root, opts.base), opts.committed)
-        )
+        to_ref = os.environ.get("PRE_COMMIT_TO_REF")
+        if opts.files is not None:
+            changed = opts.files
+        elif to_ref:
+            # Under the pre-push hook: what is being pushed, not the tree.
+            changed = pushed_files(
+                root, os.environ.get("PRE_COMMIT_FROM_REF"), to_ref, _default_base(root, opts.base)
+            )
+        else:
+            changed = changed_files(root, _default_base(root, opts.base), opts.committed)
         selection = select(root, changed, opts.helper_threshold)
 
     if opts.explain:
