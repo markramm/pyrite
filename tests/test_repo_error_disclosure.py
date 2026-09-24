@@ -369,7 +369,7 @@ class TestPullAndPushReturnGitsOwnWords:
         repo = self._repo(tmp_path)
         with (
             patch.object(GitService, "is_git_repo", return_value=True),
-            patch.object(GitService, "get_current_branch", return_value="main"),
+            patch.object(GitService, "_checked_out_branch", return_value="main"),
             # push checks its remote against `git remote` and its branch
             # with `git check-ref-format` first; this test is about what
             # it reports when the push itself fails.
@@ -396,7 +396,7 @@ class TestPullAndPushReturnGitsOwnWords:
         repo = self._repo(tmp_path)
         with (
             patch.object(GitService, "is_git_repo", return_value=True),
-            patch.object(GitService, "get_current_branch", return_value="main"),
+            patch.object(GitService, "_checked_out_branch", return_value="main"),
             # push checks its remote against `git remote` and its branch
             # with `git check-ref-format` first; this test is about what
             # it reports when the push itself fails.
@@ -917,7 +917,7 @@ class TestErrorDetailHygiene:
         repo.mkdir()
         with (
             patch.object(GitService, "is_git_repo", return_value=True),
-            patch.object(GitService, "get_current_branch", return_value="main"),
+            patch.object(GitService, "_checked_out_branch", return_value="main"),
             # push checks its remote against `git remote` and its branch
             # with `git check-ref-format` first; this test is about what
             # it reports when the push itself fails.

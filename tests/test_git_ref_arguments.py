@@ -425,3 +425,18 @@ def test_rest_export_answers_invalid_ref(repo):
     assert r.status_code == 400, r.text
     assert r.json()["detail"]["code"] == "INVALID_REF"
     assert _remote_main(repo) == pushed
+
+
+def test_push_without_a_current_branch_says_so(repo):
+    """Detached HEAD and no branch given: the answer names the missing branch."""
+    kb_dir = repo["kb_dir"]
+    _git(kb_dir, "checkout", "-q", "--detach")
+    r = TestClient(create_app(config=repo["config"])).post(
+        f"/api/kbs/{KB}/push", json={"remote": "origin"}
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["success"] is False
+    assert "current branch" in body["message"]
+    assert "Invalid branch name" not in body["message"]
+    assert _heads(repo["bare"]) == ""

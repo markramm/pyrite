@@ -312,6 +312,27 @@ class GitService:
         return "main"
 
     @staticmethod
+    def _checked_out_branch(local_path: Path) -> str | None:
+        """The checked-out branch's name, or None on a detached HEAD.
+
+        Unlike `get_current_branch`, which answers "HEAD" (detached) or
+        "main" (on error), this never invents a name to push.
+        """
+        try:
+            result = subprocess.run(
+                ["git", "symbolic-ref", "--short", "-q", "HEAD"],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                env=_git_env(),
+            )
+        except (subprocess.SubprocessError, OSError):
+            logger.warning("Failed to read the current branch of %s", local_path, exc_info=True)
+            return None
+        name = result.stdout.strip()
+        return name if result.returncode == 0 and name else None
+
+    @staticmethod
     def get_head_commit(local_path: Path) -> str:
         """Get HEAD commit hash."""
         try:
@@ -784,7 +805,14 @@ class GitService:
             # rejected value, reported with its real cause.
             return False, "Push failed: this repository has no remotes configured"
         if branch is None:
-            branch = GitService.get_current_branch(local_path)
+            branch = GitService._checked_out_branch(local_path)
+            if branch is None:
+                # Not a rejected value: there is nothing to default to.
+                return (
+                    False,
+                    "Push failed: the repository has no current branch "
+                    "(detached HEAD); name the branch to push",
+                )
         GitService.validate_remote_name(local_path, remote)
         GitService.validate_branch_name(branch)
         # The refspec is built here, never taken from the caller: a branch
