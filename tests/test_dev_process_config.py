@@ -679,3 +679,31 @@ class TestInfraChangesRunTheFullMatrixOnAPR:
         # narrow a push's.
         matrix = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
         assert "github.event_name == 'pull_request'" in matrix
+
+
+class TestRunningTheTestsDoc:
+    """CONTRIBUTING's "Running the tests" names a marker, two variables and a
+    script; each must still exist where the doc says it does (#356)."""
+
+    @pytest.fixture(scope="class")
+    def section(self) -> str:
+        text = (REPO / "CONTRIBUTING.md").read_text()
+        start = text.index("## Running the tests")
+        return text[start : text.index("\n## ", start + 1)]
+
+    def test_the_core_marker_is_registered(self, section, pyproject):
+        assert "-m core" in section
+        markers = pyproject["tool"]["pytest"]["ini_options"]["markers"]
+        assert any(m.startswith("core:") for m in markers), markers
+
+    def test_the_push_variables_are_the_ones_the_hook_and_script_read(self, section, precommit):
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "PYRITE_PUSH_WORKERS" in section and "PYRITE_PUSH_WORKERS" in hook["entry"]
+        script = (REPO / "scripts" / "test-affected").read_text()
+        assert "PYRITE_PUSH_FULL" in section and '"PYRITE_PUSH_FULL"' in script
+
+    def test_the_documented_commands_exist(self, section):
+        assert "scripts/test-affected --run" in section
+        assert (REPO / "scripts" / "test-affected").exists()
+        assert (REPO / "scripts" / "run_tutorial.sh").exists()
+        assert "--dist loadfile" in section and (REPO / "tests" / "e2e").is_dir()

@@ -113,24 +113,78 @@ pyrite/
 4. **Plugin Protocol**: Extensions use structural typing (Protocol) — no base class inheritance required
 5. **SearchBackend Abstraction**: All search operations go through `SearchBackend` protocol (SQLite or Postgres)
 
-## Testing
+## Running the tests
+
+Pyrite is written largely by AI agents and runs on its users' machines, so
+most tests are **medium**: agents build units that pass alone and do not work
+together, and a user's machine is production, with no rollback. New
+behaviour, every fix and every guard is tested through the real wiring, so a
+guard's test fails when the guard is mis-wired, not only when its logic is
+wrong.
+
+| Size | What | For | Runs |
+|---|---|---|---|
+| Small | one process, no I/O | pure logic with a large input space (parsers, schema validation, query sanitizing, selection rules), where medium is too slow to cover it | editing, pre-push, PR CI |
+| **Medium** (default) | one machine, the real wiring: SQLite, temp dirs, `TestClient`, the CLI via Typer, MCP dispatch, git in temp repos, subprocesses | new behaviour, fixes, guards | editing, pre-push, PR CI |
+| Large | several processes or a browser | the release gate, standing in for the production monitoring a hosted service would have: live server + MCP smoke, the tutorial, Playwright, install from the tag, upgrade on a real KB | `dev` after merge, manual, release |
+
+`scripts/test-affected` picks tests by what a change can reach, not by size.
+Tests carry no size marker yet.
+
+**Everything**
 
 ```bash
-# While you work: the core smoke set plus every test that imports what your
-# branch changed (against origin/dev). This is what the pre-push hook runs.
-scripts/test-affected --run            # -n 4 by default
-scripts/test-affected --explain        # which tests, and why
-
-# Everything, in parallel. Optional locally; CI runs it on every PR.
-.venv/bin/pytest tests/ extensions/ -n auto
-
-# One file, or tests matching a pattern
-.venv/bin/pytest tests/test_models.py
-.venv/bin/pytest -k "search"
-
-# Frontend
-cd web && npm run check && npm run test:unit
+.venv/bin/pytest tests/ extensions/ -n 4       # backend, ~6,000 tests, ~10 min on a busy laptop
+cd web && npm ci && npm run check && npm run test:unit && npm run build   # frontend
+HF_HUB_OFFLINE=1 .venv/bin/pytest tests/e2e -m e2e -n 4 --dist loadfile   # large: real server and MCP processes
+PATH="$PWD/.venv/bin:$PATH" bash scripts/run_tutorial.sh                  # large: docs/getting-started.md as a test
+cd web && npx playwright install chromium && npm run test:e2e             # large: browser; manual-only in CI while non-deterministic
 ```
+
+Use `-n 4`, not `-n auto`, on a laptop: `-n auto` starts a worker per core,
+each with its own databases and temp trees, and several worktrees doing that
+at once ran a 16 GB machine out of memory (#168) and filled its disk (#356).
+
+**A subset**
+
+```bash
+.venv/bin/pytest tests/test_storage.py -n 4                         # one file
+.venv/bin/pytest tests/test_storage.py -k search                    # matching tests
+.venv/bin/pytest "tests/test_rest_api.py::TestKBEndpoints::test_list_kbs"   # one test
+.venv/bin/pytest extensions/software-kb -n 4                        # one extension
+.venv/bin/pytest tests/ extensions/ -m core -n 4                    # the core smoke set
+scripts/test-affected --list          # what your branch affects, against origin/dev's merge base
+scripts/test-affected --explain       # ... and why each test was chosen
+scripts/test-affected --run           # run it: core + affected, -n 4 (-n N or -n auto)
+scripts/test-affected --run --base HEAD   # nothing changed: the core set alone
+```
+
+`test-affected` diffs your working tree, uncommitted and untracked files
+included, against the merge base with `--base` (default `origin/dev`;
+`--committed` ignores uncommitted work). It selects every test that imports,
+through any chain, a module you changed or uses a conftest fixture that does,
+plus the tests that load plugins when an extension changes, plus the `core`
+set; and it switches to the full suite when you touch `conftest.py`,
+`pyproject.toml`, pytest or hook configuration, CI workflows or
+`tests/**/fixtures/`. Its known limit is import-time reach: importing
+`pkg.x` runs `pkg/__init__.py`, which it does not follow, so a change to
+`pyrite/services/kb_service.py` selects 167 of the 281 test files that
+execute it on import. CI catches the rest.
+
+**When to test what**
+
+| When | Run |
+|---|---|
+| While editing | the test file you are changing; `scripts/test-affected --run` |
+| Before a commit | nothing extra: the commit hooks run ruff and the fast checks in seconds |
+| Before a push | the pre-push hook runs `scripts/test-affected --run` on `PYRITE_PUSH_WORKERS` (default 4) workers. It already runs everything for conftest, fixtures, pyproject and config changes; set `PYRITE_PUSH_FULL=1` yourself for storage or migration changes and cross-cutting refactors |
+| On the pull request | nothing: CI runs the full backend suite (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, and the advisory `verify-red` job (your changed tests, with the fix reverted); after the merge, `dev` runs the full matrix, the e2e smoke and the tutorial |
+| A frontend change | `cd web && npm run check && npm run test:unit && npm run build` |
+| A release | the large tests: `scripts/release.py` installs the release commit into a fresh venv and runs the tutorial against it; Playwright and the smoke layer per the release runbook |
+
+**What CI guarantees:** no pull request merges until the full backend suite
+has passed on top of current `dev`. Run the full suite locally to reproduce a
+CI failure, not out of habit.
 
 The suite does not load the embedding model unless a test is marked
 `@pytest.mark.embeddings`; everything else runs with `auto_embed` off. A test
@@ -138,15 +192,6 @@ that passes alone but fails under `-n auto` is a bug in that test (shared
 state, a fixed wall-clock timeout, an unclosed database), not a reason to run
 serially — `tests/test_task_claim_concurrency.py` shows the pattern for
 process-spawning tests.
-
-The full suite can take several minutes; runtime varies with available CPU
-cores and system load. `scripts/test-affected` selects statically from the
-import graph (a test is chosen if it imports, through any chain, a module you
-changed, or uses a conftest fixture that does), always adds the tests marked
-`@pytest.mark.core`, and runs the full suite instead when you touch
-`conftest.py`, `pyproject.toml`, pytest or hook configuration, CI workflows or
-shared test fixtures. It is a fast feedback loop, not the gate: CI on the pull
-request runs the full suite, so a test it missed shows up there.
 
 **The runner itself is pinned.** `pytest`, `pytest-cov` and `pytest-xdist`
 are exact `==` pins in the `dev` extra (#128) — not a floor like the rest of
