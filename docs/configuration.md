@@ -51,6 +51,35 @@ Grants are managed over the REST API by an admin
 (`GET`/`POST /api/kbs/{name}/permissions`) or in the web UI's KB settings; there
 is no CLI command for them yet.
 
+**`default_role: read` also publishes the KB to anyone, signed in or not.**
+Such a KB is on the pre-rendered public site (`/site`, rendered with
+`POST /api/site/render`), in `/site/sitemap.xml` and in `/sitemap.xml`,
+whatever the auth settings are. A KB with `default_role` unset, `write` or
+`none` is never rendered to `/site`, and `/site` refuses its pages even if an
+older cache still holds them. To take a KB off the public site, change its
+`default_role` and re-render; purge any CDN in front of `/site`.
+
+### The public site's Content-Security-Policy
+
+`/site` pages are served with a strict policy (`script-src 'self'`, no inline
+scripts). If a reverse proxy injects a script into those pages, such as an
+analytics snippet, the browser blocks it until you allow it:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PYRITE_SITE_CSP_EXTRA` | unset | Extra sources in CSP syntax, appended to the built-in `/site` policy. Sources go on the directive with the same name; a directive the policy lacks is added. A malformed directive is ignored and logged. |
+
+```yaml
+settings:
+  # A proxy that injects <script src="https://plausible.io/..."> plus a small
+  # inline init script: allow the host, and the inline script by its hash
+  # (the browser console's CSP error prints the hash to use).
+  site_csp_extra: "script-src https://plausible.io 'sha256-<hash>'; connect-src https://plausible.io"
+```
+
+Prefer a hash to `'unsafe-inline'` in `script-src`: `'unsafe-inline'` would
+let a script planted in KB content run too.
+
 ## Search and embeddings
 
 | Variable | Default | Meaning |
