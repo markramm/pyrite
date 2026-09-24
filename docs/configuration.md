@@ -21,7 +21,7 @@ config file at all.
 | `PYRITE_HOST` | `127.0.0.1` | Bind address. Containers need `0.0.0.0`. |
 | `PYRITE_PORT` | `8088` | Port |
 | `PYRITE_CORS_ORIGINS` | localhost dev ports | Comma-separated allowed origins |
-| `PYRITE_ALLOWED_HOSTS` | unset | Comma-separated extra hostnames an auth-disabled server answers (see below) |
+| `PYRITE_ALLOWED_HOSTS` | unset | Comma-separated extra hostnames a credential-free server answers (see below) |
 | `PYRITE_API_KEY` | unset | Single admin API key (legacy single-key mode). Prefer `api_keys` in `config.yaml` — hashed keys with a role each. |
 
 `config.yaml`:
@@ -36,10 +36,19 @@ settings:
       label: "Reader"
 ```
 
-### Allowed hosts and origins (auth disabled)
+### Allowed hosts and origins (credential-free servers)
 
-With auth disabled, every request is treated as admin, so the server trusts
-the browser less:
+These rules apply when a request can change something without a credential:
+
+- auth is disabled and no `api_key` or `api_keys` are configured, so every
+  request is admin; or
+- auth is enabled with `anonymous_tier: write`, so anonymous visitors can
+  write.
+
+In API-key mode (auth disabled, keys configured), a request needs a key. With
+auth enabled and no anonymous writes, a request that changes anything needs
+a session. Neither mode is affected by these rules. In the two
+credential-free modes the server trusts the browser less:
 
 - It answers only requests addressed to `localhost`, `127.0.0.1` or `[::1]`,
   to the bind `host` when that is not a wildcard (`0.0.0.0`, `::`), and to any
@@ -50,8 +59,8 @@ the browser less:
   Otherwise it gets `403`. Requests that send no `Origin` or `Referer`, such as
   the CLI, `curl` and agents, are not affected.
 
-These rules cover the whole app, including `/mcp` and `/ws`. If you serve an
-auth-disabled instance under another name, such as a LAN hostname or a reverse
+These rules cover the whole app, including `/mcp`, `/ws` and `/site`. If you serve a
+credential-free instance under another name, such as a LAN hostname or a reverse
 proxy's public name, add that name to `allowed_hosts`. If the web UI is served
 from another origin, add the origin to `cors_origins`:
 
@@ -63,9 +72,9 @@ settings:
 
 `pyrite serve --host <addr>` adds `<addr>` automatically. The Vite dev server
 (`npm run dev` on port 5173) is already in the default `cors_origins`. If you
-run it on another port, add `http://localhost:<port>`. With auth enabled these
-rules are off, and a reverse proxy's public hostname does not need to be
-listed.
+run it on another port, add `http://localhost:<port>`. An instance with
+`anonymous_tier: write` behind a reverse proxy must list the proxy's public
+hostname in `allowed_hosts`.
 
 ## Authentication (multi-user)
 
