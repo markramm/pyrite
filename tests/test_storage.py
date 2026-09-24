@@ -17,6 +17,8 @@ from pyrite.storage.database import PyriteDB
 from pyrite.storage.index import IndexManager
 from pyrite.storage.repository import KBRepository
 
+pytestmark = pytest.mark.core  # the local smoke set; see scripts/test-affected
+
 
 class TestPyriteDB:
     """Tests for PyriteDB."""

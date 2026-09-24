@@ -126,6 +126,10 @@ markers = [
     # in CI. Run it deliberately with `pytest tests/e2e -m e2e`.
     "e2e: live-process smoke tests (real server subprocess, real client)",
     "embeddings: needs write-time embedding on (loads the sentence-transformers model)",
+    # The local smoke set scripts/test-affected always runs (#356): storage,
+    # the KB service, read scoping, the REST app factory, MCP dispatch and the
+    # CLI entry point. Keep it under a minute at -n 4.
+    "core: always run by scripts/test-affected, whatever the branch changed",
 ]
 
 [tool.mypy]

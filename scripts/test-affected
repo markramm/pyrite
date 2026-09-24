@@ -1,0 +1,719 @@
+#!/usr/bin/env python3
+"""Select the tests a branch can affect: the core set plus every test that
+imports, directly or transitively, a module the branch changed (#356).
+
+Local runs are a fast feedback loop, not the gate. CI on the pull request
+runs the full suite and the full matrix runs on `dev` after the merge, so a
+local miss costs one red PR run -- which is why this selector is static and
+lean rather than coverage-based. What it must not do is quietly skip a test
+that imports what changed, and it falls back to the full suite when the
+branch touches something every test depends on.
+
+Selection
+  core       tests marked ``@pytest.mark.core`` -- a small smoke set over
+             storage, the KB service, auth/read scoping, the REST app
+             factory, MCP dispatch and the CLI entry point. Always runs.
+  affected   test files that import a changed module, directly or through
+             any chain of imports; built with ``ast`` over pyrite/,
+             extensions/*/src/, scripts/ and the test trees, so no database
+             and no imports are executed. Counted as imports: ``import`` and
+             ``from`` statements anywhere in a file (function-level too),
+             and dotted string literals naming a module -- ``mock.patch``
+             targets and ``importlib.import_module`` arguments. A test that
+             uses a non-autouse conftest fixture inherits what that fixture
+             (and the fixtures and helpers it calls) imports. Changed test
+             files are always selected. A changed non-Python file selects
+             the modules and tests that name it (its basename, else its
+             directory's name).
+  full suite when the branch touches conftest.py, a pyproject.toml,
+             pytest.ini / setup.cfg / tox.ini, .pre-commit-config.yaml,
+             .github/workflows/, anything under a tests' fixtures/
+             directory, or a test helper module imported by at least
+             ``--helper-threshold`` test files.
+
+Known blind spots, by design (CI covers them): autouse fixtures are not
+attributed to the tests they wrap; a plugin reached only through an entry
+point (not an import or a string naming its package) does not select the
+core tests that load it.
+
+Usage
+  scripts/test-affected --list                 selected paths / node ids
+  scripts/test-affected --explain              why each one was selected
+  scripts/test-affected --run [-n N]           run them (default -n 4)
+  scripts/test-affected --run --full           run the full suite instead
+  --base REF          compare against REF's merge base (default origin/dev)
+  --committed         ignore uncommitted and untracked changes
+  --files A B ...     use these changed paths instead of asking git
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import os
+import re
+import subprocess
+import sys
+from collections import deque
+from dataclasses import dataclass, field
+from pathlib import Path
+
+DEFAULT_BASE = "origin/dev"
+DEFAULT_WORKERS = 4
+DEFAULT_HELPER_THRESHOLD = 20
+
+_FULL_SUITE_NAMES = {"conftest.py", "pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"}
+_FULL_SUITE_PATHS = {".pre-commit-config.yaml"}
+_FULL_SUITE_PREFIXES = (".github/workflows/",)
+# Content trees: a change here is matched by basename only, never by its
+# directory's name ("backlog", "docs" are words half the suite uses).
+_CONTENT_TOPS = {"kb", "docs", "web"}
+_SKIP_DIRS = {"__pycache__", ".venv", "node_modules", ".git", "build", "dist"}
+
+
+# --------------------------------------------------------------------------
+# Changed files
+
+
+def _git(root: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=root, check=True, capture_output=True, text=True
+    ).stdout
+
+
+def changed_files(root: Path, base: str = DEFAULT_BASE, committed_only: bool = False) -> list[str]:
+    """Paths changed since the merge base of ``base`` and HEAD.
+
+    Renames are reported as both paths (a module that moved still has
+    importers of its old name). Unless ``committed_only``, the working tree's
+    uncommitted edits and untracked files count too -- during work, the test
+    you want run is the one for the edit you have not committed yet.
+    """
+    merge_base = _git(root, "merge-base", base, "HEAD").strip()
+    if committed_only:
+        out = _git(root, "diff", "--name-only", "--no-renames", merge_base, "HEAD")
+    else:
+        out = _git(root, "diff", "--name-only", "--no-renames", merge_base)
+        out += _git(root, "ls-files", "--others", "--exclude-standard")
+    return sorted({line for line in out.splitlines() if line.strip()})
+
+
+# --------------------------------------------------------------------------
+# The repository as an import graph
+
+
+@dataclass
+class _File:
+    path: str  # repo-relative, posix
+    names: list[str]  # module names this file answers to
+    is_test: bool
+    text: str = ""
+    # imported dotted name -> how ("" for a plain import, "fixture x (conftest)")
+    deps: dict[str, str] = field(default_factory=dict)
+
+
+def _walk_py(directory: Path):
+    if not directory.is_dir():
+        return
+    for path in sorted(directory.rglob("*.py")):
+        if not _SKIP_DIRS.intersection(path.parts):
+            yield path
+
+
+def _module_name(rel: Path, base: Path) -> str:
+    parts = list(rel.relative_to(base).with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _prefixes(dotted: str) -> list[str]:
+    parts = dotted.split(".")
+    return [".".join(parts[: i + 1]) for i in range(len(parts))]
+
+
+def _source_roots(root: Path) -> list[tuple[Path, Path]]:
+    """(directory to walk, directory module names are relative to)."""
+    roots = [(root / "pyrite", root)]
+    roots += [(src, src) for src in sorted((root / "extensions").glob("*/src"))]
+    roots.append((root / "scripts", root / "scripts"))
+    return roots
+
+
+def _test_roots(root: Path) -> list[Path]:
+    return [root / "tests", *sorted((root / "extensions").glob("*/tests"))]
+
+
+def _absolute(node: ast.ImportFrom, package: str) -> str:
+    if not node.level:
+        return node.module or ""
+    parts = package.split(".") if package else []
+    if node.level > 1:
+        parts = parts[: len(parts) - (node.level - 1)]
+    base = ".".join(parts)
+    return f"{base}.{node.module}" if node.module and base else (node.module or base)
+
+
+def _imports(tree: ast.AST, package: str) -> list[tuple[str, list[str]]]:
+    """(module, names imported from it) for every import anywhere in ``tree``;
+    a plain ``import a.b`` is ``("a.b", [])``."""
+    records = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            records += [(alias.name, []) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            mod = _absolute(node, package)
+            if mod:
+                records.append((mod, [a.name for a in node.names if a.name != "*"]))
+    return records
+
+
+def _string_names(tree: ast.AST, tops: set[str]) -> set[str]:
+    """Dotted string literals that name one of our modules (patch targets)."""
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            value = node.value
+            if "." in value and value.split(".", 1)[0] in tops and _DOTTED.match(value):
+                names.add(value)
+    return names
+
+
+_DOTTED = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$")
+
+
+def _is_fixture(decorator: ast.expr) -> tuple[bool, bool]:
+    """(is a pytest fixture, is autouse)."""
+    target = decorator.func if isinstance(decorator, ast.Call) else decorator
+    name = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", "")
+    if name != "fixture":
+        return False, False
+    autouse = isinstance(decorator, ast.Call) and any(
+        kw.arg == "autouse" and isinstance(kw.value, ast.Constant) and kw.value.value
+        for kw in decorator.keywords
+    )
+    return True, autouse
+
+
+@dataclass
+class _Fixture:
+    name: str
+    conftest: str
+    autouse: bool
+    imports: set[str]
+    params: list[str]
+
+
+def _conftest_fixtures(tree: ast.Module, package: str, rel: str, resolve) -> dict[str, _Fixture]:
+    """Each fixture's own imports: in its body, module-level names it uses,
+    and module-level helper functions it calls (transitively)."""
+    bindings: dict[str, set[str]] = {}
+    functions: dict[str, ast.FunctionDef] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                bound = alias.asname or alias.name.split(".")[0]
+                bindings.setdefault(bound, set()).update(resolve(alias.name, []))
+        elif isinstance(node, ast.ImportFrom):
+            mod = _absolute(node, package)
+            for alias in node.names:
+                if mod and alias.name != "*":
+                    bindings.setdefault(alias.asname or alias.name, set()).update(
+                        resolve(mod, [alias.name])
+                    )
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            functions[node.name] = node
+
+    def deps_of(fn: ast.AST, seen: set[str]) -> set[str]:
+        found = {d for mod, names in _imports(fn, package) for d in resolve(mod, names)}
+        for node in ast.walk(fn):
+            if isinstance(node, ast.Name):
+                if node.id in bindings:
+                    found |= bindings[node.id]
+                elif node.id in functions and node.id not in seen:
+                    seen.add(node.id)
+                    found |= deps_of(functions[node.id], seen)
+        return found
+
+    fixtures = {}
+    for name, fn in functions.items():
+        for decorator in fn.decorator_list:
+            is_fixture, autouse = _is_fixture(decorator)
+            if is_fixture:
+                params = [a.arg for a in fn.args.args + fn.args.kwonlyargs]
+                fixtures[name] = _Fixture(name, rel, autouse, deps_of(fn, {name}), params)
+                break
+    return fixtures
+
+
+def _used_fixture_names(tree: ast.AST) -> set[str]:
+    used = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            used.update(a.arg for a in node.args.args + node.args.kwonlyargs)
+        elif isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr == "usefixtures":
+                used.update(
+                    a.value
+                    for a in node.args
+                    if isinstance(a, ast.Constant) and isinstance(a.value, str)
+                )
+    return used
+
+
+def _core_ids(rel: str, tree: ast.Module) -> list[str]:
+    def is_core(expr: ast.expr) -> bool:
+        target = expr.func if isinstance(expr, ast.Call) else expr
+        return (
+            isinstance(target, ast.Attribute)
+            and target.attr == "core"
+            and isinstance(target.value, ast.Attribute)
+            and target.value.attr == "mark"
+        )
+
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets
+        ):
+            values = (
+                node.value.elts if isinstance(node.value, ast.List | ast.Tuple) else [node.value]
+            )
+            if any(is_core(v) for v in values):
+                return [rel]
+    ids = []
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            if any(is_core(d) for d in node.decorator_list):
+                ids.append(f"{rel}::{node.name}")
+            elif isinstance(node, ast.ClassDef):
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef) and any(
+                        is_core(d) for d in item.decorator_list
+                    ):
+                        ids.append(f"{rel}::{node.name}::{item.name}")
+    return ids
+
+
+class Graph:
+    def __init__(self, root: Path):
+        self.root = root
+        self.files: dict[str, _File] = {}
+        self.core: list[str] = []
+        self._trees: dict[str, ast.Module] = {}
+        self._packages: dict[str, str] = {}
+        test_roots = _test_roots(root)
+
+        for walk_dir, base in _source_roots(root):
+            for path in _walk_py(walk_dir):
+                self._add(path, [_module_name(path, base)], is_test=False)
+        for troot in test_roots:
+            # tests/ is a package (tests.x); extensions/*/tests are rootdir
+            # modules imported by their bare name.
+            base = troot.parent if (troot / "__init__.py").exists() else troot
+            for path in _walk_py(troot):
+                is_test = path.name.startswith("test_")
+                self._add(path, [_module_name(path, base)], is_test=is_test)
+
+        self.by_name: dict[str, list[str]] = {}
+        for f in self.files.values():
+            for name in f.names:
+                self.by_name.setdefault(name, []).append(f.path)
+        self._reexports = {
+            f.names[0]: self._reexport_map(rel)
+            for rel, f in self.files.items()
+            if rel.endswith("__init__.py")
+        }
+
+        tops = {n.split(".")[0] for f in self.files.values() for n in f.names if n}
+        for rel, tree in self._trees.items():
+            f = self.files[rel]
+            package = self._packages[rel]
+            for mod, names in _imports(tree, package):
+                for dep in self.resolve(mod, names):
+                    f.deps.setdefault(dep, "")
+            for dotted in _string_names(tree, tops):
+                for dep in self.resolve(dotted, []):
+                    f.deps.setdefault(dep, "")
+            if f.is_test:
+                self.core += _core_ids(rel, tree)
+
+        self._attribute_fixtures(test_roots)
+
+        self.importers: dict[str, list[tuple[str, str]]] = {}
+        for f in self.files.values():
+            for name, how in f.deps.items():
+                self.importers.setdefault(name, []).append((f.path, how))
+
+    def _reexport_map(self, rel: str) -> dict[str, str]:
+        """Names a package's __init__ binds by importing them: name -> module."""
+        found = {}
+        for node in self._trees[rel].body:
+            if isinstance(node, ast.ImportFrom):
+                mod = _absolute(node, self._packages[rel])
+                for alias in node.names:
+                    if mod and alias.name != "*":
+                        found[alias.asname or alias.name] = f"{mod}.{alias.name}"
+        return found
+
+    def _module_of(self, dotted: str) -> str:
+        """The longest prefix of ``dotted`` that is one of our modules, else
+        ``dotted`` itself (a deleted module is still matched by name)."""
+        for prefix in reversed(_prefixes(dotted)):
+            if prefix in self.by_name:
+                return prefix
+        return dotted
+
+    def resolve(self, mod: str, names: list[str]) -> set[str]:
+        """The modules an import depends on.
+
+        ``from pkg import Name`` depends on ``pkg.Name`` when that is a
+        module, else on the module ``pkg/__init__.py`` took ``Name`` from
+        (followed through chains of re-exports), else on ``pkg``. Parent
+        packages are not added: that ``import pkg.x`` also executes
+        ``pkg/__init__.py`` is handled from the other side, when an
+        ``__init__`` itself changes (see ``select``).
+        """
+        # A module we cannot find is kept by name as well: it may be the
+        # deleted module the branch is about.
+        deps = {mod} if mod not in self.by_name else set()
+        if not names:
+            return deps | {self._module_of(mod)}
+        for name in names:
+            target = f"{mod}.{name}"
+            for _ in range(8):
+                if target in self.by_name:
+                    break
+                pkg, _, attr = target.rpartition(".")
+                source = self._reexports.get(pkg, {}).get(attr)
+                if source is None:
+                    break
+                target = source
+            deps.add(target if target in self.by_name else self._module_of(target))
+        return deps
+
+    def _add(self, path: Path, names: list[str], is_test: bool) -> None:
+        rel = path.relative_to(self.root).as_posix()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        try:
+            tree = ast.parse(text, filename=rel)
+        except SyntaxError:
+            tree = ast.Module(body=[], type_ignores=[])
+        name = names[0]
+        package = name if path.name == "__init__.py" else name.rpartition(".")[0]
+        self.files[rel] = _File(rel, names, is_test, text)
+        self._trees[rel] = tree
+        self._packages[rel] = package
+
+    def _attribute_fixtures(self, test_roots: list[Path]) -> None:
+        conftests: dict[str, dict[str, _Fixture]] = {}
+        for rel, tree in self._trees.items():
+            if rel.endswith("conftest.py"):
+                conftests[rel] = _conftest_fixtures(tree, self._packages[rel], rel, self.resolve)
+        root_conftest = self.root / "conftest.py"
+        if root_conftest.exists():
+            tree = ast.parse(root_conftest.read_text(encoding="utf-8"))
+            conftests["conftest.py"] = _conftest_fixtures(tree, "", "conftest.py", self.resolve)
+
+        for rel, f in self.files.items():
+            if not f.is_test:
+                continue
+            # Nearest conftest first, so a closer fixture shadows a farther one.
+            scope = sorted(
+                (
+                    c
+                    for c in conftests
+                    if rel.startswith(c.rpartition("/")[0] + "/") or c == "conftest.py"
+                ),
+                key=lambda c: -c.count("/") if c != "conftest.py" else 1,
+            )
+
+            def lookup(name: str, scope: list[str] = scope) -> _Fixture | None:
+                for c in scope:
+                    if name in conftests[c]:
+                        return conftests[c][name]
+                return None
+
+            used = _used_fixture_names(self._trees[rel])
+            seen: set[str] = set()
+            stack = list(used)
+            while stack:
+                name = stack.pop()
+                if name in seen:
+                    continue
+                seen.add(name)
+                fixture = lookup(name)
+                if fixture is None or fixture.autouse:
+                    continue
+                for dep in fixture.imports:
+                    f.deps.setdefault(dep, f"fixture {fixture.name} ({fixture.conftest})")
+                stack.extend(fixture.params)
+
+    def module_names_for(self, rel: str) -> list[str]:
+        """Module names a (possibly deleted) path answers to."""
+        if rel in self.files:
+            return self.files[rel].names
+        path = self.root / rel
+        if path.suffix != ".py":
+            return []
+        for walk_dir, base in _source_roots(self.root):
+            if path.is_relative_to(walk_dir):
+                return [_module_name(path, base)]
+        for troot in _test_roots(self.root):
+            if path.is_relative_to(troot):
+                base = troot.parent if (troot / "__init__.py").exists() else troot
+                return [_module_name(path, base)]
+        return []
+
+    def in_test_root(self, rel: str) -> bool:
+        path = self.root / rel
+        return any(path.is_relative_to(t) for t in _test_roots(self.root))
+
+
+# --------------------------------------------------------------------------
+# Selection
+
+
+@dataclass
+class Selection:
+    files: dict[str, str]  # test path -> why
+    core: list[str]
+    full: str | None = None  # the reason the full suite runs, if it does
+
+
+def _full_suite_reason(graph: Graph, rel: str) -> str | None:
+    name = rel.rpartition("/")[2]
+    if name in _FULL_SUITE_NAMES:
+        return f"{rel} ({name} configures every test)"
+    if rel in _FULL_SUITE_PATHS or rel.startswith(_FULL_SUITE_PREFIXES):
+        return f"{rel} (hook or CI configuration)"
+    if graph.in_test_root(rel) and "fixtures" in Path(rel).parts:
+        return f"{rel} (shared test fixture data)"
+    return None
+
+
+def _referencing_files(graph: Graph, rel: str) -> tuple[list[str], str]:
+    """Files that name a non-module path: its basename, else its directory."""
+    path = Path(rel)
+    source_root = next(
+        (walk for walk, _ in _source_roots(graph.root) if (graph.root / rel).is_relative_to(walk)),
+        None,
+    )
+
+    def candidates(f: _File) -> bool:
+        if f.path == rel:
+            return False
+        if f.is_test:
+            return True
+        return source_root is not None and (graph.root / f.path).is_relative_to(source_root)
+
+    pool = [f for f in graph.files.values() if candidates(f)]
+    needles = [path.name]
+    if path.suffix == ".py":
+        needles.append(path.stem)
+    if len(path.parts) > 1 and path.parts[0] not in _CONTENT_TOPS:
+        needles.append(path.parent.name)
+    for needle in needles:
+        word = re.compile(rf"(?<![\w.-]){re.escape(needle)}(?![\w-])")
+        hits = [f.path for f in pool if needle in f.text and word.search(f.text)]
+        if hits:
+            return hits, needle
+    return [], ""
+
+
+def select(
+    root: Path,
+    changed: list[str],
+    helper_threshold: int = DEFAULT_HELPER_THRESHOLD,
+    graph: Graph | None = None,
+) -> Selection:
+    root = Path(root).resolve()
+    graph = graph or Graph(root)
+    selection = Selection(files={}, core=list(graph.core))
+
+    for rel in changed:
+        reason = _full_suite_reason(graph, rel)
+        if reason:
+            selection.full = reason
+            return selection
+
+    # reached[name] = (the name it was reached from, or None for a seed; seed label)
+    reached: dict[str, tuple[str | None, str]] = {}
+    queue: deque[str] = deque()
+
+    def seed(name: str, label: str) -> None:
+        if name not in reached:
+            reached[name] = (None, label)
+            queue.append(name)
+
+    def chain(name: str) -> str:
+        parts = []
+        while True:
+            prev, label = reached[name]
+            parts.append(name)
+            if prev is None:
+                return " -> ".join(parts) + f" ({label})"
+            name = prev
+
+    helpers: list[str] = []
+    packages: set[str] = set()  # changed __init__ modules
+    for rel in changed:
+        f = graph.files.get(rel)
+        if f is not None and f.is_test:
+            selection.files[rel] = "changed test file"
+        names = graph.module_names_for(rel)
+        if names:
+            for name in names:
+                seed(name, rel)
+                if rel.endswith("__init__.py"):
+                    packages.add(name)
+            if graph.in_test_root(rel) and not Path(rel).name.startswith("test_"):
+                helpers.append(rel)
+        if not names or not rel.startswith(("pyrite/", "extensions/")):
+            hits, needle = _referencing_files(graph, rel)
+            for hit in hits:
+                hf = graph.files[hit]
+                if hf.is_test:
+                    selection.files.setdefault(hit, f"names {needle!r} ({rel})")
+                for name in hf.names:
+                    seed(name, f"names {needle!r} ({rel})")
+
+    def importers_of(name: str) -> list[tuple[str, str]]:
+        found = list(graph.importers.get(name, []))
+        if name in packages:
+            # Importing any submodule executes the package's __init__.
+            prefix = name + "."
+            for dep, users in graph.importers.items():
+                if dep.startswith(prefix):
+                    found += users
+        return found
+
+    while queue:
+        name = queue.popleft()
+        for importer, how in importers_of(name):
+            f = graph.files[importer]
+            if f.is_test and importer not in selection.files:
+                via = f"{how}: " if how else "imports "
+                selection.files[importer] = via + chain(name)
+            for own in f.names:
+                if own not in reached:
+                    reached[own] = (name, reached[name][1])
+                    queue.append(own)
+
+    for rel in helpers:
+        users = _tests_reaching(graph, graph.module_names_for(rel))
+        if len(users) >= helper_threshold:
+            selection.full = (
+                f"{rel} (test helper imported by {len(users)} test files, "
+                f"threshold {helper_threshold})"
+            )
+            selection.files = {}
+            return selection
+
+    return selection
+
+
+def _tests_reaching(graph: Graph, names: list[str]) -> set[str]:
+    """Test files that import any of ``names``, directly or transitively."""
+    seen = set(names)
+    queue = deque(names)
+    tests = set()
+    while queue:
+        for importer, _ in graph.importers.get(queue.popleft(), []):
+            f = graph.files[importer]
+            if f.is_test:
+                tests.add(importer)
+            for own in f.names:
+                if own not in seen:
+                    seen.add(own)
+                    queue.append(own)
+    return tests
+
+
+def pytest_args(selection: Selection, workers: int = DEFAULT_WORKERS) -> list[str]:
+    args = ["-n", str(workers)]
+    if selection.full is not None:
+        return [*args, "tests/", "extensions/"]
+    files = sorted(selection.files)
+    extra = [c for c in selection.core if c.split("::")[0] not in selection.files]
+    return [*args, *files, *extra]
+
+
+# --------------------------------------------------------------------------
+# CLI
+
+
+def _default_base(root: Path, base: str) -> str:
+    try:
+        _git(root, "rev-parse", "--verify", "--quiet", base)
+        return base
+    except subprocess.CalledProcessError:
+        if base == DEFAULT_BASE:
+            return "dev"
+        raise
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Run the core tests plus the tests the branch can affect.",
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--list", action="store_true", help="print selected paths (default)")
+    mode.add_argument("--explain", action="store_true", help="print why each test was selected")
+    mode.add_argument("--run", action="store_true", help="run the selection with pytest")
+    parser.add_argument("-n", "--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument("--base", default=DEFAULT_BASE)
+    parser.add_argument("--committed", action="store_true")
+    parser.add_argument("--files", nargs="*", help="changed paths (skip git)")
+    parser.add_argument("--full", action="store_true", help="select the full suite")
+    parser.add_argument("--helper-threshold", type=int, default=DEFAULT_HELPER_THRESHOLD)
+    parser.add_argument("--dry-run", action="store_true", help="with --run: print the command only")
+    parser.add_argument("--root", default=None, help=argparse.SUPPRESS)
+    parser.add_argument("pytest_extra", nargs=argparse.REMAINDER, help="after --: passed to pytest")
+    opts = parser.parse_args(argv)
+
+    root = Path(opts.root or Path(__file__).resolve().parent.parent).resolve()
+    if opts.full:
+        selection = Selection(files={}, core=[], full="--full")
+    else:
+        changed = (
+            opts.files
+            if opts.files is not None
+            else changed_files(root, _default_base(root, opts.base), opts.committed)
+        )
+        selection = select(root, changed, opts.helper_threshold)
+
+    if opts.explain:
+        if selection.full is not None:
+            print(f"full suite: {selection.full}")
+            return 0
+        print(f"core ({len(selection.core)}):")
+        for node in selection.core:
+            print(f"  {node}")
+        print(f"affected ({len(selection.files)}):")
+        for path, why in sorted(selection.files.items()):
+            print(f"  {path}  <- {why}")
+        return 0
+
+    args = pytest_args(selection, opts.workers)
+    if opts.run:
+        extra = [a for a in opts.pytest_extra if a != "--"]
+        cmd = [sys.executable, "-m", "pytest", *args, "-q", "--tb=short", *extra]
+        label = (
+            selection.full
+            and f"full suite: {selection.full}"
+            or (f"{len(selection.files)} affected test files + {len(selection.core)} core")
+        )
+        print(f"test-affected: {label}", file=sys.stderr)
+        if opts.dry_run:
+            print(" ".join(cmd))
+            return 0
+        return subprocess.call(cmd, cwd=root, env={**os.environ})
+
+    for item in args[2:]:
+        print(item)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

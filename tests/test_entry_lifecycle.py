@@ -16,6 +16,8 @@ from pyrite.models import EventEntry
 from pyrite.storage.database import PyriteDB
 from pyrite.storage.repository import KBRepository
 
+pytestmark = pytest.mark.core  # the local smoke set; see scripts/test-affected
+
 
 class TestLifecycleField:
     """Tests for the lifecycle field on entries."""

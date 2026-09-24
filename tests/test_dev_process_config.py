@@ -43,6 +43,11 @@ def _stages(hook: dict, config: dict) -> set[str]:
     return set(hook.get("stages") or config.get("default_stages") or ["pre-commit"])
 
 
+def _runs_tests(hook: dict) -> bool:
+    entry = str(hook.get("entry", ""))
+    return "pytest" in entry or "test-affected" in entry
+
+
 def _local_hooks(config: dict) -> list[dict]:
     return [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
 
@@ -52,7 +57,7 @@ class TestPreCommitConfig:
         offenders = [
             hook["id"]
             for hook in _hooks(precommit)
-            if "pytest" in str(hook.get("entry", "")) and "pre-commit" in _stages(hook, precommit)
+            if _runs_tests(hook) and "pre-commit" in _stages(hook, precommit)
         ]
         assert offenders == [], f"pytest must not run at the commit stage: {offenders}"
 
@@ -60,12 +65,12 @@ class TestPreCommitConfig:
         pushed = [
             hook
             for hook in _hooks(precommit)
-            if "pytest" in str(hook.get("entry", "")) and _stages(hook, precommit) == {"pre-push"}
+            if _runs_tests(hook) and _stages(hook, precommit) == {"pre-push"}
         ]
         assert len(pushed) == 1, "expected exactly one pre-push pytest hook"
 
     def test_pre_push_suite_is_scoped_to_code_changes(self, precommit):
-        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
         assert not hook.get("always_run"), "always_run defeats the docs-only skip"
         assert hook.get("files"), "pre-push pytest needs a `files:` filter"
 
@@ -215,19 +220,36 @@ class TestPrePushStage:
         offenders = [
             hook["id"]
             for hook in _hooks(precommit)
-            if "pytest" not in str(hook.get("entry", "")) and hook.get("stages") is None
+            if not _runs_tests(hook) and hook.get("stages") is None
         ]
         assert offenders == [], f"hooks relying on default_stages (pin `stages:`): {offenders}"
 
 
 class TestParallelSuite:
     # Serial: tests/ alone took 7m41s locally and ~22 min in CI. Parallel:
-    # tests/ + extensions/ in ~2-3 min. ADR-0032's up-to-date requirement is
-    # only livable with the fast number, so both gates pin -n auto.
-    def test_pre_push_runs_the_suite_in_parallel_including_extensions(self, precommit):
-        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
-        assert "-n auto" in hook["entry"]
-        assert "extensions/" in hook["entry"]
+    # tests/ + extensions/ in ~2-3 min. CI pins -n auto; the pre-push hook
+    # runs a selection (below) on a capped number of workers.
+    def test_pre_push_runs_the_affected_selection_not_the_full_suite(self, precommit):
+        """#356: the full suite at every push filled the disk and pushed load
+        past 25 on 2026-09-24 (one push took ~35 minutes, several worktrees
+        pushing at once). Locally, a fast feedback loop: the core set plus
+        the tests the branch can affect. CI on the PR runs everything."""
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "scripts/test-affected --run" in hook["entry"], hook["entry"]
+
+    def test_pre_push_workers_are_capped_and_overridable(self, precommit):
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "-n auto" not in hook["entry"], "uncapped workers per push (#356)"
+        assert "${PYRITE_PUSH_WORKERS:-4}" in hook["entry"], hook["entry"]
+
+    def test_pre_push_full_suite_is_one_variable_away(self, precommit):
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "PYRITE_PUSH_FULL" in hook["entry"] and "--full" in hook["entry"], hook["entry"]
+
+    def test_the_full_selection_covers_extensions(self):
+        # --full (and every fallback) must still mean tests/ AND extensions/.
+        script = (REPO / "scripts" / "test-affected").read_text()
+        assert '"tests/", "extensions/"' in script
 
     def test_pre_push_refuses_a_worktree_with_no_venv(self, precommit):
         """No `.venv` here means the suite would test another checkout's code.
@@ -245,7 +267,7 @@ class TestParallelSuite:
         (#210, #242). Failing loudly is the whole fix: the wrong answer was
         silent, and silence is what cost the time.
         """
-        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
         entry = hook["entry"]
         assert "|| PY=python" not in entry, (
             "the pre-push hook still falls back to system python when a "

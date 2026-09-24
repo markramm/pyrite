@@ -84,6 +84,7 @@ def _patch_config(cli_env):
 
 
 @pytest.mark.cli
+@pytest.mark.core
 class TestTyperListCommand:
     def test_list_shows_kbs(self, cli_env):
         with _patch_config(cli_env):
@@ -98,6 +99,7 @@ class TestTyperListCommand:
 
 
 @pytest.mark.cli
+@pytest.mark.core
 class TestTyperGetCommand:
     def test_get_entry_found(self, cli_env):
         with _patch_config(cli_env):
@@ -152,6 +154,7 @@ class TestTyperBacklinksCommand:
 
 
 @pytest.mark.cli
+@pytest.mark.core
 class TestTyperCreateCommand:
     def test_create_note(self, cli_env):
         with _patch_config(cli_env):
@@ -512,6 +515,7 @@ class TestTyperConfigCommand:
 
 
 @pytest.mark.cli
+@pytest.mark.core
 class TestTopLevelHelpAdvertisesOrient:
     """docs-operational-contracts-travel-with-tool item 1: nothing at the
     top-level `pyrite --help` currently tells a cold agent that `orient`
