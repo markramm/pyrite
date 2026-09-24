@@ -389,3 +389,102 @@ def test_a_failed_v24_rebuild_leaves_the_old_table_intact(tmp_path):
     ), "a half-built copy was left behind"
     assert mgr.get_current_version() == 23
     conn.close()
+
+
+# ---------------------------------------------------------------------------
+# The row form's no-identity floor: an operator key below the tier learns
+# nothing about which rows exist
+# ---------------------------------------------------------------------------
+
+
+def test_read_tier_operator_key_gets_the_same_refusal_for_missing_and_existing_reviews(
+    tmp_path,
+):
+    """A read-tier API key has the same role on every KB, so the row form
+    refuses it on tier *before* looking the review up. Without that floor, a
+    missing id answered 404 (the resolver) and an existing id 403 (the per-KB
+    check) -- an existence oracle for review ids."""
+    import hashlib
+
+    kb_path = tmp_path / "kb"
+    kb_path.mkdir()
+    config = PyriteConfig(
+        knowledge_bases=[KBConfig(name="kb", path=kb_path, kb_type="generic")],
+        settings=Settings(
+            index_path=tmp_path / "index.db",
+            api_keys=[
+                {
+                    "key_hash": hashlib.sha256(b"read-key").hexdigest(),
+                    "role": "read",
+                    "label": "Reader",
+                }
+            ],
+        ),
+    )
+    app = create_app(config=config)
+    db = PyriteDB(config.settings.index_path)
+    try:
+        db.register_kb("kb", "generic", str(kb_path))
+        db.upsert_entry(
+            {
+                "id": "entry-kb",
+                "kb_name": "kb",
+                "entry_type": "note",
+                "title": "Entry",
+                "body": "body",
+                "file_path": str(kb_path / "entry-kb.md"),
+            }
+        )
+        rid = db.create_review(
+            entry_id="entry-kb",
+            kb_name="kb",
+            content_hash="0" * 40,
+            reviewer="admin",
+            reviewer_type="user",
+            result="pass",
+        )["id"]
+        client = TestClient(app, headers={"X-API-Key": "read-key"})
+        existing = client.delete(f"/api/reviews/{rid}")
+        missing = client.delete("/api/reviews/999999")
+        assert existing.status_code == 403, existing.text
+        assert missing.status_code == 403, missing.text
+        assert existing.json() == missing.json(), "the refusal differs by whether the row exists"
+        assert db.get_review(rid) is not None
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# A KB named in a body that is not declared JSON never reaches a handler
+# ---------------------------------------------------------------------------
+
+
+def test_json_body_without_content_type_never_reaches_the_handler(env):
+    """`_resolve_kb_names` reads a body's KB only when the request says it is
+    JSON (`_has_json_body`). That is sound only because FastAPI, with
+    `strict_content_type` (default True), also refuses to parse such a body
+    for the handler: the guard sees no KB, but the handler never runs.
+    If that default ever changed, this request would write into a private
+    KB past a guard that checked only the caller's global role."""
+    import json
+
+    client = _as(env, "alice")
+    r = client.post(
+        "/api/entries",
+        content=json.dumps({"kb": PRIVATE, "title": "Smuggled", "body": "x"}).encode(),
+    )
+    assert "content-type" not in {k.lower() for k in r.request.headers}
+    # FastAPI's own body-validation refusal, raised before the handler runs --
+    # not a 422 the handler produced after receiving the KB.
+    assert r.status_code == 422, r.text
+    detail = r.json().get("detail")
+    assert isinstance(detail, list) and detail[0]["loc"] == ["body"], (
+        f"the body reached the handler: {r.text}"
+    )
+    assert not list((env["tmp"] / PRIVATE).rglob("*.md")), "a file was written"
+    assert (
+        env["db"].execute_sql(
+            "SELECT id FROM entry WHERE kb_name = :kb AND title = 'Smuggled'", {"kb": PRIVATE}
+        )
+        == []
+    )

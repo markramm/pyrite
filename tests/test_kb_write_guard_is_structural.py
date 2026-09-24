@@ -121,3 +121,26 @@ def test_every_requires_kb_tier_route_names_its_kb_or_resolves_the_row():
             "look the row up: requires_kb_tier(tier, resolve_kb=<dependency returning "
             "RowKB>) -- see review_kb in pyrite/server/endpoints/reviews.py."
         )
+
+
+def test_every_route_with_a_body_refuses_to_parse_an_undeclared_content_type():
+    """Pins the FastAPI setting the body-KB guard relies on.
+
+    `pyrite.server.api._has_json_body` reads a KB from the body only when the
+    request declares JSON. That is sound only while FastAPI also refuses to
+    parse an undeclared body as JSON for the handler (`strict_content_type`,
+    default True). A route -- or a FastAPI default -- that turned it off would
+    let a KB reach the handler that the guard never saw.
+    """
+    from fastapi.datastructures import DefaultPlaceholder
+
+    lax = []
+    for method, route in _api_routes():
+        if not route.dependant.body_params:
+            continue
+        setting = route.strict_content_type
+        if isinstance(setting, DefaultPlaceholder):
+            setting = setting.value
+        if setting is not True:
+            lax.append(f"  {method:6} {route.path} strict_content_type={setting!r}")
+    assert not lax, "routes that parse a body with no JSON content-type:\n" + "\n".join(lax)
