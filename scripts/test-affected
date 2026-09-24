@@ -643,6 +643,13 @@ def pytest_args(selection: Selection, workers: int = DEFAULT_WORKERS) -> list[st
 # CLI
 
 
+def _python(root: Path) -> str:
+    """The worktree's own interpreter: run from a shell, the shebang's
+    ``python3`` may have no pytest, or import another checkout's code."""
+    venv = root / ".venv" / "bin" / "python"
+    return str(venv) if os.access(venv, os.X_OK) else sys.executable
+
+
 def _default_base(root: Path, base: str) -> str:
     try:
         _git(root, "rev-parse", "--verify", "--quiet", base)
@@ -698,7 +705,7 @@ def main(argv: list[str] | None = None) -> int:
     args = pytest_args(selection, opts.workers)
     if opts.run:
         extra = [a for a in opts.pytest_extra if a != "--"]
-        cmd = [sys.executable, "-m", "pytest", *args, "-q", "--tb=short", *extra]
+        cmd = [_python(root), "-m", "pytest", *args, "-q", "--tb=short", *extra]
         label = (
             selection.full
             and f"full suite: {selection.full}"

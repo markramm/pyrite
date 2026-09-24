@@ -361,6 +361,17 @@ class TestCLI:
         assert "pytest -n 4" in out.stdout
         assert "tests/test_b.py" in out.stdout
 
+    def test_run_uses_the_repository_venv_not_the_shebang_python(self, repo):
+        # `scripts/test-affected --run` from a shell runs under whatever
+        # `python3` the shebang finds, which may have no pytest (or another
+        # checkout's). The worktree's .venv is the interpreter under test.
+        venv_python = repo / ".venv" / "bin" / "python"
+        _write(repo, ".venv/bin/python", "#!/bin/sh\n")
+        venv_python.chmod(0o755)
+        out = self._run(repo, "--run", "--dry-run", "--files", "pyrite/b.py")
+        assert out.returncode == 0, out.stderr
+        assert out.stdout.startswith(f"{venv_python} -m pytest"), out.stdout
+
     def test_full_flag_forces_the_full_suite(self, repo):
         out = self._run(repo, "--run", "--dry-run", "--full", "-n", "3", "--files", "pyrite/b.py")
         assert out.returncode == 0, out.stderr
