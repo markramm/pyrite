@@ -257,7 +257,8 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   warning on the test: either it does not exercise the change, or it is a
   deliberate "this still works" guard, which is fine — say so in the PR.
   *not verifiable* means the test skipped, failed with the fix, timed out
-  (120 s per run) or produced no report, so no claim is made. Tests you did
+  (120 s per run), was not reached before the job's time budget ran out,
+  or produced no report, so no claim is made. Tests you did
   not add or edit are listed apart and never warned about, and a PR that
   changes implementation but no test file gets a warning of its own. The
   job is advisory: it is not a required check and fails only when it could

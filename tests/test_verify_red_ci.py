@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -612,6 +613,40 @@ def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
     assert git(repo, "status", "--porcelain") == ""
 
 
+class TestRunTimeout:
+    """Each run gets the per-run timeout, cut to what the budget has left once the
+    kill grace is set aside; too little left, and the run is not started."""
+
+    def test_no_budget_is_the_per_run_timeout(self, vr):
+        assert vr.run_timeout(120, None) == 120
+
+    def test_plenty_left_is_the_per_run_timeout(self, vr):
+        assert vr.run_timeout(120, 1000) == 120
+
+    def test_the_kill_grace_is_set_aside(self, vr):
+        assert vr.run_timeout(120, vr.KILL_GRACE + 30) == 30
+
+    def test_too_little_left_is_no_run(self, vr):
+        assert vr.run_timeout(120, vr.KILL_GRACE + vr.MIN_RUN - 1) is None
+
+
+def test_a_spent_budget_turns_every_remaining_file_into_a_row(
+    vr, repo: Path, tmp_path: Path
+) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    (repo / "tests" / "test_helper.py").write_text(NEW_FILE_TESTS)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: add adds")
+
+    result, summary = run_ci(repo, tmp_path, "--budget", "0")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    for f in ("tests/test_add.py", "tests/test_helper.py"):
+        line = row(summary, f)
+        assert vr.NOT_VERIFIABLE in line and "time budget" in line, line
+    assert git(repo, "status", "--porcelain") == ""
+
+
 # ---------------------------------------------------------------------------
 # The job's shape in ci.yml.
 # ---------------------------------------------------------------------------
@@ -642,7 +677,17 @@ class TestTheJobsShape:
 
     def test_it_is_bounded(self, ci):
         job = ci["jobs"]["verify-red"]
-        assert 0 < job["timeout-minutes"] <= 15
+        assert 0 < job["timeout-minutes"] <= 30
+
+    def test_the_script_budget_ends_before_the_job_is_cancelled(self, ci):
+        # A cancelled job loses the summary's legend and any file not yet
+        # written; a spent budget turns the remaining files into rows instead.
+        job = ci["jobs"]["verify-red"]
+        run = "\n".join(s.get("run", "") for s in job["steps"])
+        m = re.search(r"--budget (\d+)", run)
+        assert m, "the job must pass --budget"
+        install_margin = 5 * 60  # checkout, Python, uv, the editable installs
+        assert int(m.group(1)) + install_margin <= job["timeout-minutes"] * 60
 
     def test_it_runs_the_script_against_the_pr_base(self, ci):
         job = ci["jobs"]["verify-red"]

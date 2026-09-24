@@ -48,7 +48,9 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -209,6 +211,18 @@ def read_junit(path: Path, test_file: str) -> Report:
 # ---------------------------------------------------------------------------
 
 DEFAULT_TIMEOUT = 120  # seconds per pytest run, so one hung file is a row, not a killed job
+KILL_GRACE = 20  # _run's TERM-then-KILL waits (10 s each) after a timeout
+MIN_RUN = 5  # a run given less than this is not started
+
+
+def run_timeout(timeout: float, remaining: float | None) -> float | None:
+    """The timeout for the next run: the per-run timeout, cut to what the job's
+    budget has left after setting the kill grace aside. None: too little left to
+    start one -- the file becomes a row rather than the job being cancelled."""
+    if remaining is None:
+        return timeout
+    left = remaining - KILL_GRACE
+    return min(timeout, left) if left >= MIN_RUN else None
 
 
 def _git(*args: str) -> str:
@@ -368,13 +382,21 @@ def verify_file(
     python: str,
     tmp: Path,
     timeout: float,
+    remaining: Callable[[], float | None] = lambda: None,
 ) -> list[Row]:
     touched = touched_tests(_show(mb, test_file), Path(test_file).read_text())
+
+    def budgeted() -> float:
+        t = run_timeout(timeout, remaining())
+        if t is None:
+            raise NoVerdictError("not run: the job's time budget is spent")
+        return t
+
     try:
-        head = run_with_fix(python, test_file, tmp / f"head-{i}.xml", timeout)
+        head = run_with_fix(python, test_file, tmp / f"head-{i}.xml", budgeted())
         if head.collection_error and not head.outcomes:
             raise NoVerdictError("does not collect with the fix")
-        reverted = run_without_fix(python, base, test_file, impl, tmp / f"base-{i}.xml", timeout)
+        reverted = run_without_fix(python, base, test_file, impl, tmp / f"base-{i}.xml", budgeted())
     except NoVerdictError as exc:
         return [Row(test_file, test_file, NOT_VERIFIABLE, str(exc), True)]
     rows = []
@@ -476,7 +498,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--timeout", type=float, default=DEFAULT_TIMEOUT, help="seconds per pytest run"
     )
+    parser.add_argument(
+        "--budget",
+        type=float,
+        default=None,
+        help="seconds for all runs; files it cannot cover become rows (CI: under the job timeout)",
+    )
     args = parser.parse_args(argv)
+    start = time.monotonic()
+
+    def remaining() -> float | None:
+        return None if args.budget is None else args.budget - (time.monotonic() - start)
+
     sink = Sink(args.summary)
     # Python's default SIGTERM ends the process without unwinding; raise instead,
     # so _run kills its child and the finally below restores the tree.
@@ -509,6 +542,7 @@ def main(argv: list[str] | None = None) -> int:
                     python=args.python,
                     tmp=Path(tmp),
                     timeout=args.timeout,
+                    remaining=remaining,
                 )
                 sink.write(render_file(test_file, rows))
                 for line in annotations(rows):
