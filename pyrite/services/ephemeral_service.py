@@ -5,20 +5,15 @@ Lifecycle management for temporary knowledge bases with TTL.
 """
 
 import logging
-import re
 import shutil
 import time
 from pathlib import Path
 
 from ..config import KBConfig, PyriteConfig, save_config
 from ..storage.database import PyriteDB
+from .kb_names import PLAIN_KB_NAME_RULE, is_plain_kb_name, kb_name_in_use
 
 logger = logging.getLogger(__name__)
-
-# An ephemeral KB's name becomes a directory under <workspace>/ephemeral/ and
-# is chosen by any write-role user, so it must be a plain name: no separators,
-# no dot segments, not absolute.
-_EPHEMERAL_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
 
 class InvalidEphemeralKBNameError(ValueError):
@@ -53,12 +48,13 @@ class EphemeralKBService:
         name, or of two names one case-insensitive filesystem folds together,
         exactly one gets it, and a leftover directory is never adopted.
         """
-        if not isinstance(name, str) or not _EPHEMERAL_NAME_RE.fullmatch(name):
+        # The name becomes a directory under <workspace>/ephemeral/ and is
+        # chosen by any write-role user, so it must be a plain name.
+        if not is_plain_kb_name(name):
             raise InvalidEphemeralKBNameError(
-                "Invalid ephemeral KB name: use 1-64 letters, digits, '-' or '_', "
-                "starting with a letter or digit"
+                f"Invalid ephemeral KB name: use {PLAIN_KB_NAME_RULE}"
             )
-        if self._name_in_use(name):
+        if kb_name_in_use(self.config, self.db, name):
             raise InvalidEphemeralKBNameError("That KB name is not available")
         ephemeral_dir = self._root() / name
         if not self._inside_root(ephemeral_dir):
@@ -76,13 +72,6 @@ class EphemeralKBService:
             # leftover that would block the name forever.
             shutil.rmtree(ephemeral_dir, ignore_errors=True)
             raise
-
-    def _name_in_use(self, name: str) -> bool:
-        """True when config or the KB registry table already has this name."""
-        if self.config.get_kb(name) is not None:
-            return True
-        rows = self.db.execute_sql("SELECT 1 FROM kb WHERE name = :name", {"name": name})
-        return bool(rows)
 
     def _register(
         self,

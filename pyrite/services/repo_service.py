@@ -7,11 +7,13 @@ operations.
 """
 
 import logging
+import shutil
 from pathlib import Path
 
 from pyrite.utils.yaml import load_yaml_file
 
 from ..config import (
+    ConfigError,
     KBConfig,
     KBType,
     PyriteConfig,
@@ -22,6 +24,7 @@ from ..github_auth import get_github_token
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
 from .git_service import GitService
+from .kb_names import PLAIN_KB_NAME_RULE, is_plain_kb_name
 from .user_service import UserService
 
 logger = logging.getLogger(__name__)
@@ -67,6 +70,9 @@ class RepoService:
 
         owner, repo_name = parsed
         full_name = name or f"{owner}/{repo_name}"
+        refusal = self._refuse_repo_name(full_name)
+        if refusal:
+            return refusal
 
         # Determine workspace path
         workspace_path = self.config.settings.workspace_path / owner / repo_name
@@ -90,61 +96,25 @@ class RepoService:
         if not success:
             return {"success": False, "error_code": code, "error": msg}
 
-        # Discover KBs
-        discovered_kbs = self.discover_kbs(workspace_path)
-
-        # Register repo in DB
-        head = GitService.get_head_commit(workspace_path)
-        repo_row = self.db.register_repo(
-            name=full_name,
-            local_path=str(workspace_path),
+        registered = self._register_clone(
+            workspace_path,
+            full_name=full_name,
             remote_url=remote_url,
             owner=owner,
-            visibility="public",
-            default_branch=branch,
+            branch=branch,
+            read_only=True,  # Subscriptions are read-only
+            workspace_role="subscriber",
         )
-        self.db.update_repo_synced(full_name, head)
-
-        # Register KBs in config and DB
-        index_mgr = IndexManager(self.db, self.config)
-        kb_names = []
-        for kb_config in discovered_kbs:
-            # Set repo association
-            kb_config.repo = full_name
-            kb_config.repo_subpath = str(kb_config.path.relative_to(workspace_path))
-            kb_config.read_only = True  # Subscriptions are read-only
-
-            # Add to config if not already present
-            if not self.config.get_kb(kb_config.name):
-                self.config.add_kb(kb_config)
-
-            # Register in DB with repo_id
-            self.db.register_kb(
-                name=kb_config.name,
-                kb_type=kb_config.kb_type,
-                path=str(kb_config.path),
-                description=kb_config.description,
-            )
-            # Link KB to repo in DB
-            if repo_row.get("id"):
-                self.db.link_kb_to_repo(kb_config.name, repo_row["id"], kb_config.repo_subpath)
-
-            # Index with attribution
-            index_mgr.index_with_attribution(kb_config.name, self.git)
-            kb_names.append(kb_config.name)
-
-        # Add to user's workspace
-        user = self.user_service.get_current_user()
-        if repo_row.get("id"):
-            self.db.add_workspace_repo(user["id"], repo_row["id"], "subscriber")
-
-        save_config(self.config)
+        if not registered["success"]:
+            return registered
+        kb_names = registered["kbs"]
 
         return {
             "success": True,
             "repo": full_name,
             "path": str(workspace_path),
             "kbs": kb_names,
+            "kb_default_role": None,
             "entries_indexed": sum(self.db.count_entries(kb) for kb in kb_names),
         }
 
@@ -437,6 +407,9 @@ class RepoService:
             return {"success": False, "error": "Could not parse clone URL"}
 
         owner, repo_name = parsed
+        refusal = self._refuse_repo_name(full_name)
+        if refusal:
+            return refusal
         workspace_path = self.config.settings.workspace_path / owner / repo_name
 
         if workspace_path.exists():
@@ -456,46 +429,142 @@ class RepoService:
         if not success:
             return {"success": False, "error_code": code, "error": msg}
 
-        # Discover and register
-        discovered_kbs = self.discover_kbs(workspace_path)
-        head = GitService.get_head_commit(workspace_path)
-
-        repo_row = self.db.register_repo(
-            name=full_name,
-            local_path=str(workspace_path),
+        registered = self._register_clone(
+            workspace_path,
+            full_name=full_name,
             remote_url=clone_url,
             owner=owner,
-            default_branch=branch,
+            branch=branch,
+            read_only=False,
+            workspace_role="contributor",
         )
-        self.db.update_repo_synced(full_name, head)
-
-        index_mgr = IndexManager(self.db, self.config)
-        kb_names = []
-        for kb_config in discovered_kbs:
-            kb_config.repo = full_name
-            kb_config.repo_subpath = str(kb_config.path.relative_to(workspace_path))
-            if not self.config.get_kb(kb_config.name):
-                self.config.add_kb(kb_config)
-            self.db.register_kb(
-                name=kb_config.name,
-                kb_type=kb_config.kb_type,
-                path=str(kb_config.path),
-                description=kb_config.description,
-            )
-            if repo_row.get("id"):
-                self.db.link_kb_to_repo(kb_config.name, repo_row["id"], kb_config.repo_subpath)
-            index_mgr.index_with_attribution(kb_config.name, self.git)
-            kb_names.append(kb_config.name)
-
-        user = self.user_service.get_current_user()
-        if repo_row.get("id"):
-            self.db.add_workspace_repo(user["id"], repo_row["id"], "contributor")
-
-        save_config(self.config)
+        if not registered["success"]:
+            return registered
 
         return {
             "success": True,
             "repo": full_name,
             "path": str(workspace_path),
-            "kbs": kb_names,
+            "kbs": registered["kbs"],
+            "kb_default_role": None,
         }
+
+    # =========================================================================
+    # Registering a fresh clone
+    # =========================================================================
+    #
+    # A KB's name in a cloned repository comes from that repository's own
+    # kb.yaml, which whoever controls the repository chooses. Registering a
+    # clone therefore never adopts, re-points or re-links a KB or repository
+    # that already exists: a collision refuses the whole operation, the clone
+    # directory is removed, and nothing is left half-registered.
+    #
+    # KBs registered from a clone have no default_role: every user reaches
+    # them at their global role (subscriptions are also read-only).
+
+    def _refuse_repo_name(self, full_name: str) -> dict | None:
+        """A refusal result when a repository row already has this name."""
+        if self.db.get_repo(name=full_name) is not None:
+            return {
+                "success": False,
+                "error_code": "REPO_NAME_CONFLICT",
+                "error": f"A repository named '{full_name}' is already registered",
+            }
+        return None
+
+    @staticmethod
+    def _refuse_invalid_kb_names(kbs: list[KBConfig]) -> dict | None:
+        """A refusal result unless every discovered KB name is a plain name."""
+        for kb in kbs:
+            if not is_plain_kb_name(kb.name):
+                return {
+                    "success": False,
+                    "error_code": "INVALID_KB_NAME",
+                    "error": f"The repository names a KB that is not a valid KB name: "
+                    f"use {PLAIN_KB_NAME_RULE}",
+                }
+        return None
+
+    @staticmethod
+    def _kb_name_conflict(name: str) -> dict:
+        return {
+            "success": False,
+            "error_code": "KB_NAME_CONFLICT",
+            "error": f"The repository names a KB '{name}', which is already registered "
+            "or named twice; nothing was subscribed",
+        }
+
+    def _register_clone(
+        self,
+        workspace_path: Path,
+        *,
+        full_name: str,
+        remote_url: str,
+        owner: str,
+        branch: str,
+        read_only: bool,
+        workspace_role: str,
+    ) -> dict:
+        """Register a fresh clone's repository row and KBs, all or nothing."""
+        # Sorted, so a partial registration unwinds in a predictable order.
+        discovered_kbs = sorted(self.discover_kbs(workspace_path), key=lambda k: str(k.path))
+        refusal = self._refuse_invalid_kb_names(discovered_kbs)
+        if refusal:
+            shutil.rmtree(workspace_path, ignore_errors=True)
+            return refusal
+
+        head = GitService.get_head_commit(workspace_path)
+        repo_row = self.db.register_repo(
+            name=full_name,
+            local_path=str(workspace_path),
+            remote_url=remote_url,
+            owner=owner,
+            visibility="public",
+            default_branch=branch,
+        )
+        self.db.update_repo_synced(full_name, head)
+
+        index_mgr = IndexManager(self.db, self.config)
+        registered: list[str] = []
+        for kb_config in discovered_kbs:
+            kb_config.repo = full_name
+            kb_config.repo_subpath = str(kb_config.path.relative_to(workspace_path))
+            if read_only:
+                kb_config.read_only = True
+            # A name is claimed in both stores insert-only, which is the
+            # collision check: a KB already in config, in the registry (from
+            # any process), or named twice in this repository is refused and
+            # left untouched, and everything this clone registered unwinds.
+            try:
+                self.config.add_kb(kb_config)
+            except ConfigError:
+                self._unwind_clone(registered, full_name, workspace_path)
+                return self._kb_name_conflict(kb_config.name)
+            if not self.db.insert_new_kb(
+                name=kb_config.name,
+                kb_type=kb_config.kb_type,
+                path=str(kb_config.path),
+                description=kb_config.description,
+            ):
+                self.config.remove_kb(kb_config.name)
+                self._unwind_clone(registered, full_name, workspace_path)
+                return self._kb_name_conflict(kb_config.name)
+            registered.append(kb_config.name)
+            if repo_row.get("id"):
+                self.db.link_kb_to_repo(kb_config.name, repo_row["id"], kb_config.repo_subpath)
+            index_mgr.index_with_attribution(kb_config.name, self.git)
+
+        user = self.user_service.get_current_user()
+        if repo_row.get("id"):
+            self.db.add_workspace_repo(user["id"], repo_row["id"], workspace_role)
+
+        save_config(self.config)
+        return {"success": True, "kbs": registered}
+
+    def _unwind_clone(self, registered: list[str], full_name: str, workspace_path: Path) -> None:
+        """Remove what `_register_clone` registered for this clone, and the clone."""
+        for name in registered:
+            self.config.remove_kb(name)
+            self.db.unregister_kb(name)
+        self.db.delete_repo(full_name)
+        shutil.rmtree(workspace_path, ignore_errors=True)
