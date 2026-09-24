@@ -80,6 +80,18 @@ settings:
 Prefer a hash to `'unsafe-inline'` in `script-src`: `'unsafe-inline'` would
 let a script planted in KB content run too.
 
+Limits on what the setting can do:
+
+- `object-src` and `base-uri` cannot be extended. A directive that tries is
+  ignored, and a warning is logged.
+- Adding `'unsafe-inline'`, `'unsafe-eval'` or `*` to `script-src` or
+  `default-src` is applied, but logs a warning (on the first `/site` request), because it lets
+  script in KB content run on `/site`.
+- A directive with no value, such as `upgrade-insecure-requests`, is added
+  as is.
+- A malformed directive is ignored and logged. That includes a bad name and
+  a source that contains `,` or a control character.
+
 ## Search and embeddings
 
 | Variable | Default | Meaning |

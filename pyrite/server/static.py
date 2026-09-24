@@ -45,15 +45,28 @@ _CSP_NAME = re.compile(r"^[a-z][a-z-]*$")
 _CSP_SOURCE = re.compile(r"^[\x21-\x2b\x2d-\x3a\x3c-\x7e]+$")
 
 
+# Directives site_csp_extra may not widen: a plugin/embed source or a <base>
+# href would undo the point of the policy for content pages.
+_CSP_LOCKED = frozenset({"object-src", "base-uri"})
+# Sources that let injected content run as script; allowed, but warned about.
+_CSP_WEAKENING = frozenset({"'unsafe-inline'", "'unsafe-eval'", "*"})
+_CSP_SCRIPT_DIRECTIVES = frozenset({"script-src", "default-src"})
+
+
 @lru_cache(maxsize=16)
 def build_site_csp(extra: str = "") -> str:
     """The /site Content-Security-Policy, with ``extra`` merged in.
 
     ``extra`` is CSP syntax ("script-src https://a.example; connect-src ...").
     Its sources are appended to the built-in directive of the same name, or
-    a new directive is added. A malformed directive (bad name, or a source
-    with a separator or control character) is skipped with a warning, so a
-    typo can neither break the header nor inject another one.
+    a new directive is added; a directive with no value (for example
+    ``upgrade-insecure-requests``) is added as is. A malformed directive
+    (bad name, or a source with a separator or control character) is
+    skipped with a warning, so a typo can neither break the header nor
+    inject another one. ``object-src`` and ``base-uri`` cannot be extended
+    (skipped with a warning); ``'unsafe-inline'``, ``'unsafe-eval'`` or
+    ``*`` on ``script-src``/``default-src`` is applied but warned about,
+    since it would let a script planted in KB content run.
     """
     merged: dict[str, list[str]] = {name: list(srcs) for name, srcs in _SITE_CSP_DIRECTIVES}
     for raw in (extra or "").split(";"):
@@ -64,15 +77,30 @@ def build_site_csp(extra: str = "") -> str:
         name, sources = tokens[0], tokens[1:]
         if (
             not _CSP_NAME.match(name)
-            or not sources
             or not all(_CSP_SOURCE.match(src) for src in sources)
             or any(c in raw for c in "\r\n\t\x00")
         ):
             logger.warning("Ignoring malformed site_csp_extra directive: %r", raw.strip())
             continue
+        if name in _CSP_LOCKED and sources:
+            logger.warning(
+                "Ignoring site_csp_extra directive %r: %s cannot be extended on /site",
+                raw.strip(),
+                name,
+            )
+            continue
+        if name in _CSP_SCRIPT_DIRECTIVES:
+            for src in sources:
+                if src in _CSP_WEAKENING:
+                    logger.warning(
+                        "site_csp_extra adds %s to %s: scripts planted in KB content "
+                        "could run on /site; prefer a host or a 'sha256-...' hash",
+                        src,
+                        name,
+                    )
         target = merged.setdefault(name, [])
         target.extend(src for src in sources if src not in target)
-    return "; ".join(f"{name} {' '.join(srcs)}" for name, srcs in merged.items())
+    return "; ".join(" ".join([name, *srcs]) for name, srcs in merged.items())
 
 
 SITE_CSP = build_site_csp()
