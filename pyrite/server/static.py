@@ -18,6 +18,35 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+# Defence in depth for /site (pre-rendered KB content on the app's own origin):
+# no inline script and no event-handler attributes run, even if a renderer
+# ever emits one. The pages' behaviour lives in /site/_static/*.js. Inline
+# styles stay allowed; the pages use style attributes throughout.
+SITE_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'self'"
+)
+SITE_SECURITY_HEADERS = {
+    "Content-Security-Policy": SITE_CSP,
+    "X-Content-Type-Options": "nosniff",
+}
+
+# The only files /site/_static serves: the /site pages' scripts.
+_SITE_STATIC_DIR = Path(__file__).parent / "templates"
+_SITE_STATIC_FILES = {"site.js", "site-search.js"}
+
+
+def _site_404() -> HTMLResponse:
+    return HTMLResponse(status_code=404, headers=SITE_SECURITY_HEADERS)
+
 
 def mount_site_routes(app: FastAPI) -> None:
     """Mount /site and /viewer routes. These work independent of the SPA dist."""
@@ -60,6 +89,17 @@ def mount_site_routes(app: FastAPI) -> None:
     async def viewer_index(request: Request):
         return _serve_static_dir(viewer_dir, "index.html")
 
+    # Scripts for the /site pages (CSP: script-src 'self')
+    @app.get("/site/_static/{name}", include_in_schema=False)
+    async def site_static(name: str):
+        if name not in _SITE_STATIC_FILES:
+            return _site_404()
+        return FileResponse(
+            str(_SITE_STATIC_DIR / name),
+            media_type="text/javascript",
+            headers={"Cache-Control": "public, max-age=3600", **SITE_SECURITY_HEADERS},
+        )
+
     # Search page
     @app.get("/site/search", include_in_schema=False)
     async def site_search(request: Request):
@@ -69,7 +109,7 @@ def mount_site_routes(app: FastAPI) -> None:
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
         if path.split("/", 1)[0] not in _public(request):
-            return HTMLResponse(status_code=404)
+            return _site_404()
         return _serve_site_cached(
             site_cache_dir,
             path,
@@ -227,7 +267,7 @@ def _serve_search_page(cache_dir: Path) -> HTMLResponse:
         html = SEARCH_PAGE_HTML
     return HTMLResponse(
         content=html,
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={"Cache-Control": "public, max-age=3600", **SITE_SECURITY_HEADERS},
     )
 
 
@@ -252,9 +292,9 @@ def _serve_site_cached(cache_dir: Path, path: str, fallback_html: str) -> HTMLRe
     try:
         resolved = cache_path.resolve()
         if not resolved.is_relative_to(cache_dir.resolve()):
-            return HTMLResponse(status_code=404)
+            return _site_404()
     except (ValueError, OSError):
-        return HTMLResponse(status_code=404)
+        return _site_404()
 
     if cache_path.is_file():
         return HTMLResponse(
@@ -262,11 +302,12 @@ def _serve_site_cached(cache_dir: Path, path: str, fallback_html: str) -> HTMLRe
             headers={
                 "Cache-Control": "public, max-age=3600, s-maxage=86400",
                 "X-Pyrite-Cache": "HIT",
+                **SITE_SECURITY_HEADERS,
             },
         )
 
     # Cache miss — return SPA fallback (client-side rendering)
     return HTMLResponse(
         content=fallback_html,
-        headers={"X-Pyrite-Cache": "MISS"},
+        headers={"X-Pyrite-Cache": "MISS", **SITE_SECURITY_HEADERS},
     )
