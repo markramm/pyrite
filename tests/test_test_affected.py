@@ -225,6 +225,15 @@ class TestAffectedByImports:
         assert "tests/test_a.py" in sel.files
         assert "tests/test_b.py" not in sel.files
 
+    def test_an_extension_change_selects_tests_that_load_plugins(self, repo):
+        # Core tests reach extensions through entry points, not imports.
+        _write(repo, "tests/test_registry.py", "def test_r():\n    get_registry()\n")
+        _write(repo, "tests/test_eps.py", "from importlib.metadata import entry_points\n")
+        sel = _select(repo, "extensions/foo/src/pyrite_foo/plugin.py")
+        assert {"tests/test_registry.py", "tests/test_eps.py"} <= set(sel.files)
+        sel = _select(repo, "pyrite/c.py")
+        assert "tests/test_registry.py" not in sel.files
+
     def test_a_name_matches_whole_words_only(self, repo):
         # "x.md" must not select a test that mentions "index.md"
         _write(repo, "tests/test_index.py", "NAME = 'index.md'\n")

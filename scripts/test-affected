@@ -32,10 +32,16 @@ Selection
              directory, or a test helper module imported by at least
              ``--helper-threshold`` test files.
 
+A change under extensions/*/src/ also selects every test that mentions
+``get_registry``, ``entry_points`` or ``PluginRegistry``: core tests reach
+plugins through entry points, which no import names.
+
 Known blind spots, by design (CI covers them): autouse fixtures are not
-attributed to the tests they wrap; a plugin reached only through an entry
-point (not an import or a string naming its package) does not select the
-core tests that load it.
+attributed to the tests they wrap. Importing ``pkg.x`` executes
+``pkg/__init__.py``, and so everything that ``__init__`` imports; that
+import-time reach is not followed (``from pkg import Name`` resolves to the
+module defining ``Name``), so a module's import-time side effects select
+only its own importers.
 
 Usage
   scripts/test-affected --list                 selected paths / node ids
@@ -74,6 +80,10 @@ _FULL_SUITE_PREFIXES = (".github/workflows/",)
 # directory's name ("backlog", "docs" are words half the suite uses).
 _CONTENT_TOPS = {"kb", "docs", "web"}
 _SKIP_DIRS = {"__pycache__", ".venv", "node_modules", ".git", "build", "dist"}
+# A change inside an extension's package also selects the tests that load
+# plugins through entry points, which no import names.
+_EXTENSION_SRC = re.compile(r"^extensions/[^/]+/src/")
+_LOADS_PLUGINS = re.compile(r"\b(get_registry|entry_points|PluginRegistry)\b")
 
 
 # --------------------------------------------------------------------------
@@ -579,6 +589,12 @@ def select(
 
     helpers: list[str] = []
     packages: set[str] = set()  # changed __init__ modules
+    plugin_change = next((r for r in changed if _EXTENSION_SRC.match(r)), None)
+    if plugin_change:
+        # Core tests reach extensions through entry points, not imports.
+        for f in graph.files.values():
+            if f.is_test and _LOADS_PLUGINS.search(f.text):
+                selection.files.setdefault(f.path, f"loads plugins ({plugin_change})")
     for rel in changed:
         f = graph.files.get(rel)
         if f is not None and f.is_test:
