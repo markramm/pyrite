@@ -12,7 +12,8 @@ branch touches something every test depends on.
 Selection
   core       tests marked ``@pytest.mark.core`` -- a small smoke set over
              storage, the KB service, auth/read scoping, the REST app
-             factory, MCP dispatch and the CLI entry point. Always runs.
+             factory, MCP dispatch and the CLI entry point (pinned, file by
+             file, in tests/test_test_affected.py). Always runs.
   affected   test files that import a changed module, directly or through
              any chain of imports; built with ``ast`` over pyrite/,
              extensions/*/src/, scripts/ and the test trees, so no database
@@ -265,20 +266,23 @@ def _used_fixture_names(tree: ast.AST) -> set[str]:
 def _core_ids(rel: str, tree: ast.Module) -> list[str]:
     def is_core(expr: ast.expr) -> bool:
         target = expr.func if isinstance(expr, ast.Call) else expr
-        return (
-            isinstance(target, ast.Attribute)
-            and target.attr == "core"
-            and isinstance(target.value, ast.Attribute)
-            and target.value.attr == "mark"
+        # pytest.mark.core, or mark.core after `from pytest import mark`
+        if not (isinstance(target, ast.Attribute) and target.attr == "core"):
+            return False
+        owner = target.value
+        return (isinstance(owner, ast.Attribute) and owner.attr == "mark") or (
+            isinstance(owner, ast.Name) and owner.id == "mark"
         )
 
     for node in tree.body:
-        if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets
-        ):
-            values = (
-                node.value.elts if isinstance(node.value, ast.List | ast.Tuple) else [node.value]
-            )
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        else:
+            continue
+        if any(isinstance(t, ast.Name) and t.id == "pytestmark" for t in targets):
+            values = value.elts if isinstance(value, ast.List | ast.Tuple) else [value]
             if any(is_core(v) for v in values):
                 return [rel]
     ids = []

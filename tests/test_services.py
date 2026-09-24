@@ -448,6 +448,7 @@ class TestSearchService:
         )
 
 
+@pytest.mark.core
 class TestKBService:
     """Tests for KBService."""
 

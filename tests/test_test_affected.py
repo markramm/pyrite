@@ -121,6 +121,12 @@ def repo(tmp_path: Path) -> Path:
                     pass
         """,
         "tests/test_core_module.py": "import pytest\n\npytestmark = pytest.mark.core\n",
+        "tests/test_core_bare_mark.py": (
+            "from pytest import mark\n\n@mark.core\ndef test_bare():\n    pass\n"
+        ),
+        "tests/test_core_annotated.py": (
+            "import pytest\n\npytestmark: list = [pytest.mark.core, pytest.mark.cli]\n"
+        ),
     }
     for rel, text in files.items():
         _write(tmp_path, rel, text)
@@ -259,6 +265,8 @@ class TestCore:
             "tests/test_core.py::test_smoke",
             "tests/test_core.py::TestCoreClass",
             "tests/test_core_module.py",
+            "tests/test_core_bare_mark.py::test_bare",  # from pytest import mark
+            "tests/test_core_annotated.py",  # pytestmark: list = [...]
         }
 
     def test_core_ids_inside_a_selected_file_are_not_run_twice(self, repo):
@@ -387,8 +395,29 @@ class TestThisRepository:
         assert sel.full is None
         assert any(p.startswith("tests/") for p in sel.files)
 
-    def test_core_set_covers_the_named_surfaces(self):
+    # The core set, pinned by surface (#356). Dropping a mark silently drops a
+    # surface from every local run, so this list changes only on purpose.
+    CORE = {
+        # storage
+        "tests/test_storage.py",
+        "tests/test_entry_lifecycle.py",
+        # the KB service
+        "tests/test_services.py::TestKBService",
+        # auth / read scoping
+        "tests/test_read_scoping_is_structural.py",
+        # the REST app factory
+        "tests/test_api_state_isolation.py",
+        "tests/test_rest_api.py::TestKBEndpoints",
+        "tests/test_rest_api.py::TestEntryEndpoints",
+        # MCP dispatch
+        "tests/test_mcp_tool_dispatch_smoke.py",
+        # the CLI entry point
+        "tests/test_cli_commands.py::TestTyperListCommand",
+        "tests/test_cli_commands.py::TestTyperGetCommand",
+        "tests/test_cli_commands.py::TestTyperCreateCommand",
+        "tests/test_cli_commands.py::TestTopLevelHelpAdvertisesOrient",
+    }
+
+    def test_core_set_is_exactly_the_named_surfaces(self):
         root = SCRIPT.parent.parent
-        core_files = {c.split("::")[0] for c in ta.select(root, []).core}
-        # storage, KB service, auth/read scoping, REST app factory, MCP, CLI
-        assert len(core_files) >= 6, core_files
+        assert set(ta.select(root, []).core) == self.CORE
