@@ -259,17 +259,30 @@ def _run(cmd: list[str], env: dict[str, str], timeout: float) -> tuple[int | Non
         _, err = proc.communicate(timeout=timeout)
         return proc.returncode, err
     except subprocess.TimeoutExpired:
-        for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
-            try:
-                os.killpg(proc.pid, sig)
-            except ProcessLookupError:
-                break
-            try:
-                proc.communicate(timeout=grace)
-                break
-            except subprocess.TimeoutExpired:
-                continue
-        return None, ""
+        pass
+    except BaseException:
+        # The driver itself is going (Ctrl-C, SIGTERM, a cancelled job). The child
+        # has its own session, so nothing else would stop it: kill the group now,
+        # and main()'s finally restores the tree the killed run left reverted.
+        _killpg(proc, signal.SIGKILL)
+        raise
+    for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, 10)):
+        if not _killpg(proc, sig):
+            break
+        try:
+            proc.communicate(timeout=grace)
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    return None, ""
+
+
+def _killpg(proc: subprocess.Popen[str], sig: int) -> bool:
+    try:
+        os.killpg(proc.pid, sig)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 def _restore(impl: list[str]) -> None:
@@ -458,6 +471,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     sink = Sink(args.summary)
+    # Python's default SIGTERM ends the process without unwinding; raise instead,
+    # so _run kills its child and the finally below restores the tree.
+    signal.signal(signal.SIGTERM, _terminated)
+    impl: list[str] = []
+    started = False
     try:
         mb = _git("merge-base", args.base, "HEAD").strip()
         tests, impl = changed_since(mb)
@@ -466,7 +484,13 @@ def main(argv: list[str] | None = None) -> int:
             if impl and not tests:
                 print(NO_TEST_WARNING, flush=True)
             return 0
+        # Refused here, before anything is reverted, so the restore in `finally`
+        # can never overwrite work that was not committed.
+        dirty = _git("status", "--porcelain", "--", *impl).strip()
+        if dirty:
+            raise InfraError(f"{', '.join(impl)} have uncommitted changes; commit them first")
         sink.write(render_header(impl, mb))
+        started = True
         with tempfile.TemporaryDirectory(prefix="verify-red-") as tmp:
             for i, test_file in enumerate(tests):
                 rows = verify_file(
@@ -489,7 +513,14 @@ def main(argv: list[str] | None = None) -> int:
     except InfraError as exc:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)
         return 2
+    finally:
+        if started:
+            _restore(impl)
     return 0
+
+
+def _terminated(signum: int, frame: object) -> None:
+    raise SystemExit(128 + signum)
 
 
 if __name__ == "__main__":

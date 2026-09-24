@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import signal
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -450,6 +452,70 @@ def test_a_hung_file_is_a_row_not_a_killed_job(vr, repo: Path, tmp_path: Path) -
     assert vr.NOT_VERIFIABLE in line and "timed out without the fix" in line, line
     # The next file still ran.
     assert vr.RED_IMPORT in row(summary, "tests/test_helper.py::test_helper")
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
+    repo: Path, tmp_path: Path, sig: signal.Signals
+) -> None:
+    # The reverted `add` records its pid and hangs, so the signal lands while the
+    # tree is reverted and bash + pytest are running in their own session.
+    pidfile = tmp_path / "hung.pid"
+    (repo / "pyrite" / "__init__.py").write_text(
+        "import os\nimport time\n\n\ndef add(a, b):\n"
+        f"    open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+        "    time.sleep(120)\n    return a - b\n"
+    )
+    git(repo, "commit", "-q", "--amend", "-am", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: add adds, promptly")
+
+    env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
+    env.pop("PYTEST_ADDOPTS", None)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    driver = subprocess.Popen(
+        [sys.executable, str(SCRIPT), "--base", "dev", "--timeout", "100"],
+        cwd=repo,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while not (pidfile.exists() and pidfile.read_text().strip()):
+            assert driver.poll() is None, "the driver exited before the run hung"
+            assert time.monotonic() < deadline, "the reverted run never started"
+            time.sleep(0.1)
+        hung = int(pidfile.read_text())
+        assert (repo / "pyrite" / "__init__.py").read_text() != FIXED  # reverted right now
+
+        driver.send_signal(sig)
+        driver.wait(timeout=30)
+    finally:
+        if driver.poll() is None:
+            driver.kill()
+
+    assert driver.returncode != 0
+    deadline = time.monotonic() + 10
+    while _alive(hung) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    alive = _alive(hung)
+    if alive:
+        os.kill(hung, signal.SIGKILL)
+    assert not alive, "the pytest run outlived the driver"
     assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
     assert git(repo, "status", "--porcelain") == ""
 
