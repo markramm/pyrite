@@ -487,6 +487,23 @@ tends to widen further. The desk's `conductor_tick` entry records each
 fix-at-review with the findings and the delta cold read's verdict, so the
 retro can see whether the exception is being stretched.
 
+**One round of fix-at-review per theme.** When the delta cold read of your
+fix finds a defect *that your previous fix introduced*, the finding is
+design-shaped by definition: stop fixing. Either send the theme back with the
+design question stated (who owns the invariant, which two mechanisms
+disagree), or land it with the remaining limits documented on the PR and a
+follow-up issue — only when every remaining limit fails safe. Retro 10
+(2026-09-24): #357 took three conductor rounds (66e128a, 3c79d88, 5b4e1ab);
+each fixed a reproduced defect and introduced the next, because a shell trap
+and a Python fallback both owned restoring the tree. That cost about 1.5 h and
+six full-suite runs at load 15-20.
+
+**A push command must say when it did not push.** A guard such as
+`[ "$(git rev-parse A)" = "$(git rev-parse B)" ] && git push ...` exits
+quietly when `rev-parse` fails, and the tick believes the push happened
+(retro 10: one tick lost). Check the remote after every push —
+`git ls-remote origin <branch>` equals the SHA you meant — before reporting it.
+
 ## References
 
 - `poppendiecks` KB, `amplify-learning`: the value stream is knowledge, not
