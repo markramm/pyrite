@@ -12,6 +12,7 @@ import hashlib
 import logging
 import os
 import secrets
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -870,19 +871,116 @@ def requires_kb_read():
 _UNSET = object()
 
 
-def requires_kb_tier(tier: str):
-    """FastAPI dependency factory: enforce a minimum tier on **every** KB named.
+def kb_exists(config: PyriteConfig, db: PyriteDB, kb_name: str) -> bool:
+    """Is `kb_name` a KB this instance knows -- in config or registered in the DB?"""
+    if config.get_kb(kb_name):
+        return True
+    row = db._raw_conn.execute("SELECT 1 FROM kb WHERE name = ?", (kb_name,)).fetchone()
+    return row is not None
+
+
+@dataclass(frozen=True)
+class RowKB:
+    """What a row resolver hands `requires_kb_tier`: the KB that owns the row
+    a route changes, and the 404 the route gives for a row that does not exist.
+
+    A route whose request names no KB -- `DELETE /api/reviews/{review_id}` --
+    cannot be checked against a KB it does not know. Its resolver looks the
+    row up, and the per-KB rule is applied to the row's own KB. `not_found` is
+    what the caller sees when that KB is unreadable, so a row in a private KB
+    answers byte-for-byte like a row that does not exist.
+    """
+
+    kb_name: str
+    not_found: HTTPException
+
+
+async def _enforce_kb_tier(
+    request: Request,
+    config: PyriteConfig,
+    db: PyriteDB,
+    kb_name: str,
+    tier: str,
+    not_found: HTTPException,
+) -> None:
+    """The per-KB write rule for one KB.
+
+    Passes when the caller's effective role on `kb_name` is at least `tier`.
+    Otherwise: 404 (`not_found`) when the caller may not read the KB or the KB
+    does not exist -- the two must answer alike, or the answer is an oracle
+    for private KB names -- and 403 when the caller can read it but not
+    write it.
+    """
+    effective = await resolve_effective_kb_role(request, config, db, kb_name)
+    level = TIER_LEVELS.get(effective, -1) if effective is not None else -1
+    if level >= TIER_LEVELS.get(tier, 99):
+        return
+    if level < TIER_LEVELS["read"] or not kb_exists(config, db, kb_name):
+        raise not_found
+    raise HTTPException(
+        status_code=403,
+        detail=f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier",
+    )
+
+
+def requires_kb_tier(tier: str, *, resolve_kb=None):
+    """FastAPI dependency factory: enforce a minimum tier on the KB(s) a write changes.
 
     Resolution chain, per KB:
     1. Global admins always pass
     2. Explicit KB grant → KB default_role → user global role → anonymous tier
 
-    Falls back to a global role check when the request names no KB.
+    A KB the caller cannot read answers 404 exactly like a KB that does not
+    exist; a KB the caller can read but not reach `tier` on answers 403.
 
-    The same rule as `requires_kb_read`, for the same reason: a request that
-    names two KBs gets the tier checked on both, so a caller cannot authorise
-    a write to KB A by naming writable KB B elsewhere in the request.
+    Two forms:
+
+    - ``requires_kb_tier("write")`` -- the KB is the one the **request names**
+      (`kb`/`kb_name`/... in path, query or JSON body; every value is
+      checked, so naming a writable KB beside a private one buys nothing).
+      A route using this form must declare a KB-bearing parameter:
+      `tests/test_kb_write_guard_is_structural.py` fails otherwise, because
+      a request that names no KB falls back to the caller's *global* role,
+      which is never enough for a KB-scoped write.
+    - ``requires_kb_tier("write", resolve_kb=dep)`` -- for a route that
+      changes a row by id and names no KB. `dep` is a FastAPI dependency that
+      looks the row up and returns a `RowKB`; the rule is applied to the
+      row's own KB, and anything the request names is ignored.
     """
+    if resolve_kb is not None:
+
+        async def _identityless_floor(request: Request) -> None:
+            """Refuse before the row is looked up when no KB could change the answer.
+
+            A caller with no user identity -- an API key, or auth disabled --
+            has the same role on every KB, so a tier it lacks is refused
+            here: before the resolver validates the id or reveals whether the
+            row exists. A logged-in user may hold a per-KB grant above their
+            global role, so for them the row's KB decides, below.
+            """
+            role = getattr(request.state, "api_role", None)
+            if role is None:
+                raise HTTPException(status_code=401, detail="Invalid or missing API key")
+            if not getattr(request.state, "auth_user", None) and TIER_LEVELS.get(
+                role, -1
+            ) < TIER_LEVELS.get(tier, 99):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
+                )
+
+        async def _check_row_kb_tier(
+            request: Request,
+            # Declared first: FastAPI solves sub-dependencies in order, so the
+            # floor runs before the resolver.
+            _floor: None = Depends(_identityless_floor),
+            row: RowKB = Depends(resolve_kb),
+            config: PyriteConfig = Depends(get_config),
+            db: PyriteDB = Depends(get_db),
+        ):
+            await _enforce_kb_tier(request, config, db, row.kb_name, tier, row.not_found)
+
+        return _check_row_kb_tier
 
     async def _check_kb_tier(
         request: Request,
@@ -901,17 +999,18 @@ def requires_kb_tier(tier: str):
                 detail={"code": "INVALID_BODY", "message": "Request body could not be parsed"},
             ) from None
 
-        for kb_name in kb_names or [None]:
-            effective_role = await resolve_effective_kb_role(request, config, db, kb_name)
-            if effective_role is None or TIER_LEVELS.get(effective_role, -1) < TIER_LEVELS.get(
-                tier, 99
-            ):
-                detail = (
-                    f"Insufficient permissions on KB '{kb_name}': requires '{tier}' tier"
-                    if kb_name
-                    else f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'"
+        if not kb_names:
+            # Only reachable on a route the structural test would reject: no
+            # KB-bearing parameter, so the global role is all there is.
+            if TIER_LEVELS.get(role, -1) < TIER_LEVELS.get(tier, 99):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Insufficient permissions: requires '{tier}' tier, your role is '{role}'",
                 )
-                raise HTTPException(status_code=403, detail=detail)
+            return
+
+        for kb_name in kb_names:
+            await _enforce_kb_tier(request, config, db, kb_name, tier, kb_not_found(kb_name))
 
     return _check_kb_tier
 

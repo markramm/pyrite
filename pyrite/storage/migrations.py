@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 23
+CURRENT_VERSION = 24
 
 
 @dataclass
@@ -479,6 +479,17 @@ MIGRATIONS: list[Migration] = [
         DROP TABLE IF EXISTS llm_usage;
         """,
     ),
+    Migration(
+        version=24,
+        description="Scope starred_entry per user (user_id column, unique per user)",
+        # The table is rebuilt in _apply_v24(): the unique constraint changes,
+        # and SQLite cannot alter a constraint in place.
+        up="",
+        down="""
+        -- Not reversible without losing stars that two users share; the
+        -- user_id column remains.
+        """,
+    ),
 ]
 
 
@@ -707,6 +718,44 @@ class MigrationManager:
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_fips ON entry(fips)")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_state ON entry(state)")
         self.conn.commit()
+
+    def _apply_v24(self) -> None:
+        """Rebuild starred_entry with a user_id column, unique per (user, entry).
+
+        Stars had no owner, so every write-tier user could unstar or reorder
+        everyone's. Existing rows become user 0 -- the instance's own list,
+        which is what a caller with no user identity (auth disabled, an
+        operator API key) sees -- so a single-user install keeps its stars.
+        """
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='starred_entry'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(starred_entry)").fetchall()
+        }
+        if "user_id" in existing:
+            return
+        self.conn.executescript("""
+            CREATE TABLE starred_entry_v24 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL DEFAULT 0,
+                entry_id VARCHAR NOT NULL,
+                kb_name VARCHAR NOT NULL,
+                sort_order INTEGER,
+                created_at VARCHAR NOT NULL,
+                CONSTRAINT uq_starred_entry UNIQUE (user_id, entry_id, kb_name)
+            );
+            INSERT INTO starred_entry_v24 (id, user_id, entry_id, kb_name, sort_order, created_at)
+                SELECT id, 0, entry_id, kb_name, sort_order, created_at FROM starred_entry;
+            DROP TABLE starred_entry;
+            ALTER TABLE starred_entry_v24 RENAME TO starred_entry;
+            CREATE INDEX IF NOT EXISTS idx_starred_entry_user
+                ON starred_entry (user_id, sort_order);
+            CREATE INDEX IF NOT EXISTS idx_starred_entry_kb ON starred_entry (kb_name);
+            CREATE INDEX IF NOT EXISTS idx_starred_entry_sort ON starred_entry (sort_order);
+        """)
 
     def _apply_v21(self) -> None:
         """Conditionally add content_hash column to entry for hash-based staleness."""

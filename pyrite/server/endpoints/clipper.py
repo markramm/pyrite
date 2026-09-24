@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from ...exceptions import ClipperBlockedHostError
 from ...services.clipper import ClipperService
 from ...services.kb_service import KBService
-from ..api import get_kb_service, limiter, requires_tier
+from ..api import get_kb_service, limiter, requires_kb_tier
 from ..schemas import ClipRequest, ClipResponse
 
 logger = logging.getLogger(__name__)
@@ -15,14 +15,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Clipper"])
 
 
-@router.post("/clip", response_model=ClipResponse, dependencies=[Depends(requires_tier("write"))])
+@router.post(
+    "/clip", response_model=ClipResponse, dependencies=[Depends(requires_kb_tier("write"))]
+)
 @limiter.limit("20/minute")
 async def clip_url(
     request: Request,
     req: ClipRequest,
     svc: KBService = Depends(get_kb_service),
 ):
-    """Clip a URL: fetch, convert to Markdown, and create an entry."""
+    """Clip a URL: fetch, convert to Markdown, and create an entry.
+
+    `requires_kb_tier("write")` has already checked the caller's role on
+    `req.kb` -- and answered a KB they cannot read with the same 404 as the
+    one below, so this check, running after authorization, is no oracle.
+    """
     if not svc.get_kb(req.kb):
         raise HTTPException(
             status_code=404,

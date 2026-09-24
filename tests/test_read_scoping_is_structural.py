@@ -53,6 +53,9 @@ appear in the tree; a bare call does not, and this test will fail --
 correctly, because such a call is invisible to review.
 """
 
+import inspect
+import re
+
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -150,9 +153,15 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "/api/entries/type-schemas",
     ): "serves no KB content: plugin-declared type schemas, not KB rows",
     # -- write routes: guarded by requires_kb_tier('write')/requires_tier -
-    # A write-tier caller on a KB can necessarily read it, so the write
-    # guard subsumes the read guard. Listed rather than silently skipped
-    # so that a write route losing its guard is still visible here.
+    # A write-tier caller on a KB can necessarily read it, so the per-KB
+    # write guard subsumes the read guard. Listed rather than silently
+    # skipped so that a write route losing its guard is still visible here.
+    #
+    # Every reason starting "write route" names the guard it relies on, and
+    # `test_write_route_allowlist_reasons_name_the_guard_the_route_has`
+    # checks that claim against the route's real dependant tree. The claim
+    # used to be asserted only: `POST /api/clip` sat here as
+    # "requires_kb_tier('write')" while it had only `requires_tier`.
     ("POST", "/api/entries"): "write route: requires_kb_tier('write') subsumes read",
     ("PUT", "/api/entries/{entry_id}"): "write route: requires_kb_tier('write') subsumes read",
     ("PATCH", "/api/entries/{entry_id}"): "write route: requires_kb_tier('write') subsumes read",
@@ -161,9 +170,10 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("POST", "/api/clip"): "write route: requires_kb_tier('write') subsumes read",
     ("POST", "/api/collections"): "write route: requires_kb_tier('write') subsumes read",
     ("POST", "/api/daily/{date_str}"): "write route: requires_kb_tier('write') subsumes read",
-    ("POST", "/api/starred"): "write route: requires_tier('write') subsumes read",
-    ("PUT", "/api/starred/reorder"): "write route: requires_tier('write') subsumes read",
-    ("DELETE", "/api/starred/{entry_id}"): "write route: requires_tier('write') subsumes read",
+    ("PUT", "/api/starred/reorder"): (
+        "write route: requires_tier('write'); serves no KB content, and stars are "
+        "per user, so it can only reorder the caller's own rows"
+    ),
     ("POST", "/api/tasks/{task_id}/claim"): "write route: requires_kb_tier('write') subsumes read",
     ("POST", "/api/reviews"): "write route: requires_kb_tier('write') subsumes read",
     ("DELETE", "/api/reviews/{review_id}"): "write route: requires_kb_tier('write') subsumes read",
@@ -492,4 +502,55 @@ def test_allowlist_has_no_stale_entries():
     assert not gone, f"allowlisted routes that no longer exist: {gone}"
     assert not now_scoped, (
         f"allowlisted routes that are now scoped -- remove them from ALLOWLIST: {now_scoped}"
+    )
+
+
+# `requires_kb_tier('write')` or `requires_tier('write')`, as a reason names it.
+_GUARD_CLAIM = re.compile(r"\b(requires_kb_tier|requires_tier)\('(\w+)'\)")
+
+
+def _write_guards(dependant) -> set[tuple[str, str]]:
+    """(factory, tier) for every tier guard in a route's dependant tree.
+
+    A guard is the closure `requires_tier(t)` / `requires_kb_tier(t, ...)`
+    returns; its qualname names the factory and its closure holds `tier`.
+    """
+    found: set[tuple[str, str]] = set()
+    for dep in dependant.dependencies:
+        call = dep.call
+        qualname = getattr(call, "__qualname__", "")
+        factory = qualname.split(".<locals>", 1)[0]
+        if (
+            getattr(call, "__module__", "") == "pyrite.server.api"
+            and factory in ("requires_tier", "requires_kb_tier")
+            and ".<locals>." in qualname
+        ):
+            tier = inspect.getclosurevars(call).nonlocals.get("tier")
+            found.add((factory, tier))
+        found |= _write_guards(dep)
+    return found
+
+
+def test_write_route_allowlist_reasons_name_the_guard_the_route_has():
+    """An allowlisted write route's reason is checked, not trusted.
+
+    Each "write route" entry must name its guard, and the route's dependant
+    tree must contain exactly that guard at that tier. A reason that claims
+    `requires_kb_tier('write')` for a route guarded only by `requires_tier`
+    -- `POST /api/clip`, until it was fixed -- fails here.
+    """
+    routes = {(m, p): r for m, p, r in _iter_api_routes()}
+    wrong = []
+    for key, reason in ALLOWLIST.items():
+        if not reason.startswith("write route") or key not in routes:
+            continue
+        claims = set(_GUARD_CLAIM.findall(reason))
+        actual = _write_guards(routes[key].dependant)
+        if not claims or not claims <= actual:
+            wrong.append(
+                f"  {key[0]:6} {key[1]:40} claims {sorted(claims) or 'no guard'}, "
+                f"has {sorted(actual) or 'none'}"
+            )
+    assert not wrong, "write-route allowlist reasons that do not match the route:\n" + "\n".join(
+        wrong
     )

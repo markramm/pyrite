@@ -60,6 +60,11 @@ class ReviewOpsMixin:
         )
         return self._review_to_dict(review) if review else None
 
+    def get_review(self, review_id: int) -> dict[str, Any] | None:
+        """Get one review by ID, or None."""
+        review = self.session.query(Review).filter_by(id=review_id).first()
+        return self._review_to_dict(review) if review else None
+
     def delete_review(self, review_id: int) -> bool:
         """Delete a review by ID. Returns True if deleted."""
         count = self.session.query(Review).filter_by(id=review_id).delete()

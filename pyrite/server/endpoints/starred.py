@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...exceptions import EntryNotFoundError
-from ...services.starred_service import StarredService
+from ...services.starred_service import INSTANCE_USER, StarredService
 from ..api import (
     get_readable_kbs,
     get_starred_service,
@@ -24,6 +24,32 @@ from ..schemas import (
 router = APIRouter(tags=["Starred"])
 
 
+def _star_owner(request: Request) -> int | None:
+    """Whose star list this request reads and changes.
+
+    A logged-in user: their own. A caller with no user identity -- auth
+    disabled, or an operator API key -- the instance's list. An anonymous
+    visitor on an auth-enabled instance has no list (None): letting them
+    share the instance's would put every visitor's stars in one list again.
+    """
+    auth_user = getattr(request.state, "auth_user", None)
+    if auth_user:
+        return auth_user["id"]
+    if getattr(request.state, "anonymous", False):
+        return None
+    return INSTANCE_USER
+
+
+def _require_star_owner(request: Request) -> int:
+    owner = _star_owner(request)
+    if owner is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "LOGIN_REQUIRED", "message": "Sign in to star entries"},
+        )
+    return owner
+
+
 @router.get(
     "/starred",
     response_model=StarredEntryListResponse,
@@ -42,7 +68,10 @@ def list_starred(
     unfiltered list hands over private titles; the filter therefore goes
     into the query, before titles are resolved.
     """
-    items = svc.list_starred(kb=kb, kb_names=None if kb else readable)
+    owner = _star_owner(request)
+    if owner is None:
+        return StarredEntryListResponse(count=0, starred=[])
+    items = svc.list_starred(owner, kb=kb, kb_names=None if kb else readable)
     return StarredEntryListResponse(
         count=len(items),
         starred=[StarredEntryItem(**item) for item in items],
@@ -50,7 +79,9 @@ def list_starred(
 
 
 @router.post(
-    "/starred", response_model=StarEntryResponse, dependencies=[Depends(requires_tier("write"))]
+    "/starred",
+    response_model=StarEntryResponse,
+    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
 )
 @limiter.limit("30/minute")
 def star_entry(
@@ -58,15 +89,17 @@ def star_entry(
     body: StarEntryRequest,
     svc: StarredService = Depends(get_starred_service),
 ):
-    """Star/bookmark an entry. Idempotent — starring an already-starred entry succeeds."""
-    result = svc.star_entry(entry_id=body.entry_id, kb_name=body.kb_name)
+    """Star/bookmark an entry in the caller's own list. Idempotent — starring an
+    already-starred entry succeeds. A KB the caller cannot read answers 404."""
+    owner = _require_star_owner(request)
+    result = svc.star_entry(owner, entry_id=body.entry_id, kb_name=body.kb_name)
     return StarEntryResponse(**result)
 
 
 @router.delete(
     "/starred/{entry_id}",
     response_model=UnstarEntryResponse,
-    dependencies=[Depends(requires_tier("write"))],
+    dependencies=[Depends(requires_tier("write")), Depends(requires_kb_read())],
 )
 @limiter.limit("30/minute")
 def unstar_entry(
@@ -75,9 +108,10 @@ def unstar_entry(
     kb: str | None = Query(None, description="KB name"),
     svc: StarredService = Depends(get_starred_service),
 ):
-    """Unstar/remove bookmark from an entry."""
+    """Unstar an entry in the caller's own list; another user's star is 404."""
+    owner = _require_star_owner(request)
     try:
-        svc.unstar_entry(entry_id=entry_id, kb_name=kb)
+        svc.unstar_entry(owner, entry_id=entry_id, kb_name=kb)
     except EntryNotFoundError:
         raise HTTPException(
             status_code=404,
@@ -100,7 +134,9 @@ def reorder_starred(
     body: ReorderStarredRequest,
     svc: StarredService = Depends(get_starred_service),
 ):
-    """Reorder starred entries by updating sort_order values."""
+    """Reorder the caller's own starred entries; items naming anyone else's
+    stars change nothing."""
+    owner = _require_star_owner(request)
     entries = [item.model_dump() for item in body.entries]
-    svc.reorder_starred(entries)
+    svc.reorder_starred(owner, entries)
     return ReorderStarredResponse(reordered=True, count=len(body.entries))

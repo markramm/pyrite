@@ -401,13 +401,20 @@ class StarredEntry(Base):
     __tablename__ = "starred_entry"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    # The local_user who starred it. 0 is the instance's own list: the caller
+    # with no user identity (auth disabled, or an operator API key), and the
+    # owner of every star made before stars were per-user (migration v24).
+    # Not NULL, so the unique constraint below also holds for that list --
+    # SQLite treats NULLs as distinct.
+    user_id = Column(Integer, nullable=False, default=0, server_default="0")
     entry_id = Column(String, nullable=False)
     kb_name = Column(String, nullable=False)
     sort_order = Column(Integer, default=0)
     created_at = Column(String, nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("entry_id", "kb_name", name="uq_starred_entry"),
+        UniqueConstraint("user_id", "entry_id", "kb_name", name="uq_starred_entry"),
+        Index("idx_starred_entry_user", "user_id", "sort_order"),
         Index("idx_starred_entry_kb", "kb_name"),
         Index("idx_starred_entry_sort", "sort_order"),
     )
