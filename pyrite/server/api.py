@@ -123,6 +123,7 @@ def _init_app_state(application: FastAPI, config: PyriteConfig) -> None:
     application.state.pyrite_db = None
     application.state.pyrite_index_mgr = None
     application.state.pyrite_index_worker = None
+    application.state.pyrite_ws_loop = None
     application.state.pyrite_kb_service = None
     application.state.pyrite_kb_registry = None
     application.state.pyrite_llm_service = None
@@ -1079,15 +1080,21 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         if application.state.pyrite_index_worker is None:
             worker = IndexWorker(_app_db(), _app_get_config())
 
-            # Wire WebSocket broadcast for progress updates.
-            # NOTE: This callback is invoked from IndexWorker's background
-            # thread, not the main asyncio thread.  get_running_loop() will
-            # raise RuntimeError when no loop is active in the calling thread,
-            # which is the expected case — we catch it silently.
-            def _ws_progress(job_id: str, current: int, total: int):
+            # Wire WebSocket broadcast for progress updates. The callback runs
+            # on an IndexWorker thread; broadcast_event hands it to the loop
+            # captured at startup (#322). index_progress is operator
+            # information and reaches unscoped sockets only, whatever the
+            # job's KB (UNSCOPED_ONLY_EVENTS); kb_name is carried for them.
+            def _ws_progress(job_id: str, current: int, total: int, kb_name: str | None):
                 from .websocket import broadcast_event
 
-                broadcast_event("index_progress", job_id=job_id, current=current, total=total)
+                broadcast_event(
+                    "index_progress",
+                    job_id=job_id,
+                    current=current,
+                    total=total,
+                    kb_name=kb_name,
+                )
 
             worker.on_progress = _ws_progress
             application.state.pyrite_index_worker = worker
@@ -1164,6 +1171,27 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         # drain never runs and a stock install embeds nothing.
         db = _app_db()
         await run_in_threadpool(lambda: _drain_embed_queue(db, label="startup"))
+
+    # Sync routes and IndexWorker threads have no running loop; they hand
+    # WebSocket events to this one (#326, #322). Captured here, not at import,
+    # because the loop that serves the sockets exists only once the server
+    # starts; released at shutdown so a later app in the same process (the
+    # manager is module-global) never hands events to a dead loop.
+    # Pinned by tests/test_websocket_delivery.py (TestLoopLifetime, TestBindUnbind).
+    @application.on_event("startup")
+    async def _bind_websocket_loop() -> None:
+        import asyncio
+
+        from .websocket import bind_loop
+
+        application.state.pyrite_ws_loop = asyncio.get_running_loop()
+        bind_loop(application.state.pyrite_ws_loop)
+
+    @application.on_event("shutdown")
+    async def _unbind_websocket_loop() -> None:
+        from .websocket import unbind_loop
+
+        unbind_loop(application.state.pyrite_ws_loop)
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
     origins = config.settings.cors_origins

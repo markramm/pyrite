@@ -31,10 +31,11 @@ class IndexWorker:
         self.db = db
         self.config = config
         self._lock = threading.Lock()
-        # Optional progress callback: on_progress(job_id, current, total).
-        # Called from worker THREADS, not the main thread — callers must
-        # handle cross-thread concerns (e.g. asyncio bridge).
-        self.on_progress: Callable[[str, int, int], None] | None = None
+        # Optional progress callback: on_progress(job_id, current, total,
+        # kb_name), kb_name None for an all-KB sync. Called from worker
+        # THREADS, not the main thread -- callers must handle cross-thread
+        # concerns (e.g. asyncio bridge).
+        self.on_progress: Callable[[str, int, int, str | None], None] | None = None
         # Tracks every spawned thread so wait_for_idle() (test fixtures,
         # or any caller needing a sync point before tearing down the
         # directory a job might still be writing to) can join them all —
@@ -187,7 +188,7 @@ class IndexWorker:
             self._update_status(db, job_id, "running")
 
             def progress_cb(current: int, total: int):
-                self._update_progress(db, job_id, current, total)
+                self._update_progress(db, job_id, current, total, kb_name)
 
             results = index_mgr.sync_incremental(kb_name, progress_callback=progress_cb)
 
@@ -231,7 +232,7 @@ class IndexWorker:
             self._update_status(db, job_id, "running")
 
             def progress_cb(current: int, total: int):
-                self._update_progress(db, job_id, current, total)
+                self._update_progress(db, job_id, current, total, kb_name)
 
             count = index_mgr.index_kb(kb_name, progress_cb)
 
@@ -272,7 +273,9 @@ class IndexWorker:
         )
         db._raw_conn.commit()
 
-    def _update_progress(self, db: PyriteDB, job_id: str, current: int, total: int):
+    def _update_progress(
+        self, db: PyriteDB, job_id: str, current: int, total: int, kb_name: str | None
+    ):
         """Update progress columns and optionally call on_progress callback."""
         db._raw_conn.execute(
             "UPDATE index_job SET progress_current = ?, progress_total = ? WHERE job_id = ?",
@@ -281,7 +284,7 @@ class IndexWorker:
         db._raw_conn.commit()
         if self.on_progress:
             try:
-                self.on_progress(job_id, current, total)
+                self.on_progress(job_id, current, total, kb_name)
             except Exception:
                 logger.debug("on_progress callback failed", exc_info=True)
 
