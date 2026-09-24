@@ -25,6 +25,14 @@ def mount_site_routes(app: FastAPI) -> None:
     site_cache_dir = data_dir / "site-cache"
     viewer_dir = data_dir / "viewer"
 
+    def _public(request: Request) -> set[str]:
+        # Evaluated per request: a KB's default_role can change at runtime,
+        # and a cache rendered by an earlier version may hold private KBs.
+        from ..services.public_kbs import public_kb_names
+
+        config = getattr(request.app.state, "pyrite_config", None)
+        return set(public_kb_names(config)) if config is not None else set()
+
     # Sitemap
     @app.get("/site/sitemap.xml", include_in_schema=False)
     async def sitemap(request: Request):
@@ -33,7 +41,7 @@ def mount_site_routes(app: FastAPI) -> None:
         proto = request.headers.get("x-forwarded-proto", "")
         if proto == "https" and base.startswith("http://"):
             base = "https://" + base[7:]
-        return _generate_sitemap(site_cache_dir, base)
+        return _generate_sitemap(site_cache_dir, base, _public(request))
 
     # Robots.txt
     @app.get("/site/robots.txt", include_in_schema=False)
@@ -60,6 +68,8 @@ def mount_site_routes(app: FastAPI) -> None:
     # Serve /site/* from pre-rendered cache
     @app.get("/site/{path:path}", include_in_schema=False)
     async def site_page(request: Request, path: str):
+        if path.split("/", 1)[0] not in _public(request):
+            return HTMLResponse(status_code=404)
         return _serve_site_cached(
             site_cache_dir,
             path,
@@ -147,8 +157,12 @@ def _serve_static_dir(
     return HTMLResponse(status_code=404)
 
 
-def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
-    """Generate sitemap.xml from cached HTML files."""
+def _generate_sitemap(cache_dir: Path, base_url: str, public: set[str]) -> Response:
+    """Generate sitemap.xml from cached HTML files of the public KBs only.
+
+    A cache rendered by an earlier version can hold private KBs' pages;
+    only directories named for a public KB are listed.
+    """
     urls = []
 
     if not cache_dir.is_dir():
@@ -163,7 +177,7 @@ def _generate_sitemap(cache_dir: Path, base_url: str) -> Response:
 
     # Walk KB directories
     for kb_dir in sorted(cache_dir.iterdir()):
-        if not kb_dir.is_dir():
+        if not kb_dir.is_dir() or kb_dir.name not in public:
             continue
         kb_name = kb_dir.name
 

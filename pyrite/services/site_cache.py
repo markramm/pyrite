@@ -9,6 +9,7 @@ from ..config import PyriteConfig
 from ..storage.database import PyriteDB
 from ..utils.metadata import parse_metadata
 from ..utils.sanitize import sanitize_filename
+from .public_kbs import public_kb_names
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +58,21 @@ class SiteCacheService:
         self._branding = BrandingService(config.settings.branding_dir).get()
 
     def render_all(self) -> dict:
-        """Render all KB index pages and entry pages. Returns stats."""
+        """Render the public KBs' index pages and entry pages. Returns stats.
+
+        `/site` is served to anonymous visitors, so only public KBs
+        (`public_kbs.public_kb_names`) are rendered; links into other KBs
+        are dropped from the pages.
+        """
         from collections import defaultdict
 
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
+        public = set(public_kb_names(self.config))
         kbs = [
             {"name": kb.name, "description": getattr(kb, "description", ""), "entry_count": 0}
             for kb in self.config.all_kbs()
+            if kb.name in public
         ]
         stats = {"kbs": 0, "entries": 0, "errors": 0}
 
@@ -91,8 +99,8 @@ class SiteCacheService:
             stats["kbs"] += 1
 
             # Batch-load all backlinks, outlinks, and sources for this KB (3 queries total, not 3N)
-            backlinks_map = self.db.get_all_backlinks_for_kb(kb_name)
-            outlinks_map = self.db.get_all_outlinks_for_kb(kb_name)
+            backlinks_map = _only_public_links(self.db.get_all_backlinks_for_kb(kb_name), public)
+            outlinks_map = _only_public_links(self.db.get_all_outlinks_for_kb(kb_name), public)
             sources_map = self.db.get_all_sources_for_kb(kb_name)
 
             # Pre-compute actor->entry_ids and tag->entry_ids for related events
@@ -179,12 +187,24 @@ class SiteCacheService:
         return stats
 
     def render_entry_by_id(self, entry_id: str, kb_name: str) -> bool:
-        """Render a single entry page. Returns True if successful."""
+        """Render a single entry page. Returns True if successful.
+
+        Refuses (False) an entry in a KB that is not public.
+        """
+        public = set(public_kb_names(self.config))
+        if kb_name not in public:
+            return False
         entry = self.db.get_entry(entry_id, kb_name)
         if not entry:
             return False
-        backlinks = self.db.get_backlinks(entry_id, kb_name)
-        outlinks = self.db.get_outlinks(entry_id, kb_name)
+        backlinks = [
+            bl for bl in self.db.get_backlinks(entry_id, kb_name) if bl.get("kb_name") in public
+        ]
+        outlinks = [
+            ol
+            for ol in self.db.get_outlinks(entry_id, kb_name)
+            if ol.get("kb_name", kb_name) in public
+        ]
         self._render_entry(kb_name, entry, backlinks, outlinks)
         return True
 
@@ -635,6 +655,18 @@ class SiteCacheService:
         kb_dir = self.cache_dir / kb_name
         kb_dir.mkdir(parents=True, exist_ok=True)
         (kb_dir / f"{sanitize_filename(entry_id)}.html").write_text(html, encoding="utf-8")
+
+
+def _only_public_links(links_map: dict[str, list[dict]], public: set[str]) -> dict[str, list[dict]]:
+    """Drop link rows whose other end is in a non-public KB.
+
+    The batch link queries join across KBs, so a public entry's backlinks
+    and outlinks can name (and title) entries in private KBs.
+    """
+    return {
+        eid: [row for row in rows if row.get("kb_name") in public]
+        for eid, rows in links_map.items()
+    }
 
 
 def _render_designed_homepage(
