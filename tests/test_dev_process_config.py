@@ -304,7 +304,7 @@ class TestParallelSuite:
             "extensions/foo/src/foo/types.yaml",
         ],
     )
-    def test_pre_push_runs_for_everything_test_affected_acts_on(self, precommit, path):
+    def test_pre_push_runs_for_every_code_path_test_affected_acts_on(self, precommit, path):
         # A path the selector would act on but the hook's files: filter does not
         # match is a push that runs no tests at all, reported only as "Skipped".
         import re

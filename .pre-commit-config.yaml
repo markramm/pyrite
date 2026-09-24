@@ -117,9 +117,11 @@ repos:
         pass_filenames: false
         # Matched against the files changed in the pushed range: a docs- or
         # KB-only push skips the suite. CI still runs it. Must cover every
-        # path scripts/test-affected treats as meaningful (code and data under
+        # code path scripts/test-affected acts on (code and data under
         # pyrite/, extensions/, tests/, scripts/, and the root test config),
-        # or a push of only those runs no tests at all.
+        # or a push of only those runs no tests at all. Docs, kb/, root *.md,
+        # changelog.d/ and web/ are deliberately left to CI, including the
+        # contract tests that read them (README tool table, CONTRIBUTING).
         files: '(\.py$|^(pyrite|extensions|tests|scripts)/|(^|/)(pyproject\.toml|pytest\.ini|setup\.cfg|tox\.ini)$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
         stages: [pre-push]
       - id: fix-commit-has-tests
