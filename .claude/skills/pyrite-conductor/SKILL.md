@@ -462,44 +462,31 @@ Judgment stops:
 **Circuit breaker (no judgment involved; loop mode especially):** two
 consecutive ticks whose `dev` push went red (`conclusion: failure` on a
 completed run — a run `cancelled` by the concurrency rule because the next
-merge arrived is not red, even though `gate` reports failure for it), or any PR reverted, or the same
-theme redispatched twice → stop the loop, report what happened, and do not
+merge arrived is not red, even though `gate` reports failure for it), or any PR reverted, or a
+theme reaching its *third* worker fix round → stop the loop, report what happened, and do not
 dispatch again until the maintainer says so. Landing on `dev` unattended is
 delegated; landing repeatedly broken things is not. A breaker trip is a
 retro trigger; the retro says what the theme needed that it did not get
 (on 2026-09-18: a spike — the root cause of #46/#86/#87 was unknown when a
 worker was dispatched to fix it, and the fix took three passes).
 
-**The bounded second send-back is not a breaker trip — it is a fix at
-review.** When a second cold read on a theme returns findings that are
-(a) each reproduced by the conductor, (b) each a stated, local change (a few
-lines, one test), and (c) none a design decision or a widening of the theme,
-the conductor applies them itself in its review worktree — one commit per
-finding, `fix:` commits touching `tests/`, a cold read on the delta only —
-and flips the PR under the ordinary budgets. The breaker still trips when
-any finding is design-shaped, unbounded, or would be the theme's *third*
-pass, and always on a red `dev` push or a revert. Retro 6 (2026-09-20): four
-themes (#140, #145, #161, #180) tripped the old rule in one window; every one
-had a bounded, reproduced list, and every one waited on the maintainer's desk
-for hours while the loop dispatched nothing — the desk, not the worker, was
-the constraint. The second cold reads were not finding the first finding
-again; they were finding the surface the first fix *widened* (pull/push
-routed through the regex; the `k` cap clamped; the resolver made complete),
-which is exactly the class a fix-at-review closes and a third worker pass
-tends to widen further. The desk's `conductor_tick` entry records each
-fix-at-review with the findings and the delta cold read's verdict, so the
-retro can see whether the exception is being stretched.
+**After a worker's first fix round, the conductor changes text only.** When a
+cold read returns findings, every finding that changes code goes back to the
+worker — the conductor never writes code at review. The conductor may apply
+text: docs, changelog fragments, messages, comments, PR bodies, commit
+messages. The circuit breaker counts *worker* fix rounds and trips at the
+third. Maintainer decision, retro 11 (2026-09-25): in one window the
+conductor's code fixes at review introduced a defect or a new limit in 4 of 5
+uses (#387, #393, #422, #428), and on #428 both were single-condition
+changes — a one-condition fix can still carry a wrong assumption about the
+domain. The earlier rule (retro 6: the conductor applies bounded second-read
+findings itself) traded the maintainer's wait for a conductor that reviews its
+own code with less distance than a worker's; the delta cold read caught each
+defect, but only after the push. A revert of the conductor's own earlier
+change back to reviewed behaviour is still allowed, since it adds no new code.
 
-**One round of fix-at-review per theme.** When the delta cold read of your
-fix finds a defect *that your previous fix introduced*, the finding is
-design-shaped by definition: stop fixing. Either send the theme back with the
-design question stated (who owns the invariant, which two mechanisms
-disagree), or land it with the remaining limits documented on the PR and a
-follow-up issue — only when every remaining limit fails safe. Retro 10
-(2026-09-24): #357 took three conductor rounds (66e128a, 3c79d88, 5b4e1ab);
-each fixed a reproduced defect and introduced the next, because a shell trap
-and a Python fallback both owned restoring the tree. That cost about 1.5 h and
-six full-suite runs at load 15-20.
+When a delta cold read finds a limit that fails safe, the theme may land with
+the limit documented on the PR and a follow-up issue instead of another round.
 
 **A push command must say when it did not push.** A guard such as
 `[ "$(git rev-parse A)" = "$(git rev-parse B)" ] && git push ...` exits
