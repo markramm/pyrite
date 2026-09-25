@@ -131,8 +131,8 @@ class TestUnrelatedDeleteAndAddAreNotLinked:
 
     def test_the_add_is_reported_as_an_add(self, m10):
         repo, c_secret, c_public = m10
-        statuses = GitService.get_commit_file_statuses(repo.kb, c_public)
-        assert ("A", "public.md") in statuses
+        changes = GitService.get_commit_file_changes(repo.kb, c_public)
+        assert ("A", "public.md", None) in changes
 
     @pytest.mark.control(
         reason="Guards a regression this PR's earlier round introduced (-M10%), "
@@ -151,6 +151,67 @@ class TestUnrelatedDeleteAndAddAreNotLinked:
         repo.index()
         assert repo.svc.record_commit("k", c_public) == 1
         assert repo.change_type("p1", c_public) == "created"
+
+
+class TestSamePathReusedByAnotherEntry:
+    """Entry s1 at `notes.md` is deleted; later a different entry p1 is
+    created at the same path (filenames come from titles, so this is
+    ordinary). git's history of the path runs through both lives, and no
+    rename is involved, so only the add (and the id) separates them."""
+
+    @pytest.fixture
+    def reused(self, repo):
+        repo.write("kb/notes.md", _note("s1", "Notes", "Private draft: text only s1 has."))
+        c_s1 = repo.commit("s1")
+        (repo.kb / "notes.md").unlink()
+        repo.commit("delete s1")
+        repo.write("kb/notes.md", _note("p1", "Notes", "Public text."))
+        c_p1 = repo.commit("p1 at the same path")
+        return repo, c_s1, c_p1
+
+    def test_file_log_reports_each_commits_status(self, reused):
+        repo, c_s1, c_p1 = reused
+        log = GitService.get_file_log(repo.kb, "notes.md")
+        assert [(e["hash"], e["status"]) for e in log][0] == (c_p1, "A")
+
+    def test_attribution_stops_at_the_add(self, reused):
+        repo, c_s1, c_p1 = reused
+        repo.index()
+        repo.attribute()
+        assert repo.versions("p1") == [(c_p1, "created")]
+        assert repo.svc.get_entry_at_version("p1", "k", c_s1) is None
+
+    def test_a_row_for_the_earlier_entrys_commit_is_not_served(self, reused):
+        """A row an earlier build recorded for the path's previous life: read
+        at the entry's current path, but the file then held another id."""
+        repo, c_s1, c_p1 = reused
+        repo.index()
+        repo.db.upsert_entry_version(
+            entry_id="p1",
+            kb_name="k",
+            commit_hash=c_s1,
+            author_name="T",
+            author_email="t@example.com",
+            commit_date="2026-01-01T00:00:00+00:00",
+            change_type="created",
+        )
+        assert repo.svc.get_entry_at_version("p1", "k", c_s1) is None
+
+    @pytest.mark.control(
+        reason="Guards against an over-strict fix: dev serves this too. An "
+        "entry with no explicit id: derives it from its title, so a title "
+        "edit must not hide its earlier versions at the same path."
+    )
+    def test_a_title_edit_without_an_explicit_id_keeps_its_versions(self, repo):
+        repo.write("kb/n.md", "---\ntitle: Old\ntype: note\n---\n\nfirst\n")
+        c1 = repo.commit("v1")
+        repo.write("kb/n.md", "---\ntitle: New\ntype: note\n---\n\nsecond\n")
+        c2 = repo.commit("retitle")
+        repo.index()
+        repo.attribute()
+        (entry_id,) = [e["id"] for e in repo.db.get_entries_for_indexing("k")]
+        assert [h for h, _ in repo.versions(entry_id)] == [c2, c1]
+        assert "first" in repo.svc.get_entry_at_version(entry_id, "k", c1)
 
 
 class TestARenameMustKeepTheEntryId:
@@ -293,7 +354,7 @@ class TestKbPrefixFailsClosed:
         c = repo.commit("a")
         monkeypatch.setattr(GitService, "get_kb_prefix", staticmethod(lambda _path: None))
         assert GitService.get_file_log(repo.kb, "a.md") == []
-        assert GitService.get_commit_file_statuses(repo.kb, c) == []
+        assert GitService.get_commit_file_changes(repo.kb, c) == []
 
     def test_a_leading_space_in_the_kb_directory_is_kept(self, tmp_path):
         """`" kb"` and `"kb"` are different directories; stripping the
@@ -305,7 +366,7 @@ class TestKbPrefixFailsClosed:
             r.write("kb/a.md", _note("a1", "A", "a sibling's file"))
             c = r.commit("sibling")
             assert GitService.get_kb_prefix(r.kb) == " kb/"
-            assert GitService.get_commit_files(r.kb, c) == []
+            assert GitService.get_commit_file_changes(r.kb, c) == []
             assert GitService.get_file_log(r.kb, "a.md") == []
         finally:
             r.close()

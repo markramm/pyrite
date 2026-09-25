@@ -44,7 +44,7 @@ class VersionService:
         upsert_entry_version's existing (entry_id, kb_name, commit_hash)
         dedup.
 
-        `file_path` is stored KB-relative (matching get_commit_file_statuses'
+        `file_path` is stored KB-relative (matching get_commit_file_changes'
         already-KB-relative, already-outside-KB-refused output), never
         absolute -- an absolute path breaks the moment the KB's directory
         moves (#432 cold read).
@@ -263,6 +263,16 @@ class VersionService:
                 env=GitService.subprocess_env(),
             )
             if result.returncode == 0:
+                # The same path can hold a different entry at an older
+                # commit (one entry deleted, another created there later).
+                # A file that states another id is not this entry's
+                # version. A file with no explicit id is served: its id
+                # comes from the title, which a normal edit may change.
+                from ..models.core_types import explicit_entry_id
+
+                stated_id = explicit_entry_id(result.stdout)
+                if stated_id is not None and stated_id != entry_id:
+                    return None
                 return result.stdout
         except Exception:
             logger.warning("Git show failed for KB", exc_info=True)

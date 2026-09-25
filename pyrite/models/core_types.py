@@ -446,6 +446,25 @@ def entry_from_frontmatter(meta: dict[str, Any], body: str) -> Entry:
     return entry
 
 
+def _frontmatter_of(text: str) -> tuple[dict, str] | None:
+    """(frontmatter, body) of an entry file's text, split as
+    ``Entry.from_markdown`` splits it; None when the text has none."""
+    from ..utils.yaml import load_yaml
+
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    if not text.startswith(("---\n", "---\r\n")):
+        return None
+    after_open = text.split("\n", 1)[1]
+    parts = re.split(r"^---\s*$", after_open, flags=re.MULTILINE, maxsplit=1)
+    if len(parts) < 2:
+        return None
+    meta = load_yaml(parts[0])
+    if not isinstance(meta, dict):
+        return None
+    return meta, parts[1].strip()
+
+
 def entry_id_from_markdown(text: str) -> str | None:
     """The id an entry file's text gives its entry, derived the way loading
     the file derives it (an explicit ``id:``, or the type's generated one).
@@ -453,22 +472,27 @@ def entry_id_from_markdown(text: str) -> str | None:
     None when the text is not an entry. Used to tell a rename of one entry
     from a replacement by another: git pairs files by content similarity,
     and entries share frontmatter boilerplate, so similarity alone links
-    unrelated entries (#432).
+    unrelated entries (#432). Comparing ids assumes an id is unique within
+    a KB, which the index already relies on.
     """
-    from ..utils.yaml import load_yaml
-
     try:
-        if text.startswith("﻿"):
-            text = text[1:]
-        if not text.startswith(("---\n", "---\r\n")):
+        parsed = _frontmatter_of(text)
+        if parsed is None:
             return None
-        after_open = text.split("\n", 1)[1]
-        parts = re.split(r"^---\s*$", after_open, flags=re.MULTILINE, maxsplit=1)
-        if len(parts) < 2:
+        return entry_from_frontmatter(*parsed).id or None
+    except Exception:
+        return None
+
+
+def explicit_entry_id(text: str) -> str | None:
+    """The ``id:`` an entry file's frontmatter states, or None when it
+    states none (the id is then derived from the title, which may have
+    changed between versions of the same entry)."""
+    try:
+        parsed = _frontmatter_of(text)
+        if parsed is None:
             return None
-        meta = load_yaml(parts[0])
-        if not isinstance(meta, dict):
-            return None
-        return entry_from_frontmatter(meta, parts[1].strip()).id or None
+        value = parsed[0].get("id")
+        return str(value) if value not in (None, "") else None
     except Exception:
         return None

@@ -125,13 +125,18 @@ def _same_entry_history(
 ) -> list[dict]:
     """The prefix of `log_entries` (newest first) that belongs to `entry_id`.
 
-    `git log --follow` crosses a rename whenever git finds the two files
-    similar enough, and entries share frontmatter boilerplate, so a deleted
-    entry and an unrelated added one can look like a rename. At each point
-    where the file's path changes, the older path must hold the same entry
-    id at that commit; the history stops at the first one that does not
-    (or cannot be read), so another entry's commits are never recorded as
-    this one's versions (#432).
+    Two ways the log reaches another entry's commits (#432):
+
+    - A path is reused. An entry is deleted and a different one is later
+      created at the same path; the log of the path runs through both. The
+      history stops at the newest commit that added the file (status "A"):
+      what is older belongs to the path's previous life.
+    - A rename is inferred. `git log --follow` crosses a rename whenever git
+      finds the two files similar enough, and entries share frontmatter
+      boilerplate, so a deleted entry and an unrelated added one can look
+      like a rename. At each point where the path changes, the older path
+      must hold the same entry id at that commit (ids are unique within a
+      KB); the history stops at the first that does not, or cannot be read.
     """
     from ..models.core_types import entry_id_from_markdown
 
@@ -142,6 +147,8 @@ def _same_entry_history(
             text = git_service.read_file_at(kb_path, log_entry["hash"], path)
             if text is None or entry_id_from_markdown(text) != entry_id:
                 return log_entries[:i]
+        if str(log_entry.get("status", "")).startswith("A"):
+            return log_entries[: i + 1]
         newer_path = path
     return log_entries
 

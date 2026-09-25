@@ -295,7 +295,7 @@ class TestGetFileLog:
 
 
 class TestGetCommitFiles:
-    """Tests for get_commit_files, against real repos (quoted-path handling
+    """Tests for get_commit_file_changes, against real repos (quoted-path handling
     cannot be trusted from a mock)."""
 
     def test_get_commit_files_plain(self, tmp_path):
@@ -307,7 +307,7 @@ class TestGetCommitFiles:
         _git(repo, "commit", "-q", "-m", "add two")
         commit = _git(repo, "rev-parse", "HEAD")
 
-        files = GitService.get_commit_files(repo, commit)
+        files = [c[1] for c in GitService.get_commit_file_changes(repo, commit)]
         assert sorted(files) == ["a.md", "b.md"]
 
     def test_get_commit_files_unquotes_unicode(self, tmp_path):
@@ -319,7 +319,7 @@ class TestGetCommitFiles:
         _git(repo, "commit", "-q", "-m", "add unicode")
         commit = _git(repo, "rev-parse", "HEAD")
 
-        files = GitService.get_commit_files(repo, commit)
+        files = [c[1] for c in GitService.get_commit_file_changes(repo, commit)]
         assert files == [name]
 
     def test_get_commit_files_unquotes_tab(self, tmp_path):
@@ -331,7 +331,7 @@ class TestGetCommitFiles:
         _git(repo, "commit", "-q", "-m", "add tab name")
         commit = _git(repo, "rev-parse", "HEAD")
 
-        files = GitService.get_commit_files(repo, commit)
+        files = [c[1] for c in GitService.get_commit_file_changes(repo, commit)]
         assert files == [name]
 
     def test_get_commit_files_root_commit(self, tmp_path):
@@ -344,7 +344,7 @@ class TestGetCommitFiles:
         _git(repo, "commit", "-q", "-m", "root")
         commit = _git(repo, "rev-parse", "HEAD")
 
-        assert GitService.get_commit_files(repo, commit) == ["a.md"]
+        assert GitService.get_commit_file_changes(repo, commit) == [("A", "a.md", None)]
 
 
 class TestGetChangedFiles:

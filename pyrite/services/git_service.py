@@ -499,8 +499,10 @@ class GitService:
 
         `local_path` is the KB directory (git's cwd for this call);
         `file_path` is KB-relative. Returns list of dicts with: hash,
-        author_name, author_email, date, message, file_path -- `file_path`
-        is the KB-relative path this file had *at that commit* (its tree),
+        author_name, author_email, date, message, status, file_path --
+        `status` is git's name-status code for the file in that commit
+        ("A" where it was added, which starts that path's current life);
+        `file_path` is the KB-relative path this file had *at that commit* (its tree),
         which for commits before a rename is the old name, not the name
         passed in (#432: reading a pre-rename commit at the current path
         404s, because that path did not exist yet).
@@ -564,10 +566,11 @@ class GitService:
                 # always the last path (the new name on a rename, the only
                 # name otherwise).
                 repo_relative_path = None
-                for _status, paths in block["statuses"]:
+                status = ""
+                if block["statuses"]:
+                    status, paths = block["statuses"][0]
                     if paths:
                         repo_relative_path = paths[-1]
-                    break
                 if repo_relative_path is None:
                     continue
                 kb_relative_path = GitService._kb_relative_path(repo_relative_path, kb_prefix)
@@ -582,6 +585,7 @@ class GitService:
                         "date": parts[3],
                         "message": parts[4],
                         "file_path": kb_relative_path,
+                        "status": status,
                     }
                 )
             return entries
@@ -594,7 +598,7 @@ class GitService:
         """Get author/date/message for a single commit.
 
         Returns None if the commit cannot be read. Used alongside
-        `get_commit_files` to record entry_version rows for a commit the
+        `get_commit_file_changes` to record entry_version rows for a commit the
         server just made (#432), without a full `get_file_log` walk.
         """
         try:
@@ -631,42 +635,6 @@ class GitService:
                 "Failed to get commit info for %s at %s", local_path, commit_hash, exc_info=True
             )
             return None
-
-    @staticmethod
-    def get_commit_files(local_path: Path, commit_hash: str) -> list[str]:
-        """Get the KB-relative paths that a single commit changed.
-
-        Unlike `get_changed_files` (a range diff against HEAD), this is one
-        commit's own change set -- what a server write's commit just
-        touched, for recording entry_version rows right after that commit
-        (#432). Works for the root commit (no parent) as well as ordinary
-        commits: `git show --name-only` handles both.
-
-        Uses `-z` (see `get_file_log`'s docstring for why: a quoted/escaped
-        name from core.quotePath would otherwise come back as the escaped
-        literal, not the real filename) and converts each repo-relative
-        path git reports to KB-relative, dropping any that fall outside
-        this KB's own subtree (`local_path`).
-        """
-        return [
-            status_path
-            for _status, status_path in GitService.get_commit_file_statuses(local_path, commit_hash)
-        ]
-
-    @staticmethod
-    def get_commit_file_statuses(local_path: Path, commit_hash: str) -> list[tuple[str, str]]:
-        """Get (status, KB-relative path) for each file a single commit
-        changed -- `status` is git's one-letter name-status code (A, M, D,
-        R<NN>, ...), needed to tell "this commit created the file" (A) from
-        every other change, e.g. for entry_version.change_type.
-
-        For a rename, only the destination path is returned (what exists in
-        this commit's tree) -- same rule as `get_file_log`.
-        """
-        return [
-            (status, path)
-            for status, path, _old in GitService.get_commit_file_changes(local_path, commit_hash)
-        ]
 
     @staticmethod
     def get_commit_file_changes(
