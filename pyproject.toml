@@ -85,6 +85,8 @@ dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "pytest-xdist==3.8.0",
+    # Diff coverage on the PR's 3.12 leg (advisory; see ci.yml's test job).
+    "diff-cover==10.6.0",
     "mypy>=1.9.0",
     "ruff>=0.15.0,<0.16",
     "build>=1.0.0",
@@ -130,6 +132,10 @@ markers = [
     # the KB service, read scoping, the REST app factory, MCP dispatch and the
     # CLI entry point. Keep it under a minute at -n 4.
     "core: always run by scripts/test-affected, whatever the branch changed",
+    # verify-red (scripts/verify_red_ci.py): a test the PR adds on purpose to
+    # pass without the fix too (a "still works" guard), so it is not warned about.
+    # It must say why: reason=... or the test's docstring; a bare marker is rejected.
+    "control(reason): a deliberate negative control; verify-red expects it to pass without the fix",
 ]
 
 [tool.mypy]

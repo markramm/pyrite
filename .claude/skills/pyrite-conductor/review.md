@@ -45,19 +45,25 @@ code nobody had pushed).
       by review; locally, `scripts/test-affected --run` on the head is enough (#356: full local suites from
       several worktrees at once filled the disk and pushed load past 25). Run the full suite here only to
       reproduce a CI failure
-- [ ] fix reverted to the merge base, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...`
-      (exit 0 = red without the fix; exit 1 = passes anyway; exit 2 = nothing was reverted, NO claim — #121) — EVERY test
-      named for a regression or a "still works" case, not one at random (PR #69: a class named for the
-      exact regression it reintroduced covered only cases that already passed, and read as tested).
-      TRIAL (#352, from 2026-09-23): the PR's CI `verify-red` job does this for every changed test file
-      and puts a table in the run summary (`gh run view <id>` / the Checks tab). When that table is from
-      the run for the PR's latest push and every test the PR names for the fix reads "red without the fix", it replaces
-      the manual run; "red by import/collection error", "passes without the fix" on a test that is not a
-      "still works" guard, "not verifiable", or implementation outside `pyrite/`/`extensions/*/src/`
-      (e.g. `scripts/`) still need the manual step. So does any PR where
+- [ ] the new tests notice the change: read the `verify-red` job's summary line on the PR's latest push
+      (`gh run view <id>` / the Checks tab; `test-evidence.json` in the run's artifacts) and do not re-run it
+      locally. The job (`scripts/verify_red_ci.py`) runs the PR's new and edited tests on a throwaway
+      checkout of the merge base plus the PR's test-side files, then with the whole change. Every test the PR
+      names for the fix should be `red`. `import-only` (it fails only because a name the PR adds is missing),
+      `unexpected pass` on a test not marked `@pytest.mark.control`, and `n/a` need a look at that test (PR
+      #69: a class named for the exact regression it reintroduced covered only cases that already passed,
+      and read as tested). The worker's report pastes the same line from its own run; if the two disagree,
+      trust CI and ask why. A PR with a `fix:` commit whose line has **0 red, or only import-only reds, goes
+      back** to its author unless the PR states why (an environment-only bug like #373, a fix only a
+      wrapper-level test can see); `unexpected pass` or `control` tests do not count as evidence for it.
+      A manual check replaces the job only where
       the PR itself touches `scripts/verify*red*` or the `verify-red` job in `.github/workflows/ci.yml`: the
-      job runs the PR's own copy, so its table cannot vouch for itself. After ~15-20 PRs, decide whether to make the job
-      required for `fix:` commits
+      job runs the PR's own copy, so its table cannot vouch for itself. The manual check runs **dev's** copy,
+      never the PR's, with the PR's worktree as the working directory:
+      `d=$(mktemp -d); for f in verify_red_ci.py verify_red_record.py; do git show origin/dev:scripts/$f > $d/$f; done; (cd <PR worktree> && .venv/bin/python $d/verify_red_ci.py)`.
+      (Before the throwaway-tree runner is on dev, dev's copy reverts in place: run it in a scratch clone
+      of the PR branch, not in any worktree.) The job and diff coverage (the test
+      job's summary) are advisory; after ~10 PRs of `test-evidence.json` the maintainer decides on gating
 - [ ] any number in the report (faster, slower, N% fewer rewrites, a flake rate) was measured against the
       MERGE BASE, under ONE interpreter with the source tree pinned, and the sentence that reports it states
       the condition — two sessions each published a confident wrong number about #69 in one window (one

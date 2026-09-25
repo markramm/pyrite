@@ -300,6 +300,7 @@ class TestTheMatrixNarrowsWhereItShould:
 class TestNoNewDependencies:
     """Hard project rule: new deps need prior discussion on a ticket."""
 
+    @pytest.mark.control(reason="the allow-list only widened: it passes either way")
     def test_classifier_uses_only_actions_already_in_the_workflow(self, ci):
         allowed = {
             "actions/checkout",
@@ -307,6 +308,9 @@ class TestNoNewDependencies:
             "actions/setup-node",
             "actions/cache",
             "actions/upload-artifact",
+            # upload-artifact's first-party pair: verify-red files the test
+            # job's diff coverage with its verdicts (0.26 test-evidence item).
+            "actions/download-artifact",
             "astral-sh/setup-uv",
             "dorny/paths-filter",
         }

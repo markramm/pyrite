@@ -113,7 +113,7 @@ claim, run it in full, read the output, then claim.
 |---|---|---|
 | Backend tests pass (local) | `scripts/test-affected --run` (core + tests importing what you changed, `-n 4`) | `N passed, 0 failed` |
 | Backend tests pass (all) | the draft PR's CI: `gh pr checks <n>` | `test (3.12)` and `gate` pass |
-| The fix is real | the new test, with the fix reverted (`git stash`) | it fails |
+| The fix is real | `scripts/verify-red.sh`, **once**, before reporting (a throwaway worktree of the merge base: your tree is never touched, uncommitted work included) | `verify-red: N red · 0 import-only · 0 unexpected pass · 0 n/a`; paste its summary line into the report |
 | Each guard is tested | delete **that guard alone** (one condition, one early return, one check) and run the tests | at least one test fails -- for every guard you added |
 | Frontend passes | `cd web && npm run check && npm run test:unit && npm run build` | all green |
 | Lint passes | `.venv/bin/ruff check . && .venv/bin/ruff format --check .` | clean |
@@ -125,6 +125,16 @@ cold reads found a guard or a test that stayed green with its target removed
 (a resolved-path check, loop-lifetime guards, refusal tests matching any
 error, a tier test that held under the bug). Each cost a send-back and a full
 push cycle. Deleting one guard at a time before you report is minutes.
+
+`scripts/verify-red.sh` is the same code as CI's `verify-red` job, which the
+conductor reads instead of re-running it: run it once and paste its summary
+line. A test you add on purpose to pass without the fix too (a "still works"
+guard) gets `@pytest.mark.control(reason="...")` (or a docstring saying why),
+so it counts as a control rather than an unexpected pass; a bare marker is
+rejected. A `fix:` branch whose line shows **0 red, or only import-only
+reds, is not done**: write a test that fails on the bug's behaviour, or state
+in the report why none can (an environment-only bug) -- the conductor sends
+it back otherwise.
 
 Forbidden without evidence: "should work", "looks correct", "probably
 passes", "I'm confident".
@@ -177,7 +187,8 @@ Pushed:   <sha> == origin/<branch>
 Commits:  <n>, listed with one line each
 Closes:   #N, #M  (or the backlog item ids)
 Evidence: test-affected output line; the draft PR's CI result on the pushed
-          SHA; the RED run of each new test; lint
+          SHA; the `verify-red: ...` summary line (not prose like "RED before
+          each fix"), with a reason for each non-red test; lint
 Guards:   each check you added -> the test that fails when that check alone
           is removed (a guard no test catches is not done)
 Changed:  files touched, new vs existing
