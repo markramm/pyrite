@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Topbar from '$lib/components/layout/Topbar.svelte';
 	import TemplatePicker from '$lib/components/entry/TemplatePicker.svelte';
+	import TypeChoice from '$lib/components/entry/TypeChoice.svelte';
 	import Editor from '$lib/editor/Editor.svelte';
 	import { api } from '$lib/api/client';
 	import { kbStore } from '$lib/stores/kbs.svelte';
@@ -15,8 +16,10 @@
 	let templates = $state<TemplateSummary[]>([]);
 	let loadingTemplates = $state(false);
 	let typeSchemas = $state<Record<string, TypeSchemaInfo>>({});
+	let declaredTypes = $state<string[]>([]);
 	let title = $state('');
 	let entryType = $state('note');
+	let allowUndeclared = $state(false);
 	let body = $state('');
 	let tags = $state('');
 	let date = $state('');
@@ -36,13 +39,13 @@
 	);
 
 	// Sort types: common ones first, then alphabetical
-	const sortedTypeNames = $derived(() => {
-		const names = Object.keys(typeSchemas);
+	function sortTypeNames(names: string[]): string[] {
 		const priority = ['note', 'event', 'person', 'organization', 'document', 'topic'];
 		const top = priority.filter((n) => names.includes(n));
 		const rest = names.filter((n) => !priority.includes(n)).sort();
 		return [...top, ...rest];
-	});
+	}
+	const sortedTypeNames = $derived(() => sortTypeNames(Object.keys(typeSchemas)));
 
 	onMount(async () => {
 		if (!kb) await kbStore.load();
@@ -68,9 +71,22 @@
 		try {
 			const res = await api.getTypeSchemas(kb);
 			typeSchemas = res.types;
+			declaredTypes = res.declared;
+			// Default to a declared type when the KB declares any; otherwise
+			// keep offering (and defaulting to) every type (#392).
+			if (declaredTypes.length > 0 && !declaredTypes.includes(entryType)) {
+				entryType = sortTypeNames(declaredTypes)[0];
+			}
 		} catch {
 			typeSchemas = {};
+			declaredTypes = [];
 		}
+	}
+
+	function onTypeChoice(choice: { entryType: string; allowUndeclared: boolean }) {
+		entryType = choice.entryType;
+		allowUndeclared = choice.allowUndeclared;
+		customFields = {};
 	}
 
 	async function onTemplateSelect(templateName: string | null) {
@@ -86,16 +102,15 @@
 			const rendered = await api.renderTemplate(kb, templateName, { title });
 			body = rendered.body;
 			entryType = rendered.entry_type;
+			// A template names its own type. When the KB declares types and the
+			// template's is not among them, the template's choice still wins --
+			// but the save must not be refused for a type the user never picked.
+			allowUndeclared = declaredTypes.length > 0 && !declaredTypes.includes(entryType);
 			customFields = {};
 			step = 'edit';
 		} catch {
 			uiStore.toast('Failed to load template', 'error');
 		}
-	}
-
-	function onTypeChange(newType: string) {
-		entryType = newType;
-		customFields = {};
 	}
 
 	function onEditorChange(content: string) {
@@ -123,6 +138,10 @@
 			if (date) req.date = date;
 			if (importance !== 5) req.importance = importance;
 			if (status.trim()) req.status = status.trim();
+			// Only the explicit "use a type this KB does not declare" choice
+			// (TypeChoice, or a template naming an undeclared type) sends this;
+			// the client itself never opts in on the caller's behalf (#392).
+			if (allowUndeclared) req.allow_undeclared = true;
 
 			// Merge non-empty custom fields into metadata, coerced by schema type.
 			const meta = buildMetadata(customFields, selectedTypeSchema?.fields);
@@ -179,21 +198,12 @@
 			<!-- Type selector -->
 			{#if Object.keys(typeSchemas).length > 0}
 				<div class="mb-4">
-					<label for="entry-type" class="mb-1 block text-sm font-medium">Entry Type</label>
-					<select
-						id="entry-type"
-						bind:value={entryType}
-						onchange={(e) => onTypeChange(e.currentTarget.value)}
-						class="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-					>
-						{#each sortedTypeNames() as typeName}
-							<option value={typeName}>
-								{typeName}{typeSchemas[typeName]?.description
-									? ` — ${typeSchemas[typeName].description.slice(0, 60)}`
-									: ''}
-							</option>
-						{/each}
-					</select>
+					<TypeChoice
+						types={sortedTypeNames()}
+						declared={declaredTypes}
+						value={entryType}
+						onchange={onTypeChoice}
+					/>
 					{#if selectedTypeSchema?.description}
 						<p class="mt-1 text-xs text-zinc-500">{selectedTypeSchema.description}</p>
 					{/if}

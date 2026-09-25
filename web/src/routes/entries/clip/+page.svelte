@@ -2,6 +2,8 @@
 	import { api } from '$lib/api/client';
 	import { goto } from '$app/navigation';
 	import { kbStore } from '$lib/stores/kbs.svelte';
+	import TypeChoice from '$lib/components/entry/TypeChoice.svelte';
+	import type { TypeSchemaInfo } from '$lib/api/types';
 
 	let url = $state('');
 	let title = $state('');
@@ -9,6 +11,10 @@
 	let loading = $state(false);
 	let error = $state('');
 	let selectedKb = $state('');
+	let typeSchemas = $state<Record<string, TypeSchemaInfo>>({});
+	let declaredTypes = $state<string[]>([]);
+	let entryType = $state('note');
+	let allowUndeclared = $state(false);
 
 	// Use the current KB from the store
 	$effect(() => {
@@ -16,6 +22,33 @@
 			selectedKb = kbStore.activeKB;
 		}
 	});
+
+	$effect(() => {
+		if (selectedKb) loadTypeSchemas(selectedKb);
+	});
+
+	async function loadTypeSchemas(kb: string) {
+		try {
+			const res = await api.getTypeSchemas(kb);
+			typeSchemas = res.types;
+			declaredTypes = res.declared;
+			// Default to a declared type when the KB declares any -- a clip
+			// must not be refused just because of the default `note` type
+			// (#392).
+			if (declaredTypes.length > 0 && !declaredTypes.includes(entryType)) {
+				entryType = [...declaredTypes].sort()[0];
+			}
+			allowUndeclared = false;
+		} catch {
+			typeSchemas = {};
+			declaredTypes = [];
+		}
+	}
+
+	function onTypeChoice(choice: { entryType: string; allowUndeclared: boolean }) {
+		entryType = choice.entryType;
+		allowUndeclared = choice.allowUndeclared;
+	}
 
 	async function handleClip() {
 		if (!url.trim()) {
@@ -35,7 +68,9 @@
 				url: url.trim(),
 				kb: selectedKb,
 				title: title.trim() || undefined,
-				tags: tags.trim() ? tags.split(',').map((t) => t.trim()) : undefined
+				tags: tags.trim() ? tags.split(',').map((t) => t.trim()) : undefined,
+				entry_type: entryType,
+				...(allowUndeclared ? { allow_undeclared: true } : {})
 			});
 
 			// Redirect to the new entry
@@ -112,6 +147,15 @@
 				class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
 			/>
 		</div>
+
+		{#if Object.keys(typeSchemas).length > 0}
+			<TypeChoice
+				types={Object.keys(typeSchemas).sort()}
+				declared={declaredTypes}
+				value={entryType}
+				onchange={onTypeChoice}
+			/>
+		{/if}
 
 		{#if error}
 			<div class="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
