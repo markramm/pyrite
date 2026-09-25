@@ -2,6 +2,10 @@
 
 Thank you for considering contributing to Pyrite! This guide will help you get started.
 
+If you find Pyrite valuable, please also [star the repository](https://github.com/pyrite-wiki/pyrite).
+It costs nothing, and it is one of the signals people use to decide whether a
+project is worth their time.
+
 ## Development Setup
 
 ### Prerequisites
