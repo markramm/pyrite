@@ -33,12 +33,20 @@ Stores config, the database handle, and creates an `IndexManager`. The embedding
 - **`get_kb(name)`** -- Retrieves a `KBConfig` by name.
 - **`get_kb_stats(name)`** -- Delegates to `PyriteDB.get_kb_stats()`.
 
-## Entry CRUD
+## Entry CRUD: the write pipeline (#378)
 
-- **`create_entry(kb_name, entry_id, title, entry_type, body, **kwargs)`** -- Builds an `Entry` via the model factory, runs `before_save` hooks, saves to disk via `KBRepository`, indexes, auto-embeds, then runs `after_save` hooks. Raises `KBNotFoundError` / `KBReadOnlyError`.
-- **`update_entry(entry_id, kb_name, **updates)`** -- Loads from disk, applies updates, stamps `updated_at`, runs hooks, saves, re-indexes, and auto-embeds.
+Every create/update decision is made here, once, for every surface. REST, MCP and the CLI only map their arguments into a spec and map the errors back out; they make no create decisions of their own (a parity test, `tests/test_write_surface_parity.py`, sends the same spec through all six create surfaces).
+
+- **`_prepare(kb_name, kb_config, spec, allow_undeclared, builder)`** -- the checks, in order: the ADR-0034 truncated-body refusal (`ensure_not_truncated`) and marker stripping; the title; the undeclared-type refusal (core types not exempt, #197); plugin type resolution scoped to the KB type; `entry.validate()`; `_validate_write` (KB schema + plugin validators, returns warnings); the exists check. Raises a `ValidationError` subclass with a stable `error_code`: `UndeclaredTypeError` (`UNDECLARED_TYPE`), `EntryExistsError` (`ENTRY_EXISTS`), `SchemaViolationError` (`SCHEMA_VIOLATION`), `TruncatedBodyError` / plain `ValidationError` (`VALIDATION_FAILED`).
+- **`_prepare_and_save(...)`** -- `_prepare`, then `before_save` hooks, save + index via `DocumentManager`, embed, `after_save` hooks. Returns a `WriteResult(entry, warnings)`.
+- **`create(kb_name, spec, allow_undeclared=True)`** / **`create_entry(kb_name, entry_id, title, entry_type, body, *, allow_undeclared=True, **kwargs)`** -- one entry through the pipeline. `allow_undeclared` defaults to True for in-process callers writing their own types (tasks, collections, daily notes, plugins); every user-facing surface passes the caller's own override flag (False unless asked).
+- **`bulk_create_entries(kb_name, specs, *, allow_undeclared, validate_only)`** -- the same pipeline per item; a refused item fails alone with `{"created": false, "error", "error_code"}`, siblings are created, order is kept. Used by MCP `kb_bulk_create`, REST `/entries/import`, `pyrite import` and task decomposition.
+- **`add_entry_from_file(kb_name, path, *, validate_only, allow_undeclared)`** -- the same pipeline, with a builder that reads the frontmatter the way the loader does.
+- **`update(entry_id, kb_name, updates)`** / **`update_entry(entry_id, kb_name, **updates)`** -- refuses a truncated body, applies fields (a `kb.yaml`-declared field with no model attribute is written as a custom field), stamps `updated_at`, validates, runs hooks, saves, re-indexes, embeds. Returns `WriteResult`.
+- **`updatable_fields(entry_id, kb_name)`** -- the entry type's field set (model fields from the type registry + `kb.yaml` fields for the type, less identity/bookkeeping fields). MCP `kb_update` filters by it.
 - **`delete_entry(entry_id, kb_name)`** -- Runs `before_delete` hooks, deletes from file system and index, then runs `after_delete` hooks.
-- **`add_link(source_id, source_kb, target_id, relation, target_kb, note)`** -- Adds a wikilink to the source entry's frontmatter and re-indexes. Deduplicates existing links.
+- **`add_link(source_id, source_kb, target_id, relation, target_kb, note)`** -- Adds a link to the source entry's frontmatter and re-indexes. Deduplicates existing links.
+- **`add_links(kb_name, specs, *, dry_run)`** -- many links, each source loaded and saved once, in place (used by `pyrite links bulk-create`, #375).
 
 ## Query Operations (read-only)
 
