@@ -268,3 +268,79 @@ class TestCorrelateResults:
     def test_empty_input(self, multi_kb_db):
         correlated = correlate_results([])
         assert correlated == []
+
+
+class TestCorrelationKeys:
+    def test_shared_entry_id_groups_results_with_different_titles(self):
+        correlated = correlate_results(
+            [
+                {
+                    "id": "palantir-technologies",
+                    "kb_name": "detention-industrial",
+                    "title": "Palantir Technologies contractor",
+                    "entry_type": "contractor",
+                    "importance": 7,
+                },
+                {
+                    "id": "palantir-technologies",
+                    "kb_name": "surveillance-industrial-complex",
+                    "title": "Palantir Technologies firm",
+                    "entry_type": "firm",
+                    "importance": 8,
+                },
+            ]
+        )
+        assert len(correlated) == 1
+        assert correlated[0]["correlated_by"] == "entry_id"
+        assert correlated[0]["kb_count"] == 2
+        assert {item["kb_name"] for item in correlated[0]["appearances"]} == {
+            "detention-industrial",
+            "surveillance-industrial-complex",
+        }
+
+    def test_different_ids_fall_back_to_case_and_whitespace_normalized_title(self):
+        correlated = correlate_results(
+            [
+                {
+                    "id": "entity-a",
+                    "kb_name": "investigation-a",
+                    "title": "  Palantir   Technologies ",
+                },
+                {
+                    "id": "entity-b",
+                    "kb_name": "investigation-b",
+                    "title": "palantir technologies",
+                },
+            ]
+        )
+        assert len(correlated) == 1
+        assert correlated[0]["correlated_by"] == "title"
+        assert correlated[0]["kb_count"] == 2
+
+    def test_id_group_is_not_reused_by_title_fallback(self):
+        correlated = correlate_results(
+            [
+                {"id": "shared-id", "kb_name": "kb-a", "title": "Same report"},
+                {"id": "shared-id", "kb_name": "kb-b", "title": "Renamed report"},
+                {"id": "other-id", "kb_name": "kb-c", "title": "Same report"},
+            ]
+        )
+        id_group = next(group for group in correlated if group["correlated_by"] == "entry_id")
+        title_group = next(group for group in correlated if group["correlated_by"] == "title")
+        assert id_group["kb_count"] == 2
+        assert len(id_group["appearances"]) == 2
+        assert title_group["kb_count"] == 1
+        assert [item["id"] for item in title_group["appearances"]] == ["other-id"]
+
+    def test_shared_entry_id_counts_three_knowledge_bases(self):
+        correlated = correlate_results(
+            [
+                {"id": "shared-id", "kb_name": "kb-a", "title": "First title"},
+                {"id": "shared-id", "kb_name": "kb-b", "title": "Second title"},
+                {"id": "shared-id", "kb_name": "kb-c", "title": "Third title"},
+            ]
+        )
+        assert len(correlated) == 1
+        assert correlated[0]["correlated_by"] == "entry_id"
+        assert correlated[0]["kb_count"] == 3
+        assert len(correlated[0]["appearances"]) == 3

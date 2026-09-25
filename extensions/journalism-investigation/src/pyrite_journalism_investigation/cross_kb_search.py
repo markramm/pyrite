@@ -81,54 +81,60 @@ def cross_kb_search(
 def correlate_results(
     flat_results: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Correlate search results by entity identity across KBs.
-
-    Groups results with matching titles (case-insensitive) and
-    sorts by cross-KB appearance count (entities in more KBs rank higher).
-
-    Args:
-        flat_results: List of search result dicts with id, kb_name, title, entry_type
-
-    Returns:
-        List of entity groups, each with title, kb_count, max_importance, appearances
+    """Correlate results by entry ID first, then by normalized title.
+    Matching IDs can identify the same entity even when its title differs
+    between KBs. Results not grouped by ID fall back to case-insensitive title
+    matching with repeated whitespace collapsed.
     """
     if not flat_results:
         return []
 
-    # Group by normalized title
-    by_title: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for r in flat_results:
-        key = r.get("title", "").strip().lower()
-        by_title[key].append(r)
-
-    groups = []
-    for entries in by_title.values():
-        # Use the original-case title from the first entry
+    def make_group(entries: list[dict[str, Any]], correlated_by: str) -> dict[str, Any]:
         title = entries[0].get("title", "")
-        kb_names = {e.get("kb_name", "") for e in entries}
-        max_importance = max(int(e.get("importance", 5)) for e in entries)
-
-        appearances = []
-        for e in entries:
-            appearances.append(
-                {
-                    "id": e.get("id", ""),
-                    "kb_name": e.get("kb_name", ""),
-                    "entry_type": e.get("entry_type", ""),
-                    "importance": int(e.get("importance", 5)),
-                }
-            )
-
-        groups.append(
+        kb_names = {entry.get("kb_name", "") for entry in entries}
+        max_importance = max(int(entry.get("importance", 5)) for entry in entries)
+        appearances = [
             {
-                "title": title,
-                "kb_count": len(kb_names),
-                "max_importance": max_importance,
-                "appearances": appearances,
+                "id": entry.get("id", ""),
+                "kb_name": entry.get("kb_name", ""),
+                "entry_type": entry.get("entry_type", ""),
+                "importance": int(entry.get("importance", 5)),
             }
-        )
+            for entry in entries
+        ]
+        return {
+            "title": title,
+            "correlated_by": correlated_by,
+            "kb_count": len(kb_names),
+            "max_importance": max_importance,
+            "appearances": appearances,
+        }
 
-    # Sort by kb_count descending, then by max_importance descending
-    groups.sort(key=lambda g: (g["kb_count"], g["max_importance"]), reverse=True)
-
+    by_id: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
+    for index, result in enumerate(flat_results):
+        entry_id = result.get("id")
+        if entry_id is not None and str(entry_id).strip():
+            by_id[str(entry_id)].append((index, result))
+    groups = []
+    grouped_indices: set[int] = set()
+    for indexed_entries in by_id.values():
+        if len(indexed_entries) < 2:
+            continue
+        groups.append(make_group([entry for _, entry in indexed_entries], "entry_id"))
+        grouped_indices.update(index for index, _ in indexed_entries)
+    by_title: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for index, result in enumerate(flat_results):
+        if index in grouped_indices:
+            continue
+        title = str(result.get("title") or "")
+        normalized_title = " ".join(title.split()).casefold()
+        if normalized_title:
+            by_title[normalized_title].append(result)
+        else:
+            # An empty title does not identify an entity; keep this result alone.
+            groups.append(make_group([result], "title"))
+    for entries in by_title.values():
+        groups.append(make_group(entries, "title"))
+    # Sort by KB appearance count descending, then importance descending.
+    groups.sort(key=lambda group: (group["kb_count"], group["max_importance"]), reverse=True)
     return groups
