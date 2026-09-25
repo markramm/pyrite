@@ -399,6 +399,14 @@ class PyriteMCPServer:
         return self._task_svc_cache
 
     @property
+    def link_svc(self):
+        if not hasattr(self, "_link_svc_cache"):
+            from ..services.link_discovery_service import LinkDiscoveryService
+
+            self._link_svc_cache = LinkDiscoveryService(self.config, self.db)
+        return self._link_svc_cache
+
+    @property
     def search_svc(self):
         if not hasattr(self, "_search_svc_cache"):
             from ..services.search_service import SearchService
@@ -1376,9 +1384,7 @@ class PyriteMCPServer:
         if not source_kb or not target_kb:
             return _error("MISSING_PARAMETER", "source_kb and target_kb are required")
 
-        from ..services.link_discovery_service import LinkDiscoveryService
-
-        svc = LinkDiscoveryService(self.config, self.db)
+        svc = self.link_svc
         pairs = svc.batch_suggest(
             source_kb=source_kb,
             target_kb=target_kb,
@@ -1404,9 +1410,7 @@ class PyriteMCPServer:
         if not entry_id or not kb_name:
             return _error("MISSING_PARAMETER", "entry_id and kb_name are required")
 
-        from ..services.link_discovery_service import LinkDiscoveryService
-
-        svc = LinkDiscoveryService(self.config, self.db)
+        svc = self.link_svc
         candidates = svc.discover_neighbors(
             entry_id=entry_id,
             kb_name=kb_name,

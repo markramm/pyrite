@@ -13,7 +13,6 @@ try:
     from pyrite.config import load_config
     from pyrite.services.kb_service import KBService
     from pyrite.storage.database import PyriteDB
-    from pyrite.storage.index import IndexManager
 
     DIRECT_ACCESS = True
 except ImportError:
@@ -45,14 +44,6 @@ def _get_kb_service():
     return KBService(_get_config(), _get_db())
 
 
-@st.cache_resource
-def _get_index_mgr():
-    """Get index manager (cached as resource)."""
-    if not DIRECT_ACCESS:
-        return None
-    return IndexManager(_get_db(), _get_config())
-
-
 @st.cache_data(ttl=300)
 def get_kb_list() -> list[dict[str, Any]]:
     """Get list of knowledge bases."""
@@ -80,10 +71,10 @@ def get_kb_list() -> list[dict[str, Any]]:
 @st.cache_data(ttl=300)
 def get_stats() -> dict[str, Any]:
     """Get index statistics."""
-    index_mgr = _get_index_mgr()
-    if not index_mgr:
+    svc = _get_kb_service()
+    if not svc:
         return {"total_entries": 0, "total_tags": 0, "total_links": 0}
-    return index_mgr.get_index_stats()
+    return svc.get_index_stats()
 
 
 @st.cache_data(ttl=60)

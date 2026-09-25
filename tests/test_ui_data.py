@@ -97,3 +97,10 @@ def test_entry_graph(ui):
     assert {n["id"] for n in graph["nodes"]} == {"a", "b"}
     assert graph["edges"] == [{"source": "a", "target": "b", "label": "wikilink"}]
     assert data.get_entry_graph("missing", "kb") == {"nodes": [], "edges": []}
+
+
+def test_stats(ui):
+    data, _ = ui
+    stats = data.get_stats()
+    assert stats["total_entries"] == 3
+    assert set(stats["kbs"]) == {"kb"}
