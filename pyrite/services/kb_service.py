@@ -1173,7 +1173,11 @@ class KBService:
         Returns:
             dict with ``resolved`` (bool) indicating whether the target
             exists as of this call -- including on the duplicate-link path,
-            where the write is a no-op but the target may since have gone.
+            where the write is a no-op but the target may since have gone --
+            and ``created`` (bool): False on that no-op path, True when a new
+            link was written. The duplicate key is ``(target, kb, relation)``:
+            a second, different relation between the same two entries is a
+            new link, not a duplicate (#396).
         """
         kb_config = self.config.get_kb(source_kb)
         if not kb_config:
@@ -1214,11 +1218,15 @@ class KBService:
         # bulk script, an agent retrying a batch -- fails on links its own
         # earlier pass wrote correctly.
         for existing in entry.links:
-            if existing.target == target_id and (existing.kb or source_kb) == tkb:
+            if (
+                existing.target == target_id
+                and (existing.kb or source_kb) == tkb
+                and existing.relation == relation
+            ):
                 # The write is a no-op, but `resolved` is a claim about the
                 # target as it is now, so check rather than assume: a link
                 # recorded earlier may have been left dangling since.
-                return {"resolved": _target_exists()}
+                return {"resolved": _target_exists(), "created": False}
 
         resolved = _target_exists()
         if not resolved and not allow_dangling:
@@ -1227,7 +1235,7 @@ class KBService:
         entry.add_link(target=target_id, relation=relation, note=note, kb=tkb)
         entry.touch_updated_at()
         self._doc_mgr.save_entry(entry, source_kb, kb_config)
-        return {"resolved": resolved}
+        return {"resolved": resolved, "created": True}
 
     def add_links(
         self, kb_name: str, links: list[dict[str, Any]], *, dry_run: bool = False
@@ -1235,8 +1243,10 @@ class KBService:
         """Add many links whose sources are in ``kb_name``, one save per source.
 
         Each spec is ``{source, target, relation?, target_kb?, note?}``. A link
-        already recorded on its source is skipped, as :meth:`add_link` treats
-        it. Targets are not required to exist: a bulk link set is often loaded
+        already recorded on its source is skipped, keyed on
+        ``(target, kb, relation)``, as :meth:`add_link` treats it -- a second,
+        different relation between the same pair is created, not skipped.
+        Targets are not required to exist: a bulk link set is often loaded
         before, or alongside, the entries it points at.
 
         Each source is loaded once, gets all of its new links, and is saved
@@ -1260,21 +1270,26 @@ class KBService:
             source_id = spec.get("source")
             target_id = spec.get("target")
             tkb = spec.get("target_kb") or kb_name
+            relation = spec.get("relation") or "related_to"
             if source_id not in loaded:
                 loaded[source_id] = repo.load(source_id)
             entry = loaded[source_id]
             if entry is None:
                 results[i] = {"status": "failed", "error": f"source entry not found: {source_id}"}
                 continue
+            # Duplicate key matches add_link's: (target, kb, relation) (#396).
+            # A different relation between the same pair is a new link.
             if any(
-                existing.target == target_id and (existing.kb or kb_name) == tkb
+                existing.target == target_id
+                and (existing.kb or kb_name) == tkb
+                and existing.relation == relation
                 for existing in entry.links
             ):
                 results[i] = {"status": "skipped"}
                 continue
             entry.add_link(
                 target=target_id,
-                relation=spec.get("relation") or "related_to",
+                relation=relation,
                 note=spec.get("note", ""),
                 kb=tkb,
             )

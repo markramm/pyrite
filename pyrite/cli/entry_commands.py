@@ -517,21 +517,33 @@ def register_entry_commands(app: typer.Typer) -> None:
         bidirectional: bool = typer.Option(False, "--bidi", help="Create link in both directions"),
     ):
         """Create a link between two entries."""
+        from rich.markup import escape
+
+        def _report(created: bool, src: str, rel: str, tgt: str, kb: str) -> None:
+            # `--[implements]-->` puts the relation in literal brackets, which
+            # Rich reads as a style tag (e.g. `[implements]`) and swallows --
+            # escaping just the relation is not enough, since the brackets
+            # themselves are the markup delimiters; escape the whole dynamic
+            # segment so the relation survives in the confirmation (#396).
+            verb = "[green]Linked:[/green]" if created else "[yellow]Already linked:[/yellow]"
+            arrow = escape(f"{src} --[{rel}]--> {tgt} (in {kb})")
+            console.print(f"{verb} {arrow}")
+
         with cli_context() as (config, db, svc):
             try:
-                svc.add_link(source, kb_name, target, relation, target_kb=target_kb, note=note)
-                tkb = target_kb or kb_name
-                console.print(
-                    f"[green]Linked:[/green] {source} --[{relation}]--> {target} (in {tkb})"
+                result = svc.add_link(
+                    source, kb_name, target, relation, target_kb=target_kb, note=note
                 )
+                tkb = target_kb or kb_name
+                _report(result["created"], source, relation, target, tkb)
 
                 if bidirectional:
                     from ..schema import get_inverse_relation
 
                     inverse = get_inverse_relation(relation)
-                    svc.add_link(target, tkb, source, inverse, target_kb=kb_name, note=note)
-                    console.print(
-                        f"[green]Linked:[/green] {target} --[{inverse}]--> {source} (in {kb_name})"
+                    inv_result = svc.add_link(
+                        target, tkb, source, inverse, target_kb=kb_name, note=note
                     )
+                    _report(inv_result["created"], target, inverse, source, kb_name)
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), "rich", "ERROR")
