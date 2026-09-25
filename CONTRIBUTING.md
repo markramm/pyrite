@@ -303,10 +303,13 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
 - A test that fails without the fix. Reviews run `scripts/verify-red.sh
   <test> <impl files>` to check exactly that; you can run it too. Commit
   first: it refuses files with uncommitted changes. It rewrites the named
-  files in place and puts back exactly the bytes they had, however the run
-  ends (a verdict, a refusal, Ctrl-C); it never touches the index. An edit
-  you make to one of those files *during* the run is left as you made it and
-  named on stderr, with a non-zero exit.
+  files in place and puts back exactly the bytes they had after a verdict, a
+  refusal, a timed-out or killed test run, Ctrl-C (SIGINT), SIGTERM, a closed
+  terminal (SIGHUP) or Ctrl-\ (SIGQUIT); it never touches the index. SIGKILL
+  (the OOM killer) cannot be caught: the files keep the merge-base code, and
+  the next run names them and how to put them back. An edit you make to one
+  of those files *during* the run is left as you made it and named on
+  stderr, with a non-zero exit.
 
   CI does it for you as well: the **`verify-red`** job reverts the pull
   request's changes under `pyrite/` and `extensions/*/src/` to the merge base,

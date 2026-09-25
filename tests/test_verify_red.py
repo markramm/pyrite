@@ -429,3 +429,12 @@ def test_a_pytest_internal_error_is_no_claim(repo: Path) -> None:
     result = run(repo, "test_impl.py::test_add", "impl.py")
     assert result.returncode == 2, (result.stdout, result.stderr)
     assert "no claim" in result.stderr
+
+
+def test_contributing_names_what_the_restore_covers_and_what_it_cannot() -> None:
+    # "however the run ends" over-promised: SIGKILL cannot be caught.
+    text = " ".join((SCRIPT.parents[1] / "CONTRIBUTING.md").read_text().split())
+    para = text[text.index("Reviews run `scripts/verify-red.sh") :][:1200]
+    assert "however the run ends" not in para
+    for covered in ("SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGKILL"):
+        assert covered in para, covered
