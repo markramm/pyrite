@@ -511,6 +511,12 @@ types:
         assert "proposed" not in dry_result
         assert "read-only" in dry_result["error"].lower()
 
+    @pytest.mark.control(
+        reason="a deliberate negative control: the happy-path dry-run contract "
+        "(returns proposed, writes nothing) is unchanged by #427's fix and "
+        "passes on both sides of it -- unlike the three refusal-parity tests "
+        "above, it isn't evidence the fix did anything."
+    )
     def test_valid_dry_run_still_returns_proposed_and_writes_nothing(self, setup):
         """A dry run that would succeed for real still returns dry_run/proposed
         and writes nothing -- the existing happy-path contract, unchanged."""
