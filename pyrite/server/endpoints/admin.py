@@ -69,25 +69,20 @@ def sync_index(
     if wait:
         result = index_mgr.sync_incremental()
 
-        # Re-render site cache if entries changed
+        # Re-render site cache if entries changed. `wait=true` means the
+        # caller is already blocked on this request, so the render happens
+        # synchronously here rather than being handed to the loop captured
+        # at startup (#326's `bind_loop`/`_loop`) -- that hand-off exists for
+        # code with no way to make the caller wait; this code has exactly
+        # that. `index_mgr.config` (not `request.app.state.config`, which
+        # nothing in the server ever sets) is the same config already used
+        # to build `index_mgr` via `get_index_mgr`.
         if result.get("added", 0) + result.get("updated", 0) + result.get("removed", 0) > 0:
-            try:
-                import asyncio
+            from ...services.site_cache import SiteCacheService
 
-                from ...services.site_cache import SiteCacheService
-
-                cache_svc = SiteCacheService(
-                    config=request.app.state.config
-                    if hasattr(request.app.state, "config")
-                    else None,
-                    db=index_mgr.db,
-                )
-                if cache_svc.config:
-                    loop = asyncio.get_running_loop()
-                    loop.create_task(asyncio.to_thread(cache_svc.render_all))
-                    logger.info("Site cache render started in background")
-            except Exception:
-                logger.warning("Site cache render failed", exc_info=True)
+            cache_svc = SiteCacheService(config=index_mgr.config, db=index_mgr.db)
+            cache_svc.render_all()
+            logger.info("Site cache re-rendered after sync")
 
         # ADR-0035: a write enqueues instead of embedding, and this is one of
         # the two server paths that pay that debt back (the other is the
