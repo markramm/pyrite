@@ -13,6 +13,10 @@ asserts that `[Unreleased]` stays empty.
 
 ## [Unreleased]
 
+## [0.25.4] - 2026-09-25
+
+Security release. **Upgrade if you run Pyrite with auth enabled, or if you open Pyrite in directories you did not create** (cloned or downloaded trees). With auth enabled, the instance now stays closed to strangers until its operator decides: sign-up waits for an admin created with `pyrite-admin user create`, self-registered users read only the KBs you open to them, and login and registration are rate-limited. A `.pyrite/config.yaml` found in a working tree is no longer trusted with anything beyond that tree's own KBs and index. See the operator actions below. This release also carries the write-path fixes the investigation workflow depends on, entry version history for server writes, search and site-cache robustness, and three contributor fixes.
+
 ## [0.25.3] - 2026-09-25
 
 Security patch. **Upgrade if your server is reachable by anyone other than you**, and especially if anonymous visitors can read (`anonymous_tier: read`/`write`, or a KB with `default_role: read`). Search queries now have a maximum length of 1,000 characters. A longer query is refused with `QUERY_TOO_LONG` on REST (`422`), MCP and the CLI; it is never truncated. Searches that Pyrite builds from stored content (AI chat retrieval, link suggestions, query expansion) are trimmed to fit instead. It also includes three bug fixes: bulk create no longer overwrites an existing entry, a type declared only in `kb.yaml` keeps its fields on create, and `POST /api/index/sync?wait=true` re-renders the site cache.
