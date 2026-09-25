@@ -129,9 +129,8 @@ def _same_entry_history(
 
     - A path is reused. An entry is deleted and a different one is later
       created at the same path; the log of the path runs through both. The
-      history stops at a commit that added the file (status "A"), unless the
-      next older version that exists holds this same entry (a restore of a
-      deleted entry); delete commits are not versions.
+      history stops at the newest commit that added the file (status "A"):
+      what is older belongs to the path's previous life.
     - A rename is inferred. `git log --follow` crosses a rename whenever git
       finds the two files similar enough, and entries share frontmatter
       boilerplate, so a deleted entry and an unrelated added one can look
@@ -141,40 +140,17 @@ def _same_entry_history(
     """
     from ..models.core_types import entry_id_from_markdown
 
-    def _status(log_entry: dict) -> str:
-        return str(log_entry.get("status", ""))
-
-    def _holds_this_entry(log_entry: dict, path: str) -> bool:
-        # The derived id (explicit id: if the file states one, else the
-        # type's title-derived one), the same rule as the rename check.
-        text = git_service.read_file_at(kb_path, log_entry["hash"], path)
-        return text is not None and entry_id_from_markdown(text) == entry_id
-
-    history: list[dict] = []
     newer_path = current_rel_path
-    i = 0
-    while i < len(log_entries):
-        log_entry = log_entries[i]
+    for i, log_entry in enumerate(log_entries):
         path = log_entry.get("file_path", newer_path)
-        if path != newer_path and not _holds_this_entry(log_entry, path):
-            return history
-        history.append(log_entry)
+        if path != newer_path:
+            text = git_service.read_file_at(kb_path, log_entry["hash"], path)
+            if text is None or entry_id_from_markdown(text) != entry_id:
+                return log_entries[:i]
+        if str(log_entry.get("status", "")).startswith("A"):
+            return log_entries[: i + 1]
         newer_path = path
-        i += 1
-        if _status(log_entry).startswith("A"):
-            # An add ends the path's previous life -- unless that life was
-            # this same entry (a delete later reverted or checked out
-            # again): then the next older version that exists continues it.
-            # The delete commits in between are skipped -- the file does not
-            # exist there, so they are not readable versions.
-            while i < len(log_entries) and _status(log_entries[i]).startswith("D"):
-                i += 1
-            if i >= len(log_entries):
-                return history
-            older = log_entries[i]
-            if not _holds_this_entry(older, older.get("file_path", newer_path)):
-                return history
-    return history
+    return log_entries
 
 
 class IndexManager:
