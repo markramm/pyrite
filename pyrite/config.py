@@ -11,6 +11,7 @@ Configuration is loaded from:
 import errno
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -24,6 +25,10 @@ from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+
+class ConfigWouldEmptyRegistryError(ConfigError):
+    """save_config refused to replace a config listing KBs with one listing none."""
 
 
 class KBType(StrEnum):
@@ -1030,12 +1035,52 @@ def _repair_ephemeral_default_role(kb: KBConfig) -> None:
         kb.default_role = "none"
 
 
-def save_config(config: PyriteConfig) -> None:
-    """Save configuration to config.yaml."""
+def _kb_names_on_disk(config_file: Path) -> list[str]:
+    """KB names the config file currently lists ([] if absent or unreadable)."""
+    if not config_file.is_file():
+        return []
+    try:
+        data = load_yaml_file(config_file) or {}
+    except Exception:
+        return []
+    kbs = data.get("knowledge_bases") or [] if isinstance(data, dict) else []
+    return [str(kb.get("name", "")) for kb in kbs if isinstance(kb, dict)]
+
+
+def save_config(
+    config: PyriteConfig,
+    *,
+    allow_empty: bool = False,
+    removed: Iterable[str] = (),
+) -> None:
+    """Save configuration to config.yaml.
+
+    Refuses to replace a file that lists KBs with a config that lists none
+    (#377: a test-shaped write emptied a ~50-KB registry and nothing said so
+    for nine hours). A caller that just removed KBs passes their names as
+    ``removed``; the write goes through when those are all the file lists.
+    ``allow_empty=True`` overrides outright.
+    """
     ensure_config_dir()
 
     config_file = current_config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
+    real_file = config_file.resolve()
+
+    if not config.knowledge_bases and not allow_empty:
+        on_disk = _kb_names_on_disk(real_file)
+        kept = [name for name in on_disk if name not in set(removed)]
+        if kept:
+            raise ConfigWouldEmptyRegistryError(
+                f"Refusing to overwrite {real_file}: it lists {len(on_disk)} knowledge "
+                f"base(s) ({', '.join(kept[:5])}{', ...' if len(kept) > 5 else ''}) and "
+                "the config being saved lists none. If emptying the registry is "
+                "intended, call save_config(config, allow_empty=True), or pass the "
+                "names just removed as removed=[...]."
+            )
+
+    if real_file != config_file.absolute():
+        logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
     dump_yaml_file(config.to_dict(), config_file)
 
 

@@ -273,7 +273,7 @@ class RepoService:
             if local_path.exists():
                 shutil.rmtree(local_path)
 
-        save_config(self.config)
+        save_config(self.config, removed=[kb_row["name"] for kb_row in kb_rows])
 
         return {
             "success": True,

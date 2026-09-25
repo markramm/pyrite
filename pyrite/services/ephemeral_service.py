@@ -178,7 +178,7 @@ class EphemeralKBService:
         if not kb or not kb.ephemeral:
             return False
         self._remove(kb)
-        save_config(self.config)
+        save_config(self.config, removed=[name])
         return True
 
     def gc_ephemeral_kbs(self) -> list[str]:
@@ -194,6 +194,6 @@ class EphemeralKBService:
                 removed.append(kb.name)
 
         if removed:
-            save_config(self.config)
+            save_config(self.config, removed=removed)
 
         return removed

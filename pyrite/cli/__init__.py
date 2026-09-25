@@ -551,7 +551,7 @@ def repo_remove(
         config.remove_kb(kb.name)
 
     config.remove_repo(name)
-    save_config(config)
+    save_config(config, removed=[kb.name for kb in kbs])
 
     console.print(f"[green]Removed:[/green] {name}")
     if kbs:
