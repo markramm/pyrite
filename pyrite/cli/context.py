@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 
 def _init_base() -> tuple[PyriteConfig, PyriteDB, KBService]:
     """Shared construction for all CLI context managers."""
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    db.merge_registered_kbs(config)
+    config, db = get_config_and_db()
     svc = KBService(config, db)
     return config, db, svc
 
@@ -50,27 +48,33 @@ def cli_registry_context() -> Generator[
 @contextmanager
 def cli_db_context() -> Generator[tuple[PyriteConfig, PyriteDB], None, None]:
     """Provide config and db for commands that only need db access."""
-    config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    db.merge_registered_kbs(config)
+    config, db = get_config_and_db()
     try:
         yield config, db
     finally:
         db.close()
 
 
-def get_config_and_db() -> tuple[PyriteConfig, PyriteDB]:
-    """Get config and db without a context manager.
+def get_config_and_db(config: PyriteConfig | None = None) -> tuple[PyriteConfig, PyriteDB]:
+    """Get config and db without a context manager, merging DB-registered KBs.
 
-    Merges DB-registered KBs (added via ``pyrite kb add``) into the config so
-    that commands like ``index sync`` see them — matching ``_init_base()``.
-    Without this merge, KBs that live only in the DB (not the YAML config) are
-    invisible and indexing them produces 0 entries.
-
-    Note: callers are responsible for calling db.close(). Prefer cli_db_context()
-    for new code.
+    Pass an already-loaded config when a command owns config loading; otherwise
+    this helper loads it. Callers are responsible for calling db.close().
     """
-    config = load_config()
+    config = config or load_config()
     db = PyriteDB(config.settings.index_path)
     db.merge_registered_kbs(config)
     return config, db
+
+
+def get_config_with_registered_kbs(config: PyriteConfig | None = None) -> PyriteConfig:
+    """Load or accept a config and merge KBs registered by ``pyrite kb add``.
+
+    Commands that only need KB lookup should use this helper rather than
+    opening their own database and duplicating the registry merge.
+    """
+    config, db = get_config_and_db(config)
+    try:
+        return config
+    finally:
+        db.close()

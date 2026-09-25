@@ -1,0 +1,1 @@
+- **CLI commands now include knowledge bases added with `pyrite kb add` (#363).** Search, validation, and schema commands can resolve database-registered KBs even when they are absent from config.yaml.

@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..utils.errors import cli_error
-from .context import cli_context
+from .context import cli_context, get_config_with_registered_kbs
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -470,7 +470,7 @@ def schema_validate(
     """
     from ..config import load_config
 
-    config = load_config()
+    config = get_config_with_registered_kbs(load_config())
     schema = None
 
     # Resolve files to validate
