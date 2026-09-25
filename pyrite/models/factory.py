@@ -38,15 +38,52 @@ def build_entry(
     resolved_cls = get_entry_class(entry_type)
 
     if resolved_cls is GenericEntry:
-        return GenericEntry(
-            id=entry_id,
-            title=title,
-            body=body,
-            _entry_type=entry_type,
-            tags=kwargs.get("tags", []),
-            summary=kwargs.get("summary", ""),
-            metadata=kwargs.get("metadata", {}),
-        )
+        # A kb.yaml-only type has no dataclass fields of its own, so every
+        # kwarg beyond `tags`/`summary`/`metadata` used to be silently
+        # dropped here -- `pyrite create -t finding -f severity=high`,
+        # MCP `kb_create`, and bulk/import all lost the field, and because
+        # it never reached `to_frontmatter()` the schema validator never
+        # saw it either, so an enum violation on a custom type was not
+        # refused (#386). Route through `GenericEntry.from_frontmatter`,
+        # the same path `entry_from_frontmatter` uses, so a bare kwarg
+        # lands in `metadata` exactly like an unknown frontmatter key does
+        # on load -- one rule for "what happens to a field this type
+        # doesn't know about", not two.
+        #
+        # `id`/`title`/`type` come from this function's own parameters, not
+        # from kwargs: a stray `type=` (e.g. an MCP call sending both
+        # `entry_type` and `type`) must not override the type the caller
+        # actually asked to validate and write under (cold read, #394).
+        # `kb_name`/`_entry_type`/`extra_frontmatter`/`body` are Entry
+        # bookkeeping, never frontmatter content (`_BASE_CONSUMED_KEYS`
+        # minus what a real file's frontmatter could ever contain); a kwarg
+        # using one of those names must not leak into the written file
+        # either.
+        _reserved = {"id", "title", "type", "body", "kb_name", "_entry_type", "extra_frontmatter"}
+
+        # An explicit `metadata=` kwarg is caller data assembled from extra
+        # fields, not a file's own nested `metadata:` block -- merge its
+        # contents in at the same top level as every other kwarg so
+        # `from_frontmatter` treats all of it as "unknown keys to promote",
+        # never as `explicit_metadata` (which it would mark
+        # `_nested_metadata_keys` and write back nested, reviving the #149
+        # layout and hiding the value from schema validation).
+        explicit_metadata = kwargs.get("metadata")
+        fm: dict = {
+            "id": entry_id,
+            "title": title,
+            "type": entry_type,
+        }
+        if isinstance(explicit_metadata, dict):
+            # The same reserved names are refused inside `metadata=`: a
+            # `metadata={"type": ...}` retyped the entry past schema
+            # validation (delta cold read, #394).
+            fm.update({k: v for k, v in explicit_metadata.items() if k not in _reserved})
+        for k, v in kwargs.items():
+            if k in _reserved or k == "metadata":
+                continue
+            fm[k] = v
+        return GenericEntry.from_frontmatter(fm, body)
 
     # Build frontmatter dict for from_frontmatter().
     # Known dataclass fields go as top-level keys; unknown kwargs are
