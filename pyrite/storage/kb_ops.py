@@ -157,14 +157,29 @@ class KBOpsMixin:
         db_kbs = []
         orphans = []
         for name, path, kb_type, description, default_role in rows:
-            if default_role is None and is_ephemeral_kb_path(root, path):
-                logger.warning(
-                    "Ephemeral KB %r has no default_role in the registry; "
-                    "loading it private ('none')",
-                    name,
-                )
-                default_role = "none"
-                orphans.append(name)
+            if default_role is None:
+                try:
+                    orphan = is_ephemeral_kb_path(root, path)
+                except (OSError, RuntimeError, ValueError):
+                    # A path that cannot be resolved (an unknown ~user, a
+                    # symlink loop) must not stop the load, and fails closed:
+                    # private for this process, nothing written back.
+                    logger.warning(
+                        "Could not resolve the path of KB %r (%s); loading it private ('none')",
+                        name,
+                        path,
+                        exc_info=True,
+                    )
+                    default_role = "none"
+                    orphan = False
+                if orphan:
+                    logger.warning(
+                        "Ephemeral KB %r has no default_role in the registry; "
+                        "loading it private ('none')",
+                        name,
+                    )
+                    default_role = "none"
+                    orphans.append(name)
             db_kbs.append(
                 {
                     "name": name,

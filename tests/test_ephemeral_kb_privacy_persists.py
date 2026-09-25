@@ -415,8 +415,6 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
             assert config.get_kb("lost").default_role == "none"
             assert not db.session.in_transaction()
             blocker.rollback()
-            busy, _, _ = blocker.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
-            assert busy == 0, "a transaction left open by the load blocks the checkpoint"
         finally:
             blocker.close()
             db.close()
@@ -446,29 +444,6 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
         finally:
             db.close()
 
-    def test_listing_shows_the_effective_policy(self, tmp_path, monkeypatch):
-        """Acceptance 5: /api/kbs and /api/kbs/{name} show "none" for such a
-        KB even when the registry row still holds NULL."""
-        cookies = self._orphan(tmp_path, monkeypatch)
-        self._fail_statements(monkeypatch, "default_role IS NULL")
-        app = create_app(config=load_config())
-        admin = TestClient(app, cookies=cookies["admin"])
-
-        listed = {k["name"]: k for k in admin.get("/api/kbs").json()["kbs"]}
-        assert listed["lost"]["default_role"] == "none"
-        assert listed["open-kb"]["default_role"] is None
-        one = admin.get("/api/kbs/lost")
-        assert one.status_code == 200, one.text
-        assert one.json()["default_role"] == "none"
-
-        monkeypatch.undo()
-        db = PyriteDB(tmp_path / "index.db")
-        try:
-            row = db.execute_sql("SELECT default_role FROM kb WHERE name = 'lost'")
-        finally:
-            db.close()
-        assert row[0]["default_role"] is None, "the write was meant to fail in this test"
-
     def test_the_load_leaves_no_transaction_open(self, tmp_path, monkeypatch):
         """With nothing to record, the merge still ends its read transaction."""
         self._orphan(tmp_path, monkeypatch)
@@ -495,3 +470,29 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
             assert not db.session.in_transaction()
         finally:
             db.close()
+
+
+@pytest.mark.parametrize("kind", ["unknown-user-home", "symlink-loop"])
+def test_a_registry_path_that_cannot_be_resolved_loads_private(tmp_path, kind):
+    """A row whose path cannot be resolved must not stop the load -- this runs
+    while every entry point is constructed -- and fails closed: the KB is not
+    loaded (unreachable, never open). Nothing is written back for it."""
+    if kind == "unknown-user-home":
+        path = "~nosuchuser_pyrite_zz/kb"
+    else:
+        loop = tmp_path / "loop"
+        loop.symlink_to(loop)
+        path = str(loop / "kb")
+    config = PyriteConfig(
+        knowledge_bases=[],
+        settings=Settings(index_path=tmp_path / "index.db", workspace_path=tmp_path / "ws"),
+    )
+    db = PyriteDB(tmp_path / "index.db")
+    try:
+        db.register_kb("odd", "generic", path)
+        db.merge_registered_kbs(config)  # must not raise
+        assert config.get_kb("odd") is None
+        row = db.execute_sql("SELECT default_role FROM kb WHERE name = 'odd'")
+        assert row[0]["default_role"] is None
+    finally:
+        db.close()

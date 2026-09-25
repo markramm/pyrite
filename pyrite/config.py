@@ -473,13 +473,27 @@ class PyriteConfig:
             path = kb_data.get("path", "")
             if not path:
                 continue
-            self._db_kb_cache[name] = KBConfig(
-                name=name,
-                path=Path(path),
-                kb_type=kb_data.get("kb_type", "generic"),
-                description=kb_data.get("description", ""),
-                default_role=kb_data.get("default_role"),
-            )
+            try:
+                kb = KBConfig(
+                    name=name,
+                    path=Path(path),
+                    kb_type=kb_data.get("kb_type", "generic"),
+                    description=kb_data.get("description", ""),
+                    default_role=kb_data.get("default_role"),
+                )
+            except (OSError, RuntimeError, ValueError):
+                # A registry path that cannot be resolved (an unknown ~user, a
+                # symlink loop) must not stop the load -- this runs while every
+                # entry point is constructed. The KB is left out: unreachable,
+                # never open.
+                logger.warning(
+                    "Registry KB %r has a path that cannot be resolved (%s); not loading it",
+                    name,
+                    path,
+                    exc_info=True,
+                )
+                continue
+            self._db_kb_cache[name] = kb
             added += 1
         return added
 
