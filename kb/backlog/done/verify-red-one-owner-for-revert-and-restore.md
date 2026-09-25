@@ -7,7 +7,7 @@ tags:
 - refactor
 importance: 5
 kind: tech_debt
-status: in_progress
+status: done
 priority: medium
 effort: M
 rank: 0
@@ -32,3 +32,6 @@ Two mechanisms own one invariant: `scripts/verify-red.sh` reverts the implementa
 **Touches:** `scripts/verify_red_ci.py`, `scripts/verify-red.sh`, `tests/test_verify_red_ci.py`, `tests/test_verify_red.py`, CONTRIBUTING's verify-red paragraph. **Model:** opus (design). **Heavy:** no. **Cold read:** yes.
 **Out of scope:** the CI workflow job shape (stays advisory, `contents: read`), the review.md policy.
 **Sequence:** after the lifespan quality theme (retro 9).
+
+## Done 2026-09-24
+The recommended design: `scripts/verify_red_ci.py` owns the revert and the restore (`plan` checks each file is exactly as committed via `git hash-object --path`, `reverted` writes the merge-base content from `git cat-file --filters` and puts the original bytes back in one `finally`, SIGINT/SIGTERM held during the restore); `scripts/verify-red.sh` `exec`s its `--test` mode. No `git checkout`, `git rm` or `git status` remains, so the index is never written. Every #368 item is fixed; each property and guard is pinned in `tests/test_verify_red_ci.py` / `tests/test_verify_red.py`.

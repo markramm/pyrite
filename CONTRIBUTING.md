@@ -301,13 +301,19 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   project (an editor's `.gitignore` additions, say) is the most common thing a
   review asks to remove.
 - A test that fails without the fix. Reviews run `scripts/verify-red.sh
-  <test> <impl files>` to check exactly that; you can run it too.
+  <test> <impl files>` to check exactly that; you can run it too. Commit
+  first: it refuses files with uncommitted changes. It rewrites the named
+  files in place and puts back exactly the bytes they had, however the run
+  ends (a verdict, a refusal, Ctrl-C); it never touches the index. An edit
+  you make to one of those files *during* the run is left as you made it and
+  named on stderr, with a non-zero exit.
 
   CI does it for you as well: the **`verify-red`** job reverts the pull
   request's changes under `pyrite/` and `extensions/*/src/` to the merge base,
   runs each changed test file, and writes a table to the run's summary page.
   *red without the fix* is what a review wants to see. *red by
-  import/collection error* is weaker — the test needs your new code, which is
+  import/collection error* is weaker — the test imports or patches
+  (`monkeypatch`, `unittest.mock.patch`) a name your change adds, which is
   not the same as checking what it does. *passes without the fix* leaves a
   warning on the test: either it does not exercise the change, or it is a
   deliberate "this still works" guard, which is fine — say so in the PR.

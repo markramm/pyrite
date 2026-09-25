@@ -580,7 +580,7 @@ jobs:
   #
   # The install is editable from the PR tree and the revert happens in that
   # same tree, so `import pyrite` and every extension package resolve to the
-  # REVERTED sources (#189 -- verify-red.sh refuses if they do not).
+  # REVERTED sources (#189 -- verify_red_ci.py refuses if they do not).
   # ===========================================================================
   verify-red:
     needs: changes

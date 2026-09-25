@@ -4,8 +4,15 @@ The review lane proves by hand that a PR's new tests fail without its fix
 (`scripts/verify-red.sh`, review.md). `scripts/verify_red_ci.py` does it for
 every pull request: it splits the PR's changed files into tests and
 implementation, runs each changed test file with the implementation reverted
-to the merge base (through `verify-red.sh`, so the revert/restore, stale-.pyc
-and wrong-tree guards are the same ones), and classifies each test.
+to the merge base, and classifies each test. It is also the one owner of the
+revert and the restore (retro 10, #368): `verify-red.sh` is a wrapper over its
+`--test` mode, so the stale-.pyc and wrong-tree guards are the same ones.
+
+The properties the restore promises -- whatever ends the run, the files hold
+their committed bytes and the index is untouched; an edit is never overwritten;
+a restore that cannot complete is named file by file; checkout conversion and
+non-UTF-8 files hold -- are pinned below on real repositories with the real
+script.
 
 It is a SIGNAL, not a gate: "passes without the fix" is a warning annotation,
 and the job fails only on its own infrastructure errors. The last class in this
@@ -210,6 +217,7 @@ def test_a_missing_report_is_an_infrastructure_error(vr, tmp_path: Path) -> None
 
 MONKEYPATCH_TESTS = """\
 import json
+from unittest import mock
 
 import pytest
 
@@ -247,6 +255,51 @@ def test_class_attribute_read():
 
 def test_object_attribute_read():
     None.title
+
+
+def test_mock_patch_string_target():
+    with mock.patch("json.nope_helper", 1):
+        pass
+
+
+@mock.patch("json.nope_decorated")
+def test_mock_patch_decorator(m):
+    pass
+
+
+def test_mock_patch_object_module():
+    with mock.patch.object(json, "nope_helper", 1):
+        pass
+
+
+def test_mock_patch_object_class():
+    with mock.patch.object(t_mp.C, "helper", 1):
+        pass
+
+
+def test_mock_patch_object_instance():
+    with mock.patch.object(t_mp.C(), "helper", 1):
+        pass
+
+
+def test_delattr_module(monkeypatch):
+    monkeypatch.delattr(json, "nope_helper")
+
+
+def test_delattr_class(monkeypatch):
+    monkeypatch.delattr(t_mp.C, "nope_helper")
+
+
+def test_delattr_string_target(monkeypatch):
+    monkeypatch.delattr("json.nope_helper")
+
+
+def test_assertion_quoting_an_import_error():
+    assert "ImportError: cannot import name 'x'" == "fixed"
+
+
+def test_assertion_message_with_an_attribute_error_line():
+    assert False, "context\\nAttributeError: module 'json' has no attribute 'x'"
 """
 
 
@@ -289,6 +342,19 @@ def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
         ("test_in_setup", True),  # the same, raised in a fixture: an <error>
         ("test_class_attribute_read", False),  # type object 'C' has no attribute: behaviour
         ("test_object_attribute_read", False),  # 'NoneType' object has no attribute
+        # unittest.mock: "<module ...> / <class ...> does not have the attribute"
+        ("test_mock_patch_string_target", True),
+        ("test_mock_patch_decorator", True),
+        ("test_mock_patch_object_module", True),
+        ("test_mock_patch_object_class", True),
+        ("test_mock_patch_object_instance", False),  # an instance: behaviour, as above
+        # monkeypatch.delattr of a name the fix adds: "AttributeError: <name>"
+        ("test_delattr_module", True),
+        ("test_delattr_class", True),
+        ("test_delattr_string_target", True),
+        # the exception is AssertionError: text quoted in its message is not the error
+        ("test_assertion_quoting_an_import_error", False),
+        ("test_assertion_message_with_an_attribute_error_line", False),
     ],
 )
 def test_attribute_errors_as_the_junit_report_carries_them(
@@ -453,18 +519,19 @@ def test_an_edit_made_during_the_run_survives_the_refusal(repo: Path, tmp_path: 
     assert "# edited during the run" in (repo / "pyrite" / "__init__.py").read_text()
 
 
-def _failing_restores(tmp_path: Path, times: int) -> tuple[dict[str, str], Path]:
-    """A `git` on PATH whose first `times` `checkout -q HEAD --` calls fail."""
-    bin_dir, count = tmp_path / "bin", tmp_path / "failed-restores"
+def _git_recording_checkouts(tmp_path: Path) -> tuple[dict[str, str], Path]:
+    """A `git` on PATH that fails, and counts, every `checkout`."""
+    bin_dir, count = tmp_path / "bin", tmp_path / "checkouts"
     bin_dir.mkdir()
     count.write_text("0")
     wrapper = bin_dir / "git"
     wrapper.write_text(
         "#!/bin/sh\n"
-        'if [ "$1 $2 $3" = "checkout -q HEAD" ]; then\n'
-        f'  n=$(cat "{count}")\n'
-        f'  if [ "$n" -lt {times} ]; then echo $((n + 1)) > "{count}"; exit 1; fi\n'
-        "fi\n"
+        'for a in "$@"; do\n'
+        '  if [ "$a" = checkout ]; then\n'
+        f'    echo $(( $(cat "{count}") + 1 )) > "{count}"; exit 1\n'
+        "  fi\n"
+        "done\n"
         f'exec "{shutil.which("git")}" "$@"\n'
     )
     wrapper.chmod(0o755)
@@ -477,30 +544,307 @@ def _commit_fix(repo: Path) -> None:
     git(repo, "commit", "-q", "-am", "fix: add adds")
 
 
-def test_a_restore_that_fails_silently_is_put_right(repo: Path, tmp_path: Path) -> None:
-    # verify-red.sh's EXIT trap restores with `git checkout ... || true`: a
-    # transient failure (an index.lock held by an IDE) is silent and the script
-    # still exits 0/1. The driver must not trust that; it checks the content.
+def _index(repo: Path) -> bytes:
+    return (repo / ".git" / "index").read_bytes()
+
+
+def test_git_checkout_is_never_what_restores(repo: Path, tmp_path: Path) -> None:
+    # Replaces the two tests that pinned the old design, where verify-red.sh's
+    # EXIT trap restored with `git checkout ... || true` and the driver checked
+    # its work with a second, content-based restore (#357, three review rounds).
+    # One owner now writes the files itself, so a `git checkout` that fails
+    # (an index.lock held by an IDE) cannot touch the run at all.
     _commit_fix(repo)
-    env, count = _failing_restores(tmp_path, 1)
-    result, _ = run_ci(repo, tmp_path, env_extra=env)
-    assert count.read_text().strip() == "1", "no restore failed; the test proves nothing"
+    env, count = _git_recording_checkouts(tmp_path)
+    result, summary = run_ci(repo, tmp_path, env_extra=env)
+    assert count.read_text().strip() == "0", "the run used git checkout"
     assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "red without the fix" in summary
     assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
     assert git(repo, "status", "--porcelain") == ""
 
 
-def test_a_restore_the_driver_cannot_make_is_reported(repo: Path, tmp_path: Path) -> None:
-    # The trap's restore and the driver's own both fail: say so, instead of running
-    # the next file against the merge-base code; the finally's retry puts it right.
+@pytest.mark.parametrize("flavour", ["lf", "crlf", "latin-1"])
+def test_the_index_is_never_written(vr, repo: Path, tmp_path: Path, flavour: str) -> None:
+    # Property 1: the index after the run is the index before it, byte for byte --
+    # so an interrupt can never strand .git/index.lock or a staged merge-base file.
+    # Property 4: the verdict and the restore hold under checkout conversion and
+    # for a file that is not UTF-8; the file comes back byte for byte.
+    impl = repo / "pyrite" / "__init__.py"
+    if flavour == "crlf":
+        (repo / ".gitattributes").write_text("*.py text eol=crlf\n")
+    impl.write_bytes(_encode(BROKEN, flavour))
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    fixed = _encode(FIXED, flavour)
+    impl.write_bytes(fixed)
+    (repo / "tests" / "test_add.py").write_text(PR_TESTS)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+    assert git(repo, "status", "--porcelain") == ""
+    before = _index(repo)
+
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert vr.RED in row(summary, "tests/test_add.py::test_real")
+    assert _index(repo) == before
+    assert not (repo / ".git" / "index.lock").exists()
+    assert impl.read_bytes() == fixed
+    assert git(repo, "status", "--porcelain") == ""
+
+
+def test_an_index_only_revert_is_refused_and_left_alone(repo: Path, tmp_path: Path) -> None:
+    # #368 (5): the working file is at HEAD but the index holds the merge base.
+    # That is uncommitted state: refused before anything runs, and left as found.
     _commit_fix(repo)
-    env, count = _failing_restores(tmp_path, 2)
-    result, _ = run_ci(repo, tmp_path, env_extra=env)
-    assert count.read_text().strip() == "2", "fewer restores failed than the test needs"
+    git(repo, "checkout", "-q", "dev", "--", "pyrite/__init__.py")
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    staged = git(repo, "ls-files", "-s", "pyrite/__init__.py")
+    before = _index(repo)
+    result, _ = run_ci(repo, tmp_path)
     assert result.returncode == 2, (result.stdout, result.stderr)
-    assert "could not restore pyrite/__init__.py" in result.stderr
+    assert "uncommitted" in result.stderr
+    assert _index(repo) == before
+    assert git(repo, "ls-files", "-s", "pyrite/__init__.py") == staged
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+
+
+EDITS_TO_OTHER_FILES = OLD_TESTS + (
+    "\n\ndef test_real():\n"
+    "    from pathlib import Path\n\n"
+    "    if add(2, 2) != 4:  # the reverted run\n"
+    "        for f in ('pyrite/__init__.py', 'pyrite/other.py', 'README.md'):\n"
+    "            Path(f).write_text(Path(f).read_text() + '# edited during the run\\n')\n"
+    "    assert add(2, 2) == 4\n"
+)
+
+
+def test_edits_made_before_or_during_the_run_are_never_overwritten(
+    repo: Path, tmp_path: Path
+) -> None:
+    # Property 2. Files the run did not revert (an unchanged implementation file,
+    # a README with an uncommitted edit) keep every edit; a reverted file edited
+    # during the run is left as the editor left it and reported, not "restored".
+    (repo / "pyrite" / "other.py").write_text("X = 1\n")
+    (repo / "README.md").write_text("readme\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(EDITS_TO_OTHER_FILES)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+    (repo / "README.md").write_text("readme\n# edited before the run\n")
+
+    result, _ = run_ci(repo, tmp_path)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "pyrite/__init__.py" in result.stderr and "changed during the run" in result.stderr
+    assert (repo / "pyrite" / "__init__.py").read_text() == BROKEN + "# edited during the run\n"
+    assert (repo / "pyrite" / "other.py").read_text() == "X = 1\n# edited during the run\n"
+    assert (repo / "README.md").read_text() == (
+        "readme\n# edited before the run\n# edited during the run\n"
+    )
+
+
+PUT_BACK_DURING_THE_RUN = OLD_TESTS + (
+    "\n\ndef test_real():\n"
+    "    from pathlib import Path\n\n"
+    "    if add(2, 2) != 4:  # the reverted run: someone puts the fix back\n"
+    f"        Path('pyrite/__init__.py').write_text({FIXED!r})\n"
+    "    assert add(2, 2) == 4\n"
+)
+
+
+def test_a_file_already_back_at_head_needs_no_restore(vr, repo: Path, tmp_path: Path) -> None:
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_add.py").write_text(PUT_BACK_DURING_THE_RUN)
+    git(repo, "commit", "-q", "-am", "fix: add adds")
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert vr.RED in row(summary, "tests/test_add.py::test_real")
+    assert git(repo, "status", "--porcelain") == ""
+
+
+SABOTAGE_TESTS = """\
+import os
+import time
+from pathlib import Path
+
+from pyrite.a.x import V as A
+from pyrite.b.y import V as B
+from pyrite.c.z import V as C
+
+
+def test_v():
+    if A == 1:  # the reverted run: make two of the three restores impossible
+        Path("pyrite/b/y.py").chmod(0)
+        Path("pyrite/a").chmod(0o555)
+        Path({pidfile!r}).write_text(str(os.getpid()))
+        if {hang}:
+            time.sleep(120)
+    assert (A, B, C) == (2, 2, 2)
+"""
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores modes")
+@pytest.mark.parametrize("ending", ["fails", "times out", "SIGTERM"])
+def test_a_restore_that_cannot_complete_is_reported_file_by_file(
+    repo: Path, tmp_path: Path, ending: str
+) -> None:
+    # Property 3 and #368 (2)-(4): the first file cannot be written, the second
+    # cannot be read; both are named, the third is still restored, and the exit
+    # is non-zero -- after a verdict, after a timeout (an ordinary exception in
+    # flight) and after SIGTERM (which keeps its own exit status).
+    for d in ("a", "b", "c"):
+        (repo / "pyrite" / d).mkdir()
+    for f in ("a/x.py", "b/y.py", "c/z.py"):
+        (repo / "pyrite" / f).write_text("V = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    for f in ("a/x.py", "b/y.py", "c/z.py"):
+        (repo / "pyrite" / f).write_text("V = 2\n")
+    pidfile = tmp_path / "run.pid"
+    (repo / "tests" / "test_v.py").write_text(
+        SABOTAGE_TESTS.format(pidfile=str(pidfile), hang=ending != "fails")
+    )
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: V is 2")
+
+    env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
+    env.pop("PYTEST_ADDOPTS", None)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    timeout = "5" if ending == "times out" else "100"
+    try:
+        driver = subprocess.Popen(
+            [sys.executable, str(SCRIPT), "--base", "dev", "--timeout", timeout],
+            cwd=repo,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if ending == "SIGTERM":
+            deadline = time.monotonic() + 60
+            while not (pidfile.exists() and pidfile.read_text().strip()):
+                assert driver.poll() is None, driver.communicate()
+                assert time.monotonic() < deadline, "the reverted run never started"
+                time.sleep(0.1)
+            driver.send_signal(signal.SIGTERM)
+        _, err = driver.communicate(timeout=90)
+    finally:
+        (repo / "pyrite" / "a").chmod(0o755)
+        (repo / "pyrite" / "b" / "y.py").chmod(0o644)
+        if driver.poll() is None:
+            driver.kill()
+
+    expected = 128 + signal.SIGTERM if ending == "SIGTERM" else 2
+    assert driver.returncode == expected, err
+    assert "pyrite/a/x.py" in err, err
+    assert "pyrite/b/y.py" in err, err
+    assert (repo / "pyrite" / "c" / "z.py").read_text() == "V = 2\n"
+
+
+SIGNAL_DURING_RESTORE = """\
+import importlib.util
+import os
+import signal
+import sys
+
+spec = importlib.util.spec_from_file_location("verify_red_ci", {script!r})
+vr = importlib.util.module_from_spec(spec)
+sys.modules["verify_red_ci"] = vr
+spec.loader.exec_module(vr)
+
+real_put, calls = vr._put, []
+
+
+def put(*args, **kwargs):
+    real_put(*args, **kwargs)
+    calls.append(args)
+    if len(calls) == 3:  # two reverted, one restored: the second restore is next
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
+vr._put = put
+sys.exit(vr.main(["--base", "dev"]))
+"""
+
+
+def test_a_signal_during_the_restore_waits_for_it(repo: Path, tmp_path: Path) -> None:
+    # A second Ctrl-C or a job cancellation arriving while the tree is being put
+    # back must not leave the rest of it reverted: it is held until the restore ends.
+    (repo / "pyrite" / "extra.py").write_text("E = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "pyrite" / "extra.py").write_text("E = 2\n")
+    _commit_fix(repo)
+    script = tmp_path / "driver.py"
+    script.write_text(SIGNAL_DURING_RESTORE.format(script=str(SCRIPT)))
+    env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
+    env.pop("PYTEST_ADDOPTS", None)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    result = subprocess.run(
+        [sys.executable, str(script)], cwd=repo, env=env, capture_output=True, text=True
+    )
+    assert result.returncode == 128 + signal.SIGTERM, (result.stdout, result.stderr)
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert (repo / "pyrite" / "extra.py").read_text() == "E = 2\n"
+    assert git(repo, "status", "--porcelain") == ""
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root ignores modes")
+def test_a_revert_that_cannot_write_is_refused_and_undone(repo: Path, tmp_path: Path) -> None:
+    # The second file cannot be written (its directory is read-only): the run is
+    # refused, and the first file, already reverted, is put back.
+    (repo / "pyrite" / "ro").mkdir()
+    (repo / "pyrite" / "ro" / "z.py").write_text("Z = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "pyrite" / "ro" / "z.py").write_text("Z = 2\n")
+    _commit_fix(repo)
+    (repo / "pyrite" / "ro").chmod(0o555)
+    try:
+        result, _ = run_ci(repo, tmp_path)
+    finally:
+        (repo / "pyrite" / "ro").chmod(0o755)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "pyrite/ro/z.py: not reverted" in result.stderr
     assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
     assert git(repo, "status", "--porcelain") == ""
+
+
+def test_a_write_that_fails_leaves_no_temporary_file(vr, tmp_path: Path, monkeypatch) -> None:
+    target = tmp_path / "f.py"
+    target.write_text("old\n")
+
+    def refuse(*args):
+        raise OSError("no")
+
+    monkeypatch.setattr(vr.os, "replace", refuse)
+    with pytest.raises(OSError):
+        vr._put(str(target), b"new\n", 0o644)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["f.py"]
+    assert target.read_text() == "old\n"
+
+
+def test_a_killed_run_leaves_the_tree_restored(vr, repo: Path, tmp_path: Path) -> None:
+    # The reverted pytest is SIGKILLed (the OOM killer): no report, a row, and the
+    # tree and index exactly as before.
+    (repo / "pyrite" / "__init__.py").write_text(
+        "import os\nimport signal\n\n\ndef add(a, b):\n    os.kill(os.getpid(), signal.SIGKILL)\n"
+    )
+    git(repo, "commit", "-q", "--amend", "-am", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    _commit_fix(repo)
+    before = _index(repo)
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    line = row(summary, "tests/test_add.py")
+    assert vr.NOT_VERIFIABLE in line and "no report without the fix" in line, line
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert _index(repo) == before
 
 
 def test_a_refusal_leaves_a_staged_revert_alone(repo: Path, tmp_path: Path) -> None:
@@ -539,7 +883,9 @@ def _pin_mtimes(repo: Path) -> None:
     CPython validates a .pyc by the source's mtime (whole seconds) and size. A
     revert and a restore inside the same second, between two sources of the same
     size, is what the cold read hit; pinning the mtime makes it happen every run
-    instead of most runs.
+    instead of most runs. (The driver now writes the files itself, so the hook
+    fires only if a restore ever goes back to `git checkout`; the bytecode guard
+    itself is pinned by test_verify_red.py::test_stale_bytecode_is_not_served_...)
     """
     hook = repo / ".git" / "hooks" / "post-checkout"
     hook.write_text(
@@ -661,24 +1007,47 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def _encode(text: str, flavour: str) -> bytes:
+    """A source file as a checkout of that flavour holds it on disk."""
+    if flavour == "crlf":
+        return text.replace("\n", "\r\n").encode()
+    if flavour == "latin-1":
+        return b"# -*- coding: latin-1 -*-\n# caf\xe9\n" + text.encode()
+    return text.encode()
+
+
+@pytest.mark.parametrize("flavour", ["lf", "crlf", "latin-1"])
 @pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
 def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
-    repo: Path, tmp_path: Path, sig: signal.Signals
+    repo: Path, tmp_path: Path, sig: signal.Signals, flavour: str
 ) -> None:
     # The reverted `add` records its pid and hangs, so the signal lands while the
-    # tree is reverted and bash + pytest are running in their own session.
+    # tree is reverted and pytest is running in its own session. Property 1 on
+    # the interrupt path, and property 4: under `*.py text eol=crlf` a checkout
+    # writes CRLF while the blob holds LF (#368 (1): a byte compare against the
+    # blob skipped the restore), and a latin-1 file is bytes, not text.
     pidfile = tmp_path / "hung.pid"
-    (repo / "pyrite" / "__init__.py").write_text(
-        "import os\nimport time\n\n\ndef add(a, b):\n"
-        f"    open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
-        "    time.sleep(120)\n    return a - b\n"
+    impl = repo / "pyrite" / "__init__.py"
+    if flavour == "crlf":
+        (repo / ".gitattributes").write_text("*.py text eol=crlf\n")
+    impl.write_bytes(
+        _encode(
+            "import os\nimport time\n\n\ndef add(a, b):\n"
+            f"    open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+            "    time.sleep(120)\n    return a - b\n",
+            flavour,
+        )
     )
-    git(repo, "commit", "-q", "--amend", "-am", "base")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
     git(repo, "branch", "-f", "dev", "HEAD")
-    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    fixed = _encode(FIXED, flavour)
+    impl.write_bytes(fixed)
     (repo / "tests" / "test_add.py").write_text(PR_TESTS)
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "fix: add adds, promptly")
+    assert git(repo, "status", "--porcelain") == ""
+    before = _index(repo)
 
     env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
     env.pop("PYTEST_ADDOPTS", None)
@@ -697,7 +1066,7 @@ def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
             assert time.monotonic() < deadline, "the reverted run never started"
             time.sleep(0.1)
         hung = int(pidfile.read_text())
-        assert (repo / "pyrite" / "__init__.py").read_text() != FIXED  # reverted right now
+        assert impl.read_bytes() != fixed  # reverted right now
 
         driver.send_signal(sig)
         driver.wait(timeout=30)
@@ -713,7 +1082,9 @@ def test_interrupting_the_driver_restores_the_tree_and_kills_the_run(
     if alive:
         os.kill(hung, signal.SIGKILL)
     assert not alive, "the pytest run outlived the driver"
-    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert impl.read_bytes() == fixed
+    assert _index(repo) == before
+    assert not (repo / ".git" / "index.lock").exists()
     assert git(repo, "status", "--porcelain") == ""
 
 

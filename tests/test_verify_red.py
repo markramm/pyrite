@@ -193,3 +193,178 @@ def test_package_resolving_inside_the_worktree_still_runs(pkg_repo: Path) -> Non
     assert result.returncode == 0, result.stderr
     assert "fails without the fix" in result.stdout
     assert (pkg_repo / "pyrite" / "__init__.py").read_text() == "def add(a, b):\n    return a + b\n"
+
+
+# ---------------------------------------------------------------------------
+# One owner for the revert and the restore (retro 10, #368): verify-red.sh is
+# a wrapper over scripts/verify_red_ci.py, which writes the files itself and
+# never through `git checkout`, so the index is never touched.
+# ---------------------------------------------------------------------------
+
+
+def _index(repo: Path) -> bytes:
+    return (repo / ".git" / "index").read_bytes()
+
+
+def test_the_index_is_never_written(repo: Path) -> None:
+    before = _index(repo)
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 0, result.stderr
+    assert _index(repo) == before
+    assert (repo / "impl.py").read_text() == IMPL_FIXED
+
+
+def test_a_crlf_checkout_verifies_and_comes_back_byte_for_byte(repo: Path) -> None:
+    (repo / ".gitattributes").write_text("*.py text eol=crlf\n")
+    git(repo, "add", ".gitattributes")
+    git(repo, "commit", "-q", "-m", "crlf")
+    crlf = IMPL_FIXED.replace("\n", "\r\n").encode()
+    (repo / "impl.py").unlink()
+    git(repo, "checkout", "--", "impl.py")  # as a checkout under the attribute writes it
+    assert (repo / "impl.py").read_bytes() == crlf
+    assert git(repo, "status", "--porcelain") == ""
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 0, result.stderr
+    assert (repo / "impl.py").read_bytes() == crlf
+
+
+def test_a_test_id_that_names_no_test_is_no_claim(repo: Path) -> None:
+    # pytest exits 4 (no such node) or 5 (nothing collected): a failure to run is
+    # not "fails without the fix".
+    result = run(repo, "test_impl.py::test_does_not_exist", "impl.py")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "no claim" in result.stderr
+    assert (repo / "impl.py").read_text() == IMPL_FIXED
+
+
+def test_an_uncommitted_deletion_is_refused(repo: Path) -> None:
+    (repo / "impl.py").unlink()
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 2
+    assert "uncommitted changes" in result.stderr
+    assert not (repo / "impl.py").exists()
+
+
+def test_stale_bytecode_is_not_served_to_the_reverted_run(repo: Path) -> None:
+    # A .pyc that Python does not check against its source (or a timestamp one
+    # whose same-second, same-size source was swapped under it) would run the fix
+    # in the "without the fix" run. The revert drops the file's bytecode.
+    import importlib.util
+    import py_compile
+
+    src = repo / "impl.py"
+    py_compile.compile(
+        str(src),
+        cfile=importlib.util.cache_from_source(str(src)),
+        invalidation_mode=py_compile.PycInvalidationMode.UNCHECKED_HASH,
+    )
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+
+
+def test_interrupting_the_wrapper_restores_the_tree(repo: Path, tmp_path: Path) -> None:
+    import signal
+    import time
+
+    pidfile = tmp_path / "hung.pid"
+    (repo / "impl.py").write_text(
+        "import os\nimport time\n\n\ndef add(a, b):\n"
+        f"    open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+        "    time.sleep(120)\n    return a - b\n"
+    )
+    git(repo, "commit", "-q", "--amend", "-am", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "impl.py").write_text(IMPL_FIXED)
+    git(repo, "commit", "-q", "-am", "fix: add adds, promptly")
+    before = _index(repo)
+
+    env = {**os.environ, "VERIFY_RED_BASE": "dev", "VERIFY_RED_PYTHON": sys.executable}
+    proc = subprocess.Popen(
+        ["bash", str(SCRIPT), "test_impl.py::test_add", "impl.py"],
+        cwd=repo,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while not (pidfile.exists() and pidfile.read_text().strip()):
+            assert proc.poll() is None, "the wrapper exited before the run hung"
+            assert time.monotonic() < deadline, "the reverted run never started"
+            time.sleep(0.1)
+        hung = int(pidfile.read_text())
+        proc.send_signal(signal.SIGINT)
+        proc.wait(timeout=30)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+    assert proc.returncode != 0
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        try:
+            os.kill(hung, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        os.kill(hung, signal.SIGKILL)
+        pytest.fail("the pytest run outlived the wrapper")
+    assert (repo / "impl.py").read_text() == IMPL_FIXED
+    assert _index(repo) == before
+
+
+def test_an_interpreter_that_cannot_import_the_package_is_refused(tmp_path: Path) -> None:
+    # An extension package no interpreter on this machine installs: the import
+    # fails, so which tree the run would test is unknown -- no claim.
+    r = tmp_path / "repo"
+    src = r / "extensions" / "ext" / "src" / "verify_red_nopkg"
+    src.mkdir(parents=True)
+    git(r, "init", "-q", "-b", "dev")
+    git(r, "config", "user.email", "t@example.com")
+    git(r, "config", "user.name", "t")
+    (src / "__init__.py").write_text(IMPL_BROKEN)
+    (r / "test_impl.py").write_text(TEST_REAL.replace("from impl", "from verify_red_nopkg"))
+    git(r, "add", ".")
+    git(r, "commit", "-q", "-m", "base")
+    git(r, "checkout", "-q", "-b", "fix/add")
+    (src / "__init__.py").write_text(IMPL_FIXED)
+    git(r, "commit", "-q", "-am", "fix")
+    result = run(r, "test_impl.py::test_add", "extensions/ext/src/verify_red_nopkg/__init__.py")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "cannot confirm which tree" in result.stderr
+    assert (src / "__init__.py").read_text() == IMPL_FIXED
+
+
+def test_the_base_falls_back_to_dev_without_origin(repo: Path) -> None:
+    env = {k: v for k, v in os.environ.items() if k != "VERIFY_RED_BASE"}
+    env["VERIFY_RED_PYTHON"] = sys.executable
+    result = subprocess.run(
+        ["bash", str(SCRIPT), "test_impl.py::test_add", "impl.py"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (repo / "impl.py").read_text() == IMPL_FIXED
+
+
+def test_the_driver_needs_files_to_revert(repo: Path) -> None:
+    driver = SCRIPT.with_name("verify_red_ci.py")
+    result = subprocess.run(
+        [sys.executable, str(driver), "--base", "dev", "--test", "test_impl.py::test_add"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "name the implementation files" in result.stderr
+
+
+def test_the_file_mode_survives_the_revert_and_the_restore(repo: Path) -> None:
+    (repo / "impl.py").chmod(0o755)
+    git(repo, "commit", "-q", "-am", "impl is executable")
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 0, result.stderr
+    assert (repo / "impl.py").stat().st_mode & 0o777 == 0o755
+    assert git(repo, "status", "--porcelain") == ""
