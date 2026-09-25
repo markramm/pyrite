@@ -6,6 +6,7 @@ import pytest
 from pyrite_journalism_investigation.promote import promote_claim_to_edge
 
 from pyrite.config import KBConfig, PyriteConfig, Settings
+from pyrite.schema import generate_entry_id
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
 
@@ -353,3 +354,193 @@ class TestEndpointFieldsAreChecked:
         kb_path = setup["config"].knowledge_bases[0].path
         written = [p for p in kb_path.rglob("*.md") if p.parent.name != "claims"]
         assert not written, f"an edge was written: {written}"
+
+
+class TestDryRunMatchesRealRunRefusal:
+    """#427: a dry run only checked the edge type's own endpoint fields; a
+    real run also goes through the KB schema, plugin validators and the
+    write pipeline's exists/read-only checks. Both branches must refuse the
+    same input with the same message, whichever runs first."""
+
+    def test_existing_edge_id_refused_the_same_way_by_both(self, setup):
+        """The edge id the promotion would derive already exists. The real
+        run's exists check must also refuse the dry run, not just show a
+        proposal the real run would then reject."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-existing-edge", "X owns Y")
+
+        # Pre-create the entry the promotion would derive: generate_entry_id
+        # of "<claim title> [ownership]".
+        edge_id = generate_entry_id("X owns Y [ownership]")
+        kb_service.create_entry(
+            kb_name="test",
+            entry_id=edge_id,
+            title="X owns Y [ownership]",
+            entry_type="ownership",
+            body="Pre-existing edge.",
+            owner="[[entity-x]]",
+            asset="[[entity-y]]",
+        )
+
+        endpoint_fields = {"owner": "[[entity-x]]", "asset": "[[entity-y]]"}
+
+        dry_result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-existing-edge",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
+            dry_run=True,
+        )
+        real_result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-existing-edge",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
+            dry_run=False,
+        )
+
+        assert "error" in dry_result, dry_result
+        assert "error" in real_result, real_result
+        assert dry_result["error"] == real_result["error"]
+        assert "proposed" not in dry_result
+
+    def test_invalid_enum_endpoint_field_refused_the_same_way_by_both(self, setup, tmp_path):
+        """A KB schema constrains an endpoint field (owner, as a select with
+        options); a value outside it is refused identically by both runs."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+        kb_path = setup["config"].knowledge_bases[0].path
+
+        _create_claim(kb_service, "claim-bad-enum", "X owns Y (enum)")
+
+        # Written after the claim, since declaring any `types:` at all makes
+        # the schema enforce a known-type check for every entry_type -- a
+        # `claim` still has to be created first without it, matching how the
+        # existing-id and read-only tests keep the claim outside the schema
+        # they're testing.
+        (kb_path / "kb.yaml").write_text(
+            """
+name: test
+kb_type: journalism-investigation
+validation:
+  enforce: true
+types:
+  claim: {}
+  ownership:
+    fields:
+      owner:
+        type: select
+        options:
+          - "[[entity-x]]"
+          - "[[entity-z]]"
+"""
+        )
+        # kb_schema is lazily cached on first access; _create_claim's own
+        # validation (no kb.yaml existed yet) already cached an empty
+        # schema, so this write is invisible until the cache is cleared.
+        setup["config"].knowledge_bases[0].invalidate_schema_cache()
+
+        endpoint_fields = {"owner": "[[entity-not-an-option]]", "asset": "[[entity-y]]"}
+
+        dry_result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-bad-enum",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
+            dry_run=True,
+        )
+        real_result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-bad-enum",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
+            dry_run=False,
+        )
+
+        assert "error" in dry_result, dry_result
+        assert "error" in real_result, real_result
+        assert dry_result["error"] == real_result["error"]
+        assert "proposed" not in dry_result
+
+    def test_read_only_kb_refused_the_same_way_by_both(self, setup):
+        """A dry run against a read-only KB must refuse with the real run's
+        KBReadOnlyError message, not preview a write that cannot happen."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-read-only", "X owns Y (ro)")
+
+        # Flip the KB read-only *after* creating the claim, so the write
+        # pipeline's own read-only check is what both branches must hit.
+        setup["config"].knowledge_bases[0].read_only = True
+
+        endpoint_fields = {"owner": "[[entity-x]]", "asset": "[[entity-y]]"}
+
+        dry_result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-read-only",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
+            dry_run=True,
+        )
+        real_result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-read-only",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
+            dry_run=False,
+        )
+
+        assert "error" in dry_result, dry_result
+        assert "error" in real_result, real_result
+        assert dry_result["error"] == real_result["error"]
+        assert "proposed" not in dry_result
+        assert "read-only" in dry_result["error"].lower()
+
+    @pytest.mark.control(
+        reason="a deliberate negative control: the happy-path dry-run contract "
+        "(returns proposed, writes nothing) is unchanged by #427's fix and "
+        "passes on both sides of it -- unlike the three refusal-parity tests "
+        "above, it isn't evidence the fix did anything."
+    )
+    def test_valid_dry_run_still_returns_proposed_and_writes_nothing(self, setup):
+        """A dry run that would succeed for real still returns dry_run/proposed
+        and writes nothing -- the existing happy-path contract, unchanged."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-still-valid", "Still valid claim")
+
+        result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-still-valid",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields={"owner": "[[entity-x]]", "asset": "[[entity-y]]"},
+            dry_run=True,
+        )
+
+        assert "error" not in result, result
+        assert result.get("dry_run") is True
+        assert "proposed" in result
+        proposed_id = result["proposed"]["entry_id"]
+        edge_entry = db.get_entry(proposed_id, "test")
+        assert edge_entry is None
+        kb_path = setup["config"].knowledge_bases[0].path
+        written = [p for p in kb_path.rglob("*.md") if p.parent.name != "claims"]
+        assert not written, f"a dry run wrote: {written}"
