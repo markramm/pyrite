@@ -427,8 +427,9 @@ class RestoreError(InfraError):
 
 
 def _restore(targets: list[Target], written: dict[str, bytes | None]) -> list[str]:
-    """Put back every file the revert wrote; the ones that could not be, each
-    with its reason, already printed. Every file is attempted."""
+    """Put back every file the revert wrote; returns the ones that could not be,
+    each with its reason. Every file is attempted. Idempotent: run again, it
+    skips what is back and finds the same failures."""
     failures = []
     with _signals_held():
         for t in targets:
@@ -447,8 +448,6 @@ def _restore(targets: list[Target], written: dict[str, bytes | None]) -> list[st
                 _put(t.path, t.original, t.mode)
             except OSError as exc:
                 failures.append(f"{t.path}: not restored: {exc.strerror or exc}")
-        for failure in failures:
-            print(f"verify-red: {failure}", file=sys.stderr, flush=True)
     return failures
 
 
@@ -477,7 +476,21 @@ def reverted(targets: list[Target]) -> Iterator[None]:
         ending = exc
         raise
     finally:
-        failures = _restore(targets, written)
+        # Inline, and the first thing here: a signal whose Python handler is
+        # already pending (a second Ctrl-C) raises at the next bytecode check --
+        # before the mask in _signals_held is up, or as it comes down. Any such
+        # raise lands inside this `try`, and the restore simply runs again.
+        signalled: BaseException | None = None
+        while True:
+            try:
+                failures = _restore(targets, written)
+                break
+            except (KeyboardInterrupt, SystemExit) as exc:
+                signalled = signalled or exc
+        for failure in failures:
+            print(f"verify-red: {failure}", file=sys.stderr, flush=True)
+        if signalled is not None:
+            raise signalled  # the signal ends the run, with its own status
         if failures and isinstance(ending, Exception | None):
             raise RestoreError(f"{len(failures)} file(s) not restored; see above") from ending
 

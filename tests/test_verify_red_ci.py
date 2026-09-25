@@ -829,6 +829,63 @@ def test_a_write_that_fails_leaves_no_temporary_file(vr, tmp_path: Path, monkeyp
     assert target.read_text() == "old\n"
 
 
+SIGINT_BEFORE_THE_MASK = """\
+import importlib.util
+import os
+import signal
+import sys
+from contextlib import contextmanager
+
+spec = importlib.util.spec_from_file_location("verify_red_ci", {script!r})
+vr = importlib.util.module_from_spec(spec)
+sys.modules["verify_red_ci"] = vr
+spec.loader.exec_module(vr)
+
+real_held, fired = vr._signals_held, []
+
+
+@contextmanager
+def held():
+    # A second Ctrl-C whose Python handler is pending as the restore begins --
+    # before the signal mask is up. It runs at the next bytecode check: here.
+    if not fired:
+        fired.append(1)
+        os.kill(os.getpid(), signal.SIGINT)
+        for _ in range(1000):
+            pass
+    with real_held():
+        yield
+
+
+vr._signals_held = held
+sys.exit(vr.main(["--base", "dev"]))
+"""
+
+
+def test_a_ctrl_c_pending_as_the_restore_begins_does_not_skip_it(
+    repo: Path, tmp_path: Path
+) -> None:
+    (repo / "pyrite" / "extra.py").write_text("E = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    (repo / "pyrite" / "extra.py").write_text("E = 2\n")
+    _commit_fix(repo)
+    script = tmp_path / "driver.py"
+    script.write_text(SIGINT_BEFORE_THE_MASK.format(script=str(SCRIPT)))
+    env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
+    env.pop("PYTEST_ADDOPTS", None)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    result = subprocess.run(
+        [sys.executable, str(script)], cwd=repo, env=env, capture_output=True, text=True
+    )
+    assert result.returncode != 0, (result.stdout, result.stderr)
+    assert "KeyboardInterrupt" in result.stderr, result.stderr  # the Ctrl-C still ends the run
+    assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
+    assert (repo / "pyrite" / "extra.py").read_text() == "E = 2\n"
+    assert git(repo, "status", "--porcelain") == ""
+
+
 def test_a_killed_run_leaves_the_tree_restored(vr, repo: Path, tmp_path: Path) -> None:
     # The reverted pytest is SIGKILLed (the OOM killer): no report, a row, and the
     # tree and index exactly as before.
