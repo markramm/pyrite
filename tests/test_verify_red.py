@@ -368,3 +368,64 @@ def test_the_file_mode_survives_the_revert_and_the_restore(repo: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert (repo / "impl.py").stat().st_mode & 0o777 == 0o755
     assert git(repo, "status", "--porcelain") == ""
+
+
+# ---------------------------------------------------------------------------
+# The verdict matches CI mode: pytest's exit 1 is red; a collection error is a
+# (weak) red, whatever exit it produced -- 2 for a file, 4 for a node id that
+# the failed import hid; anything else (a killed run, an internal error, an
+# interrupted session) is no claim.
+# ---------------------------------------------------------------------------
+
+
+def _commit_test(repo: Path, text: str) -> None:
+    (repo / "test_impl.py").write_text(text)
+    git(repo, "commit", "-q", "-am", "test")
+
+
+def _commit_impl_pair(repo: Path, broken: str, fixed: str) -> None:
+    git(repo, "checkout", "-q", "dev")
+    (repo / "impl.py").write_text(broken)
+    git(repo, "commit", "-q", "--allow-empty", "-am", "base impl")
+    git(repo, "checkout", "-q", "-B", "fix/add")
+    (repo / "impl.py").write_text(fixed)
+    git(repo, "commit", "-q", "-am", "fix impl")
+
+
+def test_a_collection_error_is_a_weak_red(repo: Path) -> None:
+    _commit_impl_pair(repo, IMPL_BROKEN, IMPL_FIXED + "\n\ndef helper():\n    return 1\n")
+    _commit_test(repo, "from impl import helper\n\n\ndef test_add():\n    assert helper() == 1\n")
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "collection error" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        # the run is killed (the OOM killer): pytest's exit is -9
+        "import os\nimport signal\n\n\ndef add(a, b):\n    os.kill(os.getpid(), signal.SIGKILL)\n",
+        # the session is interrupted inside a test: exit 2, no collection error
+        "def add(a, b):\n    raise KeyboardInterrupt\n",
+    ],
+    ids=["killed", "interrupted"],
+)
+def test_a_run_that_did_not_finish_is_no_claim(repo: Path, broken: str) -> None:
+    _commit_impl_pair(repo, broken, IMPL_FIXED)
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "no claim" in result.stderr
+    assert (repo / "impl.py").read_text() == IMPL_FIXED
+
+
+def test_a_pytest_internal_error_is_no_claim(repo: Path) -> None:
+    # exit 3: a plugin hook raised -- only in the reverted run.
+    (repo / "conftest.py").write_text(
+        "import impl\n\n\ndef pytest_runtest_logreport(report):\n"
+        "    if impl.add(2, 2) != 4:\n        raise RuntimeError('boom')\n"
+    )
+    git(repo, "add", "conftest.py")
+    git(repo, "commit", "-q", "-m", "conftest")
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "no claim" in result.stderr

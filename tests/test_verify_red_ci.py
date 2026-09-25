@@ -210,6 +210,21 @@ def test_junit_node_ids_keep_classes_and_parameters(vr, tmp_path: Path) -> None:
     assert not report.collection_error
 
 
+def test_an_interrupted_session_is_not_a_collection_error(vr, tmp_path: Path) -> None:
+    # pytest writes a bare <testcase/> when a session is interrupted or hits an
+    # internal error; only a classname-less testcase WITH an <error> is a module
+    # that failed to import.
+    xml = tmp_path / "r.xml"
+    xml.write_text('<testsuites><testsuite><testcase time="0.000" /></testsuite></testsuites>')
+    assert not vr.read_junit(xml, "tests/test_x.py").collection_error
+    xml.write_text(
+        '<testsuites><testsuite><testcase classname="" name="test_x" file="tests/test_x.py">'
+        '<error message="collection failure">ImportError</error></testcase>'
+        "</testsuite></testsuites>"
+    )
+    assert vr.read_junit(xml, "tests/test_x.py").collection_error
+
+
 def test_a_missing_report_is_an_infrastructure_error(vr, tmp_path: Path) -> None:
     with pytest.raises(vr.InfraError):
         vr.read_junit(tmp_path / "absent.xml", "tests/test_x.py")

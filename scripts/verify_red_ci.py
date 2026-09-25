@@ -237,7 +237,10 @@ def read_junit(path: Path, test_file: str) -> Report:
     for case in ET.parse(path).getroot().iter("testcase"):
         classname, name = case.get("classname", ""), case.get("name", "")
         if not classname:
-            collection_error = True
+            # A module that failed to import: classname="" with an <error>. A bare
+            # <testcase/> is what an interrupted session or an internal error leaves.
+            if case.find("error") is not None:
+                collection_error = True
             continue
         # classname is the dotted module path plus any classes: keep what follows
         # the module's own name, whatever rootdir the dotted prefix came from.
@@ -728,23 +731,39 @@ def verify_one(test_id: str, paths: list[str], *, mb: str, python: str) -> int:
             file=sys.stderr,
         )
         return 2
-    with reverted(targets):
-        code, _ = _run(_pytest(python, test_id), {**os.environ, **_RUN_ENV}, None)
+    with tempfile.TemporaryDirectory(prefix="verify-red-") as tmp:
+        junit = Path(tmp) / "reverted.xml"
+        with reverted(targets):
+            code, _ = _run(
+                _pytest(python, test_id, *_junit_args(junit)), {**os.environ, **_RUN_ENV}, None
+            )
+        # The same verdict as the CI mode: an import that fails at collection is a
+        # (weak) red whatever exit it gave -- 2 for a file, 4 for a node id the
+        # failed import hid from collection.
+        collection_error = junit.exists() and read_junit(junit, test_id).collection_error
+    if collection_error:
+        print(
+            f"verify-red: {test_id} fails without the fix -- at a collection error, so weakly:"
+            " it needs a name the fix adds, which is not the same as checking what it does"
+        )
+        return 0
+    if code == 1:
+        print(f"verify-red: {test_id} fails without the fix (as it should)")
+        return 0
     if code == 0:
         print(
             f"verify-red: {test_id} PASSED without the fix -- it does not test the change",
             file=sys.stderr,
         )
         return 1
-    if code in (4, 5):  # usage error (no such node id), no tests collected
-        print(
-            f"verify-red: pytest exited {code} for {test_id} (no such test, or nothing"
-            " collected) -- no claim",
-            file=sys.stderr,
-        )
-        return 2
-    print(f"verify-red: {test_id} fails without the fix (as it should)")
-    return 0
+    # 2 without a collection error (interrupted), 3 (internal error), 4 (no such
+    # node), 5 (nothing collected), a negative code (the run was killed).
+    print(
+        f"verify-red: pytest exited {code} for {test_id} without the fix (interrupted, killed,"
+        " an internal error, no such test or nothing collected) -- no claim",
+        file=sys.stderr,
+    )
+    return 2
 
 
 # ---------------------------------------------------------------------------
