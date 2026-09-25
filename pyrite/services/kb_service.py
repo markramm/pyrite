@@ -201,9 +201,21 @@ class KBService:
             expected = e.get("expected")
             message = e.get("message")
             if rule == "enum":
-                parts.append(f"{field}: {got!r} is not one of {expected}")
+                rendered = f"{field}: {got!r} is not one of {expected}"
+                # A validator's `message` can say more than the generic
+                # "Invalid <field>: <got>" (e.g. explaining why an enum only
+                # applies conditionally) -- append it when it does, same
+                # spirit as the `required` case below.
+                generic = f"Invalid {field}: {got}"
+                if message and message != generic:
+                    rendered += f" ({message})"
+                parts.append(rendered)
             elif rule == "required":
-                parts.append(f"{field}: required")
+                # A conditional `required` rule (e.g. journalism's "amount is
+                # required when transaction_type is payment") sets `message`
+                # to explain *why*; dropping it for the bare "field: required"
+                # loses the only useful part of the refusal (#429).
+                parts.append(f"{field}: {message or 'required'}")
             elif message:
                 # A rule this renderer does not know, or none at all (e.g.
                 # cascade's "Importance must be 1-10, got: 99"): the

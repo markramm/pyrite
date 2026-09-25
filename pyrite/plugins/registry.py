@@ -918,24 +918,28 @@ class PluginRegistry:
         """Run every validator scoped to ``kb_type`` against ``fields``.
 
         The call site for plugin validation on writes (#379): ``kb_schema.py``
-        calls this instead of open-coding the aggregation-plus-call loop.
-        ``storage/index.py``'s health check fetches the list once per KB
-        and calls the validators itself, applying the same non-dict filter. Every returned validator already binds
-        the ``(entry_type, fields, ctx)`` contract -- registration refused
-        any that didn't (see ``_filter_conforming_validators``) -- so there
-        is no signature fallback here; a validator that still raises is a
-        bug in that validator, not a contract mismatch, and is logged and
-        skipped rather than aborting the whole validation pass.
+        is this method's only caller, instead of open-coding the
+        aggregation-plus-call loop. ``storage/index.py``'s health check does
+        **not** call this method -- it fetches the validator list once per KB
+        with ``get_validators_for_kb`` and calls each validator itself
+        (``_check_invalid_status``), to avoid re-fetching the list per row;
+        it applies the same non-dict filter this method does, so the two
+        stay consistent without sharing a call site. Every returned
+        validator already binds the ``(entry_type, fields, ctx)`` contract --
+        registration refused any that didn't (see
+        ``_filter_conforming_validators``) -- so there is no signature
+        fallback here; a validator that still raises is a bug in that
+        validator, not a contract mismatch, and is logged and skipped rather
+        than aborting the whole validation pass.
 
         Return-shape normalization (coordinator should-fix 5): binding the
         3-argument signature says nothing about the return type -- a
         validator can bind ``(entry_type, fields, ctx)`` and still return
-        the OLD ``list[str]`` shape. Every caller of this method calls
-        ``.get(...)`` on each item (``kb_schema.py`` for ``severity``,
-        ``index.py`` for ``field``/``rule``), which raises ``AttributeError``
-        on a plain string. A non-dict item is refused here -- logged and
-        dropped -- rather than reaching a caller not expecting it; the
-        dict items in the same return survive.
+        the OLD ``list[str]`` shape. This method's caller (``kb_schema.py``)
+        calls ``.get(...)`` on each item for ``severity``, which raises
+        ``AttributeError`` on a plain string. A non-dict item is refused
+        here -- logged and dropped -- rather than reaching a caller not
+        expecting it; the dict items in the same return survive.
         """
         results: list[dict] = []
         for validator in self.get_validators_for_kb(kb_type):
