@@ -495,14 +495,14 @@ class TestSweepLifetime:
         assert m.connection_count == 0
 
 
-def test_adr_0036_is_proposed():
+def test_adr_0036_is_recorded():
     import yaml
 
     root = Path(__file__).resolve().parent.parent / "kb" / "adrs"
     (path,) = list(root.glob("0036-*.md"))
     front = yaml.safe_load(path.read_text().split("---")[1])
     assert front["adr_number"] == 36
-    assert front["status"] == "proposed"
+    assert front["status"] == "accepted"  # maintainer, 2026-09-25
     assert front["type"] == "adr"
 
 
