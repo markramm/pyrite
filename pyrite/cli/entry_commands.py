@@ -535,7 +535,12 @@ def register_entry_commands(app: typer.Typer) -> None:
                     source, kb_name, target, relation, target_kb=target_kb, note=note
                 )
                 tkb = target_kb or kb_name
-                _report(result["created"], source, relation, target, tkb)
+                # `result["relation"]` is what is actually on disk, not the
+                # caller's own `relation` argument -- on a no-op (already
+                # linked) those can differ in spelling while still matching
+                # under the service's normalisation (round-2 cold read): the
+                # confirmation must name what a `grep` of the file would find.
+                _report(result["created"], source, result["relation"], target, tkb)
 
                 if bidirectional:
                     from ..schema import get_inverse_relation
@@ -544,6 +549,6 @@ def register_entry_commands(app: typer.Typer) -> None:
                     inv_result = svc.add_link(
                         target, tkb, source, inverse, target_kb=kb_name, note=note
                     )
-                    _report(inv_result["created"], target, inverse, source, kb_name)
+                    _report(inv_result["created"], target, inv_result["relation"], source, kb_name)
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), "rich", "ERROR")

@@ -83,6 +83,21 @@ _FIELD_CREATE_ENTRY_COLLISION: frozenset[str] = frozenset(
     {"kb_name", "entry_id", "entry_type", "allow_undeclared"}
 )
 
+#: `--field` keys refused because a freshly created entry can never actually
+#: carry them, the #407 symptom recurring on `create` (round-2 cold read):
+#: `type` is frontmatter-only -- `build_entry` always writes the caller's
+#: own `entry_type` argument as `type:`, so `--field type=note` on a task
+#: silently had no effect and `task create` reported success anyway, the
+#: same as `update -f type=...` before it was refused. `created_at`/
+#: `updated_at` are accepted by the constructor (`build_entry` passes them
+#: through) but `Entry._base_frontmatter` only re-emits a timestamp for an
+#: entry loaded FROM a file (`_source_frontmatter` set, #151/#46) -- a
+#: freshly created entry never has that, so the value is silently dropped
+#: before the file is ever written, unlike `update -f created_at=...` on an
+#: existing entry, which does persist. Refusing here rather than silently
+#: accepting and dropping.
+_FIELD_CREATE_NEVER_TAKES_EFFECT: frozenset[str] = frozenset({"type", "created_at", "updated_at"})
+
 
 def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
     """Parse `--field key=value` pairs for `task create`.
@@ -105,7 +120,10 @@ def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
       dangling-target check `add_link` applies everywhere else (round-1
       cold read);
     - a key colliding with `create_entry`'s own call signature or control
-      parameters (`_FIELD_CREATE_ENTRY_COLLISION`).
+      parameters (`_FIELD_CREATE_ENTRY_COLLISION`);
+    - `type`, `created_at` and `updated_at` -- a freshly created entry can
+      never actually carry them (`_FIELD_CREATE_NEVER_TAKES_EFFECT`), the
+      #407 symptom recurring on `create` (round-2 cold read).
     """
     from ..models.task import TaskEntry
     from ..services.kb_service import _MANAGED_FIELDS
@@ -144,6 +162,13 @@ def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
             console.print(
                 f"[red]Error:[/red] --field {k}=... is refused: this name collides "
                 f"with a parameter `task create` itself needs."
+            )
+            raise typer.Exit(1)
+        if k in _FIELD_CREATE_NEVER_TAKES_EFFECT:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: a freshly created "
+                f"task cannot carry this value; it would report success and set "
+                f"nothing."
             )
             raise typer.Exit(1)
         fields[k] = _parse_field_value(v)

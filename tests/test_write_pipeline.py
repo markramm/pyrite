@@ -637,6 +637,36 @@ def test_rest_patch_stores_an_undeclared_field(env, rest):
     assert "foo: bar" in text, text
 
 
+def test_rest_patch_type_refusal_on_a_missing_entry_is_still_404(env, rest):
+    """Round-2 cold read: `type`/`entry_type`/empty-key refusal used to run
+    before the KB and entry lookups in `_update`, so a PATCH naming both a
+    bogus field AND a nonexistent entry answered 400 `VALIDATION_FAILED`
+    instead of the 404 `NOT_FOUND` a missing entry should always give,
+    whatever else is wrong with the request."""
+    resp = rest.patch("/api/entries/does-not-exist", json={"kb": KB, "field": "type", "value": "x"})
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["detail"]["code"] == "NOT_FOUND"
+
+
+def test_rest_patch_entry_type_is_refused_cleanly_not_a_500(env, rest):
+    """`entry_type` is `type`'s sibling reserved-but-unsettable name -- no
+    entry has a settable `entry_type` attribute (it's a read-only property).
+    Before this fix `PATCH field=entry_type` raised a raw AttributeError,
+    which FastAPI would turn into an unhandled 500 rather than the 400
+    `VALIDATION_FAILED` every other refusal produces."""
+    resp = rest.post(
+        "/api/entries", json={"kb": KB, "entry_type": "note", "title": "ET", "body": "b"}
+    )
+    assert resp.status_code == 200, resp.text
+    entry_id = resp.json()["id"]
+
+    resp = rest.patch(
+        f"/api/entries/{entry_id}", json={"kb": KB, "field": "entry_type", "value": "hacked"}
+    )
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+
+
 def test_rest_patch_refuses_a_task_audit_field(task_env):
     from pyrite.services.kb_service import KBService
 

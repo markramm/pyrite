@@ -953,31 +953,40 @@ class KBService:
         ensure_not_truncated(updates)
         updates = {k: v for k, v in updates.items() if k not in MARKER_KEYS}
 
-        # `type` and the empty key are never model attributes on any entry
-        # (`type` is frontmatter-only; `entry_type` is the computed property
-        # a caller cannot set), so #407's undeclared-key branch below would
-        # route them into `metadata` instead of refusing them: `-f
-        # type=hacked` reported `updated: true` and left the real `type:`
-        # frontmatter line untouched -- the very #407 symptom recurring for a
-        # reserved key #407's own fix did not cover (round-1 cold read).
-        # Refused unconditionally, not gated by `restrict`: unlike a managed
-        # field an in-process caller might legitimately own (links, status),
-        # no caller -- internal or external -- means anything sensible by
-        # setting `type` or `""` through an update.
-        bad_keys = sorted(k for k in updates if k == "type" or k == "")
-        if bad_keys:
-            raise ValidationError(
-                f"Cannot set {', '.join(k or '(empty key)' for k in bad_keys)} on "
-                f"{entry_id!r} with an update: an entry's type is fixed once "
-                "created, and a --field key must be non-empty."
-            )
-
         kb_config = self._writable_kb(kb_name)
 
         repo = KBRepository(kb_config)
         entry = repo.load(entry_id)
         if not entry:
             raise EntryNotFoundError(f"Entry not found: {entry_id}")
+
+        # `type`/`entry_type` and the empty key are never model attributes on
+        # any entry (`type` is frontmatter-only; `entry_type` is a read-only
+        # `@property` with no setter, so setting it raised a raw
+        # AttributeError instead of a clean refusal -- almost certainly a 500
+        # through REST PATCH, round-2 cold read), so #407's undeclared-key
+        # branch below would route `type` into `metadata` instead of refusing
+        # it: `-f type=hacked` reported `updated: true` and left the real
+        # `type:` frontmatter line untouched -- the #407 symptom recurring
+        # for a reserved key #407's own fix did not cover (round-1 cold
+        # read). Refused unconditionally, not gated by `restrict`: unlike a
+        # managed field an in-process caller might legitimately own (links,
+        # status), no caller -- internal or external -- means anything
+        # sensible by setting `type`, `entry_type` or `""` through an update.
+        #
+        # Checked AFTER the KB and entry lookups above (round-2 cold read):
+        # a missing KB or entry, or a read-only KB, must still answer its own
+        # 404/403 (KBNotFoundError/EntryNotFoundError/KBReadOnlyError), not a
+        # ValidationError that tells the caller their *request* was invalid
+        # when the real problem is that the KB or entry they named doesn't
+        # exist.
+        bad_keys = sorted(k for k in updates if k in ("type", "entry_type") or k == "")
+        if bad_keys:
+            raise ValidationError(
+                f"Cannot set {', '.join(k or '(empty key)' for k in bad_keys)} on "
+                f"{entry_id!r} with an update: an entry's type is fixed once "
+                "created, and a --field key must be non-empty."
+            )
 
         _, _, managed = self._field_sets(entry.entry_type, kb_config)
         if restrict:
@@ -1216,10 +1225,18 @@ class KBService:
             dict with ``resolved`` (bool) indicating whether the target
             exists as of this call -- including on the duplicate-link path,
             where the write is a no-op but the target may since have gone --
-            and ``created`` (bool): False on that no-op path, True when a new
-            link was written. The duplicate key is ``(target, kb, relation)``:
-            a second, different relation between the same two entries is a
-            new link, not a duplicate (#396).
+            ``created`` (bool): False on that no-op path, True when a new
+            link was written -- and ``relation`` (str): the relation actually
+            recorded on disk, which on the no-op path can differ from the
+            caller's own ``relation`` argument (``_norm_relation`` treats a
+            legacy file's ``related`` as equal to the ``related_to`` default,
+            so a caller's default matches without their spellings being
+            identical -- round-2 cold read: a confirmation naming the
+            caller's relation instead of the file's would mislead a caller
+            who then greps the file for what they typed). The duplicate key
+            is ``(target, kb, relation)``: a second, different relation
+            between the same two entries is a new link, not a duplicate
+            (#396).
         """
         kb_config = self.config.get_kb(source_kb)
         if not kb_config:
@@ -1268,7 +1285,15 @@ class KBService:
                 # The write is a no-op, but `resolved` is a claim about the
                 # target as it is now, so check rather than assume: a link
                 # recorded earlier may have been left dangling since.
-                return {"resolved": _target_exists(), "created": False}
+                # `relation` in the result is what is actually on disk
+                # (`existing.relation`), not the caller's own argument: on
+                # legacy data those can differ in spelling while still
+                # matching under `_norm_relation` (round-2 cold read).
+                return {
+                    "resolved": _target_exists(),
+                    "created": False,
+                    "relation": existing.relation,
+                }
 
         resolved = _target_exists()
         if not resolved and not allow_dangling:
@@ -1277,7 +1302,7 @@ class KBService:
         entry.add_link(target=target_id, relation=relation, note=note, kb=tkb)
         entry.touch_updated_at()
         self._doc_mgr.save_entry(entry, source_kb, kb_config)
-        return {"resolved": resolved, "created": True}
+        return {"resolved": resolved, "created": True, "relation": relation}
 
     def add_links(
         self, kb_name: str, links: list[dict[str, Any]], *, dry_run: bool = False

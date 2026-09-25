@@ -259,3 +259,86 @@ def test_update_field_empty_key_is_refused(tmp_path):
 
     after = path.read_text(encoding="utf-8")
     assert after == before
+
+
+# ---------------------------------------------------------------------------
+# Round-2 cold-read findings on #447:
+#
+# 1. `entry_type` is `type`'s sibling reserved-but-unsettable name: no entry
+#    has a settable `entry_type` attribute either (it is a read-only
+#    `@property`), so `update(..., {"entry_type": "x"})` raised a raw
+#    `AttributeError` ("property 'entry_type' ... has no setter") instead of
+#    a clean refusal -- almost certainly a 500 through REST PATCH rather
+#    than the 400 `VALIDATION_FAILED` every other refusal produces.
+#
+# 2. The base-key/empty-key refusal ran before the KB-exists, KB-writable and
+#    entry-exists checks, so `update("ghost", "no-such-kb", {"type": "x"})`
+#    answered `VALIDATION_FAILED` instead of `KB_NOT_FOUND`, and the same
+#    call against a real KB with a nonexistent entry id answered
+#    `VALIDATION_FAILED` instead of `NOT_FOUND` -- a caller who mistyped the
+#    KB or entry id got told the request itself was invalid, not that the
+#    thing they named doesn't exist.
+# ---------------------------------------------------------------------------
+
+
+def test_update_field_entry_type_is_refused_not_a_raw_attributeerror(tmp_path):
+    """`-f entry_type=hacked` is `type`'s sibling: also refused cleanly, not
+    an uncaught AttributeError (no entry has a settable `entry_type`; it is
+    a read-only property)."""
+    config, kb_path = _make_env(tmp_path, "notes", NOTE_KB_YAML)
+    result = _invoke(config, ["create", "-k", "notes", "-t", "note", "--title", "N", "-b", "x"])
+    assert result.exit_code == 0, result.output
+    entry_id = _entry_id(kb_path)
+    path = list(kb_path.rglob("*.md"))[0]
+    before = path.read_text(encoding="utf-8")
+
+    result = _invoke(
+        config, ["update", entry_id, "-k", "notes", "-f", "entry_type=hacked", "--format", "json"]
+    )
+    assert result.exit_code != 0
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    payload = _json_payload(result)
+    assert payload.get("error_code") == "VALIDATION_FAILED", payload
+
+    after = path.read_text(encoding="utf-8")
+    assert after == before
+
+
+def test_update_base_key_refusal_does_not_mask_a_missing_kb(tmp_path):
+    """A base-key refusal (`-f type=x`) must not pre-empt the KBNotFoundError
+    a missing KB name would otherwise raise. Tested at the service directly:
+    REST PUT/PATCH already map KBNotFoundError to 404 `NOT_FOUND`
+    (`pyrite/server/endpoints/entries.py`) separately from ValidationError's
+    400 `VALIDATION_FAILED` -- this pins that `_update` raises the right
+    *type* for that mapping to reach, regardless of what any one surface's
+    exception handler currently does with it."""
+    from pyrite.exceptions import KBNotFoundError
+    from pyrite.services.kb_service import KBService
+
+    config, _kb_path = _make_env(tmp_path, "notes", NOTE_KB_YAML)
+    db = PyriteDB(config.settings.index_path)
+    try:
+        svc = KBService(config, db)
+        with pytest.raises(KBNotFoundError):
+            svc.update("anything", "no-such-kb", {"type": "x"})
+    finally:
+        db.close()
+
+
+def test_update_base_key_refusal_does_not_mask_a_missing_entry(tmp_path):
+    """A base-key refusal (`-f type=x`) must not pre-empt the
+    EntryNotFoundError a missing entry id would otherwise raise, against a
+    KB that is real. REST maps this to 404 `NOT_FOUND`, same as the missing-KB
+    case above; the service's exception type is what makes that mapping
+    reachable at all."""
+    from pyrite.exceptions import EntryNotFoundError
+    from pyrite.services.kb_service import KBService
+
+    config, _kb_path = _make_env(tmp_path, "notes", NOTE_KB_YAML)
+    db = PyriteDB(config.settings.index_path)
+    try:
+        svc = KBService(config, db)
+        with pytest.raises(EntryNotFoundError):
+            svc.update("no-such-entry", "notes", {"type": "x"})
+    finally:
+        db.close()

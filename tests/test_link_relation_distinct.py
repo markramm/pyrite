@@ -184,6 +184,67 @@ def test_cli_link_no_relation_flag_is_a_noop_on_legacy_data(link_env):
     assert "Already linked:" in clean, clean
 
 
+def test_cli_link_already_linked_names_the_relation_actually_on_disk(link_env):
+    """Round-2 cold read: `_norm_relation` (round 1) makes a caller's
+    `related_to` match an on-disk legacy `related` link as the same
+    no-op -- but the confirmation line named the *caller's* relation
+    (`related_to`), not what the file actually says (`related`). A caller
+    reading `Already linked: a --[related_to]--> b` and then grepping the
+    file for `related_to` would find nothing."""
+    notes_path = link_env["notes_path"]
+    (notes_path / "link-a.md").write_text(
+        "---\nid: link-a\ntitle: link-a\ntype: note\nlinks:\n- target: link-b\n"
+        "  relation: related\n---\nx\n",
+        encoding="utf-8",
+    )
+    db = PyriteDB(link_env["db_path"])
+    IndexManager(db, link_env["config"]).index_all()
+    db.close()
+
+    with _patch_config(link_env):
+        # No -r: the CLI's default is related_to, which normalises to match
+        # the file's explicit "related" -- still a no-op, but the message
+        # must say what is actually stored, not the caller's default.
+        result = runner.invoke(app, ["link", "link-a", "link-b", "-k", "lk"])
+        assert result.exit_code == 0, result.output
+    clean = _strip_ansi(result.output)
+    assert "Already linked:" in clean, clean
+    assert "[related]" in clean, clean
+    assert "[related_to]" not in clean, clean
+
+
+def test_cli_link_bidi_already_linked_names_the_relation_actually_on_disk(link_env):
+    """Same bug as `test_cli_link_already_linked_names_the_relation_actually_on_disk`,
+    on the `--bidi` inverse leg: the inverse confirmation must also name what
+    is on disk for the target->source direction, not the CLI's computed
+    `inverse` value."""
+    notes_path = link_env["notes_path"]
+    (notes_path / "link-a.md").write_text(
+        "---\nid: link-a\ntitle: link-a\ntype: note\nlinks:\n- target: link-b\n"
+        "  relation: related\n---\nx\n",
+        encoding="utf-8",
+    )
+    (notes_path / "link-b.md").write_text(
+        "---\nid: link-b\ntitle: link-b\ntype: note\nlinks:\n- target: link-a\n"
+        "  relation: related\n---\ny\n",
+        encoding="utf-8",
+    )
+    db = PyriteDB(link_env["db_path"])
+    IndexManager(db, link_env["config"]).index_all()
+    db.close()
+
+    with _patch_config(link_env):
+        # No -r: forward default related_to matches on-disk "related" on
+        # link-a; the --bidi inverse (also related_to, since related_to is
+        # self-inverse) must likewise match link-b's on-disk "related".
+        result = runner.invoke(app, ["link", "link-a", "link-b", "-k", "lk", "--bidi"])
+        assert result.exit_code == 0, result.output
+    clean = _strip_ansi(result.output)
+    assert clean.count("Already linked:") == 2, clean
+    assert clean.count("[related]") == 2, clean
+    assert "[related_to]" not in clean, clean
+
+
 def test_add_link_identical_triple_stays_a_noop_after_target_deleted(link_env):
     """The idempotency the duplicate check exists for: a replayed link set
     must not fail just because the target has since gone."""

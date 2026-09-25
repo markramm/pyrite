@@ -381,3 +381,52 @@ def test_task_create_field_links_does_not_bypass_dangling_target_check(task_cli_
         ],
     )
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Round-2 cold-read finding: `type` and the timestamp keys reach the same
+# undeclared-key branch on create that `update` was fixed to refuse (#407 on
+# a new surface). `task create --field type=note` and `--field
+# created_at=...`/`updated_at=...` exited 0 with "Task created" and wrote
+# nothing the caller asked for -- `type` stayed `task` on disk, and the
+# timestamps never appeared at all. `TaskService.create_task` forwards
+# `fields` into `KBService.create_entry(..., **kwargs)`, whose GenericEntry
+# branch (`build_entry`) absorbs an unknown kwarg into metadata rather than
+# refusing it, the same shape #407 fixed on `update`.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.cli
+def test_task_create_field_refuses_type(task_cli_env):
+    """`--field type=note` must not report success while leaving the real
+    `type: task` frontmatter line untouched."""
+    result = runner.invoke(
+        app,
+        ["task", "create", "T", "-k", "test-tasks", "--field", "type=note", "--format", "json"],
+    )
+    assert result.exit_code != 0
+    assert "type" in result.output.lower()
+
+
+@pytest.mark.parametrize("key", ["created_at", "updated_at"])
+@pytest.mark.cli
+def test_task_create_field_refuses_timestamps(task_cli_env, key):
+    """`--field created_at=...`/`updated_at=...` must not report success
+    while silently dropping the timestamp -- it never appeared in the file
+    at all, not even nested under metadata."""
+    result = runner.invoke(
+        app,
+        [
+            "task",
+            "create",
+            "T",
+            "-k",
+            "test-tasks",
+            "--field",
+            f"{key}=2001-01-01",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert key in result.output.lower()
