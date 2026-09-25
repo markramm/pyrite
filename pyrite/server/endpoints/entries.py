@@ -153,6 +153,7 @@ def list_type_schemas(
     from ...schema.core_types import CORE_TYPE_METADATA, CORE_TYPES
 
     result: dict[str, dict] = {}
+    declared: list[str] = []
 
     # Layer 1: Core types as baseline
     for type_name, type_info in CORE_TYPES.items():
@@ -217,6 +218,9 @@ def list_type_schemas(
         kb_config = config.get_kb(kb)
         if kb_config:
             schema = kb_config.kb_schema
+            # The same vocabulary `_refuse_undeclared_type` (#378) checks
+            # against: non-empty only when the KB's kb.yaml declares any type.
+            declared = sorted(schema.types.keys()) if schema and schema.types else []
             for type_name, ts in schema.types.items():
                 if type_name not in result:
                     result[type_name] = {"description": "", "fields": {}, "subdirectory": ""}
@@ -243,7 +247,7 @@ def list_type_schemas(
                             "description": ts.field_descriptions.get(fname, ""),
                         }
 
-    return {"types": result}
+    return {"types": result, "declared": declared}
 
 
 def _python_type_to_field_type(type_str: str) -> str:
