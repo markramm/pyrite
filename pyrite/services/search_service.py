@@ -12,7 +12,7 @@ import time
 from enum import StrEnum
 from typing import Any
 
-from ..exceptions import QuerySyntaxError, QueryTooLongError, StorageError
+from ..exceptions import QuerySyntaxError, QueryTooLongError, StorageBusyError, StorageError
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
@@ -34,22 +34,66 @@ _QUERY_SYNTAX_ERROR_MARKERS = (
 )
 
 
-def _looks_like_query_syntax_error(message: str) -> bool:
-    """Is this OperationalError message shape a real FTS5/SQL parse error?
+def _looks_like_query_syntax_error(message: str, query: str) -> bool:
+    """Is this OperationalError message a parse error in the query that was sent?
 
     Whitelist, not blacklist: only the shapes SQLite is known to use for a
     query the caller actually wrote wrong are reclassified as
     QuerySyntaxError. Everything else (a locked database, disk I/O, a
-    missing table, a file that can't be opened) stays an OperationalError
-    the caller did nothing to cause.
+    missing table, a file that can't be opened) stays a storage fault the
+    caller did nothing to cause.
+
+    ``no such column: <name>`` is the one ambiguous shape: FTS5 uses it for a
+    ``col:term`` filter in the query, and SQLite uses it for a column the SQL
+    itself names that the schema lacks. The caller's fault iff ``<name>``
+    appears in the query as a whole token or a separator-delimited piece of
+    one (``party`` in ``third-party``, ``a.b`` in ``"a.b":y``). A name the
+    query never mentions (``e.fips`` for the query ``fips``) is schema drift
+    (#431).
     """
     lowered = message.lower()
     if lowered.startswith("no such column:"):
-        # FTS5 reports a `col:term` filter unqualified ("no such column: a");
-        # a qualified name ("e.fips") is the SQL itself missing a column --
-        # schema drift, not the caller's query.
-        return "." not in lowered.split(":", 1)[1]
+        name = lowered.split(":", 1)[1].strip()
+        if not name:
+            return False
+        pattern = r"(?<![\w.])" + re.escape(name) + r"(?![\w.])"
+        return re.search(pattern, query.lower()) is not None
     return any(marker in lowered for marker in _QUERY_SYNTAX_ERROR_MARKERS)
+
+
+#: SQLite's primary result codes for a transient lock: another connection
+#: holds the database (SQLITE_BUSY) or a table (SQLITE_LOCKED).
+_TRANSIENT_SQLITE_CODES = frozenset({sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED})
+
+#: The same faults by message, for an error that lost ``sqlite_errorcode``
+#: (constructed by a wrapper rather than raised by SQLite).
+_TRANSIENT_SQLITE_MARKERS = (
+    "database is locked",
+    "database table is locked",
+    "database schema is locked",
+    "database is busy",
+)
+
+
+def _is_transient(error: sqlite3.Error) -> bool:
+    """Could the same call succeed if made again? Only for a lock (#431)."""
+    code = getattr(error, "sqlite_errorcode", None)
+    if code is not None:
+        # Extended codes (SQLITE_BUSY_SNAPSHOT, ...) carry the primary code in
+        # the low byte.
+        return (code & 0xFF) in _TRANSIENT_SQLITE_CODES
+    lowered = str(error).lower()
+    return any(marker in lowered for marker in _TRANSIENT_SQLITE_MARKERS)
+
+
+def storage_error_from(error: sqlite3.Error, what: str = "Search failed") -> StorageError:
+    """The ``StorageError`` for a sqlite failure that is not the caller's query.
+
+    A lock becomes ``StorageBusyError`` (retryable); schema drift, a missing
+    table and corruption stay a plain ``StorageError`` (not retryable).
+    """
+    cls = StorageBusyError if _is_transient(error) else StorageError
+    return cls(f"{what}: {error}")
 
 
 def check_query_length(query: str) -> None:
@@ -69,86 +113,78 @@ def check_query_length(query: str) -> None:
 _FTS_OPERATORS = frozenset({"AND", "OR", "NOT"})
 
 
-def clip_derived_query(text: str) -> str:
-    """Bound text that a search is *built from*, where refusing would break
-    the feature: an entry title for link suggestions, a chat message for
-    retrieval. The chat message is the caller's own text, but it is not a
-    search the caller asked for, so the feature searches with a bounded
-    prefix of it instead of failing. Every direct search query -- REST
-    ``q``, MCP ``kb_search``, the CLI -- still goes through
-    ``check_query_length`` and is refused, never clipped.
+def clip_semantic_text(text: str) -> str:
+    """Bound text for the semantic leg, which embeds it and never parses it.
 
-    The result stays valid FTS5 input: it ends on a word boundary, never
-    inside a quoted phrase (an unbalanced quote is "unterminated string"),
-    never inside a parenthesised group (an unbalanced paren is also a syntax
-    error), and never on a bare AND/OR/NOT. The result may be empty -- callers
-    that derive a query from clipped text must treat "" as nothing to search,
-    not run an empty MATCH.
+    A prefix of at most ``MAX_SEARCH_QUERY_LENGTH`` characters ending on a
+    word boundary (a single over-long word is cut). No FTS5 cleanup: quotes,
+    parens and operators mean nothing to an embedding, and cutting at them
+    would throw away the words ("1) first 2) second" must not become "1").
     """
     if len(text) <= MAX_SEARCH_QUERY_LENGTH:
         return text
     clipped = text[:MAX_SEARCH_QUERY_LENGTH]
     if not text[MAX_SEARCH_QUERY_LENGTH].isspace():
-        # The cut fell inside a word: drop the partial word (unless it is the
-        # only word, which then stays cut -- still valid FTS5 input).
         clipped = clipped[: _last_word_start(clipped)] or clipped
-    if clipped.count('"') % 2:
-        # The cut fell inside a quoted phrase: drop the open phrase.
-        clipped = clipped[: clipped.rfind('"')]
-    clipped = _drop_unbalanced_parens(clipped)
-    clipped = clipped.rstrip()
-    while clipped and clipped[_last_word_start(clipped) :] in _FTS_OPERATORS:
-        # Never end on a bare operator: FTS5 reads it as a syntax error.
-        clipped = clipped[: _last_word_start(clipped)].rstrip()
-    return clipped
+    return clipped.rstrip()
 
 
-def _drop_unbalanced_parens(text: str) -> str:
-    """Cut ``text`` back to before its first unmatched paren, if any.
+#: Words too common to help an OR-joined query find related entries. Dropped
+#: only when not written in capitals: "IT", "US" and "OR" are acronyms, "it",
+#: "us" and "or" are not.
+_STOP_WORDS = frozenset(
+    """a about after all also an and any are as at be been but by can could did
+    do does for from had has have he her his how i if in into is it its just me
+    my no not of on or our she should so than that the their them then there
+    these they this those to up us was we were what when where which who why
+    will with would you your""".split()
+)
 
-    A naive ``text.count("(") != text.count(")")`` (with ``rfind("(")`` to
-    find where to cut) gets three real shapes wrong:
 
-    - Nested groups: ``"(a (b) c"`` has one unmatched "(" -- the *outer*
-      one -- but ``rfind("(")`` finds the *inner*, already-closed "(" and
-      cuts there, discarding the whole (validly closed) inner group for no
-      reason.
-    - A "(" inside a quoted phrase, e.g. ``'"a(b"'``, is a literal
-      character to FTS5, not a group opener -- counting it as one can flag
-      balanced text as unbalanced (or mask a real imbalance elsewhere).
-    - A lone ")" with no "(" before it: ``rfind("(")`` returns -1, and
-      slicing to ``text[:-1]`` just drops the last character, leaving the
-      stray ")" in place -- still a syntax error.
+def build_or_query(text: str, extra_terms: list[str] | tuple[str, ...] = ()) -> str:
+    """An FTS5 query that cannot fail to parse, built from text nobody wrote as one.
 
-    A left-to-right depth scan that skips quoted spans gets all three
-    right: quotes toggle a "not counting parens right now" state, and the
-    first paren that never finds its match (a "(" whose depth never
-    returns to its starting level, or a lone ")") is where the cut belongs.
+    For an entry title (link suggestions) or a chat message (retrieval): the
+    text's words, each double-quoted so FTS5 reads it as a literal (never an
+    operator or a ``column:`` filter), OR-joined so an entry sharing any of
+    them matches and FTS5 ranks by overlap. ``extra_terms`` (tags) are quoted
+    and added as given.
+
+    Words are split on non-word characters. Single characters are dropped, and
+    so are lowercase stop words (``_STOP_WORDS``); a two-letter word such as
+    "AI" or "UX" is kept (#431). Whole terms only, and no more than
+    ``MAX_SEARCH_QUERY_LENGTH``: a term that would not fit is dropped whole,
+    and a shorter one after it may still fit. The result may be ``""`` --
+    nothing to search -- which a caller must not send as a MATCH.
     """
-    in_quotes = False
-    depth = 0
-    first_unmatched_open: int | None = None
-    for i, ch in enumerate(text):
-        if ch == '"':
-            in_quotes = not in_quotes
-        elif in_quotes:
+    tokens = [
+        w
+        for w in re.split(r"\W+", text or "")
+        if len(w) > 1 and not (w.lower() in _STOP_WORDS and not w.isupper())
+    ]
+    tokens.extend(t for t in extra_terms if t)
+    seen: set[str] = set()
+    query = ""
+    for token in tokens:
+        if token.lower() in seen:
             continue
-        elif ch == "(":
-            if depth == 0:
-                first_unmatched_open = i
-            depth += 1
-        elif ch == ")":
-            if depth == 0:
-                # A lone ")" with nothing open: cut right before it.
-                return text[:i].rstrip()
-            depth -= 1
-            if depth == 0:
-                first_unmatched_open = None
-    if depth > 0 and first_unmatched_open is not None:
-        # One or more "(" never closed -- cut before the outermost one, so
-        # any group nested inside it (which did close) is dropped too.
-        return text[:first_unmatched_open].rstrip()
-    return text
+        seen.add(token.lower())
+        term = '"' + token.replace('"', '""') + '"'
+        candidate = f"{query} OR {term}" if query else term
+        if len(candidate) > MAX_SEARCH_QUERY_LENGTH:
+            continue
+        query = candidate
+    return query
+
+
+#: What makes a query "explicit syntax" the sanitizer leaves alone. FTS5's
+#: operators are case-sensitive: lowercase "and"/"or"/"not" are plain words,
+#: so the check is too (#431).
+_EXPLICIT_SYNTAX_MARKERS = (" AND ", " OR ", " NOT ", '"')
+
+
+def _has_explicit_syntax(query: str) -> bool:
+    return any(marker in query for marker in _EXPLICIT_SYNTAX_MARKERS)
 
 
 def _last_word_start(text: str) -> int:
@@ -221,7 +257,8 @@ class SearchService:
 
         This method:
         - Quotes tokens containing special characters to treat them as literals
-        - Preserves explicit FTS5 operators (AND, OR, NOT)
+        - Preserves explicit FTS5 operators (AND, OR, NOT -- uppercase only;
+          FTS5 reads lowercase and/or/not as plain words)
         - Preserves already-quoted phrases
 
         Examples:
@@ -235,8 +272,10 @@ class SearchService:
         """
         check_query_length(query)
 
-        # If query already contains FTS5 operators or quotes, assume user knows what they're doing
-        if any(op in query.upper() for op in [" AND ", " OR ", " NOT ", '"']):
+        # If query already contains FTS5 operators or quotes, assume user knows
+        # what they're doing. Uppercase only: FTS5 reads a lowercase "and" as a
+        # word, so it must not switch quoting off (#431).
+        if _has_explicit_syntax(query):
             return query
 
         # Quote any token containing FTS5-special characters
@@ -259,35 +298,35 @@ class SearchService:
         return [r for r in results if r.get("kb_name") in allowed][:limit]
 
     def _db_search(self, **kwargs: Any) -> list[dict[str, Any]]:
-        """Call ``self.db.search`` and reclassify a genuine FTS5 parse error.
+        """Call ``self.db.search`` and classify any sqlite failure.
 
         ``sanitize_fts_query`` skips quoting when the query already contains
-        an FTS5 operator (AND/OR/NOT) or a quote — it assumes the caller
-        knows what they're doing. A bare special-char token like
+        an FTS5 operator (uppercase AND/OR/NOT) or a quote — it assumes the
+        caller knows what they're doing. A bare special-char token like
         `cross-link` mixed into such a query then reaches SQLite's MATCH
         unquoted and raises ``sqlite3.OperationalError`` (e.g. "no such
         column: link"), because the hyphen/colon is parsed as column-filter
         syntax. That's a deterministic, non-retryable query problem, not an
-        internal error — reclassify it before it escapes to CLI/MCP/REST.
+        internal error — it is reclassified as ``QuerySyntaxError``.
 
-        But ``sqlite3.OperationalError`` is also SQLite's type for failures
-        that have nothing to do with the query's syntax: "database is
-        locked", a disk I/O error, a missing table, a database file that
-        can't be opened. Relabeling *every* OperationalError QUERY_SYNTAX
-        turned those into an unlogged, user-blaming 400 once QUERY_SYNTAX
-        was mapped to 400 in ``_PYRITE_ERROR_STATUS`` (#414 round 2). Only
-        the message shapes SQLite actually uses for a parse failure --
-        "no such column:", "fts5: syntax error", "unterminated string" --
-        are reclassified; anything else is a real storage failure and is
-        re-raised as ``StorageError`` (mapped to a logged 5xx) instead.
+        Only a parse error the caller caused is reclassified: an error whose
+        text matches ``_QUERY_SYNTAX_ERROR_MARKERS`` ("fts5:", "unterminated
+        string", "unknown special query", "expected integer"), or a "no such
+        column:" naming something the query itself contains (see
+        ``_looks_like_query_syntax_error``). Everything else -- "database is
+        locked", disk I/O, a missing table or column, a corrupt file (a
+        ``sqlite3.DatabaseError``, not an OperationalError) -- is a storage
+        fault and is raised as ``StorageError`` (``StorageBusyError`` for a
+        lock). Not logged here: each surface logs it once, with a traceback
+        (REST's central handler, MCP's dispatcher), and the CLI prints it.
         """
         try:
             return self.db.search(**kwargs)
-        except sqlite3.OperationalError as e:
-            if not _looks_like_query_syntax_error(str(e)):
-                logger.error("Search backend failure (not a query syntax problem): %s", e)
-                raise StorageError(f"Search failed: {e}") from e
-            token = self._offending_token(str(kwargs.get("query") or ""), e)
+        except sqlite3.DatabaseError as e:
+            query = str(kwargs.get("query") or "")
+            if not _looks_like_query_syntax_error(str(e), query):
+                raise storage_error_from(e) from e
+            token = self._offending_token(query, e)
             if token:
                 raise QuerySyntaxError(
                     f"Query could not be parsed: the token '{token}' was read as a "
@@ -357,7 +396,7 @@ class SearchService:
             return None
         # Respect explicit operators / quoted phrases — same guard the
         # sanitizer uses to decide "the user knows what they want."
-        if any(op in query.upper() for op in [" AND ", " OR ", " NOT ", '"']):
+        if _has_explicit_syntax(query):
             return None
         terms = query.split()
         if len(terms) < 2:
@@ -389,6 +428,7 @@ class SearchService:
         trace: dict[str, Any] | None = None,
         kb_names: set[str] | list[str] | None = None,
         warnings: list[str] | None = None,
+        semantic_query: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search across entries.
@@ -417,6 +457,13 @@ class SearchService:
                 applied on every leg that ran. Never populated on the happy
                 path; a caller that ignores it still gets correctly filtered
                 results, just without knowing a leg was dropped.
+            semantic_query: The text the semantic leg embeds, when it should
+                differ from ``query``. A feature that derives an OR query from
+                a title or a message passes the query as ``query`` and the
+                text itself here, so the vector leg embeds words, not
+                ``"a" OR "b"`` (#431). ``None`` (the default): both legs use
+                ``query``. Refused over ``MAX_SEARCH_QUERY_LENGTH`` like
+                ``query``; ignored in keyword mode.
 
         **What a search response owes its caller** (#56) — the one statement
         of the convention; the REST schema, the REST route and the ``kb_search``
@@ -446,6 +493,9 @@ class SearchService:
         # Before expansion, mode selection or sanitizing: every mode refuses an
         # over-long query the same way.
         check_query_length(query)
+        if semantic_query is not None:
+            check_query_length(semantic_query)
+        semantic_text = query if semantic_query is None else semantic_query
 
         # Validate `limit` once, here, rather than letting whatever arithmetic
         # reaches it first decide the error. `limit=None` used to surface as a
@@ -486,7 +536,7 @@ class SearchService:
                 # Semantic uses original natural language query, not expanded
                 fetch = limit * 4 if kb_names is not None else limit
                 results = self._semantic_search(
-                    query,
+                    semantic_text,
                     kb_name,
                     fetch,
                     offset=offset,
@@ -519,6 +569,7 @@ class SearchService:
                     offset,
                     sanitize,
                     expanded_query=expanded_query,
+                    semantic_query=semantic_text,
                     fips=fips,
                     state=state,
                     status=status,
@@ -636,7 +687,11 @@ class SearchService:
             return []
 
         svc = EmbeddingService(self.db)
-        if not svc.has_embeddings():
+        try:
+            has_embeddings = svc.has_embeddings()
+        except sqlite3.DatabaseError as e:
+            raise storage_error_from(e, "Semantic search failed") from e
+        if not has_embeddings:
             # ADR-0035 §5. Under "writes are eventually-embedded" this is the
             # ordinary state of a KB nobody has embedded yet, and an empty
             # result set is indistinguishable from "searched, found nothing".
@@ -675,13 +730,20 @@ class SearchService:
 
         # sqlite-vec KNN doesn't support SQL OFFSET, so fetch limit+offset
         # and slice in Python
-        results = svc.search_similar(
-            query,
-            kb_name=kb_name,
-            limit=limit + offset,
-            max_distance=max_distance,
-            **active,
-        )
+        # The embedded text is never parsed, so no sqlite failure here is the
+        # caller's query: every one is a storage fault, classified like the
+        # keyword leg's (#431). Before this, an OperationalError escaped as a
+        # non-PyriteError -- a plain-text 500 on REST, INTERNAL on MCP.
+        try:
+            results = svc.search_similar(
+                query,
+                kb_name=kb_name,
+                limit=limit + offset,
+                max_distance=max_distance,
+                **active,
+            )
+        except sqlite3.DatabaseError as e:
+            raise storage_error_from(e, "Semantic search failed") from e
         return results[offset:]
 
     @staticmethod
@@ -755,6 +817,7 @@ class SearchService:
         offset: int = 0,
         sanitize: bool = True,
         expanded_query: str | None = None,
+        semantic_query: str | None = None,
         fips: str | None = None,
         state: str | None = None,
         status: str | None = None,
@@ -794,7 +857,7 @@ class SearchService:
         # Try to get semantic results — filtered on the vector leg itself, so
         # the fused set can never contain an entry the caller's filter excluded.
         semantic_results = self._semantic_search(
-            query,
+            query if semantic_query is None else semantic_query,
             kb_name,
             limit=fetch_size,
             filters=self._leg_filters(

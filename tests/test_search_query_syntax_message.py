@@ -48,11 +48,17 @@ def test_prefers_the_token_the_fragment_came_from():
     assert "cross-link" not in message
 
 
-def test_does_not_blame_a_token_the_error_does_not_name():
-    message = _message("detention AND third-party-doctrine", "no such column: zebra")
+def test_a_column_the_query_does_not_name_is_not_the_callers_fault():
+    """FTS5 names a column it read *from the query*; a name the query never
+    contains is the SQL itself missing a column -- a storage fault, not a
+    token to blame on the caller (#431)."""
+    from pyrite.exceptions import StorageError
 
-    assert "no such column: zebra" in message
-    assert "third-party-doctrine" not in message
+    service = SearchService(_RaisingDB(sqlite3.OperationalError("no such column: zebra")))
+    with pytest.raises(StorageError) as excinfo:
+        service._db_search(query="detention AND third-party-doctrine")
+    assert "no such column: zebra" in str(excinfo.value)
+    assert not isinstance(excinfo.value, QuerySyntaxError)
 
 
 def test_other_operational_errors_keep_the_previous_text():
@@ -128,7 +134,7 @@ class TestOnlyQueryShapedErrorsAreTheCallersFault:
         from pyrite.services.search_service import _looks_like_query_syntax_error
 
         message = self._fts_error(query)
-        assert _looks_like_query_syntax_error(message), message
+        assert _looks_like_query_syntax_error(message, query), message
 
     def test_a_missing_table_column_is_not_the_callers_fault(self):
         import sqlite3
@@ -140,4 +146,4 @@ class TestOnlyQueryShapedErrorsAreTheCallersFault:
         with pytest.raises(sqlite3.OperationalError) as exc_info:
             con.execute("SELECT e.fips FROM entry e").fetchall()
         con.close()
-        assert not _looks_like_query_syntax_error(str(exc_info.value)), str(exc_info.value)
+        assert not _looks_like_query_syntax_error(str(exc_info.value), "fips"), str(exc_info.value)
