@@ -132,6 +132,44 @@ class TestSearchEndpointErrors:
         assert resp.status_code == 400
         assert resp.json()["code"] == "QUERY_SYNTAX"
 
+    @pytest.mark.parametrize(
+        "error_text",
+        [
+            "database is locked",
+            "disk I/O error",
+            "no such table: entry_fts",
+            "unable to open database file",
+        ],
+    )
+    def test_search_real_db_failure_stays_a_5xx(self, rest_api_env, error_text):
+        """A genuine backend failure -- not the caller's query -- must not be
+        relabeled 400 QUERY_SYNTAX just because SQLite raises the same
+        sqlite3.OperationalError type for both. Round-2 cold read finding on
+        #414/#428: _db_search used to reclassify every OperationalError.
+        """
+        import sqlite3
+
+        from pyrite.server.api import get_search_service
+        from pyrite.services.search_service import SearchService
+
+        class _RaisingDB:
+            def search(self, **kwargs):
+                raise sqlite3.OperationalError(error_text)
+
+            def __getattr__(self, name):
+                raise sqlite3.OperationalError(error_text)
+
+        client = rest_api_env["client"]
+        broken_svc = SearchService(_RaisingDB())
+        client.app.dependency_overrides[get_search_service] = lambda: broken_svc
+        try:
+            resp = client.get("/api/search?q=hello")
+        finally:
+            del client.app.dependency_overrides[get_search_service]
+        assert resp.status_code >= 500, resp.json()
+        assert resp.json().get("code") != "QUERY_SYNTAX", resp.json()
+        assert resp.json().get("code") == "STORAGE_ERROR", resp.json()
+
 
 @pytest.mark.api
 class TestKBEndpointErrors:

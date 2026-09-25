@@ -69,3 +69,32 @@ def test_error_code_is_unchanged():
         service._db_search(query="detention AND third-party-doctrine")
 
     assert excinfo.value.error_code == "QUERY_SYNTAX"
+
+
+# ---------------------------------------------------------------------------
+# A non-syntax OperationalError is a server failure, not the caller's fault
+# (#414 fix round 2): "database is locked", a disk I/O error, a missing
+# table, or a database file that can't be opened must stay a 5xx and be
+# logged -- not get relabeled QUERY_SYNTAX/400 just because they are also
+# OperationalError under the hood.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "error_text",
+    [
+        "database is locked",
+        "disk I/O error",
+        "no such table: entry_fts",
+        "unable to open database file",
+    ],
+)
+def test_non_syntax_operational_errors_are_not_query_syntax_error(error_text):
+    from pyrite.exceptions import StorageError
+
+    service = SearchService(_RaisingDB(sqlite3.OperationalError(error_text)))
+    with pytest.raises(StorageError) as excinfo:
+        service._db_search(query="hello")
+    assert error_text in str(excinfo.value)
+    # And specifically not reclassified as the caller's query being bad.
+    assert not isinstance(excinfo.value, QuerySyntaxError)

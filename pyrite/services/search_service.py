@@ -12,13 +12,38 @@ import time
 from enum import StrEnum
 from typing import Any
 
-from ..exceptions import QuerySyntaxError, QueryTooLongError
+from ..exceptions import QuerySyntaxError, QueryTooLongError, StorageError
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
 
 #: The longest search query, in characters, that any surface accepts.
 MAX_SEARCH_QUERY_LENGTH = 1000
+
+#: Substrings SQLite/FTS5 actually use for a *parse* failure -- as opposed to
+#: a storage failure ("database is locked", a disk I/O error, a missing
+#: table, a file that can't be opened) that also happens to raise
+#: sqlite3.OperationalError. Checked with `in` against the lowercased error
+#: text; anything that doesn't match one of these is not the caller's query
+#: being bad.
+_QUERY_SYNTAX_ERROR_MARKERS = (
+    "no such column:",
+    "fts5: syntax error",
+    "unterminated string",
+)
+
+
+def _looks_like_query_syntax_error(message: str) -> bool:
+    """Is this OperationalError message shape a real FTS5/SQL parse error?
+
+    Whitelist, not blacklist: only the shapes SQLite is known to use for a
+    query the caller actually wrote wrong are reclassified as
+    QuerySyntaxError. Everything else (a locked database, disk I/O, a
+    missing table, a file that can't be opened) stays an OperationalError
+    the caller did nothing to cause.
+    """
+    lowered = message.lower()
+    return any(marker in lowered for marker in _QUERY_SYNTAX_ERROR_MARKERS)
 
 
 def check_query_length(query: str) -> None:
@@ -64,16 +89,60 @@ def clip_derived_query(text: str) -> str:
     if clipped.count('"') % 2:
         # The cut fell inside a quoted phrase: drop the open phrase.
         clipped = clipped[: clipped.rfind('"')]
-    if clipped.count("(") != clipped.count(")"):
-        # The cut fell inside a parenthesised group: drop back to before the
-        # last unmatched "(" (an open group can't itself contain a balanced
-        # ")" that outnumbers "(", so the last "(" is always the culprit).
-        clipped = clipped[: clipped.rfind("(")]
+    clipped = _drop_unbalanced_parens(clipped)
     clipped = clipped.rstrip()
     while clipped and clipped[_last_word_start(clipped) :] in _FTS_OPERATORS:
         # Never end on a bare operator: FTS5 reads it as a syntax error.
         clipped = clipped[: _last_word_start(clipped)].rstrip()
     return clipped
+
+
+def _drop_unbalanced_parens(text: str) -> str:
+    """Cut ``text`` back to before its first unmatched paren, if any.
+
+    A naive ``text.count("(") != text.count(")")`` (with ``rfind("(")`` to
+    find where to cut) gets three real shapes wrong:
+
+    - Nested groups: ``"(a (b) c"`` has one unmatched "(" -- the *outer*
+      one -- but ``rfind("(")`` finds the *inner*, already-closed "(" and
+      cuts there, discarding the whole (validly closed) inner group for no
+      reason.
+    - A "(" inside a quoted phrase, e.g. ``'"a(b"'``, is a literal
+      character to FTS5, not a group opener -- counting it as one can flag
+      balanced text as unbalanced (or mask a real imbalance elsewhere).
+    - A lone ")" with no "(" before it: ``rfind("(")`` returns -1, and
+      slicing to ``text[:-1]`` just drops the last character, leaving the
+      stray ")" in place -- still a syntax error.
+
+    A left-to-right depth scan that skips quoted spans gets all three
+    right: quotes toggle a "not counting parens right now" state, and the
+    first paren that never finds its match (a "(" whose depth never
+    returns to its starting level, or a lone ")") is where the cut belongs.
+    """
+    in_quotes = False
+    depth = 0
+    first_unmatched_open: int | None = None
+    for i, ch in enumerate(text):
+        if ch == '"':
+            in_quotes = not in_quotes
+        elif in_quotes:
+            continue
+        elif ch == "(":
+            if depth == 0:
+                first_unmatched_open = i
+            depth += 1
+        elif ch == ")":
+            if depth == 0:
+                # A lone ")" with nothing open: cut right before it.
+                return text[:i].rstrip()
+            depth -= 1
+            if depth == 0:
+                first_unmatched_open = None
+    if depth > 0 and first_unmatched_open is not None:
+        # One or more "(" never closed -- cut before the outermost one, so
+        # any group nested inside it (which did close) is dropped too.
+        return text[:first_unmatched_open].rstrip()
+    return text
 
 
 def _last_word_start(text: str) -> int:
@@ -184,7 +253,7 @@ class SearchService:
         return [r for r in results if r.get("kb_name") in allowed][:limit]
 
     def _db_search(self, **kwargs: Any) -> list[dict[str, Any]]:
-        """Call ``self.db.search`` and reclassify a raw FTS5 syntax error.
+        """Call ``self.db.search`` and reclassify a genuine FTS5 parse error.
 
         ``sanitize_fts_query`` skips quoting when the query already contains
         an FTS5 operator (AND/OR/NOT) or a quote — it assumes the caller
@@ -194,10 +263,24 @@ class SearchService:
         column: link"), because the hyphen/colon is parsed as column-filter
         syntax. That's a deterministic, non-retryable query problem, not an
         internal error — reclassify it before it escapes to CLI/MCP/REST.
+
+        But ``sqlite3.OperationalError`` is also SQLite's type for failures
+        that have nothing to do with the query's syntax: "database is
+        locked", a disk I/O error, a missing table, a database file that
+        can't be opened. Relabeling *every* OperationalError QUERY_SYNTAX
+        turned those into an unlogged, user-blaming 400 once QUERY_SYNTAX
+        was mapped to 400 in ``_PYRITE_ERROR_STATUS`` (#414 round 2). Only
+        the message shapes SQLite actually uses for a parse failure --
+        "no such column:", "fts5: syntax error", "unterminated string" --
+        are reclassified; anything else is a real storage failure and is
+        re-raised as ``StorageError`` (mapped to a logged 5xx) instead.
         """
         try:
             return self.db.search(**kwargs)
         except sqlite3.OperationalError as e:
+            if not _looks_like_query_syntax_error(str(e)):
+                logger.error("Search backend failure (not a query syntax problem): %s", e)
+                raise StorageError(f"Search failed: {e}") from e
             token = self._offending_token(str(kwargs.get("query") or ""), e)
             if token:
                 raise QuerySyntaxError(
@@ -248,6 +331,17 @@ class SearchService:
         OR-combined ("orange OR county OR florida OR quarterly") recovers the
         near-misses.
 
+        Each term is sanitized (quoted if it contains an FTS5-special
+        character) before joining. `sanitize_fts_query` can't do this for
+        us: it skips quoting entirely once it sees the query already
+        contains an operator, and joining with " OR " is exactly what
+        introduces one. Without this, a perfectly ordinary plain-word query
+        like "pre-push selection" or "section 230(c) reform" relaxes to
+        `pre-push OR selection`, and the un-quoted hyphenated/parenthesized
+        term then reaches FTS5 raw and raises -- turning a normal zero-hit
+        search into a QUERY_SYNTAX error that blames the user for a query
+        they never wrote wrong (#361).
+
         Returns the OR-combined query, or ``None`` when relaxation does not
         apply: a single term (nothing to relax), an empty query, or a query the
         user already wrote with explicit operators or quoted phrases (we honor
@@ -262,7 +356,8 @@ class SearchService:
         terms = query.split()
         if len(terms) < 2:
             return None
-        return " OR ".join(terms)
+        quoted_terms = [re.sub(r"(\S*[^\w\s]\S*)", r'"\1"', term) for term in terms]
+        return " OR ".join(quoted_terms)
 
     # =========================================================================
     # Search Operations

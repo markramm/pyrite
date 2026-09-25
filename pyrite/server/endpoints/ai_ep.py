@@ -10,6 +10,7 @@ from ...config import PyriteConfig
 from ...exceptions import QuerySyntaxError
 from ...services.auth_service import AuthService
 from ...services.kb_service import KBService
+from ...services.link_discovery_service import LinkDiscoveryService
 from ...services.llm_service import LLMService
 from ...services.llm_usage_service import LLMUsageService
 from ...services.quota_service import QuotaService
@@ -237,29 +238,36 @@ async def ai_suggest_links(
     title = entry.get("title", "")
 
     kb_names = None if req.kb_name else readable
-    clipped_title = clip_derived_query(title)
-    if not clipped_title:
-        # A title that clips to "" (e.g. an unterminated quote past the cap)
-        # has nothing to search -- an empty query is not "no query", so skip
-        # the search rather than ask the backend to special-case it.
+    # Build the query from the title's own words, quoted and OR-joined
+    # (same helper LinkDiscoveryService.suggest_links uses) instead of
+    # handing the raw title to search(): a real title routinely carries
+    # punctuation FTS5 reads as operator syntax -- AND, quotes, a hyphen,
+    # a colon -- and a title is not a search the caller wrote, so it must
+    # not be able to fail to parse (round-2 cold read on #414/#428; #361).
+    derived_query = LinkDiscoveryService.build_suggest_query({"title": title})
+    if not derived_query.strip():
+        # No words long enough to search on (or an empty title) -- nothing
+        # to search, not an empty MATCH.
         related = []
     else:
         try:
             related = search_svc.search(
-                query=clipped_title,
+                query=derived_query,
                 kb_name=req.kb_name,
                 kb_names=kb_names,
                 limit=15,
                 mode="hybrid",
             )
         except QuerySyntaxError:
-            # Deterministic and not retryable in keyword mode either -- the
-            # query itself is bad, not the mode. Let it propagate to the
-            # central handler, which maps it to 400 QUERY_SYNTAX.
+            # Should not happen -- build_suggest_query's quoted-OR tokens
+            # can't fail to parse -- but if it ever does, it is
+            # deterministic and not retryable in keyword mode either.
+            # Kept as defense in depth; propagates to the central handler,
+            # which maps it to 400 QUERY_SYNTAX.
             raise
         except Exception:
             related = search_svc.search(
-                query=clipped_title,
+                query=derived_query,
                 kb_name=req.kb_name,
                 kb_names=kb_names,
                 limit=15,
@@ -348,22 +356,34 @@ async def ai_chat(
     context_text = ""
     kb_names = None if req.kb else readable
     try:
-        try:
-            results = search_svc.search(
-                query=clip_derived_query(last_msg),
-                kb_name=req.kb,
-                kb_names=kb_names,
-                limit=5,
-                mode="hybrid",
-            )
-        except Exception:
-            results = search_svc.search(
-                query=clip_derived_query(last_msg),
-                kb_name=req.kb,
-                kb_names=kb_names,
-                limit=5,
-                mode="keyword",
-            )
+        clipped_msg = clip_derived_query(last_msg)
+        if not clipped_msg:
+            # A message that clips to "" (an unterminated quote past the
+            # cap) has nothing to search -- same rule as suggest-links.
+            results = []
+        else:
+            try:
+                results = search_svc.search(
+                    query=clipped_msg,
+                    kb_name=req.kb,
+                    kb_names=kb_names,
+                    limit=5,
+                    mode="hybrid",
+                )
+            except QuerySyntaxError:
+                # Deterministic and not retryable in keyword mode either --
+                # same rationale as suggest-links. The outer except below
+                # still catches this, so chat proceeds without context
+                # rather than failing the request.
+                raise
+            except Exception:
+                results = search_svc.search(
+                    query=clipped_msg,
+                    kb_name=req.kb,
+                    kb_names=kb_names,
+                    limit=5,
+                    mode="keyword",
+                )
 
         for r in results:
             if readable is not None and r.get("kb_name") not in readable:
