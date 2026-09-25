@@ -78,6 +78,10 @@ def task_cli_env(tmp_path):
 
 
 @pytest.mark.cli
+@pytest.mark.control(
+    reason="the schema refusal without --field already worked before #397; "
+    "this pins the baseline the rest of the file's tests build on"
+)
 def test_task_create_with_field_satisfies_required_schema_fields(desk_env):
     """Without --field, the desk schema's required fields refuse the create."""
     result = runner.invoke(
@@ -182,7 +186,18 @@ def test_task_create_field_uses_the_shared_value_parser(task_cli_env):
 @pytest.mark.parametrize(
     ("flag", "value"),
     [
-        ("title", "dup title"),
+        # Without --field at all (pre-#397), typer's own "no such option"
+        # usage banner happens to contain the word "TITLE" (from
+        # `[OPTIONS] [TITLE]`), so this case passes by coincidence even
+        # without the fix -- unlike the others, whose flag name never
+        # appears in that generic banner.
+        pytest.param(
+            "title",
+            "dup title",
+            marks=pytest.mark.control(
+                reason="typer's usage banner contains the word 'TITLE' regardless of --field"
+            ),
+        ),
         ("body", "dup body"),
         ("parent", "some-parent"),
         ("priority", "3"),

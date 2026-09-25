@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
 from typer.testing import CliRunner
 
 from pyrite.cli import app
@@ -144,6 +145,11 @@ def test_update_field_writes_undeclared_top_level_task_key(tmp_path):
     assert "metadata" not in fm or "park_until" not in (fm.get("metadata") or {})
 
 
+@pytest.mark.control(
+    reason="the schema refusal (and leaving the file untouched) already worked "
+    "before #407; this pins that it still holds now that undeclared keys are "
+    "stored instead of dropped"
+)
 def test_update_rejecting_a_declared_field_leaves_the_file_byte_identical(tmp_path):
     """A schema refusal (enum violation) must not touch the file at all."""
     kb_yaml = """name: statuses
@@ -176,14 +182,13 @@ validation:
     assert after == before
 
 
+@pytest.mark.control(
+    reason="the markers were dropped before #407 too, as a side effect of the "
+    "bug this issue closes (hasattr -> False -> continue); this pins that they "
+    "stay dropped now that the strip is deliberate rather than accidental"
+)
 def test_update_does_not_persist_truncation_marker_keys(tmp_path):
-    """`body_truncated=false` (and the other ADR-0034 marker keys) never land in the file.
-
-    Marked as a control: this passed before the fix too (the markers reached
-    `hasattr` -> False -> `continue` and were dropped as a side effect of the
-    bug this issue closes). It has to keep passing once undeclared keys are
-    stored on purpose, so it is pinned here rather than left to accident.
-    """
+    """`body_truncated=false` (and the other ADR-0034 marker keys) never land in the file."""
     config, kb_path = _make_env(tmp_path, "notes", NOTE_KB_YAML)
     result = _invoke(config, ["create", "-k", "notes", "-t", "note", "--title", "N", "-b", "x"])
     assert result.exit_code == 0, result.output
