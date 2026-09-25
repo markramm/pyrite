@@ -1324,10 +1324,36 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         application.state.pyrite_ws_loop = asyncio.get_running_loop()
         bind_loop(application.state.pyrite_ws_loop)
 
+    # A socket lives no longer than the credential that opened it (#411,
+    # ADR-0036): AuthService announces each session end or scope change and
+    # the socket manager closes the sockets it names. Subscribing is
+    # idempotent and never undone -- the listener is module-level, like the
+    # manager, and does nothing while no live loop is bound. The expiry sweep
+    # lives exactly as long as this app's loop.
+    # Pinned by tests/test_websocket_credential_lifetime.py.
+    @application.on_event("startup")
+    async def _start_socket_credential_lifetime() -> None:
+        import asyncio
+
+        from ..services import credential_events
+        from .websocket import expiry_sweep, on_credential_change
+
+        credential_events.subscribe(on_credential_change)
+        application.state.pyrite_ws_expiry_sweep = asyncio.get_running_loop().create_task(
+            expiry_sweep()
+        )
+
     @application.on_event("shutdown")
     async def _unbind_websocket_loop() -> None:
+        import asyncio
+
         from .websocket import unbind_loop
 
+        sweep = getattr(application.state, "pyrite_ws_expiry_sweep", None)
+        if sweep is not None:
+            sweep.cancel()
+            # Bounded: shutdown never waits on the sweep for long.
+            await asyncio.wait({sweep}, timeout=5)
         unbind_loop(application.state.pyrite_ws_loop)
 
     # CORS — use configured origins; disable credentials with wildcard (spec compliance)
@@ -1416,7 +1442,8 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
         """Authenticate the handshake, then register the socket with its scope.
 
         Rejected handshakes are closed *before* ``accept`` and never reach the
-        manager (#218). The readable set is fixed for the connection's life.
+        manager (#218). The readable set is fixed for the connection's life,
+        and the connection lives no longer than its credential (ADR-0036).
         The resolution runs on a worker thread with its own short-lived DB
         handle -- not a ``Depends(get_db)`` session, which would stay open for
         as long as the socket does.
@@ -1438,18 +1465,22 @@ def create_app(config: PyriteConfig | None = None) -> FastAPI:
             await ws.close(code=1008)
             return
 
-        def _resolve() -> set[str] | None:
+        def _resolve():
             with _app_db().request_handle() as db:
                 return resolve_socket_scope(ws, cfg, db)
 
+        # Read before resolving: a credential change processed after this
+        # point may have revoked what `_resolve` is about to find valid.
+        epoch = manager.epoch
         try:
-            readable = await run_in_threadpool(_resolve)
+            scope = await run_in_threadpool(_resolve)
         except HandshakeRejectedError:
             logger.info("Refused /ws handshake: no credential admits this socket")
             await ws.close(code=1008)
             return
 
-        await manager.connect(ws, readable)
+        if not await manager.connect(ws, scope, epoch):
+            return
         try:
             while True:
                 # Keep connection alive; clients can send pings

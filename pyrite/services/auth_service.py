@@ -16,6 +16,7 @@ from ..config import AuthConfig, OAuthProviderConfig
 from ..exceptions import LastAdminError
 from ..services.oauth_providers import OAuthProfile
 from ..storage.database import PyriteDB
+from .credential_events import CredentialChange, publish
 
 logger = logging.getLogger(__name__)
 
@@ -461,6 +462,17 @@ class AuthService:
 
         Returns user dict or None if expired/invalid. Updates last_used.
         """
+        found = self.verify_session_detail(token)
+        return found[0] if found else None
+
+    def verify_session_detail(self, token: str) -> tuple[dict, dict] | None:
+        """``verify_session``, plus the session itself: ``(user, session)``.
+
+        ``session`` is ``{"token_hash", "expires_at"}`` (``expires_at`` a
+        timezone-aware ``datetime``). A live-update socket records both at
+        its handshake so it can be closed when that session ends (ADR-0036).
+        Kept out of the user dict, which endpoints return to clients.
+        """
         token_hash = hashlib.sha256(token.encode()).hexdigest()
 
         # Probabilistic cleanup (1 in 20 calls)
@@ -489,11 +501,13 @@ class AuthService:
         avatar_url = row["avatar_url"]
 
         # Check expiry
-        if datetime.fromisoformat(expires_at) < datetime.now(UTC):
+        expiry = datetime.fromisoformat(expires_at)
+        if expiry < datetime.now(UTC):
             self.db.execute_write_sql(
                 "DELETE FROM session WHERE id = :session_id",
                 {"session_id": session_id},
             )
+            publish(CredentialChange(session_hash=token_hash))
             return None
 
         # Update last_used
@@ -502,7 +516,7 @@ class AuthService:
             {"last_used": datetime.now(UTC).isoformat(), "session_id": session_id},
         )
 
-        return {
+        user = {
             "id": user_id,
             "username": username,
             "display_name": display_name,
@@ -510,6 +524,13 @@ class AuthService:
             "auth_provider": auth_provider,
             "avatar_url": avatar_url,
         }
+        return user, {"token_hash": token_hash, "expires_at": expiry}
+
+    # Every method that ends a session or changes what a user may read --
+    # logout, expiry and eviction, role changes, KB grants and revokes, and
+    # the admin grant `create_user_ephemeral_kb` writes -- publishes a
+    # `CredentialChange` after its write, so open live-update sockets opened
+    # with that credential are closed (#411, ADR-0036).
 
     def logout(self, token: str) -> bool:
         """Delete session by token. Returns True if found."""
@@ -518,14 +539,19 @@ class AuthService:
             "DELETE FROM session WHERE token_hash = :token_hash",
             {"token_hash": token_hash},
         )
+        if rowcount > 0:
+            publish(CredentialChange(session_hash=token_hash))
         return rowcount > 0
 
     def logout_all(self, user_id: int) -> int:
         """Delete all sessions for a user. Returns count deleted."""
-        return self.db.execute_write_sql(
+        deleted = self.db.execute_write_sql(
             "DELETE FROM session WHERE user_id = :user_id",
             {"user_id": user_id},
         )
+        if deleted:
+            publish(CredentialChange(user_id=user_id))
+        return deleted
 
     def get_user(self, user_id: int) -> dict | None:
         """Get user by ID."""
@@ -568,6 +594,10 @@ class AuthService:
             {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
         if rowcount > 0:
+            # Publish on every role write, even an unchanged one: a separate
+            # read to skip that case races a concurrent change and can miss a
+            # downgrade (#433 delta cold read). An extra reconnect is the cost.
+            publish(CredentialChange(user_id=user_id))
             return True
         exists = self.db.execute_sql(
             "SELECT 1 FROM local_user WHERE id = :user_id", {"user_id": user_id}
@@ -594,11 +624,18 @@ class AuthService:
     def _cleanup_expired(self) -> int:
         """Delete expired sessions."""
         now = datetime.now(UTC).isoformat()
+        expired = self.db.execute_sql(
+            "SELECT token_hash FROM session WHERE expires_at < :now", {"now": now}
+        )
         deleted = self.db.execute_write_sql(
             "DELETE FROM session WHERE expires_at < :now", {"now": now}
         )
         if deleted:
             logger.debug("Cleaned up %d expired sessions", deleted)
+        # A session that expired between the two statements is deleted but
+        # not announced; its socket's own recorded expiry still closes it.
+        for row in expired:
+            publish(CredentialChange(session_hash=row["token_hash"]))
         return deleted
 
     def _enforce_max_sessions(self, user_id: int) -> None:
@@ -612,13 +649,18 @@ class AuthService:
         if count >= self.config.max_sessions_per_user:
             # Delete oldest sessions to make room
             excess = count - self.config.max_sessions_per_user + 1
-            self.db.execute_write_sql(
-                """DELETE FROM session WHERE id IN (
-                    SELECT id FROM session WHERE user_id = :user_id
-                    ORDER BY created_at ASC LIMIT :excess
-                )""",
-                {"user_id": user_id, "excess": excess},
-            )
+            # One statement, so the eviction is atomic; RETURNING names the
+            # evicted sessions so their sockets can be closed.
+            with self.db.transaction():
+                evicted = self.db.execute_sql(
+                    """DELETE FROM session WHERE id IN (
+                        SELECT id FROM session WHERE user_id = :user_id
+                        ORDER BY created_at ASC LIMIT :excess
+                    ) RETURNING token_hash""",
+                    {"user_id": user_id, "excess": excess},
+                )
+            for row in evicted:
+                publish(CredentialChange(session_hash=row["token_hash"]))
 
     def _hash_password(self, password: str) -> str:
         """Hash password with bcrypt."""
@@ -712,6 +754,7 @@ class AuthService:
                 "now2": now,
             },
         )
+        publish(CredentialChange(user_id=user_id))
 
     def revoke_kb_permission(self, user_id: int, kb_name: str) -> bool:
         """Revoke a per-KB permission. Returns True if found."""
@@ -719,6 +762,8 @@ class AuthService:
             "DELETE FROM kb_permission WHERE user_id = :user_id AND kb_name = :kb_name",
             {"user_id": user_id, "kb_name": kb_name},
         )
+        if rowcount > 0:
+            publish(CredentialChange(user_id=user_id))
         return rowcount > 0
 
     def list_kb_permissions(self, kb_name: str) -> list[dict]:
@@ -995,6 +1040,7 @@ class AuthService:
         except BaseException:
             ephemeral_service.force_expire_kb(name)
             raise
+        publish(CredentialChange(user_id=user_id))
 
         return {
             "name": kb.name,

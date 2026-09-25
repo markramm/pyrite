@@ -1,8 +1,11 @@
 /**
  * WebSocket client for multi-tab awareness.
  *
- * The server fixes a socket's readable KBs at handshake, for the connection's
- * life (#218, #323). So the socket must follow the signed-in user: the root
+ * The server resolves a socket's readable KBs once, at handshake (#218, #323),
+ * and closes the socket when the credential that opened it ends or changes
+ * (logout, expiry, a role or KB-grant change; ADR-0036), after which this
+ * client reconnects and is scoped afresh. The socket must still follow the
+ * signed-in user, so a tab never waits on that close: the root
  * layout calls `follow(identity)` whenever `authStore.socketIdentity` changes,
  * and a change closes the current socket and opens exactly one new one (#336).
  *
