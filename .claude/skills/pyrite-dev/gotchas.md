@@ -527,3 +527,27 @@ file the code never read (the #387 delta read lost its first repro this way).
 
 `PYRITE_CONFIG_DIR` alone now moves the index too (it defaults beside
 `config.yaml`); before #377 it did not.
+
+## "Submit, then assert still active" races the background thread's own completion (#88)
+
+A test that calls `IndexWorker.submit_sync()`/`submit_rebuild()` and, on the
+*next line*, asserts the job is still `pending`/`running` (or that a second
+submit's dedup check found the first job still active) is betting the
+background thread hasn't finished yet. On an empty fixture KB that sync can
+complete in well under a millisecond, so under CPU contention (`-n auto`
+co-scheduled with another CPU-heavy file) the bet loses roughly 1 run in 5-8:
+`tests/test_index_worker.py::TestGetActiveJobs::test_active_jobs_filters`
+(`assert 0 >= 1`) and `TestConcurrency::test_duplicate_sync_returns_same_id`
+(job ids differ because dedup didn't fire) both did, on dev's post-merge CI.
+Any assertion whose truth depends on "the thread hasn't gotten there yet" is
+this shape, not just these two -- `test_different_kbs_get_different_jobs` has
+the identical "submit right after submit" call shape but only asserts id
+*inequality*, true regardless of completion order, which is why it never
+flaked.
+
+Fix: don't race it, gate it. Patch `pyrite.services.index_worker.IndexManager`
+so `sync_incremental` blocks on a `threading.Event` the test controls (see the
+`gated_sync` fixture in `tests/test_index_worker.py`) -- the job is
+deterministically still `running` for as long as the gate is closed, no sleep,
+no timing assumption, and the test still proves dedup/filtering against a real
+in-flight job rather than a synthetic one.
