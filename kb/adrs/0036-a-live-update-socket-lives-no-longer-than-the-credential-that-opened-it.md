@@ -3,7 +3,7 @@ id: adr-0036
 type: adr
 title: "A live-update socket lives no longer than the credential that opened it"
 adr_number: 36
-status: proposed
+status: accepted
 date: 2026-09-25
 ---
 
