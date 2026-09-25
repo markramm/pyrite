@@ -15,6 +15,7 @@ from rich.table import Table
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import (
+    KBConfig,
     auto_discover_kbs,
     load_config,
 )
@@ -265,7 +266,7 @@ def kb_validate(
     db = None
     health = {}
 
-    def _select_kbs(current_config):
+    def _select_kbs(current_config) -> list[KBConfig]:
         if name:
             kb = current_config.get_kb(name)
             if not kb:
@@ -280,17 +281,7 @@ def kb_validate(
             return [kb]
         return current_config.all_kbs()
 
-    try:
-        config, db = get_config_and_db(config)
-        kbs = _select_kbs(config)
-
-        # Run content-drift checks once (check_health walks all KBs internally),
-        # then bucket results by kb name.
-        from ..storage import IndexManager
-
-        index_mgr = IndexManager(db, config)
-        health = index_mgr.check_health()
-    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
+    def _use_yaml_config(exc: Exception) -> tuple[list[KBConfig], dict[str, Any]]:
         logger.warning(
             "Could not read index database %s while validating KBs; "
             "using YAML config without content-drift checks: %s",
@@ -299,12 +290,29 @@ def kb_validate(
         )
         # A failed merge may have partially added DB-only KBs. Reload to make
         # the fallback strictly YAML-backed, matching other CLI commands.
-        config = load_config()
-        kbs = _select_kbs(config)
-        health = {}
-    finally:
-        if db is not None:
-            db.close()
+        yaml_config = load_config()
+        return _select_kbs(yaml_config), {}
+
+    try:
+        config, db = get_config_and_db(config)
+    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
+        kbs, health = _use_yaml_config(exc)
+    else:
+        try:
+            kbs = _select_kbs(config)
+
+            # Run content-drift checks once (check_health walks all KBs
+            # internally), then bucket results by kb name.
+            from ..storage import IndexManager
+
+            index_mgr = IndexManager(db, config)
+            try:
+                health = index_mgr.check_health()
+            except (sqlite3.Error, SQLAlchemyError) as exc:
+                kbs, health = _use_yaml_config(exc)
+        finally:
+            if db is not None:
+                db.close()
 
     def _for_kb(kb_name: str, field: str) -> list:
         return [row for row in health.get(field, []) if row.get("kb") == kb_name]

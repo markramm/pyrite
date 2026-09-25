@@ -27,7 +27,9 @@ class SchemaService:
     def _require_kb_directory(self, kb: KBConfig) -> None:
         """Refuse schema writes when the registered KB directory is gone."""
         if not kb.path.is_dir():
-            raise KBNotFoundError(f"KB '{kb.name}' directory does not exist: {kb.path}")
+            raise KBNotFoundError(
+                f"KB '{kb.name}' directory is missing; re-register or remove the KB"
+            )
 
     def _load_kb_yaml(self, kb: KBConfig) -> dict[str, Any]:
         """Load kb.yaml, returning empty dict if missing."""

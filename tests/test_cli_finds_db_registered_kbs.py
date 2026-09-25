@@ -111,6 +111,24 @@ def test_kb_validate_uses_yaml_config_when_index_database_is_unreadable(register
     assert index_db.read_bytes() == corrupt_bytes
 
 
+def test_kb_validate_does_not_report_file_read_errors_as_database_errors(
+    registered_kb, monkeypatch, caplog
+):
+    from pyrite.storage.index import IndexManager
+
+    def fail_check_health(self, kb_name=None):
+        raise OSError("could not read a KB entry")
+
+    monkeypatch.setattr(IndexManager, "check_health", fail_check_health)
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.kb_commands"):
+        result = runner.invoke(app, ["kb", "validate", "--format", "json"])
+
+    assert isinstance(result.exception, OSError)
+    assert "could not read a KB entry" in str(result.exception)
+    assert "Could not read index database" not in caplog.text
+
+
 def test_kb_schema_show_finds_db_registered_kb(registered_kb):
     payload = json.loads(
         _invoke(["kb", "schema", "show", "registry-only", "--format", "json"]).stdout
@@ -213,7 +231,10 @@ def test_schema_writes_refuse_missing_db_registered_kb_directory(
     assert result.exit_code == 1, result.output
     payload = json.loads(result.stdout)
     assert payload["error_code"] == "KB_NOT_FOUND"
-    assert "directory does not exist" in payload["error"]
+    assert payload["error"] == (
+        "KB 'registry-only' directory is missing; re-register or remove the KB"
+    )
+    assert str(registered_kb["kb_path"]) not in payload["error"]
     assert not registered_kb["kb_path"].exists()
 
 
