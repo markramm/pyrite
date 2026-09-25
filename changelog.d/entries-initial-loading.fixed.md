@@ -1,1 +1,0 @@
-- **Entries wait for the selected knowledge base's list before showing an empty state (#45).** Initial loads and KB switches show a loading state until the list request settles; a genuinely empty list still shows its empty state.

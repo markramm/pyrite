@@ -1,2 +1,0 @@
-- A schema refusal on a `required` or `enum` field now keeps the validator's own explanation instead of showing only `field: required` or the allowed values -- a conditional rule like journalism's "amount is required for payment transactions" is visible in the error again (#429).
-- The journalism-investigation extension's claim-to-edge promotion now treats a whitespace-only endpoint field (e.g. `"   "`) as missing, the same as an empty or absent one.
