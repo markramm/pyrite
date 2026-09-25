@@ -10,10 +10,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ..config import load_config
 from ..exceptions import QuerySyntaxError
 from ..services.read_shaping import parse_fields_param, project_fields
 from ..storage.repository import KBRepository
+from .context import get_config_and_db
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +116,9 @@ def register_search_command(app: typer.Typer):
         as the NOT operator, not a literal exclude — matching Bannon
         entries, not excluding them).
         """
-        config = load_config()
+        # The index database also holds the KBs added with `pyrite kb add`;
+        # get_config_and_db merges them into the config, so `-k` finds them (#363).
+        config, db = get_config_and_db()
 
         # A search scoped to an unregistered KB used to return an empty result
         # set (exit 0), which looks like a query miss rather than a wrong KB.
@@ -136,11 +138,7 @@ def register_search_command(app: typer.Typer):
             _search_files(config, query, kb_name, entry_type, limit)
             return
 
-        from ..storage import PyriteDB
-
         try:
-            db = PyriteDB(config.settings.index_path)
-
             if db.count_entries() == 0:
                 # Status to stderr — stdout must stay clean for -f json callers.
                 err_console.print("[yellow]Index is empty. Building index...[/yellow]")

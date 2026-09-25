@@ -104,7 +104,7 @@ def test_search_kb_not_found_suggestion_includes_db_only_kb(tmp_path, monkeypatc
     config._db_kb_cache["db-only-kb"] = db_only_kb
 
     runner = CliRunner()
-    with patch("pyrite.cli.search_commands.load_config", return_value=config):
+    with patch("pyrite.cli.context.load_config", return_value=config):
         result = runner.invoke(app, ["search", "anything", "-k", "typo-kb", "--format", "json"])
 
     assert result.exit_code == 1

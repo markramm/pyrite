@@ -16,7 +16,7 @@ from ..config import (
     load_config,
 )
 from ..exceptions import PyriteError
-from .context import cli_context, cli_registry_context
+from .context import cli_context, cli_db_context, cli_registry_context
 
 kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
@@ -252,34 +252,28 @@ def kb_validate(
     && deploy` blocks on structural errors; scripts that want to gate on
     drift too can check for exit code 2.
     """
-    config = load_config()
-
-    if name:
-        kb = config.get_kb(name)
-        if not kb:
-            from ..utils.errors import cli_error
-
-            cli_error(
-                f"KB '{name}' not found",
-                output_format,
-                error_code="KB_NOT_FOUND",
-                suggestion="Run `pyrite kb list` to see registered KBs.",
-            )
-        kbs = [kb]
-    else:
-        kbs = config.knowledge_bases
-
-    # Run content-drift checks once (check_health walks all KBs internally),
-    # then bucket results by kb name.
     from ..storage import IndexManager
-    from ..storage.database import PyriteDB
 
-    db = PyriteDB(config.settings.index_path)
-    try:
-        index_mgr = IndexManager(db, config)
-        health = index_mgr.check_health()
-    finally:
-        db.close()
+    # cli_db_context merges the KBs added with `pyrite kb add` (#363).
+    with cli_db_context() as (config, db):
+        if name:
+            kb = config.get_kb(name)
+            if not kb:
+                from ..utils.errors import cli_error
+
+                cli_error(
+                    f"KB '{name}' not found",
+                    output_format,
+                    error_code="KB_NOT_FOUND",
+                    suggestion="Run `pyrite kb list` to see registered KBs.",
+                )
+            kbs = [kb]
+        else:
+            kbs = config.all_kbs()
+
+        # Run content-drift checks once (check_health walks all KBs internally),
+        # then bucket results by kb name.
+        health = IndexManager(db, config).check_health()
 
     def _for_kb(kb_name: str, field: str) -> list:
         return [row for row in health.get(field, []) if row.get("kb") == kb_name]
@@ -577,12 +571,12 @@ def schema_show(
     """Show the current schema for a KB."""
     from ..services.schema_service import SchemaService
 
-    config = load_config()
-    try:
-        svc = SchemaService(config)
-        result = svc.show_schema(kb_name)
-    except (PyriteError, ValueError) as e:
-        _kb_error(e, output_format)
+    with cli_db_context() as (config, _db):
+        try:
+            svc = SchemaService(config)
+            result = svc.show_schema(kb_name)
+        except (PyriteError, ValueError) as e:
+            _kb_error(e, output_format)
 
     formatted = _format_output(result, output_format)
     if formatted is not None:
@@ -631,7 +625,6 @@ def schema_add_type(
     """Add a type definition to a KB's schema."""
     from ..services.schema_service import SchemaService
 
-    config = load_config()
     type_def: dict[str, Any] = {}
     if description:
         type_def["description"] = description
@@ -642,11 +635,12 @@ def schema_add_type(
     if subdirectory:
         type_def["subdirectory"] = subdirectory
 
-    try:
-        svc = SchemaService(config)
-        result = svc.add_type(kb_name, type_name, type_def)
-    except (PyriteError, ValueError) as e:
-        _kb_error(e, output_format)
+    with cli_db_context() as (config, _db):
+        try:
+            svc = SchemaService(config)
+            result = svc.add_type(kb_name, type_name, type_def)
+        except (PyriteError, ValueError) as e:
+            _kb_error(e, output_format)
 
     if "error" in result:
         from ..utils.errors import cli_error
@@ -670,12 +664,12 @@ def schema_remove_type(
     """Remove a type definition from a KB's schema."""
     from ..services.schema_service import SchemaService
 
-    config = load_config()
-    try:
-        svc = SchemaService(config)
-        result = svc.remove_type(kb_name, type_name)
-    except (PyriteError, ValueError) as e:
-        _kb_error(e, output_format)
+    with cli_db_context() as (config, _db):
+        try:
+            svc = SchemaService(config)
+            result = svc.remove_type(kb_name, type_name)
+        except (PyriteError, ValueError) as e:
+            _kb_error(e, output_format)
 
     if "error" in result:
         from ..utils.errors import cli_error
@@ -700,8 +694,6 @@ def schema_set(
     from ..services.schema_service import SchemaService
     from ..utils.yaml import load_yaml_file as load_yaml
 
-    config = load_config()
-
     if not schema_file.exists():
         from ..utils.errors import cli_error
 
@@ -714,11 +706,12 @@ def schema_set(
 
     schema = load_yaml(schema_file)
 
-    try:
-        svc = SchemaService(config)
-        result = svc.set_schema(kb_name, schema)
-    except (PyriteError, ValueError) as e:
-        _kb_error(e, output_format)
+    with cli_db_context() as (config, _db):
+        try:
+            svc = SchemaService(config)
+            result = svc.set_schema(kb_name, schema)
+        except (PyriteError, ValueError) as e:
+            _kb_error(e, output_format)
 
     formatted = _format_output(result, output_format)
     if formatted is not None:

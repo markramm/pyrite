@@ -87,7 +87,6 @@ def _patch_config(env):
         patch("pyrite.cli.load_config", return_value=target),
         patch("pyrite.cli.context.load_config", return_value=target),
         patch("pyrite.cli.kb_commands.load_config", return_value=target),
-        patch("pyrite.cli.search_commands.load_config", return_value=target),
         patch("pyrite.cli.repo_commands.load_config", return_value=target),
     ):
         yield

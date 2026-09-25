@@ -43,7 +43,7 @@ def test_schema_validate_detects_schema_for_db_only_kb(tmp_path):
     config = PyriteConfig(knowledge_bases=[], settings=Settings(index_path=tmp_path / "index.db"))
     config._db_kb_cache["db-only-kb"] = db_only_kb
 
-    with patch("pyrite.config.load_config", return_value=config):
+    with patch("pyrite.cli.context.load_config", return_value=config):
         result = runner.invoke(app, ["schema", "validate", str(entry_path)])
 
     assert result.exit_code != 0, (

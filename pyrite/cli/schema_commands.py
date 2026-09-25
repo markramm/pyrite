@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..utils.errors import cli_error
-from .context import cli_context
+from .context import cli_context, get_config_and_db
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -468,9 +468,9 @@ def schema_validate(
     Checks: frontmatter parsing, required fields, protocol field types,
     and ID collision detection.
     """
-    from ..config import load_config
-
-    config = load_config()
+    # Merges the KBs added with `pyrite kb add`, so `-k` finds them (#363).
+    config, db = get_config_and_db()
+    db.close()
     schema = None
 
     # Resolve files to validate

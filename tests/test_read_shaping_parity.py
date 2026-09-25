@@ -132,7 +132,6 @@ def _cli_keys(env, fields):
         args += ["--fields", fields]
     with (
         patch("pyrite.cli.context.load_config", return_value=env["config"]),
-        patch("pyrite.cli.search_commands.load_config", return_value=env["config"]),
     ):
         result = runner.invoke(app, args)
     assert result.exit_code == 0, result.output

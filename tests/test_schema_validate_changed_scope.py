@@ -125,7 +125,7 @@ class TestSchemaValidateChangedNoKBConfigured:
 
         from unittest.mock import patch
 
-        with patch("pyrite.config.load_config", return_value=config):
+        with patch("pyrite.cli.context.load_config", return_value=config):
             result = runner.invoke(app, ["schema", "validate", "--changed"])
 
         assert result.exit_code == 0, (

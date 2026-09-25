@@ -461,7 +461,7 @@ def test_cli_search_honours_type_filter_in_hybrid(cli_index, monkeypatch):
 
     config, _index_path = cli_index
     runner = CliRunner()
-    with patch("pyrite.cli.search_commands.load_config", return_value=config):
+    with patch("pyrite.cli.context.load_config", return_value=config):
         result = runner.invoke(
             app,
             [
@@ -481,7 +481,7 @@ def test_cli_search_honours_type_filter_in_hybrid(cli_index, monkeypatch):
     payload = json.loads(result.stdout)
     assert {r["id"] for r in payload["results"]} == {"theme-capture"}
 
-    with patch("pyrite.cli.search_commands.load_config", return_value=config):
+    with patch("pyrite.cli.context.load_config", return_value=config):
         result = runner.invoke(
             app,
             [
