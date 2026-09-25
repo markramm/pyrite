@@ -308,6 +308,22 @@ class TestTheMatrixNarrowsWhereItShould:
         assert self._evaluate(expression, "merge_group", "true") == ["3.11", "3.12", "3.13"]
         assert self._evaluate(expression, "push", "true") == ["3.11", "3.12", "3.13"]
 
+    @pytest.mark.control(reason="pins an invariant that already holds; red if the queue narrows")
+    @pytest.mark.parametrize("push_infra", ["true", "false"])
+    def test_the_queue_runs_everything_the_dev_push_would(self, ci, push_infra):
+        # The push to dev skips `test` and `frontend` when a merge_group run
+        # passed the same SHA (ci.yml, the `queue` step). That is sound only
+        # while the queue runs at least what the push would have: the same
+        # interpreters, and no step the push runs that the queue skips.
+        expression = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
+        queue = set(self._evaluate(expression, "merge_group", "true"))
+        push = set(self._evaluate(expression, "push", push_infra))
+        assert queue >= push, (queue, push)
+        for job in ("test", "frontend"):
+            for step in ci["jobs"][job]["steps"]:
+                cond = str(step.get("if", "")).replace('"', "'")
+                assert "'push'" not in cond and "merge_group" not in cond, (job, step)
+
 
 class TestNoNewDependencies:
     """Hard project rule: new deps need prior discussion on a ticket."""

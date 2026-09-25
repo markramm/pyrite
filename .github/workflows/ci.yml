@@ -57,9 +57,11 @@ jobs:
     runs-on: ubuntu-latest
     # dorny/paths-filter reads the PR's changed-files list on pull_request
     # events, which needs pull-requests: read beyond the workflow default.
+    # The `queue` step lists this workflow's merge_group runs: actions: read.
     permissions:
       contents: read
       pull-requests: read
+      actions: read
     # Each output reads the fallback FIRST, then the filter. Exactly one of the
     # two steps runs per event, and a skipped step's outputs are the empty
     # string -- which `== 'true'` reads as "not changed", i.e. skip. Listing
@@ -70,6 +72,7 @@ jobs:
       web: ${{ steps.all.outputs.web || steps.filter.outputs.web }}
       kb: ${{ steps.all.outputs.kb || steps.filter.outputs.kb }}
       infra: ${{ steps.all.outputs.infra || steps.filter.outputs.infra }}
+      queue_passed: ${{ steps.all.outputs.queue_passed || steps.queue.outputs.passed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -105,6 +108,37 @@ jobs:
           echo "web=true" >> "$GITHUB_OUTPUT"
           echo "kb=true" >> "$GITHUB_OUTPUT"
           echo "infra=true" >> "$GITHUB_OUTPUT"
+          echo "queue_passed=false" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Each commit is tested once. The merge queue runs the full matrix and
+      # the frontend on the exact commit that then lands on dev -- the queue
+      # run's head_sha IS the dev push's SHA (checked on 2026-09-25: 85c7c123,
+      # 0a66cd4c, 65a4ab22, d787e875 each had a successful merge_group run,
+      # concluded 11-26 s before the push run started). Running `test` and
+      # `frontend` again on the push re-tested code with exactly those tests
+      # already passed against it. So on a push to dev, a successful
+      # merge_group run of this workflow for this SHA skips both; `smoke` runs
+      # (the queue does not), and `gate` reads the skips as it always has.
+      # Anything else -- no queue run, one still running, a failed one, an API
+      # error, a direct push -- runs everything as before. main and
+      # workflow_dispatch never skip: the step does not run for them.
+      # -----------------------------------------------------------------------
+      - id: queue
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?event=merge_group&head_sha=$GITHUB_SHA&status=success" \
+                --jq "[.workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\" and .conclusion == \"success\")] | length" \
+              || echo 0)
+          if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
+            echo "merge queue already passed $GITHUB_SHA; skipping test and frontend"
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no successful merge_group run for $GITHUB_SHA; running everything"
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - id: filter
         if: github.event_name != 'merge_group'
@@ -166,7 +200,7 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.backend == 'true' || github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.backend == 'true' || github.ref == 'refs/heads/main') && needs.changes.outputs.queue_passed != 'true'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -422,7 +456,7 @@ jobs:
   # ===========================================================================
   frontend:
     needs: changes
-    if: needs.changes.outputs.web == 'true' || github.ref == 'refs/heads/main'
+    if: (needs.changes.outputs.web == 'true' || github.ref == 'refs/heads/main') && needs.changes.outputs.queue_passed != 'true'
     runs-on: ubuntu-latest
     defaults:
       run:

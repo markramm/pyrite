@@ -170,14 +170,42 @@ set; and it switches to the full suite when you touch `conftest.py`,
 `pyrite/services/kb_service.py` selects 167 of the 281 test files that
 execute it on import. CI catches the rest.
 
+**Each tree is tested once.** A `--run` that passes on a clean tree (nothing
+uncommitted in tracked files, no untracked `.py` file, and no untracked or
+gitignored file under `pyrite/`, `tests/`, `extensions/`, `kb/` or `scripts/`
+beyond `__pycache__`-style build output), using the worktree's own `.venv`,
+records a stamp: the
+tree's SHA, the Python major.minor and the tests it ran, under the git common
+directory, so every worktree of the repository shares it. A later `--run` --
+the pre-push hook's included, which looks up the tree of the ref being pushed
+-- whose tests the stamp covers prints `already passed on tree <sha> (...);
+skipping` and exits 0. A dirty tree is never stamped and never skips;
+failures are never stamped, and neither is a run with `PYTEST_ADDOPTS` or
+`PYTEST_PLUGINS` set; `--force` or `PYRITE_PUSH_FORCE=1` ignores stamps.
+Stamps older than 14 days are ignored and pruned. A stamp is keyed on the
+tree and the Python version, not the environment: a pass where the Postgres
+tests skipped (`PYRITE_TEST_PG_URL` unset) covers a later run where it is
+set. When what changed is the environment, use `--force`.
+
+**After a failure that looks load-caused** (a timeout, a flaky port), re-run
+only what failed rather than the whole selection:
+
+```bash
+scripts/test-affected --run -- --lf    # anything after -- goes to pytest
+```
+
+A `--lf` pass is not stamped, since only part of the selection ran; when it
+is green, the next full `--run` (or the push) runs the selection once more
+and stamps it.
+
 **When to test what**
 
 | When | Run |
 |---|---|
 | While editing | the test file you are changing; `scripts/test-affected --run` |
 | Before a commit | nothing extra: the commit hooks run ruff and the fast checks in seconds |
-| Before a push | the pre-push hook runs `scripts/test-affected --run` on `PYRITE_PUSH_WORKERS` (default 4) workers. It already runs everything for conftest, fixtures, pyproject and config changes; set `PYRITE_PUSH_FULL=1` yourself for storage or migration changes and cross-cutting refactors |
-| On the pull request | nothing: CI runs the backend suite on one interpreter (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, the advisory `verify-red` job (your new tests, without and with your change) and diff coverage; the merge queue runs the full three-Python matrix on the exact commit about to land (#400), and so does the push to `dev` after the merge, which also runs the e2e smoke and the tutorial |
+| Before a push | the pre-push hook runs `scripts/test-affected --run` on `PYRITE_PUSH_WORKERS` (default 4) workers, unless your own `--run` already passed on the tree being pushed (see *Each tree is tested once* below). It already runs everything for conftest, fixtures, pyproject and config changes; set `PYRITE_PUSH_FULL=1` yourself for storage or migration changes and cross-cutting refactors |
+| On the pull request | nothing: CI runs the backend suite on one interpreter (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, the advisory `verify-red` job (your new tests, without and with your change) and diff coverage; the merge queue runs the full three-Python matrix on the exact commit about to land (#400); the push to `dev` after the merge runs the e2e smoke and the tutorial, and the matrix and frontend again only if the queue did not already pass that SHA |
 | A frontend change | `cd web && npm run check && npm run test:unit && npm run build` |
 | A release | the large tests: `scripts/release.py` installs the release commit into a fresh venv and runs the tutorial against it; Playwright and the smoke layer per the release runbook |
 
