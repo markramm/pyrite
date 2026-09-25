@@ -21,6 +21,22 @@ class AuthStore {
 		return this.authConfig.anonymous_tier !== 'none';
 	}
 
+	/**
+	 * Whom the live-update socket should be opened for, or null for no socket.
+	 *
+	 * The server fixes a socket's readable KBs at handshake (#323), so the
+	 * root layout reopens the socket whenever this changes (#336). Keyed by
+	 * user id, not the user object, so a refetch of the same user is not a
+	 * change. Null while loading (the scope is not known yet) and when signed
+	 * out of a server that admits no anonymous reader (it would refuse).
+	 */
+	get socketIdentity(): string | null {
+		if (this.loading) return null;
+		if (!this.authConfig.enabled) return 'local';
+		if (this.user) return `user:${this.user.id}`;
+		return this.allowsAnonymous ? 'anonymous' : null;
+	}
+
 	async init() {
 		this.loading = true;
 		try {

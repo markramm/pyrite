@@ -10,6 +10,7 @@
 	import { api } from '$lib/api/client';
 	import type { AuthUser } from '$lib/types/auth';
 	import { brandStore } from '$lib/stores/brand.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import PoweredBy from '$lib/components/common/PoweredBy.svelte';
 
 	let currentUser = $state<AuthUser | null>(null);
@@ -48,11 +49,11 @@
 	let showUserMenu = $derived(authEnabled && currentUser !== null);
 
 	async function handleLogout() {
-		try {
-			await api.logout();
-		} catch {
-			// proceed to redirect even if the request fails
-		}
+		// Through the store, not `api.logout()`: clearing `authStore.user` is
+		// what makes the root layout close the live-update socket, which
+		// otherwise keeps the old user's scope (#336). The store swallows a
+		// failed request and clears the user anyway.
+		await authStore.logout();
 		goto('/login');
 	}
 
