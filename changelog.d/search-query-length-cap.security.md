@@ -1,1 +1,0 @@
-- **Search queries have a maximum length.** A query over 1,000 characters is refused with an explicit error on every surface (422 `QUERY_TOO_LONG` on REST, a `QUERY_TOO_LONG` validation error on MCP, a clear CLI error); it is never truncated.
