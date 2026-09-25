@@ -54,9 +54,9 @@
  * than `test.fixme`d. Under the auth-disabled world this was unreachable: the
  * submission never gets far enough to produce a 401.
  */
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 
-import { SEEDED_USER, UNKNOWN_USER } from './auth-setup';
+import { AUTH_BACKEND_URL, AUTH_E2E_KB, SEEDED_USER, UNKNOWN_USER } from './auth-setup';
 
 /**
  * Log in through the form, the way a user does.
@@ -254,5 +254,88 @@ test.describe('Register page', () => {
 		// guess and not the developer-facing "API Error 400: ..." string.
 		await expect(page.getByTestId('register-error')).toHaveText('Username already taken');
 		await expect(page).toHaveURL(/\/register$/);
+	});
+});
+
+test.describe('The live-update socket follows the signed-in user (#336)', () => {
+	/**
+	 * The server fixes a socket's readable KBs at handshake (#323). Before
+	 * #336 the web client opened its socket once and kept it across a logout,
+	 * so the login page went on toasting the previous user's new entries. In
+	 * this world `anonymous_tier` is `none`: every KB is readable only by a
+	 * signed-in user, so any event reaching a signed-out page is a leak.
+	 */
+	test('after logout through the sidebar, no event from the old scope reaches the page', async ({
+		page,
+		playwright
+	}) => {
+		// A writer outside the browser, with its own session: the "other tab"
+		// whose writes the socket reports.
+		const writer: APIRequestContext = await playwright.request.newContext({
+			baseURL: AUTH_BACKEND_URL
+		});
+		try {
+			const login = await writer.post('/auth/login', {
+				data: { username: SEEDED_USER.username, password: SEEDED_USER.password }
+			});
+			expect(login.ok(), await login.text()).toBeTruthy();
+
+			async function createEntry(title: string): Promise<string> {
+				const res = await writer.post('/api/entries', {
+					data: { kb: AUTH_E2E_KB, entry_type: 'note', title, body: 'socket scope probe' }
+				});
+				expect(res.ok(), await res.text()).toBeTruthy();
+				return (await res.json()).id;
+			}
+
+			// Every live-update frame any of the page's sockets receives. The
+			// toast is the user-visible symptom; the frame is the leak itself.
+			const frames: string[] = [];
+			page.on('websocket', (ws) => {
+				if (!new URL(ws.url()).pathname.startsWith('/ws')) return; // Vite's HMR socket
+				ws.on('framereceived', (frame) => frames.push(String(frame.payload)));
+			});
+
+			await loginAs(page, SEEDED_USER.username, SEEDED_USER.password);
+			await expect(page).toHaveURL(/localhost:\d+\/$/);
+
+			// `getByText`, against this file's locator rule: the toast has no
+			// role, label or test id, and its text (with the entry id) is the
+			// one thing that identifies the event it reports.
+			//
+			// Positive control: signed in, the socket is live and delivers.
+			// Without this the absence asserted below would prove nothing (a
+			// socket that never connected shows no toast either). Retried
+			// because the socket opens asynchronously after login.
+			await expect(async () => {
+				const id = await createEntry(`socket-before-logout-${Date.now()}`);
+				await expect(page.getByText(`New entry created: ${id}`)).toBeVisible({
+					timeout: 2_000
+				});
+			}).toPass({ timeout: 20_000 });
+
+			await page.getByRole('button', { name: 'Log out' }).click();
+			await expect(page).toHaveURL(/\/login$/);
+
+			const leaked = await createEntry(`socket-after-logout-${Date.now()}`);
+			// The event window: the positive control saw its toast inside 2 s.
+			// Watch for the toast APPEARING during the window -- it dismisses
+			// itself after a few seconds, so a check at the end would pass even
+			// when it had been shown (as it was, on dev before #336).
+			const toasted = await page
+				.getByText(`New entry created: ${leaked}`)
+				.waitFor({ state: 'visible', timeout: 4_000 })
+				.then(
+					() => true,
+					() => false
+				);
+			expect(toasted, 'the signed-out page toasted the old scope\'s event').toBe(false);
+			expect(
+				frames.filter((f) => f.includes(leaked)),
+				'a socket still carrying the old scope received the event'
+			).toEqual([]);
+		} finally {
+			await writer.dispose();
+		}
 	});
 });
