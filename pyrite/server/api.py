@@ -130,10 +130,12 @@ def register_pyrite_exception_handler(app: FastAPI) -> None:
             # detail unsafe to return over HTTP (#377's ConfigSaveRefusedError
             # pattern, extended to any PyriteError subclass that opts in via
             # a `public_message` class attribute -- e.g. BrandingInvalidError,
-            # #445's cold read). Logged at the exception's own severity
-            # already happened above for 5xx; a sub-500 refusal like this one
-            # is worth a line too, since `message` below won't carry it.
-            logger.warning("%s", exc)
+            # #445's cold read). A 5xx already logged the detail above (with
+            # exc_info); logging it again here would double it on every
+            # request -- the #445 delta cold read's second finding. Only a
+            # sub-500 refusal needs this line, since nothing else logs it.
+            if status_code < 500:
+                logger.warning("%s", exc)
             message = public_message
         return JSONResponse(status_code=status_code, content={"code": code, "message": message})
 

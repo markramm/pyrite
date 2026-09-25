@@ -28,6 +28,19 @@ DEFAULT_BRAND_NAME = "Pyrite"
 DEFAULT_PRIMARY_COLOR = "#d4a017"  # gold-400 equivalent — today's accent
 DEFAULT_FOOTER_CREDIT_URL = "https://pyrite.wiki"
 
+# Module-level, keyed on the resolved branding.yaml path, each holding at
+# most one (mtime, error) pair (#445 delta cold read): every request to an
+# anonymous route (/sitemap.xml, /robots.txt, /config/branding) that hits a
+# broken branding.yaml builds its own BrandingService (seo_endpoints.py has
+# no per-request caching the way branding_endpoints.py's _service_cache
+# does), so without this, a stuck operator typo logs a full traceback on
+# every single page load. Keyed on mtime, not just the path, so a fixed file
+# is re-read and re-logged on its next real failure instead of staying
+# silent forever -- and keyed per-path (not a single shared slot) so two
+# different branding dirs in the same process (e.g. two tests, or two
+# ephemeral configs) don't evict each other's cached failure.
+_failure_cache: dict[str, tuple[float, BrandingInvalidError]] = {}
+
 
 @dataclass
 class BrandingConfig:
@@ -151,6 +164,23 @@ class BrandingService:
         if not yaml_path.is_file():
             return BrandingConfig(branding_dir=self._branding_dir)
 
+        path_key = str(yaml_path)
+        mtime = yaml_path.stat().st_mtime
+        cached = _failure_cache.get(path_key)
+        if cached is not None and cached[0] == mtime:
+            # Same file, same mtime as a failure already logged: re-raise
+            # without re-parsing or re-logging (see _failure_cache above).
+            raise cached[1]
+
+        try:
+            cfg = self._load_raw(yaml_path)
+        except BrandingInvalidError as e:
+            logger.error("Invalid branding config: %s", e, exc_info=e)
+            _failure_cache[path_key] = (mtime, e)
+            raise
+        return cfg
+
+    def _load_raw(self, yaml_path: Path) -> BrandingConfig:
         try:
             data = load_yaml_file(yaml_path) or {}
         except Exception as e:
@@ -176,10 +206,42 @@ class BrandingService:
                 f"{yaml_path}: 'mcp' must be a YAML mapping, got {type(mcp).__name__}"
             )
 
+        # Every scalar field BrandingConfig exposes must be a string (or
+        # absent) -- a list or number reads fine as far as .get() is
+        # concerned, but silently breaks the field's contract: site_url: [x]
+        # reaches SitemapService as a list where f-string interpolation
+        # expects str, and name: [x] serializes through to_public_dict() as
+        # a JSON array where every consumer (the web branding store, the
+        # <title> tag, the MCP prompt) expects text (#445 delta cold read).
+        string_fields = {
+            "name": data.get("name"),
+            "tagline": data.get("tagline"),
+            "primary_color": data.get("primary_color"),
+            "site_url": data.get("site_url"),
+            "support_url": data.get("support_url"),
+            "footer_credit_url": data.get("footer_credit_url"),
+            "logo": data.get("logo"),
+            "wordmark": data.get("wordmark"),
+            "favicon": data.get("favicon"),
+            "apple_touch_icon": data.get("apple_touch_icon"),
+            "logo_light": data.get("logo_light"),
+            "logo_dark": data.get("logo_dark"),
+            "wordmark_light": data.get("wordmark_light"),
+            "wordmark_dark": data.get("wordmark_dark"),
+            "meta.og_image_path": meta.get("og_image_path"),
+            "meta.description": meta.get("description"),
+            "mcp.agent_prompt_brand": mcp.get("agent_prompt_brand"),
+        }
+        for field_name, value in string_fields.items():
+            if value is not None and not isinstance(value, str):
+                raise BrandingInvalidError(
+                    f"{yaml_path}: '{field_name}' must be a string, got {type(value).__name__}"
+                )
+
         name = data.get("name", DEFAULT_BRAND_NAME)
         mcp_brand = mcp.get("agent_prompt_brand") or name
 
-        cfg = BrandingConfig(
+        return BrandingConfig(
             name=name,
             tagline=data.get("tagline", ""),
             primary_color=data.get("primary_color", DEFAULT_PRIMARY_COLOR),
@@ -200,4 +262,3 @@ class BrandingService:
             mcp_agent_prompt_brand=mcp_brand,
             branding_dir=self._branding_dir,
         )
-        return cfg

@@ -8,19 +8,39 @@ path-only URLs that resolve relative to whatever host served them.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Response
 
 from ..config import PyriteConfig
+from ..exceptions import BrandingInvalidError
 from ..services.branding_service import BrandingService
 from ..services.sitemap_service import SitemapService
 from ..storage.database import PyriteDB
 from .api import get_config, get_db
 
+logger = logging.getLogger(__name__)
+
 seo_router = APIRouter(tags=["SEO"])
 
 
 def _site_url(config: PyriteConfig) -> str:
-    brand = BrandingService(config.settings.branding_dir).get()
+    """The branding config's site_url, or "" (path-only URLs) on failure.
+
+    A crawler reading a 5xx on /robots.txt takes it as "don't crawl" -- an
+    operator's config typo must not pull the whole site out of search
+    (#445 delta cold read). Unlike POST /api/site/render (a deliberate
+    operator action answered with 409 BRANDING_INVALID) and
+    GET /config/branding (kept at 500; the web branding store already has
+    a fallback for it), these two anonymous, always-on routes degrade to
+    default branding instead of failing. BrandingService._load itself
+    logs the failure once per (path, mtime), so this call site does not
+    need its own log line.
+    """
+    try:
+        brand = BrandingService(config.settings.branding_dir).get()
+    except BrandingInvalidError:
+        return ""
     return brand.site_url or ""
 
 
