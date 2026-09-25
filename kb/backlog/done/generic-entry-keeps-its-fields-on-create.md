@@ -6,7 +6,7 @@ tags:
 - bug
 - data-loss
 kind: bug
-status: in_progress
+status: done
 assignee: agent:pyrite-worker
 priority: high
 effort: S

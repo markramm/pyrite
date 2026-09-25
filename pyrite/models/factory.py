@@ -38,15 +38,25 @@ def build_entry(
     resolved_cls = get_entry_class(entry_type)
 
     if resolved_cls is GenericEntry:
-        return GenericEntry(
-            id=entry_id,
-            title=title,
-            body=body,
-            _entry_type=entry_type,
-            tags=kwargs.get("tags", []),
-            summary=kwargs.get("summary", ""),
-            metadata=kwargs.get("metadata", {}),
-        )
+        # A kb.yaml-only type has no dataclass fields of its own, so every
+        # kwarg beyond `tags`/`summary`/`metadata` used to be silently
+        # dropped here -- `pyrite create -t finding -f severity=high`,
+        # MCP `kb_create`, and bulk/import all lost the field, and because
+        # it never reached `to_frontmatter()` the schema validator never
+        # saw it either, so an enum violation on a custom type was not
+        # refused (#386). Route through `GenericEntry.from_frontmatter`,
+        # the same path `entry_from_frontmatter` uses, so a bare kwarg
+        # lands in `metadata` exactly like an unknown frontmatter key does
+        # on load -- one rule for "what happens to a field this type
+        # doesn't know about", not two.
+        fm: dict = {
+            "id": entry_id,
+            "title": title,
+            "type": entry_type,
+        }
+        for k, v in kwargs.items():
+            fm[k] = v
+        return GenericEntry.from_frontmatter(fm, body)
 
     # Build frontmatter dict for from_frontmatter().
     # Known dataclass fields go as top-level keys; unknown kwargs are
