@@ -19,7 +19,8 @@ Verdicts, for each new or edited test:
   absent: its file does not collect, or it raises ImportError, AttributeError
   or NameError naming an identifier the PR adds (an AST diff). Weak.
 - **unexpected pass**: passes without the fix; it does not test the change.
-  ``@pytest.mark.control`` declares a deliberate negative control instead.
+  ``@pytest.mark.control(reason=...)`` declares a deliberate negative control
+  instead.
 - **n/a**: no claim (did not pass with the fix, skipped, not run, timed out).
 
 Test-side files are those under ``tests/`` or ``extensions/*/tests/``, and any
@@ -377,12 +378,15 @@ def run_pytest(
         timed_out = True
     phases: dict[str, list[dict]] = {}
     collect_failed = set()
+    collected = False
     for rec in map(json.loads, record.read_text().splitlines() if record.exists() else []):
         if "collect" in rec:
             collect_failed.add(rec["collect"])
+        elif "collected" in rec:
+            collected = True
         else:
             phases.setdefault(rec["nodeid"], []).append(rec)
-    if not phases and not collect_failed and not timed_out:
+    if not phases and not collect_failed and not collected and not timed_out:
         tail = "\n  ".join(log.read_text().splitlines()[-15:])
         if name == "with":  # pytest itself failed (a conftest, a plugin): no verdict is honest
             raise InfraError(f"the run with the fix recorded no test; pytest said:\n  {tail}")
@@ -466,8 +470,8 @@ def verdicts(change: Change, without: Run, with_fix: Run) -> list[tuple[str, str
 LEGEND = (
     "*red* (not listed): fails without the fix -- the evidence a review wants. *import-only*: "
     "fails only because a name the PR adds is missing -- weak. *unexpected pass*: passes "
-    "without the fix, so it does not test the change (`@pytest.mark.control` marks a "
-    "deliberate negative control). *n/a*: no claim."
+    "without the fix, so it does not test the change (`@pytest.mark.control(reason=...)` "
+    "marks a deliberate negative control). *n/a*: no claim."
 )
 
 

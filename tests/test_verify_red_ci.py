@@ -1145,3 +1145,28 @@ def test_the_worker_runs_it_once_and_pastes_the_line():
     assert "paste its summary line" in dev
     assert "0 red, or only import-only reds, is not done" in dev
     assert '@pytest.mark.control(reason="...")' in dev
+
+
+@pytest.mark.parametrize(
+    "test_file",
+    [
+        # a module that skips itself (an optional dependency CI does not install)
+        "import pytest\n\npytest.importorskip('no_such_module_here')\n\n"
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n",
+        # a class pytest cannot collect (it has an __init__)
+        "from pyrite import add\n\n\nclass TestNew:\n    def __init__(self):\n        pass\n\n"
+        "    def test_new(self):\n        assert add(2, 2) == 4\n",
+    ],
+    ids=["module-skip", "uncollectable-class"],
+)
+def test_a_new_test_that_does_not_run_with_the_fix_is_no_claim_not_an_infra_error(
+    repo: Path, tmp_path: Path, test_file: str
+) -> None:
+    # #393 delta cold read: pytest ran and collected the file, it just ran no
+    # test from it. That is n/a, not "the check could not run" (exit 2).
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(test_file)
+    commit_all(repo)
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 0 red" in summary, summary

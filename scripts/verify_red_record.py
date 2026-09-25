@@ -45,6 +45,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
 def pytest_collectreport(report: pytest.CollectReport) -> None:
     if report.failed:
         _write({"collect": report.nodeid})
+    elif report.nodeid.endswith(".py"):
+        # Collected (or skipped as a whole): pytest ran even if no test in it
+        # did, so "recorded nothing" is not a broken conftest or plugin.
+        _write({"collected": report.nodeid})
 
 
 def _control_reason(item: pytest.Item) -> str | None:
