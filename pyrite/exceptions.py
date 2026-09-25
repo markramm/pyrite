@@ -26,11 +26,13 @@ class ValidationError(PyriteError):
 
 
 class InvalidGitRefError(ValidationError):
-    """A caller-supplied git remote or branch is not an acceptable name.
+    """A caller-supplied git remote, branch or commit id is not acceptable.
 
     A remote must be one of the repository's configured remotes (never a URL
     or a path); a branch must be a valid branch name that does not begin
-    with "-". Raised before git runs. Carries ``error_code`` ``INVALID_REF``.
+    with "-"; a commit id must be 4-64 hex characters (checked before git
+    runs) and must name a commit, not a tree or blob (an annotated tag peels
+    to its commit). Carries ``error_code`` ``INVALID_REF``.
     """
 
     error_code = "INVALID_REF"

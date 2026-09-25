@@ -7,12 +7,19 @@ Retrieves entry version history and content at specific git commits.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 from ..config import PyriteConfig
+from ..exceptions import InvalidGitRefError
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
+
+# A git object id, abbreviated or full: SHA-1 (40) or SHA-256 (64) hex, at
+# least 4 characters (git's own minimum abbreviation). Nothing else -- no
+# symbolic refs, no revision expressions, nothing git could read as an option.
+_COMMIT_HASH_RE = re.compile(r"[0-9a-fA-F]{4,64}")
 
 
 class VersionService:
@@ -27,8 +34,21 @@ class VersionService:
         return self.db.get_entry_versions(entry_id, kb_name, limit=limit)
 
     def get_entry_at_version(self, entry_id: str, kb_name: str, commit_hash: str) -> str | None:
-        """Get entry content at a specific git commit."""
+        """Get entry content at a specific git commit.
+
+        Returns None when the KB, the entry or the object is unknown, or the
+        entry's file does not exist at that commit.
+
+        Raises:
+            InvalidGitRefError: `commit_hash` is not a hex object id (checked
+                before any lookup or git call), or it names an object that is
+                not a commit, such as a tree or a blob. This service is the
+                only path from a caller-supplied hash to git.
+        """
         import subprocess
+
+        if not _COMMIT_HASH_RE.fullmatch(commit_hash):
+            raise InvalidGitRefError("Invalid commit hash: expected a hex object id")
 
         from ..services.git_service import GitService
 
@@ -52,10 +72,32 @@ class VersionService:
         except ValueError:
             rel_path = file_path
 
-        # Use git show to get content at commit
+        def _rev_parse(rev: str) -> str | None:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", "--quiet", "--end-of-options", rev],
+                cwd=str(kb_path),
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            return result.stdout.strip() if result.returncode == 0 else None
+
+        try:
+            # The id must name a commit (an annotated tag peels to its commit).
+            # `<tree>:<path>` would otherwise read a path from any tree.
+            if _rev_parse(f"{commit_hash}^{{object}}") is None:
+                return None
+            commit = _rev_parse(f"{commit_hash}^{{commit}}")
+        except Exception:
+            logger.warning("Git rev-parse failed for KB", exc_info=True)
+            return None
+        if commit is None:
+            raise InvalidGitRefError("Invalid commit hash: the object is not a commit")
+
+        # Read the entry's file at the peeled, full commit id
         try:
             result = subprocess.run(
-                ["git", "show", f"{commit_hash}:{rel_path}"],
+                ["git", "show", "--end-of-options", f"{commit}:{rel_path}"],
                 cwd=str(kb_path),
                 capture_output=True,
                 text=True,
@@ -64,5 +106,5 @@ class VersionService:
             if result.returncode == 0:
                 return result.stdout
         except Exception:
-            logger.warning("Git diff failed for KB", exc_info=True)
+            logger.warning("Git show failed for KB", exc_info=True)
         return None

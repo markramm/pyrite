@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from ...exceptions import InvalidGitRefError
 from ...services.version_service import VersionService
 from ..api import get_version_service, limiter, requires_kb_read
 from ..schemas import EntryVersionResponse, VersionListResponse
@@ -45,7 +46,10 @@ def get_entry_at_version(
     version_svc: VersionService = Depends(get_version_service),
 ):
     """Get entry content at a specific git commit."""
-    content = version_svc.get_entry_at_version(entry_id, kb, commit_hash)
+    try:
+        content = version_svc.get_entry_at_version(entry_id, kb, commit_hash)
+    except InvalidGitRefError as e:
+        raise HTTPException(status_code=400, detail={"code": "INVALID_REF", "message": str(e)})
     if content is None:
         raise HTTPException(
             status_code=404,

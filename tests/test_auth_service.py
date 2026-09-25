@@ -139,8 +139,8 @@ class TestRoles:
 
     def test_set_role(self, auth_env):
         service, _ = auth_env
-        reg = service.register("alice", "password123")
-        service.register("bob", "password456")
+        service.register("alice", "password123")  # first user: the sole admin
+        reg = service.register("bob", "password456")
         assert service.set_role(reg["id"], "write") is True
         user = service.get_user(reg["id"])
         assert user["role"] == "write"

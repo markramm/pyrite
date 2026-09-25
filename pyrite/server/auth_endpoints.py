@@ -12,10 +12,11 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..config import PyriteConfig
+from ..exceptions import ValidationError
 from ..services.auth_service import AuthService
 from ..services.oauth_providers import GitHubOAuthProvider
 from ..storage.database import PyriteDB
-from .api import get_config, get_db
+from .api import get_config, get_db, requires_tier, verify_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -133,60 +134,50 @@ def _clear_oauth_binding_cookie(response: Response) -> None:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+# User management needs the caller's role. auth_router is mounted without the
+# credential dependency, because /auth/login, /auth/register and /auth/config
+# must stay reachable without one, so these routes resolve it themselves:
+# verify_api_key sets request.state.api_role from a key or session cookie (401
+# when there is neither), and requires_tier("admin") refuses anything below it
+# (403). Order matters: the tier check reads what verify_api_key set.
+_ADMIN_ONLY = [Depends(verify_api_key), Depends(requires_tier("admin"))]
 
-@auth_router.get("/users")
+
+@auth_router.get("/users", dependencies=_ADMIN_ONLY)
 async def list_users(
-    request: Request,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    """List all users. Requires admin role."""
-    auth_user = getattr(request.state, "auth_user", None)
-    global_role = getattr(request.state, "api_role", None)
-
-    is_admin = global_role == "admin" or (auth_user and auth_user.get("role") == "admin")
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+    """List all users. Requires the global admin tier."""
     return {"users": auth_service.list_users()}
 
 
-@auth_router.put("/users/{user_id}/role")
+@auth_router.put("/users/{user_id}/role", dependencies=_ADMIN_ONLY)
 async def set_user_role(
     request: Request,
     user_id: int,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    """Update a user's global role. Requires admin."""
-    auth_user = getattr(request.state, "auth_user", None)
-    global_role = getattr(request.state, "api_role", None)
-    is_admin = global_role == "admin" or (auth_user and auth_user.get("role") == "admin")
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+    """Update a user's global role. Requires the global admin tier."""
     body = await request.json()
     role = body.get("role", "")
     if role not in ("read", "write", "admin"):
         raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
 
-    found = auth_service.set_role(user_id, role)
+    try:
+        found = auth_service.set_role(user_id, role)
+    except ValidationError as e:
+        raise HTTPException(status_code=409, detail={"code": "LAST_ADMIN", "message": str(e)})
     if not found:
         raise HTTPException(status_code=404, detail="User not found")
     return {"updated": True, "user_id": user_id, "role": role}
 
 
-@auth_router.get("/users/{user_id}/permissions")
+@auth_router.get("/users/{user_id}/permissions", dependencies=_ADMIN_ONLY)
 async def get_user_permissions(
-    request: Request,
     user_id: int,
     auth_service: AuthService = Depends(get_auth_service),
 ) -> dict:
-    """Get a user's per-KB permissions. Requires admin."""
-    auth_user = getattr(request.state, "auth_user", None)
-    global_role = getattr(request.state, "api_role", None)
-    is_admin = global_role == "admin" or (auth_user and auth_user.get("role") == "admin")
-    if not is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-
+    """Get a user's per-KB permissions. Requires the global admin tier."""
     perms = auth_service.get_user_kb_permissions(user_id)
     return {"user_id": user_id, "permissions": perms}
 

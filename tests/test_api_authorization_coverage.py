@@ -31,6 +31,11 @@ from tests.test_api_tiers import _build_client, _hash_key
 
 MUTATING_METHODS = ("post", "put", "patch", "delete")
 
+# Path prefixes whose mutating routes are held to the read-tier refusal. All of
+# /api, plus the admin user-management routes under /auth (#330): the rest of
+# /auth (login, register, logout, OAuth) is deliberately public.
+GUARDED_PREFIXES = ("/api/", "/auth/users")
+
 # (METHOD, path) pairs a read-tier caller may legitimately invoke despite the
 # mutating HTTP method. Each needs a reason: the route must not change stored
 # state, spend quota on the operator's behalf, or reach the network.
@@ -85,7 +90,7 @@ def _mutating_routes(client) -> list[tuple[str, str]]:
     return sorted(
         (method.upper(), path)
         for path, ops in paths.items()
-        if path.startswith("/api/")
+        if path.startswith(GUARDED_PREFIXES)
         for method in ops
         if method in MUTATING_METHODS
     )
@@ -95,6 +100,38 @@ def test_api_surface_is_enumerable(read_client):
     """Guard against the vacuous pass: an empty enumeration proves nothing."""
     routes = _mutating_routes(read_client)
     assert len(routes) > 20, f"expected the full API surface, enumerated {len(routes)}"
+
+
+def test_auth_user_management_is_enumerated(read_client):
+    """The widened prefix must actually reach /auth/users*, or it proves nothing."""
+    assert ("PUT", "/auth/users/{user_id}/role") in _mutating_routes(read_client)
+
+
+def _user_management_routes(client) -> list[tuple[str, str]]:
+    """Every route under /auth/users, whatever its method: all are admin-only."""
+    paths = client.app.openapi()["paths"]
+    return sorted(
+        (method.upper(), path)
+        for path, ops in paths.items()
+        if path.startswith("/auth/users")
+        for method in ops
+        if method in ("get", *MUTATING_METHODS)
+    )
+
+
+def test_user_management_rejects_read_tier_on_every_method(read_client):
+    """Reads are covered too: listing users or their grants is admin-only,
+    so a new unguarded GET under /auth/users fails here (#330)."""
+    routes = _user_management_routes(read_client)
+    assert ("GET", "/auth/users") in routes and len(routes) >= 3, routes
+    unguarded = []
+    for method, path in routes:
+        resp = read_client.request(method, _fill_path(path).replace("/x", "/1"), json={})
+        if resp.status_code != 403:
+            unguarded.append(f"{method} {path} -> {resp.status_code}")
+    assert not unguarded, "User-management routes callable by a read-tier key:\n  " + "\n  ".join(
+        unguarded
+    )
 
 
 def test_read_key_is_accepted_at_read_tier(read_client):
