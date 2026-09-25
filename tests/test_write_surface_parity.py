@@ -41,7 +41,8 @@ KB = "parity"
 
 #: A KB with a declared schema. `person` is declared (a core type, declared on
 #: purpose so a core type is not exempt merely by being core); `note` is a core
-#: type it does NOT declare; `role` is an enum.
+#: type it does NOT declare; `role` is an enum. `finding` is declared only in
+#: kb.yaml (no model class), with an enum `severity` (#386).
 KB_YAML = """\
 name: parity
 validation:
@@ -52,7 +53,11 @@ types:
       role:
         type: select
         options: [author, editor]
-  finding: {}
+  finding:
+    fields:
+      severity:
+        type: select
+        options: [low, high]
 """
 
 EXISTING_ID = "existing-person"
@@ -105,6 +110,12 @@ CASES = [
         {"entry_type": "person", "title": "Parity Enum", "body": "b", "role": "bogus"},
         "SCHEMA_VIOLATION",
         "parity-enum",
+    ),
+    (
+        "enum_violation_kb_yaml_only_type",
+        {"entry_type": "finding", "title": "Parity Finding", "body": "b", "severity": "bogus"},
+        "SCHEMA_VIOLATION",
+        "parity-finding",
     ),
 ]
 
@@ -166,7 +177,28 @@ def _with_rest(env, fn):
             d.close()
 
 
+#: The fields POST /api/entries declares. Any other field travels in
+#: `metadata`, as the web form sends a type's custom fields.
+_REST_CREATE_FIELDS = {
+    "entry_type",
+    "title",
+    "body",
+    "date",
+    "importance",
+    "tags",
+    "participants",
+    "role",
+    "metadata",
+    "allow_undeclared",
+    "body_truncated",
+}
+
+
 def rest_create(env, spec):
+    extra = {k: spec.pop(k) for k in list(spec) if k not in _REST_CREATE_FIELDS}
+    if extra:
+        spec["metadata"] = {**spec.get("metadata", {}), **extra}
+
     def go(client):
         resp = client.post("/api/entries", json={"kb": KB, **spec})
         assert resp.status_code >= 400, resp.text
