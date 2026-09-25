@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 24
+CURRENT_VERSION = 25
 
 
 @dataclass
@@ -490,6 +490,16 @@ MIGRATIONS: list[Migration] = [
         -- user_id column remains.
         """,
     ),
+    Migration(
+        version=25,
+        description="Add file_path to entry_version so a pre-rename version reads at its own path (#432)",
+        # Actual ALTER TABLE handled conditionally in _apply_v25() since the
+        # column may already exist from ORM create_all.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
 ]
 
 
@@ -769,6 +779,58 @@ class MigrationManager:
             if self.conn.in_transaction:
                 self.conn.execute("ROLLBACK")
             raise
+
+    def _apply_v25(self) -> None:
+        """Conditionally add file_path to entry_version (#432), and
+        normalise any absolute paths already written to KB-relative.
+
+        Only pre-release code (this branch, before the coordinator's
+        second round) ever stored an absolute path; nothing shipped with
+        that shape. Still, a dev database that already ran an earlier
+        version of this migration would have absolute rows with no way to
+        repair them later (upsert_entry_version only fills a *missing*
+        path, never replaces one that is set) -- so this normalises them
+        in place, once, here.
+        """
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entry_version'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {
+            row[1] for row in self.conn.execute("PRAGMA table_info(entry_version)").fetchall()
+        }
+        if "file_path" not in existing:
+            self.conn.execute("ALTER TABLE entry_version ADD COLUMN file_path TEXT")
+            self.conn.commit()
+            return
+
+        kb_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='kb'"
+        ).fetchone()
+        if not kb_exists:
+            return
+
+        kb_paths = dict(self.conn.execute("SELECT name, path FROM kb").fetchall())
+        rows = self.conn.execute(
+            "SELECT id, kb_name, file_path FROM entry_version WHERE file_path IS NOT NULL"
+        ).fetchall()
+        for row_id, kb_name, file_path in rows:
+            kb_path = kb_paths.get(kb_name)
+            if not kb_path:
+                continue
+            # An absolute path always starts with the KB's own root, plus a
+            # separator, since it was built as kb_path / rel; anything else
+            # (already relative, or from a different KB root entirely) is
+            # left untouched rather than guessed at.
+            prefix = kb_path.rstrip("/\\") + "/"
+            if file_path.startswith(prefix):
+                relative = file_path[len(prefix) :]
+                self.conn.execute(
+                    "UPDATE entry_version SET file_path = ? WHERE id = ?",
+                    (relative, row_id),
+                )
+        self.conn.commit()
 
     def _apply_v21(self) -> None:
         """Conditionally add content_hash column to entry for hash-based staleness."""

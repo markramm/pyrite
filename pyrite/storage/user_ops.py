@@ -255,8 +255,17 @@ class UserOpsMixin:
         diff_summary: str = "",
         change_type: str = "modified",
         author_github_login: str | None = None,
+        file_path: str | None = None,
     ) -> None:
-        """Insert an entry version (from git log). Skips if commit already recorded."""
+        """Insert an entry version (from git log), or -- if already recorded
+        -- fill in its `file_path` when the existing row has none.
+
+        A row recorded before #432 has no path; re-running attribution
+        indexing on it must repair it rather than skip it forever, so this
+        is not a plain "skip if exists": only a caller-supplied path ever
+        writes, and only into a row whose path is still unset, so a caller
+        still on the old signature (no `file_path`) can never blank one out.
+        """
         existing = (
             self.session.query(EntryVersion)
             .filter_by(entry_id=entry_id, kb_name=kb_name, commit_hash=commit_hash)
@@ -274,8 +283,12 @@ class UserOpsMixin:
                 message=message,
                 diff_summary=diff_summary,
                 change_type=change_type,
+                file_path=file_path,
             )
             self.session.add(version)
+            self.session.commit()
+        elif file_path is not None and existing.file_path is None:
+            existing.file_path = file_path
             self.session.commit()
 
     def get_entry_versions(
@@ -304,6 +317,24 @@ class UserOpsMixin:
             .first()
             is not None
         )
+
+    def get_entry_version_file_path(
+        self, entry_id: str, kb_name: str, commit_hash: str
+    ) -> str | None:
+        """The path this entry had at `commit_hash`, if recorded.
+
+        Not part of the public version shape (EntryVersionResponse omits
+        `file_path` by design), but needed internally to read a pre-rename
+        version's content at the path it actually had, rather than the
+        entry's current one (#432). None if the row has no stored path
+        (recorded before #432) or does not exist.
+        """
+        row = (
+            self.session.query(EntryVersion.file_path)
+            .filter_by(entry_id=entry_id, kb_name=kb_name, commit_hash=commit_hash)
+            .first()
+        )
+        return row[0] if row else None
 
     def _version_to_dict(self, v: EntryVersion) -> dict[str, Any]:
         """Convert EntryVersion ORM object to dict."""

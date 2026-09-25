@@ -223,6 +223,98 @@ class TestExportServiceCommit:
         assert result["commit_hash"]
         assert result["files_changed"] >= 1
 
+    def test_commit_kb_records_a_readable_version(self, git_kb):
+        """#432: a server write (ExportService.commit_kb, reached from REST
+        POST /kbs/{kb}/commit, MCP kb_commit and KBService.publish) records
+        a version, readable immediately -- no reindex in between."""
+        export_svc = git_kb["export_svc"]
+        db = git_kb["db"]
+        config = git_kb["config"]
+        kb_path = git_kb["kb_path"]
+
+        entry_file = kb_path / "entry-1.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: Entry\ntype: note\n---\n\nContent")
+
+        # The entry must be indexed for record_commit to resolve its path
+        # to an entry id -- the same way a server write flow indexes on
+        # save, before ever calling commit.
+        IndexManager(db, config).index_all()
+
+        result = export_svc.commit_kb("test-kb", message="Add entry-1")
+        assert result["success"]
+        commit_hash = result["commit_hash"]
+
+        from pyrite.services.version_service import VersionService
+
+        version_svc = VersionService(config, db)
+        versions = version_svc.get_entry_versions("entry-1", "test-kb")
+        assert len(versions) == 1
+        assert versions[0]["commit_hash"] == commit_hash
+
+        content = version_svc.get_entry_at_version("entry-1", "test-kb", commit_hash)
+        assert content is not None
+        assert "Content" in content
+
+    @pytest.mark.control(
+        reason="On origin/dev, commit_kb never calls record_commit at all "
+        "(that recording is #432's own root feature), so under lock "
+        "contention there is no INSERT to fail and nothing to poison the "
+        "session -- this passes on the merge base for a reason unrelated "
+        "to the rollback fix. Against round 1 of this PR (which added "
+        "recording without a rollback) this was red; the mutation check "
+        "(removing self.db.session.rollback()) is what proves it is "
+        "load-bearing against the code as it stands now."
+    )
+    def test_commit_kb_recovers_the_session_when_recording_fails_under_lock(self, git_kb, caplog):
+        """A concurrent writer (another index sync, another request) can
+        hold the sqlite write lock right when record_commit tries to
+        insert -- that insert then raises OperationalError, and commit_kb's
+        except must roll the ORM session back. Without a rollback, the
+        session stays poisoned (PendingRollbackError) for every later call
+        on it in the same process -- the MCP server and the CLI both reuse
+        one long-lived session (coordinator cold read on #432)."""
+        import logging
+        import sqlite3
+
+        export_svc = git_kb["export_svc"]
+        db = git_kb["db"]
+        config = git_kb["config"]
+        kb_path = git_kb["kb_path"]
+        db_path = config.settings.index_path
+
+        entry_file = kb_path / "entry-1.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: Entry\ntype: note\n---\n\nContent")
+        IndexManager(db, config).index_all()
+
+        # Hold the write lock from a second connection while commit_kb runs,
+        # so record_commit's INSERT hits "database is locked".
+        blocker = sqlite3.connect(str(db_path), timeout=0.1)
+        blocker.execute("BEGIN IMMEDIATE")
+        try:
+            with caplog.at_level(logging.WARNING, logger="pyrite.services.export_service"):
+                result = export_svc.commit_kb("test-kb", message="Add entry-1")
+            # commit_kb must still report the commit succeeded -- the git
+            # commit itself is not undone by a recording failure.
+            assert result["success"]
+            # Structural, not timed: the recording really failed on the lock
+            # and went through the recovery branch this test is about.
+            assert "Failed to record entry_version rows" in caplog.text
+        finally:
+            blocker.rollback()
+            blocker.close()
+
+        # The session must be usable again -- not raising PendingRollbackError.
+        db.get_entry("entry-1", "test-kb")
+        db.get_entry_versions("entry-1", "test-kb")
+        db.upsert_entry_version(
+            entry_id="entry-1",
+            kb_name="test-kb",
+            commit_hash="0" * 40,
+            author_name="x",
+            author_email="x@example.com",
+            commit_date="2026-01-01T00:00:00+00:00",
+        )
+
     def test_commit_kb_not_found(self, git_kb):
         export_svc = git_kb["export_svc"]
         with pytest.raises(KBNotFoundError):
@@ -350,6 +442,39 @@ class TestRESTCommitEndpoints:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"]
+
+    def test_commit_endpoint_records_readable_version(self, git_kb):
+        """#432 over HTTP: POST /kbs/{kb}/commit then GET the entry's
+        versions and content immediately, no reindex in between."""
+        from starlette.testclient import TestClient
+
+        kb_path = git_kb["kb_path"]
+        config = git_kb["config"]
+        db = git_kb["db"]
+
+        entry_file = kb_path / "entry-1.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: API\ntype: note\n---\n\nAPI entry")
+        IndexManager(db, config).index_all()
+
+        app = self._make_app(config, db)
+        client = TestClient(app)
+        resp = client.post(
+            "/api/kbs/test-kb/commit",
+            json={"message": "API commit"},
+        )
+        assert resp.status_code == 200
+        commit_hash = resp.json()["commit_hash"]
+
+        versions_resp = client.get("/api/entries/entry-1/versions", params={"kb": "test-kb"})
+        assert versions_resp.status_code == 200
+        versions = versions_resp.json()["versions"]
+        assert any(v["commit_hash"] == commit_hash for v in versions), versions
+
+        content_resp = client.get(
+            f"/api/entries/entry-1/versions/{commit_hash}", params={"kb": "test-kb"}
+        )
+        assert content_resp.status_code == 200
+        assert "API entry" in content_resp.json()["content"]
 
     def test_commit_endpoint_kb_not_found(self, git_kb):
         from starlette.testclient import TestClient

@@ -141,6 +141,31 @@ class TestPublishChanges:
         assert result["success"] is True
         assert result["entries_published"] == 0
 
+    def test_publish_records_a_readable_version(self, git_kb):
+        """#432: KBService.publish (used by the review/publish workflow)
+        goes through ExportService.commit_kb, so it must record a version
+        too, readable immediately."""
+        from pyrite.services.version_service import VersionService
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(git_kb["db"], git_kb["config"]).index_all()
+
+        (git_kb["kb_path"] / "hello.md").write_text(
+            "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nPublished.\n"
+        )
+
+        result = git_kb["svc"].publish_changes("test-kb", summary="Test publish")
+        assert result["success"] is True
+        commit_hash = result["commit_hash"]
+
+        version_svc = VersionService(git_kb["config"], git_kb["db"])
+        versions = version_svc.get_entry_versions("hello", "test-kb")
+        assert any(v["commit_hash"] == commit_hash for v in versions), versions
+
+        content = version_svc.get_entry_at_version("hello", "test-kb", commit_hash)
+        assert content is not None
+        assert "Published." in content
+
     def test_publish_auto_generates_message(self, git_kb):
         (git_kb["kb_path"] / "hello.md").write_text(
             "---\nid: hello\ntype: note\ntitle: Hello\ntags: []\n---\n\nAuto msg.\n"

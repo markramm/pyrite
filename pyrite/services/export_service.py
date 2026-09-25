@@ -223,6 +223,12 @@ class ExportService:
         Returns:
             dict with success, commit_hash, files_changed, etc.
 
+        After a successful commit, the commit's entry versions are recorded
+        in the index database (#432). If that recording fails, the shared
+        database session is rolled back so it stays usable -- which also
+        discards any database work the caller left pending (uncommitted) on
+        that session. Commit your own session work before calling this.
+
         Raises:
             KBNotFoundError: KB doesn't exist
             PyriteError: KB is not in a git repository
@@ -239,6 +245,38 @@ class ExportService:
         success, result = GitService.commit(kb.path, message, paths=paths, sign_off=sign_off)
 
         if success:
+            # Record entry_version rows for this commit so the version list
+            # and read endpoints serve it immediately, without a reindex
+            # (#432). Every commit path (REST, MCP, CLI, KBService.publish)
+            # goes through this method, so recording here covers them all.
+            commit_hash = result.get("commit_hash")
+            if commit_hash:
+                try:
+                    from .version_service import VersionService
+
+                    VersionService(self.config, self.db).record_commit(kb_name, commit_hash)
+                except Exception:
+                    # A recording failure must not turn a successful commit
+                    # into a reported failure -- the commit already
+                    # happened. The next `index build --with-attribution`
+                    # still recovers these rows.
+                    #
+                    # The rollback is not optional: a failed INSERT (e.g.
+                    # "database is locked" under write contention from a
+                    # concurrent index sync) leaves this ORM session's
+                    # transaction in a failed state. Without rolling it
+                    # back here, every later call on this exact session --
+                    # which the MCP server and the CLI both reuse across
+                    # requests, not just this one call -- raises
+                    # PendingRollbackError instead of doing its own work
+                    # (coordinator cold read on #432).
+                    self.db.session.rollback()
+                    logger.warning(
+                        "Failed to record entry_version rows for %s@%s",
+                        kb_name,
+                        commit_hash,
+                        exc_info=True,
+                    )
             return {"success": True, **result}
         return {"success": False, "error": result.get("error", "Unknown error")}
 

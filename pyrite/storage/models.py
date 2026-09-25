@@ -379,6 +379,12 @@ class EntryVersion(Base):
     message = Column(Text)
     diff_summary = Column(Text)
     change_type = Column(String)
+    # The entry's path relative to the KB's repo root *at this commit*
+    # (#432). Read at this path, not the entry's current path, so a
+    # pre-rename version stays servable after the entry moves. Nullable:
+    # rows recorded before #432 have none, and get_entry_at_version falls
+    # back to the entry's current path for those, as it always has.
+    file_path = Column(String, nullable=True)
 
     __table_args__ = (
         ForeignKeyConstraint(

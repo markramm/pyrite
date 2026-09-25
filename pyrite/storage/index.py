@@ -116,6 +116,43 @@ def _parse_indexed_at(indexed_at: str) -> datetime:
     return dt
 
 
+def _same_entry_history(
+    entry_id: str,
+    current_rel_path: str,
+    log_entries: list[dict],
+    kb_path: Path,
+    git_service: Any,
+) -> list[dict]:
+    """The prefix of `log_entries` (newest first) that belongs to `entry_id`.
+
+    Two ways the log reaches another entry's commits (#432):
+
+    - A path is reused. An entry is deleted and a different one is later
+      created at the same path; the log of the path runs through both. The
+      history stops at the newest commit that added the file (status "A"):
+      what is older belongs to the path's previous life.
+    - A rename is inferred. `git log --follow` crosses a rename whenever git
+      finds the two files similar enough, and entries share frontmatter
+      boilerplate, so a deleted entry and an unrelated added one can look
+      like a rename. At each point where the path changes, the older path
+      must hold the same entry id at that commit (ids are unique within a
+      KB); the history stops at the first that does not, or cannot be read.
+    """
+    from ..models.core_types import entry_id_from_markdown
+
+    newer_path = current_rel_path
+    for i, log_entry in enumerate(log_entries):
+        path = log_entry.get("file_path", newer_path)
+        if path != newer_path:
+            text = git_service.read_file_at(kb_path, log_entry["hash"], path)
+            if text is None or entry_id_from_markdown(text) != entry_id:
+                return log_entries[:i]
+        if str(log_entry.get("status", "")).startswith("A"):
+            return log_entries[: i + 1]
+        newer_path = path
+    return log_entries
+
+
 class IndexManager:
     """
     Manages the SQLite FTS index for all KBs.
@@ -1226,7 +1263,13 @@ class IndexManager:
                 # Extract git attribution if available
                 if is_git:
                     rel_path = str(file_path.relative_to(kb_path))
-                    log_entries = git_service.get_file_log(kb_path, rel_path)
+                    log_entries = _same_entry_history(
+                        entry.id,
+                        rel_path,
+                        git_service.get_file_log(kb_path, rel_path),
+                        kb_path,
+                        git_service,
+                    )
 
                     if log_entries:
                         # First commit = created_by, last commit = modified_by
@@ -1236,9 +1279,16 @@ class IndexManager:
                 # Insert entry first (must exist before entry_version FK)
                 self.db.upsert_entry(data)
 
-                # Then populate entry_version table
+                # Then populate entry_version table. Each commit's file_path
+                # is the KB-relative path this entry had *at that commit*
+                # (its own tree), not necessarily its current path --
+                # get_file_log resolves this per commit via --name-status
+                # so a pre-rename commit stays readable at the name it
+                # actually had (#432). Stored KB-relative, not absolute: an
+                # absolute path breaks the moment the KB's directory moves.
                 for i, log_entry in enumerate(log_entries):
                     change_type = "created" if i == len(log_entries) - 1 else "modified"
+                    commit_rel_path = log_entry.get("file_path", rel_path)
                     self.db.upsert_entry_version(
                         entry_id=entry.id,
                         kb_name=kb_name,
@@ -1248,6 +1298,7 @@ class IndexManager:
                         commit_date=log_entry["date"],
                         message=log_entry["message"],
                         change_type=change_type,
+                        file_path=commit_rel_path,
                     )
                 indexed_count += 1
 
