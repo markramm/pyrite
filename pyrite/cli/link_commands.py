@@ -753,22 +753,40 @@ def _find_asymmetric_links(
 
 @links_app.command("asymmetric")
 def links_asymmetric(
-    kb_a: str = typer.Option(..., "--kb-a", help="First KB"),
-    kb_b: str = typer.Option(..., "--kb-b", help="Second KB"),
+    kb: str | None = typer.Option(None, "-k", "--kb", help="Single KB to check"),
+    kb_a: str | None = typer.Option(None, "--kb-a", help="First KB in a cross-KB check"),
+    kb_b: str | None = typer.Option(None, "--kb-b", help="Second KB in a cross-KB check"),
     output_format: str = typer.Option(
         "rich", "--format", help="Output format: json, rich, markdown, csv, yaml"
     ),
 ):
-    """Find one-directional links between two KBs.
+    """Find one-directional links between two KBs or within one KB.
 
     Detects links that exist A→B but not B→A (or vice versa).
     These asymmetries may represent missing reverse connections.
 
     \\b
     Examples:
+        pyrite links asymmetric -k linkkb
+        pyrite links asymmetric --kb linkkb --format json
         pyrite links asymmetric --kb-a ramm --kb-b senge
         pyrite links asymmetric --kb-a ramm --kb-b senge --format json
     """
+    if kb is not None:
+        if kb_a is not None or kb_b is not None:
+            typer.echo(
+                "Use either -k/--kb for one KB or both --kb-a and --kb-b for two KBs, not both.",
+                err=True,
+            )
+            raise typer.Exit(code=2)
+        kb_a = kb_b = kb
+    elif kb_a is None or kb_b is None:
+        typer.echo(
+            "Use -k/--kb for one KB or provide both --kb-a and --kb-b for two KBs.",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+
     results = _find_asymmetric_links(kb_a=kb_a, kb_b=kb_b)
 
     data = {

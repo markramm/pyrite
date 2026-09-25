@@ -392,10 +392,39 @@ class LinkDiscoveryService:
         kb_a: str,
         kb_b: str,
     ) -> list[dict]:
-        """Find one-directional cross-KB links between two KBs.
+        """Find one-directional links between two KBs or within one KB.
 
         Returns links that exist in one direction (A\u2192B) but not the reverse (B\u2192A).
+        When both names are the same, each directed link is considered once.
         """
+        if kb_a == kb_b:
+            entries = self.db.list_entries(kb_name=kb_a, limit=10000)
+            entry_ids = {entry["id"] for entry in entries}
+            titles = {entry["id"]: entry.get("title", entry["id"]) for entry in entries}
+
+            links: dict[tuple[str, str], str] = {}
+            for entry in entries:
+                source_id = entry["id"]
+                for outlink in self.db.get_outlinks(source_id, kb_a):
+                    target_id = outlink["id"]
+                    if outlink.get("kb_name") == kb_a and target_id in entry_ids:
+                        links[(source_id, target_id)] = outlink.get("relation", "related_to")
+
+            return [
+                {
+                    "source_id": source_id,
+                    "source_kb": kb_a,
+                    "source_title": titles.get(source_id, source_id),
+                    "target_id": target_id,
+                    "target_kb": kb_a,
+                    "target_title": titles.get(target_id, target_id),
+                    "direction": f"{kb_a} \u2192 {kb_a}",
+                    "relation": relation,
+                }
+                for (source_id, target_id), relation in links.items()
+                if (target_id, source_id) not in links
+            ]
+
         # Get all entries in both KBs
         entries_a = self.db.list_entries(kb_name=kb_a, limit=10000)
         entries_b = self.db.list_entries(kb_name=kb_b, limit=10000)
