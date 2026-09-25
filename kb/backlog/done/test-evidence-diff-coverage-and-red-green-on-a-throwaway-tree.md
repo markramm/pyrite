@@ -7,7 +7,7 @@ tags:
 - test
 - process
 kind: tech_debt
-status: in_progress
+status: done
 assignee: agent:pyrite-worker
 priority: high
 effort: L
