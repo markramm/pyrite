@@ -49,22 +49,49 @@ Usage
   scripts/test-affected --run [-n N]           run them (default -n 4)
   scripts/test-affected --run --full           run the full suite instead
                                                (or PYRITE_PUSH_FULL=1|true|yes)
+  scripts/test-affected --run -- --lf          re-run only the last run's failures
+                                               (anything after -- goes to pytest)
+  --force             ignore pass stamps (or PYRITE_PUSH_FORCE=1|true|yes)
   --base REF          compare against REF's merge base (default origin/dev)
   --committed         ignore uncommitted and untracked changes
   --files A B ...     use these changed paths instead of asking git
 
 Under the pre-push hook (PRE_COMMIT_FROM_REF / PRE_COMMIT_TO_REF set) the
 changed paths are those of the pushed range, not the working tree.
+
+Pass stamps: each tree is tested once
+  A ``--run`` that exits 0 on a clean tree (no uncommitted change to a
+  tracked file, no untracked ``.py`` file) records a stamp: the HEAD tree SHA,
+  the interpreter's major.minor, and the selection it ran ("full" for the
+  full suite). A later ``--run`` -- the pre-push hook's included -- whose
+  selection the stamp covers skips, printing one line. The worker's own run
+  and the hook's run of the same commit were the same tests on the same code;
+  under load the repeat cost about 45 minutes (maintainer, 2026-09-25).
+
+  The tree looked up is the one being tested: the pushed ref's tree under the
+  hook, else HEAD's tree when the working tree is clean (a dirty tree never
+  skips and is never stamped). Stamps live under the git COMMON dir, so every
+  worktree shares them; a tree SHA names content, so that is safe. "full"
+  covers any selection; a list covers another when it contains each test (a
+  file covers its node ids). Two passes on one tree merge. Never stamped: a
+  failure, a dry run, and a run whose pytest arguments can narrow it
+  (``--lf``, ``-k``, ...; only output flags such as ``-v``, ``-x``,
+  ``--tb=`` keep a run stampable). A stamp that does not parse, names
+  another tree or interpreter, or is older than 14 days is ignored, and old
+  ones are pruned when a new one is written.
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -691,6 +718,159 @@ def pytest_args(selection: Selection, workers: int | str = DEFAULT_WORKERS) -> l
 
 
 # --------------------------------------------------------------------------
+# Pass stamps: each tree is tested once
+
+STAMP_DIR_NAME = "pyrite-test-stamps"
+STAMP_VERSION = 1
+STAMP_MAX_AGE = 14 * 86400  # seconds
+# pytest arguments that change how a run reports, never which tests run: a
+# pass with only these ran the whole selection. Anything else (--lf, -k,
+# --deselect, a path) may have run part of it, so that pass is not stamped.
+_OUTPUT_ONLY_ARGS = {
+    "-v", "-vv", "-vvv", "-q", "-qq", "-x", "--exitfirst", "-s", "-l",
+    "--showlocals", "--no-header", "--no-summary",
+}  # fmt: skip
+_OUTPUT_ONLY_PREFIXES = ("--tb=", "--durations=", "--color=", "-r", "--capture=")
+
+
+def _truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes"}
+
+
+def python_version(python: str) -> str | None:
+    """major.minor of the interpreter that runs pytest, or None if unknown."""
+    if python == sys.executable:
+        return f"{sys.version_info[0]}.{sys.version_info[1]}"
+    try:
+        out = subprocess.run(
+            [python, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    version = out.stdout.strip()
+    return version if out.returncode == 0 and re.fullmatch(r"\d+\.\d+", version) else None
+
+
+def stamp_dir(root: Path) -> Path | None:
+    """Under the git common dir: every worktree of the repository shares it."""
+    try:
+        common = Path(_git(root, "rev-parse", "--git-common-dir").strip())
+    except (subprocess.CalledProcessError, OSError):
+        return None
+    return (common if common.is_absolute() else root / common) / STAMP_DIR_NAME
+
+
+def tree_of(root: Path, rev: str) -> str | None:
+    try:
+        return _git(root, "rev-parse", "--verify", "--quiet", f"{rev}^{{tree}}").strip() or None
+    except (subprocess.CalledProcessError, OSError):
+        return None
+
+
+def is_clean(root: Path) -> bool:
+    """No uncommitted change to a tracked file and no untracked ``.py`` file
+    (an untracked conftest or module changes what runs without changing
+    HEAD's tree). Unknown counts as dirty."""
+    try:
+        if _git(root, "status", "--porcelain", "--untracked-files=no").strip():
+            return False
+        untracked = _git(root, "ls-files", "-z", "--others", "--exclude-standard")
+    except (subprocess.CalledProcessError, OSError):
+        return False
+    return not any(p.endswith(".py") for p in untracked.split("\0"))
+
+
+def stampable_args(extra: list[str]) -> bool:
+    return all(a in _OUTPUT_ONLY_ARGS or a.startswith(_OUTPUT_ONLY_PREFIXES) for a in extra)
+
+
+def covers(stamped: str | list[str], needed: str | list[str]) -> bool:
+    if stamped == "full":
+        return True
+    if needed == "full":
+        return False
+    have = set(stamped)
+    return all(item in have or item.split("::")[0] in have for item in needed)
+
+
+def _stamp_path(directory: Path, tree: str, python: str) -> Path:
+    return directory / f"{tree}-py{python}.json"
+
+
+def read_stamp(path: Path, tree: str, python: str, now: float | None = None) -> dict | None:
+    """The stamp at ``path`` if it is well formed, for this tree and
+    interpreter, and recent; else None. Never trust what does not parse."""
+    now = time.time() if now is None else now
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("version") != STAMP_VERSION:
+        return None
+    if data.get("tree") != tree or data.get("python") != python:
+        return None
+    sel = data.get("selection")
+    if not (sel == "full" or (isinstance(sel, list) and all(isinstance(s, str) for s in sel))):
+        return None
+    when = data.get("when")
+    if isinstance(when, bool) or not isinstance(when, int | float):
+        return None
+    if not now - STAMP_MAX_AGE <= when <= now + 300:
+        return None
+    return data
+
+
+def write_stamp(directory: Path, tree: str, python: str, selection: str | list[str]) -> None:
+    """Record a pass, merged with any valid stamp for the same tree; prune
+    stamps older than STAMP_MAX_AGE. Best effort: a stamp that cannot be
+    written costs one re-run, never a failure."""
+    now = time.time()
+    path = _stamp_path(directory, tree, python)
+    previous = read_stamp(path, tree, python, now)
+    if previous is not None:
+        old = previous["selection"]
+        if "full" in (old, selection):
+            selection = "full"
+        else:
+            selection = sorted(set(old) | set(selection))
+    elif selection != "full":
+        selection = sorted(set(selection))
+    data = {
+        "version": STAMP_VERSION,
+        "tree": tree,
+        "python": python,
+        "selection": selection,
+        "when": now,
+    }
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".stamp-", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+        os.replace(tmp, path)
+        for old_path in directory.iterdir():
+            if old_path != path and now - old_path.stat().st_mtime > STAMP_MAX_AGE:
+                old_path.unlink()
+    except OSError:
+        pass
+
+
+def find_stamp(directory: Path, tree: str, python: str, needed: str | list[str]) -> dict | None:
+    stamp = read_stamp(_stamp_path(directory, tree, python), tree, python)
+    return stamp if stamp is not None and covers(stamp["selection"], needed) else None
+
+
+def _skip_line(tree: str, stamp: dict) -> str:
+    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(stamp["when"]))
+    sel = stamp["selection"]
+    count = "full suite" if sel == "full" else f"{len(sel)} tests selected"
+    return f"test-affected: already passed on tree {tree[:10]} ({when}, {count}); skipping"
+
+
+# --------------------------------------------------------------------------
 # CLI
 
 
@@ -728,16 +908,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--full", action="store_true", help="select the full suite")
     parser.add_argument("--helper-threshold", type=int, default=DEFAULT_HELPER_THRESHOLD)
     parser.add_argument("--dry-run", action="store_true", help="with --run: print the command only")
+    parser.add_argument(
+        "--force", action="store_true", help="with --run: ignore pass stamps (PYRITE_PUSH_FORCE=1)"
+    )
     parser.add_argument("--root", default=None, help=argparse.SUPPRESS)
     parser.add_argument("pytest_extra", nargs=argparse.REMAINDER, help="after --: passed to pytest")
     opts = parser.parse_args(argv)
 
     root = Path(opts.root or Path(__file__).resolve().parent.parent).resolve()
-    env_full = os.environ.get("PYRITE_PUSH_FULL", "").strip().lower() in {"1", "true", "yes"}
+    env_full = _truthy("PYRITE_PUSH_FULL")
+    to_ref = os.environ.get("PRE_COMMIT_TO_REF")
     if opts.full or env_full:
         selection = Selection(files={}, core=[], full="--full" if opts.full else "PYRITE_PUSH_FULL")
     else:
-        to_ref = os.environ.get("PRE_COMMIT_TO_REF")
         try:
             if opts.files is not None:
                 changed = opts.files
@@ -774,7 +957,8 @@ def main(argv: list[str] | None = None) -> int:
     args = pytest_args(selection, opts.workers)
     if opts.run:
         extra = [a for a in opts.pytest_extra if a != "--"]
-        cmd = [_python(root), "-m", "pytest", *args, "-q", "--tb=short", *extra]
+        python = _python(root)
+        cmd = [python, "-m", "pytest", *args, "-q", "--tb=short", *extra]
         label = (
             selection.full
             and f"full suite: {selection.full}"
@@ -784,7 +968,39 @@ def main(argv: list[str] | None = None) -> int:
         if opts.dry_run:
             print(" ".join(cmd))
             return 0
-        return subprocess.call(cmd, cwd=root, env={**os.environ})
+        needed: str | list[str] = "full" if selection.full is not None else args[2:]
+        version = python_version(python)
+        stamps = stamp_dir(root)
+        clean = is_clean(root)
+        head_tree = tree_of(root, "HEAD")
+        if (
+            stamps is not None
+            and version is not None
+            and not (opts.force or _truthy("PYRITE_PUSH_FORCE"))
+        ):
+            # The tree under test: under the hook, the one being pushed --
+            # never the working tree's, which may be another commit.
+            looked_up = tree_of(root, to_ref) if to_ref else (clean and head_tree)
+            stamp = looked_up and find_stamp(stamps, looked_up, version, needed)
+            if stamp:
+                print(_skip_line(looked_up, stamp), file=sys.stderr)
+                return 0
+        code = subprocess.call(cmd, cwd=root, env={**os.environ})
+        if code == 0 and stamps is not None and version is not None:
+            # pytest ran on the working tree, so that is what is stamped --
+            # and only when it was exactly HEAD's tree from start to finish
+            # and the whole selection ran.
+            tree = tree_of(root, "HEAD")
+            if not (clean and is_clean(root)) or tree is None or tree != head_tree:
+                print("test-affected: passed; not stamped (uncommitted changes)", file=sys.stderr)
+            elif not stampable_args(extra):
+                print(
+                    "test-affected: passed; not stamped (pytest args may narrow the run)",
+                    file=sys.stderr,
+                )
+            else:
+                write_stamp(stamps, tree, version, needed)
+        return code
 
     for item in args[2:]:
         print(item)

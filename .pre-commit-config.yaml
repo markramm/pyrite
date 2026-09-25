@@ -10,7 +10,8 @@
 #              KB schema validation. No pytest.
 #   commit-msg `fix:` commits must touch tests/.
 #   pre-push   core + affected tests (scripts/test-affected), only when the
-#              pushed range touches code; PYRITE_PUSH_FULL=1 for everything.
+#              pushed range touches code, and not again on a tree whose run
+#              already passed; PYRITE_PUSH_FULL=1 for everything.
 #   CI         the authority. Full suite + everything above, on every push and PR.
 #
 # The commit stage must stay fast because pre-commit stashes EVERY unstaged edit
@@ -95,6 +96,13 @@ repos:
         # The full suite at every push filled the disk and pushed load past 25
         # on 2026-09-24 with several worktrees pushing (#356); CI on the PR
         # runs everything, so this is feedback, not the gate.
+        #
+        # Each tree is tested once: a `--run` that passed on a clean tree left
+        # a stamp (tree SHA + Python major.minor, under the git common dir),
+        # and the script skips here when the PUSHED ref's tree has one that
+        # covers the selection -- the worker's own run and this one were the
+        # same tests on the same code, about 45 minutes under load
+        # (2026-09-25). PYRITE_PUSH_FORCE=1 ignores stamps.
         #
         # Refuse rather than fall back. This used to end `|| PY=python`, and in
         # a worktree created with a bare `git worktree add` (no venv) that
