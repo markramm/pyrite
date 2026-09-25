@@ -13,6 +13,20 @@ asserts that `[Unreleased]` stays empty.
 
 ## [Unreleased]
 
+## [0.25.2] - 2026-09-25
+
+Security release, the second batch from the multi-user threat-model pass begun in v0.25.1. It covers five areas: per-KB write checks, anonymous visitors' roles, a Host and Origin guard for credential-free servers, GitHub OAuth sign-in, and ephemeral KB privacy. **Upgrade if you run Pyrite with `anonymous_tier: write`; without a credential (auth off and no API key) on a LAN or behind a reverse proxy; from the Render, Fly.io or Railway deploy templates; or with GitHub sign-in.** A single-user install you reach only at `localhost` sees no change beyond the Host note below.
+
+**Before you upgrade, check these:**
+
+- **Reaching a local, auth-off server by anything other than `localhost`?** That includes a LAN IP, `*.local`, or a proxy hostname. Add that name to `allowed_hosts` (`PYRITE_ALLOWED_HOSTS`) first, or requests get `421`. If the web UI is served from another origin, add it to `cors_origins`. `localhost`, `127.0.0.1` and `[::1]` work unchanged. The CLI, MCP over stdio and agents that send no `Host`/`Origin` headers are unaffected.
+- **Deployed from a Render, Fly.io or Railway template?** Those templates now start with auth enabled, and the first account registered becomes admin. **Register your admin account immediately after the first deploy.** Until an admin exists, anyone who reaches the URL first could claim that account. To stop open sign-up afterwards, set `PYRITE_AUTH_ALLOW_REGISTRATION=false`. A later release replaces this with an admin created from the command line. If an existing deployment from these templates ran with auth off, enable auth and register now, or set `PYRITE_ALLOWED_HOSTS` to its public hostname.
+- **Running `anonymous_tier: write`?** Review recent writes to KBs with `default_role: none` or `read` for content you did not expect.
+- **GitHub sign-in configured?** A sign-in in progress at the moment of upgrade fails once; signing in again works. `/auth/github/status` shows the connected GitHub username.
+- **Using ephemeral KBs?** On upgrade, an ephemeral KB whose registry entry has no access policy is treated as private and named in a startup warning. Set `default_role` explicitly if it should be shared.
+
+The details, and the behaviour changes (a KB you cannot read answers `404` on every write route, `anonymous_tier` must be `read`, `write` or `none`, and more), are in the Security and Fixed sections below.
+
 ## [0.25.1] - 2026-09-23
 
 Security release. It fixes authorization gaps in the multi-user path (auth enabled, several users): API-key handling, per-KB checks on export, MCP writes, settings, statistics and repositories, and path handling for entry ids, ephemeral KBs and exports. **If you run Pyrite with auth enabled and more than one user, upgrade**, and read the Security section for what to check on an existing install. Multi-user remains alpha; the 0.26 security review continues (see `kb/roadmap.md`).
