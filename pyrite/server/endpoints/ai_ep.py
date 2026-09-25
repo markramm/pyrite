@@ -14,7 +14,7 @@ from ...services.link_discovery_service import LinkDiscoveryService
 from ...services.llm_service import LLMService
 from ...services.llm_usage_service import LLMUsageService
 from ...services.quota_service import QuotaService
-from ...services.search_service import SearchService, clip_derived_query
+from ...services.search_service import SearchService, build_or_query, clip_semantic_text
 from ...storage.database import PyriteDB
 from ..api import (
     get_config,
@@ -246,13 +246,16 @@ async def ai_suggest_links(
     # not be able to fail to parse (round-2 cold read on #414/#428; #361).
     derived_query = LinkDiscoveryService.build_suggest_query({"title": title})
     if not derived_query.strip():
-        # No words long enough to search on (or an empty title) -- nothing
-        # to search, not an empty MATCH.
+        # No words to search on (or an empty title) -- nothing to search,
+        # not an empty MATCH.
         related = []
     else:
         try:
+            # The semantic leg embeds the title itself, not the OR string
+            # (#431).
             related = search_svc.search(
                 query=derived_query,
+                semantic_query=clip_semantic_text(title),
                 kb_name=req.kb_name,
                 kb_names=kb_names,
                 limit=15,
@@ -266,6 +269,11 @@ async def ai_suggest_links(
             # which maps it to 400 QUERY_SYNTAX.
             raise
         except Exception:
+            # Recovered, but not silently: a storage fault here is the
+            # server's problem (#437 cold read).
+            logger.warning(
+                "suggest-links hybrid search failed; retrying keyword-only", exc_info=True
+            )
             related = search_svc.search(
                 query=derived_query,
                 kb_name=req.kb_name,
@@ -356,15 +364,21 @@ async def ai_chat(
     context_text = ""
     kb_names = None if req.kb else readable
     try:
-        clipped_msg = clip_derived_query(last_msg)
-        if not clipped_msg:
-            # A message that clips to "" (an unterminated quote past the
-            # cap) has nothing to search -- same rule as suggest-links.
+        # The message is not a query the caller wrote: search its words,
+        # quoted and OR-joined like suggest-links', so it cannot fail to
+        # parse, and let the semantic leg embed the message itself (#431).
+        # Parsing the message as FTS5 made ordinary English ("hooks and
+        # CI?") a syntax error, and clipping it as FTS5 cut "1) ... 2) ..."
+        # at the first ")"; the except below then hid both.
+        derived_query = build_or_query(last_msg)
+        if not derived_query:
+            # No words to search on -- nothing to search, not an empty MATCH.
             results = []
         else:
             try:
                 results = search_svc.search(
-                    query=clipped_msg,
+                    query=derived_query,
+                    semantic_query=clip_semantic_text(last_msg),
                     kb_name=req.kb,
                     kb_names=kb_names,
                     limit=5,
@@ -377,8 +391,10 @@ async def ai_chat(
                 # rather than failing the request.
                 raise
             except Exception:
+                # Recovered, but not silently (#437 cold read).
+                logger.warning("chat hybrid search failed; retrying keyword-only", exc_info=True)
                 results = search_svc.search(
-                    query=clipped_msg,
+                    query=derived_query,
                     kb_name=req.kb,
                     kb_names=kb_names,
                     limit=5,

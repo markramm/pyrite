@@ -8,12 +8,11 @@ All methods return structured data (lists of dicts). Formatting is left to calle
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
-from .search_service import MAX_SEARCH_QUERY_LENGTH, clip_derived_query
+from .search_service import build_or_query, clip_semantic_text
 
 logger = logging.getLogger(__name__)
 
@@ -34,38 +33,12 @@ class LinkDiscoveryService:
         """Build an FTS5 OR query from an entry's title words and tags.
 
         Uses OR to find entries sharing *any* term, which gives broader recall
-        and lets FTS5 rank by overlap.
+        and lets FTS5 rank by overlap. Each term is quoted, so a word that
+        collides with an FTS column name ("capture") or carries punctuation is
+        a literal, never syntax. See ``build_or_query`` for which words are
+        kept and how the cap is applied.
         """
-        tokens: list[str] = []
-        title = entry.get("title", "")
-        if title:
-            tokens.extend(w for w in re.split(r"\W+", title) if w and len(w) > 2)
-        tags = entry.get("tags", [])
-        if tags:
-            tokens.extend(t for t in tags if t)
-        # Deduplicate while preserving order
-        seen: set[str] = set()
-        unique: list[str] = []
-        for t in tokens:
-            lower = t.lower()
-            if lower not in seen:
-                seen.add(lower)
-                unique.append(t)
-        # Quote each term so FTS5 treats it as a literal phrase. Without quoting,
-        # a bare token that collides with an FTS column name (e.g. "capture",
-        # "legalism") is parsed as a `column:` filter and raises
-        # `OperationalError: no such column: <token>`. Double-quoting disables
-        # operator/column interpretation for the token. Escape embedded quotes.
-        quoted = ['"' + t.replace('"', '""') + '"' for t in unique]
-        # Whole terms only, and no more than the search-query cap: a
-        # heavily-tagged entry must still get suggestions, not a refusal.
-        query = ""
-        for term in quoted:
-            candidate = f"{query} OR {term}" if query else term
-            if len(candidate) > MAX_SEARCH_QUERY_LENGTH:
-                continue  # drop this term whole; a shorter one may still fit
-            query = candidate
-        return query
+        return build_or_query(entry.get("title", "") or "", entry.get("tags") or ())
 
     # ------------------------------------------------------------------
     # suggest_links — single-entry keyword-based suggestion
@@ -173,17 +146,17 @@ class LinkDiscoveryService:
         summary = entry.get("summary", "")
         tags = entry.get("tags", [])
 
+        # The keyword leg gets OR-joined quoted tokens, which cannot fail to
+        # parse; the semantic leg embeds the title and summary as text. Handing
+        # hybrid the raw title made its keyword leg parse it as FTS5 -- a title
+        # with a quote and a hyphen raised QUERY_SYNTAX (#431).
+        keyword_query = self.build_suggest_query({"title": title, "tags": tags})
+        semantic_text = ""
         if mode in ("semantic", "hybrid"):
-            query_parts = [title]
-            if summary:
-                query_parts.append(summary[:200])
-            query = clip_derived_query(" ".join(query_parts))
-        else:
-            # Keyword: OR-joined quoted tokens, bounded by the query cap.
-            query = self.build_suggest_query({"title": title, "tags": tags})
-
-        if not query.strip():
-            return []
+            parts = [p for p in (title, summary[:200]) if p] or [t for t in tags or [] if t]
+            # With no title or summary, the tags are the text -- as words, not
+            # the OR-joined keyword query.
+            semantic_text = clip_semantic_text(" ".join(parts))
 
         # Fall back to keyword if semantic unavailable
         actual_mode = mode
@@ -200,6 +173,14 @@ class LinkDiscoveryService:
             except (ImportError, AttributeError):
                 actual_mode = "keyword"
 
+        if actual_mode == "semantic":
+            query, semantic_query = semantic_text, None
+        else:
+            query = keyword_query
+            semantic_query = semantic_text if actual_mode == "hybrid" else None
+        if not query.strip():
+            return []
+
         search_svc = SearchService(self.db, settings=self.config.settings)
 
         raw_results = search_svc.search(
@@ -207,6 +188,7 @@ class LinkDiscoveryService:
             kb_name=target_kb,
             limit=limit + 30,
             mode=actual_mode,
+            semantic_query=semantic_query or None,
         )
 
         # Collect existing link targets to exclude

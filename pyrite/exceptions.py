@@ -103,7 +103,25 @@ class PluginError(PyriteError):
 
 
 class StorageError(PyriteError):
-    """Raised when a storage operation fails."""
+    """Raised when a storage operation fails.
+
+    ``retryable`` says whether the same call could succeed if made again. It is
+    False here: schema drift, a missing table and a corrupt file fail the same
+    way every time. Only ``StorageBusyError`` sets it.
+    """
+
+    retryable: bool = False
+
+
+class StorageBusyError(StorageError):
+    """A transient storage fault: the database was locked or busy (#431).
+
+    The one ``StorageError`` a caller may retry: another connection held a
+    lock, and the same call can succeed once it is released. REST still maps
+    it to ``STORAGE_ERROR`` 500; MCP reports it with ``retryable: true``.
+    """
+
+    retryable = True
 
 
 class KBProtectedError(PyriteError):

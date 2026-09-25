@@ -27,6 +27,7 @@ from ..exceptions import (
     PyriteError,
     QuerySyntaxError,
     QueryTooLongError,
+    StorageError,
     ValidationError,
 )
 from ..services.body_bounds import (
@@ -109,12 +110,16 @@ def _refusal(exc: PyriteError) -> dict:
 
     Write refusals carry a stable ``error_code`` (see the ValidationError
     subclasses in ``pyrite.exceptions``) that REST and the CLI report
-    unchanged (#378). Never retryable: the same call fails the same way.
+    unchanged (#378). Not retryable -- the same call fails the same way --
+    except a ``StorageError`` that says otherwise: a locked or busy database
+    (``StorageBusyError``) can succeed on a retry; schema drift, a missing
+    table and corruption cannot (#431).
     """
     code = getattr(exc, "error_code", None) or next(
         (c for t, c in _DOMAIN_ERROR_CODES if isinstance(exc, t)), "REQUEST_REFUSED"
     )
-    err = _error(code, str(exc), suggestion=getattr(exc, "suggestion", None))
+    retryable = isinstance(exc, StorageError) and exc.retryable
+    err = _error(code, str(exc), suggestion=getattr(exc, "suggestion", None), retryable=retryable)
     declared = getattr(exc, "declared_types", None)
     if declared is not None:
         err["declared_types"] = declared
@@ -2181,8 +2186,12 @@ class PyriteMCPServer:
             return handler(arguments)
         except PyriteError as e:
             # A refused request, not a crash: the service said no for a reason
-            # the caller can act on. Never retryable -- the same call fails the
-            # same way -- and not logged as an exception.
+            # the caller can act on, and it is not logged as an exception --
+            # except a storage fault, which is the server's problem and is
+            # logged once, with its traceback (#431). See _refusal for which
+            # refusals are retryable.
+            if isinstance(e, StorageError):
+                logger.error("Tool %s failed: %s", name, e, exc_info=e)
             return _refusal(e)
         except Exception as e:
             logger.exception("Tool %s failed with args %s", name, arguments)

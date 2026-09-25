@@ -309,10 +309,11 @@ class TestAISuggestLinks:
         )
         assert resp.status_code == 404
 
+    @pytest.mark.control(reason="pre-existing; only its docstring changed, for #431's word rule")
     def test_suggest_links_empty_title_skips_search(self, ai_env):
-        """A title with no word long enough to search on (build_suggest_query
-        drops words of length <= 2, and drops a whole term that would push
-        the OR-joined query over the search cap) has nothing to search --
+        """A title with no word to search on (build_suggest_query drops single
+        characters and lowercase stop words, and drops a whole term that would
+        push the OR-joined query over the search cap) has nothing to search --
         an empty query is not "no query", so suggest-links must not run
         search at all, rather than ask the backend to special-case it.
         Covers both the "too short" case and #414's original "title clips to
@@ -341,9 +342,10 @@ class TestAISuggestLinks:
         assert resp.json()["suggestions"] == []
         mock_svc.search.assert_not_called()
 
+    @pytest.mark.control(reason="pre-existing; only its docstring changed, for #431's word rule")
     def test_suggest_links_short_title_skips_search(self, ai_env):
-        """A title with only short words (<=2 chars, dropped by
-        build_suggest_query) also has nothing to search.
+        """A title of single characters (dropped by build_suggest_query) also
+        has nothing to search.
         """
         from pyrite.services.kb_service import KBService
         from pyrite.server.api import get_search_service

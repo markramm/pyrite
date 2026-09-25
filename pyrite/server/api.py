@@ -110,7 +110,10 @@ def register_pyrite_exception_handler(app: FastAPI) -> None:
     def _handler(request: Request, exc: PyriteError) -> JSONResponse:
         status_code, code = _classify(exc)
         if status_code >= 500:
-            logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=True)
+            # The exception itself, not True: this handler runs outside the
+            # except frame, so sys.exc_info() is empty here and exc_info=True
+            # logged no traceback (#431).
+            logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=exc)
         message = str(exc)
         if isinstance(exc, ConfigSaveRefusedError):
             # The detail names the absolute config path and the KBs in the
