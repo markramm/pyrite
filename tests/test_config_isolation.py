@@ -9,7 +9,9 @@ and nobody noticed for nine hours. Two defaults let it happen:
    monkeypatches ``CONFIG_DIR``). A ``pyrite`` / ``pyrite-admin`` / ``python
    -c`` child process does not inherit a monkeypatch, so it read and wrote the
    real ``~/.pyrite``. The repo-root ``conftest.py`` now exports
-   ``PYRITE_CONFIG_DIR`` and ``PYRITE_DATA_DIR`` for the whole session.
+   ``PYRITE_CONFIG_DIR`` for the whole session and clears ``PYRITE_DATA_DIR``
+   (which would override every explicit ``settings.index_path`` in-process and
+   win over ``PYRITE_CONFIG_DIR`` when resolving the config dir).
 2. ``PYRITE_CONFIG_DIR`` moved the config file but not the index:
    ``Settings.index_path`` defaulted to ``~/.pyrite/index.db`` regardless, so a
    sandboxed ``pyrite kb add`` still registered into the user's real index.
@@ -63,15 +65,33 @@ def _snapshot(root: Path) -> dict[str, tuple[int, int]]:
 
 
 class TestSessionIsolation:
-    def test_session_exports_config_and_data_dirs_outside_home(self):
+    def test_session_exports_a_config_dir_outside_home(self):
         home_pyrite = (Path.home() / ".pyrite").resolve()
         tmp_root = Path(tempfile.gettempdir()).resolve()
-        for var in ("PYRITE_CONFIG_DIR", "PYRITE_DATA_DIR"):
-            value = os.environ.get(var)
-            assert value, f"{var} is not set for the test session"
-            resolved = Path(value).resolve()
-            assert resolved.is_relative_to(tmp_root), f"{var}={value} is not a temp dir"
-            assert not resolved.is_relative_to(home_pyrite), f"{var}={value} is under ~/.pyrite"
+        value = os.environ.get("PYRITE_CONFIG_DIR")
+        assert value, "PYRITE_CONFIG_DIR is not set for the test session"
+        resolved = Path(value).resolve()
+        assert resolved.is_relative_to(tmp_root), f"PYRITE_CONFIG_DIR={value} is not a temp dir"
+        assert not resolved.is_relative_to(home_pyrite), (
+            f"PYRITE_CONFIG_DIR={value} is under ~/.pyrite"
+        )
+
+    def test_session_does_not_export_a_data_dir(self, tmp_path):
+        """PYRITE_DATA_DIR would override an explicit settings.index_path in
+        every in-process load_config -- and hide precedence bugs."""
+        assert "PYRITE_DATA_DIR" not in os.environ
+        explicit = tmp_path / "explicit.db"
+        cfg = Path(os.environ["PYRITE_CONFIG_DIR"])
+        probe = "import pyrite.config as c\nprint(c.load_config().settings.index_path)\n"
+        env = dict(os.environ)
+        env["HOME"] = str(tmp_path / "home")
+        own = tmp_path / "own-cfg"
+        own.mkdir()
+        (own / "config.yaml").write_text(f"settings:\n  index_path: {explicit}\n")
+        env["PYRITE_CONFIG_DIR"] = str(own)
+        out = _run([sys.executable, "-c", probe], env=env, cwd=tmp_path).stdout.strip()
+        assert Path(out) == explicit.resolve()
+        assert cfg.exists()
 
     def test_child_process_writes_nothing_under_home(self, tmp_path):
         """A config write and an index write from `pyrite-admin` / `pyrite`,

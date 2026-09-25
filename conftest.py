@@ -72,7 +72,12 @@ def _isolate_pyrite_config_environment() -> None:
     session_dir = Path(tempfile.mkdtemp(prefix="pyrite-test-config-")).resolve()
     atexit.register(shutil.rmtree, session_dir, ignore_errors=True)
     os.environ["PYRITE_CONFIG_DIR"] = str(session_dir)
-    os.environ["PYRITE_DATA_DIR"] = str(session_dir)
+    # Not PYRITE_DATA_DIR: it overrides an explicit `settings.index_path` in
+    # every in-process load_config and wins over PYRITE_CONFIG_DIR when the
+    # config dir is resolved, which would hide precedence bugs. The index and
+    # repos default beside config.yaml, so PYRITE_CONFIG_DIR alone isolates
+    # them. A value from the developer's shell would escape it: clear that.
+    os.environ.pop("PYRITE_DATA_DIR", None)
 
 
 _isolate_pyrite_config_environment()
