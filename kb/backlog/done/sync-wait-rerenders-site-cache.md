@@ -6,7 +6,7 @@ tags:
 - bug
 - server
 kind: bug
-status: in_progress
+status: done
 assignee: agent:pyrite-worker
 priority: medium
 effort: S

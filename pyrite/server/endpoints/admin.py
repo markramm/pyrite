@@ -31,6 +31,7 @@ from ..api import (
 from ..schemas import (
     AIStatusResponse,
     KBReindexResponse,
+    SiteCacheSyncStatus,
     StatsResponse,
     SyncResponse,
 )
@@ -69,21 +70,6 @@ def sync_index(
     if wait:
         result = index_mgr.sync_incremental()
 
-        # Re-render site cache if entries changed. `wait=true` means the
-        # caller is already blocked on this request, so the render happens
-        # synchronously here rather than being handed to the loop captured
-        # at startup (#326's `bind_loop`/`_loop`) -- that hand-off exists for
-        # code with no way to make the caller wait; this code has exactly
-        # that. `index_mgr.config` (not `request.app.state.config`, which
-        # nothing in the server ever sets) is the same config already used
-        # to build `index_mgr` via `get_index_mgr`.
-        if result.get("added", 0) + result.get("updated", 0) + result.get("removed", 0) > 0:
-            from ...services.site_cache import SiteCacheService
-
-            cache_svc = SiteCacheService(config=index_mgr.config, db=index_mgr.db)
-            cache_svc.render_all()
-            logger.info("Site cache re-rendered after sync")
-
         # ADR-0035: a write enqueues instead of embedding, and this is one of
         # the two server paths that pay that debt back (the other is the
         # unconditional startup drain, which since the cold read no longer
@@ -100,11 +86,45 @@ def sync_index(
 
         broadcast_event("kb_synced", entry_id="", kb_name="")
 
+        # Re-render the site cache if entries changed, *after* the sync has
+        # already committed and the drain/broadcast above have run. `wait=true`
+        # means the caller is already blocked on this request, so the render
+        # happens synchronously here rather than being handed to the loop
+        # captured at startup (#326's `bind_loop`/`_loop`) -- that hand-off
+        # exists for code with no way to make the caller wait; this code has
+        # exactly that. `index_mgr.config` (not `request.app.state.config`,
+        # which nothing in the server ever sets) is the same config already
+        # used to build `index_mgr` via `get_index_mgr`.
+        #
+        # A render failure does NOT fail the sync (#349 cold-read round): the
+        # sync already committed its counts, drained the embed queue and
+        # broadcast `kb_synced` by this point, and a 500 here would also make
+        # a retry see `added=0` (nothing changed), so the cache would never
+        # get another chance to render. The failure is instead reported on
+        # `site_cache.error` and logged with its traceback -- narrow because
+        # only `render_all` is wrapped, not the sync, drain or broadcast above.
+        site_cache_status = None
+        if result.get("added", 0) + result.get("updated", 0) + result.get("removed", 0) > 0:
+            from ...services.site_cache import SiteCacheService
+
+            cache_svc = SiteCacheService(config=index_mgr.config, db=index_mgr.db)
+            try:
+                cache_svc.render_all()
+            except Exception:
+                logger.exception("Site cache render failed after sync")
+                site_cache_status = SiteCacheSyncStatus(
+                    rendered=False, error="site cache render failed; see server log"
+                )
+            else:
+                logger.info("Site cache re-rendered after sync")
+                site_cache_status = SiteCacheSyncStatus(rendered=True)
+
         return SyncResponse(
             synced=True,
             added=result.get("added", 0),
             updated=result.get("updated", 0),
             removed=result.get("removed", 0),
+            site_cache=site_cache_status,
         )
 
     job_id = worker.submit_sync()

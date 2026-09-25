@@ -23,6 +23,16 @@ The KB is created with ``default_role="read"``: since the security-batch-2
 change, ``/site`` (and ``SiteCacheService.render_all``) renders only public
 KBs (``public_kbs.public_kb_names``); a KB with no default role renders
 nothing, which would pass this test for the wrong reason.
+
+**Cold-read fix round (2026-09-25).** The first pass made a render failure
+fail the *sync itself*: a 500, skipping ``_drain_embed_queue`` and the
+``kb_synced`` broadcast, and leaving a retry with ``added=0`` (nothing
+changed, so it would never render again). Sync and render are now reported
+independently -- the sync commits, drains and broadcasts regardless, and the
+render's own outcome rides along on ``SyncResponse.site_cache`` (``{rendered,
+error}``). "No broad except hiding the failure" now means: the failure is
+visible in the response and the log (with a traceback), not that it must
+raise and take the whole request down with it.
 """
 
 from pathlib import Path
@@ -35,6 +45,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from pyrite.config import KBConfig, PyriteConfig, Settings  # noqa: E402
 from pyrite.server.api import create_app  # noqa: E402
+from pyrite.server.websocket import manager  # noqa: E402
+
+MARKER = {"type": "kb_synced", "entry_id": "__marker__", "kb_name": ""}
 
 
 def _config(tmp_path: Path) -> PyriteConfig:
@@ -87,13 +100,36 @@ class TestSyncWaitRerendersSiteCache:
         html = landing.read_text()
         assert "public-kb" in html
 
-    def test_sync_wait_true_does_not_hide_a_real_render_failure(self, tmp_path, monkeypatch):
-        """No broad ``except`` may swallow a real rendering failure.
+    def test_sync_wait_true_reports_rendered_true_on_success(self, tmp_path):
+        """A successful render reports ``rendered: true`` with no error."""
+        config = _config(tmp_path)
+        app = create_app(config=config)
+        _write_entry(config.get_kb("public-kb").path)
+
+        with TestClient(app) as client:
+            resp = client.post("/api/index/sync", params={"wait": "true"})
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["site_cache"] == {"rendered": True, "error": None}, body
+
+    def test_sync_wait_true_does_not_hide_a_real_render_failure(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        """A render failure does not fail the sync itself.
+
+        The sync already committed (files were parsed and the index
+        updated) by the time the render runs, so a render failure must not
+        turn a real, successful sync into a 500: that would also skip
+        ``_drain_embed_queue`` and the ``kb_synced`` broadcast, and a retry
+        would see ``added=0`` (nothing changed) and so never render again.
 
         Acceptance criterion, verbatim: "no broad `except` hiding the
-        failure." If ``render_all`` raises, that exception must propagate
-        (or otherwise fail the request) rather than being logged away.
+        failure." Read together with the cold read's fix-round note above:
+        the failure must be visible -- in the response (``site_cache.error``)
+        and in the log, with a traceback -- not that it must raise.
         """
+        import logging
+
         import pyrite.services.site_cache as site_cache_module
 
         config = _config(tmp_path)
@@ -105,5 +141,85 @@ class TestSyncWaitRerendersSiteCache:
 
         monkeypatch.setattr(site_cache_module.SiteCacheService, "render_all", _boom)
 
-        with TestClient(app) as client, pytest.raises(Exception, match="boom"):
-            client.post("/api/index/sync", params={"wait": "true"})
+        with (
+            caplog.at_level(logging.ERROR),
+            TestClient(app) as client,
+            client.websocket_connect("/ws") as ws,
+        ):
+            resp = client.post("/api/index/sync", params={"wait": "true"})
+
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            # The sync itself succeeded: counts are real, not swallowed.
+            assert body["added"] == 1, body
+            assert body["site_cache"]["rendered"] is False, body
+            assert body["site_cache"]["error"], "the error field must be populated, not None"
+            # Generic to callers -- the raw exception text stays in the log.
+            assert "boom" not in body["site_cache"]["error"]
+
+            # The drain and broadcast still ran despite the render failure.
+            client.portal.call(manager.broadcast, dict(MARKER))
+            assert ws.receive_json() == {
+                "type": "kb_synced",
+                "entry_id": "",
+                "kb_name": "",
+            }
+            assert ws.receive_json() == MARKER
+
+        # The failure is not silent: the traceback reached the log.
+        assert any("boom" in r.message or "boom" in str(r.exc_info) for r in caplog.records), (
+            f"no log record captured the render failure: {[r.message for r in caplog.records]}"
+        )
+        assert any(r.exc_info for r in caplog.records if "boom" in str(r.exc_info or "")), (
+            "the render failure was logged without exc_info -- no traceback"
+        )
+
+    def test_drain_and_broadcast_run_before_the_render_is_attempted(self, tmp_path, monkeypatch):
+        """The render happens *after* the drain and broadcast, not before.
+
+        Independent of whether the render's own `try`/`except` catches
+        everything: a future change to that block (a narrower exception
+        type, an exception the render raises from a `finally`, ...) must not
+        be able to resurrect the original bug, where a render problem could
+        prevent the drain or the broadcast from ever running. Pinned by call
+        order, not just by outcome.
+        """
+        import pyrite.server.api as api_module
+
+        config = _config(tmp_path)
+        app = create_app(config=config)
+        _write_entry(config.get_kb("public-kb").path)
+
+        calls: list[str] = []
+
+        real_drain = api_module._drain_embed_queue
+
+        def _spy_drain(db, *args, **kwargs):
+            calls.append("drain")
+            return real_drain(db, *args, **kwargs)
+
+        def _spy_broadcast(*args, **kwargs):
+            calls.append("broadcast")
+
+        def _spy_render(self):
+            calls.append("render")
+            return {"kbs": 0, "entries": 0, "errors": 0}
+
+        # `sync_index` does `from ..api import _drain_embed_queue` /
+        # `from ..websocket import broadcast_event` *inside the handler*, so
+        # each call re-resolves the current attribute on these modules --
+        # patching the modules here reaches them.
+        monkeypatch.setattr(api_module, "_drain_embed_queue", _spy_drain)
+        monkeypatch.setattr("pyrite.server.websocket.broadcast_event", _spy_broadcast)
+        monkeypatch.setattr("pyrite.services.site_cache.SiteCacheService.render_all", _spy_render)
+
+        with TestClient(app) as client:
+            # The lifespan's own startup drain (unrelated to this sync) may
+            # already have appended to `calls`; only the request matters.
+            calls.clear()
+            resp = client.post("/api/index/sync", params={"wait": "true"})
+            assert resp.status_code == 200, resp.text
+
+        assert calls == ["drain", "broadcast", "render"], (
+            f"expected drain and broadcast before render, got {calls}"
+        )
