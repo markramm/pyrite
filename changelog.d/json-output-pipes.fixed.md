@@ -1,1 +1,0 @@
-JSON output from investigation commands, admin schema, and QA URL checks remains valid when piped, including long values and forced terminal colors. URL checks emit a JSON report for empty results without mixing in progress messages.

@@ -1,1 +1,0 @@
-- **Neighbor discovery now describes its search scope accurately (#65).** With no target KB, results may include entries from the source KB; the source entry and, by default, existing links are still excluded.
