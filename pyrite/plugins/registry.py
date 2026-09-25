@@ -917,9 +917,10 @@ class PluginRegistry:
     def run_validators(self, kb_type: str, entry_type: str, fields: dict, ctx: dict) -> list[dict]:
         """Run every validator scoped to ``kb_type`` against ``fields``.
 
-        The single call site for plugin validation (#379): ``kb_schema.py``
-        and ``storage/index.py`` both call this instead of open-coding the
-        aggregation-plus-call loop. Every returned validator already binds
+        The call site for plugin validation on writes (#379): ``kb_schema.py``
+        calls this instead of open-coding the aggregation-plus-call loop.
+        ``storage/index.py``'s health check fetches the list once per KB
+        and calls the validators itself, applying the same non-dict filter. Every returned validator already binds
         the ``(entry_type, fields, ctx)`` contract -- registration refused
         any that didn't (see ``_filter_conforming_validators``) -- so there
         is no signature fallback here; a validator that still raises is a

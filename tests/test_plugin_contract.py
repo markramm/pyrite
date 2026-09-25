@@ -854,3 +854,31 @@ class TestRegistrationRefusesNonConforming:
         validators = reg.get_all_validators()
 
         assert len(validators) == 1
+
+
+class TestIndexHealthToleratesMalformedValidatorOutput:
+    """#422 delta cold read: index health calls the KB's validators directly
+    (looked up once per KB), so it must apply the same non-dict filter
+    ``run_validators`` does -- a validator returning ``list[str]`` must not
+    crash ``index health``."""
+
+    def test_a_validator_returning_strings_does_not_crash_health(self):
+        from types import SimpleNamespace
+
+        from pyrite.storage.index import IndexManager
+
+        kb = SimpleNamespace(name="k", kb_type="t")
+        row = {"status": "odd", "entry_type": "t", "id": "i"}
+        health = {"invalid_statuses": []}
+
+        def returns_strings(entry_type, fields, ctx):
+            return ["status bad"]
+
+        def reports_enum(entry_type, fields, ctx):
+            return [{"field": "status", "rule": "enum", "expected": ["ok"], "message": "bad"}]
+
+        IndexManager._check_invalid_status(kb, row, [returns_strings, reports_enum], health)
+
+        assert health["invalid_statuses"] == [
+            {"kb": "k", "id": "i", "type": "t", "status": "odd", "allowed": ["ok"]}
+        ]

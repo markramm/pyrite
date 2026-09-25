@@ -950,6 +950,8 @@ class IndexManager:
                 )
                 continue
             for item in results or []:
+                if not isinstance(item, dict):
+                    continue  # malformed validator output; run_validators drops it too
                 if item.get("field") == "status" and item.get("rule") == "enum":
                     health["invalid_statuses"].append(
                         {
