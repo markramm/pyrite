@@ -22,7 +22,58 @@ class KBReadOnlyError(PyriteError):
 
 
 class ValidationError(PyriteError):
-    """Raised when entry data fails validation."""
+    """Raised when entry data fails validation.
+
+    Every write refusal is a ValidationError, and carries a stable
+    ``error_code`` that REST, MCP and the CLI all report unchanged (#378).
+    Subclasses below narrow the code; the base code is ``VALIDATION_FAILED``.
+    ``suggestion`` is an optional surface-neutral fix hint.
+    """
+
+    error_code = "VALIDATION_FAILED"
+    suggestion: str | None = None
+
+
+class UndeclaredTypeError(ValidationError):
+    """A create named a type the KB's kb.yaml does not declare (#197).
+
+    Raised only when the KB declares types at all. Core types are not
+    exempt: a KB that declares a schema declares its vocabulary.
+    """
+
+    error_code = "UNDECLARED_TYPE"
+
+    def __init__(self, message: str, declared_types: list[str]):
+        super().__init__(message)
+        self.declared_types = declared_types
+
+
+class EntryExistsError(ValidationError):
+    """A create resolved to an id that already exists. Create never replaces."""
+
+    error_code = "ENTRY_EXISTS"
+
+
+class SchemaViolationError(ValidationError):
+    """The KB schema or a plugin validator rejected the entry (enum, required, range...)."""
+
+    error_code = "SCHEMA_VIOLATION"
+
+    def __init__(self, message: str, errors: list[dict] | None = None):
+        super().__init__(message)
+        self.errors = errors or []
+
+
+class TruncatedBodyError(ValidationError):
+    """ADR-0034 rule 2: a write carried a body marked ``body_truncated``.
+
+    Keeps the base ``VALIDATION_FAILED`` code, which docs/json-contracts.md
+    documents for this refusal.
+    """
+
+    def __init__(self, message: str, suggestion: str | None = None):
+        super().__init__(message)
+        self.suggestion = suggestion
 
 
 class InvalidGitRefError(ValidationError):

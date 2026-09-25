@@ -26,9 +26,12 @@ read side attaches is what the write side refuses: an agent that edits the
 chunk it was handed and saves it would replace the whole stored body with
 that fragment -- silent, permanent, and produced by the safety feature
 itself. :func:`refuse_truncated_body` is the one implementation of that
-refusal; every write surface (MCP, REST, CLI) calls it on the **raw**
-request, before any model drops the undeclared key and before the service
-layer, which takes an ``Entry`` and cannot carry the marker.
+refusal. Since #378 it is applied in one place for entry writes -- the write
+pipeline in ``KBService`` (create, bulk create, import, add-from-file,
+update), which receives the caller's spec with the marker still on it -- and
+the surfaces only map the resulting :class:`~pyrite.exceptions.TruncatedBodyError`.
+The one other caller is MCP's dispatcher, for plugin write tools whose
+handlers the core cannot see into; it uses :func:`ensure_not_truncated`.
 
 Keeping both halves here is what stops them drifting: the keys the read side
 attaches and the keys the write side refuses are the same tuple, named once.
@@ -40,7 +43,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from ..exceptions import ConfigError
+from ..exceptions import ConfigError, TruncatedBodyError
 
 DEFAULT_BODY_CHUNK = 8000
 MAX_BODY_CHUNK = 20_000
@@ -292,3 +295,15 @@ def refuse_truncated_body(payload: Any, *, body_key: str = "body") -> str | None
     if not carries_truncation_marker(payload):
         return None
     return REFUSAL_MESSAGE
+
+
+def ensure_not_truncated(payload: Any, *, body_key: str = "body") -> None:
+    """Raise :class:`TruncatedBodyError` if this write must be refused.
+
+    The raising form of :func:`refuse_truncated_body`, for callers that report
+    refusals as exceptions (the ``KBService`` write pipeline, MCP's dispatch
+    gate for plugin write tools). The error carries :data:`REFUSAL_SUGGESTION`.
+    """
+    message = refuse_truncated_body(payload, body_key=body_key)
+    if message is not None:
+        raise TruncatedBodyError(message, suggestion=REFUSAL_SUGGESTION)
