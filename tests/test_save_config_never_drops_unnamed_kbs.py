@@ -17,6 +17,7 @@ effects.
 """
 
 import logging
+import os
 import time
 
 import pytest
@@ -504,6 +505,20 @@ def test_a_name_yaml_reads_as_a_number_or_bool_does_not_block_saves(cfg_dir, tmp
     )
 
 
+def test_removing_a_kb_whose_name_yaml_reads_as_a_number(cfg_dir, tmp_path):
+    """The in-memory name is the int 2024; removed=[2024] must match the
+    file's "2024" (both sides compared as str)."""
+    kb_dir = tmp_path / "kbs" / "year"
+    kb_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(f"knowledge_bases:\n- name: 2024\n  path: {kb_dir}\n")
+    config = load_config()
+    name = config.knowledge_bases[0].name
+    assert name == 2024  # what YAML hands back
+    config.remove_kb(name)
+    save_config(config, removed=[name])
+    assert _names(cfg_dir) == []
+
+
 def test_a_refusal_tells_an_operator_to_restart_not_to_call_code(cfg_dir, tmp_path):
     _write_registry(cfg_dir, tmp_path, "a", "b")
     with pytest.raises(ConfigSaveRefusedError) as exc:
@@ -513,31 +528,125 @@ def test_a_refusal_tells_an_operator_to_restart_not_to_call_code(cfg_dir, tmp_pa
     assert "Restart the server" in ConfigSaveRefusedError.public_message
 
 
-def test_a_failed_write_leaves_the_old_file_whole_and_no_temp_file(cfg_dir, tmp_path, monkeypatch):
-    """The write went through open(path, "w"), which truncates first: a crash
-    mid-write left an empty file, which reads as "no KBs" and switches the
-    drop check off. It now writes beside the file and renames over it."""
-    before = _write_registry(cfg_dir, tmp_path, "a", "b")
-    config = load_config()
-    config.add_kb(_kb(tmp_path, "c"))
+# --- fix round 3 (#387): the message follows the reason; the write is in place --
 
-    def boom(data, path):
-        from pathlib import Path
 
-        Path(path).write_text("knowledge_bases:\n- name: a\n")  # partial
-        raise OSError("disk full")
+UNPARSEABLE = "knowledge_bases: [\n  - name: broken\n"
 
-    monkeypatch.setattr(config_module, "dump_yaml_file", boom)
-    with pytest.raises(OSError):
-        save_config(config)
+
+def _set_up_reason(reason, cfg_dir, tmp_path) -> bytes:
+    """`dropped`: the file lists a KB this process does not know.
+    `unreadable`: the file cannot be parsed, so nothing can be checked."""
+    if reason == "dropped":
+        return _write_registry(cfg_dir, tmp_path, "alpha")
+    (cfg_dir / "config.yaml").write_text(UNPARSEABLE)
+    return UNPARSEABLE.encode()
+
+
+def _flat(text: str) -> str:
+    """Rich wraps long lines at spaces; compare with the wrapping undone."""
+    return " ".join(text.split()).lower()
+
+
+def _assert_advice(reason, text):
+    text = _flat(text)
+    if reason == "dropped":
+        assert "restart" in text and "re-run" in text, text
+    else:
+        # Restarting a server on an unparseable config.yaml fails at startup.
+        assert "restart" not in text, text
+        assert "fix or move" in text, text
+
+
+@pytest.mark.parametrize("reason", ["dropped", "unreadable"])
+def test_the_operator_message_follows_the_reason(cfg_dir, tmp_path, reason):
+    _set_up_reason(reason, cfg_dir, tmp_path)
+    with pytest.raises(ConfigSaveRefusedError) as exc:
+        save_config(PyriteConfig(knowledge_bases=[_kb(tmp_path, "x")]))
+    _assert_advice(reason, str(exc.value))
+    _assert_advice(reason, exc.value.public_message)
+    assert str(cfg_dir) not in exc.value.public_message
+
+
+@pytest.mark.parametrize("reason", ["dropped", "unreadable"])
+def test_cli_refusal_advice_follows_the_reason(cfg_dir, tmp_path, monkeypatch, reason):
+    import pyrite.admin_cli as admin_cli
+
+    before = _set_up_reason(reason, cfg_dir, tmp_path)
+    monkeypatch.setattr(admin_cli, "load_config", lambda: PyriteConfig())
+    new_kb = tmp_path / "new"
+    new_kb.mkdir()
+
+    result = CliRunner().invoke(admin_cli.app, ["kb", "add", str(new_kb), "--name", "n"])
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit)
+    _assert_advice(reason, result.output)
     assert (cfg_dir / "config.yaml").read_bytes() == before
-    assert [p.name for p in cfg_dir.iterdir()] == ["config.yaml"]
 
 
-def test_the_write_keeps_the_files_permissions(cfg_dir, tmp_path):
+@pytest.mark.parametrize("reason", ["dropped", "unreadable"])
+def test_rest_refusal_advice_follows_the_reason(cfg_dir, tmp_path, caplog, reason):
+    from pyrite.server.api import create_app, get_config, get_db
+    from pyrite.storage.database import PyriteDB
+
+    before = _set_up_reason(reason, cfg_dir, tmp_path)
+    config = _fresh_config(tmp_path, index="index.db")
+    eph = tmp_path / "ws" / "ephemeral" / "scratch"
+    eph.mkdir(parents=True)
+    config.add_kb(
+        KBConfig(
+            name="scratch",
+            path=eph,
+            kb_type="generic",
+            ephemeral=True,
+            ttl=3600,
+            created_at_ts=time.time(),
+        )
+    )
+    app = create_app(config=config)
+    db = PyriteDB(config.settings.index_path)
+    app.dependency_overrides[get_config] = lambda: config
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        with caplog.at_level(logging.WARNING):
+            r = TestClient(app).delete("/api/kbs/ephemeral/scratch")
+    finally:
+        db.close()
+
+    assert r.status_code == 409, r.text
+    assert r.json()["code"] == "CONFIG_SAVE_REFUSED"
+    assert str(cfg_dir) not in r.text
+    _assert_advice(reason, r.json()["message"])
+    assert any(str(cfg_dir) in rec.getMessage() for rec in caplog.records)
+    assert eph.exists()
+    assert (cfg_dir / "config.yaml").read_bytes() == before
+
+
+def test_the_write_is_in_place_and_keeps_hard_links(cfg_dir, tmp_path):
+    """A rename-over write gives config.yaml a new inode: a hard link to it
+    keeps the old content, and so would any owner a root save does not keep."""
     _write_registry(cfg_dir, tmp_path, "a")
-    (cfg_dir / "config.yaml").chmod(0o640)
+    alias = tmp_path / "alias.yaml"
+    os.link(cfg_dir / "config.yaml", alias)
     config = load_config()
     config.add_kb(_kb(tmp_path, "b"))
+
     save_config(config)
-    assert (cfg_dir / "config.yaml").stat().st_mode & 0o777 == 0o640
+
+    assert os.path.samefile(cfg_dir / "config.yaml", alias)
+    assert "b" in [kb["name"] for kb in load_yaml_file(alias)["knowledge_bases"]]
+
+
+def test_the_write_works_when_only_the_file_is_writable(cfg_dir, tmp_path):
+    """A config dir the process cannot create files in (a read-only mount with
+    one writable file, a root-owned ~/.pyrite) must not block a save."""
+    _write_registry(cfg_dir, tmp_path, "a")
+    config = load_config()
+    config.add_kb(_kb(tmp_path, "b"))
+    cfg_dir.chmod(0o555)
+    try:
+        save_config(config)
+    finally:
+        cfg_dir.chmod(0o755)
+    assert _names(cfg_dir) == ["a", "b"]

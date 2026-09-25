@@ -124,14 +124,28 @@ class ConfigSaveRefusedError(ConfigError):
 
     public_message = (
         "The configuration was not saved: the config file changed since the server "
-        "loaded it. Restart the server and try again; the server log names the file "
-        "and the knowledge bases."
+        "loaded it. Restart the server so it reads the current file, then re-run the "
+        "request; the server log names the file and the knowledge bases."
     )
 
     def __init__(self, message: str, *, config_file=None, dropped: list[str] | None = None):
         super().__init__(message)
         self.config_file = config_file
         self.dropped = list(dropped or [])
+
+
+class ConfigFileUnreadableError(ConfigSaveRefusedError):
+    """The config file on disk could not be read as a registry (unparseable,
+    not a mapping, an entry with no name), so a save cannot check what it
+    would drop. Restarting does not help -- the server would fail to load the
+    same file -- so the advice is to fix or move it.
+    """
+
+    public_message = (
+        "The configuration was not saved: the config file on the server could not "
+        "be read. An administrator needs to fix or move config.yaml; the server log "
+        "names the file and the problem."
+    )
 
 
 class QuerySyntaxError(PyriteError):

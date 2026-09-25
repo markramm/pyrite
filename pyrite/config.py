@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 
-from pyrite.exceptions import ConfigError, ConfigSaveRefusedError
+from pyrite.exceptions import ConfigError, ConfigFileUnreadableError, ConfigSaveRefusedError
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -1046,11 +1046,12 @@ def _kb_names_on_disk(config_file: Path) -> list[str]:
     if not config_file.exists():
         return []
 
-    def unreadable(why: str) -> ConfigSaveRefusedError:
-        return ConfigSaveRefusedError(
+    def unreadable(why: str) -> ConfigFileUnreadableError:
+        return ConfigFileUnreadableError(
             f"Refusing to overwrite {config_file}: {why}, so this save cannot check "
-            "which knowledge bases it would remove. Fix or move the file, or call "
-            "save_config(config, allow_drop=True) to replace it.",
+            "which knowledge bases it would remove. Fix or move that config.yaml; it "
+            "was left unchanged. (In code: save_config(config, allow_drop=True) "
+            "replaces it.)",
             config_file=config_file,
             dropped=[],
         )
@@ -1135,31 +1136,7 @@ def save_config(
     real_file = config_file.resolve()
     if real_file != config_file.absolute():
         logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
-    _write_atomically(config.to_dict(), real_file)
-
-
-def _write_atomically(data: dict, real_file: Path) -> None:
-    """Write beside the real file, then rename over it.
-
-    ``open(path, "w")`` truncates first: a crash mid-write, or another
-    process's save check in that window, saw an empty file -- which reads as
-    "no KBs" and switches the drop check off. The rename is atomic on POSIX,
-    targets the resolved file so a symlinked config.yaml stays a symlink, and
-    keeps the old file's permissions (it may hold secrets).
-    """
-    import tempfile
-
-    fd, tmp = tempfile.mkstemp(prefix=".config.", suffix=".yaml.tmp", dir=real_file.parent)
-    os.close(fd)
-    tmp_path = Path(tmp)
-    try:
-        if real_file.exists():
-            os.chmod(tmp_path, real_file.stat().st_mode & 0o7777)
-        dump_yaml_file(data, tmp_path)
-        os.replace(tmp_path, real_file)
-    except BaseException:
-        tmp_path.unlink(missing_ok=True)
-        raise
+    dump_yaml_file(config.to_dict(), config_file)
 
 
 def auto_discover_kbs(search_paths: list[Path] | None = None) -> list[KBConfig]:
