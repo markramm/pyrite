@@ -60,7 +60,7 @@ Security release. **Upgrade if you run Pyrite with auth enabled, or if you open 
 
 - **Behavior note:** bare `kb validate` also checks `kb add` registrations, so a registration whose directory was deleted now makes it fail. For a registered KB whose directory is missing, `kb schema add-type` and `search -k` can still proceed; `pyrite create` already works this way.
 
-Fixed database handles left open by index stats and index health, which caused Windows temporary-directory cleanup to fail.
+- `pyrite index stats` and `pyrite index health` close the index database; an open handle made Windows temporary-directory cleanup fail (#449).
 
 - **`PYRITE_CONFIG_DIR` now moves the index, and a config save never drops a knowledge base it did not name** (#377).
   - With no `settings.index_path`, the index (`index.db`) and cloned repos (`repos/`) default to the directory holding `config.yaml`. So `PYRITE_CONFIG_DIR=/tmp/x pyrite kb add ...` no longer registers into `~/.pyrite/index.db`. A default `~/.pyrite` install sees no change. `PYRITE_DATA_DIR`, then `settings.index_path`, still take precedence (full order in `docs/configuration.md`).
@@ -69,7 +69,7 @@ Fixed database handles left open by index stats and index health, which caused W
   - On refusal, the CLI prints one error line and exits 1. The REST API returns a generic 409 (`CONFIG_SAVE_REFUSED`) and logs the file and KB names server-side. The advice follows the reason: when the file changed since the process loaded it, restart the server or re-run the command; when the file cannot be read, fix or move it (a restart would fail to load it). The write is still in place, not atomic; see the known limits in `docs/configuration.md`. A write through a symlinked `config.yaml` logs the real path.
   - The test suite now sets `PYRITE_CONFIG_DIR` (and clears `PYRITE_DATA_DIR`) for the whole session. `pyrite` subprocesses spawned by tests can no longer read or write the developer's `~/.pyrite`, including the `ephemeral-*` directories the suite used to leave in `~/.pyrite/repos/ephemeral`.
 
-Cross-KB investigation search now groups shared entry IDs before falling back to normalized titles.
+- Cross-KB investigation search groups results by shared entry ID first, then by normalized title, transitively (#61).
 
 - **Entries wait for the selected knowledge base's list before showing an empty state (#45).** Initial loads and KB switches show a loading state until the list request settles; a genuinely empty list still shows its empty state.
 
