@@ -19,6 +19,7 @@ beforeEach(() => {
 	kbStore.activeKB = null;
 	kbStore.loading = false;
 	kbStore.error = null;
+	kbStore.initialized = false;
 });
 
 describe('KBStore', () => {
@@ -35,6 +36,7 @@ describe('KBStore', () => {
 			await kbStore.load();
 			expect(kbStore.kbs).toHaveLength(2);
 			expect(kbStore.kbs[0].name).toBe('events');
+			expect(kbStore.initialized).toBe(true);
 		});
 
 		it('auto-selects first KB when none active', async () => {
@@ -64,6 +66,7 @@ describe('KBStore', () => {
 			await kbStore.load();
 			expect(kbStore.error).toBe('Network error');
 			expect(kbStore.kbs).toHaveLength(0);
+			expect(kbStore.initialized).toBe(true);
 		});
 
 		it('sets loading flag during request', async () => {

@@ -10,6 +10,8 @@ class EntryStore {
 	limit = $state(50);
 	offset = $state(0);
 	loading = $state(false);
+	initialized = $state(false);
+	listKB = $state<string | undefined>(undefined);
 	saving = $state(false);
 	error = $state<string | null>(null);
 	dirty = $state(false);
@@ -27,6 +29,8 @@ class EntryStore {
 		offset?: number;
 	} = {}) {
 		this.loading = true;
+		this.initialized = false;
+		this.listKB = options.kb;
 		this.error = null;
 		try {
 			const res = await api.listEntries({
@@ -47,6 +51,7 @@ class EntryStore {
 			this.error = e instanceof Error ? e.message : 'Failed to load entries';
 		} finally {
 			this.loading = false;
+			this.initialized = true;
 		}
 	}
 
