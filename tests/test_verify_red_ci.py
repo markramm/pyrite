@@ -491,6 +491,23 @@ def test_a_pr_is_classified_test_by_test(vr, repo: Path, tmp_path: Path) -> None
     assert git(repo, "status", "--porcelain") == ""
 
 
+def test_the_job_runs_from_a_subdirectory(vr, repo: Path, tmp_path: Path) -> None:
+    _commit_fix(repo)
+    summary = tmp_path / "summary.md"
+    env = {**os.environ, "GITHUB_STEP_SUMMARY": str(summary), "VERIFY_RED_PYTHON": sys.executable}
+    env.pop("PYTEST_ADDOPTS", None)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--base", "dev"],
+        cwd=repo / "tests",
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert vr.RED in row(summary.read_text(), "tests/test_add.py::test_real")
+    assert git(repo, "status", "--porcelain") == ""
+
+
 def test_no_implementation_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None:
     (repo / "tests" / "test_add.py").write_text(PR_TESTS)
     git(repo, "commit", "-q", "-am", "test: more tests")

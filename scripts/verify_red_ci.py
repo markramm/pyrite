@@ -871,6 +871,11 @@ class Sink:
                 fh.write(text)
 
 
+def _from_top(path: str, top: Path) -> str:
+    """A cwd-relative path as git names it: relative to the top of the tree."""
+    return Path(os.path.relpath(Path(path).absolute(), top)).as_posix()
+
+
 def _resolve_base(given: str | None) -> str:
     """--base, else $VERIFY_RED_BASE, else origin/dev; `dev` if that does not resolve."""
     base = given or os.environ.get("VERIFY_RED_BASE") or "origin/dev"
@@ -909,11 +914,19 @@ def main(argv: list[str] | None = None) -> int:
     for sig in ENDING_SIGNALS:
         signal.signal(sig, _terminated)
     try:
+        # git names paths from the top of the tree, and the files are read from
+        # the cwd: work from the top, with --test's cwd-relative paths mapped there.
+        top = Path(_git("rev-parse", "--show-toplevel").strip())
+        impl, test = [_from_top(f, top) for f in args.impl], args.test
+        if test:
+            file, sep, rest = test.partition("::")
+            test = _from_top(file, top) + sep + rest
+        os.chdir(top)
         mb = _git("merge-base", _resolve_base(args.base), "HEAD").strip()
-        if args.test:
-            if not args.impl:
+        if test:
+            if not impl:
                 raise InfraError("name the implementation files to revert")
-            return verify_one(args.test, args.impl, mb=mb, python=args.python)
+            return verify_one(test, impl, mb=mb, python=args.python)
         return verify_pr(mb, args.python, Sink(args.summary), args.timeout, remaining)
     except InfraError as exc:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)

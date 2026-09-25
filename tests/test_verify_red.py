@@ -461,3 +461,25 @@ def test_a_git_error_in_the_index_check_is_not_reported_as_staged(
     assert result.returncode == 2, (result.stdout, result.stderr)
     assert "in the index" not in result.stderr
     assert "outside repository" in result.stderr, result.stderr
+
+
+def test_it_runs_from_a_subdirectory(tmp_path: Path) -> None:
+    # git names paths from the top of the tree; the files are read from the cwd.
+    r = tmp_path / "repo"
+    (r / "pkg").mkdir(parents=True)
+    git(r, "init", "-q", "-b", "dev")
+    git(r, "config", "user.email", "t@example.com")
+    git(r, "config", "user.name", "t")
+    (r / ".gitignore").write_text("__pycache__/\n")
+    (r / "pkg" / "impl.py").write_text(IMPL_BROKEN)
+    (r / "pkg" / "test_impl.py").write_text(TEST_REAL)
+    git(r, "add", ".")
+    git(r, "commit", "-q", "-m", "base")
+    git(r, "checkout", "-q", "-b", "fix/add")
+    (r / "pkg" / "impl.py").write_text(IMPL_FIXED)
+    git(r, "commit", "-q", "-am", "fix")
+    result = run(r / "pkg", "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "fails without the fix" in result.stdout
+    assert (r / "pkg" / "impl.py").read_text() == IMPL_FIXED
+    assert git(r, "status", "--porcelain") == ""
