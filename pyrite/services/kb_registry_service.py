@@ -129,6 +129,8 @@ class KBRegistryService:
         if existing:
             raise ConfigError(f"KB '{name}' already exists")
 
+        # Checked before anything is created: no directory, no preset, no row.
+        self.config.refuse_outside_tree(path, f"adding KB '{name}'")
         resolved = Path(path).expanduser().resolve()
         resolved.mkdir(parents=True, exist_ok=True)
 
@@ -294,6 +296,14 @@ class KBRegistryService:
             raise KBNotFoundError(f"KB '{name}' not found")
 
         allowed = {"description", "kb_type", "default_role"}
+        if "default_role" in updates and (
+            self.config.confined_default_role(updates["default_role"]) != updates["default_role"]
+        ):
+            raise ConfigError(
+                f"Refusing to set default_role '{updates['default_role']}' on '{name}': this "
+                "server runs on an untrusted repo-local config, where a KB can only be closed. "
+                "Publish KBs from a trusted config (~/.pyrite or PYRITE_CONFIG_DIR)."
+            )
         for key, value in updates.items():
             if key in allowed:
                 setattr(kb, key, value)

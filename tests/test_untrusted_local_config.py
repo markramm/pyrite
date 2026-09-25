@@ -467,3 +467,122 @@ class TestUntrustedRegistryAndSave:
         cfg = config_module.load_config()
         assert cfg.get_kb("opened").default_role is None
         assert cfg.get_kb("closed").default_role == "none"
+
+
+# ── round 3: default_role shipped in the tree's index, and kb add ────────
+
+
+def _shipped_index(tree: Path, cfg, *, default_role="read"):
+    """The tree's own index.db, carrying a KB row whose default_role came
+    with the content."""
+    from pyrite.storage.database import PyriteDB
+
+    (tree / "shipped").mkdir(exist_ok=True)
+    with PyriteDB(cfg.settings.index_path) as db:
+        db.register_kb("shipped", "generic", str(tree / "shipped"), default_role=default_role)
+
+
+class TestShippedDefaultRole:
+    def test_the_resolver_ignores_a_default_role_shipped_in_the_index(self, world):
+        from pyrite.server.api import resolve_kb_default_role
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        _shipped_index(tree, cfg)
+        with PyriteDB(cfg.settings.index_path) as db:
+            db.merge_registered_kbs(cfg)
+            assert resolve_kb_default_role(cfg, db, "shipped") is None
+
+    @pytest.mark.control(reason="a shipped 'none' could always only close a KB")
+    def test_a_shipped_none_still_closes_the_kb(self, world):
+        from pyrite.server.api import resolve_kb_default_role
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        _shipped_index(tree, cfg, default_role="none")
+        with PyriteDB(cfg.settings.index_path) as db:
+            assert resolve_kb_default_role(cfg, db, "shipped") == "none"
+
+    def test_a_self_registered_user_does_not_see_a_kb_the_index_made_public(
+        self, world, monkeypatch
+    ):
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+        from pyrite.storage.database import PyriteDB
+        from tests.auth_seed import seed_user
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        monkeypatch.setenv("PYRITE_AUTH_ENABLED", "true")  # the operator's own switch
+        cfg = config_module.load_config()
+        assert cfg.settings.auth.enabled
+        _shipped_index(tree, cfg)
+        with PyriteDB(cfg.settings.index_path) as db:
+            seed_user(db, "root", role="admin")
+        app = create_app(config=cfg)
+        client = TestClient(app)
+        r = client.post("/auth/register", json={"username": "stranger", "password": "password123"})
+        assert r.status_code == 200, r.text
+        r = client.get("/api/kbs")
+        assert r.status_code == 200, r.text
+        assert "shipped" not in {kb["name"] for kb in r.json()["kbs"]}
+        state_db = getattr(app.state, "pyrite_db", None)
+        if state_db is not None:
+            state_db.close()
+
+    def test_an_admin_cannot_publish_a_kb_under_an_untrusted_config(self, world):
+        from pyrite.exceptions import ConfigError
+        from pyrite.services.kb_registry_service import KBRegistryService
+        from pyrite.storage.database import PyriteDB
+        from pyrite.storage.index import IndexManager
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        _shipped_index(tree, cfg, default_role=None)
+        with PyriteDB(cfg.settings.index_path) as db:
+            registry = KBRegistryService(cfg, db, IndexManager(db, cfg))
+            with pytest.raises(ConfigError, match="trusted"):
+                registry.update_kb("shipped", default_role="read")
+            registry.update_kb("shipped", default_role="none")  # closing is allowed
+            assert db.execute_sql("SELECT default_role FROM kb WHERE name = 'shipped'") == [
+                {"default_role": "none"}
+            ]
+
+
+class TestKbAddUnderAnUntrustedConfig:
+    def test_an_out_of_tree_path_is_refused_before_any_side_effect(self, world, tmp_path):
+        from pyrite.exceptions import ConfigError
+        from pyrite.services.kb_registry_service import KBRegistryService
+        from pyrite.storage.database import PyriteDB
+        from pyrite.storage.index import IndexManager
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        target = tmp_path / "outside" / "new-kb"
+        with PyriteDB(cfg.settings.index_path) as db:
+            registry = KBRegistryService(cfg, db, IndexManager(db, cfg))
+            with pytest.raises(ConfigError, match="outside"):
+                registry.add_kb("far", str(target), kb_type="generic")
+            assert db.execute_sql("SELECT name FROM kb WHERE name = 'far'") == []
+        assert not target.exists()
+        assert not target.parent.exists()
+
+    @pytest.mark.control(reason="an in-tree kb add always worked")
+    def test_an_in_tree_path_is_still_added(self, world):
+        from pyrite.services.kb_registry_service import KBRegistryService
+        from pyrite.storage.database import PyriteDB
+        from pyrite.storage.index import IndexManager
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        with PyriteDB(cfg.settings.index_path) as db:
+            KBRegistryService(cfg, db, IndexManager(db, cfg)).add_kb("near", str(tree / "near"))
+        assert (tree / "near").is_dir()

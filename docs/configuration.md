@@ -28,13 +28,18 @@ a cloned or downloaded tree, so Pyrite reads only what stays inside that tree:
 when it is `none`), and `settings.index_path` (inside it), `auto_embed`,
 `search_mode` and `summary_length`. (`workspace_path` is never read from any
 `config.yaml`.) KBs registered in that tree's index are held to the same rule:
-one whose path is outside the tree is not loaded. Anything else (the
+one whose path is outside the tree is not loaded, `pyrite kb add` refuses a
+path outside the tree before creating anything, and a `default_role` stored in
+the tree's index is ignored unless it is `none`. Under such a config an admin
+cannot publish a KB either (`default_role` `read` or `write` is refused):
+publishing needs a trusted config. Anything else (the
 embedding model, editor, AI and server settings, auth, API keys, other
 `default_role` values, repositories, subscriptions) is ignored with a warning,
 and GitHub credentials are never read from or written to it. When Pyrite saves
 such a config (`pyrite kb add` in that tree), it writes back only the KB
 registry and the file's own allowed settings -- never credentials or values
-that came from the environment. To use a directory's config in full, point `PYRITE_CONFIG_DIR`
+that came from the environment -- so any other key in the file is dropped from
+it on save. To use a directory's config in full, point `PYRITE_CONFIG_DIR`
 at it. The configs `scripts/new-worktree.sh` writes need nothing more.
 
 A local embedding model is named by an absolute path in your own config. A
@@ -216,8 +221,14 @@ match) can read, and never write, KBs whose `default_role` is set to `read` or
 stays closed to them. Users an operator created or vetted -- the CLI, an invite
 code, an org rule -- keep the old rule: their global role applies to every KB
 without a `default_role`. Changing a user's role does not change this; an
-admin grants or removes it explicitly (`"global_access": true|false` in
-`PUT /auth/users/{id}/role`). To share a KB with every signed-in user,
+admin grants or removes it explicitly, for now only through the role API
+(`"global_access": true|false` in `PUT /auth/users/{id}/role`; `GET
+/auth/users` shows each user's value). Users inserted by the
+`deploy/*/create-user.py` scripts get public-KB access only until an admin
+grants it. Migration v25 marks every user that existed before it with global
+access; its rollback is a no-op, so rolling back and migrating up again grants
+global access to every user present at that time, self-registered ones
+included. To share a KB with every signed-in user,
 set its `default_role` to `read` (which also puts it on the public site, below),
 or grant it per user.
 

@@ -912,11 +912,18 @@ class AuthService:
         )
 
     def list_users(self) -> list[dict]:
-        """List all local users (excluding password hashes)."""
-        return self.db.execute_sql(
-            "SELECT id, username, display_name, role, auth_provider, avatar_url "
+        """List all local users (excluding password hashes).
+
+        ``global_access`` says whether the user's role covers KBs without a
+        default_role; a self-registered user has False until an admin grants it.
+        """
+        rows = self.db.execute_sql(
+            "SELECT id, username, display_name, role, global_access, auth_provider, avatar_url "
             "FROM local_user ORDER BY username"
         )
+        for row in rows:
+            row["global_access"] = bool(row["global_access"])
+        return rows
 
     def get_user_kb_permissions(self, user_id: int) -> dict[str, str]:
         """Get all explicit KB grants for a user. Returns {kb_name: role}."""

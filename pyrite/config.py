@@ -489,6 +489,26 @@ class PyriteConfig:
             return kb
         return self._db_kb_cache.get(name)
 
+    def confined_default_role(self, value: str | None) -> str | None:
+        """A default_role as this config may honour it. Under an untrusted
+        repo-local config only "none" is kept: anything that opens a KB would
+        come from the tree (its yaml or its own index), not from an operator
+        of this server. Publishing a KB needs a trusted config."""
+        if self._confine_root is not None and value != "none":
+            return None
+        return value
+
+    def refuse_outside_tree(self, path: Path | str, what: str) -> None:
+        """Raise ConfigError when an untrusted config would reach outside its tree."""
+        if self._confine_root is None:
+            return
+        if not Path(path).expanduser().resolve().is_relative_to(self._confine_root):
+            raise ConfigError(
+                f"Refusing {what}: {path} is outside {self._confine_root}, the tree of the "
+                "untrusted repo-local config in use. Point PYRITE_CONFIG_DIR at your own "
+                "config to work outside it."
+            )
+
     def register_db_kbs(self, db_kbs: list[dict]) -> int:
         """Register DB-added KBs as a fallback lookup (not added to knowledge_bases).
 
@@ -518,8 +538,7 @@ class PyriteConfig:
                             self._confine_root,
                         )
                         continue
-                    if default_role != "none":
-                        default_role = None  # an exposure setting; see _UNTRUSTED_KB_KEYS
+                    default_role = self.confined_default_role(default_role)
                 kb = KBConfig(
                     name=name,
                     path=Path(path),

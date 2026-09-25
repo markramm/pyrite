@@ -779,3 +779,16 @@ def test_the_role_endpoint_refuses_a_non_boolean_global_access(two_kb_app):
     )
     assert r.status_code == 400
     assert "team-kb" not in _visible_kbs(client)
+
+
+def test_admins_see_which_users_have_global_access(two_kb_app):
+    _, user_id = _signed_up(two_kb_app)
+    r = two_kb_app["admin"].get("/auth/users")
+    assert r.status_code == 200, r.text
+    users = {u["username"]: u for u in r.json()["users"]}
+    assert users["newcomer"]["global_access"] is False
+    two_kb_app["admin"].put(
+        f"/auth/users/{user_id}/role", json={"role": "read", "global_access": True}
+    )
+    users = {u["username"]: u for u in two_kb_app["admin"].get("/auth/users").json()["users"]}
+    assert users["newcomer"]["global_access"] is True
