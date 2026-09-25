@@ -113,7 +113,6 @@ class TestCentralExceptionHandler:
             FrontmatterError,
             KBNotFoundError,
             KBProtectedError,
-            LastAdminError,
             PluginError,
             PyriteError,
             StorageError,
@@ -129,13 +128,18 @@ class TestCentralExceptionHandler:
             "kb_not_found": KBNotFoundError("no kb here"),
             "protected": KBProtectedError("kb is protected"),
             "validation": ValidationError("bad field"),
-            "last_admin": LastAdminError("cannot demote the last admin"),
             "frontmatter": FrontmatterError("bad yaml"),
             "config": ConfigError("dup kb"),
             "plugin": PluginError("missing sdk"),
             "storage": StorageError("disk gone"),
             "base": PyriteError("generic domain error"),
         }
+        # #416: imported separately so a PR that has not yet added
+        # LastAdminError fails only the one parametrized case below, not
+        # every other case sharing this fixture.
+        from pyrite.exceptions import LastAdminError
+
+        raisers["last_admin"] = LastAdminError("cannot demote the last admin")
         for name, exc in raisers.items():
 
             def _route(_exc=exc):

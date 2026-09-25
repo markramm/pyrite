@@ -287,6 +287,11 @@ class TestRecordedVersionMembership:
         r = c.get(f"/api/entries/entry-1/versions/{foreign}", params={"kb": "test-kb"})
         assert r.status_code == 404, r.text
 
+    @pytest.mark.control(
+        reason="commit1 is HEAD~1 in the fixture's repo, so it was already "
+        "servable before the membership check (#415) was added; this pins "
+        "that the fix does not regress the ordinary case, not the fix itself."
+    )
     def test_recorded_version_is_served(self, version_setup):
         """commit1 is recorded by the version_setup fixture, and is servable."""
         svc, db, commit1 = version_setup
@@ -294,6 +299,11 @@ class TestRecordedVersionMembership:
         assert content is not None
         assert "Version 1" in content
 
+    @pytest.mark.control(
+        reason="commit1 was already resolvable pre-fix (see "
+        "test_recorded_version_is_served); this pins that an abbreviated "
+        "form of a recorded hash still matches post-fix, not the fix itself."
+    )
     def test_recorded_abbreviated_hash_still_matches(self, version_setup):
         """Membership is checked on the peeled full commit id, so a caller
         using an abbreviated form of a recorded hash still resolves."""
