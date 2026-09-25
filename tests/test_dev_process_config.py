@@ -770,9 +770,14 @@ class TestDevPushReusesTheMergeQueuesPass:
         assert cond == "github.event_name == 'push' && github.ref == 'refs/heads/dev'", cond
 
     def test_the_classifier_exposes_the_answer(self, ci):
+        # Like every classifier output, it reads the merge_group step first
+        # (tests/test_ci_workflow_triggers.py), which says "false": the queue
+        # itself never skips the matrix it exists to run.
         assert ci["jobs"]["changes"]["outputs"]["queue_passed"] == (
-            "${{ steps.queue.outputs.passed }}"
+            "${{ steps.all.outputs.queue_passed || steps.queue.outputs.passed }}"
         )
+        (fallback,) = [s for s in ci["jobs"]["changes"]["steps"] if s.get("id") == "all"]
+        assert 'echo "queue_passed=false"' in fallback["run"]
 
     def test_the_classifier_may_read_workflow_runs(self, ci):
         assert ci["jobs"]["changes"]["permissions"].get("actions") == "read"

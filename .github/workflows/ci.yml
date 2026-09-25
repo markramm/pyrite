@@ -72,7 +72,7 @@ jobs:
       web: ${{ steps.all.outputs.web || steps.filter.outputs.web }}
       kb: ${{ steps.all.outputs.kb || steps.filter.outputs.kb }}
       infra: ${{ steps.all.outputs.infra || steps.filter.outputs.infra }}
-      queue_passed: ${{ steps.queue.outputs.passed }}
+      queue_passed: ${{ steps.all.outputs.queue_passed || steps.queue.outputs.passed }}
     steps:
       - uses: actions/checkout@v4
 
@@ -108,6 +108,7 @@ jobs:
           echo "web=true" >> "$GITHUB_OUTPUT"
           echo "kb=true" >> "$GITHUB_OUTPUT"
           echo "infra=true" >> "$GITHUB_OUTPUT"
+          echo "queue_passed=false" >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------------------
       # Each commit is tested once. The merge queue runs the full matrix and
