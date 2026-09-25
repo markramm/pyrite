@@ -34,6 +34,23 @@ from pyrite.models.factory import build_entry
 from pyrite.models.generic import GenericEntry
 from pyrite.server.mcp_server import PyriteMCPServer
 from pyrite.storage.database import PyriteDB
+from pyrite.utils.yaml import load_yaml
+
+
+def _parse_frontmatter(text: str) -> dict:
+    """Parse a written entry's YAML frontmatter into a dict.
+
+    A substring check ("severity" in written) passes just as well for
+    `metadata:\\n  severity: critical` as for a top-level `severity:
+    critical` -- exactly the #149 nesting regression a cold read caught in
+    this branch. Every "keeps the field" assertion below must see `severity`
+    as a TOP-LEVEL key, so they all go through this parser instead.
+    """
+    assert text.startswith("---"), text
+    end = text.find("---", 3)
+    assert end > 0, text
+    return load_yaml(text[3:end]) or {}
+
 
 # A kb.yaml-only type: no Python model class, so `get_entry_class` falls
 # back to `GenericEntry`. `severity` is a `select` field so `validation:
@@ -92,6 +109,50 @@ class TestBuildEntryDirect:
         assert entry.summary == "s"
         assert entry.metadata.get("m") == 1
 
+    def test_generic_type_metadata_kwarg_is_promoted_not_nested(self):
+        """dev wrote a `metadata={"m": 1}` kwarg as a top-level `m: 1` key
+        (the GenericEntry constructor call had no `_nested_metadata_keys`,
+        so `to_frontmatter`'s promotion loop treated every metadata entry as
+        promotable). Routing through `GenericEntry.from_frontmatter` must not
+        regress that: an explicit `metadata=` kwarg is caller data assembled
+        from extra fields, not a file's own nested `metadata:` block, so it
+        must promote exactly like a bare kwarg does (#149 layout must not
+        come back).
+        """
+        entry = build_entry("finding", entry_id="x", title="X", metadata={"m": 1})
+        fm = entry.to_frontmatter()
+        assert fm.get("m") == 1, f"expected 'm' promoted to top level; got {fm}"
+        assert "metadata" not in fm, f"metadata must not come back nested; got {fm}"
+
+    def test_generic_type_kwarg_cannot_override_id_title_type(self):
+        """`type=` (or `id=`/`title=`) arriving as a plain kwarg must not
+        override the entry's actual type -- an MCP `kb_create` call with a
+        stray `type` field must not be validated as one type and written as
+        another."""
+        entry = build_entry("finding", entry_id="y", title="Y", type="event")
+        assert entry.entry_type == "finding"
+        assert entry.to_frontmatter().get("type") == "finding"
+
+    def test_generic_type_reserved_keys_do_not_leak_into_frontmatter(self):
+        """`kb_name`, `_entry_type`, `extra_frontmatter` and `lifecycle` are
+        Entry bookkeeping, not caller-settable frontmatter content; a plain
+        kwarg with one of these names must not land as a literal top-level
+        key the way an ordinary custom field does."""
+        entry = build_entry(
+            "finding",
+            entry_id="z",
+            title="Z",
+            kb_name="should-not-leak",
+            lifecycle="archived",
+        )
+        fm = entry.to_frontmatter()
+        assert fm.get("kb_name") != "should-not-leak", fm
+        # `lifecycle` is a real Entry attribute with its own meaning (active/
+        # archived); a caller passing it as a bare kwarg should set it the
+        # way the typed branch would, not silently vanish or corrupt id/type.
+        assert entry.id == "z"
+        assert fm.get("type") == "finding"
+
 
 class TestCreateEntrySurface:
     """`KBService.create_entry` -- what CLI `create -f` and MCP `kb_create` call."""
@@ -106,7 +167,9 @@ class TestCreateEntrySurface:
             entry = svc.create_entry("t", "x", "X", "finding", "body", severity="high")
         finally:
             db.close()
-        assert entry.to_frontmatter().get("severity") == "high"
+        fm = entry.to_frontmatter()
+        assert fm.get("severity") == "high", fm
+        assert "metadata" not in fm, fm
 
     def test_create_entry_refuses_an_off_enum_value(self, tmp_path):
         """Acceptance 2: enforce=true refuses a bad select value on a
@@ -120,6 +183,26 @@ class TestCreateEntrySurface:
         try:
             with pytest.raises(ValidationError, match="severity"):
                 svc.create_entry("t", "x", "X", "finding", "body", severity="critical")
+        finally:
+            db.close()
+        assert not (kb_config.path / "x.md").exists(), "a refused create must not write the file"
+
+    def test_create_entry_refuses_an_off_enum_value_given_via_metadata(self, tmp_path):
+        """The same refusal must hold when the bad value arrives nested
+        under an explicit `metadata=` kwarg rather than as a bare kwarg --
+        dev refused this (metadata's contents reached the validator once
+        promoted); routing through `from_frontmatter`'s nested-metadata
+        tracking must not exempt the `metadata=` path from enforcement."""
+        config, kb_config = _make_kb(tmp_path)
+        db = PyriteDB(config.settings.index_path)
+        from pyrite.services.kb_service import KBService
+
+        svc = KBService(config, db)
+        try:
+            with pytest.raises(ValidationError, match="severity"):
+                svc.create_entry(
+                    "t", "x", "X", "finding", "body", metadata={"severity": "critical"}
+                )
         finally:
             db.close()
         assert not (kb_config.path / "x.md").exists(), "a refused create must not write the file"
@@ -152,8 +235,9 @@ class TestCLICreateSurface:
                 ],
             )
         assert result.exit_code == 0, result.output
-        written = (kb_config.path / "x.md").read_text(encoding="utf-8")
-        assert "severity" in written and "high" in written, written
+        fm = _parse_frontmatter((kb_config.path / "x.md").read_text(encoding="utf-8"))
+        assert fm.get("severity") == "high", fm
+        assert "metadata" not in fm, fm
 
     def test_cli_create_dash_f_refuses_off_enum(self, tmp_path):
         from pyrite.cli import app
@@ -202,9 +286,35 @@ class TestMCPKBCreateSurface:
             # `metadata`, same as `test_kb_create_with_metadata_generic_type`
             # asserts for an explicit `metadata=` kwarg -- the file on disk is
             # the unambiguous check that the field itself, not just the
-            # write's success flag, survived.
-            written = Path(result["file_path"]).read_text(encoding="utf-8")
-            assert "severity" in written and "high" in written, written
+            # write's success flag, survived, and that it landed top-level
+            # rather than re-nested under `metadata:` (#149).
+            fm = _parse_frontmatter(Path(result["file_path"]).read_text(encoding="utf-8"))
+            assert fm.get("severity") == "high", fm
+            assert "metadata" not in fm, fm
+        finally:
+            server.close()
+
+    def test_kb_create_type_kwarg_cannot_override_entry_type(self, tmp_path):
+        """A stray `type` argument in the MCP call must not be validated as
+        one type and written as another (coordinator repro: `entry_type` and
+        `type` disagreeing)."""
+        config, kb_config = _make_kb(tmp_path)
+        server = PyriteMCPServer(config, tier="write")
+        try:
+            result = server._dispatch_tool(
+                "kb_create",
+                {
+                    "kb_name": "t",
+                    "entry_type": "finding",
+                    "title": "X",
+                    "body": "body",
+                    "type": "event",
+                    "severity": "high",
+                },
+            )
+            assert result.get("created") is True, result
+            fm = _parse_frontmatter(Path(result["file_path"]).read_text(encoding="utf-8"))
+            assert fm.get("type") == "finding", fm
         finally:
             server.close()
 
@@ -245,8 +355,9 @@ class TestBulkAndImportSurface:
         finally:
             db.close()
         assert results[0]["created"] is True, results
-        written = (kb_config.path / "x.md").read_text(encoding="utf-8")
-        assert "severity" in written and "high" in written, written
+        fm = _parse_frontmatter((kb_config.path / "x.md").read_text(encoding="utf-8"))
+        assert fm.get("severity") == "high", fm
+        assert "metadata" not in fm, fm
 
     # No off-enum refusal test for `bulk_create_entries` here: unlike
     # `create_entry`, it never calls `_validate_write` at all (confirmed by
@@ -255,5 +366,5 @@ class TestBulkAndImportSurface:
     # schema.py`'s enforce coverage only exercises `create_entry`/
     # `update_entry`). That is a real gap, but its root cause is in
     # `kb_service.py`'s bulk loop, not in `build_entry` -- this ticket's
-    # touch is `factory.py` only. Filed separately rather than folded in here
-    # (see the report's Unsure/Left).
+    # touch is `factory.py` only. Already tracked as #366 (bulk create skips
+    # schema/plugin validation); not folded into this fix.

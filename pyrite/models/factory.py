@@ -49,12 +49,36 @@ def build_entry(
         # lands in `metadata` exactly like an unknown frontmatter key does
         # on load -- one rule for "what happens to a field this type
         # doesn't know about", not two.
+        #
+        # `id`/`title`/`type` come from this function's own parameters, not
+        # from kwargs: a stray `type=` (e.g. an MCP call sending both
+        # `entry_type` and `type`) must not override the type the caller
+        # actually asked to validate and write under (cold read, #394).
+        # `kb_name`/`_entry_type`/`extra_frontmatter`/`body` are Entry
+        # bookkeeping, never frontmatter content (`_BASE_CONSUMED_KEYS`
+        # minus what a real file's frontmatter could ever contain); a kwarg
+        # using one of those names must not leak into the written file
+        # either.
+        _reserved = {"id", "title", "type", "body", "kb_name", "_entry_type", "extra_frontmatter"}
+
+        # An explicit `metadata=` kwarg is caller data assembled from extra
+        # fields, not a file's own nested `metadata:` block -- merge its
+        # contents in at the same top level as every other kwarg so
+        # `from_frontmatter` treats all of it as "unknown keys to promote",
+        # never as `explicit_metadata` (which it would mark
+        # `_nested_metadata_keys` and write back nested, reviving the #149
+        # layout and hiding the value from schema validation).
+        explicit_metadata = kwargs.get("metadata")
         fm: dict = {
             "id": entry_id,
             "title": title,
             "type": entry_type,
         }
+        if isinstance(explicit_metadata, dict):
+            fm.update(explicit_metadata)
         for k, v in kwargs.items():
+            if k in _reserved or k == "metadata":
+                continue
             fm[k] = v
         return GenericEntry.from_frontmatter(fm, body)
 
