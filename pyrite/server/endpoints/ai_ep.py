@@ -12,7 +12,7 @@ from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
 from ...services.llm_usage_service import LLMUsageService
 from ...services.quota_service import QuotaService
-from ...services.search_service import SearchService
+from ...services.search_service import SearchService, clip_derived_query
 from ...storage.database import PyriteDB
 from ..api import (
     get_config,
@@ -238,7 +238,7 @@ async def ai_suggest_links(
     kb_names = None if req.kb_name else readable
     try:
         related = search_svc.search(
-            query=title,
+            query=clip_derived_query(title),
             kb_name=req.kb_name,
             kb_names=kb_names,
             limit=15,
@@ -246,7 +246,7 @@ async def ai_suggest_links(
         )
     except Exception:
         related = search_svc.search(
-            query=title,
+            query=clip_derived_query(title),
             kb_name=req.kb_name,
             kb_names=kb_names,
             limit=15,
@@ -337,7 +337,7 @@ async def ai_chat(
     try:
         try:
             results = search_svc.search(
-                query=last_msg,
+                query=clip_derived_query(last_msg),
                 kb_name=req.kb,
                 kb_names=kb_names,
                 limit=5,
@@ -345,7 +345,7 @@ async def ai_chat(
             )
         except Exception:
             results = search_svc.search(
-                query=last_msg,
+                query=clip_derived_query(last_msg),
                 kb_name=req.kb,
                 kb_names=kb_names,
                 limit=5,

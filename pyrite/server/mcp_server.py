@@ -26,6 +26,7 @@ from ..exceptions import (
     KBReadOnlyError,
     PyriteError,
     QuerySyntaxError,
+    QueryTooLongError,
     ValidationError,
 )
 from ..schema import generate_entry_id
@@ -126,6 +127,7 @@ _DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (KBReadOnlyError, "READ_ONLY"),
     (KBProtectedError, "KB_PROTECTED"),
     (QuerySyntaxError, "QUERY_SYNTAX"),
+    (QueryTooLongError, "QUERY_TOO_LONG"),
     (ValidationError, "VALIDATION_FAILED"),
     (ConfigError, "CONFIG_ERROR"),
 )

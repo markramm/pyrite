@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import load_config
-from ..exceptions import QuerySyntaxError
+from ..exceptions import QuerySyntaxError, QueryTooLongError
 from ..services.read_shaping import parse_fields_param, project_fields
 from ..storage.repository import KBRepository
 
@@ -130,6 +130,23 @@ def register_search_command(app: typer.Typer):
                 output_format,
                 error_code="KB_NOT_FOUND",
                 suggestion=f"known KBs: {known} (or run `pyrite kb list`)",
+            )
+
+        # Every surface refuses an over-long query the same way, file search
+        # included; the index path must not fall back to file search with it.
+        from ..services.search_service import check_query_length
+
+        try:
+            check_query_length(query)
+        except QueryTooLongError as e:
+            from ..utils.errors import cli_error
+
+            cli_error(
+                str(e),
+                output_format,
+                error_code=e.error_code,
+                suggestion="shorten the query",
+                retryable=False,
             )
 
         if use_files:

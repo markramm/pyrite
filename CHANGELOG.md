@@ -13,6 +13,10 @@ asserts that `[Unreleased]` stays empty.
 
 ## [Unreleased]
 
+## [0.25.3] - 2026-09-25
+
+Security patch. **Upgrade if your server is reachable by anyone other than you**, and especially if anonymous visitors can read (`anonymous_tier: read`/`write`, or a KB with `default_role: read`). Search queries now have a maximum length of 1,000 characters. A longer query is refused with `QUERY_TOO_LONG` on REST (`422`), MCP and the CLI; it is never truncated. Searches that Pyrite builds from stored content (AI chat retrieval, link suggestions, query expansion) are trimmed to fit instead. It also includes three bug fixes: bulk create no longer overwrites an existing entry, a type declared only in `kb.yaml` keeps its fields on create, and `POST /api/index/sync?wait=true` re-renders the site cache.
+
 ## [0.25.2] - 2026-09-25
 
 Security release, the second batch from the multi-user threat-model pass begun in v0.25.1. It covers five areas: per-KB write checks, anonymous visitors' roles, a Host and Origin guard for credential-free servers, GitHub OAuth sign-in, and ephemeral KB privacy. **Upgrade if you run Pyrite with `anonymous_tier: write`; without a credential (auth off and no API key) on a LAN or behind a reverse proxy; from the Render, Fly.io or Railway deploy templates; or with GitHub sign-in.** A single-user install you reach only at `localhost` sees no change beyond the Host note below.

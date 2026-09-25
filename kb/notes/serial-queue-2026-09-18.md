@@ -22,7 +22,7 @@ The `pyrite-architect`'s re-split after #168 (the conductor loop ran the 16 GB m
 
 1. `machine-wide-suite-lock-one-full-suite-at-a-time-xdist-workers-bounded-by-memory` (#168) — `scripts/suite.sh`: a kernel-released machine-wide lock, xdist workers from memory not cores, the pre-push hook behind it — opus — M ~250 — heavy: no — cold read — waits on #163 merged (`tests/test_dev_process_config.py`, `.pre-commit-config.yaml`).
 2. `every-heavy-runner-takes-the-suite-lock-playwright-the-skills-and-the-conductor-health-step` (#168) — `scripts/e2e.sh` under the same lock, local Playwright workers bounded, every skill/agent prompt says the wrapper, the conductor's load/memory refusal is a command — sonnet — S ~150 — heavy: one single-spec Playwright run — waits on 1.
-3. `codeql-triage-…` Theme A (CodeQL #43) — search query length cap, the read-tier ReDoS, the one exploitable finding — opus — S ~120 — heavy: no — cold read — waits on #145 merged (`search_service.py`, `endpoints/search.py`, `tool_schemas.py`).
+3. `codeql-triage-…` — tracked privately.
 
 **What the 0.24.2 definition of done requires** (the release cut by one script; every milestone issue closed — #56 via #145, #9, #13) **and what the roadmap's 0.24.2 workstreams list**
 
@@ -99,4 +99,4 @@ The `pyrite-architect`'s re-split after #168 (the conductor loop ran the 16 GB m
 
 **Distance to the 0.24.2 definition of done, in one-at-a-time cycles** (a cycle = one worker pass + one review):
 - *The literal definition* — "cut by one script from a CI-verified commit; every milestone issue closed": the reviews of #140 and #145, then entries 5, 6, 10, 11, 12 — **about 5 cycles plus 2 reviews** if #9 needs a fix; #9 closing on package G's assertion instead pulls 7, 8 and 9 onto the path (**about 7 cycles**).
-- *Everything the roadmap's 0.24.2 workstreams list* (Playwright blocking, the packaged UI, the post-tag workflow, docs facts, the README), behind the two machine-safety themes and the ReDoS cap: entries 1–20 — **20 cycles plus the 5 queued reviews, 7 of them heavy** (2, 5, 9, 11, 13, 14's evidence, 17). Package H's last criterion ("passes on `main`") can only be observed at the release itself.
+- *Everything the roadmap's 0.24.2 workstreams list* (Playwright blocking, the packaged UI, the post-tag workflow, docs facts, the README), behind the two machine-safety themes and entry 3: entries 1–20 — **20 cycles plus the 5 queued reviews, 7 of them heavy** (2, 5, 9, 11, 13, 14's evidence, 17). Package H's last criterion ("passes on `main`") can only be observed at the release itself.
