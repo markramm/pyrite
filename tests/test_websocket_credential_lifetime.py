@@ -569,3 +569,73 @@ class TestFanOut:
         assert len(first.sent) == 1
         assert victim.sent == []
         assert victim.closed_with == CREDENTIAL_CLOSE_CODE
+
+
+class TestFixRound:
+    """The #433 cold read's follow-ups."""
+
+    def test_setting_the_same_role_closes_nothing(self, env):
+        app, tokens, users = env["app"], env["tokens"], env["users"]
+        with TestClient(app) as c:
+            with c.websocket_connect("/ws", headers=_cookie(tokens["alice"])) as alice:
+                r = c.put(
+                    f"/auth/users/{users['alice']}/role",
+                    json={"role": "write"},  # alice is already write
+                    headers=_cookie(tokens["admin-user"]),
+                )
+                assert r.status_code == 200, r.text
+                _assert_open(alice, c)
+
+    def test_creating_an_ephemeral_kb_closes_the_creators_socket(self, env):
+        """Its admin grant is a grant write like any other."""
+        app, tokens = env["app"], env["tokens"]
+        with TestClient(app) as c:
+            with (
+                c.websocket_connect("/ws", headers=_cookie(tokens["alice"])) as alice,
+                c.websocket_connect("/ws", headers=_cookie(tokens["bob"])) as bob,
+            ):
+                r = c.post("/api/kbs/ephemeral", json={}, headers=_cookie(tokens["alice"]))
+                assert r.status_code == 200, r.text
+                _assert_closed(alice, c)
+                _assert_open(bob, c)
+
+    def test_session_cap_eviction_is_one_delete_and_announces_each_session(self, env):
+        """Several excess sessions go in one DELETE statement (atomic), and
+        every evicted session's socket is closed; the newest survives."""
+        from sqlalchemy import event
+
+        app, config = env["app"], env["config"]
+        extra = [_login(app, "alice") for _ in range(3)]  # alice: 4 sessions
+        config.settings.auth.max_sessions_per_user = 2
+        oldest_three = [env["tokens"]["alice"], *extra[:2]]
+        with TestClient(app) as c:
+            sockets = [
+                c.websocket_connect("/ws", headers=_cookie(t)).__enter__()
+                for t in [*oldest_three, extra[2]]
+            ]
+            try:
+                db = PyriteDB(config.settings.index_path)
+                deletes = []
+
+                def count(conn, cursor, statement, *args):
+                    if statement.lstrip().upper().startswith("DELETE FROM SESSION"):
+                        deletes.append(statement)
+
+                event.listen(db.engine, "before_cursor_execute", count)
+                try:
+                    AuthService(db, config.settings.auth).login("alice", "password123")
+                    remaining = db.execute_sql(
+                        "SELECT COUNT(*) AS n FROM session WHERE user_id = :u",
+                        {"u": env["users"]["alice"]},
+                    )[0]["n"]
+                finally:
+                    event.remove(db.engine, "before_cursor_execute", count)
+                    db.close()
+                assert len(deletes) == 1
+                assert remaining == 2
+                for ws in sockets[:3]:
+                    _assert_closed(ws, c)
+                _assert_open(sockets[3], c)
+            finally:
+                for ws in sockets:
+                    ws.__exit__(None, None, None)

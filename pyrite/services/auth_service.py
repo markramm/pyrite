@@ -526,9 +526,11 @@ class AuthService:
         }
         return user, {"token_hash": token_hash, "expires_at": expiry}
 
-    # Every method below that ends a session or changes what a user may read
-    # publishes a `CredentialChange` after its write, so open live-update
-    # sockets opened with that credential are closed (#411, ADR-0036).
+    # Every method that ends a session or changes what a user may read --
+    # logout, expiry and eviction, role changes, KB grants and revokes, and
+    # the admin grant `create_user_ephemeral_kb` writes -- publishes a
+    # `CredentialChange` after its write, so open live-update sockets opened
+    # with that credential are closed (#411, ADR-0036).
 
     def logout(self, token: str) -> bool:
         """Delete session by token. Returns True if found."""
@@ -574,6 +576,10 @@ class AuthService:
         """
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
+        # Read first so an unchanged role closes no sockets (ADR-0036).
+        before = self.db.execute_sql(
+            "SELECT role FROM local_user WHERE id = :user_id", {"user_id": user_id}
+        )
         # Atomic only because the auth tables live in SQLite: SQLite
         # serializes writers, so the COUNT(*) subquery and the UPDATE it
         # gates always see a consistent snapshot within this one statement.
@@ -592,7 +598,8 @@ class AuthService:
             {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
         if rowcount > 0:
-            publish(CredentialChange(user_id=user_id))
+            if not before or before[0]["role"] != role:
+                publish(CredentialChange(user_id=user_id))
             return True
         exists = self.db.execute_sql(
             "SELECT 1 FROM local_user WHERE id = :user_id", {"user_id": user_id}
@@ -644,13 +651,17 @@ class AuthService:
         if count >= self.config.max_sessions_per_user:
             # Delete oldest sessions to make room
             excess = count - self.config.max_sessions_per_user + 1
-            oldest = self.db.execute_sql(
-                """SELECT id, token_hash FROM session WHERE user_id = :user_id
-                ORDER BY created_at ASC LIMIT :excess""",
-                {"user_id": user_id, "excess": excess},
-            )
-            for row in oldest:
-                self.db.execute_write_sql("DELETE FROM session WHERE id = :id", {"id": row["id"]})
+            # One statement, so the eviction is atomic; RETURNING names the
+            # evicted sessions so their sockets can be closed.
+            with self.db.transaction():
+                evicted = self.db.execute_sql(
+                    """DELETE FROM session WHERE id IN (
+                        SELECT id FROM session WHERE user_id = :user_id
+                        ORDER BY created_at ASC LIMIT :excess
+                    ) RETURNING token_hash""",
+                    {"user_id": user_id, "excess": excess},
+                )
+            for row in evicted:
                 publish(CredentialChange(session_hash=row["token_hash"]))
 
     def _hash_password(self, password: str) -> str:
@@ -1031,6 +1042,7 @@ class AuthService:
         except BaseException:
             ephemeral_service.force_expire_kb(name)
             raise
+        publish(CredentialChange(user_id=user_id))
 
         return {
             "name": kb.name,
