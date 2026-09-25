@@ -66,12 +66,25 @@ def _resolve_bearer_auth(
     return ctx
 
 
+def _session_ctx(user: dict, session: dict) -> dict[str, Any]:
+    """A session credential's ctx. ``session_hash`` and ``session_expires_at``
+    let a live-update socket be closed when that session ends (ADR-0036)."""
+    return {
+        "role": user["role"],
+        "username": user["username"],
+        "user_id": user["id"],
+        "session_hash": session["token_hash"],
+        "session_expires_at": session["expires_at"],
+    }
+
+
 def _resolve_credential(
     request: HTTPConnection,
     config: PyriteConfig,
     db: PyriteDB,
 ) -> dict[str, Any]:
-    """The credential half of `_resolve_bearer_auth`: role, username, user_id.
+    """The credential half of `_resolve_bearer_auth`: role, username, user_id
+    (and, for a session, ``session_hash`` and ``session_expires_at``).
 
     Reads only headers and cookies, so it takes any `HTTPConnection` -- a
     `Request` here, a `WebSocket` handshake in `websocket.resolve_socket_scope`
@@ -94,14 +107,9 @@ def _resolve_credential(
             if config.settings.auth.enabled:
                 from ..services.auth_service import AuthService
 
-                auth_service = AuthService(db, config.settings.auth)
-                user = auth_service.verify_session(token)
-                if user:
-                    return {
-                        "role": user["role"],
-                        "username": user["username"],
-                        "user_id": user["id"],
-                    }
+                found = AuthService(db, config.settings.auth).verify_session_detail(token)
+                if found:
+                    return _session_ctx(*found)
 
     # 2. X-API-Key header (fallback for clients that use it)
     api_key = request.headers.get("x-api-key")
@@ -117,14 +125,9 @@ def _resolve_credential(
         if session_token:
             from ..services.auth_service import AuthService
 
-            auth_service = AuthService(db, config.settings.auth)
-            user = auth_service.verify_session(session_token)
-            if user:
-                return {
-                    "role": user["role"],
-                    "username": user["username"],
-                    "user_id": user["id"],
-                }
+            found = AuthService(db, config.settings.auth).verify_session_detail(session_token)
+            if found:
+                return _session_ctx(*found)
 
     # 4. No auth configured — open access
     if (

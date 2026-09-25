@@ -1,0 +1,1 @@
+- A live-update socket (`/ws`) now lives no longer than the credential that opened it: logging out, a session expiring or being evicted, a role change, or a KB grant or revoke closes that user's open sockets, so a socket never delivers an event its current credential could not read. The client reconnects under its new scope. Proposed as ADR-0036. (#411)
