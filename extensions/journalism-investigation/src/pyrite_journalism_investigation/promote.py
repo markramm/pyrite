@@ -110,9 +110,13 @@ def promote_claim_to_edge(
         }
 
     # The edge type's own relationship fields -- checked here, before dry_run
-    # branches, so a dry run refuses bad or missing endpoints as a real run
-    # does. A dry run does not run the KB's full schema and plugin validation
-    # (#427), so a real run can still refuse what a dry run showed.
+    # branches, so a dry run refuses bad or missing endpoints with the same
+    # clear message a real run gives, rather than the plugin validator's raw
+    # SchemaViolationError. This is *not* the whole story: the KB's schema,
+    # plugin validators, the exists check and the read-only check all run
+    # only through kb_service below, which is why both branches build and
+    # submit the same spec to kb_service (#427) instead of the dry run
+    # returning early once these endpoint checks pass.
     problem = _endpoint_fields_problem(edge_type, endpoint_fields)
     if problem:
         return {"error": problem}
@@ -132,17 +136,44 @@ def promote_claim_to_edge(
     edge_id = generate_entry_id(edge_title)
     importance = claim.get("importance", 5)
 
-    # Build the proposed entry info
-    proposed = {
-        "entry_id": edge_id,
+    # One spec, fed to kb_service by both branches: a dry run validates
+    # exactly what a real run would write.
+    spec = {
+        "id": edge_id,
         "title": edge_title,
-        "edge_type": edge_type,
+        "entry_type": edge_type,
+        "body": f"Promoted from claim [[{claim_id}]].",
         "importance": importance,
-        "sourced_from": claim_id,
+        "links": [
+            {"target": claim_id, "relation": "sourced_from"},
+        ],
         **endpoint_fields,
     }
 
     if dry_run:
+        # bulk_create_entries(validate_only=True) skips the read-only check
+        # (it has to: a validate-only call against a KB with no write access
+        # is exactly how a caller previews one), so it is checked here,
+        # matching _writable_kb's own message, before the KB schema and
+        # plugin validators run.
+        kb_config = kb_service.config.get_kb(kb_name)
+        if not kb_config:
+            return {"error": f"KB not found: {kb_name}"}
+        if kb_config.read_only:
+            return {"error": f"KB is read-only: {kb_name}"}
+
+        result = kb_service.bulk_create_entries(kb_name, [spec], validate_only=True)[0]
+        if not result.get("valid"):
+            return {"error": result.get("error", "validation failed")}
+
+        proposed = {
+            "entry_id": result["entry_id"],
+            "title": edge_title,
+            "edge_type": edge_type,
+            "importance": importance,
+            "sourced_from": claim_id,
+            **endpoint_fields,
+        }
         return {
             "dry_run": True,
             "proposed": proposed,
@@ -152,18 +183,7 @@ def promote_claim_to_edge(
 
     # Create the edge-entity entry
     try:
-        kb_service.create_entry(
-            kb_name=kb_name,
-            entry_id=edge_id,
-            title=edge_title,
-            entry_type=edge_type,
-            body=f"Promoted from claim [[{claim_id}]].",
-            importance=importance,
-            links=[
-                {"target": claim_id, "relation": "sourced_from"},
-            ],
-            **endpoint_fields,
-        )
+        kb_service.create(kb_name, spec)
         return {
             "created": edge_id,
             "edge_type": edge_type,
