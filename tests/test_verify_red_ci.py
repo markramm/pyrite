@@ -589,6 +589,7 @@ def test_the_index_is_never_written(vr, repo: Path, tmp_path: Path, flavour: str
     assert vr.RED in row(summary, "tests/test_add.py::test_real")
     assert _index(repo) == before
     assert not (repo / ".git" / "index.lock").exists()
+    assert not (repo / JOURNAL).exists()
     assert impl.read_bytes() == fixed
     assert git(repo, "status", "--porcelain") == ""
 
@@ -742,6 +743,8 @@ def test_a_restore_that_cannot_complete_is_reported_file_by_file(
     assert "pyrite/a/x.py" in err, err
     assert "pyrite/b/y.py" in err, err
     assert (repo / "pyrite" / "c" / "z.py").read_text() == "V = 2\n"
+    # The tree is not as committed: the next run must say so, not "commit them first".
+    assert (repo / JOURNAL).exists()
 
 
 SIGNAL_DURING_RESTORE = """\
@@ -884,6 +887,69 @@ def test_a_ctrl_c_pending_as_the_restore_begins_does_not_skip_it(
     assert (repo / "pyrite" / "__init__.py").read_text() == FIXED
     assert (repo / "pyrite" / "extra.py").read_text() == "E = 2\n"
     assert git(repo, "status", "--porcelain") == ""
+
+
+JOURNAL = Path(".git") / "verify-red.inflight"
+
+
+def test_a_run_after_the_driver_was_killed_says_so(repo: Path, tmp_path: Path) -> None:
+    # SIGKILL (the OOM killer) cannot be caught: the merge-base code stays on disk.
+    # The next run must not say "uncommitted changes; commit them first" -- that
+    # would commit the merge base over the fix -- but name the files and the way back.
+    pidfile, hang = tmp_path / "hung.pid", tmp_path / "hang"
+    hang.touch()
+    (repo / "pyrite" / "__init__.py").write_text(
+        "import os\nimport time\n\n\ndef add(a, b):\n"
+        f"    if os.path.exists({str(hang)!r}):\n"
+        f"        open({str(pidfile)!r}, 'w').write(str(os.getpid()))\n"
+        "        time.sleep(120)\n"
+        "    return a - b\n"
+    )
+    git(repo, "commit", "-q", "--amend", "-am", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    _commit_fix(repo)
+    env = {**os.environ, "VERIFY_RED_PYTHON": sys.executable}
+    env.pop("PYTEST_ADDOPTS", None)
+    env.pop("GITHUB_STEP_SUMMARY", None)
+    driver = subprocess.Popen(
+        [sys.executable, str(SCRIPT), "--base", "dev"],
+        cwd=repo,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        while not (pidfile.exists() and pidfile.read_text().strip()):
+            assert driver.poll() is None, "the driver exited before the run hung"
+            assert time.monotonic() < deadline, "the reverted run never started"
+            time.sleep(0.1)
+        driver.kill()
+        driver.wait(timeout=30)
+    finally:
+        if driver.poll() is None:
+            driver.kill()
+        if pidfile.exists() and pidfile.read_text().strip():
+            try:
+                os.kill(int(pidfile.read_text()), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+    assert (repo / "pyrite" / "__init__.py").read_text() != FIXED  # left reverted
+
+    result, _ = run_ci(repo, tmp_path)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "did not finish restoring" in result.stderr, result.stderr
+    assert "pyrite/__init__.py" in result.stderr
+    assert "commit them first" not in result.stderr
+
+    # The way back it names works.
+    hang.unlink()
+    git(repo, "checkout", "HEAD", "--", "pyrite/__init__.py")
+    (repo / JOURNAL).unlink()
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "red without the fix" in summary
+    assert not (repo / JOURNAL).exists()
 
 
 def test_a_killed_run_leaves_the_tree_restored(vr, repo: Path, tmp_path: Path) -> None:

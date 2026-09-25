@@ -26,7 +26,10 @@ at its original needs nothing; anything else was edited during the run and is
 left as the editor left it. SIGINT, SIGTERM, SIGHUP and SIGQUIT wait until the
 restore ends.
 Every file is attempted; the ones that could not be restored are named on
-stderr and the exit is non-zero (2, or the signal's own status).
+stderr and the exit is non-zero (2, or the signal's own status). SIGKILL cannot
+be caught: ``.git/verify-red.inflight`` lists the reverted files until they are
+all back, so the next run names them and the way back instead of refusing
+with "uncommitted changes; commit them first".
 
 **Classification** (``--base``): the changes since the merge base with
 ``--base`` split into test files (``tests/**/test_*.py``,
@@ -342,6 +345,31 @@ def _committed(path: str, disk: bytes | None, head: str | None) -> bool:
     return _git("hash-object", f"--path={path}", "--stdin", stdin=disk).strip() == head
 
 
+def _journal() -> Path:
+    """Where a run records the files it reverted until they are back: this
+    worktree's git directory, so no checkout ever tracks it."""
+    return Path(_git("rev-parse", "--git-dir").strip()) / "verify-red.inflight"
+
+
+def _check_no_run_in_flight() -> None:
+    """A run killed outright (SIGKILL, the OOM killer, a power cut) cannot restore:
+    its files still hold the merge base. Say that, rather than "uncommitted
+    changes; commit them first" -- which would commit the merge base over the fix."""
+    journal = _journal()
+    try:
+        paths = journal.read_text().split("\n", 1)[1].split()
+    except FileNotFoundError:
+        return
+    except (OSError, IndexError):
+        paths = []
+    listed = " ".join(paths) or "(unreadable: see the file)"
+    raise InfraError(
+        f"a previous verify-red run did not finish restoring {listed}: they may still hold"
+        f" the merge-base code. Check `git diff HEAD -- {listed}`, put them back with"
+        f" `git checkout HEAD -- {listed}`, then delete {journal}"
+    )
+
+
 def plan(paths: list[str], mb: str) -> list[Target]:
     """The files the run will revert, each checked to be exactly as committed.
 
@@ -349,6 +377,7 @@ def plan(paths: list[str], mb: str) -> list[Target]:
     index -- before anything is touched. Files identical at the merge base are
     left out: there is nothing to revert.
     """
+    _check_no_run_in_flight()
     staged = subprocess.run(["git", "diff", "--cached", "--quiet", "HEAD", "--", *paths])
     if staged.returncode != 0:
         raise InfraError(
@@ -459,7 +488,10 @@ def reverted(targets: list[Target]) -> Iterator[None]:
     keeps its own exit status."""
     written: dict[str, bytes | None] = {}
     ending: BaseException | None = None
+    journal = _journal()
     try:
+        # Written before any file changes; removed only once every file is back.
+        _put(str(journal), f"{os.getpid()}\n{' '.join(t.path for t in targets)}\n".encode(), 0o644)
         for t in targets:
             try:
                 if _read(t.path) != t.original:
@@ -489,6 +521,8 @@ def reverted(targets: list[Target]) -> Iterator[None]:
                 signalled = signalled or exc
         for failure in failures:
             print(f"verify-red: {failure}", file=sys.stderr, flush=True)
+        if not failures:
+            journal.unlink(missing_ok=True)
         if signalled is not None:
             raise signalled  # the signal ends the run, with its own status
         if failures and isinstance(ending, Exception | None):
