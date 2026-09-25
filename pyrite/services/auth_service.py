@@ -313,25 +313,7 @@ class AuthService:
         if not self._verify_password(password, password_hash):
             raise ValueError("Invalid username or password")
 
-        # Enforce max sessions per user
-        self._enforce_max_sessions(user_id)
-
-        # Create session
-        raw_token, token_hash = self._generate_token()
-        now = datetime.now(UTC)
-        expires_at = now + timedelta(hours=self.config.session_ttl_hours)
-
-        self.db.execute_write_sql(
-            """INSERT INTO session (token_hash, user_id, created_at, expires_at, last_used)
-            VALUES (:token_hash, :user_id, :created_at, :expires_at, :last_used)""",
-            {
-                "token_hash": token_hash,
-                "user_id": user_id,
-                "created_at": now.isoformat(),
-                "expires_at": expires_at.isoformat(),
-                "last_used": now.isoformat(),
-            },
-        )
+        raw_token = self._create_session(user_id)
 
         user = {
             "id": user_id,
@@ -431,21 +413,7 @@ class AuthService:
             user_id = id_rows[0]["id"]
 
         # 5. Create session
-        self._enforce_max_sessions(user_id)
-        raw_token, token_hash = self._generate_token()
-        now_dt = datetime.now(UTC)
-        expires_at = now_dt + timedelta(hours=self.config.session_ttl_hours)
-        self.db.execute_write_sql(
-            """INSERT INTO session (token_hash, user_id, created_at, expires_at, last_used)
-            VALUES (:token_hash, :user_id, :created_at, :expires_at, :last_used)""",
-            {
-                "token_hash": token_hash,
-                "user_id": user_id,
-                "created_at": now_dt.isoformat(),
-                "expires_at": expires_at.isoformat(),
-                "last_used": now_dt.isoformat(),
-            },
-        )
+        raw_token = self._create_session(user_id)
 
         user = {
             "id": user_id,
@@ -638,29 +606,69 @@ class AuthService:
             publish(CredentialChange(session_hash=row["token_hash"]))
         return deleted
 
-    def _enforce_max_sessions(self, user_id: int) -> None:
-        """Delete oldest sessions if user has too many."""
-        count_rows = self.db.execute_sql(
-            "SELECT COUNT(*) AS cnt FROM session WHERE user_id = :user_id",
-            {"user_id": user_id},
-        )
-        count = count_rows[0]["cnt"] if count_rows else 0
+    def _create_session(self, user_id: int) -> str:
+        """Insert a new session for ``user_id``, evicting the oldest beyond the
+        cap, and return its raw token.
 
-        if count >= self.config.max_sessions_per_user:
-            # Delete oldest sessions to make room
-            excess = count - self.config.max_sessions_per_user + 1
-            # One statement, so the eviction is atomic; RETURNING names the
-            # evicted sessions so their sockets can be closed.
-            with self.db.transaction():
-                evicted = self.db.execute_sql(
-                    """DELETE FROM session WHERE id IN (
-                        SELECT id FROM session WHERE user_id = :user_id
-                        ORDER BY created_at ASC LIMIT :excess
-                    ) RETURNING token_hash""",
-                    {"user_id": user_id, "excess": excess},
-                )
-            for row in evicted:
-                publish(CredentialChange(session_hash=row["token_hash"]))
+        Property: at every commit point the user holds at most
+        ``max_sessions_per_user`` sessions, however many logins -- password,
+        OAuth or both -- run at once (#435). The insert and the eviction are
+        one write transaction, and the transaction opens with the INSERT, a
+        write: SQLite takes the database's single write lock at that
+        statement, so the eviction that follows sees every session committed
+        before it and none can be committed beside it. (A leading SELECT would
+        not do: a deferred transaction's reads take no write lock, so two
+        logins could read the same count.)
+
+        Evicted sessions are announced after the commit, so a listener never
+        acts on an eviction that was rolled back (#433).
+        """
+        raw_token, token_hash = self._generate_token()
+        now = datetime.now(UTC)
+        expires_at = now + timedelta(hours=self.config.session_ttl_hours)
+        session = self.db.session
+        try:
+            self.db.execute_write_sql(
+                """INSERT INTO session (token_hash, user_id, created_at, expires_at, last_used)
+                VALUES (:token_hash, :user_id, :created_at, :expires_at, :last_used)""",
+                {
+                    "token_hash": token_hash,
+                    "user_id": user_id,
+                    "created_at": now.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "last_used": now.isoformat(),
+                },
+                commit=False,
+            )
+            evicted = self._enforce_max_sessions(user_id, keep=token_hash)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        for hash_ in evicted:
+            publish(CredentialChange(session_hash=hash_))
+        return raw_token
+
+    def _enforce_max_sessions(self, user_id: int, keep: str) -> list[str]:
+        """Delete the user's sessions beyond the cap; return their hashes.
+
+        Runs inside :meth:`_create_session`'s write transaction, which commits
+        it. One statement, so the eviction is atomic and counts the rows it
+        acts on rather than a count read earlier; RETURNING names the evicted
+        sessions so their sockets can be closed. The session being created
+        (``keep``) is ranked first, so a login never evicts the session it is
+        about to return, whatever the clocks say; the rest go oldest first.
+        A cap below one still leaves the new session.
+        """
+        rows = self.db.execute_sql(
+            """DELETE FROM session WHERE id IN (
+                SELECT id FROM session WHERE user_id = :user_id
+                ORDER BY token_hash = :keep DESC, created_at DESC, id DESC
+                LIMIT -1 OFFSET :cap
+            ) RETURNING token_hash""",
+            {"user_id": user_id, "keep": keep, "cap": max(self.config.max_sessions_per_user, 1)},
+        )
+        return [row["token_hash"] for row in rows]
 
     def _hash_password(self, password: str) -> str:
         """Hash password with bcrypt."""

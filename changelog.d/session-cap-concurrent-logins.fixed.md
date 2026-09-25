@@ -1,0 +1,1 @@
+- The per-user session cap (`auth.max_sessions_per_user`) now holds when several logins for one user run at once, whether password, OAuth or both: creating a session and evicting the oldest beyond the cap are one write transaction. Evicted sessions are still announced after the commit, so their live-update sockets close. (#435)
