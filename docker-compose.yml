@@ -6,6 +6,9 @@ services:
     volumes:
       - pyrite-data:/data
     environment:
+      # Bound to all interfaces with auth disabled: requests must use an allowed
+      # host (localhost, or PYRITE_ALLOWED_HOSTS) or they get 421. For a shared
+      # or LAN deployment, enable auth instead (see docs/configuration.md).
       - PYRITE_HOST=0.0.0.0
     restart: unless-stopped
 

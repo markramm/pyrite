@@ -72,9 +72,17 @@ settings:
 
 `pyrite serve --host <addr>` adds `<addr>` automatically. The Vite dev server
 (`npm run dev` on port 5173) is already in the default `cors_origins`. If you
-run it on another port, add `http://localhost:<port>`. An instance with
-`anonymous_tier: write` behind a reverse proxy must list the proxy's public
-hostname in `allowed_hosts`.
+run it on another port, add `http://localhost:<port>`.
+
+Behind a reverse proxy, the browser sends `Origin: https://<public name>` on
+every write, including login, logout and registration. If the proxy rewrites
+`Host` to the upstream address (nginx does unless you set
+`proxy_set_header Host $host`), that `Origin` no longer matches the server's
+own origin and every UI write gets 403. Either keep the public `Host`
+(`proxy_set_header Host $host`) and add the public name to `allowed_hosts`, or
+add the public origin (`https://<public name>`) to `cors_origins`. This applies
+to an auth-disabled instance without API keys and to one with
+`anonymous_tier: write`.
 
 ## Authentication (multi-user)
 
