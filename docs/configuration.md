@@ -50,12 +50,13 @@ ephemeral expiry, unsubscribe), which name what they remove and check before
 deleting anything. A `config.yaml` that cannot be parsed is not overwritten
 either. Code that means to drop KBs passes `save_config(config, removed=[...])`
 or `allow_drop=True`. A write through a symlinked `config.yaml` logs the real
-file it changed. Saves are atomic: the new file is written beside the old one
-and renamed over it, so a crash never leaves a half-written or empty file.
+file it changed.
 
-When a long-running server refuses a save because `config.yaml` changed since
-it started (for example after `pyrite-admin kb add` from a shell), restart the
-server so it reads the current file.
+The refusal says which case it is. If `config.yaml` changed since the process
+loaded it (for example `pyrite-admin kb add` from a shell while a server runs),
+restart the server, or re-run the command, so it reads the current file. If
+`config.yaml` cannot be read (it does not parse, is not a mapping, or has an
+entry with no name), fix or move it: restarting would only fail to load it.
 
 Known limits: only the list of knowledge bases is protected. A save from a
 process whose config is out of date still overwrites `repositories:` and
@@ -63,6 +64,15 @@ process whose config is out of date still overwrites `repositories:` and
 There is no lock between two processes saving at the same moment, and a
 repository subscribe that is refused at its final save is not rolled back
 (unsubscribe it and retry).
+
+The write is not atomic: a crash mid-write can leave a truncated
+`config.yaml`, which the next save refuses to overwrite only if it cannot be
+parsed. Most truncations still parse -- including the empty file a crash right
+after the file is opened leaves -- and then read as a shorter list of KBs, or
+none. A command that loads such a file sees only those KBs, with no error, and
+its next save writes the shorter list; a process that loaded the file before
+the crash (a running server) writes its full list back on its next save. Keep
+a copy of `config.yaml` to restore from.
 
 ## Server
 
