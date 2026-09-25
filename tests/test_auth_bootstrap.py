@@ -386,7 +386,7 @@ class TestSelfRegisteredReadsPublicKbsOnly:
 
     @pytest.mark.control(reason="existing users already read every KB on dev; pins the migration")
     def test_existing_users_keep_their_global_role_after_the_migration(self, tmp_path):
-        """A user row from before v25 (no global_access column) keeps reading
+        """A user row from before v26 (no global_access column) keeps reading
         KBs without a default_role once the column is added."""
         db_path = tmp_path / "old.db"
         conn = sqlite3.connect(db_path)

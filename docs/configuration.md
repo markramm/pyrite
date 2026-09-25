@@ -230,7 +230,7 @@ admin grants or removes it explicitly, for now only through the role API
 (`"global_access": true|false` in `PUT /auth/users/{id}/role`; `GET
 /auth/users` shows each user's value). Users inserted by the
 `deploy/*/create-user.py` scripts get public-KB access only until an admin
-grants it. Migration v25 marks every user that existed before it with global
+grants it. Migration v26 marks every user that existed before it with global
 access; its rollback is a no-op, so rolling back and migrating up again grants
 global access to every user present at that time, self-registered ones
 included. To share a KB with every signed-in user,
