@@ -385,7 +385,8 @@ class TestClassification:
         # A whole token or a separator-delimited piece, not any substring.
         assert not _looks_like_query_syntax_error("no such column: fips", "fipsy AND x")
         assert not _looks_like_query_syntax_error("no such column: fips", "e.fips AND x")
-        assert not _looks_like_query_syntax_error("no such column: ", "a AND b")
+        # An empty name would match between any two separators.
+        assert not _looks_like_query_syntax_error("no such column: ", "a  b")
 
     def test_corruption_is_a_storage_error(self, indexed_test_env, tmp_path, monkeypatch):
         db = indexed_test_env["db"]
@@ -535,8 +536,21 @@ class TestMcpContract:
         assert result["retryable"] is False
         assert "no such table" in result["error"]
 
-    def test_a_refusal_that_is_not_a_storage_fault_is_not_logged(self, mcp_server, caplog):
+    @pytest.mark.parametrize(
+        ("query", "code"),
+        [
+            ('x AND "a.b":y', "QUERY_SYNTAX"),
+            ("x" * (MAX_SEARCH_QUERY_LENGTH + 1), "QUERY_TOO_LONG"),
+        ],
+        ids=["syntax", "too-long"],
+    )
+    def test_a_refusal_that_is_not_a_storage_fault_is_not_logged(
+        self, mcp_server, caplog, query, code
+    ):
+        """QUERY_TOO_LONG reaches the dispatcher's PyriteError branch, where
+        only a StorageError is logged; QUERY_SYNTAX is answered by kb_search."""
         with caplog.at_level(logging.ERROR):
-            result = mcp_server._dispatch_tool("kb_search", {"query": 'x AND "a.b":y'})
-        assert result["error_code"] == "QUERY_SYNTAX"
+            result = mcp_server._dispatch_tool("kb_search", {"query": query})
+        assert result["error_code"] == code
+        assert result["retryable"] is False
         assert _error_records(caplog) == []
