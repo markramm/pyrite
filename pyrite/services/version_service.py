@@ -101,10 +101,7 @@ class VersionService:
         # have at this entry's path, including commits that never touched
         # this entry (#415). Membership is checked on the peeled, full
         # commit id so an abbreviated form of a recorded hash still matches.
-        recorded_hashes = {
-            v["commit_hash"] for v in self.db.get_entry_versions(entry_id, kb_name, limit=10000)
-        }
-        if commit not in recorded_hashes:
+        if not self.db.entry_version_exists(entry_id, kb_name, commit):
             return None
 
         # Read the entry's file at the peeled, full commit id. `<rev>:<path>`
