@@ -8,6 +8,7 @@ Configuration is loaded from:
 3. Individual kb.yaml files in each KB root
 """
 
+import errno
 import logging
 import os
 from dataclasses import dataclass, field
@@ -414,6 +415,25 @@ class Settings:
             self.ai_api_base = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 
+def _refuse_unresolvable(path: Path) -> None:
+    """Raise when ``path`` cannot be resolved: an unknown ``~user`` or a symlink loop.
+
+    ``Path.resolve()`` in non-strict mode raised ``RuntimeError`` on a loop
+    through Python 3.12 and silently returns the unresolved path from 3.13
+    on, so the check resolves strictly. A path that does not exist yet is
+    fine; any other ``OSError`` (a permission error, say) is left to the
+    ordinary non-strict resolve, as before.
+    """
+    try:
+        path.expanduser().resolve(strict=True)
+    except FileNotFoundError:
+        return
+    except OSError as e:
+        if e.errno == errno.ELOOP:
+            raise
+        return
+
+
 @dataclass
 class PyriteConfig:
     """
@@ -474,6 +494,7 @@ class PyriteConfig:
             if not path:
                 continue
             try:
+                _refuse_unresolvable(Path(path))
                 kb = KBConfig(
                     name=name,
                     path=Path(path),
