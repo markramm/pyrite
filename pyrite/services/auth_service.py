@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 import bcrypt as _bcrypt
 
 from ..config import AuthConfig, OAuthProviderConfig
+from ..exceptions import ValidationError
 from ..services.oauth_providers import OAuthProfile
 from ..storage.database import PyriteDB
 
@@ -538,14 +539,33 @@ class AuthService:
         return rows[0]
 
     def set_role(self, user_id: int, role: str) -> bool:
-        """Set user role. Returns True if user found."""
+        """Set user role. Returns True if user found.
+
+        Raises:
+            ValueError: `role` is not read, write or admin.
+            ValidationError: the change would demote the last global admin,
+                leaving nobody able to manage users. The count and the update
+                are one statement, so two admins demoting each other at once
+                cannot both succeed.
+        """
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
         rowcount = self.db.execute_write_sql(
-            "UPDATE local_user SET role = :role, updated_at = :now WHERE id = :user_id",
+            "UPDATE local_user SET role = :role, updated_at = :now "
+            "WHERE id = :user_id AND ("
+            "  :role = 'admin' OR role != 'admin'"
+            "  OR (SELECT COUNT(*) FROM local_user WHERE role = 'admin') > 1"
+            ")",
             {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
-        return rowcount > 0
+        if rowcount > 0:
+            return True
+        exists = self.db.execute_sql(
+            "SELECT 1 FROM local_user WHERE id = :user_id", {"user_id": user_id}
+        )
+        if exists:
+            raise ValidationError("Cannot demote the last admin: promote another user first")
+        return False
 
     def set_usage_tier(self, user_id: int, usage_tier: str) -> bool:
         """Set a user's usage tier (free/pro/enterprise — a resource/

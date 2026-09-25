@@ -202,3 +202,70 @@ class TestAuthDisabled:
             assert r.json() == {"users": []}
         finally:
             db.close()
+
+
+class TestLastAdmin:
+    """The last global admin cannot be demoted: nobody could promote anyone
+    back, and there is no in-product recovery (#330 cold read)."""
+
+    def test_sole_admin_cannot_demote_self_over_http(self, two_sessions):
+        admin, _, _, admin_id, _ = two_sessions
+        r = admin.put(f"/auth/users/{admin_id}/role", json={"role": "read"})
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"]["code"] == "LAST_ADMIN"
+        assert admin.get("/auth/me").json()["role"] == "admin"
+        assert admin.get("/auth/users").status_code == 200
+
+    def test_sole_admin_may_reassert_admin(self, two_sessions):
+        admin, _, _, admin_id, _ = two_sessions
+        r = admin.put(f"/auth/users/{admin_id}/role", json={"role": "admin"})
+        assert r.status_code == 200, r.text
+
+    def test_one_of_two_admins_can_demote_the_other(self, two_sessions):
+        admin, member, _, admin_id, member_id = two_sessions
+        assert admin.put(f"/auth/users/{member_id}/role", json={"role": "admin"}).status_code == 200
+        r = member.put(f"/auth/users/{admin_id}/role", json={"role": "write"})
+        assert r.status_code == 200, r.text
+        assert admin.get("/auth/me").json()["role"] == "write"
+        # member is now the only admin, and is held there.
+        r = member.put(f"/auth/users/{member_id}/role", json={"role": "read"})
+        assert r.status_code == 409, r.text
+        assert member.get("/auth/me").json()["role"] == "admin"
+
+
+class TestLastAdminService:
+    """The rule lives in AuthService.set_role, not only in the route."""
+
+    @pytest.fixture
+    def auth(self, tmp_path):
+        from pyrite.services.auth_service import AuthService
+
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            yield AuthService(db, AuthConfig(enabled=True, allow_registration=True))
+        finally:
+            db.close()
+
+    @pytest.mark.parametrize("role", ["read", "write"])
+    def test_refused_and_unchanged(self, auth, role):
+        from pyrite.exceptions import ValidationError
+
+        first = auth.register("root", "password123")
+        auth.register("other", "password123")
+        assert first["role"] == "admin"
+        with pytest.raises(ValidationError, match="last admin"):
+            auth.set_role(first["id"], role)
+        roles = {u["username"]: u["role"] for u in auth.list_users()}
+        assert roles == {"root": "admin", "other": "read"}
+
+    def test_allowed_when_another_admin_remains(self, auth):
+        first = auth.register("root", "password123")
+        other = auth.register("other", "password123")
+        assert auth.set_role(other["id"], "admin") is True
+        assert auth.set_role(first["id"], "read") is True
+        roles = {u["username"]: u["role"] for u in auth.list_users()}
+        assert roles == {"root": "read", "other": "admin"}
+
+    def test_unknown_user_is_still_not_found(self, auth):
+        auth.register("root", "password123")
+        assert auth.set_role(9999, "read") is False

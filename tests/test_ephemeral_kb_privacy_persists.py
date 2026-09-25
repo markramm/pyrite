@@ -136,6 +136,7 @@ class TestGrantCommitsWithTheKB:
         config = _fresh_config(tmp_path)
         db = PyriteDB(config.settings.index_path)
         auth = AuthService(db, config.settings.auth)
+        auth.register("admin", "password123")  # first user: the sole admin
         user = auth.register("alice", "password123")
         auth.set_role(user["id"], "write")
         return config, db, auth, user
