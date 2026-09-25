@@ -134,12 +134,17 @@ class TestCentralExceptionHandler:
             "storage": StorageError("disk gone"),
             "base": PyriteError("generic domain error"),
         }
-        # #416: imported separately so a PR that has not yet added
-        # LastAdminError fails only the one parametrized case below, not
-        # every other case sharing this fixture.
-        from pyrite.exceptions import LastAdminError
+        try:
+            # #416: imported inside a try so a checkout that has not yet
+            # added LastAdminError only loses the "last_admin" probe route
+            # (and its one parametrized case, which 404s instead of
+            # exercising the fixture) rather than failing this fixture --
+            # and every other case that shares it -- to construct at all.
+            from pyrite.exceptions import LastAdminError
 
-        raisers["last_admin"] = LastAdminError("cannot demote the last admin")
+            raisers["last_admin"] = LastAdminError("cannot demote the last admin")
+        except ImportError:
+            pass
         for name, exc in raisers.items():
 
             def _route(_exc=exc):
