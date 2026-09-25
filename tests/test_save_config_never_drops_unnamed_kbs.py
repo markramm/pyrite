@@ -481,3 +481,63 @@ class TestRepoPreflight:
             svc.fork_and_subscribe("https://github.com/owner/repo")
         assert self.calls == []
         assert (cfg_dir / "config.yaml").read_bytes() == self.before
+
+
+# --- fix-at-review on 21bfc815 (delta cold read) ------------------------------
+
+
+@pytest.mark.parametrize("raw_name", ["2024", "0", "true"])
+def test_a_name_yaml_reads_as_a_number_or_bool_does_not_block_saves(cfg_dir, tmp_path, raw_name):
+    """YAML reads `name: 2024` as an int (and `true` as a bool); the file side
+    was compared as str and the in-memory side was not, so every save from a
+    correctly loaded config was refused -- and `name: 0` counted as no name."""
+    kb_dir = tmp_path / "kbs" / "odd"
+    kb_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(
+        f"knowledge_bases:\n- name: {raw_name}\n  path: {kb_dir}\n"
+    )
+    config = load_config()
+    config.add_kb(_kb(tmp_path, "k2"))
+    save_config(config)
+    assert sorted(str(n) for n in _names(cfg_dir)) == sorted(
+        [raw_name if raw_name != "true" else "True", "k2"]
+    )
+
+
+def test_a_refusal_tells_an_operator_to_restart_not_to_call_code(cfg_dir, tmp_path):
+    _write_registry(cfg_dir, tmp_path, "a", "b")
+    with pytest.raises(ConfigSaveRefusedError) as exc:
+        save_config(_fresh_config(tmp_path))
+    msg = str(exc.value)
+    assert "Restart the server" in msg and "changed since this process loaded it" in msg
+    assert "Restart the server" in ConfigSaveRefusedError.public_message
+
+
+def test_a_failed_write_leaves_the_old_file_whole_and_no_temp_file(cfg_dir, tmp_path, monkeypatch):
+    """The write went through open(path, "w"), which truncates first: a crash
+    mid-write left an empty file, which reads as "no KBs" and switches the
+    drop check off. It now writes beside the file and renames over it."""
+    before = _write_registry(cfg_dir, tmp_path, "a", "b")
+    config = load_config()
+    config.add_kb(_kb(tmp_path, "c"))
+
+    def boom(data, path):
+        from pathlib import Path
+
+        Path(path).write_text("knowledge_bases:\n- name: a\n")  # partial
+        raise OSError("disk full")
+
+    monkeypatch.setattr(config_module, "dump_yaml_file", boom)
+    with pytest.raises(OSError):
+        save_config(config)
+    assert (cfg_dir / "config.yaml").read_bytes() == before
+    assert [p.name for p in cfg_dir.iterdir()] == ["config.yaml"]
+
+
+def test_the_write_keeps_the_files_permissions(cfg_dir, tmp_path):
+    _write_registry(cfg_dir, tmp_path, "a")
+    (cfg_dir / "config.yaml").chmod(0o640)
+    config = load_config()
+    config.add_kb(_kb(tmp_path, "b"))
+    save_config(config)
+    assert (cfg_dir / "config.yaml").stat().st_mode & 0o777 == 0o640

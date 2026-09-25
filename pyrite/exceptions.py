@@ -123,8 +123,9 @@ class ConfigSaveRefusedError(ConfigError):
     """
 
     public_message = (
-        "The configuration was not saved: it would have removed knowledge bases "
-        "this request did not remove. The server log names the file and the KBs."
+        "The configuration was not saved: the config file changed since the server "
+        "loaded it. Restart the server and try again; the server log names the file "
+        "and the knowledge bases."
     )
 
     def __init__(self, message: str, *, config_file=None, dropped: list[str] | None = None):
