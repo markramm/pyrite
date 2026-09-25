@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..exceptions import BrandingInvalidError
 from ..utils.yaml import load_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,15 @@ class BrandingService:
         if not yaml_path.is_file():
             return BrandingConfig(branding_dir=self._branding_dir)
 
-        data = load_yaml_file(yaml_path) or {}
+        try:
+            data = load_yaml_file(yaml_path) or {}
+        except Exception as e:
+            raise BrandingInvalidError(f"{yaml_path} could not be parsed: {e}") from e
+        if not isinstance(data, dict):
+            raise BrandingInvalidError(
+                f"{yaml_path} must be a YAML mapping, got {type(data).__name__}"
+            )
+
         meta = data.get("meta") or {}
         mcp = data.get("mcp") or {}
 

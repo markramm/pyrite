@@ -132,6 +132,12 @@ class ConfigError(PyriteError):
     """Raised when configuration is invalid."""
 
 
+class BrandingInvalidError(PyriteError):
+    """Raised when ``branding.yaml`` exists but cannot be parsed or is not
+    a mapping (#408). An operator-facing 409, not a 500: nothing has been
+    committed yet, so the caller can fix the file and retry."""
+
+
 class ConfigSaveRefusedError(ConfigError):
     """A config save was refused: it would drop KBs the caller did not name,
     or the file on disk could not be read to check (#377).

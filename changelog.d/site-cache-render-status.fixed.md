@@ -1,0 +1,2 @@
+- `POST /api/index/sync?wait=true` now reports the site cache's per-entry render failures on `site_cache.errors`, instead of discarding them and reporting `rendered: true` even when every page failed. `POST /api/site/render` reports the same `rendered`/`errors` shape.
+- `POST /api/site/render` now answers `409 BRANDING_INVALID` for an unreadable or malformed `branding.yaml`, instead of a 500 (#408).

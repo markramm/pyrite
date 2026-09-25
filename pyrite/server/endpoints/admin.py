@@ -110,8 +110,13 @@ def sync_index(
 
             try:
                 # Inside the try: the constructor reads branding.yaml, which
-                # an operator may have left half-edited.
-                SiteCacheService(config=index_mgr.config, db=index_mgr.db).render_all()
+                # an operator may have left half-edited. On this path (#408)
+                # a broken branding file is reported the same generic way as
+                # any other render failure -- the sync already committed, so
+                # there is no "nothing committed yet, fix and retry" framing
+                # to offer; that framing is only true of the explicit
+                # POST /api/site/render call below.
+                stats = SiteCacheService(config=index_mgr.config, db=index_mgr.db).render_all()
             except Exception:
                 logger.exception("Site cache render failed after sync")
                 site_cache_status = SiteCacheSyncStatus(
@@ -119,7 +124,9 @@ def sync_index(
                 )
             else:
                 logger.info("Site cache re-rendered after sync")
-                site_cache_status = SiteCacheSyncStatus(rendered=True)
+                site_cache_status = SiteCacheSyncStatus(
+                    rendered=True, errors=stats.get("errors", 0)
+                )
 
         return SyncResponse(
             synced=True,
@@ -199,12 +206,29 @@ async def render_site_cache(
     config: PyriteConfig = Depends(get_config),
     db: PyriteDB = Depends(get_db),
 ):
-    """Render all /site pages to the filesystem cache for fast serving."""
+    """Render all /site pages to the filesystem cache for fast serving.
+
+    ``rendered`` means the same thing here as on the sync path's
+    ``site_cache`` status (#408): the render ran to completion, independent
+    of per-entry page failures, which ``errors`` counts. This is an
+    explicit, nothing-already-committed operator call, so an unreadable
+    ``branding.yaml`` (``SiteCacheService.__init__`` reads it) is reported
+    as a 409 rather than folded into `rendered: false` -- unlike the sync
+    path, there is nothing that already committed, so surfacing the mistake
+    plainly is more useful than a generic 200/500.
+    """
     import asyncio
 
+    from ...exceptions import BrandingInvalidError
     from ...services.site_cache import SiteCacheService
 
-    svc = SiteCacheService(config, db)
+    try:
+        svc = await asyncio.to_thread(SiteCacheService, config, db)
+    except BrandingInvalidError as e:
+        logger.warning("Site cache render refused: invalid branding.yaml: %s", e)
+        raise HTTPException(
+            status_code=409, detail={"code": "BRANDING_INVALID", "message": str(e)}
+        ) from None
     stats = await asyncio.to_thread(svc.render_all)
     return {"rendered": True, **stats}
 

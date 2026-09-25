@@ -354,9 +354,17 @@ class SiteCacheSyncStatus(BaseModel):
     the render runs, so a render failure is reported here rather than
     failing the whole request. ``error`` is a generic message for callers;
     the real exception and its traceback go to the server log only.
+
+    ``rendered`` means the render ran to completion (#408); it says nothing
+    about whether every page came out clean. ``errors`` is always present --
+    it is 0 when the render didn't get far enough to produce per-entry stats
+    (e.g. the service failed to construct) and the count of per-entry
+    failures otherwise -- so a caller reads ``rendered and errors == 0`` as
+    "all pages are fresh."
     """
 
     rendered: bool
+    errors: int = 0
     error: str | None = None
 
 

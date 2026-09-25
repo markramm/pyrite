@@ -1278,3 +1278,115 @@ class TestSiteCacheBranding:
         cache_env["svc"].render_all()
         html = (cache_env["cache_dir"] / "index.html").read_text()
         assert "Pyrite Knowledge Base" in html
+
+
+class TestRenderSiteCacheEndpoint:
+    """``POST /api/site/render`` (#408): the endpoint must mean the same
+    thing by ``rendered`` and ``errors`` as the sync path's ``site_cache``
+    status, and a broken ``branding.yaml`` must not 500.
+    """
+
+    @pytest.fixture
+    def _client(self, tmp_path):
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        (kb_path / "entry.md").write_text(
+            """---
+id: entry
+title: An Entry
+entry_type: note
+---
+
+Body.
+"""
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client._pyrite_config = config
+            sync_resp = client.post("/api/index/sync", params={"wait": "true"})
+            assert sync_resp.status_code == 200, sync_resp.text
+            assert sync_resp.json()["added"] == 1, (
+                f"precondition: the entry must be indexed before render, got {sync_resp.json()}"
+            )
+            yield client
+
+    @pytest.mark.control(
+        reason=(
+            "The pre-fix render endpoint already did `{'rendered': True, **stats}`, "
+            "and `stats` already carried `errors` from `render_all()` -- this "
+            "endpoint's success/errors-present shape was never the #408 bug (only "
+            "the sync path's SiteCacheSyncStatus lacked `errors`). Kept as a "
+            "control so a future change to this endpoint can't silently drop it."
+        )
+    )
+    def test_render_reports_rendered_true_and_errors_zero_on_success(self, _client):
+        resp = _client.post("/api/site/render")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["rendered"] is True, body
+        assert body["errors"] == 0, body
+
+    @pytest.mark.control(
+        reason=(
+            "Same reason as the test above: `render_all()`'s `errors` count "
+            "already rode along via `**stats` before this fix. `rendered` "
+            "staying true under a per-entry failure was already correct on "
+            "this endpoint; #408's bug was the sync path discarding it."
+        )
+    )
+    def test_render_reports_errors_even_though_rendered_true(self, _client, monkeypatch):
+        """Same meaning as the sync path: ``rendered`` says the render ran
+        to completion, ``errors`` carries per-entry failure counts."""
+        import pyrite.services.site_cache as site_cache_module
+
+        def _boom(self, *args, **kwargs):
+            raise RuntimeError("boom: entry render exploded")
+
+        monkeypatch.setattr(site_cache_module.SiteCacheService, "_render_entry", _boom)
+
+        resp = _client.post("/api/site/render")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["rendered"] is True, body
+        assert body["errors"] == 1, body
+
+    def test_broken_branding_yaml_answers_409_branding_invalid(self, tmp_path):
+        """A half-edited ``branding.yaml`` is an operator mistake on an
+        explicit, nothing-already-committed render call -- it must not
+        report a generic 200 (that would hide the mistake) nor 500 (the
+        original bug); it answers 409 with a stable error code."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/site/render")
+
+        assert resp.status_code == 409, resp.text
+        body = resp.json()
+        detail = body.get("detail", body)
+        assert detail.get("code") == "BRANDING_INVALID", body
