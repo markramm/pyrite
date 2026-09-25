@@ -83,7 +83,7 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -455,7 +455,9 @@ class RestoreError(InfraError):
     """Some reverted files could not be put back; each was named on stderr."""
 
 
-def _restore(targets: list[Target], written: dict[str, bytes | None]) -> list[str]:
+def _restore(
+    targets: list[Target], written: dict[str, bytes | None], created: list[Path]
+) -> list[str]:
     """Put back every file the revert wrote; returns the ones that could not be,
     each with its reason. Every file is attempted. Idempotent: run again, it
     skips what is back and finds the same failures."""
@@ -477,6 +479,12 @@ def _restore(targets: list[Target], written: dict[str, bytes | None]) -> list[st
                 _put(t.path, t.original, t.mode)
             except OSError as exc:
                 failures.append(f"{t.path}: not restored: {exc.strerror or exc}")
+        # Then the directories the revert made, deepest first. An empty one left
+        # behind imports as a namespace package: a package the PR deleted would
+        # still import. One that is not empty holds something else; it stays.
+        for d in sorted(set(created), key=lambda d: len(d.parts), reverse=True):
+            with suppress(OSError):
+                d.rmdir()
     return failures
 
 
@@ -487,6 +495,7 @@ def reverted(targets: list[Target]) -> Iterator[None]:
     fails raises RestoreError -- unless a signal is ending the run, which
     keeps its own exit status."""
     written: dict[str, bytes | None] = {}
+    created: list[Path] = []  # directories the revert made, to remove again
     ending: BaseException | None = None
     journal = _journal()
     try:
@@ -499,6 +508,11 @@ def reverted(targets: list[Target]) -> Iterator[None]:
                 # Recorded before the write: an interrupt between the two leaves a
                 # file still at its original, which the restore then skips.
                 written[t.path] = t.base
+                if t.base is not None:
+                    parent = Path(t.path).parent
+                    while not parent.exists():
+                        created.append(parent)
+                        parent = parent.parent
                 _put(t.path, t.base, t.mode)
                 _drop_pyc(t.path)
             except OSError as exc:
@@ -515,7 +529,7 @@ def reverted(targets: list[Target]) -> Iterator[None]:
         signalled: BaseException | None = None
         while True:
             try:
-                failures = _restore(targets, written)
+                failures = _restore(targets, written, created)
                 break
             except (KeyboardInterrupt, SystemExit) as exc:
                 signalled = signalled or exc

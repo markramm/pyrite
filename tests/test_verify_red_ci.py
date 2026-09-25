@@ -1100,6 +1100,43 @@ def test_renamed_and_deleted_implementation_is_reverted_and_restored(
     assert git(repo, "status", "--porcelain") == ""
 
 
+GONE_TESTS = """\
+import pytest
+
+
+def test_the_legacy_package_is_gone():
+    with pytest.raises(ImportError):
+        import pyrite.legacy  # noqa: F401
+"""
+
+
+def test_a_deleted_package_leaves_no_directory_behind(vr, repo: Path, tmp_path: Path) -> None:
+    # The revert recreates pyrite/legacy/ to put the merge base's files back; the
+    # restore removes the files AND the directories it made. An empty directory
+    # left behind imports as a namespace package, so the next file's run with
+    # the fix saw a package the PR deleted.
+    (repo / "pyrite" / "legacy" / "sub").mkdir(parents=True)
+    (repo / "pyrite" / "legacy" / "__init__.py").write_text("")
+    (repo / "pyrite" / "legacy" / "core.py").write_text("X = 1\n")
+    (repo / "pyrite" / "legacy" / "sub" / "deep.py").write_text("Y = 1\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "--amend", "-m", "base")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    git(repo, "rm", "-q", "-r", "pyrite/legacy")
+    (repo / "tests" / "test_gone_a.py").write_text(GONE_TESTS)
+    (repo / "tests" / "test_gone_b.py").write_text(GONE_TESTS)
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "fix: drop the legacy package")
+    assert not (repo / "pyrite" / "legacy").exists()
+
+    result, summary = run_ci(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    for f in ("test_gone_a", "test_gone_b"):
+        assert vr.RED in row(summary, f"tests/{f}.py::test_the_legacy_package_is_gone"), summary
+    assert not (repo / "pyrite" / "legacy").exists()
+    assert git(repo, "status", "--porcelain") == ""
+
+
 def test_a_hung_file_is_a_row_not_a_killed_job(vr, repo: Path, tmp_path: Path) -> None:
     (repo / "pyrite" / "__init__.py").write_text(
         "import time\n\n\ndef add(a, b):\n    time.sleep(60)\n    return a - b\n"
