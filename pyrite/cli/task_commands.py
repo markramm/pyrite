@@ -69,19 +69,46 @@ _FIELD_OWN_OPTION: dict[str, str] = {
     "tags": "--tags",
 }
 
+#: `--field` keys refused because `TaskService.create_task` forwards
+#: `fields` as `**kwargs` straight into `KBService.create_entry(kb_name,
+#: entry_id, title, entry_type, body, *, allow_undeclared, **kwargs)`
+#: (round-1 cold read). `kb_name`/`entry_id`/`entry_type` collide with that
+#: call's own positional/keyword arguments and crash with a raw "got
+#: multiple values for keyword argument" TypeError; `allow_undeclared`
+#: doesn't crash -- it silently binds to the control parameter that decides
+#: whether the undeclared-type refusal runs, so a caller naming a field
+#: `allow_undeclared` would instead flip the create pipeline's own safety
+#: switch without knowing it.
+_FIELD_CREATE_ENTRY_COLLISION: frozenset[str] = frozenset(
+    {"kb_name", "entry_id", "entry_type", "allow_undeclared"}
+)
+
 
 def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
     """Parse `--field key=value` pairs for `task create`.
 
     Uses the same value parser as `create -f`/`update -f`
-    (`_parse_field_value`), and refuses a key that already has its own
-    option, `status` (task lifecycle is `task update --status`, not a
-    free-form field), and a `TaskEntry.managed_fields` key -- `create` does
-    not run `update`'s managed-field refusal, so without this an agent could
-    forge the audit trail (`status_change_log`, `evidence`, `agent_context`,
-    `assigned_at`) at creation instead of only failing to set it later.
+    (`_parse_field_value`), and refuses:
+
+    - a key that already has its own option;
+    - `status` (task lifecycle is `task update --status`, not a free-form
+      field);
+    - a `TaskEntry.managed_fields` key -- `create` does not run `update`'s
+      managed-field refusal, so without this an agent could forge the audit
+      trail (`status_change_log`, `evidence`, `agent_context`,
+      `assigned_at`) at creation instead of only failing to set it later;
+    - every service-level `KBService._MANAGED_FIELDS` key (`id`, `kb_name`,
+      `file_path`, `links`, `sources`, `provenance`, `extra_frontmatter`) --
+      `update` already refuses these on every entry type, not just tasks;
+      `create` didn't, so `--field links=[{"target": "ghost"}]` created a
+      task already linked to a target that doesn't exist, bypassing the
+      dangling-target check `add_link` applies everywhere else (round-1
+      cold read);
+    - a key colliding with `create_entry`'s own call signature or control
+      parameters (`_FIELD_CREATE_ENTRY_COLLISION`).
     """
     from ..models.task import TaskEntry
+    from ..services.kb_service import _MANAGED_FIELDS
     from .entry_commands import _parse_field_value
 
     fields: dict[str, Any] = {}
@@ -105,6 +132,18 @@ def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
             console.print(
                 f"[red]Error:[/red] --field {k}=... is refused: Pyrite maintains "
                 f"this field as part of the task's audit trail."
+            )
+            raise typer.Exit(1)
+        if k in _MANAGED_FIELDS:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: Pyrite maintains "
+                f"this field; `update` refuses it too."
+            )
+            raise typer.Exit(1)
+        if k in _FIELD_CREATE_ENTRY_COLLISION:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: this name collides "
+                f"with a parameter `task create` itself needs."
             )
             raise typer.Exit(1)
         fields[k] = _parse_field_value(v)

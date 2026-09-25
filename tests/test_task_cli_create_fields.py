@@ -277,3 +277,107 @@ def test_task_create_help_lists_field_option():
 
     clean = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", result.stdout)
     assert "--field" in clean
+
+
+# ---------------------------------------------------------------------------
+# Round-1 cold-read findings: `--field` keys that collide with
+# `KBService.create_entry`'s own positional/keyword parameters or its
+# control flags, and the service-level `_MANAGED_FIELDS` set `update`
+# already refuses (identity, storage location, structure) that `create`
+# --field did not before this fix.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("key", ["kb_name", "entry_id", "entry_type"])
+@pytest.mark.cli
+def test_task_create_field_refuses_create_entry_positional_collisions(task_cli_env, key):
+    """`--field kb_name=...`/`entry_id=...`/`entry_type=...` used to crash
+    with a raw TypeError ("got multiple values for keyword argument") because
+    `TaskService.create_task` forwards `fields` as `**kwargs` into
+    `KBService.create_entry`, which already receives these as its own named
+    parameters. Must be a clean refusal, not a stack trace."""
+    result = runner.invoke(
+        app,
+        ["task", "create", "T", "-k", "test-tasks", "--field", f"{key}=x", "--format", "json"],
+    )
+    assert result.exit_code != 0
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert key in result.output.lower()
+
+
+@pytest.mark.cli
+def test_task_create_field_refuses_allow_undeclared(task_cli_env):
+    """`--field allow_undeclared=false` used to bind silently to
+    `create_entry`'s own `allow_undeclared` control parameter (via
+    `**kwargs`), turning off the undeclared-type refusal without the caller
+    asking for that -- a security-relevant collision, not just a cosmetic
+    one."""
+    result = runner.invoke(
+        app,
+        [
+            "task",
+            "create",
+            "T",
+            "-k",
+            "test-tasks",
+            "--field",
+            "allow_undeclared=false",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "allow_undeclared" in result.output.lower()
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["id", "file_path", "links", "sources", "provenance", "extra_frontmatter"],
+)
+@pytest.mark.cli
+def test_task_create_field_refuses_service_managed_fields(task_cli_env, key):
+    """Every key in `KBService._MANAGED_FIELDS` -- not just
+    `TaskEntry.managed_fields` -- must be refused on create the same way
+    `update` refuses it. Before this fix, `links=[{"target": "a"}]` bypassed
+    the dangling-target check `add_link` normally applies (a task could be
+    created already linked to a nonexistent entry), and the others were
+    silently absorbed into metadata or dropped instead of taking effect."""
+    value = '[{"target": "a"}]' if key == "links" else "x"
+    result = runner.invoke(
+        app,
+        [
+            "task",
+            "create",
+            "T",
+            "-k",
+            "test-tasks",
+            "--field",
+            f"{key}={value}",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code != 0
+    assert key in result.output.lower()
+
+
+@pytest.mark.cli
+def test_task_create_field_links_does_not_bypass_dangling_target_check(task_cli_env):
+    """Concrete regression for the `links` collision: a task must not be
+    creatable already linked to a target that does not exist, the way
+    `add_link` (without `allow_dangling`) refuses elsewhere."""
+    result = runner.invoke(
+        app,
+        [
+            "task",
+            "create",
+            "Linked to nothing",
+            "-k",
+            "test-tasks",
+            "--field",
+            'links=[{"target": "nonexistent"}]',
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code != 0

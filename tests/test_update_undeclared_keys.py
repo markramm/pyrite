@@ -202,3 +202,60 @@ def test_update_does_not_persist_truncation_marker_keys(tmp_path):
     for marker in ("body_truncated", "body_length", "body_offset", "body_chunk_size"):
         assert marker not in fm, fm
         assert marker not in nested, nested
+
+
+# ---------------------------------------------------------------------------
+# Round-1 cold-read findings: `update -f type=...` (and an empty key) used to
+# report success and write nothing usable, the same #407 symptom recurring
+# for a *reserved* key that #407's fix routed into metadata instead of into
+# the model. `type` is frontmatter-only -- no entry has a `type` attribute,
+# `entry_type` is a computed property -- so it fell into the generic
+# undeclared-key branch and was silently stored under `metadata.type`,
+# never touching the file's real `type:` line.
+# ---------------------------------------------------------------------------
+
+
+def test_update_field_type_is_refused_not_silently_swallowed(tmp_path):
+    """`-f type=hacked` must not report success while leaving the real
+    `type:` frontmatter line untouched (the #407 symptom recurring for a
+    reserved key #407's own fix didn't cover)."""
+    config, kb_path = _make_env(tmp_path, "notes", NOTE_KB_YAML)
+    result = _invoke(config, ["create", "-k", "notes", "-t", "note", "--title", "N", "-b", "x"])
+    assert result.exit_code == 0, result.output
+    entry_id = _entry_id(kb_path)
+    path = list(kb_path.rglob("*.md"))[0]
+    before = path.read_text(encoding="utf-8")
+
+    result = _invoke(
+        config, ["update", entry_id, "-k", "notes", "-f", "type=hacked", "--format", "json"]
+    )
+    assert result.exit_code != 0
+    payload = _json_payload(result)
+    assert payload.get("error_code") == "VALIDATION_FAILED", payload
+
+    after = path.read_text(encoding="utf-8")
+    assert after == before
+    fm = _frontmatter(kb_path)
+    assert fm["type"] == "note"
+    assert "type" not in (fm.get("metadata") or {})
+
+
+def test_update_field_empty_key_is_refused(tmp_path):
+    """`-f =empty` (a key that splits to the empty string) must not silently
+    land as a literal `'': empty` metadata entry."""
+    config, kb_path = _make_env(tmp_path, "notes", NOTE_KB_YAML)
+    result = _invoke(config, ["create", "-k", "notes", "-t", "note", "--title", "N", "-b", "x"])
+    assert result.exit_code == 0, result.output
+    entry_id = _entry_id(kb_path)
+    path = list(kb_path.rglob("*.md"))[0]
+    before = path.read_text(encoding="utf-8")
+
+    result = _invoke(
+        config, ["update", entry_id, "-k", "notes", "-f", "=empty", "--format", "json"]
+    )
+    assert result.exit_code != 0
+    payload = _json_payload(result)
+    assert payload.get("error_code") == "VALIDATION_FAILED", payload
+
+    after = path.read_text(encoding="utf-8")
+    assert after == before

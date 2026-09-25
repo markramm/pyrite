@@ -110,6 +110,80 @@ def test_add_link_identical_triple_is_a_noop_and_reports_created_false(link_env)
         db.close()
 
 
+def test_add_link_default_relation_matches_a_legacy_links_without_relation(link_env):
+    """A hand-written (or pre-#396) `links: [{target: b}]` entry -- no
+    `relation` key at all -- loads with `Link.from_dict`'s own default,
+    `"related"`. `add_link`'s caller-facing default is `"related_to"`
+    (matching the CLI, MCP and RELATIONSHIP_TYPES). Before this fix the
+    duplicate key compared these two default strings literally and treated
+    them as different relations, so `pyrite link a b` (no -r) on legacy data
+    added a second link where `dev` did nothing -- round-1 cold read.
+    """
+    notes_path = link_env["notes_path"]
+    (notes_path / "link-a.md").write_text(
+        "---\nid: link-a\ntitle: link-a\ntype: note\nlinks:\n- target: link-b\n---\nx\n",
+        encoding="utf-8",
+    )
+    db = PyriteDB(link_env["db_path"])
+    try:
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, link_env["config"]).index_all()
+        svc = KBService(link_env["config"], db)
+
+        path = notes_path / "link-a.md"
+        before = path.read_text(encoding="utf-8")
+
+        # No -r/relation given: this is add_link's own default, exactly what
+        # `pyrite link a b` and MCP `kb_link` send with no --relation.
+        result = svc.add_link("link-a", "lk", "link-b")
+        assert result["created"] is False, "legacy 'related' must match the related_to default"
+
+        after = path.read_text(encoding="utf-8")
+        assert after == before, after
+    finally:
+        db.close()
+
+
+def test_add_links_bulk_default_relation_matches_legacy_data(link_env):
+    """The bulk path (`add_links`) must normalise the same way as `add_link`."""
+    notes_path = link_env["notes_path"]
+    (notes_path / "link-a.md").write_text(
+        "---\nid: link-a\ntitle: link-a\ntype: note\nlinks:\n- target: link-b\n---\nx\n",
+        encoding="utf-8",
+    )
+    db = PyriteDB(link_env["db_path"])
+    try:
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, link_env["config"]).index_all()
+        svc = KBService(link_env["config"], db)
+
+        results = svc.add_links("lk", [{"source": "link-a", "target": "link-b"}])
+        assert results[0]["status"] == "skipped", results
+    finally:
+        db.close()
+
+
+def test_cli_link_no_relation_flag_is_a_noop_on_legacy_data(link_env):
+    """`pyrite link a b` (no -r, so the CLI's own default applies) against
+    legacy data with no `relation` key must print `Already linked:`."""
+    notes_path = link_env["notes_path"]
+    (notes_path / "link-a.md").write_text(
+        "---\nid: link-a\ntitle: link-a\ntype: note\nlinks:\n- target: link-b\n---\nx\n",
+        encoding="utf-8",
+    )
+    db = PyriteDB(link_env["db_path"])
+    IndexManager(db, link_env["config"]).index_all()
+    db.close()
+
+    with _patch_config(link_env):
+        result = runner.invoke(app, ["link", "link-a", "link-b", "-k", "lk"])
+        assert result.exit_code == 0, result.output
+    clean = _strip_ansi(result.output)
+    assert "Already linked:" in clean, clean
+
+
 def test_add_link_identical_triple_stays_a_noop_after_target_deleted(link_env):
     """The idempotency the duplicate check exists for: a replayed link set
     must not fail just because the target has since gone."""

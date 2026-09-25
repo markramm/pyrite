@@ -65,6 +65,29 @@ _MANAGED_FIELDS = frozenset(
 #: result carries them and an agent echoing it back would freeze them.
 _TIMESTAMP_FIELDS = frozenset({"created_at", "updated_at"})
 
+#: Two different spellings of "no relation was ever named" that must compare
+#: equal in a link's duplicate key. Every write surface (CLI `link`, MCP
+#: `kb_link`, `add_link`'s own default, `add_links`' bulk path) defaults an
+#: omitted relation to ``related_to``. But a file written before #396 --  or
+#: by hand -- with `links: [{target: b}]` and no `relation:` key at all loads
+#: through `Link.from_dict`, whose *own* default is the older ``related``
+#: (round-1 cold read). Comparing the raw strings in the duplicate check
+#: treated those as different relations: `pyrite link a b` with no `-r` on
+#: such a file added a second link where `dev` did nothing. `_norm_relation`
+#: is the one place both spellings collapse to the same key.
+_LEGACY_DEFAULT_RELATION = "related"
+_DEFAULT_RELATION = "related_to"
+
+
+def _norm_relation(relation: str) -> str:
+    """Canonicalise a relation for the link duplicate-key comparison only.
+
+    Never used to decide what gets *written* -- a link is saved with the
+    caller's or the file's relation exactly as given, never rewritten to this
+    canonical form, so this cannot silently migrate legacy data on save.
+    """
+    return _DEFAULT_RELATION if relation == _LEGACY_DEFAULT_RELATION else relation
+
 
 @dataclass
 class WriteResult:
@@ -930,6 +953,25 @@ class KBService:
         ensure_not_truncated(updates)
         updates = {k: v for k, v in updates.items() if k not in MARKER_KEYS}
 
+        # `type` and the empty key are never model attributes on any entry
+        # (`type` is frontmatter-only; `entry_type` is the computed property
+        # a caller cannot set), so #407's undeclared-key branch below would
+        # route them into `metadata` instead of refusing them: `-f
+        # type=hacked` reported `updated: true` and left the real `type:`
+        # frontmatter line untouched -- the very #407 symptom recurring for a
+        # reserved key #407's own fix did not cover (round-1 cold read).
+        # Refused unconditionally, not gated by `restrict`: unlike a managed
+        # field an in-process caller might legitimately own (links, status),
+        # no caller -- internal or external -- means anything sensible by
+        # setting `type` or `""` through an update.
+        bad_keys = sorted(k for k in updates if k == "type" or k == "")
+        if bad_keys:
+            raise ValidationError(
+                f"Cannot set {', '.join(k or '(empty key)' for k in bad_keys)} on "
+                f"{entry_id!r} with an update: an entry's type is fixed once "
+                "created, and a --field key must be non-empty."
+            )
+
         kb_config = self._writable_kb(kb_name)
 
         repo = KBRepository(kb_config)
@@ -1221,7 +1263,7 @@ class KBService:
             if (
                 existing.target == target_id
                 and (existing.kb or source_kb) == tkb
-                and existing.relation == relation
+                and _norm_relation(existing.relation) == _norm_relation(relation)
             ):
                 # The write is a no-op, but `resolved` is a claim about the
                 # target as it is now, so check rather than assume: a link
@@ -1277,12 +1319,13 @@ class KBService:
             if entry is None:
                 results[i] = {"status": "failed", "error": f"source entry not found: {source_id}"}
                 continue
-            # Duplicate key matches add_link's: (target, kb, relation) (#396).
-            # A different relation between the same pair is a new link.
+            # Duplicate key matches add_link's: (target, kb, relation) (#396),
+            # normalised the same way so legacy data (no `relation:` key,
+            # loaded as "related") matches this method's "related_to" default.
             if any(
                 existing.target == target_id
                 and (existing.kb or kb_name) == tkb
-                and existing.relation == relation
+                and _norm_relation(existing.relation) == _norm_relation(relation)
                 for existing in entry.links
             ):
                 results[i] = {"status": "skipped"}
