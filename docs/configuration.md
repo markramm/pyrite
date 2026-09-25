@@ -9,10 +9,35 @@ config file at all.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PYRITE_CONFIG_DIR` | `~/.pyrite` | Directory holding `config.yaml`. When unset, a `.pyrite/config.yaml` found in the current directory or any parent is used instead of `~/.pyrite` — a repo-local registry, so a checkout's `kb/` resolves to that checkout. |
-| `PYRITE_DATA_DIR` | `~/.pyrite` | Directory for the index (`index.db`) and cloned repos (`repos/`). Set this in containers and point a volume at it. |
+| `PYRITE_CONFIG_DIR` | `~/.pyrite` | Directory holding `config.yaml`. When unset, a `.pyrite/config.yaml` found in the current directory or any parent is used instead of `~/.pyrite` — a repo-local registry, so a checkout's `kb/` resolves to that checkout. The index and cloned repos default to this directory too (see below). |
+| `PYRITE_DATA_DIR` | `~/.pyrite` | Directory for the index (`index.db`) and cloned repos (`repos/`); overrides `settings.index_path` in `config.yaml`. When set it is also where `config.yaml` is read from, ahead of `PYRITE_CONFIG_DIR`. Set this in containers and point a volume at it. |
 | `PYRITE_STATIC_DIR` | `<checkout>/web/dist` | Built web UI to serve at `/`. Needed when the package is installed into site-packages rather than run from a checkout. |
 | `PYRITE_BRANDING_DIR` | built-in | Folder of white-label branding assets (see `deploy/branding-examples/`) |
+
+**Which directory holds `config.yaml`**, first match wins:
+
+1. `PYRITE_DATA_DIR`
+2. `PYRITE_CONFIG_DIR`
+3. a `.pyrite/config.yaml` in the current directory or a parent
+4. `~/.pyrite`
+
+**Where the index goes**, first match wins:
+
+1. `$PYRITE_DATA_DIR/index.db`
+2. `settings.index_path` in `config.yaml`
+3. `index.db` beside the `config.yaml` chosen above — `~/.pyrite/index.db` for a
+   default install, `$PYRITE_CONFIG_DIR/index.db` when that is set
+
+Cloned repos follow the same order (`$PYRITE_DATA_DIR/repos`, then `repos/`
+beside `config.yaml`). In 0.25.1 and earlier, setting only `PYRITE_CONFIG_DIR` left the
+index at `~/.pyrite/index.db`, so a sandboxed run still wrote your real index.
+
+**Pyrite will not empty a registry by accident.** Saving a configuration that
+lists no knowledge bases over a `config.yaml` that lists some fails with an
+error naming the file, unless the command just removed exactly those KBs
+(`pyrite-admin kb remove` of the last KB, for instance). Code that means it
+passes `save_config(config, allow_empty=True)`. A write through a symlinked
+`config.yaml` logs the real file it changed.
 
 ## Server
 
