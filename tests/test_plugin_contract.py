@@ -969,6 +969,13 @@ class TestValidateWriteKeepsEnumDetail:
         )
         assert "Transaction of type 'payment' must have an amount" in text, text
 
+    @pytest.mark.control(
+        reason="negative control for the required-message fix: a `required` "
+        "rule with no `message` at all must still fall back to the old "
+        "`field: required` rendering rather than `field: None`. This passes "
+        "against origin/dev too (the fallback text is unchanged) -- it pins "
+        "the no-message case so the fix above doesn't regress it."
+    )
     def test_a_required_error_with_no_message_still_says_required(self, tmp_path, monkeypatch):
         """A `required` rule with no `message` (nothing set one) falls back to
         the old rendering rather than showing `None` or an empty string."""
