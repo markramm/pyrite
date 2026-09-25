@@ -67,7 +67,6 @@ warning  py/incomplete-url-substring-sanitization   #37   tests/test_llm_service
 warning  py/incomplete-url-substring-sanitization   #38   tests/test_llm_service.py:191
 warning  py/incomplete-url-substring-sanitization   #39   tests/test_notebooklm_renderer.py:254
 warning  py/incomplete-url-substring-sanitization   #40   pyrite/services/user_service.py:83
-warning  py/polynomial-redos                        #43   pyrite/services/search_service.py:98
 warning  py/weak-sensitive-data-hashing             #26   pyrite/server/api.py:392
 warning  py/weak-sensitive-data-hashing             #27   pyrite/server/api.py:400
 warning  py/weak-sensitive-data-hashing             #28   pyrite/server/api.py:401
@@ -90,7 +89,6 @@ For each rule group: (1) true positive or noise, with the reasoning per alert (w
 - `py/clear-text-logging-sensitive-data` ×1 (error) — `mcp_routes.py:182` (a password logged); `py/clear-text-storage-sensitive-data` ×1 — `scripts/scrape_appointee_details.py:627` (a script, not the product).
 - `py/weak-sensitive-data-hashing` ×7 (warning) — `server/api.py:392–401`, `mcp_routes.py:67–118`, `tests/e2e/conftest.py:253` — API-key hashing; decide whether sha256 of a high-entropy key is the intended design (then dismiss with the reason) or whether a keyed hash is warranted.
 - `py/incomplete-url-substring-sanitization` ×7 (warning) — `config.py:155`, `github_auth.py:363`, `user_service.py:83`, three tests.
-- `py/polynomial-redos` ×1 (warning) — `search_service.py:98`.
 
 ## Also for the maintainer (kept)
 
@@ -99,9 +97,8 @@ Whether CodeQL should become a required PR check (a repo setting) once the count
 ## Groom 2026-09-18
 
 Spike: `spike/codeql-triage` (worktree discarded, no code committed). Evidence is
-from reading `origin/dev` plus four throwaway experiments: a `TestClient` repro of
-the search endpoint, a direct-call probe of `static.py`'s containment checks, a
-probe of `sanitize_filename`, and a timing comparison of two candidate ReDoS fixes.
+from reading `origin/dev` plus throwaway experiments: a direct-call probe of
+`static.py`'s containment checks and a probe of `sanitize_filename`.
 
 **Counts (48 alerts in scope; the 8 `actions/missing-workflow-permissions` are excluded):**
 
@@ -111,61 +108,14 @@ probe of `sanitize_filename`, and a timing comparison of two candidate ReDoS fix
 | Noise (dismiss) | 43 |
 | Needs a maintainer decision | 1 (`py/weak-sensitive-data-hashing`, recommendation below) |
 
-The headline finding is that **exactly one alert is remotely exploitable**, and it
-is not one of the 33 `error`-severity ones: `py/polynomial-redos` #43 (a `warning`)
-is a reproduced read-tier denial of service. The 15 `py/path-injection` and 13
+The 15 `py/path-injection` and 13
 `py/stack-trace-exposure` `error` alerts are, with three exceptions, guarded.
 
 ---
 
 ### 1. Per-alert verdicts
 
-#### `py/polynomial-redos` #43 — `search_service.py:98` — **TRUE POSITIVE (the only exploitable one)**
-
-No sanitizer. `sanitize_fts_query` applies `re.sub(r"(\S*[^\w\s]\S*)", ...)` to the
-raw `q` query parameter. The two `\S*` around the character class make the match
-quadratic in the length of a single non-space run. `GET /api/search` declares
-`q: str = Query(..., min_length=1)` — **no `max_length`** — so the run is caller-controlled
-and unbounded.
-
-Reproduced end to end through `TestClient` against `create_app()` (`rest_api_env`):
-
-```
-baseline  q=hello           200     30.0 ms
-q = "a" *  5000             200    143.5 ms
-q = "a" * 20000             200   2838.6 ms
-q = "a" * 40000             200  12254.3 ms
-```
-
-Direct timing of the regex alone, off the request path: n=50000 → 10.2 s, n=100000 → 40.2 s,
-n=400000 → **773 s** (nearly 13 minutes of CPU for one request). The growth is quadratic,
-confirming the rule.
-
-**Exploit shape.** Tier: **read** — the route is `dependencies=[Depends(requires_kb_read())]`,
-so any read key, or any anonymous caller on a deployment with `default_role: read` or
-`PYRITE_AUTH_ANONYMOUS_TIER=read`, reaches it. Rate limit is `100/minute`. At ~12 s of
-single-threaded CPU per request, well under 100 requests/minute saturates every worker;
-the yield is a full denial of service of the whole API process, not just search.
-The same sanitizer is on the MCP `search` path via `search_service.py:270` and `:388`,
-so the MCP read tier reaches it too.
-
-**The fix is a length cap, not a regex rewrite.** I tried the obvious rewrite
-`(?=\S*[^\w\s])(\S+)`. It produces byte-identical output on every sanitizer test case, and
-it is *also* quadratic — **and at the lengths that matter it is far worse than what it
-replaces**:
-
-```
-n        original      lookahead rewrite
-5000       0.11 s       0.10 s
-20000      1.62 s       1.60 s
-100000    40.2 s      295.1 s      <- 7.3x WORSE
-400000   773.1 s     1021.8 s
-```
-
-Below ~20k the two are indistinguishable, which is exactly the trap: a worker who measures
-only short inputs will conclude the rewrite helps. It does not — it makes the attack
-cheaper. Truncating the query to 512 characters before the `re.sub` bounds the worst case
-at **1.497 ms** and leaves all six sanitizer behaviours byte-identical.
+Alert #43 is tracked privately.
 
 #### `py/stack-trace-exposure` ×13 — **1 true positive, 2 partial, 10 noise**
 
@@ -352,53 +302,10 @@ maintainer" below; Theme D is written so it can be dispatched either way.
 
 ### 2. Themes
 
-Sequencing note: `pyrite/server/endpoints/*` is quiet right now. `search_service.py` and
-`endpoints/search.py` are both in PR #145's review (which also touches `mcp_server.py`),
-so **Theme A must wait for #145 to land**. `mcp_server.py` will be touched by 7D/7E, but
-no theme here touches it.
+Sequencing note: `pyrite/server/endpoints/*` is quiet right now. `mcp_server.py` will be
+touched by 7D/7E, but no theme here touches it.
 
 **Cold read: yes for all four themes. `heavy: no` for all four.**
-
----
-
-#### Theme A — `fix/search-query-length-cap` — the ReDoS
-
-**Model: opus** (it changes a guard on the read tier and must not change sanitizer output).
-**Sequence: after PR #145 merges** — hard conflict on `search_service.py` and
-`endpoints/search.py`.
-
-Touches (existing): `pyrite/services/search_service.py`, `pyrite/server/endpoints/search.py`,
-`pyrite/server/tool_schemas.py` (the MCP `search` tool's query schema), `CHANGELOG.md`.
-Touches (new): `tests/test_search_query_length_cap.py`.
-
-Acceptance criteria:
-1. `SearchService.sanitize_fts_query` truncates its input to a module-level
-   `MAX_FTS_QUERY_CHARS = 512` before the `re.sub`. The cap is applied in
-   `sanitize_fts_query` itself, not only at the endpoint — `search_service.py:270` and
-   `:388` are both call sites and the MCP path reaches them.
-2. `GET /api/search` declares `q: str = Query(..., min_length=1, max_length=512)`, so an
-   over-long query is rejected with a 422 naming the limit rather than silently truncated
-   at the HTTP edge.
-3. The MCP `search` tool's `query` property in `tool_schemas.py` carries the same
-   `maxLength: 512`.
-4. A test asserts `sanitize_fts_query("a" * 100_000)` completes in under 100 ms. (Measured
-   headroom: the capped call is ~1.5 ms; the uncapped one is ~41 s at that length. Use a
-   wall-clock budget generous enough to survive `-n auto`, per the pre-push rule — 100 ms
-   against a 1.5 ms actual is ~65x headroom.)
-5. A test asserts the six sanitizer behaviours are unchanged by the cap, at minimum:
-   `"alex-jones"` → `'"alex-jones"'`; `"0.6 milestone"` → `'"0.6" milestone'`;
-   `"alex jones"` unchanged; `'alex AND "not-here"'` unchanged (operator short-circuit);
-   `"a-b c.d ef"` → `'"a-b" "c.d" ef'`; `"foo_bar baz-qux"` → `'foo_bar "baz-qux"'`.
-6. A `TestClient` test asserts `GET /api/search?q=<600 chars>` returns 422, and
-   `?q=<512 chars>` returns 200.
-7. **Do not "fix" the regex.** The rewrite `(?=\S*[^\w\s])(\S+)` is byte-identical on
-   output, still quadratic, and **7.3x slower than the original at n=100000** (295 s vs
-   40 s) — it makes the attack cheaper, not dearer. It looks equivalent below ~20k, so
-   benchmarking short inputs will mislead you. A reviewer seeing a regex change instead of
-   a cap should reject the branch.
-
-Evidence the worker can copy: the `TestClient` timing repro in section 1 is four lines
-against the `rest_api_env` fixture and belongs in the new test file as criterion 4/6.
 
 ---
 
@@ -561,8 +468,7 @@ Two decisions, both stated as recommendations only:
    of 48 alerts, 44 were noise. Making the current rule set blocking would have gated the
    repo on false positives roughly ten times more often than on real ones. If it becomes
    required, it should be required *after* the dismissals land, and the ruleset should
-   probably be `error`-severity-only — noting that the single exploitable finding here was
-   a `warning`, so severity alone is not a good filter either.
+   probably be `error`-severity-only.
 
 ### What the spike did not get to
 
@@ -570,26 +476,15 @@ Two decisions, both stated as recommendations only:
   caller learns whether any private repo exists, using the operator's stored token). Noted
   under #51, deliberately excluded from Theme B's scope; it needs a design decision, not a
   message change. No CodeQL alert covers it.
-- Whether the **read tier can reach any other unbounded regex**. I checked only
-  `sanitize_fts_query` because that is what CodeQL flagged. `clipper.py`'s `_strip_elements`
+- Whether the **read tier can reach any unbounded regex** CodeQL did not flag. `clipper.py`'s `_strip_elements`
   runs `re.sub` with `.*?` and `re.DOTALL` over attacker-influenced HTML on the write tier,
-  which is the same rule's shape and was *not* flagged. Worth a follow-up spike rather than
-  folding into Theme A.
+  which is the same rule's shape and was *not* flagged. Worth a follow-up spike.
 - The `tests/e2e/conftest.py` suite writes into `~/.pyrite/repos/` (there are ~2400 stale
   `ephemeral/` dirs there). Unrelated test-hygiene issue, no alert, not chased.
 
 ## Groom 2026-09-18 (serial)
 
 Re-cut after #168 (one Pyrite task at a time; each theme one worker pass and one review). Theme B is done (PR #161, awaiting review) and the eight `actions/missing-workflow-permissions` alerts landed in 28fc380. What remains, in order; the acceptance criteria under "2. Themes" above stand verbatim and are not repeated — this section adds the fields they lacked.
-
-### A — `fix/search-query-length-cap` (the ReDoS; the one exploitable finding)
-
-**Acceptance:** Theme A's seven criteria above, verbatim. One correction: criterion 3's "MCP `search` tool" is `kb_search` (`pyrite/server/tool_schemas.py:13`).
-**Regimes:** a query of exactly 512, 513 and 100,000 characters; an empty and a whitespace-only query (today's behaviour unchanged); a 600-character query over **MCP**, where there is no 422 — say what the caller gets (truncate-and-search with a `warnings` entry, or a `VALIDATION_FAILED`; pick one, and it must not be a silent truncation that returns confident results for a query the caller did not send); multi-byte input (the cap counts characters, and a 512-character CJK query must not be cut mid-codepoint or exceed a byte limit downstream); the operator short-circuit path (`AND`/`OR`/quotes) with an over-long input — it returns before the `re.sub`, so prove the cap is applied before the short-circuit, not after; both call sites (`search_service.py` ~:270 and ~:388 — re-locate after #145) reached from REST, MCP and the CLI.
-**Touches** — existing: `pyrite/services/search_service.py`, `pyrite/server/endpoints/search.py`, `pyrite/server/tool_schemas.py`, `CHANGELOG.md`. New: `tests/test_search_query_length_cap.py`.
-**Sequence:** after PR #145 merges — hard conflict on all three existing files. Then first: it is the only remotely exploitable finding, on the read tier, and the alert page is public.
-**Model:** opus. **heavy:** no. **Cold read:** yes. **Size:** S, ~120 lines (≈15 production).
-**Out of scope:** rewriting the regex (criterion 7 — a reviewer seeing a regex change rejects the branch); a general request-size limit; rate limiting.
 
 ### C1 — `fix/github-token-host-equality` (the code half of Theme C)
 
