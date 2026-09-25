@@ -38,9 +38,19 @@ directory is gone, the next run prunes its worktree registration.
 
 Both runs put the throwaway tree first on `PYTHONPATH`, and the runner refuses
 to run (exit 2) if a package in that tree imports from somewhere else, such as
-another checkout's editable install (#189). They also set
+another checkout's editable install (#189). A top-level package or extension
+that only the PR adds is stubbed out in the run without the fix, so the head's
+editable install cannot serve it there. Both runs also set
 `PYTHONDONTWRITEBYTECODE`, so the second run can't import stale bytecode from
-the first.
+the first. Both get a scratch `HOME`, `PYRITE_CONFIG_DIR`, `PYRITE_DATA_DIR`
+and `XDG_*` directories, so a new test running against buggy code cannot
+write to your real config. `HF_HOME` still points at your model cache.
+
+A PR whose only non-test changes are changelog fragments, `kb/` entries or
+Markdown has nothing to verify. Those files are still left out of the run
+without the fix, since a test may read them. A pytest run with the fix that
+records nothing at all (a broken conftest or plugin) is the check failing:
+exit 2, with pytest's last lines in the summary.
 
 ### Verdicts
 
@@ -61,7 +71,9 @@ verify-red: 3 red · 1 import-only · 0 unexpected pass · 0 n/a (12 pre-existin
 - **unexpected pass**: the test passes without the fix, so it does not test the
   change. In CI it gets a warning annotation. For a test you mean to pass
   either way, such as a "this still works" guard, add
-  `@pytest.mark.control`. It then counts as **control**.
+  `@pytest.mark.control(reason="...")`, or the marker plus a docstring that
+  says why. It then counts as **control**. A bare marker is rejected and the
+  test stays an unexpected pass.
 - **n/a**: no claim. The test failed or skipped with the fix, skipped without
   it, was not collected, or its run timed out.
 
@@ -69,13 +81,29 @@ Tests the PR did not add or edit are counted, not listed. Workers run
 `scripts/verify-red.sh` once before reporting and paste the summary line. The
 conductor reads the CI job's line instead of running it again.
 
+### Known limits
+
+These are not fixed; weigh the line with them in mind.
+
+- **Red through a wrapper is weaker evidence.** A `TypeError` from a keyword
+  argument the PR adds, a failure wrapped in an `ExceptionGroup`, or a
+  failure that a `CliRunner`, `TestClient` or MCP wrapper turns into a status
+  code or an output string all count as *red*, not *import-only*. The runner
+  only reads the exception that reaches pytest.
+- **A conftest that imports a name the fix adds** stops pytest before any test
+  runs without the fix, so every selected test in that run is *n/a*.
+- **A SIGKILLed driver orphans its pytest child**, which keeps running in the
+  throwaway tree until it finishes. Your checkout is still untouched.
+
 ## Diff coverage
 
 On a pull request, the 3.12 leg of the `test` job runs the suite under
 `pytest --cov`, with 3.12's low-overhead `sysmon` tracer. Then
 `diff-cover coverage.xml --compare-branch=<base> --fail-under=80` writes the
 changed lines that no test runs to that job's step summary. A result below 80%
-produces a warning annotation, never a failure.
+produces a warning annotation, never a failure. When the PR changes no measured
+line, diff-cover reports 100%; the evidence file records that as `null`, and
+the summary prints `n/a`.
 
 ## The evidence file
 
@@ -85,7 +113,8 @@ The `verify-red` job waits for `test`, whatever its result, and writes
 ```json
 {
   "pr": 393,
-  "head": "<sha>",
+  "head": "<the PR's head sha>",
+  "merge_commit": "<the merge commit CI checked out>",
   "merge_base": "<sha>",
   "fix_commits": 1,
   "verify_red": {"red": 3, "import-only": 1, "unexpected pass": 0, "n/a": 0,

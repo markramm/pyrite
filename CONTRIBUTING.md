@@ -310,8 +310,8 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   fails only because a name your change adds is missing, which shows it needs
   your code, not that it checks what the code does. *unexpected pass* leaves
   a warning on the test: it does not exercise the change. If it is a
-  deliberate "this still works" guard, mark it `@pytest.mark.control` and it
-  counts as a control instead. *n/a* means no claim (it skipped, failed with
+  deliberate "this still works" guard, mark it
+  `@pytest.mark.control(reason="...")` and it counts as a control instead. *n/a* means no claim (it skipped, failed with
   the fix, or timed out). `scripts/verify-red.sh` runs the same check
   locally; it never modifies your checkout, and it includes uncommitted work.
 - Diff coverage: on a pull request the 3.12 test run measures coverage, and
