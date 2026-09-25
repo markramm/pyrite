@@ -177,7 +177,7 @@ execute it on import. CI catches the rest.
 | While editing | the test file you are changing; `scripts/test-affected --run` |
 | Before a commit | nothing extra: the commit hooks run ruff and the fast checks in seconds |
 | Before a push | the pre-push hook runs `scripts/test-affected --run` on `PYRITE_PUSH_WORKERS` (default 4) workers. It already runs everything for conftest, fixtures, pyproject and config changes; set `PYRITE_PUSH_FULL=1` yourself for storage or migration changes and cross-cutting refactors |
-| On the pull request | nothing: CI runs the full backend suite (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, the advisory `verify-red` job (your new tests, without and with your change) and diff coverage; after the merge, `dev` runs the full matrix, the e2e smoke and the tutorial |
+| On the pull request | nothing: CI runs the backend suite on one interpreter (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, the advisory `verify-red` job (your new tests, without and with your change) and diff coverage; the merge queue runs the full three-Python matrix on the exact commit about to land (#400), and so does the push to `dev` after the merge, which also runs the e2e smoke and the tutorial |
 | A frontend change | `cd web && npm run check && npm run test:unit && npm run build` |
 | A release | the large tests: `scripts/release.py` installs the release commit into a fresh venv and runs the tutorial against it; Playwright and the smoke layer per the release runbook |
 

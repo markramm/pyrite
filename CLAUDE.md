@@ -100,7 +100,7 @@ gh pr update-branch --rebase            #   rebase onto dev; checks re-run; auto
 Auto-merge does not rebase for you: with "up to date" required, a PR goes
 `BEHIND` the moment another one merges, and sits there until updated.
 
-CI on a PR runs the checks relevant to the changed files (one interpreter); the full matrix runs on `dev` after the merge. Runtime depends on the checks and runner availability. If `dev` is red, no PR merges until it is fixed — that is the point. `rebase` is the default merge method; `squash` for a branch whose history is noise.
+CI on a PR runs the checks relevant to the changed files (one interpreter); the merge queue and the push to `dev` after the merge both run the full Python matrix (3.11, 3.12, 3.13) — the queue runs it on the exact commit about to land, so a Python-version-specific break is caught before it reaches `dev`, not after (#400). Runtime depends on the checks and runner availability. If `dev` is red, no PR merges until it is fixed — that is the point. `rebase` is the default merge method; `squash` for a branch whose history is noise.
 
 ## Testing
 

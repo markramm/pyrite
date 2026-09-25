@@ -30,11 +30,19 @@ So `changes` must not depend on that action's merge_group behaviour. On
 too much for a queued group is correct and cheap; running nothing and saying
 so in green is not.
 
-The interpreter *matrix* is a separate decision from which jobs run, and a
-queued group takes the narrow one (maintainer, 2026-09-21): it sits between a
-pull request and the push to `dev`, and that push still runs all three, so
-breadth is delayed by one step rather than lost. `TestTheMatrixNarrowsWhereItShould`
-evaluates that expression per event instead of grepping it.
+The interpreter *matrix* is a separate decision from which jobs run. It was
+narrow on a merge group (maintainer, 2026-09-21), on the reasoning that the
+push to `dev` after the queue's merge still runs all three, so breadth was
+delayed by one step rather than lost. That delay is exactly what let #388
+land through PR CI and the (narrow) merge queue on 3.12 alone, then redden
+`dev`'s post-merge matrix on 3.13 (`Path.resolve()` no longer raises on a
+symlink loop in non-strict mode) -- `dev` stayed red for about an hour and
+blocked a release cut (#400). The merge queue runs on the exact commit that
+is about to land, at the cost of queue runner minutes rather than wall time
+(the legs run in parallel), so as of #400 (maintainer approved 2026-09-25) it
+runs the full matrix too. `pull_request` alone stays narrow.
+`TestTheMatrixNarrowsWhereItShould` evaluates that expression per event
+instead of grepping it.
 """
 
 import json
@@ -255,11 +263,13 @@ class TestTheMatrixNarrowsWhereItShould:
 
     #: (event_name, infra_output) -> the interpreters that should run.
     #: A merge group forces every classifier output to 'true' (fail closed),
-    #: so `infra != 'true'` cannot narrow it -- the event must be named.
+    #: so `infra != 'true'` cannot narrow it -- the event must be named. Only
+    #: `pull_request` (non-infra) is narrow; merge_group runs the full matrix
+    #: (#400).
     CASES = [
         ("pull_request", "false", ["3.12"]),
         ("pull_request", "true", ["3.11", "3.12", "3.13"]),  # #133 exception
-        ("merge_group", "true", ["3.12"]),
+        ("merge_group", "true", ["3.11", "3.12", "3.13"]),  # #400
         ("push", "true", ["3.11", "3.12", "3.13"]),
         ("workflow_dispatch", "false", ["3.11", "3.12", "3.13"]),
     ]
@@ -288,12 +298,14 @@ class TestTheMatrixNarrowsWhereItShould:
         expression = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
         assert self._evaluate(expression, event, infra) == expected
 
-    def test_a_queued_group_does_not_pay_for_three_interpreters(self, ci):
-        # The point of narrowing (maintainer, 2026-09-21). The push to dev
-        # that follows the queue's merge still runs all three, so breadth is
-        # delayed by one step rather than lost.
+    def test_a_queued_group_pays_for_the_full_matrix(self, ci):
+        # #400: a merge group runs the exact commit about to land on `dev`.
+        # #388 passed PR CI and a narrow merge queue on 3.12, then reddened
+        # dev's post-merge matrix on 3.13 and blocked a release cut for about
+        # an hour. The queue costs runner minutes, not wall time (the legs
+        # run in parallel), to catch that before the merge instead of after.
         expression = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
-        assert self._evaluate(expression, "merge_group", "true") == ["3.12"]
+        assert self._evaluate(expression, "merge_group", "true") == ["3.11", "3.12", "3.13"]
         assert self._evaluate(expression, "push", "true") == ["3.11", "3.12", "3.13"]
 
 

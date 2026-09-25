@@ -171,10 +171,10 @@ jobs:
     strategy:
       matrix:
         # Value chain (ADR-0032 §3): a pull request proves the change on one
-        # interpreter, fast; the push to dev that follows the merge proves
-        # breadth (every supported Python, Postgres). main only fast-forwards
-        # to a commit dev already proved. Each step costs more only where it
-        # tells us something the previous one could not.
+        # interpreter, fast; the merge queue and the push to dev that follows
+        # prove breadth (every supported Python, Postgres). main only
+        # fast-forwards to a commit dev already proved. Each step costs more
+        # only where it tells us something the previous one could not.
         #
         # Exception (#133): a PR that touches test infrastructure -- fixture
         # declarations, collection hooks, pytest config, the hooks/CI that
@@ -183,16 +183,17 @@ jobs:
         # project's logic, so the one-interpreter gate cannot see it; #81
         # merged green on 3.12 and reddened dev on 3.13 two minutes later.
         #
-        # A merge group is narrow too (maintainer, 2026-09-21: "narrow it for
-        # now, it is easy to add back later if we have matrix failures"). It
-        # sits between a PR and the push to dev, and the push that follows the
-        # queue's merge still runs all three -- so breadth is delayed by one
-        # step, not lost. Note the `infra` test cannot carry this: the
-        # fail-closed step sets every output to 'true' on a merge group, so
-        # `infra != 'true'` is never satisfied there and the event has to be
-        # named. If a queued batch ever reddens dev on 3.11 or 3.13, drop the
-        # merge_group clause and the queue pays for the full matrix.
-        python-version: ${{ fromJSON(((github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true') || github.event_name == 'merge_group') && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
+        # A merge group used to be narrow too (maintainer, 2026-09-21: "narrow
+        # it for now, it is easy to add back later if we have matrix
+        # failures"). #388 is exactly that case: it passed PR CI and the
+        # (narrow) merge queue on 3.12, then reddened dev's post-merge matrix
+        # on 3.13 -- `Path.resolve()` no longer raises on a symlink loop in
+        # non-strict mode -- and dev stayed red for about an hour, blocking a
+        # release cut (#400, maintainer approved 2026-09-25). The queue runs
+        # the exact commit that is about to land, so as of #400 it pays for
+        # the full matrix: queue runner minutes, not wall time, since the
+        # legs run in parallel. Only `pull_request` stays narrow.
+        python-version: ${{ fromJSON((github.event_name == 'pull_request' && needs.changes.outputs.infra != 'true') && '["3.12"]' || '["3.11", "3.12", "3.13"]') }}
 
     # pgvector/pgvector ships the postgres server with the pgvector
     # extension pre-installed (plain postgres:* images don't have it, and
