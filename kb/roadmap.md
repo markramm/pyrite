@@ -512,12 +512,20 @@ dispatches **ahead of everything below except work already in flight**:
 1. **#380 (T6): the surfaces stop reaching past services**, with a boundary
    test that only ratchets down. It runs once #445 and #447 land, because
    they share its files. It uses Opus, because the ratchet is the design.
-2. **ADR-0037 (proposed): one authorization policy point and one error
-   contract.** Every REST route, MCP tool and CLI write asks one service
+2. **ADR-0037: one authorization policy point and one error contract.** Every REST route, MCP tool and CLI write asks one service
    whether the caller may act, and every refusal leaves through one mapping.
    This is the mechanism behind the definition of done's structural
    authorization guard. Security fixes after batch 3 are built against it,
    not route by route.
+
+   **Themes 0–3a are in 0.26** (maintainer, 2026-09-25). Their order:
+   - 0: the characterization harness;
+   - then 1 (policy extraction, #383, Opus) and 2 (the error contract),
+     which can run in parallel;
+   - then 3a: REST reads go through the policy, and the guard lands.
+
+   Themes 3b–5 are 0.27. The error codes follow REST's; MCP keeps a
+   `legacy_error_code` for one release.
 
 **Check:** after #380, a parity fix touches one service plus thin adapters.
 If one still takes more than about 150 worker turns, the diagnosis was
