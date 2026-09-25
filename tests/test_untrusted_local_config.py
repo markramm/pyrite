@@ -381,3 +381,89 @@ class TestModelLoader:
         monkeypatch.setattr(sentence_transformers, "SentenceTransformer", FakeModel)
         embedding_service._load_model("all-MiniLM-L6-v2")
         assert seen and seen[0].get("trust_remote_code") is False
+
+
+# ── round 2: the index registry, saving, and exposure settings ──────────
+
+
+class TestUntrustedRegistryAndSave:
+    def test_db_registered_kbs_outside_the_tree_are_not_loaded(self, world, tmp_path, caplog):
+        """The tree's own index.db can list KBs too; they are confined the
+        same way as the yaml ones."""
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        outside = tmp_path / "elsewhere-kb"
+        outside.mkdir()
+        (tree / "inner").mkdir()
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        assert _inside(cfg.settings.index_path, tree)
+        with PyriteDB(cfg.settings.index_path) as db:
+            db.register_kb("far", "generic", str(outside), default_role="read")
+            db.register_kb("near", "generic", str(tree / "inner"))
+            with caplog.at_level(logging.WARNING, logger="pyrite.config"):
+                db.merge_registered_kbs(cfg)
+        names = {kb.name for kb in cfg.all_kbs()}
+        assert "far" not in names and cfg.get_kb("far") is None
+        assert "near" in names
+        assert "far" in caplog.text
+
+    @pytest.mark.control(reason="a trusted config merged registry KBs anywhere on dev too")
+    def test_a_trusted_config_still_merges_registry_kbs_anywhere(
+        self, world, tmp_path, monkeypatch
+    ):
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        elsewhere = tmp_path / "plain"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        outside = tmp_path / "far-kb"
+        outside.mkdir()
+        cfg = config_module.load_config()
+        with PyriteDB(tmp_path / "trusted.db") as db:
+            db.register_kb("far", "generic", str(outside))
+            db.merge_registered_kbs(cfg)
+        assert cfg.get_kb("far") is not None
+
+    def test_saving_an_untrusted_config_writes_only_allowlisted_keys(self, world, monkeypatch):
+        home, tree = world
+        (tree / "kb").mkdir()
+        (tree / ".pyrite" / "config.yaml").write_text(_worktree_config(tree, "fix/x"))
+        monkeypatch.setenv("PYRITE_API_KEY", "planted-env-key")
+        monkeypatch.setenv("PYRITE_AI_PROVIDER", "openai")
+        monkeypatch.setenv("PYRITE_HOST", "0.0.0.0")
+        monkeypatch.setenv("PYRITE_AUTO_EMBED", "true")
+        cfg = config_module.load_config()
+        config_module.save_config(cfg)
+        text = (tree / ".pyrite" / "config.yaml").read_text()
+        assert "planted-env-key" not in text
+        saved = yaml.safe_load(text)
+        assert set(saved) <= {"version", "knowledge_bases", "settings"}
+        assert set(saved.get("settings") or {}) <= {
+            "index_path",
+            "auto_embed",
+            "search_mode",
+            "summary_length",
+        }
+        # The file's own allowlisted values survive; the environment's do not.
+        assert saved["settings"]["auto_embed"] is False
+        assert [kb["name"] for kb in saved["knowledge_bases"]] == ["pyrite"]
+
+    def test_default_role_from_an_untrusted_config_can_only_close_a_kb(self, world):
+        home, tree = world
+        (tree / "a").mkdir()
+        (tree / "b").mkdir()
+        _write(
+            tree,
+            {
+                "knowledge_bases": [
+                    {"name": "opened", "path": str(tree / "a"), "default_role": "write"},
+                    {"name": "closed", "path": str(tree / "b"), "default_role": "none"},
+                ]
+            },
+        )
+        cfg = config_module.load_config()
+        assert cfg.get_kb("opened").default_role is None
+        assert cfg.get_kb("closed").default_role == "none"

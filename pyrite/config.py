@@ -478,6 +478,9 @@ class PyriteConfig:
 
     # Fallback lookup for DB-registered KBs not in config.yaml
     _db_kb_cache: dict[str, KBConfig] = field(default_factory=dict, repr=False)
+    # Set by load_config for an untrusted repo-local config: every KB, from
+    # the yaml or from the index's registry, must resolve inside this tree.
+    _confine_root: Path | None = field(default=None, repr=False)
 
     def get_kb(self, name: str) -> KBConfig | None:
         """Get a KB by name (config.yaml first, then DB-registered KBs)."""
@@ -503,14 +506,26 @@ class PyriteConfig:
             path = kb_data.get("path", "")
             if not path:
                 continue
+            default_role = kb_data.get("default_role")
             try:
                 _refuse_unresolvable(Path(path))
+                if self._confine_root is not None:
+                    if not Path(path).expanduser().resolve().is_relative_to(self._confine_root):
+                        logger.warning(
+                            "Not loading registry KB %r: its path is outside the tree of "
+                            "the untrusted repo-local config (%s)",
+                            name,
+                            self._confine_root,
+                        )
+                        continue
+                    if default_role != "none":
+                        default_role = None  # an exposure setting; see _UNTRUSTED_KB_KEYS
                 kb = KBConfig(
                     name=name,
                     path=Path(path),
                     kb_type=kb_data.get("kb_type", "generic"),
                     description=kb_data.get("description", ""),
-                    default_role=kb_data.get("default_role"),
+                    default_role=default_role,
                 )
             except (OSError, RuntimeError, ValueError):
                 # A registry path that cannot be resolved (an unknown ~user, a
@@ -1057,9 +1072,9 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
 # is exposed (host, auth, API keys, CORS) is ignored. Widening this list is a
 # security decision.
 _UNTRUSTED_TOP_KEYS = frozenset({"version", "knowledge_bases", "settings"})
-_UNTRUSTED_KB_KEYS = frozenset(
-    {"name", "path", "kb_type", "description", "read_only", "shortname", "default_role"}
-)
+_UNTRUSTED_KB_KEYS = frozenset({"name", "path", "kb_type", "description", "read_only", "shortname"})
+# default_role is an exposure setting: from an untrusted source only "none"
+# (which can only close a KB) is kept.
 _UNTRUSTED_SETTINGS_KEYS = frozenset({"index_path", "auto_embed", "search_mode", "summary_length"})
 
 
@@ -1067,6 +1082,19 @@ def _untrusted_settings_defaults() -> dict[str, Any]:
     """Settings as ``to_dict`` writes them for a fresh config: a file Pyrite
     saved back holds these, and holding them changes nothing."""
     return PyriteConfig().to_dict()["settings"]
+
+
+def _untrusted_kb_entry(kb: dict[str, Any], ignored: list[str] | None = None) -> dict[str, Any]:
+    """A KB entry reduced to what an untrusted config may set."""
+    kept = {k: v for k, v in kb.items() if k in _UNTRUSTED_KB_KEYS}
+    if kb.get("default_role") == "none":
+        kept["default_role"] = "none"
+    if ignored is not None:
+        for key, value in kb.items():
+            if key in kept or value in (None, "", False, []):
+                continue
+            ignored.append(f"knowledge_bases[{kb.get('name')}].{key}")
+    return kept
 
 
 def _restrict_untrusted(data: Any, config_file: Path) -> tuple[dict[str, Any], list[str]]:
@@ -1087,10 +1115,7 @@ def _restrict_untrusted(data: Any, config_file: Path) -> tuple[dict[str, Any], l
     for kb in kept.get("knowledge_bases") or []:
         if not isinstance(kb, dict):
             continue
-        for key, value in kb.items():
-            if key not in _UNTRUSTED_KB_KEYS and value not in (None, "", False, []):
-                ignored.append(f"knowledge_bases[{kb.get('name')}].{key}")
-        kbs.append({k: v for k, v in kb.items() if k in _UNTRUSTED_KB_KEYS})
+        kbs.append(_untrusted_kb_entry(kb, ignored))
     if "knowledge_bases" in kept:
         kept["knowledge_bases"] = kbs
 
@@ -1152,6 +1177,7 @@ def load_config() -> PyriteConfig:
         config = PyriteConfig.from_dict(data)
         if not trusted:
             root = config_file.parent.parent.resolve()
+            config._confine_root = root
             ignored += _contain_untrusted_paths(config, root)
             if ignored:
                 logger.warning(
@@ -1323,7 +1349,36 @@ def save_config(
     real_file = config_file.resolve()
     if real_file != config_file.absolute():
         logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
-    dump_yaml_file(config.to_dict(), config_file)
+    trusted = current_config_source()[1]
+    dump_yaml_file(
+        config.to_dict() if trusted else _untrusted_save_data(config, config_file), config_file
+    )
+
+
+def _untrusted_save_data(config: PyriteConfig, config_file: Path) -> dict[str, Any]:
+    """What may be written back to an untrusted repo-local config.
+
+    The KB registry (allowlisted keys only), and the file's own allowlisted
+    settings exactly as they were on disk. Nothing from memory beyond the
+    registry: credentials and environment-sourced values are never written.
+    """
+    on_disk: dict[str, Any] = {}
+    if config_file.exists():
+        try:
+            loaded = load_yaml_file(config_file)
+            if isinstance(loaded, dict) and isinstance(loaded.get("settings"), dict):
+                on_disk = loaded["settings"]
+        except Exception:
+            logger.warning("Could not re-read %s; saving no settings", config_file)
+    full = config.to_dict()
+    data: dict[str, Any] = {
+        "version": full.get("version", "1.0"),
+        "knowledge_bases": [_untrusted_kb_entry(kb) for kb in full.get("knowledge_bases", [])],
+    }
+    settings = {k: v for k, v in on_disk.items() if k in _UNTRUSTED_SETTINGS_KEYS}
+    if settings:
+        data["settings"] = settings
+    return data
 
 
 def auto_discover_kbs(search_paths: list[Path] | None = None) -> list[KBConfig]:

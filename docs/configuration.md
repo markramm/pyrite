@@ -24,12 +24,17 @@ config file at all.
 **A repo-local `.pyrite/config.yaml` (3) is not trusted.** It may have come with
 a cloned or downloaded tree, so Pyrite reads only what stays inside that tree:
 `knowledge_bases` whose paths resolve inside it (keys `name`, `path`,
-`kb_type`, `description`, `read_only`, `shortname`, `default_role`), and
-`settings.index_path` (inside it), `auto_embed`, `search_mode` and
-`summary_length`. (`workspace_path` is never read from any `config.yaml`.) Anything else (the embedding model,
-editor, AI and server settings, auth, API keys, repositories, subscriptions)
-is ignored with a warning, and GitHub credentials are never read from or
-written to it. To use a directory's config in full, point `PYRITE_CONFIG_DIR`
+`kb_type`, `description`, `read_only`, `shortname`, and `default_role` only
+when it is `none`), and `settings.index_path` (inside it), `auto_embed`,
+`search_mode` and `summary_length`. (`workspace_path` is never read from any
+`config.yaml`.) KBs registered in that tree's index are held to the same rule:
+one whose path is outside the tree is not loaded. Anything else (the
+embedding model, editor, AI and server settings, auth, API keys, other
+`default_role` values, repositories, subscriptions) is ignored with a warning,
+and GitHub credentials are never read from or written to it. When Pyrite saves
+such a config (`pyrite kb add` in that tree), it writes back only the KB
+registry and the file's own allowed settings -- never credentials or values
+that came from the environment. To use a directory's config in full, point `PYRITE_CONFIG_DIR`
 at it. The configs `scripts/new-worktree.sh` writes need nothing more.
 
 A local embedding model is named by an absolute path in your own config. A
