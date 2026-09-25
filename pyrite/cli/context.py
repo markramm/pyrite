@@ -1,8 +1,11 @@
 """Shared CLI context — eliminates duplicated PyriteDB + service construction."""
 
 import logging
+import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
+
+from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import PyriteConfig, load_config
 from ..services.kb_registry_service import KBRegistryService
@@ -31,9 +34,9 @@ def cli_context() -> Generator[tuple[PyriteConfig, PyriteDB, KBService], None, N
 
 
 @contextmanager
-def cli_registry_context() -> Generator[
-    tuple[PyriteConfig, PyriteDB, KBService, KBRegistryService], None, None
-]:
+def cli_registry_context() -> (
+    Generator[tuple[PyriteConfig, PyriteDB, KBService, KBRegistryService], None, None]
+):
     """Provide config, db, service, and registry for CLI commands that need KB management."""
     config, db, svc = _init_base()
     index_mgr = IndexManager(db, config)
@@ -67,14 +70,31 @@ def get_config_and_db(config: PyriteConfig | None = None) -> tuple[PyriteConfig,
     return config, db
 
 
-def get_config_with_registered_kbs(config: PyriteConfig | None = None) -> PyriteConfig:
-    """Load or accept a config and merge KBs registered by ``pyrite kb add``.
+def get_config_with_registered_kbs(
+    config: PyriteConfig | None = None, *, name: str
+) -> PyriteConfig:
+    """Resolve a KB from YAML first, then the database registry if necessary.
 
-    Commands that only need KB lookup should use this helper rather than
-    opening their own database and duplicating the registry merge.
+    Avoid opening the index database when the requested KB is already in
+    config.yaml. If registry lookup fails, keep the YAML config usable and let
+    the caller report that the requested KB was not found.
     """
-    config, db = get_config_and_db(config)
-    try:
+    config = config or load_config()
+    if config.get_kb(name) is not None:
         return config
-    finally:
-        db.close()
+
+    try:
+        db = PyriteDB(config.settings.index_path)
+        try:
+            db.merge_registered_kbs(config)
+        finally:
+            db.close()
+    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
+        logger.warning(
+            "Could not read KB registry from index database %s while resolving %r; "
+            "using YAML config: %s",
+            config.settings.index_path,
+            name,
+            exc,
+        )
+    return config

@@ -206,3 +206,54 @@ def test_yaml_config_kb_keeps_precedence_over_db_registration(registered_kb, tmp
         assert [kb.name for kb in config.all_kbs()] == ["registry-only"]
     finally:
         db.close()
+
+
+def _write_yaml_kb_config(registered_kb):
+    registered_kb["config_file"].write_text(
+        json.dumps(
+            {
+                "knowledge_bases": [
+                    {
+                        "name": "yaml-only",
+                        "path": str(registered_kb["kb_path"]),
+                        "kb_type": "generic",
+                    }
+                ],
+                "settings": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_named_yaml_kb_works_with_unreadable_index_db(registered_kb, capsys):
+    _write_yaml_kb_config(registered_kb)
+    index_db = registered_kb["data_dir"] / "index.db"
+    index_db.write_bytes(b"not a sqlite database")
+
+    from pyrite.cli.schema_commands import schema_validate
+
+    schema_validate(files=None, kb_name="yaml-only", changed=False)
+    output = capsys.readouterr().out
+
+    assert "1 files" in output
+    assert "0 errors" in output
+    assert index_db.read_bytes() == b"not a sqlite database"
+
+
+def test_failed_registry_lookup_warns_and_keeps_yaml_config(registered_kb, caplog):
+    from pyrite.cli.context import get_config_with_registered_kbs
+    from pyrite.config import load_config
+
+    _write_yaml_kb_config(registered_kb)
+    index_db = registered_kb["data_dir"] / "index.db"
+    index_db.write_bytes(b"not a sqlite database")
+    config = load_config()
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.context"):
+        result = get_config_with_registered_kbs(config, name="database-only")
+
+    assert result is config
+    assert config.get_kb("yaml-only") is not None
+    assert config.get_kb("database-only") is None
+    assert "using YAML config" in caplog.text

@@ -470,7 +470,9 @@ def schema_validate(
     """
     from ..config import load_config
 
-    config = get_config_with_registered_kbs(load_config())
+    config = load_config()
+    if kb_name:
+        config = get_config_with_registered_kbs(config, name=kb_name)
     schema = None
 
     # Resolve files to validate

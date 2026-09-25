@@ -117,7 +117,9 @@ def register_search_command(app: typer.Typer):
         as the NOT operator, not a literal exclude — matching Bannon
         entries, not excluding them).
         """
-        config = get_config_with_registered_kbs(load_config())
+        config = load_config()
+        if kb_name:
+            config = get_config_with_registered_kbs(config, name=kb_name)
 
         # A search scoped to an unregistered KB used to return an empty result
         # set (exit 0), which looks like a query miss rather than a wrong KB.

@@ -579,7 +579,7 @@ def schema_show(
     """Show the current schema for a KB."""
     from ..services.schema_service import SchemaService
 
-    config = get_config_with_registered_kbs(load_config())
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
     try:
         svc = SchemaService(config)
         result = svc.show_schema(kb_name)
@@ -633,7 +633,7 @@ def schema_add_type(
     """Add a type definition to a KB's schema."""
     from ..services.schema_service import SchemaService
 
-    config = get_config_with_registered_kbs(load_config())
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
     type_def: dict[str, Any] = {}
     if description:
         type_def["description"] = description
@@ -672,7 +672,7 @@ def schema_remove_type(
     """Remove a type definition from a KB's schema."""
     from ..services.schema_service import SchemaService
 
-    config = get_config_with_registered_kbs(load_config())
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
     try:
         svc = SchemaService(config)
         result = svc.remove_type(kb_name, type_name)
@@ -702,7 +702,7 @@ def schema_set(
     from ..services.schema_service import SchemaService
     from ..utils.yaml import load_yaml_file as load_yaml
 
-    config = get_config_with_registered_kbs(load_config())
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
 
     if not schema_file.exists():
         from ..utils.errors import cli_error
