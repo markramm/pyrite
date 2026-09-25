@@ -1,0 +1,100 @@
+# Test evidence: verify-red and diff coverage
+
+Two advisory checks run on every pull request that changes backend code. Each
+answers a question the other cannot:
+
+| Check | Question | Blind spot |
+|---|---|---|
+| **Diff coverage** | Is every changed line run by some test? | Code that runs but whose result no test checks |
+| **verify-red** | Do the PR's new tests notice the change as a whole? | Which part of the change each test notices (per-hunk revert, planned for 0.27) |
+
+Neither fails `gate` yet. Each PR's numbers go into a `test-evidence` artifact;
+after about ten PRs the maintainer decides what, if anything, becomes required.
+
+## verify-red
+
+```bash
+scripts/verify-red.sh                 # against origin/dev (else dev)
+scripts/verify-red.sh --json e.json   # also write the evidence file
+```
+
+The runner (`scripts/verify_red_ci.py`) never modifies your checkout:
+
+1. It checks out the merge base with the base branch into a throwaway
+   `git worktree --detach` under `$TMPDIR`.
+2. It copies in your test-side files: everything under `tests/`,
+   `extensions/*/tests/`, and any `conftest.py`, committed or not.
+3. It runs only the tests you **added or edited**. That is the run *without
+   the fix*. A test counts as edited when its AST changed, so reformatting a
+   test does not count.
+4. It copies in the rest of your change, so the throwaway tree now matches
+   your working tree, and runs the same tests again. That is the run *with the
+   fix*.
+5. It removes the throwaway tree.
+
+Nothing is ever restored, because nothing you own was changed. If a run is
+killed outright, it can leave a stale directory under `$TMPDIR`. Once that
+directory is gone, the next run prunes its worktree registration.
+
+Both runs put the throwaway tree first on `PYTHONPATH`, and the runner refuses
+to run (exit 2) if a package in that tree imports from somewhere else, such as
+another checkout's editable install (#189). They also set
+`PYTHONDONTWRITEBYTECODE`, so the second run can't import stale bytecode from
+the first.
+
+### Verdicts
+
+The output is one line, then a table of every test that is not *red*:
+
+```
+verify-red: 3 red · 1 import-only · 0 unexpected pass · 0 n/a (12 pre-existing tests in these files not run)
+```
+
+- **red**: the test passes with the fix and fails without it. This is the evidence a review wants.
+- **import-only**: the test fails without the fix only because the code it needs
+  is missing. Either its file does not collect, or it raises `ImportError`,
+  `AttributeError` or `NameError` naming an identifier the PR adds. The runner
+  finds those identifiers by diffing the ASTs of the changed code. It reads
+  the exception object itself, never the traceback, so the repo's
+  `--tb=short` has no effect. This verdict is weak: it shows the test needs
+  your code, not that it checks what the code does.
+- **unexpected pass**: the test passes without the fix, so it does not test the
+  change. In CI it gets a warning annotation. For a test you mean to pass
+  either way, such as a "this still works" guard, add
+  `@pytest.mark.control`. It then counts as **control**.
+- **n/a**: no claim. The test failed or skipped with the fix, skipped without
+  it, was not collected, or its run timed out.
+
+Tests the PR did not add or edit are counted, not listed. Workers run
+`scripts/verify-red.sh` once before reporting and paste the summary line. The
+conductor reads the CI job's line instead of running it again.
+
+## Diff coverage
+
+On a pull request, the 3.12 leg of the `test` job runs the suite under
+`pytest --cov`, with 3.12's low-overhead `sysmon` tracer. Then
+`diff-cover coverage.xml --compare-branch=<base> --fail-under=80` writes the
+changed lines that no test runs to that job's step summary. A result below 80%
+produces a warning annotation, never a failure.
+
+## The evidence file
+
+The `verify-red` job waits for `test`, whatever its result, and writes
+`test-evidence.json` (artifact `test-evidence`, kept 90 days):
+
+```json
+{
+  "pr": 393,
+  "head": "<sha>",
+  "merge_base": "<sha>",
+  "fix_commits": 1,
+  "verify_red": {"red": 3, "import-only": 1, "unexpected pass": 0, "n/a": 0,
+                 "control": 0, "pre-existing": 12},
+  "diff_coverage": {"percent": 87.5, "lines": 40, "uncovered": 5}
+}
+```
+
+`verify_red` is `null` when there was nothing to verify. That happens when the
+PR has no code change, or no new or edited test. `diff_coverage` is `null`
+when the test job produced no report. To collect the file:
+`gh run download <run-id> -n test-evidence`.

@@ -177,7 +177,7 @@ execute it on import. CI catches the rest.
 | While editing | the test file you are changing; `scripts/test-affected --run` |
 | Before a commit | nothing extra: the commit hooks run ruff and the fast checks in seconds |
 | Before a push | the pre-push hook runs `scripts/test-affected --run` on `PYRITE_PUSH_WORKERS` (default 4) workers. It already runs everything for conftest, fixtures, pyproject and config changes; set `PYRITE_PUSH_FULL=1` yourself for storage or migration changes and cross-cutting refactors |
-| On the pull request | nothing: CI runs the full backend suite (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, and the advisory `verify-red` job (your changed tests, with the fix reverted); after the merge, `dev` runs the full matrix, the e2e smoke and the tutorial |
+| On the pull request | nothing: CI runs the full backend suite (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, the advisory `verify-red` job (your new tests, without and with your change) and diff coverage; after the merge, `dev` runs the full matrix, the e2e smoke and the tutorial |
 | A frontend change | `cd web && npm run check && npm run test:unit && npm run build` |
 | A release | the large tests: `scripts/release.py` installs the release commit into a fresh venv and runs the tutorial against it; Playwright and the smoke layer per the release runbook |
 
@@ -300,25 +300,23 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
 - One issue per PR, and the diff stays inside it. A stray hunk from another
   project (an editor's `.gitignore` additions, say) is the most common thing a
   review asks to remove.
-- A test that fails without the fix. Reviews run `scripts/verify-red.sh
-  <test> <impl files>` to check exactly that; you can run it too.
-
-  CI does it for you as well: the **`verify-red`** job reverts the pull
-  request's changes under `pyrite/` and `extensions/*/src/` to the merge base,
-  runs each changed test file, and writes a table to the run's summary page.
-  *red without the fix* is what a review wants to see. *red by
-  import/collection error* is weaker — the test needs your new code, which is
-  not the same as checking what it does. *passes without the fix* leaves a
-  warning on the test: either it does not exercise the change, or it is a
-  deliberate "this still works" guard, which is fine — say so in the PR.
-  *not verifiable* means the test skipped, failed with the fix, timed out
-  (120 s per run), was not reached before the job's time budget ran out,
-  or produced no report, so no claim is made. Tests you did
-  not add or edit are listed apart and never warned about, and a PR that
-  changes implementation but no test file gets a warning of its own. The
-  job is advisory: it is not a required check and fails only when it could
-  not run (`python scripts/verify_red_ci.py --base origin/dev` runs it
-  locally).
+- A test that fails without the fix. CI checks it for you: the advisory
+  **`verify-red`** job checks out the merge base in a throwaway tree, adds
+  your test files, runs the tests you added or edited, then adds the rest of
+  your change and runs them again. Its summary line, e.g.
+  `verify-red: 3 red · 0 import-only · 1 unexpected pass · 0 n/a`, is on the
+  run's summary page, with a row for each test that is not *red*.
+  *red* is what a review wants to see. *import-only* is weaker: the test
+  fails only because a name your change adds is missing, which shows it needs
+  your code, not that it checks what the code does. *unexpected pass* leaves
+  a warning on the test: it does not exercise the change. If it is a
+  deliberate "this still works" guard, mark it `@pytest.mark.control` and it
+  counts as a control instead. *n/a* means no claim (it skipped, failed with
+  the fix, or timed out). `scripts/verify-red.sh` runs the same check
+  locally; it never modifies your checkout, and it includes uncommitted work.
+- Diff coverage: on a pull request the 3.12 test run measures coverage, and
+  `diff-cover` lists the lines you changed that no test runs (target 80%).
+  Like `verify-red` it is advisory for now; see [docs/testing.md](docs/testing.md).
 - The affected tests green locally (`scripts/test-affected --run`), plus
   `ruff check` and `ruff format --check`. CI runs the full suite on the PR.
 - A changelog fragment: a **new file** `changelog.d/<slug>.<section>.md`
