@@ -49,8 +49,10 @@ write to your real config. `HF_HOME` still points at your model cache.
 A PR whose only non-test changes are changelog fragments, `kb/` entries or
 Markdown has nothing to verify. Those files are still left out of the run
 without the fix, since a test may read them. A pytest run with the fix that
-records nothing at all (a broken conftest or plugin) is the check failing:
-exit 2, with pytest's last lines in the summary.
+collects no test file at all (a broken conftest or plugin) is the check
+failing: exit 2, with pytest's last lines in the summary. A file that collects
+but runs nothing, such as one that skips itself when an optional dependency
+is missing, makes its tests *n/a* instead.
 
 ### Verdicts
 
@@ -92,8 +94,27 @@ These are not fixed; weigh the line with them in mind.
   only reads the exception that reaches pytest.
 - **A conftest that imports a name the fix adds** stops pytest before any test
   runs without the fix, so every selected test in that run is *n/a*.
-- **A SIGKILLed driver orphans its pytest child**, which keeps running in the
-  throwaway tree until it finishes. Your checkout is still untouched.
+- **A SIGKILLed or SIGTERMed driver orphans its pytest child**, which keeps
+  running in the throwaway tree until it finishes. Your checkout is still
+  untouched.
+- **Any Markdown counts as not code.** A PR that changes only a skill,
+  `CONTRIBUTING.md` or other `.md` file, plus a test that pins its text, has
+  nothing to verify.
+- **Any docstring satisfies `control`.** The runner can't tell a docstring
+  that says why the test passes without the fix from one that only says what
+  it tests.
+- **Only packages with an `__init__.py` are stubbed.** A top-level module, a
+  namespace package or an extension without a `src/` layout that only the PR
+  adds can still be imported in the run without the fix. That produces a
+  false *unexpected pass*, never a false *red*. A new extension reached
+  through the plugin registry is *red*, not *import-only*, since the registry
+  wraps the import error.
+- **One scratch `HOME` serves both runs**, so the run without the fix can
+  leave files the run with the fix sees. It also hides `~/.gitconfig` and the
+  Playwright browser cache, so tests that need them are *n/a*.
+- **Stale-tree cleanup assumes absolute `gitdir` paths.** With
+  `worktree.useRelativePaths` set, a live run's registration could be removed.
+  The cleanup also ignores `git worktree lock`.
 
 ## Diff coverage
 
