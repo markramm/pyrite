@@ -29,11 +29,11 @@ one person running several loops can list across desks.
 # the whole queue, oldest first
 pyrite task list -k <project>-desk --status open
 
-# the conductor files a decision when a tick reaches a kept item
-pyrite task create -k <project>-desk -t "Merge #184" --priority 3 \
-  -b "Recommendation and link…"
-pyrite update <id> -k <project>-desk -f project=<project> -f kind=merge \
-  -f link=https://… -f requested_by=conductor -f tags=outside,quick
+# the conductor files a decision when a tick reaches a kept item, in one step
+pyrite task create "Merge #184" -k <project>-desk --priority 3 \
+  -b "Recommendation and link…" --tags outside,quick \
+  --field project=<project> --field kind=merge \
+  --field link=https://… --field requested_by=conductor
 
 # the maintainer (or the conductor's reconcile step, when it can observe the outcome)
 pyrite task update <id> -k <project>-desk --status done

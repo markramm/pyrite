@@ -58,6 +58,59 @@ def _get_service() -> tuple[TaskService, PyriteDB]:
     return TaskService(config, db), db
 
 
+#: `--field` keys refused because a dedicated option already sets them,
+#: named so the error can point the caller at the right option.
+_FIELD_OWN_OPTION: dict[str, str] = {
+    "title": "--title (or the positional TITLE)",
+    "body": "--body",
+    "parent": "--parent",
+    "priority": "--priority",
+    "assignee": "--assignee",
+    "tags": "--tags",
+}
+
+
+def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
+    """Parse `--field key=value` pairs for `task create`.
+
+    Uses the same value parser as `create -f`/`update -f`
+    (`_parse_field_value`), and refuses a key that already has its own
+    option, `status` (task lifecycle is `task update --status`, not a
+    free-form field), and a `TaskEntry.managed_fields` key -- `create` does
+    not run `update`'s managed-field refusal, so without this an agent could
+    forge the audit trail (`status_change_log`, `evidence`, `agent_context`,
+    `assigned_at`) at creation instead of only failing to set it later.
+    """
+    from ..models.task import TaskEntry
+    from .entry_commands import _parse_field_value
+
+    fields: dict[str, Any] = {}
+    for fv in field or []:
+        if "=" not in fv:
+            console.print(f"[red]Error:[/red] --field must be key=value, got '{fv}'")
+            raise typer.Exit(1)
+        k, v = fv.split("=", 1)
+        if k in _FIELD_OWN_OPTION:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: use {_FIELD_OWN_OPTION[k]} instead."
+            )
+            raise typer.Exit(1)
+        if k == "status":
+            console.print(
+                "[red]Error:[/red] --field status=... is refused: a new task is "
+                "always created open; use `task update --status` to change it."
+            )
+            raise typer.Exit(1)
+        if k in TaskEntry.managed_fields:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: Pyrite maintains "
+                f"this field as part of the task's audit trail."
+            )
+            raise typer.Exit(1)
+        fields[k] = _parse_field_value(v)
+    return fields
+
+
 @task_app.command("create")
 def task_create(
     title_arg: str | None = typer.Argument(
@@ -72,6 +125,9 @@ def task_create(
     ),
     body: str | None = typer.Option(None, "--body", "-b", help="Task description"),
     tags: str = typer.Option("", "--tags", help="Comma-separated tags"),
+    field: list[str] | None = typer.Option(
+        None, "--field", help="Extra field as key=value (repeatable)"
+    ),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Create a new task.
@@ -79,6 +135,11 @@ def task_create(
     The title may be given either positionally (``task create "Title"``) or via
     the ``--title`` flag (``task create --title "Title"``) — both work, for
     consistency with the other ``--body``/``--priority`` flags.
+
+    ``--field key=value`` (repeatable) sets any field a KB's schema requires
+    or allows for ``task`` beyond the built-in options -- e.g. the desk
+    schema's ``project``/``kind``. ``-f`` is already ``--format`` on this
+    command (#303), so this is ``--field`` only, with no short flag.
     """
     if title_arg and title_opt:
         console.print(
@@ -93,6 +154,8 @@ def task_create(
         )
         raise typer.Exit(1)
 
+    fields = _parse_task_create_fields(field)
+
     svc, db = _get_service()
     try:
         result = svc.create_task(
@@ -103,6 +166,7 @@ def task_create(
             priority=priority,
             assignee=assignee or "",
             tags=[t.strip() for t in tags.split(",")] if tags else None,
+            fields=fields or None,
         )
 
         formatted = _format_output(result, fmt)
