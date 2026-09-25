@@ -71,32 +71,46 @@ class VersionService:
         if commit_info is None:
             return 0
 
-        # (status, KB-relative path) per changed .md file -- already
-        # resolved against the KB's repo prefix and refused if outside it
-        # (GitService.get_commit_file_statuses).
+        # (status, KB-relative path, KB-relative rename source) per changed
+        # .md file -- already resolved against the KB's repo prefix and
+        # refused if outside it (GitService.get_commit_file_changes).
         changed = [
-            (status, path)
-            for status, path in GitService.get_commit_file_statuses(kb_path, commit_hash)
-            if path.endswith(".md")
+            change
+            for change in GitService.get_commit_file_changes(kb_path, commit_hash)
+            if change[1].endswith(".md")
         ]
         if not changed:
             return 0
 
         # Path -> entry id, from the index (not from parsing frontmatter
         # again): the same source of truth IndexManager itself uses. Loaded
-        # once for this whole commit, not once per changed file.
-        entries_by_path = {
-            str(Path(e["file_path"]).relative_to(kb_path)): e["id"]
-            for e in self.db.get_entries_for_indexing(kb_name)
-        }
+        # once for this whole commit, not once per changed file. A row whose
+        # path is not under the KB cannot match any changed file; it is
+        # skipped, never allowed to stop the others being recorded.
+        entries_by_path: dict[str, str] = {}
+        for e in self.db.get_entries_for_indexing(kb_name):
+            try:
+                if not e["file_path"]:
+                    raise ValueError("no file path")
+                entries_by_path[str(Path(e["file_path"]).relative_to(kb_path))] = e["id"]
+            except ValueError:
+                logger.warning(
+                    "Skipping index row %s: its path is not under KB %s", e["id"], kb_name
+                )
 
         recorded = 0
-        for status, kb_relative_path in changed:
+        for status, kb_relative_path, source in changed:
             entry_id = entries_by_path.get(kb_relative_path)
             if entry_id is None:
                 continue
             existed = self.db.entry_version_exists(entry_id, kb_name, commit_hash)
             change_type = "created" if status == "A" else "modified"
+            if status.startswith("R") and not self._same_entry_at(
+                kb_path, f"{commit_info['hash']}^", source, entry_id
+            ):
+                # git paired this file with a different entry's (or one
+                # from outside the KB): from this entry's view, an add.
+                change_type = "created"
             self.db.upsert_entry_version(
                 entry_id=entry_id,
                 kb_name=kb_name,
@@ -111,6 +125,21 @@ class VersionService:
             if not existed:
                 recorded += 1
         return recorded
+
+    @staticmethod
+    def _same_entry_at(
+        kb_path: Path, rev: str, kb_relative_path: str | None, entry_id: str
+    ) -> bool:
+        """True when `kb_relative_path` holds entry `entry_id` in `rev`'s
+        tree. git pairs renames by similarity, and entries share frontmatter
+        boilerplate, so only the id says two paths are one entry (#432)."""
+        from ..models.core_types import entry_id_from_markdown
+        from ..services.git_service import GitService
+
+        if kb_relative_path is None:
+            return False
+        text = GitService.read_file_at(kb_path, rev, kb_relative_path)
+        return text is not None and entry_id_from_markdown(text) == entry_id
 
     def get_entry_at_version(self, entry_id: str, kb_name: str, commit_hash: str) -> str | None:
         """Get entry content at a specific git commit.
@@ -183,12 +212,15 @@ class VersionService:
         # possibly-abbreviated hash. Falls back to the entry's current path
         # for rows recorded before #432 (no stored path), same as today.
         versioned_path = self.db.get_entry_version_file_path(entry_id, kb_name, commit)
+        try:
+            current_rel_path = str(Path(entry["file_path"]).relative_to(kb_path))
+        except ValueError:
+            current_rel_path = None
         if versioned_path:
             # Stored KB-relative from this fix onward. Tolerate an absolute
-            # path too (nothing storing that shape is released, but an
-            # existing dev database may have rows from before this
-            # coordinator round) by relativizing it the same way the
-            # entry's own current path is handled below.
+            # path under the KB (a dev database may hold rows from before
+            # paths were stored relative); any other absolute path is
+            # refused below, never resolved.
             if Path(versioned_path).is_absolute():
                 try:
                     rel_path = str(Path(versioned_path).relative_to(kb_path))
@@ -197,11 +229,24 @@ class VersionService:
             else:
                 rel_path = versioned_path
         else:
-            file_path = entry["file_path"]
-            try:
-                rel_path = str(Path(file_path).relative_to(kb_path))
-            except ValueError:
-                rel_path = file_path
+            rel_path = current_rel_path
+        if rel_path is None:
+            # The entry's indexed path is not under the KB: nothing to read.
+            return None
+        # A version read at a path other than the entry's current one goes
+        # through read_file_at, which refuses an absolute path or a ".."
+        # segment (git anchors "./" at the KB, so either names a file other
+        # than the recorded one), and must hold this entry: a row pointing at
+        # another entry's file (as rename pairing by similarity alone once
+        # recorded) is not served. The current path came from relative_to
+        # above, so it is already KB-relative.
+        if rel_path != current_rel_path:
+            from ..models.core_types import entry_id_from_markdown
+
+            text = GitService.read_file_at(kb_path, commit, rel_path)
+            if text is None or entry_id_from_markdown(text) != entry_id:
+                return None
+            return text
 
         # Read the entry's file at the peeled, full commit id. `<rev>:<path>`
         # is resolved by git relative to the repo root, not to `cwd`, so a

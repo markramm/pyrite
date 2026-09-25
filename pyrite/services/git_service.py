@@ -146,16 +146,22 @@ class GitService:
     """Low-level git operations via subprocess."""
 
     @staticmethod
-    def get_kb_prefix(kb_path: Path) -> str:
+    def get_kb_prefix(kb_path: Path) -> str | None:
         """The KB's path relative to its git repo ROOT, e.g. "kbdir/" for a
         KB that is a subdirectory of its repo, or "" when the KB path IS
-        the repo root.
+        the repo root. None when git cannot say.
 
         `git log`/`git show` report paths relative to the repo root, not to
         `cwd` -- joining such a path directly onto `kb_path` double-prefixes
         a KB in a subdirectory (repo/kbdir/ + "kbdir/a.md" ->
         repo/kbdir/kbdir/a.md). Every caller that turns a repo-relative
         path into a KB-relative one must go through this (#432 cold read).
+
+        Fails closed: "" means "every path in the repo is this KB's", so a
+        failure is None, never "", and `_kb_relative_path` refuses every
+        path against None. Only git's line terminator is removed -- a
+        directory name may begin or end with whitespace, and " kb/" is not
+        "kb/".
         """
         try:
             result = subprocess.run(
@@ -166,30 +172,62 @@ class GitService:
                 timeout=10,
                 env=_git_env(),
             )
-            if result.returncode != 0:
-                return ""
-            return result.stdout.strip()
         except (subprocess.SubprocessError, OSError):
             logger.warning("Failed to get KB prefix for %s", kb_path, exc_info=True)
-            return ""
+            return None
+        if result.returncode != 0:
+            logger.warning("Failed to get KB prefix for %s: %s", kb_path, result.stderr.strip())
+            return None
+        return result.stdout.rstrip("\n")
 
     @staticmethod
-    def _kb_relative_path(repo_relative_path: str, kb_prefix: str) -> str | None:
+    def _kb_relative_path(repo_relative_path: str, kb_prefix: str | None) -> str | None:
         """Convert a repo-relative path to KB-relative, or None if the path
         falls outside the KB's own subtree (e.g. another KB in a sibling
         directory, or `--follow` reporting a path from before a move into
         this KB). Never resolves a path outside the prefix -- a caller must
         treat None as "not this KB's file", not fall back to any other
-        path (#432 cold read: refuse, don't guess)."""
+        path (#432 cold read: refuse, don't guess). An unknown prefix
+        (None) refuses every path."""
+        if kb_prefix is None:
+            return None
         if not kb_prefix:
             return repo_relative_path
-        if repo_relative_path == kb_prefix.rstrip("/"):
-            # The prefix itself named as a file is not a real case for a
-            # KB (a directory), but guards a degenerate rstrip edge.
-            return None
         if not repo_relative_path.startswith(kb_prefix):
             return None
-        return repo_relative_path[len(kb_prefix) :]
+        rest = repo_relative_path[len(kb_prefix) :]
+        return rest or None
+
+    @staticmethod
+    def is_safe_kb_relative_path(path: str) -> bool:
+        """True for a non-empty relative path with no ".." segment -- the
+        only shape a stored KB-relative path may have. An absolute path or
+        a ".." segment is refused rather than resolved: git anchors
+        "<rev>:./<path>" at the KB, so either would name a file other than
+        the one recorded (#432)."""
+        if not path or path.startswith("/"):
+            return False
+        return ".." not in path.split("/")
+
+    @staticmethod
+    def read_file_at(local_path: Path, commit: str, kb_relative_path: str) -> str | None:
+        """The text of `kb_relative_path` in `commit`'s tree, or None when it
+        is not there or the path is not a safe KB-relative path."""
+        if not GitService.is_safe_kb_relative_path(kb_relative_path):
+            return None
+        try:
+            result = subprocess.run(
+                ["git", "show", "--end-of-options", f"{commit}:./{kb_relative_path}"],
+                cwd=str(local_path),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=_git_env(),
+            )
+        except (subprocess.SubprocessError, OSError):
+            logger.warning("git show failed for %s", local_path, exc_info=True)
+            return None
+        return result.stdout if result.returncode == 0 else None
 
     @staticmethod
     def _parse_nul_separated_name_status(raw: bytes) -> list[dict]:
@@ -472,11 +510,14 @@ class GitService:
         (core.quotePath), which a naive split would return verbatim
         instead of the real filename (#432 cold read).
 
-        `-M10%` makes `--follow` keep tracking a file across a rename even
-        when it was also heavily edited in the same commit -- git's
-        default similarity threshold for rename detection (50%) would
-        otherwise treat that as a delete+add and silently truncate history
-        at the rename (#432 cold read).
+        Rename detection uses git's default similarity threshold. A lower
+        one pairs a deleted entry with an unrelated added one, because
+        entries share frontmatter boilerplate. The limit that follows: a
+        rename bundled with an edit that drops similarity below the
+        default starts the file's history at the rename. Even at the
+        default, similarity does not prove two files are one entry --
+        callers that record versions also require the entry id to match
+        across a rename (#432).
 
         git reports every path relative to the repo ROOT, not to
         `local_path` -- a KB that is a subdirectory of its repo would
@@ -491,7 +532,6 @@ class GitService:
             "git",
             "log",
             "--follow",
-            "-M10%",
             "--format=%H|%an|%ae|%aI|%s",
             "--name-status",
             "-z",
@@ -617,14 +657,29 @@ class GitService:
     def get_commit_file_statuses(local_path: Path, commit_hash: str) -> list[tuple[str, str]]:
         """Get (status, KB-relative path) for each file a single commit
         changed -- `status` is git's one-letter name-status code (A, M, D,
-        R<NN>, C<NN>, ...), needed to tell "this commit created the file"
-        (A) from every other change, e.g. for entry_version.change_type
-        (#432 cold read: record_commit previously hardcoded "modified" for
-        every row, including the add).
+        R<NN>, ...), needed to tell "this commit created the file" (A) from
+        every other change, e.g. for entry_version.change_type.
 
-        For a rename/copy, only the destination path is returned (what
-        exists in this commit's tree) -- same rule as `get_file_log`.
+        For a rename, only the destination path is returned (what exists in
+        this commit's tree) -- same rule as `get_file_log`.
         """
+        return [
+            (status, path)
+            for status, path, _old in GitService.get_commit_file_changes(local_path, commit_hash)
+        ]
+
+    @staticmethod
+    def get_commit_file_changes(
+        local_path: Path, commit_hash: str
+    ) -> list[tuple[str, str, str | None]]:
+        """(status, KB-relative path, KB-relative source path) for each file
+        a single commit changed. The source path is set only for a rename
+        whose source lies inside this KB; it is None otherwise, including a
+        rename from outside the KB (confinement: a path outside the KB is
+        never resolved). Rename detection is git's default threshold (see
+        `get_file_log`).
+        """
+        # None (git could not say) refuses every path in _kb_relative_path.
         kb_prefix = GitService.get_kb_prefix(local_path)
         try:
             result = subprocess.run(
@@ -632,7 +687,6 @@ class GitService:
                     "git",
                     "show",
                     "--name-status",
-                    "-M10%",
                     "--format=",
                     "-z",
                     "--end-of-options",
@@ -645,15 +699,17 @@ class GitService:
             )
             if result.returncode != 0:
                 return []
-            out: list[tuple[str, str]] = []
+            out: list[tuple[str, str, str | None]] = []
             for status, paths in GitService._parse_nul_separated_name_only_statuses(result.stdout):
                 if not paths:
                     continue
-                repo_relative_path = paths[-1]
-                kb_relative_path = GitService._kb_relative_path(repo_relative_path, kb_prefix)
+                kb_relative_path = GitService._kb_relative_path(paths[-1], kb_prefix)
                 if kb_relative_path is None:
                     continue
-                out.append((status, kb_relative_path))
+                source = None
+                if len(paths) == 2:
+                    source = GitService._kb_relative_path(paths[0], kb_prefix)
+                out.append((status, kb_relative_path, source))
             return out
         except (subprocess.SubprocessError, OSError):
             logger.warning(

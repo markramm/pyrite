@@ -532,59 +532,44 @@ class TestRecordCommit:
         assert post_rename_content is not None
         assert "Version 1" in post_rename_content
 
-    def test_renamed_entry_below_default_similarity_pre_rename_version_is_readable(self, kb_setup):
-        """A rename bundled with a content edit big enough to drop
-        similarity below git's default rename-detection threshold (50%)
-        must still resolve the pre-rename commit's content, not silently
-        drop it from history (coordinator cold read on #432). The base
-        file has real bulk (50 lines) so editing roughly half of it lands
-        in a believable ~30% similarity band -- not the near-0% a small
-        file plus a large unrelated addition would produce, which any
-        threshold handles trivially and proves nothing about the fix."""
+    @pytest.mark.control(
+        reason="Documents an accepted limit (#432): on dev, plain --follow "
+        "already stops at a rename below git's default similarity."
+    )
+    def test_history_starts_at_a_rename_below_default_similarity(self, kb_setup):
+        """Limit, not a goal: a rename bundled with an edit that drops
+        similarity below git's default threshold is a delete plus an add to
+        git. The entry's history starts at the rename; the pre-rename
+        commit is neither listed nor served. A lower threshold would keep
+        it, but pairs unrelated entries that share frontmatter boilerplate,
+        serving one entry's content as another's version."""
         svc, db, config, kb_path, commit1 = kb_setup
         frontmatter = "---\nid: entry-1\ntitle: V1\ntype: note\n---\n\n"
         body_lines = [f"line {i}" for i in range(50)]
-        original = frontmatter + "\n".join(body_lines)
-        (kb_path / "a.md").write_text(original)
+        (kb_path / "a.md").write_text(frontmatter + "\n".join(body_lines))
         _git(kb_path, "add", ".")
         _git(kb_path, "commit", "-m", "bulk content")
         commit1 = _git(kb_path, "rev-parse", "HEAD")
 
         _git(kb_path, "mv", "a.md", "b.md")
-        # Only the body is mutated -- the frontmatter block must stay
-        # parseable, or this entry never gets indexed at its new path and
-        # the fixture would fail for the wrong reason.
         for i in range(0, len(body_lines), 2):
             body_lines[i] = body_lines[i] + " CHANGED"
-        rewritten = frontmatter + "\n".join(body_lines)
-        (kb_path / "b.md").write_text(rewritten)
+        (kb_path / "b.md").write_text(frontmatter + "\n".join(body_lines))
         _git(kb_path, "add", "-A")
         _git(kb_path, "commit", "-m", "rename with partial rewrite")
         commit2 = _git(kb_path, "rev-parse", "HEAD")
 
-        # Confirm the fixture itself actually produced a sub-100 rename --
-        # otherwise this test would pass for the wrong reason.
-        status = _git(kb_path, "show", "--name-status", "-M10%", "--format=", commit2)
-        assert status.startswith("R"), f"fixture did not produce a rename: {status!r}"
-        assert status.split("\t")[0] != "R100", f"fixture rename was 100% similar: {status!r}"
+        status = _git(kb_path, "show", "--name-status", "--format=", commit2)
+        assert not status.startswith("R"), f"fixture: git paired the files: {status!r}"
 
         from pyrite.services.git_service import GitService
         from pyrite.storage.index import IndexManager
 
-        idx = IndexManager(db, config)
-        idx.index_with_attribution("test-kb", GitService)
+        IndexManager(db, config).index_with_attribution("test-kb", GitService)
 
         versions = svc.get_entry_versions("entry-1", "test-kb")
-        hashes = {v["commit_hash"] for v in versions}
-        assert commit1 in hashes, (
-            "history was truncated at the low-similarity rename: --follow "
-            "needs an explicit low -M threshold"
-        )
-        assert commit2 in hashes
-
-        pre_rename_content = svc.get_entry_at_version("entry-1", "test-kb", commit1)
-        assert pre_rename_content is not None
-        assert pre_rename_content == original
+        assert [(v["commit_hash"], v["change_type"]) for v in versions] == [(commit2, "created")]
+        assert svc.get_entry_at_version("entry-1", "test-kb", commit1) is None
 
     def test_foreign_commit_to_different_entrys_old_path_still_404s(self, kb_setup):
         """#415 must hold across the rename fix: a commit that touched a

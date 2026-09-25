@@ -228,38 +228,6 @@ class TestGetFileLog:
             (c0, "a.md"),
         ]
 
-    def test_get_file_log_follows_a_rename_below_default_similarity(self, tmp_path):
-        """A rename bundled with a big enough content edit falls below
-        git's default rename-detection threshold, so plain --follow stops
-        at the rename and never reaches the file's original commit --
-        get_file_log must pass an explicit low -M so history is not
-        silently truncated (coordinator cold read on #432)."""
-        repo = tmp_path / "repo"
-        _init_repo(repo)
-        original = "\n".join(f"line {i}" for i in range(50))
-        (repo / "a.md").write_text(original)
-        _git(repo, "add", ".")
-        _git(repo, "commit", "-q", "-m", "add")
-        c0 = _git(repo, "rev-parse", "HEAD")
-
-        _git(repo, "mv", "a.md", "z.md")
-        # Rewrite most lines so similarity drops well below 50%.
-        lines = original.split("\n")
-        for i in range(0, len(lines), 2):
-            lines[i] = lines[i] + " CHANGED SUBSTANTIALLY TO DROP SIMILARITY"
-        (repo / "z.md").write_text("\n".join(lines))
-        _git(repo, "add", "-A")
-        _git(repo, "commit", "-q", "-m", "rename+edit")
-        c1 = _git(repo, "rev-parse", "HEAD")
-
-        log = GitService.get_file_log(repo, "z.md")
-        hashes = [entry["hash"] for entry in log]
-        assert c1 in hashes
-        assert c0 in hashes, (
-            "history stopped at the rename: --follow needs an explicit low "
-            "-M threshold, not git's default"
-        )
-
     def test_get_file_log_unquotes_a_unicode_filename(self, tmp_path):
         """core.quotePath quotes a non-ASCII name in git's plain output;
         -z must be used so the path comes back raw, not as the literal

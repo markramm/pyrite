@@ -265,7 +265,7 @@ class TestExportServiceCommit:
         "(removing self.db.session.rollback()) is what proves it is "
         "load-bearing against the code as it stands now."
     )
-    def test_commit_kb_recovers_the_session_when_recording_fails_under_lock(self, git_kb):
+    def test_commit_kb_recovers_the_session_when_recording_fails_under_lock(self, git_kb, caplog):
         """A concurrent writer (another index sync, another request) can
         hold the sqlite write lock right when record_commit tries to
         insert -- that insert then raises OperationalError, and commit_kb's
@@ -273,8 +273,8 @@ class TestExportServiceCommit:
         session stays poisoned (PendingRollbackError) for every later call
         on it in the same process -- the MCP server and the CLI both reuse
         one long-lived session (coordinator cold read on #432)."""
+        import logging
         import sqlite3
-        import time
 
         export_svc = git_kb["export_svc"]
         db = git_kb["db"]
@@ -291,12 +291,14 @@ class TestExportServiceCommit:
         blocker = sqlite3.connect(str(db_path), timeout=0.1)
         blocker.execute("BEGIN IMMEDIATE")
         try:
-            t0 = time.time()
-            result = export_svc.commit_kb("test-kb", message="Add entry-1")
+            with caplog.at_level(logging.WARNING, logger="pyrite.services.export_service"):
+                result = export_svc.commit_kb("test-kb", message="Add entry-1")
             # commit_kb must still report the commit succeeded -- the git
             # commit itself is not undone by a recording failure.
             assert result["success"]
-            assert time.time() - t0 < 15, "commit_kb should not hang waiting on the lock"
+            # Structural, not timed: the recording really failed on the lock
+            # and went through the recovery branch this test is about.
+            assert "Failed to record entry_version rows" in caplog.text
         finally:
             blocker.rollback()
             blocker.close()

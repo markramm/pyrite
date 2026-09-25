@@ -444,3 +444,31 @@ def entry_from_frontmatter(meta: dict[str, Any], body: str) -> Entry:
     entry.lifecycle = meta.get("lifecycle", "active")
     capture_extra_frontmatter(entry, meta)
     return entry
+
+
+def entry_id_from_markdown(text: str) -> str | None:
+    """The id an entry file's text gives its entry, derived the way loading
+    the file derives it (an explicit ``id:``, or the type's generated one).
+
+    None when the text is not an entry. Used to tell a rename of one entry
+    from a replacement by another: git pairs files by content similarity,
+    and entries share frontmatter boilerplate, so similarity alone links
+    unrelated entries (#432).
+    """
+    from ..utils.yaml import load_yaml
+
+    try:
+        if text.startswith("﻿"):
+            text = text[1:]
+        if not text.startswith(("---\n", "---\r\n")):
+            return None
+        after_open = text.split("\n", 1)[1]
+        parts = re.split(r"^---\s*$", after_open, flags=re.MULTILINE, maxsplit=1)
+        if len(parts) < 2:
+            return None
+        meta = load_yaml(parts[0])
+        if not isinstance(meta, dict):
+            return None
+        return entry_from_frontmatter(meta, parts[1].strip()).id or None
+    except Exception:
+        return None

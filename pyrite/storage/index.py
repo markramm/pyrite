@@ -116,6 +116,36 @@ def _parse_indexed_at(indexed_at: str) -> datetime:
     return dt
 
 
+def _same_entry_history(
+    entry_id: str,
+    current_rel_path: str,
+    log_entries: list[dict],
+    kb_path: Path,
+    git_service: Any,
+) -> list[dict]:
+    """The prefix of `log_entries` (newest first) that belongs to `entry_id`.
+
+    `git log --follow` crosses a rename whenever git finds the two files
+    similar enough, and entries share frontmatter boilerplate, so a deleted
+    entry and an unrelated added one can look like a rename. At each point
+    where the file's path changes, the older path must hold the same entry
+    id at that commit; the history stops at the first one that does not
+    (or cannot be read), so another entry's commits are never recorded as
+    this one's versions (#432).
+    """
+    from ..models.core_types import entry_id_from_markdown
+
+    newer_path = current_rel_path
+    for i, log_entry in enumerate(log_entries):
+        path = log_entry.get("file_path", newer_path)
+        if path != newer_path:
+            text = git_service.read_file_at(kb_path, log_entry["hash"], path)
+            if text is None or entry_id_from_markdown(text) != entry_id:
+                return log_entries[:i]
+        newer_path = path
+    return log_entries
+
+
 class IndexManager:
     """
     Manages the SQLite FTS index for all KBs.
@@ -1226,7 +1256,13 @@ class IndexManager:
                 # Extract git attribution if available
                 if is_git:
                     rel_path = str(file_path.relative_to(kb_path))
-                    log_entries = git_service.get_file_log(kb_path, rel_path)
+                    log_entries = _same_entry_history(
+                        entry.id,
+                        rel_path,
+                        git_service.get_file_log(kb_path, rel_path),
+                        kb_path,
+                        git_service,
+                    )
 
                     if log_entries:
                         # First commit = created_by, last commit = modified_by

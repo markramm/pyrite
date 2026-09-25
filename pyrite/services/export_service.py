@@ -223,6 +223,12 @@ class ExportService:
         Returns:
             dict with success, commit_hash, files_changed, etc.
 
+        After a successful commit, the commit's entry versions are recorded
+        in the index database (#432). If that recording fails, the shared
+        database session is rolled back so it stays usable -- which also
+        discards any database work the caller left pending (uncommitted) on
+        that session. Commit your own session work before calling this.
+
         Raises:
             KBNotFoundError: KB doesn't exist
             PyriteError: KB is not in a git repository
