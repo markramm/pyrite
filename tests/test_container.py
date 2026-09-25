@@ -17,18 +17,14 @@ class TestPyriteDataDir:
         monkeypatch.setenv("PYRITE_DATA_DIR", str(data_dir))
         monkeypatch.delenv("PYRITE_CONFIG_DIR", raising=False)
 
-        # Re-import to pick up the new env var
-        import importlib
+        # CONFIG_DIR is resolve_config_dir() evaluated at import; call it
+        # directly. Reloading pyrite.config here used to replace every class
+        # in the module (KBConfig, PyriteConfig, ...) for the rest of the
+        # worker, so a later test holding the originals saw objects of the
+        # "same" class fail isinstance -- an order-dependent failure under -n.
+        from pyrite.config import resolve_config_dir
 
-        import pyrite.config as cfg_mod
-
-        importlib.reload(cfg_mod)
-        try:
-            assert cfg_mod.CONFIG_DIR == data_dir.resolve()
-        finally:
-            # Restore original module state
-            monkeypatch.delenv("PYRITE_DATA_DIR", raising=False)
-            importlib.reload(cfg_mod)
+        assert resolve_config_dir() == data_dir.resolve()
 
     def test_pyrite_data_dir_sets_index_and_workspace(self, tmp_path):
         """When PYRITE_DATA_DIR is set, index_path and workspace_path should be inside it."""
