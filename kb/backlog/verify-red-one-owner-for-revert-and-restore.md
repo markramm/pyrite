@@ -7,10 +7,11 @@ tags:
 - refactor
 importance: 5
 kind: tech_debt
-status: proposed
+status: in_progress
 priority: medium
 effort: M
 rank: 0
+assignee: agent:pyrite-worker
 ---
 
 ## Problem
