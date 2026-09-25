@@ -496,3 +496,20 @@ def test_a_registry_path_that_cannot_be_resolved_loads_private(tmp_path, kind):
         assert row[0]["default_role"] is None
     finally:
         db.close()
+
+
+def test_an_unresolvable_path_is_detected_on_every_python(tmp_path):
+    """Python 3.13's non-strict ``resolve()`` returns a looping path instead of
+    raising, which let such a KB load (dev CI on 3.13, 2026-09-25). The check
+    resolves strictly, so it refuses a loop and an unknown ~user on every
+    version, and accepts a path that only does not exist yet."""
+    from pyrite.config import _refuse_unresolvable
+
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    with pytest.raises((OSError, RuntimeError)):
+        _refuse_unresolvable(loop / "kb")
+    with pytest.raises(RuntimeError):
+        _refuse_unresolvable(Path("~nosuchuser_pyrite_zz/kb"))
+    _refuse_unresolvable(tmp_path / "not-yet" / "kb")  # missing is fine
+    _refuse_unresolvable(tmp_path)  # existing is fine
