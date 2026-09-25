@@ -129,8 +129,12 @@ push cycle. Deleting one guard at a time before you report is minutes.
 `scripts/verify-red.sh` is the same code as CI's `verify-red` job, which the
 conductor reads instead of re-running it: run it once and paste its summary
 line. A test you add on purpose to pass without the fix too (a "still works"
-guard) gets `@pytest.mark.control`, so it counts as a control rather than an
-unexpected pass.
+guard) gets `@pytest.mark.control(reason="...")` (or a docstring saying why),
+so it counts as a control rather than an unexpected pass; a bare marker is
+rejected. A `fix:` branch whose line shows **0 red, or only import-only
+reds, is not done**: write a test that fails on the bug's behaviour, or state
+in the report why none can (an environment-only bug) -- the conductor sends
+it back otherwise.
 
 Forbidden without evidence: "should work", "looks correct", "probably
 passes", "I'm confident".

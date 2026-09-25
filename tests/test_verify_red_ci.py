@@ -83,8 +83,7 @@ class TestTestSide:
         assert not vr.is_test_file("pyrite/test_mode.py")
 
 
-# Kept from the old runner, so these pass without this change too: controls.
-@pytest.mark.control
+@pytest.mark.control(reason="kept from the old runner: passes without this change too")
 class TestWhichTestsThePRTouched:
     BASE = (
         "def test_same():\n    assert 1\n\n\n"
@@ -135,6 +134,22 @@ class TestAddedIdentifiers:
         added = vr.defined_names(head) - vr.defined_names(base)
         assert added == {"new_fn", "C2", "attr", "meth", "CONST"}
 
+    def test_names_inside_function_bodies_do_not_count(self, vr):
+        # B3: an unrelated nested get() must not turn "'NoneType' object has no
+        # attribute 'get'" into import-only.
+        head = "def helper():\n    def get():\n        pass\n\n    x = 1\n    return get\n"
+        added = vr.defined_names(head) - vr.defined_names(None)
+        assert added == {"helper"}
+        exc = {"types": ["AttributeError"], "args": ["'NoneType' object has no attribute 'get'"]}
+        verdict, _ = vr.classify(
+            {"outcome": "passed"},
+            {"outcome": "failed", "exc": exc},
+            collect_failed=False,
+            control=None,
+            added=added,
+        )
+        assert verdict == vr.RED
+
     def test_a_new_module_adds_its_dotted_name(self, vr):
         assert vr.module_names("pyrite/services/newmod.py") == {
             "pyrite.services.newmod",
@@ -156,7 +171,7 @@ PASSED = {"outcome": "passed"}
 class TestClassify:
     ADDED = frozenset({"helper", "pyrite.newmod", "newmod"})
 
-    def verdict(self, vr, with_fix, without, *, collect_failed=False, control=False):
+    def verdict(self, vr, with_fix, without, *, collect_failed=False, control=None):
         return vr.classify(
             with_fix, without, collect_failed=collect_failed, control=control, added=self.ADDED
         )[0]
@@ -169,7 +184,14 @@ class TestClassify:
         assert self.verdict(vr, PASSED, PASSED) == vr.UNEXPECTED
 
     def test_a_declared_control_is_not_a_warning(self, vr):
-        assert self.verdict(vr, PASSED, PASSED, control=True) == vr.CONTROL
+        assert self.verdict(vr, PASSED, PASSED, control="a still-works guard") == vr.CONTROL
+
+    def test_a_control_without_a_reason_is_rejected(self, vr):
+        verdict, detail = vr.classify(
+            PASSED, PASSED, collect_failed=False, control="", added=self.ADDED
+        )
+        assert verdict == vr.UNEXPECTED
+        assert "needs a reason" in detail
 
     def test_a_collection_failure_without_the_fix_is_import_only(self, vr):
         assert self.verdict(vr, PASSED, None, collect_failed=True) == vr.IMPORT_ONLY
@@ -206,7 +228,7 @@ class TestClassify:
     )
     def test_no_claim(self, vr, with_fix, without, detail):
         verdict, text = vr.classify(
-            with_fix, without, collect_failed=False, control=False, added=self.ADDED
+            with_fix, without, collect_failed=False, control=None, added=self.ADDED
         )
         assert verdict == vr.NA
         assert detail in text
@@ -254,9 +276,20 @@ def test_vacuous():
     assert callable(add)
 
 
-@pytest.mark.control
+@pytest.mark.control(reason="add(0, 0) was already right")
 def test_declared_control():
     assert add(0, 0) == 0
+
+
+@pytest.mark.control
+def test_docstring_control():
+    'A still-works guard: add(0, 0) was already right.'
+    assert add(0, 0) == 0
+
+
+@pytest.mark.control
+def test_bare_control():
+    assert add(0, 0) == 0 * 2
 
 
 def test_lazy_import():
@@ -449,7 +482,7 @@ def test_the_run_succeeds(pr_run):
 
 
 def test_the_summary_line_counts_only_the_prs_own_tests(pr_run):
-    line = "verify-red: 4 red · 7 import-only · 1 unexpected pass · 1 n/a · 1 control"
+    line = "verify-red: 4 red · 7 import-only · 2 unexpected pass · 1 n/a · 2 control"
     assert line in pr_run["summary"], pr_run["summary"]
     assert line in pr_run["result"].stdout
     assert "1 pre-existing test" in pr_run["summary"]
@@ -464,6 +497,8 @@ def test_the_summary_line_counts_only_the_prs_own_tests(pr_run):
         ("tests/test_add.py::test_assertion_quoting_an_added_name", "red"),
         ("tests/test_add.py::test_vacuous", "unexpected pass"),
         ("tests/test_add.py::test_declared_control", "control"),
+        ("tests/test_add.py::test_docstring_control", "control"),
+        ("tests/test_add.py::test_bare_control", "unexpected pass"),
         ("tests/test_add.py::test_lazy_import", "import-only"),
         ("tests/test_helper.py::test_helper", "import-only"),
         ("tests/test_patch.py::test_mock_patch_string", "import-only"),
@@ -488,9 +523,15 @@ def test_pre_existing_tests_are_a_count_not_rows(pr_run):
 
 def test_only_an_unexpected_pass_is_annotated(pr_run):
     warnings = [ln for ln in pr_run["result"].stdout.splitlines() if ln.startswith("::warning")]
-    assert len(warnings) == 1, warnings
-    assert "tests/test_add.py::test_vacuous" in warnings[0]
-    assert "file=tests/test_add.py" in warnings[0]
+    assert len(warnings) == 2, warnings
+    assert "tests/test_add.py::test_bare_control" in warnings[0]
+    assert "tests/test_add.py::test_vacuous" in warnings[1]
+    assert "file=tests/test_add.py" in warnings[1]
+
+
+def test_a_bare_control_marker_is_rejected(pr_run):
+    row = [ln for ln in pr_run["summary"].splitlines() if "test_bare_control" in ln]
+    assert row and "needs a reason" in row[0], pr_run["summary"]
 
 
 def test_the_developers_tree_is_untouched(pr_run):
@@ -507,13 +548,14 @@ def test_the_evidence_file(pr_run):
     assert ev["verify_red"] == {
         "red": 4,
         "import-only": 7,
-        "unexpected pass": 1,
+        "unexpected pass": 2,
         "n/a": 1,
-        "control": 1,
+        "control": 2,
         "pre-existing": 1,
     }
     assert ev["merge_base"] == git(pr_run["repo"], "merge-base", "dev", "HEAD")
     assert ev["head"] == git(pr_run["repo"], "rev-parse", "HEAD")
+    assert ev["merge_commit"] == ev["head"]  # no --head-sha: HEAD is the head
     assert ev["fix_commits"] == 1
     assert ev["diff_coverage"] is None
 
@@ -598,6 +640,150 @@ def test_a_conftest_that_needs_the_fix_is_no_claim_not_a_crash(repo: Path, tmp_p
     assert "the without run recorded no test" in result.stderr
 
 
+def test_a_test_only_pr_with_a_fragment_kb_and_docs_is_nothing_to_verify(
+    repo: Path, tmp_path: Path
+) -> None:
+    # B1: a changelog fragment, a KB entry or a doc cannot change what a test
+    # does, so a PR that adds a test and only those has nothing to verify.
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_zero():\n    assert add(0, 0) == 0\n"
+    )
+    for path in ("changelog.d/zero.added.md", "kb/backlog/zero.md", "docs/zero.md", "README.md"):
+        (repo / path).parent.mkdir(parents=True, exist_ok=True)
+        (repo / path).write_text("text\n")
+    commit_all(repo, "test: add(0, 0)")
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: nothing to verify (no code change)" in summary, summary
+    assert "::warning" not in result.stdout
+
+
+def test_a_package_the_pr_adds_is_not_importable_without_the_fix(
+    repo: Path, tmp_path: Path
+) -> None:
+    # B2: the head's editable install (here: the developer's tree, at the end of
+    # sys.path like site-packages) would serve a package the PR adds to the run
+    # without the fix, and its test would read "unexpected pass".
+    (repo / "newpkg").mkdir()
+    (repo / "newpkg" / "__init__.py").write_text("def f():\n    return 1\n")
+    (repo / "tests" / "test_newpkg.py").write_text(
+        "from newpkg import f\n\n\ndef test_f():\n    assert f() == 1\n"
+    )
+    commit_all(repo, "feat: newpkg")
+    wrapper = tmp_path / "python"
+    wrapper.write_text(
+        "#!/usr/bin/env bash\n"
+        f'export PYTHONPATH="${{PYTHONPATH:+$PYTHONPATH:}}{repo}"\n'
+        f'exec "{sys.executable}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+    result, summary = run_vr(repo, tmp_path, "--python", str(wrapper))
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 0 red · 1 import-only · 0 unexpected pass · 0 n/a" in summary, summary
+
+
+def test_a_package_the_pr_adds_that_imports_from_elsewhere_is_refused(
+    repo: Path, tmp_path: Path
+) -> None:
+    # B2 and #189 together: if something ahead of the stub serves the new package
+    # (another checkout on the path), the run is refused rather than trusted.
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "newpkg").mkdir(parents=True)
+    (elsewhere / "newpkg" / "__init__.py").write_text("def f():\n    return 1\n")
+    (repo / "newpkg").mkdir()
+    (repo / "newpkg" / "__init__.py").write_text("def f():\n    return 1\n")
+    (repo / "tests" / "test_newpkg.py").write_text(
+        "from newpkg import f\n\n\ndef test_f():\n    assert f() == 1\n"
+    )
+    commit_all(repo, "feat: newpkg")
+    wrapper = tmp_path / "python"
+    wrapper.write_text(
+        "#!/usr/bin/env bash\n"
+        f'export PYTHONPATH="{elsewhere}${{PYTHONPATH:+:$PYTHONPATH}}"\n'
+        f'exec "{sys.executable}" "$@"\n'
+    )
+    wrapper.chmod(0o755)
+    result, _ = run_vr(repo, tmp_path, "--python", str(wrapper))
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "newpkg resolves outside" in result.stderr, result.stderr
+
+
+def test_both_runs_get_a_scratch_home_and_config(repo: Path, tmp_path: Path) -> None:
+    # New tests run against buggy code: nothing may land in the developer's
+    # HOME or Pyrite config (the 2026-09-23 incident class).
+    home = tmp_path / "home"
+    home.mkdir()
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "import os\nfrom pathlib import Path\n\nfrom pyrite import add\n\n\n"
+        "def test_new():\n"
+        "    for var in ('HOME', 'PYRITE_CONFIG_DIR', 'PYRITE_DATA_DIR', 'XDG_CONFIG_HOME',\n"
+        "                'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'XDG_STATE_HOME'):\n"
+        "        (Path(os.environ[var]) / f'written-{var}').write_text('x')\n"
+        "    (Path.home() / 'written-home').write_text('x')\n"
+        "    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    env = _env(
+        tmp_path,
+        {
+            "HOME": str(home),
+            "PYRITE_CONFIG_DIR": str(home / "cfg"),
+            "PYRITE_DATA_DIR": str(home / "data"),
+            "XDG_CONFIG_HOME": str(home / "xdg"),
+        },
+    )
+    result, summary = run_vr(repo, tmp_path, env=env)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 0 n/a" in summary, summary
+    assert list(home.rglob("*")) == []
+
+
+def test_the_scratch_env_keeps_the_model_cache(vr, tmp_path: Path, monkeypatch) -> None:
+    # Models are a read-mostly download cache, not config: a scratch HOME must not
+    # turn every embedding test into "n/a" by hiding them.
+    monkeypatch.setenv("HF_HOME", "/models")
+    env = vr.scratch_env(tmp_path)
+    assert env["HF_HOME"] == "/models"
+    assert env["HOME"] == env["PYRITE_CONFIG_DIR"] == env["PYRITE_DATA_DIR"] == str(tmp_path)
+
+
+@pytest.mark.control(
+    reason="dev's in-place runner never pruned; this pins the scope of the new one"
+)
+def test_only_its_own_stale_trees_are_pruned(repo: Path, tmp_path: Path) -> None:
+    # Someone else's worktree whose directory is missing (an unmounted disk, a
+    # moved checkout) is not this tool's to forget.
+    other = tmp_path / "elsewhere" / "wt"
+    git(repo, "worktree", "add", "-q", "--detach", str(other))
+    subprocess.run(["rm", "-rf", str(other)], check=True)
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    result, _ = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert any(str(other.name) in w for w in worktrees(repo)), worktrees(repo)
+
+
+def test_a_run_with_the_fix_that_records_nothing_is_an_infra_error(
+    repo: Path, tmp_path: Path
+) -> None:
+    # A conftest or plugin that breaks pytest outright is the check failing,
+    # not every test being "n/a": exit 2, and say why where the table would be.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "conftest.py").write_text("raise RuntimeError('boom in conftest')\n")
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "boom in conftest" in summary, summary
+    assert "boom in conftest" in result.stderr
+
+
 def test_no_code_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None:
     (repo / "tests" / "test_add.py").write_text(PR_TESTS.replace("make", "add"))
     commit_all(repo, "test: more tests")
@@ -618,7 +804,7 @@ def test_a_code_change_with_no_new_test_is_a_warning(repo: Path, tmp_path: Path)
     assert len(warnings) == 1 and "no new or edited test" in warnings[0], result.stdout
 
 
-@pytest.mark.control  # the #189 check is kept: the old runner refused this too
+@pytest.mark.control(reason="the #189 check is kept: the old runner refused this too")
 def test_a_package_that_resolves_outside_the_tree_is_refused(repo: Path, tmp_path: Path) -> None:
     # #189: an interpreter whose `import pyrite` lands in another checkout (a
     # symlinked .venv's editable install) would verify the wrong code.
@@ -774,6 +960,31 @@ def test_diff_coverage_is_carried_into_the_evidence(repo: Path, tmp_path: Path) 
     assert "diff coverage: 75% of 20 changed lines" in summary
 
 
+def test_diff_coverage_of_no_lines_is_not_100_percent(repo: Path, tmp_path: Path) -> None:
+    # B5: diff-cover reports 100% when no measured line changed. That is no data.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "test_new.py").write_text(
+        "from pyrite import add\n\n\ndef test_new():\n    assert add(2, 2) == 4\n"
+    )
+    commit_all(repo)
+    dc = tmp_path / "diff-cover.json"
+    dc.write_text(
+        json.dumps({"total_percent_covered": 100, "total_num_lines": 0, "total_num_violations": 0})
+    )
+    out = tmp_path / "evidence.json"
+    result, summary = run_vr(
+        repo, tmp_path, "--json", str(out), "--diff-cover-json", str(dc), "--head-sha", "abc123"
+    )
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    ev = json.loads(out.read_text())
+    assert ev["diff_coverage"] == {"percent": None, "lines": 0, "uncovered": 0}
+    assert "diff coverage: n/a (no changed line is measured)" in summary
+    assert "100%" not in summary
+    # B5: the PR's head is what joins to the PR; the merge commit CI checks out is kept apart.
+    assert ev["head"] == "abc123"
+    assert ev["merge_commit"] == git(repo, "rev-parse", "HEAD")
+
+
 # ---------------------------------------------------------------------------
 # The local entry point
 # ---------------------------------------------------------------------------
@@ -816,17 +1027,17 @@ def _runs(job: dict) -> str:
 
 
 class TestTheVerifyRedJob:
-    @pytest.mark.control  # kept from the old job
+    @pytest.mark.control(reason="kept from the old job")
     def test_it_runs_on_pull_request_only(self, ci):
         condition = ci["jobs"]["verify-red"]["if"]
         assert "github.event_name == 'pull_request'" in condition, condition
         assert "||" not in condition, f"another event could reach it: {condition}"
 
-    @pytest.mark.control  # kept from the old job
+    @pytest.mark.control(reason="kept from the old job")
     def test_it_is_not_a_gate(self, ci):
         assert ci["jobs"]["gate"]["needs"] == ["changes", "kb", "test", "frontend"]
 
-    @pytest.mark.control  # kept from the old job
+    @pytest.mark.control(reason="kept from the old job")
     def test_it_is_read_only(self, ci):
         assert ci["jobs"]["verify-red"].get("permissions") == {"contents": "read"}
 
@@ -837,7 +1048,7 @@ class TestTheVerifyRedJob:
         setup = 5 * 60  # checkout, Python, uv, the installs
         assert 2 * int(m.group(1)) + setup <= job["timeout-minutes"] * 60
 
-    @pytest.mark.control  # kept from the old job
+    @pytest.mark.control(reason="kept from the old job")
     def test_it_runs_the_script_against_the_merge_base_with_the_pr_base(self, ci):
         job = ci["jobs"]["verify-red"]
         run = _runs(job)
@@ -849,6 +1060,8 @@ class TestTheVerifyRedJob:
     def test_it_publishes_the_evidence_artifact(self, ci):
         job = ci["jobs"]["verify-red"]
         assert "--json test-evidence.json" in _runs(job)
+        # The checkout is the merge commit; the evidence must join to the PR's head.
+        assert '--head-sha "${{ github.event.pull_request.head.sha }}"' in _runs(job)
         upload = next(
             s for s in job["steps"] if s.get("uses", "").startswith("actions/upload-artifact")
         )
@@ -902,7 +1115,7 @@ class TestDiffCoverage:
         markers = tomllib.loads((REPO / "pyproject.toml").read_text())["tool"]["pytest"][
             "ini_options"
         ]["markers"]
-        assert any(m.startswith("control:") for m in markers), markers
+        assert any(m.startswith("control(reason):") for m in markers), markers
 
 
 # ---------------------------------------------------------------------------
@@ -920,9 +1133,15 @@ def test_the_conductor_reads_the_ci_result_and_does_not_rerun_it():
     assert "do not re-run it locally" in review
     # The job runs the PR's own copy: a PR that changes it cannot vouch for itself.
     assert "the PR itself touches `scripts/verify*red*` or the `verify-red` job" in review
+    # ...and the manual check runs dev's copy from the PR's worktree, never the PR's own copy.
+    assert "git show origin/dev:scripts/$f" in review
+    assert "The manual check runs **dev's** copy, never the PR's" in review
+    assert "0 red, or only import-only reds, goes back" in review
 
 
 def test_the_worker_runs_it_once_and_pastes_the_line():
     dev = _words(REPO / ".claude" / "skills" / "pyrite-dev" / "SKILL.md")
     assert "scripts/verify-red.sh" in dev
     assert "paste its summary line" in dev
+    assert "0 red, or only import-only reds, is not done" in dev
+    assert '@pytest.mark.control(reason="...")' in dev

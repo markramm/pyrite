@@ -663,6 +663,7 @@ jobs:
           python scripts/verify_red_ci.py --timeout 420
           --base "${{ github.event.pull_request.base.sha }}"
           --pr "${{ github.event.pull_request.number }}"
+          --head-sha "${{ github.event.pull_request.head.sha }}"
           --diff-cover-json diff-cover.json
           --json test-evidence.json
 

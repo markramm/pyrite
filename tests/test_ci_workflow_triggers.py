@@ -300,7 +300,7 @@ class TestTheMatrixNarrowsWhereItShould:
 class TestNoNewDependencies:
     """Hard project rule: new deps need prior discussion on a ticket."""
 
-    @pytest.mark.control  # the allow-list only widened: it passes either way
+    @pytest.mark.control(reason="the allow-list only widened: it passes either way")
     def test_classifier_uses_only_actions_already_in_the_workflow(self, ci):
         allowed = {
             "actions/checkout",

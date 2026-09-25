@@ -134,7 +134,8 @@ markers = [
     "core: always run by scripts/test-affected, whatever the branch changed",
     # verify-red (scripts/verify_red_ci.py): a test the PR adds on purpose to
     # pass without the fix too (a "still works" guard), so it is not warned about.
-    "control: a deliberate negative control; verify-red expects it to pass without the fix",
+    # It must say why: reason=... or the test's docstring; a bare marker is rejected.
+    "control(reason): a deliberate negative control; verify-red expects it to pass without the fix",
 ]
 
 [tool.mypy]

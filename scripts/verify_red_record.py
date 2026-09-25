@@ -29,7 +29,7 @@ def key(nodeid: str) -> tuple[str, ...]:
 def pytest_configure(config: pytest.Config) -> None:
     # Registered here too: the run without the fix may use a pyproject from
     # before the marker existed, and --strict-markers would stop it.
-    config.addinivalue_line("markers", "control: a deliberate negative control")
+    config.addinivalue_line("markers", "control(reason): a deliberate negative control")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -47,6 +47,20 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
         _write({"collect": report.nodeid})
 
 
+def _control_reason(item: pytest.Item) -> str | None:
+    """None without ``@pytest.mark.control``; else its reason, "" when it gives none.
+
+    A control must say why it passes without the fix: ``reason=...`` (or a
+    positional string) or the test's docstring. The driver rejects "".
+    """
+    marker = item.get_closest_marker("control")
+    if marker is None:
+        return None
+    reason = marker.kwargs.get("reason") or (marker.args[0] if marker.args else "")
+    doc = getattr(getattr(item, "function", None), "__doc__", None) or ""
+    return str(reason or doc).strip()
+
+
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     report = yield
@@ -54,7 +68,7 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
         "nodeid": item.nodeid,
         "when": call.when,
         "outcome": report.outcome,
-        "control": item.get_closest_marker("control") is not None,
+        "control": _control_reason(item),
     }
     if report.failed and call.excinfo is not None:
         exc = call.excinfo.value

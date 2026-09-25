@@ -75,6 +75,16 @@ def is_test_side(path: str) -> bool:
     )
 
 
+def is_inert(path: str) -> bool:
+    """A change no test can observe: a changelog fragment, a KB entry, Markdown.
+
+    Still left out of the run without the fix (a test may read one), but it
+    alone does not make a PR something to verify (B1).
+    """
+    parts = PurePosixPath(path).parts
+    return parts[0] in ("changelog.d", "kb") or path.endswith(".md")
+
+
 def is_test_file(path: str) -> bool:
     p = PurePosixPath(path)
     return is_test_side(path) and p.suffix == ".py" and p.name.startswith("test_")
@@ -111,19 +121,31 @@ def touched_tests(base_src: str | None, head_src: str) -> set[tuple[str, ...]]:
 
 
 def defined_names(src: str | None) -> set[str]:
-    """Every function, class, and module- or class-level variable a source defines."""
-    tree = _parse(src)
-    if tree is None:
-        return set()
+    """The functions, classes and variables a source defines at module or class level.
+
+    Not inside function bodies: a local helper the PR adds must not turn an
+    unrelated AttributeError on the same name into "import-only" (B3).
+    """
     names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            names.add(node.name)
-        if isinstance(node, ast.Module | ast.ClassDef):
-            for stmt in node.body:
-                targets = stmt.targets if isinstance(stmt, ast.Assign) else []
-                targets = [stmt.target] if isinstance(stmt, ast.AnnAssign) else targets
-                names |= {t.id for t in targets if isinstance(t, ast.Name)}
+
+    def walk(body: list[ast.stmt]) -> None:
+        for stmt in body:
+            if isinstance(stmt, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                names.add(stmt.name)
+                if isinstance(stmt, ast.ClassDef):
+                    walk(stmt.body)
+                continue
+            targets = stmt.targets if isinstance(stmt, ast.Assign) else []
+            targets = [stmt.target] if isinstance(stmt, ast.AnnAssign) else targets
+            names.update(t.id for t in targets if isinstance(t, ast.Name))
+            for child in ast.iter_child_nodes(stmt):  # if / try / with blocks
+                if isinstance(child, ast.stmt):
+                    walk([child])
+                elif isinstance(child, ast.ExceptHandler):
+                    walk(child.body)
+
+    tree = _parse(src)
+    walk(tree.body if tree else [])
     return names
 
 
@@ -152,10 +174,14 @@ def classify(
     without: dict | None,
     *,
     collect_failed: bool,
-    control: bool,
+    control: str | None,
     added: frozenset[str] | set[str],
 ) -> tuple[str, str]:
-    """(verdict, detail) for one test, from its record in each run."""
+    """(verdict, detail) for one test, from its record in each run.
+
+    `control` is the reason a ``@pytest.mark.control`` gives (its ``reason=`` or
+    the test's docstring): None without the marker, "" for a bare one.
+    """
     if with_fix is None or with_fix["outcome"] != "passed":
         return NA, f"{with_fix['outcome'] if with_fix else 'not run'} with the fix"
     if collect_failed:
@@ -163,7 +189,11 @@ def classify(
     if without is None or without["outcome"] == "skipped":
         return NA, f"{without['outcome'] if without else 'not run'} without the fix"
     if without["outcome"] == "passed":
-        return (CONTROL, "") if control else (UNEXPECTED, "")
+        if control:
+            return CONTROL, ""
+        if control == "":
+            return UNEXPECTED, "@pytest.mark.control needs a reason: reason=... or a docstring"
+        return UNEXPECTED, ""
     exc = without.get("exc") or {}
     missing = _named(exc) & added if _MISSING_NAME & set(exc.get("types", [])) else set()
     if missing:
@@ -248,20 +278,40 @@ def import_roots(tree: Path) -> list[Path]:
     return [tree, *sorted(tree.glob("extensions/*/src"))]
 
 
-def check_imports(python: str, tree: Path, env: dict[str, str]) -> None:
-    """#189: every package in the tree must import from the tree, not an install elsewhere."""
-    pkgs = sorted({p.parent.name for r in import_roots(tree) for p in r.glob("*/__init__.py")})
+def packages(root: Path) -> set[str]:
+    """The top-level packages a checkout provides (its root, and extensions/*/src)."""
+    return {p.parent.name for r in import_roots(root) for p in r.glob("*/__init__.py")}
+
+
+def check_imports(
+    python: str, tree: Path, stubs: Path, env: dict[str, str], head_pkgs: set[str]
+) -> None:
+    """#189: the tests must import the tree under test and nothing else.
+
+    A package in the tree must resolve into it. A package only the PR's head has
+    (a new extension, whose editable install is the head's) must not import at
+    all: it resolves to a stub in `stubs` that raises ModuleNotFoundError (B2).
+    """
+    here = packages(tree)
+    shutil.rmtree(stubs, ignore_errors=True)
+    for name in head_pkgs - here:
+        (stubs / name).mkdir(parents=True)
+        (stubs / name / "__init__.py").write_text(
+            f'raise ModuleNotFoundError("No module named {name!r}", name={name!r})\n'
+        )
     code = (
         "import importlib.util as u, json, sys\n"
         "print(json.dumps({n: getattr(u.find_spec(n), 'origin', None) for n in sys.argv[1:]}))"
     )
+    names = sorted(here | head_pkgs)
     r = subprocess.run(
-        [python, "-c", code, *pkgs], cwd=tree, env=env, capture_output=True, text=True
+        [python, "-c", code, *names], cwd=tree, env=env, capture_output=True, text=True
     )
     if r.returncode != 0:
         raise InfraError(f"could not locate the packages under test: {r.stderr.strip()}")
     for name, origin in json.loads(r.stdout).items():
-        if not origin or not Path(origin).resolve().is_relative_to(tree.resolve()):
+        where = tree if name in here else stubs
+        if not origin or not Path(origin).resolve().is_relative_to(where.resolve()):
             raise InfraError(
                 f"{name} resolves outside the tree under test ({origin}): a verdict about "
                 "code the interpreter is not importing is not evidence"
@@ -275,20 +325,40 @@ class Run:
     timed_out: bool
 
 
-def run_pytest(python: str, tree: Path, work: Path, name: str, timeout: float) -> Run:
+def scratch_env(home: Path) -> dict[str, str]:
+    """HOME, Pyrite's config and data, and the XDG dirs, all in `home`: new tests
+    run against buggy code, and the developer's own config is not theirs to
+    write (the 2026-09-23 incident)."""
+    env = {"HOME": str(home), "PYRITE_CONFIG_DIR": str(home), "PYRITE_DATA_DIR": str(home)}
+    for var, sub in (
+        ("XDG_CONFIG_HOME", ".config"),
+        ("XDG_DATA_HOME", ".local/share"),
+        ("XDG_CACHE_HOME", ".cache"),
+        ("XDG_STATE_HOME", ".local/state"),
+    ):
+        (home / sub).mkdir(parents=True, exist_ok=True)
+        env[var] = str(home / sub)
+    # Model downloads are a read-mostly cache, not config: keep the real one.
+    env["HF_HOME"] = os.environ.get("HF_HOME") or str(Path.home() / ".cache" / "huggingface")
+    return env
+
+
+def run_pytest(
+    python: str, tree: Path, work: Path, name: str, timeout: float, head_pkgs: set[str]
+) -> Run:
     record = work / f"{name}.jsonl"
+    roots = [*map(str, import_roots(tree)), str(work / "stubs"), str(work / "plugin")]
     env = {
         **os.environ,
+        **scratch_env(work / "home"),
         # Both runs import one tree whose sources change in between; a .pyc the
         # first wrote (same size, same mtime second) would serve it to the second.
         "PYTHONDONTWRITEBYTECODE": "1",
-        "PYTHONPATH": os.pathsep.join(
-            [*map(str, import_roots(tree)), str(work / "plugin"), os.environ.get("PYTHONPATH", "")]
-        ),
+        "PYTHONPATH": os.pathsep.join([*roots, os.environ.get("PYTHONPATH", "")]),
         "VERIFY_RED_RECORD": str(record),
         "VERIFY_RED_SELECT": str(work / "select.json"),
     }
-    check_imports(python, tree, env)
+    check_imports(python, tree, work / "stubs", env, head_pkgs)
     files = sorted({k[0] for k in json.loads((work / "select.json").read_text())})
     cmd = [python, "-m", "pytest", *files, "-p", "verify_red_record", "-p", "no:cacheprovider"]
     log = work / f"{name}.log"
@@ -312,9 +382,11 @@ def run_pytest(python: str, tree: Path, work: Path, name: str, timeout: float) -
             collect_failed.add(rec["collect"])
         else:
             phases.setdefault(rec["nodeid"], []).append(rec)
-    if not phases and not timed_out:
-        tail = log.read_text().splitlines()[-15:]
-        print(f"verify-red: the {name} run recorded no test:", *tail, sep="\n  ", file=sys.stderr)
+    if not phases and not collect_failed and not timed_out:
+        tail = "\n  ".join(log.read_text().splitlines()[-15:])
+        if name == "with":  # pytest itself failed (a conftest, a plugin): no verdict is honest
+            raise InfraError(f"the run with the fix recorded no test; pytest said:\n  {tail}")
+        print(f"verify-red: the {name} run recorded no test:\n  {tail}", file=sys.stderr)
     results = {}
     for nodeid, recs in phases.items():
         # A failed or skipped phase decides; otherwise it passed only once its
@@ -327,9 +399,22 @@ def run_pytest(python: str, tree: Path, work: Path, name: str, timeout: float) -
     return Run(results, collect_failed, timed_out)
 
 
+def forget_stale_trees(top: Path) -> None:
+    """Drop the registration of this tool's own throwaway trees whose directory is
+    gone (a killed run, once $TMPDIR was cleared). `git worktree prune` would
+    drop anyone's; this reads each registration's gitdir and touches only ours."""
+    common = Path(git("rev-parse", "--git-common-dir", cwd=top).strip())
+    admin_dirs = (top / common / "worktrees").glob("*/gitdir")
+    for gitdir in admin_dirs:
+        tree = Path(gitdir.read_text().strip()).parent
+        if tree.name == "tree" and tree.parent.name.startswith("verify-red-") and not tree.exists():
+            shutil.rmtree(gitdir.parent)
+
+
 def verify(python: str, top: Path, mb: str, change: Change, timeout: float) -> tuple[Run, Run]:
     """(run without the fix, run with it), in one throwaway tree."""
-    git("worktree", "prune", cwd=top)  # a killed run's tree, once $TMPDIR has lost it
+    forget_stale_trees(top)
+    head_pkgs = packages(top)
     work = Path(tempfile.mkdtemp(prefix="verify-red-"))
     tree = work / "tree"
     try:
@@ -338,9 +423,9 @@ def verify(python: str, top: Path, mb: str, change: Change, timeout: float) -> t
         shutil.copy(PLUGIN, work / "plugin")
         (work / "select.json").write_text(json.dumps(change.selected))
         overlay(top, tree, change.test_side)
-        without = run_pytest(python, tree, work, "without", timeout)
+        without = run_pytest(python, tree, work, "without", timeout, head_pkgs)
         overlay(top, tree, change.code)
-        return without, run_pytest(python, tree, work, "with", timeout)
+        return without, run_pytest(python, tree, work, "with", timeout, head_pkgs)
     finally:
         remove = ["git", "worktree", "remove", "--force", str(tree)]
         subprocess.run(remove, cwd=top, capture_output=True)
@@ -356,7 +441,7 @@ def verdicts(change: Change, without: Run, with_fix: Run) -> list[tuple[str, str
             w,
             wo,
             collect_failed=nodeid.split("::")[0] in without.collect_failed,
-            control=bool((w or wo or {}).get("control")),
+            control=(w or wo or {}).get("control"),
             added=change.added,
         )
         if verdict == NA and (w is None and with_fix.timed_out or wo is None and without.timed_out):
@@ -401,9 +486,13 @@ def report(args: argparse.Namespace) -> tuple[dict, str]:
     mb = git("merge-base", args.base or _default_base(top), "HEAD", cwd=top).strip()
     change = read_change(top, mb)
     subjects = git("log", "--format=%s", f"{mb}..HEAD", cwd=top).splitlines()
+    checked_out = git("rev-parse", "HEAD", cwd=top).strip()
     evidence: dict = {
         "pr": args.pr,
-        "head": git("rev-parse", "HEAD", cwd=top).strip(),
+        # CI checks out the PR's merge commit, which joins to nothing: the PR's
+        # own head is passed in (--head-sha), the merge commit kept apart (B5).
+        "head": args.head_sha or checked_out,
+        "merge_commit": checked_out,
         "merge_base": mb,
         "fix_commits": sum(bool(re.match(r"fix(\(.*\))?!?:", s)) for s in subjects),
         "verify_red": None,
@@ -411,10 +500,11 @@ def report(args: argparse.Namespace) -> tuple[dict, str]:
     }
     out = ["## verify-red: do this PR's new tests fail without its change?", ""]
     ci = os.environ.get("GITHUB_ACTIONS") == "true"
-    if not change.code or not change.selected:
-        why = "no code change" if not change.code else "no new or edited test"
+    code = [p for p in change.code if not is_inert(p)]
+    if not code or not change.selected:
+        why = "no code change" if not code else "no new or edited test"
         out.append(f"verify-red: nothing to verify ({why}).")
-        if change.code and ci:
+        if code and ci:
             print(f"::warning title=verify-red::this PR changes code but has {why}", flush=True)
     else:
         rows = verdicts(change, *verify(args.python, top, mb, change, args.timeout))
@@ -437,11 +527,15 @@ def report(args: argparse.Namespace) -> tuple[dict, str]:
     if args.diff_cover_json and Path(args.diff_cover_json).is_file():
         dc = json.loads(Path(args.diff_cover_json).read_text())
         d = evidence["diff_coverage"] = {
-            "percent": dc.get("total_percent_covered"),
+            # diff-cover says 100% when no measured line changed: that is no data (B5).
+            "percent": dc.get("total_percent_covered") if dc.get("total_num_lines") else None,
             "lines": dc.get("total_num_lines"),
             "uncovered": dc.get("total_num_violations"),
         }
-        out += ["", f"diff coverage: {d['percent']}% of {d['lines']} changed lines (advisory)"]
+        if d["percent"] is None:
+            out += ["", "diff coverage: n/a (no changed line is measured)"]
+        else:
+            out += ["", f"diff coverage: {d['percent']}% of {d['lines']} changed lines (advisory)"]
     return evidence, "\n".join(out)
 
 
@@ -454,11 +548,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", help="write the evidence (verdict counts, diff coverage) here")
     parser.add_argument("--diff-cover-json", help="diff-cover's JSON report, carried into --json")
     parser.add_argument("--pr", type=int, help="the pull request number, for --json")
+    parser.add_argument("--head-sha", help="the PR's head commit, for --json (CI: not the merge)")
     args = parser.parse_args(argv)
     try:
         evidence, text = report(args)
     except InfraError as exc:
         print(f"verify-red: could not run: {exc}", file=sys.stderr)
+        if args.summary:
+            with open(args.summary, "a", encoding="utf-8") as fh:
+                fh.write(f"## verify-red: could not run\n\n```\n{exc}\n```\n")
         return 2
     print(text, flush=True)
     if args.summary:

@@ -53,9 +53,16 @@ code nobody had pushed).
       `unexpected pass` on a test not marked `@pytest.mark.control`, and `n/a` need a look at that test (PR
       #69: a class named for the exact regression it reintroduced covered only cases that already passed,
       and read as tested). The worker's report pastes the same line from its own run; if the two disagree,
-      trust CI and ask why. A manual check replaces the job only where
+      trust CI and ask why. A PR with a `fix:` commit whose line has **0 red, or only import-only reds, goes
+      back** to its author unless the PR states why (an environment-only bug like #373, a fix only a
+      wrapper-level test can see); `unexpected pass` or `control` tests do not count as evidence for it.
+      A manual check replaces the job only where
       the PR itself touches `scripts/verify*red*` or the `verify-red` job in `.github/workflows/ci.yml`: the
-      job runs the PR's own copy, so its table cannot vouch for itself. The job and diff coverage (the test
+      job runs the PR's own copy, so its table cannot vouch for itself. The manual check runs **dev's** copy,
+      never the PR's, with the PR's worktree as the working directory:
+      `d=$(mktemp -d); for f in verify_red_ci.py verify_red_record.py; do git show origin/dev:scripts/$f > $d/$f; done; (cd <PR worktree> && .venv/bin/python $d/verify_red_ci.py)`.
+      (Before the throwaway-tree runner is on dev, dev's copy reverts in place: run it in a scratch clone
+      of the PR branch, not in any worktree.) The job and diff coverage (the test
       job's summary) are advisory; after ~10 PRs of `test-evidence.json` the maintainer decides on gating
 - [ ] any number in the report (faster, slower, N% fewer rewrites, a flake rate) was measured against the
       MERGE BASE, under ONE interpreter with the source tree pinned, and the sentence that reports it states
