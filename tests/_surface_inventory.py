@@ -58,6 +58,21 @@ class EntryPoint:
     def qualname(self) -> str:
         return inspect.unwrap(self.handler).__qualname__
 
+    @property
+    def module(self) -> str:
+        """The dotted module the handler is defined in -- independent of where
+        the package is installed, unlike ``source``."""
+        return inspect.unwrap(self.handler).__module__
+
+
+def plugin_packages() -> set[str]:
+    """Top-level packages of the installed Pyrite plugins (the ``pyrite.plugins``
+    entry points), however they are installed -- editable from any checkout,
+    or as wheels."""
+    from importlib.metadata import entry_points
+
+    return {ep.value.split(":")[0].split(".")[0] for ep in entry_points(group="pyrite.plugins")}
+
 
 def _walk_routes(routes, prefix: str = "") -> list[tuple[str, object]]:
     """(full path, APIRoute) for every route, through included routers.

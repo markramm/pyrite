@@ -555,11 +555,15 @@ in-flight job rather than a synthetic one.
 ## A surface reaching the DB fails `test_layer_boundaries.py` (#380)
 
 REST endpoints, MCP handlers, the CLIs and `ui/data.py` reach storage only
-through a service. `tests/test_layer_boundaries.py` fails on `_raw_conn`,
-`<x>.db.<y>`, `db.<method>()`, `PyriteDB(`, and -- outside `server/api.py` --
-`Depends(get_db)`, `AuthService(` and `app.state.pyrite_db`. The fix is a
-service method plus a provider (`api.py` for REST, `cli/context.py` for the
-CLI), never an allowlist entry: `ALLOWLIST_SIZE` only goes down.
+through a service. `tests/test_layer_boundaries.py` counts, per function and
+rule, every place a DB handle *enters* a surface: `_raw_conn`, any `.db` read
+(so `d = svc.db` and `getattr(svc, "db")` count), `db.<anything>` but
+`close`, `get_db` under any name and `AuthService(` outside `api.py`,
+`PyriteDB`, `sqlite3`, and any import or use of a `pyrite.storage` class.
+Composition roots and the allowlist both pin a count per (function, rule)
+and a list size, so one more reach anywhere fails. The fix is a service
+method plus a provider (`api.py` for REST, `cli/context.py` for the CLI),
+never a new entry: `ALLOWLIST_SIZE` only goes down.
 
 Two traps met on the way:
 - `import pyrite.cli.context` imports the whole `pyrite.cli` package (the
