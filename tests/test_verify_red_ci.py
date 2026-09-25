@@ -568,6 +568,36 @@ def test_a_renamed_test_file_is_not_all_new(repo: Path, tmp_path: Path) -> None:
     assert "1 pre-existing test" in summary
 
 
+def test_a_file_the_change_deletes_is_absent_with_the_fix(repo: Path, tmp_path: Path) -> None:
+    # The run with the fix must match the working tree, deletions included.
+    (repo / "pyrite" / "legacy.py").write_text("OLD = 1\n")
+    commit_all(repo, "base: legacy")
+    git(repo, "branch", "-f", "dev", "HEAD")
+    git(repo, "rm", "-q", "pyrite/legacy.py")
+    (repo / "tests" / "test_new.py").write_text(
+        "import importlib.util\n\n\ndef test_legacy_is_gone():\n"
+        "    assert importlib.util.find_spec('pyrite.legacy') is None\n"
+    )
+    commit_all(repo, "refactor: drop legacy")
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 1 red · 0 import-only · 0 unexpected pass · 0 n/a" in summary, summary
+
+
+def test_a_conftest_that_needs_the_fix_is_no_claim_not_a_crash(repo: Path, tmp_path: Path) -> None:
+    # Without the fix pytest cannot load the conftest and runs nothing: every test
+    # is a row saying so, and the run still finishes.
+    (repo / "pyrite" / "__init__.py").write_text(FIXED)
+    (repo / "tests" / "conftest.py").write_text("from pyrite import helper  # noqa: F401\n")
+    (repo / "tests" / "test_new.py").write_text(NEW_FILE_TESTS)
+    commit_all(repo)
+    result, summary = run_vr(repo, tmp_path)
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert "verify-red: 0 red · 0 import-only · 0 unexpected pass · 1 n/a" in summary, summary
+    assert "not run without the fix" in summary
+    assert "the without run recorded no test" in result.stderr
+
+
 def test_no_code_change_is_nothing_to_verify(repo: Path, tmp_path: Path) -> None:
     (repo / "tests" / "test_add.py").write_text(PR_TESTS.replace("make", "add"))
     commit_all(repo, "test: more tests")
