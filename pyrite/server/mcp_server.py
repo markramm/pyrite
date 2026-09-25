@@ -27,6 +27,7 @@ from ..exceptions import (
     PyriteError,
     QuerySyntaxError,
     QueryTooLongError,
+    StorageError,
     ValidationError,
 )
 from ..services.body_bounds import (
@@ -85,6 +86,7 @@ _DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (KBProtectedError, "KB_PROTECTED"),
     (QuerySyntaxError, "QUERY_SYNTAX"),
     (QueryTooLongError, "QUERY_TOO_LONG"),
+    (StorageError, "STORAGE_ERROR"),
     (ValidationError, "VALIDATION_FAILED"),
     (ConfigError, "CONFIG_ERROR"),
 )
@@ -109,12 +111,19 @@ def _refusal(exc: PyriteError) -> dict:
 
     Write refusals carry a stable ``error_code`` (see the ValidationError
     subclasses in ``pyrite.exceptions``) that REST and the CLI report
-    unchanged (#378). Never retryable: the same call fails the same way.
+    unchanged (#378). Not retryable -- the same call fails the same way -- except
+    a StorageError, which is a transient server fault.
     """
     code = getattr(exc, "error_code", None) or next(
         (c for t, c in _DOMAIN_ERROR_CODES if isinstance(exc, t)), "REQUEST_REFUSED"
     )
-    err = _error(code, str(exc), suggestion=getattr(exc, "suggestion", None))
+    err = _error(
+        code,
+        str(exc),
+        suggestion=getattr(exc, "suggestion", None),
+        # A storage fault (a locked database, disk I/O) is transient, not a refusal.
+        retryable=isinstance(exc, StorageError),
+    )
     declared = getattr(exc, "declared_types", None)
     if declared is not None:
         err["declared_types"] = declared
@@ -2181,8 +2190,8 @@ class PyriteMCPServer:
             return handler(arguments)
         except PyriteError as e:
             # A refused request, not a crash: the service said no for a reason
-            # the caller can act on. Never retryable -- the same call fails the
-            # same way -- and not logged as an exception.
+            # the caller can act on. Not retryable (the same call fails the
+            # same way) except a StorageError, and not logged as an exception.
             return _refusal(e)
         except Exception as e:
             logger.exception("Tool %s failed with args %s", name, arguments)
