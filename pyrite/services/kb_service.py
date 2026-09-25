@@ -461,6 +461,8 @@ class KBService:
         if kb_config.read_only:
             raise KBReadOnlyError(f"KB is read-only: {kb_name}")
 
+        repository = KBRepository(kb_config)
+
         hook_ctx = PluginContext(
             config=self.config,
             db=self.db,
@@ -498,6 +500,16 @@ class KBService:
                 }
 
                 entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **extra)
+
+                # Match create_entry: a create with an existing ID is never
+                # an update. This check also catches duplicate IDs earlier in
+                # this batch because each successful item has already been saved.
+                if repository.exists(entry.id):
+                    raise ValidationError(
+                        f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'. "
+                        "Use update to change it, or choose a different title/id."
+                    )
+
                 entry = self._run_hooks("before_save", entry, hook_ctx)
 
                 self._doc_mgr.save_entry(entry, kb_name, kb_config)

@@ -1,0 +1,1 @@
+- **Bulk create and `pyrite import` no longer overwrite entries with duplicate IDs (#359).** Existing entries and earlier entries in the same batch now fail individually with an “already exists” error; their files remain unchanged while valid siblings are imported.
