@@ -6,13 +6,20 @@
  * layout calls `follow(identity)` whenever `authStore.socketIdentity` changes,
  * and a change closes the current socket and opens exactly one new one (#336).
  *
- * Reconnects with exponential backoff after a socket that had opened drops.
+ * Reconnects with exponential backoff (1 s doubling to 30 s) after a drop.
+ *
  * A handshake the server refuses is closed before `accept`, which a browser
- * reports as close code 1006 (not 1008), so the client cannot tell a refusal
- * from a dropped connection by code. It uses the one signal it has: no socket
- * has opened for this identity yet. That is a refusal, reported as the
- * `refused` status and not retried until the identity changes -- nothing else
- * could change the server's answer.
+ * reports as close code 1006 (not 1008): the same code as a backend that is
+ * restarting or a proxy answering 502 mid-deploy. So the client cannot tell a
+ * refusal from a transient failure by code, and uses a heuristic instead. A
+ * handshake that fails without any socket having opened for this identity is
+ * retried twice with the backoff. After that it is reported as `refused` and
+ * left alone until the identity changes, the browser comes back `online`, or
+ * the tab becomes visible, each of which earns one more attempt. The
+ * heuristic can be wrong both ways. A long outage at page load reads as a
+ * refusal (recovered on the next of those events or a reload). A refusal
+ * after this identity once connected reads as a drop and keeps backing off
+ * (at most every 30 s).
  */
 
 export interface WSEvent {
@@ -24,14 +31,17 @@ export interface WSEvent {
 /**
  * `idle`: no socket wanted (signed out with no anonymous access, or torn
  * down). `connecting`: a socket is opening. `open`: live. `closed`: dropped,
- * a reconnect is scheduled. `refused`: the server would not admit this
- * identity; not retried until it changes.
+ * a reconnect is scheduled. `refused`: every handshake for this identity
+ * failed without opening, retries included; see the header for when it is
+ * tried again.
  */
 export type WSStatus = 'idle' | 'connecting' | 'open' | 'closed' | 'refused';
 
 type WSEventHandler = (event: WSEvent) => void;
 
 const INITIAL_RECONNECT_DELAY = 1000;
+/** Retries of a handshake that has never opened for this identity, before `refused`. */
+const UNOPENED_RETRIES = 2;
 
 export class WebSocketClient {
 	private ws: WebSocket | null = null;
@@ -43,6 +53,8 @@ export class WebSocketClient {
 	private shouldConnect = false;
 	/** Whether any socket has opened since the last `connect()`. */
 	private everOpened = false;
+	/** Handshakes that failed without opening since the last `connect()`. */
+	private unopenedFailures = 0;
 	/** The identity the current socket was opened for; undefined before any `follow`. */
 	private identity: string | null | undefined = undefined;
 	private _status: WSStatus = 'idle';
@@ -92,8 +104,28 @@ export class WebSocketClient {
 		if (typeof window === 'undefined') return;
 		this.shouldConnect = true;
 		this.everOpened = false;
+		this.unopenedFailures = 0;
+		this.reconnectDelay = INITIAL_RECONNECT_DELAY;
+		window.addEventListener('online', this.retryIfRefused);
+		document.addEventListener('visibilitychange', this.retryIfVisible);
 		this.doConnect();
 	}
+
+	/**
+	 * One more attempt for a refused socket, when something that could have
+	 * changed the answer happened (network back, tab back). A failure of that
+	 * attempt settles on `refused` again at once.
+	 */
+	private retryIfRefused = () => {
+		if (this._status !== 'refused') return;
+		// `unopenedFailures` is still at its limit, so this is one attempt.
+		this.shouldConnect = true;
+		this.doConnect();
+	};
+
+	private retryIfVisible = () => {
+		if (document.visibilityState === 'visible') this.retryIfRefused();
+	};
 
 	private doConnect() {
 		this.reconnectTimer = null;
@@ -121,11 +153,15 @@ export class WebSocketClient {
 			ws.onclose = () => {
 				this.ws = null;
 				if (!this.everOpened) {
-					// Closed without this identity's socket ever opening: the
-					// server refused the handshake. Retrying cannot help.
-					this.shouldConnect = false;
-					this.setStatus('refused');
-					return;
+					// Closed without this identity's socket ever opening: a
+					// refusal, or a transient failure at page load. Retry a
+					// bounded number of times, then settle on refused.
+					if (this.unopenedFailures >= UNOPENED_RETRIES) {
+						this.shouldConnect = false;
+						this.setStatus('refused');
+						return;
+					}
+					this.unopenedFailures++;
 				}
 				this.setStatus('closed');
 				if (this.shouldConnect) {
@@ -158,6 +194,10 @@ export class WebSocketClient {
 		// Forgotten, so a later `follow` of the same identity reopens.
 		this.identity = undefined;
 		this.shouldConnect = false;
+		if (typeof window !== 'undefined') {
+			window.removeEventListener('online', this.retryIfRefused);
+			document.removeEventListener('visibilitychange', this.retryIfVisible);
+		}
 		if (this.reconnectTimer !== null) {
 			clearTimeout(this.reconnectTimer);
 			this.reconnectTimer = null;

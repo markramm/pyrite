@@ -193,47 +193,159 @@ describe('a late onclose from a replaced socket', () => {
 	});
 });
 
+/**
+ * Fail the current handshake and every retry the client makes, until it
+ * settles on `refused`: the first attempt plus two retries (1 s, then 2 s).
+ */
+function refuseEveryAttempt() {
+	const before = FakeWebSocket.instances.length;
+	latest().fireClose(1006);
+	vi.advanceTimersByTime(1000);
+	expect(FakeWebSocket.instances).toHaveLength(before + 1);
+	latest().fireClose(1006);
+	vi.advanceTimersByTime(2000);
+	expect(FakeWebSocket.instances).toHaveLength(before + 2);
+	latest().fireClose(1006);
+	expect(client.status).toBe('refused');
+}
+
 describe('a refused handshake', () => {
-	it('is reported as refused, with a notification, and never retried', () => {
+	it('is retried twice with the backoff before it counts as refused', () => {
 		const statuses: WSStatus[] = [];
 		client.onStatus((s) => statuses.push(s));
 		client.follow('anonymous');
 
 		latest().fireClose(1006); // closed without ever opening
+		expect(client.status).toBe('closed');
+		vi.advanceTimersByTime(999);
+		expect(FakeWebSocket.instances).toHaveLength(1);
+		vi.advanceTimersByTime(1);
+		expect(FakeWebSocket.instances).toHaveLength(2);
 
+		latest().fireClose(1006);
+		expect(client.status).toBe('closed');
+		vi.advanceTimersByTime(1999);
+		expect(FakeWebSocket.instances).toHaveLength(2);
+		vi.advanceTimersByTime(1);
+		expect(FakeWebSocket.instances).toHaveLength(3);
+
+		latest().fireClose(1006);
 		expect(client.status).toBe('refused');
 		expect(statuses).toContain('refused');
 		vi.advanceTimersByTime(10 * 60_000);
-		expect(FakeWebSocket.instances).toHaveLength(1);
+		expect(FakeWebSocket.instances).toHaveLength(3);
+	});
+
+	it('a transient failure of the first handshake recovers (a backend restarting at page load)', () => {
+		client.follow('user:1');
+		latest().fireClose(1006); // 502 from a proxy mid-deploy
+		vi.advanceTimersByTime(1000);
+		expect(FakeWebSocket.instances).toHaveLength(2);
+		latest().fireOpen();
+		expect(client.status).toBe('open');
 	});
 
 	it('stays refused when the same identity is followed again', () => {
 		client.follow('anonymous');
-		latest().fireClose();
+		refuseEveryAttempt();
 		client.follow('anonymous');
-		expect(FakeWebSocket.instances).toHaveLength(1);
+		expect(FakeWebSocket.instances).toHaveLength(3);
 		expect(client.status).toBe('refused');
 	});
 
 	it('is retried once the user changes', () => {
 		client.follow('anonymous');
-		latest().fireClose();
+		refuseEveryAttempt();
 
 		client.follow('user:1');
 
-		expect(FakeWebSocket.instances).toHaveLength(2);
+		expect(FakeWebSocket.instances).toHaveLength(4);
 		expect(client.status).toBe('connecting');
 		latest().fireOpen();
 		expect(client.status).toBe('open');
 	});
 
-	it('an error before open is a refusal too (the browser fires error, then close)', () => {
+	it("a refusal does not use up the next user's retries", () => {
+		client.follow('anonymous');
+		refuseEveryAttempt();
+
+		client.follow('user:1');
+		latest().fireClose(1006);
+
+		expect(client.status).toBe('closed');
+		vi.advanceTimersByTime(1000);
+		expect(FakeWebSocket.instances).toHaveLength(5);
+	});
+
+	it('an error before open counts like a close (the browser fires error, then close)', () => {
 		client.follow('anonymous');
 		const s = latest();
 		s.onerror?.(new Event('error'));
 		expect(s.closeCalled).toBe(true);
 		s.fireClose();
+		expect(client.status).toBe('closed');
+	});
+
+	it('is retried once when the browser comes back online', () => {
+		client.follow('anonymous');
+		refuseEveryAttempt();
+
+		window.dispatchEvent(new Event('online'));
+		expect(FakeWebSocket.instances).toHaveLength(4);
+		expect(client.status).toBe('connecting');
+
+		// Once: a second refusal settles at once, with no further retries.
+		latest().fireClose(1006);
 		expect(client.status).toBe('refused');
+		vi.advanceTimersByTime(10 * 60_000);
+		expect(FakeWebSocket.instances).toHaveLength(4);
+	});
+
+	it('the online retry can recover', () => {
+		client.follow('anonymous');
+		refuseEveryAttempt();
+		window.dispatchEvent(new Event('online'));
+		expect(FakeWebSocket.instances).toHaveLength(4);
+		latest().fireOpen();
+		expect(client.status).toBe('open');
+	});
+
+	it('is retried once when the tab becomes visible, not when it is hidden', () => {
+		const visibility = vi.spyOn(document, 'visibilityState', 'get');
+		client.follow('anonymous');
+		refuseEveryAttempt();
+
+		visibility.mockReturnValue('hidden');
+		document.dispatchEvent(new Event('visibilitychange'));
+		expect(FakeWebSocket.instances).toHaveLength(3);
+
+		visibility.mockReturnValue('visible');
+		document.dispatchEvent(new Event('visibilitychange'));
+		expect(FakeWebSocket.instances).toHaveLength(4);
+		visibility.mockRestore();
+	});
+
+	it('online or visibility does nothing unless refused', () => {
+		client.follow('user:1');
+		latest().fireOpen();
+		window.dispatchEvent(new Event('online'));
+		document.dispatchEvent(new Event('visibilitychange'));
+		expect(FakeWebSocket.instances).toHaveLength(1);
+
+		client.follow(null);
+		window.dispatchEvent(new Event('online'));
+		expect(FakeWebSocket.instances).toHaveLength(1);
+	});
+
+	it('a disconnected client removes its online and visibility listeners', () => {
+		const removedFromWindow = vi.spyOn(window, 'removeEventListener');
+		const removedFromDocument = vi.spyOn(document, 'removeEventListener');
+		client.follow('anonymous');
+		client.disconnect();
+		expect(removedFromWindow.mock.calls.map((c) => c[0])).toContain('online');
+		expect(removedFromDocument.mock.calls.map((c) => c[0])).toContain('visibilitychange');
+		removedFromWindow.mockRestore();
+		removedFromDocument.mockRestore();
 	});
 });
 
@@ -295,7 +407,7 @@ describe('any other disconnect keeps the backoff', () => {
 		expect(FakeWebSocket.instances).toHaveLength(4);
 	});
 
-	it('a new identity gets a fresh refusal check, even after the old one had opened', () => {
+	it('a new identity gets a fresh refusal count, even after the old one had opened', () => {
 		client.follow('user:1');
 		latest().fireOpen();
 		latest().fireClose(1001);
@@ -303,7 +415,7 @@ describe('any other disconnect keeps the backoff', () => {
 		latest().fireClose(1006); // backoff now 2s
 
 		client.follow('user:2');
-		latest().fireClose(1006); // never opened for user:2: refused
+		refuseEveryAttempt(); // never opened for user:2: refused after its retries
 
 		expect(client.status).toBe('refused');
 	});
