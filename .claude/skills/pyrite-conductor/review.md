@@ -21,7 +21,7 @@ perfect (maintainer, 2026-09-25). A failure in a test the change touches is
 real: hand it back to the worker. A failure in a test it does not touch --
 common while sibling worktrees run suites (#112) -- is re-run alone; if it
 passes alone, push with `--no-verify` and say so on the PR, and let CI decide.
-File an issue only if the same test fails that way again. Do not spend a
+File an issue only if the same test fails that way again. Name the skipped test in the PR, so a reviewer sees it and a repeat is visible. If PR CI or the merge queue then fails the same test, it is a real failure the change caused -- a test the change never touched can still be broken by it (2026-09-25: a module reload in one test broke an unrelated one only after the batch's change) -- and it goes back to the worker. Do not spend a
 worker round making a laptop run pristine.
 
 In **your own review worktree** on the pushed head — never the worker's

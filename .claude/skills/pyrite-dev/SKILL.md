@@ -188,8 +188,9 @@ branch that is not yours — on 2026-09-18 a worker found 18 foreign commits
 this way, one push from the wrong PR, #119); **push** (`git push -u origin
 <branch>`; a red pre-push in a test your change touches is a stop -- fix it;
 a failure in a test it does not touch: re-run that test alone, and if it passes
-alone push with `--no-verify` and say so in the report -- PR CI and the merge
-queue are the authority, not this laptop); **report with the
+alone push with `--no-verify` and name that test in the report -- PR CI and the
+merge queue are the authority, not this laptop; if CI fails the same test, your
+change caused it, untouched or not, and it is yours to fix); **report with the
 pushed SHA** — a conductor reviews only what is on the remote. The PR stays a
 draft: the conductor flips it ready after review. Report:
 

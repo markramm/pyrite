@@ -275,7 +275,7 @@ CI runs the same checks plus the full Python matrix, Postgres, the frontend
 build and Playwright, so the pre-push run does not have to be perfect. If it
 fails in a test your change does not touch, re-run that test alone
 (`scripts/test-affected --run -- --lf`); if it passes, push with `--no-verify`
-and say so in the PR, and CI will decide. A failure in a test your change
+and say so in the PR, and CI will decide. Name the test in the PR; if CI fails it too, it is a real failure your change caused, even in a test you did not touch. A failure in a test your change
 touches is a real failure: fix it.
 
 **Claiming an issue:** before you spend more than an hour on an issue, say so
