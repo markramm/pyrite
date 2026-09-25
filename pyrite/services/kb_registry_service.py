@@ -368,10 +368,14 @@ class KBRegistryService:
         if not kb:
             return None
 
-        return KBConfig(
-            name=kb.name,
-            path=Path(kb.path),
-            kb_type=kb.kb_type or "generic",
-            description=kb.description or "",
-            default_role=kb.default_role,
+        # The same confinement as loading the registry: a row refused there
+        # (outside an untrusted config's tree) is not found here either.
+        return self.config.kb_config_from_registry_row(
+            {
+                "name": kb.name,
+                "path": kb.path,
+                "kb_type": kb.kb_type,
+                "description": kb.description,
+                "default_role": kb.default_role,
+            }
         )

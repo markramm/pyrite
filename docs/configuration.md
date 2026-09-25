@@ -32,7 +32,12 @@ one whose path is outside the tree is not loaded, `pyrite kb add` refuses a
 path outside the tree before creating anything, and a `default_role` stored in
 the tree's index is ignored unless it is `none`. Under such a config an admin
 cannot publish a KB either (`default_role` `read` or `write` is refused):
-publishing needs a trusted config. Anything else (the
+publishing needs a trusted config. Note that the KB listing (`GET /api/kbs`,
+`pyrite kb list`) still shows the `default_role` stored in the index, while
+every access decision ignores it. An untrusted config with no `index_path`, or
+one whose `index_path` is refused, uses `.pyrite/index.db` inside its own
+tree, never your own index; an index your own config publishes KBs from is
+only ever used through a trusted config (`~/.pyrite` or `PYRITE_CONFIG_DIR`). Anything else (the
 embedding model, editor, AI and server settings, auth, API keys, other
 `default_role` values, repositories, subscriptions) is ignored with a warning,
 and GitHub credentials are never read from or written to it. When Pyrite saves

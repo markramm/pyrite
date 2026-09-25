@@ -586,3 +586,115 @@ class TestKbAddUnderAnUntrustedConfig:
         with PyriteDB(cfg.settings.index_path) as db:
             KBRegistryService(cfg, db, IndexManager(db, cfg)).add_kb("near", str(tree / "near"))
         assert (tree / "near").is_dir()
+
+
+# ── round 4: every index row -> KBConfig path is confined ────────────────
+
+
+def _far_row(tmp_path: Path, cfg) -> Path:
+    """An index row naming a KB outside the tree, with a note in it."""
+    from pyrite.storage.database import PyriteDB
+
+    far = tmp_path / "far-away-kb"
+    far.mkdir()
+    (far / "secret.md").write_text("---\nid: secret\ntitle: Secret\ntype: note\n---\n\nFar.\n")
+    with PyriteDB(cfg.settings.index_path) as db:
+        db.register_kb("far", "generic", str(far), default_role="read")
+    return far
+
+
+def _registry(cfg, db):
+    from pyrite.services.kb_registry_service import KBRegistryService
+    from pyrite.storage.index import IndexManager
+
+    return KBRegistryService(cfg, db, IndexManager(db, cfg))
+
+
+class TestRegistryRowsAreConfinedEverywhere:
+    def test_reindex_of_an_out_of_tree_row_is_not_found_and_indexes_nothing(self, world, tmp_path):
+        from pyrite.exceptions import KBNotFoundError
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        _far_row(tmp_path, cfg)
+        with PyriteDB(cfg.settings.index_path) as db:
+            registry = _registry(cfg, db)
+            assert registry.get_kb_config("far") is None
+            with pytest.raises(KBNotFoundError):
+                registry.reindex_kb("far")
+            assert db.execute_sql("SELECT COUNT(*) AS n FROM entry WHERE kb_name = 'far'") == [
+                {"n": 0}
+            ]
+
+    def test_kb_service_does_not_resolve_an_out_of_tree_row(self, world, tmp_path):
+        from pyrite.services.kb_service import KBService
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        _far_row(tmp_path, cfg)
+        with PyriteDB(cfg.settings.index_path) as db:
+            svc = KBService(cfg, db)
+            svc._registry = _registry(cfg, db)
+            assert svc.get_kb("far") is None
+
+    def test_an_in_tree_row_keeps_only_a_closing_default_role(self, world):
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        _write(tree, {"knowledge_bases": []})
+        cfg = config_module.load_config()
+        (tree / "near").mkdir()
+        with PyriteDB(cfg.settings.index_path) as db:
+            db.register_kb("near", "generic", str(tree / "near"), default_role="write")
+            kb = _registry(cfg, db).get_kb_config("near")
+        assert kb is not None and kb.default_role is None
+
+    @pytest.mark.control(reason="a trusted config always reindexed registry KBs anywhere")
+    def test_a_trusted_config_still_reindexes_a_registry_kb_anywhere(
+        self, world, tmp_path, monkeypatch
+    ):
+        from pyrite.storage.database import PyriteDB
+
+        home, tree = world
+        elsewhere = tmp_path / "plain"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)
+        cfg = config_module.load_config()
+        cfg.settings.index_path = tmp_path / "trusted.db"
+        _far_row(tmp_path, cfg)
+        with PyriteDB(cfg.settings.index_path) as db:
+            registry = _registry(cfg, db)
+            assert registry.get_kb_config("far").default_role == "read"
+            registry.reindex_kb("far")
+            assert db.execute_sql("SELECT COUNT(*) AS n FROM entry WHERE kb_name = 'far'") == [
+                {"n": 1}
+            ]
+
+
+@pytest.mark.control(reason="the refusal landed in the previous round; this pins it over HTTP")
+def test_publishing_under_an_untrusted_config_is_409_over_http(world):
+    from fastapi.testclient import TestClient
+
+    from pyrite.server.api import create_app
+    from pyrite.storage.database import PyriteDB
+
+    home, tree = world
+    _write(tree, {"knowledge_bases": []})
+    cfg = config_module.load_config()
+    _shipped_index(tree, cfg, default_role=None)
+    app = create_app(config=cfg)  # auth off: the local caller is admin
+    client = TestClient(app)
+    r = client.put("/api/kbs/shipped/default-role", json={"role": "read"})
+    assert r.status_code == 409, r.text
+    assert r.json()["code"] == "CONFIG_CONFLICT"
+    with PyriteDB(cfg.settings.index_path) as db:
+        assert db.execute_sql("SELECT default_role FROM kb WHERE name = 'shipped'") == [
+            {"default_role": None}
+        ]
+    state_db = getattr(app.state, "pyrite_db", None)
+    if state_db is not None:
+        state_db.close()

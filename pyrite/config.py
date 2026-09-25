@@ -509,6 +509,53 @@ class PyriteConfig:
                 "config to work outside it."
             )
 
+    def kb_config_from_registry_row(self, kb_data: dict) -> KBConfig | None:
+        """The one way an index registry row becomes a KBConfig.
+
+        Returns None -- with a warning -- for a row that must not be used: no
+        name or path, a path that cannot be resolved, or, under an untrusted
+        repo-local config, a path outside that config's tree. Under such a
+        config the row's default_role goes through confined_default_role.
+        Every caller that turns a registry row into a KBConfig uses this, so a
+        row refused at load is not found anywhere else either.
+        """
+        name = kb_data.get("name", "")
+        path = kb_data.get("path", "")
+        if not name or not path:
+            return None
+        default_role = kb_data.get("default_role")
+        try:
+            _refuse_unresolvable(Path(path))
+            if self._confine_root is not None:
+                if not Path(path).expanduser().resolve().is_relative_to(self._confine_root):
+                    logger.warning(
+                        "Not loading registry KB %r: its path is outside the tree of "
+                        "the untrusted repo-local config (%s)",
+                        name,
+                        self._confine_root,
+                    )
+                    return None
+                default_role = self.confined_default_role(default_role)
+            return KBConfig(
+                name=name,
+                path=Path(path),
+                kb_type=kb_data.get("kb_type") or "generic",
+                description=kb_data.get("description") or "",
+                default_role=default_role,
+            )
+        except (OSError, RuntimeError, ValueError):
+            # A registry path that cannot be resolved (an unknown ~user, a
+            # symlink loop) must not stop the load -- this runs while every
+            # entry point is constructed. The KB is left out: unreachable,
+            # never open.
+            logger.warning(
+                "Registry KB %r has a path that cannot be resolved (%s); not loading it",
+                name,
+                path,
+                exc_info=True,
+            )
+            return None
+
     def register_db_kbs(self, db_kbs: list[dict]) -> int:
         """Register DB-added KBs as a fallback lookup (not added to knowledge_bases).
 
@@ -523,40 +570,8 @@ class PyriteConfig:
             name = kb_data.get("name", "")
             if not name or name in self._kb_by_name:
                 continue
-            path = kb_data.get("path", "")
-            if not path:
-                continue
-            default_role = kb_data.get("default_role")
-            try:
-                _refuse_unresolvable(Path(path))
-                if self._confine_root is not None:
-                    if not Path(path).expanduser().resolve().is_relative_to(self._confine_root):
-                        logger.warning(
-                            "Not loading registry KB %r: its path is outside the tree of "
-                            "the untrusted repo-local config (%s)",
-                            name,
-                            self._confine_root,
-                        )
-                        continue
-                    default_role = self.confined_default_role(default_role)
-                kb = KBConfig(
-                    name=name,
-                    path=Path(path),
-                    kb_type=kb_data.get("kb_type", "generic"),
-                    description=kb_data.get("description", ""),
-                    default_role=default_role,
-                )
-            except (OSError, RuntimeError, ValueError):
-                # A registry path that cannot be resolved (an unknown ~user, a
-                # symlink loop) must not stop the load -- this runs while every
-                # entry point is constructed. The KB is left out: unreachable,
-                # never open.
-                logger.warning(
-                    "Registry KB %r has a path that cannot be resolved (%s); not loading it",
-                    name,
-                    path,
-                    exc_info=True,
-                )
+            kb = self.kb_config_from_registry_row(kb_data)
+            if kb is None:
                 continue
             self._db_kb_cache[name] = kb
             added += 1
