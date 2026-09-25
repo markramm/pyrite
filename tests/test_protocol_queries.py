@@ -254,3 +254,28 @@ class TestProtocolFieldsInGetEntry:
         assert result.get("priority") is None
         assert result.get("due_date") is None
         assert result.get("coordinates") is None
+
+
+class TestTaskServiceFinders:
+    """The finders on TaskService (#380): the MCP tools call these, so REST
+    and the CLI can too. They answer exactly what the storage finders do,
+    `kb_names` narrowing included."""
+
+    @pytest.mark.parametrize(
+        ("finder", "args"),
+        [
+            ("find_by_assignee", {"assignee": "agent:alpha"}),
+            ("find_by_status", {"status": "open"}),
+            ("find_by_location", {"location": "New York"}),
+            ("find_overdue", {"as_of": "2026-12-31"}),
+        ],
+    )
+    def test_matches_storage(self, db, finder, args):
+        from pyrite.config import PyriteConfig, Settings
+        from pyrite.services.task_service import TaskService
+
+        svc = TaskService(PyriteConfig(settings=Settings(index_path=Path("/unused"))), db)
+        for extra in ({}, {"kb_name": "kb-a"}, {"kb_names": {"kb-b"}}, {"limit": 1, "offset": 1}):
+            got = getattr(svc, finder)(**args, **extra)
+            assert got == getattr(db, finder)(**args, **extra)
+        assert getattr(svc, finder)(**args)  # the fixture has a match for each

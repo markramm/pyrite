@@ -293,8 +293,9 @@ def index_embed(
         )
 
     # Check index has entries
-    row = db._raw_conn.execute("SELECT COUNT(*) FROM entry").fetchone()
-    if row[0] == 0:
+    from ..storage import IndexManager
+
+    if IndexManager(db, config).is_empty():
         cli_error(
             "Index is empty.",
             error_code="INDEX_EMPTY",

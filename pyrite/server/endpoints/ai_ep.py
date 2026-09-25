@@ -15,12 +15,12 @@ from ...services.llm_service import LLMService
 from ...services.llm_usage_service import LLMUsageService
 from ...services.quota_service import QuotaService
 from ...services.search_service import SearchService, build_or_query, clip_semantic_text
-from ...storage.database import PyriteDB
 from ..api import (
+    get_auth_service,
     get_config,
-    get_db,
     get_kb_service,
     get_llm_service,
+    get_llm_usage_service,
     get_readable_kbs,
     get_search_service,
     get_user_llm_context,
@@ -94,7 +94,13 @@ def _get_entry(svc: KBService, entry_id: str, kb_name: str) -> dict:
     return entry
 
 
-def _enforce_llm_quota(request: Request, config: PyriteConfig, db: PyriteDB, kind: str) -> None:
+def _enforce_llm_quota(
+    request: Request,
+    config: PyriteConfig,
+    auth_service: AuthService,
+    usage_svc: LLMUsageService,
+    kind: str,
+) -> None:
     """Raise 429 if the current user is over their tier's daily LLM
     quota. No-op (unlimited) for anonymous requests (auth disabled) or
     when no usage_tiers are configured -- matches QuotaService's
@@ -103,13 +109,11 @@ def _enforce_llm_quota(request: Request, config: PyriteConfig, db: PyriteDB, kin
     if not auth_user:
         return
 
-    auth_service = AuthService(db, config.settings.auth)
     user = auth_service.get_user(auth_user["id"])
     if not user:
         return
 
     quota_svc = QuotaService(config)
-    usage_svc = LLMUsageService(db)
     allowed, message = quota_svc.check_llm_quota(
         user_id=auth_user["id"],
         kind=kind,
@@ -129,12 +133,13 @@ async def ai_summarize(
     svc: KBService = Depends(get_kb_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
     config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+    usage_svc: LLMUsageService = Depends(get_llm_usage_service),
 ):
     """Generate an AI summary for an entry."""
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
-    _enforce_llm_quota(request, config, db, kind="summarize")
+    _enforce_llm_quota(request, config, auth_service, usage_svc, kind="summarize")
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
     body = entry.get("body", "") or ""
@@ -162,12 +167,13 @@ async def ai_auto_tag(
     svc: KBService = Depends(get_kb_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
     config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+    usage_svc: LLMUsageService = Depends(get_llm_usage_service),
 ):
     """Suggest tags for an entry using AI."""
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
-    _enforce_llm_quota(request, config, db, kind="auto-tag")
+    _enforce_llm_quota(request, config, auth_service, usage_svc, kind="auto-tag")
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
     body = entry.get("body", "") or ""
@@ -221,7 +227,8 @@ async def ai_suggest_links(
     search_svc: SearchService = Depends(get_search_service),
     user_ctx: dict | None = Depends(get_user_llm_context),
     config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+    usage_svc: LLMUsageService = Depends(get_llm_usage_service),
     readable: set[str] | None = Depends(get_readable_kbs),
 ):
     """Suggest wikilinks for an entry using AI + search.
@@ -231,7 +238,7 @@ async def ai_suggest_links(
     """
     llm = _resolve_llm(llm, user_ctx)
     _require_configured(llm)
-    _enforce_llm_quota(request, config, db, kind="suggest-links")
+    _enforce_llm_quota(request, config, auth_service, usage_svc, kind="suggest-links")
     entry = _get_entry(svc, req.entry_id, req.kb_name)
 
     body = entry.get("body", "") or ""

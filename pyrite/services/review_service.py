@@ -68,6 +68,14 @@ class ReviewService:
         """Get the latest review for an entry."""
         return self.db.get_latest_review(entry_id, kb_name)
 
+    def get_review(self, review_id: int) -> dict[str, Any] | None:
+        """One review by id, or ``None``."""
+        return self.db.get_review(review_id)
+
+    def delete_review(self, review_id: int) -> bool:
+        """Delete a review by id. True when a review was deleted."""
+        return self.db.delete_review(review_id)
+
     def is_review_current(self, entry_id: str, kb_name: str) -> dict[str, Any]:
         """Check if the latest review is still current (file unchanged).
 

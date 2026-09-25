@@ -551,3 +551,25 @@ so `sync_incremental` blocks on a `threading.Event` the test controls (see the
 deterministically still `running` for as long as the gate is closed, no sleep,
 no timing assumption, and the test still proves dedup/filtering against a real
 in-flight job rather than a synthetic one.
+
+## A surface reaching the DB fails `test_layer_boundaries.py` (#380)
+
+REST endpoints, MCP handlers, the CLIs and `ui/data.py` reach storage only
+through a service. `tests/test_layer_boundaries.py` counts, per function and
+rule, every place a DB handle *enters* a surface: `_raw_conn`, any `.db` read
+(so `d = svc.db` and `getattr(svc, "db")` count), `db.<anything>` but
+`close`, `get_db` under any name and `AuthService(` outside `api.py`,
+`PyriteDB`, `sqlite3`, and any import or use of a `pyrite.storage` class.
+Composition roots and the allowlist both pin a count per (function, rule)
+and a list size, so one more reach anywhere fails. The fix is a service
+method plus a provider (`api.py` for REST, `cli/context.py` for the CLI),
+never a new entry: `ALLOWLIST_SIZE` only goes down.
+
+Two traps met on the way:
+- `import pyrite.cli.context` imports the whole `pyrite.cli` package (the
+  Typer app and every command module): `import pyrite.admin_cli` went from
+  0.05 s to 0.22 s when it did so at module level. `admin_cli.py` imports it
+  inside each command instead.
+- Newer FastAPI wraps `include_router` in `_IncludedRouter`, so
+  `app.routes` shows 10 `APIRoute`s, not ~140. Walk the wrappers
+  (`tests/_surface_inventory.rest_operations`) rather than `app.routes`.

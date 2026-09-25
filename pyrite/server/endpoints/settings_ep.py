@@ -14,8 +14,14 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ...services.kb_service import KBService
-from ..api import TIER_LEVELS, get_kb_service, invalidate_llm_service, limiter, requires_tier
+from ...services.settings_service import SettingsService
+from ..api import (
+    TIER_LEVELS,
+    get_settings_service,
+    invalidate_llm_service,
+    limiter,
+    requires_tier,
+)
 from ..schemas import (
     BulkSettingsUpdateRequest,
     SettingResponse,
@@ -146,10 +152,10 @@ def _maybe_invalidate_llm(key: str) -> None:
         invalidate_llm_service()
 
 
-def _write(svc: KBService, key: str, value: str) -> None:
+def _write(settings: SettingsService, key: str, value: str) -> None:
     if is_secret_setting(key) and value == MASK:
         return  # the mask read back unchanged: keep the stored secret
-    svc.db.set_setting(key, value)
+    settings.set(key, value)
     _maybe_invalidate_llm(key)
 
 
@@ -157,10 +163,10 @@ def _write(svc: KBService, key: str, value: str) -> None:
 @limiter.limit("100/minute")
 def get_all_settings(
     request: Request,
-    svc: KBService = Depends(get_kb_service),
+    settings: SettingsService = Depends(get_settings_service),
 ):
     """Get all settings (secret values masked)."""
-    return _masked_settings(svc.db.get_all_settings(), admin=_is_admin(request))
+    return _masked_settings(settings.all(), admin=_is_admin(request))
 
 
 @router.put("/settings", dependencies=[Depends(requires_tier("write"))])
@@ -168,13 +174,13 @@ def get_all_settings(
 def bulk_update_settings(
     request: Request,
     req: BulkSettingsUpdateRequest,
-    svc: KBService = Depends(get_kb_service),
+    settings: SettingsService = Depends(get_settings_service),
 ):
     """Bulk update settings. All-or-nothing on the admin check."""
     _require_admin_for(request, req.settings.keys())
     for key, value in req.settings.items():
-        _write(svc, key, value)
-    return _masked_settings(svc.db.get_all_settings(), admin=_is_admin(request))
+        _write(settings, key, value)
+    return _masked_settings(settings.all(), admin=_is_admin(request))
 
 
 @router.get("/settings/{key}", response_model=SettingResponse)
@@ -182,10 +188,10 @@ def bulk_update_settings(
 def get_setting(
     request: Request,
     key: str,
-    svc: KBService = Depends(get_kb_service),
+    settings: SettingsService = Depends(get_settings_service),
 ):
     """Get a single setting (a secret value is masked)."""
-    value = _masked_value(key, svc.db.get_setting(key), admin=_is_admin(request))
+    value = _masked_value(key, settings.get(key), admin=_is_admin(request))
     return SettingResponse(key=key, value=value)
 
 
@@ -199,12 +205,12 @@ def set_setting(
     request: Request,
     key: str,
     req: SettingUpdateRequest,
-    svc: KBService = Depends(get_kb_service),
+    settings: SettingsService = Depends(get_settings_service),
 ):
     """Set a single setting."""
     _require_admin_for(request, [key])
-    _write(svc, key, req.value)
-    value = _masked_value(key, svc.db.get_setting(key), admin=_is_admin(request))
+    _write(settings, key, req.value)
+    value = _masked_value(key, settings.get(key), admin=_is_admin(request))
     return SettingResponse(key=key, value=value)
 
 
@@ -213,11 +219,11 @@ def set_setting(
 def delete_setting(
     request: Request,
     key: str,
-    svc: KBService = Depends(get_kb_service),
+    settings: SettingsService = Depends(get_settings_service),
 ):
     """Delete a setting."""
     _require_admin_for(request, [key])
-    deleted = svc.db.delete_setting(key)
+    deleted = settings.delete(key)
     if not deleted:
         raise HTTPException(
             status_code=404,

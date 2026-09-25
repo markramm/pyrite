@@ -4,10 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ...services.review_service import ReviewService
-from ...storage.database import PyriteDB
 from ..api import (
     RowKB,
-    get_db,
     get_review_service,
     limiter,
     requires_kb_read,
@@ -151,14 +149,14 @@ def _review_not_found(review_id: int) -> HTTPException:
     )
 
 
-def review_kb(review_id: int, db: PyriteDB = Depends(get_db)) -> RowKB:
+def review_kb(review_id: int, review_svc: ReviewService = Depends(get_review_service)) -> RowKB:
     """The KB that owns review `review_id` -- the one a delete is checked on.
 
     The request names no KB, so the only honest KB to check is the row's own.
     A review in a KB the caller cannot read answers with the same 404 as a
     review that does not exist.
     """
-    review = db.get_review(review_id)
+    review = review_svc.get_review(review_id)
     if review is None:
         raise _review_not_found(review_id)
     return RowKB(kb_name=review["kb_name"], not_found=_review_not_found(review_id))
@@ -175,7 +173,7 @@ def delete_review(
     review_svc: ReviewService = Depends(get_review_service),
 ):
     """Delete a review. Authorised on the per-KB write role of the review's own KB."""
-    deleted = review_svc.db.delete_review(review_id)
+    deleted = review_svc.delete_review(review_id)
     if not deleted:
         raise _review_not_found(review_id)
     return {"deleted": True, "review_id": review_id}

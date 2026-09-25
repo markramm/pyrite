@@ -355,6 +355,74 @@ class TaskService:
 
         return tasks
 
+    # -- Protocol finders (ADR-0017) -------------------------------------
+    # Cross-type queries over the protocol columns. The MCP `kb_find_*`
+    # tools call these (#380). `kb_names` narrows in SQL, before LIMIT.
+
+    def find_by_assignee(
+        self,
+        assignee: str,
+        kb_name: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Entries of any type assigned to ``assignee``, newest first."""
+        return self.db.find_by_assignee(
+            assignee=assignee,
+            kb_name=kb_name,
+            status=status,
+            limit=limit,
+            offset=offset,
+            kb_names=kb_names,
+        )
+
+    def find_overdue(
+        self,
+        as_of: str | None = None,
+        kb_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Entries not done or failed whose ``due_date`` is before ``as_of`` (default today)."""
+        return self.db.find_overdue(
+            as_of=as_of, kb_name=kb_name, limit=limit, offset=offset, kb_names=kb_names
+        )
+
+    def find_by_status(
+        self,
+        status: str,
+        kb_name: str | None = None,
+        entry_type: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Entries of any type with ``status``, newest first."""
+        return self.db.find_by_status(
+            status=status,
+            kb_name=kb_name,
+            entry_type=entry_type,
+            limit=limit,
+            offset=offset,
+            kb_names=kb_names,
+        )
+
+    def find_by_location(
+        self,
+        location: str,
+        kb_name: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        kb_names: set[str] | list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Entries of any type whose ``location`` contains ``location``, newest first."""
+        return self.db.find_by_location(
+            location=location, kb_name=kb_name, limit=limit, offset=offset, kb_names=kb_names
+        )
+
     def claim_task(self, task_id: str, kb_name: str, assignee: str) -> dict[str, Any]:
         """Atomically claim an open task. Delegates to KBService.claim_entry()."""
         return self.kb_svc.claim_entry(task_id, kb_name, assignee)

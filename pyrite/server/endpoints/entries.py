@@ -14,9 +14,11 @@ from ...exceptions import (
     PyriteError,
     ValidationError,
 )
+from ...services.block_service import BlockService
 from ...services.kb_service import KBService
 from ...services.read_shaping import parse_fields_param, project_fields
 from ..api import (
+    get_block_service,
     get_config,
     get_kb_service,
     get_readable_kbs,
@@ -462,6 +464,7 @@ def resolve_entry(
     target: str = Query(..., description="Entry ID or title to resolve"),
     kb: str | None = Query(None, description="Filter by KB name"),
     svc: KBService = Depends(get_kb_service),
+    block_svc: BlockService = Depends(get_block_service),
 ):
     """Resolve a wikilink target to an entry. Tries exact ID match first, then title match.
     Supports fragment syntax: target#heading or target^block-id."""
@@ -481,16 +484,9 @@ def resolve_entry(
         block_content = None
         # If fragment specified, try to find matching block
         if heading or block_id:
-            from ...storage.models import Block
-
-            blocks_query = svc.db.session.query(Block).filter_by(
-                entry_id=result["id"], kb_name=result["kb_name"]
+            block = block_svc.find_block(
+                result["id"], result["kb_name"], heading=heading, block_id=block_id
             )
-            if heading:
-                blocks_query = blocks_query.filter(Block.heading == heading)
-            if block_id:
-                blocks_query = blocks_query.filter(Block.block_id == block_id)
-            block = blocks_query.first()
             if block:
                 block_content = block.content
 

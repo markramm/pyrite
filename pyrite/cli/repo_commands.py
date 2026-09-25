@@ -9,7 +9,6 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import load_config
-from ..storage.database import PyriteDB
 from ..utils.errors import cli_error
 
 repo_collab_app = typer.Typer(help="Repository collaboration commands")
@@ -26,9 +25,10 @@ def _get_db_and_services():
     """Helper to create DB and service instances."""
     from ..services.repo_service import RepoService
     from ..services.user_service import UserService
+    from .context import open_index_db
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    db = open_index_db(config)
     user_service = UserService(db)
     repo_service = RepoService(config, db, user_service=user_service)
     return config, db, repo_service, user_service
@@ -189,7 +189,7 @@ def repo_status(
 
         console.print(f"\n  KBs: {status.get('kb_count', 0)}")
         for kb_name in status.get("kb_names", []):
-            count = db.count_entries(kb_name)
+            count = repo_service.kb_entry_count(kb_name)
             console.print(f"    - {kb_name} ({count} entries)")
 
         contributors = status.get("contributors", [])
@@ -243,9 +243,7 @@ def repo_list_extended(
             if last_synced != "-" and len(last_synced) > 19:
                 last_synced = last_synced[:19]
 
-            kb_count = len(
-                db._raw_conn.execute("SELECT 1 FROM kb WHERE repo_id = ?", (repo["id"],)).fetchall()
-            )
+            kb_count = len(repo_service.repo_kb_names(repo["id"]))
 
             table.add_row(
                 repo["name"],

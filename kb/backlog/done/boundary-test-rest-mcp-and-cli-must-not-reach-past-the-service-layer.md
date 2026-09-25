@@ -7,10 +7,11 @@ tags:
 - programmatic-validation
 importance: 5
 kind: improvement
-status: proposed
+status: done
 priority: medium
 effort: M
 rank: 0
+assignee: agent:pyrite-worker
 ---
 
 ## Problem

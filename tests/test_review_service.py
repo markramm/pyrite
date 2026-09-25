@@ -97,3 +97,16 @@ class TestReviewService:
         status = svc.is_review_current("entry-1", "test-kb")
         assert status["current"] is False
         assert status["review"] is None
+
+
+class TestReviewLookups:
+    """get_review / delete_review: what the REST delete route used to ask
+    the DB for directly (#380)."""
+
+    def test_get_and_delete_review(self, review_setup):
+        svc, _db = review_setup
+        review = svc.create_review("entry-1", "test-kb", "me", "user", "pass")
+        assert svc.get_review(review["id"])["kb_name"] == "test-kb"
+        assert svc.delete_review(review["id"]) is True
+        assert svc.get_review(review["id"]) is None
+        assert svc.delete_review(review["id"]) is False

@@ -225,7 +225,7 @@ def export_site(
                 console.print(f"  [dim]Created {f}[/dim]")
 
         # Load all entries from DB
-        raw_entries = db.list_entries(kb_name=kb, limit=100000)
+        raw_entries = svc.list_entries(kb_name=kb, limit=100000)
         if not raw_entries:
             console.print("[yellow]No entries found in KB.[/yellow]")
             raise typer.Exit(0)

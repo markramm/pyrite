@@ -5,10 +5,12 @@ from pydantic import BaseModel
 
 from ...config import PyriteConfig
 from ...exceptions import InvalidGitRefError, KBNotFoundError
+from ...services.auth_service import AuthService
 from ...services.export_service import ExportService
 from ...services.kb_registry_service import KBRegistryService
 from ...services.kb_service import KBService
 from ..api import (
+    get_auth_service,
     get_config,
     get_export_service,
     get_kb_registry,
@@ -162,19 +164,14 @@ def export_kb_to_repo(
     body: ExportRequest,
     request: Request,
     export_svc: ExportService = Depends(get_export_service),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """Export a KB's entries to a GitHub repo (clone, export, commit, push)."""
     # Get GitHub token from authenticated user if available
     github_token = None
     auth_user = getattr(request.state, "auth_user", None)
     if auth_user:
-        from ...services.auth_service import AuthService
-
-        config = request.app.state.pyrite_config
-        db = request.app.state.pyrite_db
-        if db:
-            auth_service = AuthService(db, config.settings.auth)
-            github_token, _ = auth_service.get_github_token_for_user(auth_user["id"])
+        github_token, _ = auth_service.get_github_token_for_user(auth_user["id"])
 
     try:
         result = export_svc.export_kb_to_repo(

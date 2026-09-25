@@ -11,8 +11,8 @@ import streamlit as st
 # Try to import from pyrite, fall back to API calls
 try:
     from pyrite.config import load_config
+    from pyrite.services.kb_service import KBService
     from pyrite.storage.database import PyriteDB
-    from pyrite.storage.index import IndexManager
 
     DIRECT_ACCESS = True
 except ImportError:
@@ -37,25 +37,25 @@ def _get_config():
 
 
 @st.cache_resource
-def _get_index_mgr():
-    """Get index manager (cached as resource)."""
+def _get_kb_service():
+    """Get the KB service (cached as resource). The UI reads through it (#380)."""
     if not DIRECT_ACCESS:
         return None
-    return IndexManager(_get_db(), _get_config())
+    return KBService(_get_config(), _get_db())
 
 
 @st.cache_data(ttl=300)
 def get_kb_list() -> list[dict[str, Any]]:
     """Get list of knowledge bases."""
-    db = _get_db()
+    svc = _get_kb_service()
     config = _get_config()
 
-    if not db or not config:
+    if not svc or not config:
         return []
 
     kbs = []
     for kb in config.knowledge_bases:
-        stats = db.get_kb_stats(kb.name)
+        stats = svc.get_kb_stats(kb.name)
         kbs.append(
             {
                 "name": kb.name,
@@ -71,10 +71,10 @@ def get_kb_list() -> list[dict[str, Any]]:
 @st.cache_data(ttl=300)
 def get_stats() -> dict[str, Any]:
     """Get index statistics."""
-    index_mgr = _get_index_mgr()
-    if not index_mgr:
+    svc = _get_kb_service()
+    if not svc:
         return {"total_entries": 0, "total_tags": 0, "total_links": 0}
-    return index_mgr.get_index_stats()
+    return svc.get_index_stats()
 
 
 @st.cache_data(ttl=60)
@@ -125,11 +125,11 @@ def get_timeline(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     """Get timeline events."""
-    db = _get_db()
-    if not db:
+    svc = _get_kb_service()
+    if not svc:
         return []
 
-    results = db.get_timeline(date_from=date_from, date_to=date_to, min_importance=min_importance)
+    results = svc.get_timeline(date_from=date_from, date_to=date_to, min_importance=min_importance)
 
     if actor:
         actor_lower = actor.lower()
@@ -143,51 +143,47 @@ def get_timeline(
 @st.cache_data(ttl=300)
 def get_tags(kb_name: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     """Get tags with counts."""
-    db = _get_db()
-    if not db:
+    svc = _get_kb_service()
+    if not svc:
         return []
 
     effective_kb = kb_name if kb_name and kb_name != "All KBs" else None
-    return db.get_tags_as_dicts(kb_name=effective_kb, limit=limit)
+    return svc.get_tags(kb_name=effective_kb, limit=limit)
 
 
 @st.cache_data(ttl=60)
 def get_entry(entry_id: str, kb_name: str | None = None) -> dict[str, Any] | None:
     """Get entry by ID."""
-    db = _get_db()
+    svc = _get_kb_service()
     config = _get_config()
-    if not db or not config:
+    if not svc or not config:
         return None
 
+    # KBService.get_entry attaches outlinks and backlinks. With no KB named,
+    # the UI looks only in config.yaml's KBs (not DB-registered ones), so it
+    # walks them itself rather than using get_entry's all-KB search.
     if kb_name and kb_name != "All KBs":
-        result = db.get_entry(entry_id, kb_name)
-    else:
-        result = None
-        for kb in config.knowledge_bases:
-            result = db.get_entry(entry_id, kb.name)
-            if result:
-                break
-
-    if result:
-        result["outlinks"] = db.get_outlinks(entry_id, result["kb_name"])
-        result["backlinks"] = db.get_backlinks(entry_id, result["kb_name"])
-
-    return result
+        return svc.get_entry(entry_id, kb_name)
+    for kb in config.knowledge_bases:
+        result = svc.get_entry(entry_id, kb.name)
+        if result:
+            return result
+    return None
 
 
 @st.cache_data(ttl=60)
 def get_entry_graph(entry_id: str, kb_name: str) -> dict[str, Any]:
     """Get graph data (nodes + edges) centered on an entry."""
-    db = _get_db()
-    if not db:
+    svc = _get_kb_service()
+    if not svc:
         return {"nodes": [], "edges": []}
 
-    center = db.get_entry(entry_id, kb_name)
+    center = svc.get_entry(entry_id, kb_name)  # carries outlinks and backlinks
     if not center:
         return {"nodes": [], "edges": []}
 
-    outlinks = db.get_outlinks(entry_id, kb_name)
-    backlinks = db.get_backlinks(entry_id, kb_name)
+    outlinks = center["outlinks"]
+    backlinks = center["backlinks"]
 
     nodes = {}
     edges = []
@@ -247,14 +243,10 @@ def get_entry_graph(entry_id: str, kb_name: str) -> dict[str, Any]:
 
 def save_entry(entry_id: str, kb_name: str, **updates) -> bool:
     """Update an entry via KBService. Returns True on success."""
-    config = _get_config()
-    db = _get_db()
-    if not config or not db:
+    svc = _get_kb_service()
+    if not svc:
         return False
 
-    from pyrite.services.kb_service import KBService
-
-    svc = KBService(config, db)
     try:
         svc.update_entry(entry_id, kb_name, **updates)
         clear_cache()

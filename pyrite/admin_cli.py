@@ -176,13 +176,13 @@ def index_build(
     ),
 ):
     """Build or rebuild the search index."""
-    from .storage import IndexManager, PyriteDB
+    from .cli.context import index_db_context
+    from .storage import IndexManager
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    index_mgr = IndexManager(db, config)
+    with index_db_context(config) as db:
+        index_mgr = IndexManager(db, config)
 
-    try:
         if kb_name:
             count = index_mgr.index_kb(kb_name)
             console.print(f"[green]Indexed {count} entries from {kb_name}[/green]")
@@ -190,8 +190,6 @@ def index_build(
             results = index_mgr.index_all()
             total = sum(results.values())
             console.print(f"[green]Indexed {total} entries across {len(results)} KBs[/green]")
-    finally:
-        db.close()
 
 
 @index_app.command("sync")
@@ -199,69 +197,63 @@ def index_sync(
     kb_name: str | None = typer.Argument(None, help="KB to sync"),
 ):
     """Incremental index sync with file changes."""
-    from .storage import IndexManager, PyriteDB
+    from .cli.context import index_db_context
+    from .storage import IndexManager
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    index_mgr = IndexManager(db, config)
+    with index_db_context(config) as db:
+        index_mgr = IndexManager(db, config)
 
-    try:
         results = index_mgr.sync_incremental(kb_name)
         console.print(
             f"[green]Synced:[/green] +{results['added']} -{results['removed']} ~{results['updated']}"
         )
-    finally:
-        db.close()
 
 
 @index_app.command("stats")
 def index_stats(kb_name: str | None = typer.Argument(None, help="KB name")):
     """Show index statistics."""
-    from .storage import IndexManager, PyriteDB
+    from .cli.context import index_db_context
+    from .storage import IndexManager
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    index_mgr = IndexManager(db, config)
+    with index_db_context(config) as db:
+        index_mgr = IndexManager(db, config)
 
-    try:
         stats = index_mgr.get_index_stats()
         console.print(f"[bold]Total entries:[/bold] {stats.get('total_entries', 0)}")
         console.print(f"[bold]Total tags:[/bold] {stats.get('total_tags', 0)}")
         console.print(f"[bold]Total links:[/bold] {stats.get('total_links', 0)}")
-    finally:
-        db.close()
 
 
 @index_app.command("embed")
 def index_embed(kb_name: str = typer.Argument(..., help="KB to generate embeddings for")):
     """Generate vector embeddings for semantic search."""
-    from .storage import PyriteDB
+
+    from .cli.context import index_db_context
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    with index_db_context(config) as db:
+        try:
+            from .services.embedding_service import EmbeddingService
 
-    try:
-        from .services.embedding_service import EmbeddingService
-
-        embed_svc = EmbeddingService(db)
-        count = embed_svc.embed_kb(kb_name)
-        console.print(f"[green]Generated embeddings for {count} entries[/green]")
-    except ImportError:
-        console.print("[red]Error:[/red] Install semantic extras: pip install pyrite[semantic]")
-    finally:
-        db.close()
+            embed_svc = EmbeddingService(db)
+            count = embed_svc.embed_kb(kb_name)
+            console.print(f"[green]Generated embeddings for {count} entries[/green]")
+        except ImportError:
+            console.print("[red]Error:[/red] Install semantic extras: pip install pyrite[semantic]")
 
 
 @index_app.command("health")
 def index_health():
     """Check index health and consistency."""
-    from .storage import IndexManager, PyriteDB
+    from .cli.context import index_db_context
+    from .storage import IndexManager
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    index_mgr = IndexManager(db, config)
+    with index_db_context(config) as db:
+        index_mgr = IndexManager(db, config)
 
-    try:
         health = index_mgr.check_health()
         is_healthy = not (
             health["missing_files"] or health["unindexed_files"] or health["stale_entries"]
@@ -277,8 +269,6 @@ def index_health():
                 console.print(f"  Unindexed files: {len(health['unindexed_files'])}")
             if health["stale_entries"]:
                 console.print(f"  Stale entries: {len(health['stale_entries'])}")
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -293,69 +283,53 @@ def repo_subscribe(
     branch: str = typer.Option("main", "--branch", "-b", help="Branch"),
 ):
     """Subscribe to a remote repository."""
+    from .cli.context import index_db_context
     from .services.repo_service import RepoService
-    from .storage.database import PyriteDB
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with index_db_context(config) as db:
         svc = RepoService(config, db)
         result = svc.subscribe(url, name=name, branch=branch)
         console.print(f"[green]Subscribed:[/green] {result['name']}")
-    finally:
-        db.close()
 
 
 @repo_app.command("fork")
 def repo_fork(url: str = typer.Argument(..., help="GitHub repo URL to fork")):
     """Fork a GitHub repository and clone locally."""
+    from .cli.context import index_db_context
     from .services.repo_service import RepoService
-    from .storage.database import PyriteDB
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with index_db_context(config) as db:
         svc = RepoService(config, db)
         result = svc.fork(url)
         console.print(f"[green]Forked and cloned:[/green] {result['name']}")
-    finally:
-        db.close()
 
 
 @repo_app.command("sync")
 def repo_sync(repo_name: str = typer.Argument(..., help="Repository name")):
     """Sync a repository with its remote."""
+    from .cli.context import index_db_context
     from .services.repo_service import RepoService
-    from .storage.database import PyriteDB
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with index_db_context(config) as db:
         svc = RepoService(config, db)
         result = svc.sync(repo_name)
         console.print(f"[green]Synced:[/green] {repo_name} ({result.get('status', 'ok')})")
-    finally:
-        db.close()
 
 
 @repo_app.command("unsubscribe")
 def repo_unsubscribe(repo_name: str = typer.Argument(..., help="Repository name")):
     """Unsubscribe from a repository."""
+    from .cli.context import index_db_context
     from .services.repo_service import RepoService
-    from .storage.database import PyriteDB
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-
-    try:
+    with index_db_context(config) as db:
         svc = RepoService(config, db)
         svc.unsubscribe(repo_name)
         console.print(f"[green]Unsubscribed:[/green] {repo_name}")
-    finally:
-        db.close()
 
 
 @repo_app.command("status")
@@ -462,11 +436,11 @@ def repo_remove(
 @auth_app.command("whoami")
 def auth_whoami():
     """Show current user identity."""
-    from .storage.database import PyriteDB
+
+    from .cli.context import index_db_context
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    try:
+    with index_db_context(config) as db:
         from .services.user_service import UserService
 
         user_service = UserService(db)
@@ -482,8 +456,6 @@ def auth_whoami():
                 console.print(f"  Name: {user['display_name']}")
             if user.get("email"):
                 console.print(f"  Email: {user['email']}")
-    finally:
-        db.close()
 
 
 @auth_app.command("login")
@@ -676,20 +648,18 @@ def user_create(
 
         pyrite-admin user create alice --role admin
     """
+    from .cli.context import index_db_context
     from .services.auth_service import AuthService
-    from .storage import PyriteDB
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    try:
-        user = AuthService(db, config.settings.auth).create_user(
-            username, password, role=role, display_name=display_name
-        )
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
-    finally:
-        db.close()
+    with index_db_context(config) as db:
+        try:
+            user = AuthService(db, config.settings.auth).create_user(
+                username, password, role=role, display_name=display_name
+            )
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1) from None
     console.print(f"[green]Created user[/green] {user['username']} (role: {user['role']})")
 
 

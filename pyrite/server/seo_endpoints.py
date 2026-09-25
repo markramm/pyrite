@@ -16,8 +16,7 @@ from ..config import PyriteConfig
 from ..exceptions import BrandingInvalidError
 from ..services.branding_service import BrandingService
 from ..services.sitemap_service import SitemapService
-from ..storage.database import PyriteDB
-from .api import get_config, get_db
+from .api import get_config, get_sitemap_service
 
 logger = logging.getLogger(__name__)
 
@@ -47,10 +46,9 @@ def _site_url(config: PyriteConfig) -> str:
 @seo_router.get("/sitemap.xml")
 def sitemap_xml(
     config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    svc: SitemapService = Depends(get_sitemap_service),
 ) -> Response:
     """Return the sitemap XML document."""
-    svc = SitemapService(config, db)
     xml = svc.render_xml(_site_url(config))
     return Response(
         content=xml,
@@ -62,10 +60,9 @@ def sitemap_xml(
 @seo_router.get("/robots.txt")
 def robots_txt(
     config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    svc: SitemapService = Depends(get_sitemap_service),
 ) -> Response:
     """Return robots.txt pointing at the sitemap."""
-    svc = SitemapService(config, db)
     return Response(
         content=svc.render_robots(_site_url(config)),
         media_type="text/plain",

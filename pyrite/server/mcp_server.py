@@ -399,6 +399,14 @@ class PyriteMCPServer:
         return self._task_svc_cache
 
     @property
+    def link_svc(self):
+        if not hasattr(self, "_link_svc_cache"):
+            from ..services.link_discovery_service import LinkDiscoveryService
+
+            self._link_svc_cache = LinkDiscoveryService(self.config, self.db)
+        return self._link_svc_cache
+
+    @property
     def search_svc(self):
         if not hasattr(self, "_search_svc_cache"):
             from ..services.search_service import SearchService
@@ -948,7 +956,7 @@ class PyriteMCPServer:
         assignee = args.get("assignee", "")
         if not assignee:
             return _error("VALIDATION_FAILED", "assignee is required")
-        rows = self.db.find_by_assignee(
+        rows = self.task_svc.find_by_assignee(
             assignee=assignee,
             kb_name=args.get("kb_name"),
             status=args.get("status"),
@@ -963,7 +971,7 @@ class PyriteMCPServer:
         self, args: dict[str, Any], *, readable_kbs: set[str] | None = None
     ) -> dict[str, Any]:
         """Find entries with overdue due_date."""
-        rows = self.db.find_overdue(
+        rows = self.task_svc.find_overdue(
             as_of=args.get("as_of"),
             kb_name=args.get("kb_name"),
             limit=min(args.get("limit", 50), 200),
@@ -980,7 +988,7 @@ class PyriteMCPServer:
         status = args.get("status", "")
         if not status:
             return _error("VALIDATION_FAILED", "status is required")
-        rows = self.db.find_by_status(
+        rows = self.task_svc.find_by_status(
             status=status,
             kb_name=args.get("kb_name"),
             entry_type=args.get("entry_type"),
@@ -998,7 +1006,7 @@ class PyriteMCPServer:
         location = args.get("location", "")
         if not location:
             return _error("VALIDATION_FAILED", "location is required")
-        rows = self.db.find_by_location(
+        rows = self.task_svc.find_by_location(
             location=location,
             kb_name=args.get("kb_name"),
             limit=min(args.get("limit", 50), 200),
@@ -1040,7 +1048,7 @@ class PyriteMCPServer:
                     }
 
                 # Count existing edges of this type
-                count = self.db.count_entries(
+                count = self.svc.count_entries(
                     kb_name=kb_config.name,
                     entry_type=type_name,
                 )
@@ -1376,9 +1384,7 @@ class PyriteMCPServer:
         if not source_kb or not target_kb:
             return _error("MISSING_PARAMETER", "source_kb and target_kb are required")
 
-        from ..services.link_discovery_service import LinkDiscoveryService
-
-        svc = LinkDiscoveryService(self.config, self.db)
+        svc = self.link_svc
         pairs = svc.batch_suggest(
             source_kb=source_kb,
             target_kb=target_kb,
@@ -1404,9 +1410,7 @@ class PyriteMCPServer:
         if not entry_id or not kb_name:
             return _error("MISSING_PARAMETER", "entry_id and kb_name are required")
 
-        from ..services.link_discovery_service import LinkDiscoveryService
-
-        svc = LinkDiscoveryService(self.config, self.db)
+        svc = self.link_svc
         candidates = svc.discover_neighbors(
             entry_id=entry_id,
             kb_name=kb_name,
@@ -2003,7 +2007,7 @@ class PyriteMCPServer:
             kb_name = uri[len(f"{URI_SCHEME}kbs/") : -len("/entries")]
             if readable_kbs is not None and kb_name not in readable_kbs:
                 return _kb_not_found(kb_name)
-            entries = self.db.list_entries(kb_name=kb_name, limit=MAX_RESOURCE_LIST_ENTRIES)
+            entries = self.svc.list_entries(kb_name=kb_name, limit=MAX_RESOURCE_LIST_ENTRIES)
             return {
                 "contents": [
                     {

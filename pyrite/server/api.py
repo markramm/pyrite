@@ -12,10 +12,11 @@ import hashlib
 import logging
 import os
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,6 +42,7 @@ from ..exceptions import (
     StorageError,
     ValidationError,
 )
+from ..services.block_service import BlockService
 from ..services.ephemeral_service import EphemeralKBService
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
@@ -52,11 +54,19 @@ from ..services.llm_service import LLMService
 from ..services.llm_usage_service import LLMUsageService
 from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
+from ..services.settings_service import SettingsService
 from ..services.starred_service import StarredService
 from ..services.task_service import TaskService
 from ..services.version_service import VersionService
 from ..storage.database import PyriteDB
 from ..storage.index import IndexManager
+
+if TYPE_CHECKING:
+    from ..services.auth_service import AuthService
+    from ..services.embedding_worker import EmbeddingWorker
+    from ..services.qa_service import QAService
+    from ..services.site_cache import SiteCacheService
+    from ..services.sitemap_service import SitemapService
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +420,121 @@ def get_starred_service(
 ) -> StarredService:
     """Get StarredService instance via DI."""
     return StarredService(db, kb_service)
+
+
+def get_block_service(
+    db: PyriteDB = Depends(get_db),
+) -> BlockService:
+    """Get BlockService instance via DI."""
+    return BlockService(db)
+
+
+def get_settings_service(
+    db: PyriteDB = Depends(get_db),
+) -> SettingsService:
+    """Get SettingsService instance via DI."""
+    return SettingsService(db)
+
+
+def get_auth_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> "AuthService":
+    """Get AuthService instance via DI (users, sessions, grants, tokens).
+
+    One per request, like every other provider here. The endpoints used to
+    build ``AuthService(db, ...)`` inline (#380).
+    """
+    from ..services.auth_service import AuthService
+
+    return AuthService(db, config.settings.auth)
+
+
+def get_qa_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+    llm_service: LLMService = Depends(get_llm_service),
+) -> "QAService":
+    """Get QAService instance via DI."""
+    from ..services.qa_service import QAService
+
+    return QAService(config, db, llm_service=llm_service)
+
+
+def get_sitemap_service(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> "SitemapService":
+    """Get SitemapService instance via DI."""
+    from ..services.sitemap_service import SitemapService
+
+    return SitemapService(config, db)
+
+
+def get_embedding_worker(
+    db: PyriteDB = Depends(get_db),
+) -> "EmbeddingWorker":
+    """Get an EmbeddingWorker (the embed queue) via DI."""
+    from ..services.embedding_worker import EmbeddingWorker
+
+    return EmbeddingWorker(db)
+
+
+def get_site_cache_factory(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> "Callable[[], SiteCacheService]":
+    """A zero-argument builder for SiteCacheService.
+
+    A factory, not the service: the constructor reads ``branding.yaml`` and
+    may raise ``BrandingInvalidError``, which ``POST /site/render`` answers
+    with a 409 -- so the handler must be the one that calls it.
+    """
+
+    def build() -> "SiteCacheService":
+        from ..services.site_cache import SiteCacheService
+
+        return SiteCacheService(config, db)
+
+    return build
+
+
+def get_kb_default_role_resolver(
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> Callable[[str], str | None]:
+    """A KB's ``default_role``, for a handler that decides inline.
+
+    ``resolve_default(kb_name)`` is ``resolve_kb_default_role`` bound to
+    this request's config and database (#380); #383 replaces it.
+    """
+
+    def resolve_default(kb_name: str) -> str | None:
+        return resolve_kb_default_role(config, db, kb_name)
+
+    return resolve_default
+
+
+KBRoleResolver = Callable[[str], Awaitable[str | None]]
+
+
+def get_kb_role_resolver(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> KBRoleResolver:
+    """The caller's effective role on a KB, for a handler that decides inline.
+
+    Returns an async callable: ``await role_of(kb_name)`` is
+    ``resolve_effective_kb_role`` for this request. It exists so a handler
+    needs no database handle of its own (#380); the access-policy work
+    (#383, ADR-0037) replaces it.
+    """
+
+    async def role_of(kb_name: str) -> str | None:
+        return await resolve_effective_kb_role(request, config, db, kb_name)
+
+    return role_of
 
 
 def invalidate_llm_service():

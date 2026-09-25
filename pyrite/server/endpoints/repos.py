@@ -5,18 +5,15 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ...config import PyriteConfig
 from ...services.git_service import GitService
 from ...services.repo_service import RepoService
-from ...storage.database import PyriteDB
 from ..api import (
     TIER_LEVELS,
-    get_config,
-    get_db,
+    KBRoleResolver,
+    get_kb_role_resolver,
     get_readable_kbs,
     get_repo_service,
     requires_tier,
-    resolve_effective_kb_role,
 )
 from ..schemas import ForkRequest, PRRequest, RepoInfo, RepoListResponse, SubscribeRequest
 
@@ -128,11 +125,6 @@ def _requires_github_token(svc: RepoService = Depends(get_repo_service)) -> None
         )
 
 
-def _repo_kb_names(db: PyriteDB, repo: dict) -> list[str]:
-    """The KBs a repository holds, as recorded when it was subscribed."""
-    return [row["name"] for row in db.get_kbs_for_repo(repo["id"])]
-
-
 def _repo_is_readable(kb_names: list[str], readable: set[str] | None) -> bool:
     """A repository is readable when every KB it holds is (`None`: unscoped)."""
     return readable is None or all(kb in readable for kb in kb_names)
@@ -158,16 +150,14 @@ def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_er
 
     async def _check(
         name: str,
-        request: Request,
         readable: set[str] | None = Depends(get_readable_kbs),
-        config: PyriteConfig = Depends(get_config),
-        db: PyriteDB = Depends(get_db),
+        role_of: KBRoleResolver = Depends(get_kb_role_resolver),
         svc: RepoService = Depends(get_repo_service),
     ) -> None:
-        repo = db.get_repo(name=name)
+        repo = svc.get_repo(name)
         if not repo:
             return
-        kb_names = _repo_kb_names(db, repo)
+        kb_names = svc.repo_kb_names(repo["id"])
 
         if not _repo_is_readable(kb_names, readable):
             raise HTTPException(
@@ -178,7 +168,7 @@ def _repo_kb_guard(tier: str, missing_status: int, missing_code: str, missing_er
         if tier == "read":
             return
         for kb in kb_names:
-            role = await resolve_effective_kb_role(request, config, db, kb)
+            role = await role_of(kb)
             if role is None or TIER_LEVELS.get(role, -1) < TIER_LEVELS[tier]:
                 raise HTTPException(
                     status_code=403,
@@ -254,7 +244,6 @@ def list_repos(
     request: Request,
     svc: RepoService = Depends(get_repo_service),
     readable: set[str] | None = Depends(get_readable_kbs),
-    db: PyriteDB = Depends(get_db),
 ):
     """List the subscribed/forked repos whose KBs the caller may read.
 
@@ -263,7 +252,7 @@ def list_repos(
     """
     repos = svc.list_repos()
     if readable is not None:
-        repos = [r for r in repos if _repo_is_readable(_repo_kb_names(db, r), readable)]
+        repos = [r for r in repos if _repo_is_readable(svc.repo_kb_names(r["id"]), readable)]
     return RepoListResponse(repos=[_repo_dict_to_info(r, svc) for r in repos])
 
 

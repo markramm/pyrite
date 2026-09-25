@@ -149,3 +149,30 @@ def test_admin_can_export_private_kb(env):
 
     assert r.status_code == 200, r.text
     assert SECRET in _bare_repo_history(bare)
+
+
+@pytest.mark.control(
+    reason="characterization for #380: pins behaviour before it moves behind a service, so it passes with and without the change by design"
+)
+def test_export_hands_the_signed_in_users_github_token_to_the_service(env, monkeypatch):
+    """Characterizes #380's move of the token lookup to the auth provider: a
+    signed-in caller's stored GitHub token reaches the export service, and a
+    caller with none stored passes None."""
+    from pyrite.services.export_service import ExportService
+
+    seen = []
+
+    def fake_export(self, kb_name, repo_url, github_token=None, **kw):
+        seen.append(github_token)
+        return {"success": True}
+
+    monkeypatch.setattr(ExportService, "export_kb_to_repo", fake_export)
+    AuthService(env["db"], env["config"].settings.auth).store_github_token(
+        env["writer_id"], "gho_characterized"
+    )
+
+    r = env["writer"].post(f"/api/kbs/{PUBLIC}/export", json={"repo_url": "file:///nowhere"})
+    assert r.status_code == 200, r.text
+    r = env["admin"].post(f"/api/kbs/{PUBLIC}/export", json={"repo_url": "file:///nowhere"})
+    assert r.status_code == 200, r.text
+    assert seen == ["gho_characterized", None]

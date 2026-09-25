@@ -1,32 +1,34 @@
 """Admin endpoints: stats, index sync, AI status, KB management, plugins."""
 
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 
-from ...config import PyriteConfig
 from ...exceptions import ConfigError, KBNotFoundError, KBProtectedError
 from ...services.auth_service import AuthService
+from ...services.embedding_worker import EmbeddingWorker
 from ...services.ephemeral_service import EphemeralKBService, InvalidEphemeralKBNameError
 from ...services.index_worker import IndexWorker
 from ...services.kb_registry_service import KBRegistryService
 from ...services.llm_service import LLMService
 from ...services.llm_usage_service import LLMUsageService
-from ...storage.database import PyriteDB
+from ...services.site_cache import SiteCacheService
 from ...storage.index import IndexManager
 from ..api import (
-    get_config,
-    get_db,
+    get_auth_service,
+    get_embedding_worker,
     get_ephemeral_service,
     get_index_mgr,
     get_index_worker,
+    get_kb_default_role_resolver,
     get_kb_registry,
     get_llm_service,
     get_llm_usage_service,
     get_readable_kbs,
+    get_site_cache_factory,
     limiter,
     requires_tier,
-    resolve_kb_default_role,
 )
 from ..schemas import (
     AIStatusResponse,
@@ -203,8 +205,7 @@ def get_all_usage(
 @limiter.limit("10/minute")
 async def render_site_cache(
     request: Request,
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    build_site_cache: Callable[[], SiteCacheService] = Depends(get_site_cache_factory),
 ):
     """Render all /site pages to the filesystem cache for fast serving.
 
@@ -220,10 +221,9 @@ async def render_site_cache(
     import asyncio
 
     from ...exceptions import BrandingInvalidError
-    from ...services.site_cache import SiteCacheService
 
     try:
-        svc = await asyncio.to_thread(SiteCacheService, config, db)
+        svc = await asyncio.to_thread(build_site_cache)
     except BrandingInvalidError as e:
         # Logged detail names the real path; the response body carries only
         # the exception's public_message (#377 pattern; #445 cold read --
@@ -238,11 +238,8 @@ async def render_site_cache(
 
 @router.get("/index/embed-status")
 @limiter.limit("100/minute")
-def embed_status(request: Request, db: PyriteDB = Depends(get_db)):
+def embed_status(request: Request, worker: EmbeddingWorker = Depends(get_embedding_worker)):
     """Return embedding queue status."""
-    from ...services.embedding_worker import EmbeddingWorker
-
-    worker = EmbeddingWorker(db)
     return worker.get_status()
 
 
@@ -387,16 +384,14 @@ def force_expire_ephemeral_kb(
 def create_ephemeral_kb(
     request: Request,
     name: str | None = Body(None, embed=True),
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
     eph_svc: EphemeralKBService = Depends(get_ephemeral_service),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """Create an ephemeral KB for the current user."""
     auth_user = getattr(request.state, "auth_user", None)
     if not auth_user:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    auth_service = AuthService(db, config.settings.auth)
     try:
         result = auth_service.create_user_ephemeral_kb(auth_user["id"], eph_svc, name=name)
     except InvalidEphemeralKBNameError as e:
@@ -419,18 +414,17 @@ def create_ephemeral_kb(
 def list_kb_permissions(
     request: Request,
     name: str,
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+    resolve_default: Callable[[str], str | None] = Depends(get_kb_default_role_resolver),
 ):
     """List permission grants for a KB. Requires global admin or KB admin."""
     auth_user = getattr(request.state, "auth_user", None)
     global_role = getattr(request.state, "api_role", None)
-    auth_service = AuthService(db, config.settings.auth)
 
     if global_role != "admin":
         if not auth_user:
             raise HTTPException(status_code=403, detail="Admin access required")
-        kb_default_role = resolve_kb_default_role(config, db, name)
+        kb_default_role = resolve_default(name)
         effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
         if effective != "admin":
             raise HTTPException(status_code=403, detail="Admin access required for this KB")
@@ -447,23 +441,21 @@ def manage_kb_permission(
     user_id: int = Body(...),
     role: str | None = Body(None),
     revoke: bool = Body(False),
-    config: PyriteConfig = Depends(get_config),
-    db: PyriteDB = Depends(get_db),
+    auth_service: AuthService = Depends(get_auth_service),
+    resolve_default: Callable[[str], str | None] = Depends(get_kb_default_role_resolver),
 ):
     """Grant or revoke a per-KB permission. Requires global admin or KB admin."""
     auth_user = getattr(request.state, "auth_user", None)
     global_role = getattr(request.state, "api_role", None)
-    auth_service = AuthService(db, config.settings.auth)
 
     if global_role != "admin":
         if not auth_user:
             raise HTTPException(status_code=403, detail="Admin access required")
-        kb_default_role = resolve_kb_default_role(config, db, name)
+        kb_default_role = resolve_default(name)
         effective = auth_service.get_kb_role(auth_user["id"], name, kb_default_role)
         if effective != "admin":
             raise HTTPException(status_code=403, detail="Admin access required for this KB")
 
-    auth_service = AuthService(db, config.settings.auth)
     granted_by = auth_user["id"] if auth_user else None
 
     if revoke:
