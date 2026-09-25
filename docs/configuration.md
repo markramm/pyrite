@@ -57,6 +57,8 @@ loaded it (for example `pyrite-admin kb add` from a shell while a server runs),
 restart the server, or re-run the command, so it reads the current file. If
 `config.yaml` cannot be read (it does not parse, is not a mapping, or has an
 entry with no name), fix or move it: restarting would only fail to load it.
+An entry with a name but no `path` is reported as the first case, though a
+restart will fail to load that file too (#405).
 
 Known limits: only the list of knowledge bases is protected. A save from a
 process whose config is out of date still overwrites `repositories:` and
@@ -66,12 +68,14 @@ repository subscribe that is refused at its final save is not rolled back
 (unsubscribe it and retry).
 
 The write is not atomic: a crash mid-write can leave a truncated
-`config.yaml`, which the next save refuses to overwrite only if it cannot be
-parsed. Most truncations still parse -- including the empty file a crash right
-after the file is opened leaves -- and then read as a shorter list of KBs, or
-none. A command that loads such a file sees only those KBs, with no error, and
-its next save writes the shorter list; a process that loaded the file before
-the crash (a running server) writes its full list back on its next save. Keep
+`config.yaml`. The next save refuses to overwrite it when it cannot be
+parsed, and in a few other cases, but most truncations still parse --
+including the empty file a crash right after the file is opened leaves -- and
+then read as a shorter list of KBs, or none. A command that loads such a file
+usually sees only those KBs, with no error (some fail to load with a raw
+error instead), and its next save writes the shorter list. A process that
+loaded the file before the crash (a running server) usually writes its full
+list back on its next save. Keep
 a copy of `config.yaml` to restore from.
 
 ## Server
