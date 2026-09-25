@@ -1548,7 +1548,11 @@ def main():
     """Run the API server."""
     import uvicorn
 
+    from ..config import open_registration_warning
+
     config = load_config()
+    if warning := open_registration_warning(config):
+        logger.warning(warning)
     uvicorn.run(
         "pyrite.server.api:app",
         host=config.settings.host,

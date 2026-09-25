@@ -24,6 +24,7 @@ from fastapi.testclient import TestClient
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in, seed_user
 from tests.test_api_tiers import _hash_key
 
 USER_ROUTES = (
@@ -66,15 +67,13 @@ def two_sessions(tmp_path):
     member = TestClient(application)
     anon = TestClient(application)
 
-    r = admin.post("/auth/register", json={"username": "admin-user", "password": "password123"})
-    assert r.status_code == 200, r.text
-    assert r.json()["role"] == "admin"
-    admin_id = r.json()["id"]
+    admin_user = seed_and_sign_in(admin, "admin-user", "password123", role="admin")
+    assert admin_user["role"] == "admin"
+    admin_id = admin_user["id"]
 
-    r = member.post("/auth/register", json={"username": "member", "password": "password123"})
-    assert r.status_code == 200, r.text
-    assert r.json()["role"] != "admin"
-    member_id = r.json()["id"]
+    member_user = seed_and_sign_in(member, "member", "password123", role="read")
+    assert member_user["role"] != "admin"
+    member_id = member_user["id"]
 
     # A fresh login too, so the session cookie is the /auth/login one.
     r = member.post("/auth/login", json={"username": "member", "password": "password123"})
@@ -171,11 +170,10 @@ class TestApiKeys:
         ]
         application, db = _app(tmp_path, api_keys=keys)
         client = TestClient(application)
-        r = client.post("/auth/register", json={"username": "someone", "password": "password123"})
-        assert r.status_code == 200, r.text
+        user = seed_and_sign_in(client, "someone", "password123", role="admin")
         client.cookies.clear()
         try:
-            yield client, r.json()["id"]
+            yield client, user["id"]
         finally:
             db.close()
 
@@ -250,8 +248,8 @@ class TestLastAdminService:
     def test_refused_and_unchanged(self, auth, role):
         from pyrite.exceptions import ValidationError
 
-        first = auth.register("root", "password123")
-        auth.register("other", "password123")
+        first = seed_user(auth.db, "root", "password123")
+        seed_user(auth.db, "other", "password123")
         assert first["role"] == "admin"
         with pytest.raises(ValidationError, match="last admin"):
             auth.set_role(first["id"], role)
@@ -259,15 +257,15 @@ class TestLastAdminService:
         assert roles == {"root": "admin", "other": "read"}
 
     def test_allowed_when_another_admin_remains(self, auth):
-        first = auth.register("root", "password123")
-        other = auth.register("other", "password123")
+        first = seed_user(auth.db, "root", "password123")
+        other = seed_user(auth.db, "other", "password123")
         assert auth.set_role(other["id"], "admin") is True
         assert auth.set_role(first["id"], "read") is True
         roles = {u["username"]: u["role"] for u in auth.list_users()}
         assert roles == {"root": "read", "other": "admin"}
 
     def test_unknown_user_is_still_not_found(self, auth):
-        auth.register("root", "password123")
+        seed_user(auth.db, "root", "password123")
         assert auth.set_role(9999, "read") is False
 
     def test_raises_last_admin_error_specifically(self, auth):
@@ -276,8 +274,8 @@ class TestLastAdminService:
         mislabeling every other validation failure the same way."""
         from pyrite.exceptions import LastAdminError
 
-        first = auth.register("root", "password123")
-        auth.register("other", "password123")
+        first = seed_user(auth.db, "root", "password123")
+        seed_user(auth.db, "other", "password123")
         with pytest.raises(LastAdminError):
             auth.set_role(first["id"], "read")
 

@@ -29,7 +29,8 @@ SECRET = "sk-operator-secret-value"
 def env(tmp_path: Path):
     from pyrite.config import AuthConfig, KBConfig, PyriteConfig
     from pyrite.server.api import create_app
-    from pyrite.services.auth_service import AuthService
+
+    from tests.auth_seed import seed_and_sign_in
 
     kb_path = tmp_path / "notes"
     kb_path.mkdir()
@@ -40,16 +41,10 @@ def env(tmp_path: Path):
 
     def login(username: str, role: str | None = None) -> TestClient:
         c = TestClient(app)
-        r = c.post("/auth/register", json={"username": username, "password": "password1"})
-        assert r.status_code in (200, 201), r.text
-        if role is not None:
-            AuthService(app.state.pyrite_db, cfg.settings.auth).set_role(r.json()["id"], role)
-            c.cookies.clear()
-            r = c.post("/auth/login", json={"username": username, "password": "password1"})
-            assert r.status_code == 200, r.text
+        seed_and_sign_in(c, username, "password1", role=role)
         return c
 
-    admin = login("owner")  # first user is admin
+    admin = login("owner", "admin")  # seeded as admin via the operator path
     writer = login("wendy", "write")
     reader = login("rita", "read")
     anon = TestClient(app)

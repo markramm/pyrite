@@ -35,6 +35,7 @@ from pyrite.server.api import create_app, get_index_worker
 from pyrite.server.websocket import broadcast_event, manager
 from pyrite.services.auth_service import AuthService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 MARKER = {"type": "kb_synced", "entry_id": "__marker__", "kb_name": ""}
@@ -81,7 +82,18 @@ def secured():
         config = _config(Path(d), auth=True)
         app = create_app(config=config)
         tokens = {}
-        for name in ("admin-user", "granted", "peer"):
+        # The sole admin, seeded via the operator path (this app has no
+        # test-supplied get_db override, so a direct PyriteDB connection is
+        # used here rather than auth_seed's app_db-based helpers).
+        seed_db = PyriteDB(config.settings.index_path)
+        try:
+            seed_user(seed_db, "admin-user", "password123", role="admin")
+            _, tokens["admin-user"] = AuthService(seed_db, config.settings.auth).login(
+                "admin-user", "password123"
+            )
+        finally:
+            seed_db.close()
+        for name in ("granted", "peer"):
             r = TestClient(app).post(
                 "/auth/register", json={"username": name, "password": "password123"}
             )

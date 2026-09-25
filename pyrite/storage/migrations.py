@@ -16,7 +16,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # Current schema version
-CURRENT_VERSION = 25
+CURRENT_VERSION = 26
 
 
 @dataclass
@@ -500,6 +500,17 @@ MIGRATIONS: list[Migration] = [
         -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
         """,
     ),
+    Migration(
+        version=26,
+        description="Add local_user.global_access: self-registered users read public KBs only",
+        # ALTER handled conditionally in _apply_v26() since the column may
+        # already exist from ORM create_all. DEFAULT 1: every existing user
+        # keeps the access their global role gave them.
+        up="",
+        down="""
+        -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
+        """,
+    ),
 ]
 
 
@@ -727,6 +738,20 @@ class MigrationManager:
             self.conn.execute("ALTER TABLE entry ADD COLUMN state TEXT")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_fips ON entry(fips)")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_entry_state ON entry(state)")
+        self.conn.commit()
+
+    def _apply_v26(self) -> None:
+        """Conditionally add global_access to local_user; existing users get 1."""
+        table_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='local_user'"
+        ).fetchone()
+        if not table_exists:
+            return
+        existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
+        if "global_access" not in existing:
+            self.conn.execute(
+                "ALTER TABLE local_user ADD COLUMN global_access INTEGER NOT NULL DEFAULT 1"
+            )
         self.conn.commit()
 
     def _apply_v24(self) -> None:

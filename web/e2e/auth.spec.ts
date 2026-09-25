@@ -23,8 +23,8 @@
  * So the specs below run under the `chromium-auth` project, against a second
  * backend with `auth.enabled: true`, a second data directory, a second port
  * and a second Vite dev server. The machinery and the reason each piece is
- * separate are documented in `e2e/auth-setup.ts`; the user is created by
- * `e2e/auth.setup.ts`. `playwright.config.ts` was extended additively: the
+ * separate are documented in `e2e/auth-setup.ts`, which also creates the user
+ * (`pyrite-admin user create`). `playwright.config.ts` was extended additively: the
  * existing `chromium` project gained a `testIgnore` for this file and nothing
  * else about it changed.
  *
@@ -239,12 +239,11 @@ test.describe('Register page', () => {
 	});
 
 	test('a duplicate username is rejected by the server', async ({ page }) => {
-		// SEEDED_USER already exists (auth.setup.ts registered it), so this
+		// SEEDED_USER already exists (the CLI seed created it), so this
 		// exercises the real server-side uniqueness check rather than a
 		// client-side guess. It is also why this spec does not register a NEW
 		// user: a successful registration auto-logs-in and mutates the shared
-		// world, and the "first user is admin" invariant the setup depends on
-		// must hold for the whole run.
+		// world.
 		await page.getByLabel('Username').fill(SEEDED_USER.username);
 		await page.getByLabel('Password', { exact: true }).fill('e2e-password-123');
 		await page.getByLabel('Confirm Password').fill('e2e-password-123');

@@ -30,6 +30,7 @@ from pyrite.server.api import create_app, get_config, get_db
 from pyrite.services.auth_service import AuthService
 from pyrite.services.oauth_providers import OAuthProfile, OAuthToken
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in, seed_user
 
 # The browser-binding cookie's name is part of the interface (a reverse proxy
 # or a CSP may need to know it), so it is spelled out here, not imported.
@@ -104,9 +105,14 @@ def _callback(client: TestClient, state: str):
 
 
 def _login_local(client: TestClient, username: str) -> int:
-    r = client.post("/auth/register", json={"username": username, "password": "password123"})
-    assert r.status_code == 200, r.text
-    return r.json()["id"]
+    """A local user, seeded via the operator path and signed in on ``client``.
+
+    Each test's ``world`` fixture starts with an empty database, so this is
+    always the sole user -- the same admin semantics a first registrant used
+    to get -- which is fine here: these tests are about OAuth state binding,
+    not about role."""
+    user = seed_and_sign_in(client, username, "password123")
+    return user["id"]
 
 
 def _set_cookie_headers(response) -> list[str]:
@@ -120,6 +126,9 @@ def _set_cookie_headers(response) -> list[str]:
 
 class TestLoginFlowBinding:
     def test_same_browser_completes_login(self, world):
+        # A sign-up (OAuth or local) is refused until an admin exists; seed
+        # one via the operator path so this OAuth login can complete.
+        seed_user(world["db"], "root", role="admin")
         browser = world["browser"]()
         state = _state_of(browser.get("/auth/github", follow_redirects=False))
         r = _callback(browser, state)
@@ -151,6 +160,7 @@ class TestLoginFlowBinding:
     def test_refused_callback_does_not_burn_the_real_flow(self, world):
         """A mismatched callback must not consume the legitimate browser's
         state: the attacker's browser still completes its own login."""
+        seed_user(world["db"], "root", role="admin")
         attacker = world["browser"]()
         victim = world["browser"]()
         state = _state_of(attacker.get("/auth/github", follow_redirects=False))
@@ -159,6 +169,7 @@ class TestLoginFlowBinding:
         assert r.headers["location"] == "/"
 
     def test_state_is_single_use_in_the_same_browser(self, world):
+        seed_user(world["db"], "root", role="admin")
         browser = world["browser"]()
         r0 = browser.get("/auth/github", follow_redirects=False)
         state = _state_of(r0)

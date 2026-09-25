@@ -79,7 +79,8 @@ def env(tmp_path):
     config = AuthConfig(enabled=True, max_sessions_per_user=CAP)
     with PyriteDB(db_path) as db:
         service = AuthService(db, config)
-        alice = service.register("alice", "password123")
+        # The operator path: sign-up is closed until an admin exists (#13).
+        alice = service.create_user("alice", "password123", role="admin")
         # Make alice reachable through oauth_login too (see _MIXED_PROFILE).
         db.execute_write_sql(
             "UPDATE local_user SET provider_id = :pid WHERE id = :id",

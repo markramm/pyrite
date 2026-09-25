@@ -13,10 +13,11 @@ from pydantic import BaseModel
 
 from ..config import PyriteConfig
 from ..exceptions import LastAdminError
-from ..services.auth_service import AuthService
+from ..services.auth_service import AuthService, RegistrationClosedError
 from ..services.oauth_providers import GitHubOAuthProvider
 from ..storage.database import PyriteDB
-from .api import get_config, get_db, requires_tier, verify_api_key
+from .api import _anonymized_key_func, get_config, get_db, requires_tier, verify_api_key
+from .auth_rate_limit import get_auth_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -205,14 +206,24 @@ async def register(
     config: PyriteConfig = Depends(get_config),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> AuthUserResponse:
-    """Create a new account. First user gets admin role."""
+    """Create a new account.
+
+    Refused (403) until an operator has created an admin with the CLI; a
+    registered user never becomes admin. Rate-limited per client (429).
+    """
     if not config.settings.auth.enabled:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
+
+    get_auth_rate_limiter(request, config.settings.auth).check_register(
+        _anonymized_key_func(request)
+    )
 
     try:
         user = auth_service.register(
             body.username, body.password, body.display_name, body.invite_code
         )
+    except RegistrationClosedError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -231,13 +242,21 @@ async def login(
     config: PyriteConfig = Depends(get_config),
     auth_service: AuthService = Depends(get_auth_service),
 ) -> AuthUserResponse:
-    """Authenticate and set session cookie."""
+    """Authenticate and set session cookie.
+
+    Rate-limited before the password is checked: every attempt counts for
+    the client, failed attempts for the username (429 when either is spent).
+    """
     if not config.settings.auth.enabled:
         raise HTTPException(status_code=400, detail="Authentication is not enabled")
+
+    limiter = get_auth_rate_limiter(request, config.settings.auth)
+    limiter.check_login(_anonymized_key_func(request), body.username)
 
     try:
         user, token = auth_service.login(body.username, body.password)
     except ValueError:
+        limiter.record_login_failure(body.username)
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
     _set_session_cookie(response, token, config.settings.auth.session_ttl_hours, request)

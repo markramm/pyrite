@@ -170,9 +170,36 @@ to an auth-disabled instance without API keys and to one with
 |---|---|---|
 | `PYRITE_AUTH_ENABLED` | `false` | Turn on user accounts and per-KB permissions |
 | `PYRITE_AUTH_ANONYMOUS_TIER` | unset | What an unauthenticated request may do when auth is enabled: `read`, `write`, or `none` for nothing. Any other value, including `admin`, is refused at startup. It is a ceiling: on each KB the visitor gets the lower of this and the KB's `default_role` (a `default_role: none` KB stays hidden, a `default_role: read` KB stays read-only, and `default_role: write` never lifts a `read` visitor to write). Unset falls back to the API-key role. |
-| `PYRITE_AUTH_ALLOW_REGISTRATION` | `false` | Let people create accounts |
+| `PYRITE_AUTH_ALLOW_REGISTRATION` | `true` | Let people create accounts on the web (still closed until an admin exists; see below) |
+| `PYRITE_AUTH_LOGIN_RATE_LIMIT` | `20/minute;200/hour` | `/auth/login` attempts per client (`settings.auth.login_rate_limit`) |
+| `PYRITE_AUTH_LOGIN_RATE_LIMIT_PER_USERNAME` | `5/minute;30/hour` | Failed `/auth/login` attempts per username (`settings.auth.login_rate_limit_per_username`) |
+| `PYRITE_AUTH_REGISTER_RATE_LIMIT` | `5/minute;20/hour` | `/auth/register` attempts per client (`settings.auth.register_rate_limit`) |
 | `PYRITE_GITHUB_CLIENT_ID` / `PYRITE_GITHUB_CLIENT_SECRET` | unset | GitHub OAuth login |
 | `PYRITE_ENCRYPTION_KEY` | unset | If set, stored GitHub access tokens are encrypted at rest with it. Set it on any shared instance. |
+
+**The first admin comes from the CLI.** With auth enabled, web registration and
+GitHub sign-up are refused until an admin exists, and nobody becomes admin by
+signing up first. On the server's data directory:
+
+```bash
+pyrite-admin user create alice --role admin     # prompts for the password
+```
+
+`settings.auth.require_invite_code: true` makes registration need a code an
+admin created; the new user gets the code's role. Limits use the same syntax
+as slowapi (`"5/minute"`, several joined by `;`); an over-limit request gets
+429 with `Retry-After`. `pyrite serve` warns at startup when registration is
+open, naming the KBs a stranger could read by signing up.
+
+**What a self-registered user can read.** Someone who signs up without an
+invite code (or through GitHub without an `allowed_orgs` or `org_tier_map`
+match) reads only KBs whose `default_role` is set to `read` or `write`, plus any
+KB an admin grants them. A KB with no `default_role` stays closed to them. Users
+an operator created or vetted -- the CLI, an invite code, an org rule, or an
+admin setting their global role -- keep the old rule: their global role applies
+to every KB without a `default_role`. To share a KB with every signed-in user,
+set its `default_role` to `read` (which also puts it on the public site, below),
+or grant it per user.
 
 Per-KB access: each KB in `config.yaml` may carry `default_role: read` (public
 to any authenticated user), `write`, or `none` (private: explicit grants only).

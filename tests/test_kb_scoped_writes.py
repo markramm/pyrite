@@ -31,18 +31,17 @@ from pyrite.server.api import create_app
 from pyrite.services.auth_service import AuthService
 from pyrite.services.clipper import ClipperService, ClipResult
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 PRIVATE = "p"  # default_role none: invisible without a grant
 READONLY = "k"  # default_role read: readable, not writable, by a non-admin
 OPEN = "w"  # no default_role: a user's global role applies
 
 
-def _register(app, username) -> str:
-    r = TestClient(app).post(
-        "/auth/register", json={"username": username, "password": "password123"}
-    )
-    assert r.status_code == 200, r.text
-    return r.cookies["pyrite_session"]
+def _token(db, config, username, password="password123") -> str:
+    """A session token for a seeded user (the app's own requests read the
+    same database file)."""
+    return AuthService(db, config.settings.auth).login(username, password)[1]
 
 
 @pytest.fixture
@@ -77,12 +76,18 @@ def env(stub_clip):
             ),
         )
         app = create_app(config=config)
-        tokens = {name: _register(app, name) for name in ("admin", "alice", "bob")}
         db = PyriteDB(config.settings.index_path)
+        # Operator-path seeding: admin is the first user;
+        # alice and bob get global "write" (covering every KB, as a registrant
+        # used to), matching what this test's assertions rely on.
+        seed_user(db, "admin", "password123", role="admin")
+        seed_user(db, "alice", "password123", role="write")
+        seed_user(db, "bob", "password123", role="write")
+        tokens = {
+            name: _token(db, config, name, "password123") for name in ("admin", "alice", "bob")
+        }
         auth = AuthService(db, config.settings.auth)
         users = {u["username"]: u["id"] for u in auth.list_users()}
-        auth.set_role(users["alice"], "write")
-        auth.set_role(users["bob"], "write")
         for kb in (PRIVATE, READONLY, OPEN):
             db.register_kb(kb, "generic", str(tmp / kb))
             db.upsert_entry(

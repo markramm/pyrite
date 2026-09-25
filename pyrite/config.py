@@ -324,6 +324,13 @@ class AuthConfig:
     max_sessions_per_user: int = 5
     allow_registration: bool = True
     require_invite_code: bool = False
+    # Rate limits on the unauthenticated auth endpoints, in the `limits`
+    # syntax slowapi uses ("5/minute", several joined by ";"). Login is
+    # limited per client (every attempt) and per username (failed attempts);
+    # registration per client.
+    login_rate_limit: str = "20/minute;200/hour"
+    login_rate_limit_per_username: str = "5/minute;30/hour"
+    register_rate_limit: str = "5/minute;20/hour"
     providers: dict[str, OAuthProviderConfig] = field(default_factory=dict)
     ephemeral_min_tier: str = "write"
     ephemeral_max_per_user: int = 1
@@ -688,6 +695,10 @@ class PyriteConfig:
                 "session_ttl_hours": self.settings.auth.session_ttl_hours,
                 "max_sessions_per_user": self.settings.auth.max_sessions_per_user,
                 "allow_registration": self.settings.auth.allow_registration,
+                "require_invite_code": self.settings.auth.require_invite_code,
+                "login_rate_limit": self.settings.auth.login_rate_limit,
+                "login_rate_limit_per_username": self.settings.auth.login_rate_limit_per_username,
+                "register_rate_limit": self.settings.auth.register_rate_limit,
                 "ephemeral_min_tier": self.settings.auth.ephemeral_min_tier,
                 "ephemeral_max_per_user": self.settings.auth.ephemeral_max_per_user,
                 "ephemeral_default_ttl": self.settings.auth.ephemeral_default_ttl,
@@ -835,6 +846,14 @@ class PyriteConfig:
                 session_ttl_hours=auth_data.get("session_ttl_hours", 168),
                 max_sessions_per_user=auth_data.get("max_sessions_per_user", 5),
                 allow_registration=auth_data.get("allow_registration", True),
+                require_invite_code=auth_data.get("require_invite_code", False),
+                login_rate_limit=auth_data.get("login_rate_limit", AuthConfig.login_rate_limit),
+                login_rate_limit_per_username=auth_data.get(
+                    "login_rate_limit_per_username", AuthConfig.login_rate_limit_per_username
+                ),
+                register_rate_limit=auth_data.get(
+                    "register_rate_limit", AuthConfig.register_rate_limit
+                ),
                 providers=providers,
                 ephemeral_min_tier=auth_data.get("ephemeral_min_tier", "write"),
                 ephemeral_max_per_user=auth_data.get("ephemeral_max_per_user", 1),
@@ -996,6 +1015,12 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         )
     if val := env("PYRITE_AUTH_ALLOW_REGISTRATION"):
         config.settings.auth.allow_registration = val.lower() in ("true", "1", "yes")
+    if val := env("PYRITE_AUTH_LOGIN_RATE_LIMIT"):
+        config.settings.auth.login_rate_limit = val
+    if val := env("PYRITE_AUTH_LOGIN_RATE_LIMIT_PER_USERNAME"):
+        config.settings.auth.login_rate_limit_per_username = val
+    if val := env("PYRITE_AUTH_REGISTER_RATE_LIMIT"):
+        config.settings.auth.register_rate_limit = val
     if val := env("PYRITE_CORS_ORIGINS"):
         config.settings.cors_origins = [s.strip() for s in val.split(",")]
     if val := env("PYRITE_ALLOWED_HOSTS"):
@@ -1150,6 +1175,32 @@ def load_config() -> PyriteConfig:
         kb.load_kb_yaml()
 
     return config
+
+
+def open_registration_warning(config: PyriteConfig) -> str | None:
+    """The startup warning for an auth-enabled server anyone can sign up to.
+
+    None unless auth is on and registration needs no invite code. A
+    self-registered user reads only KBs whose ``default_role`` is read or
+    write, so the warning names those: they are what a
+    stranger gets by creating an account.
+    """
+    auth = config.settings.auth
+    if not auth.enabled or not auth.allow_registration or auth.require_invite_code:
+        return None
+    public = sorted(
+        kb.name for kb in config.knowledge_bases if kb.default_role in ("read", "write")
+    )
+    readable = (
+        f"they can read KBs with default_role read or write: {', '.join(public)}"
+        if public
+        else "no KB has default_role read or write, so they can read nothing until granted"
+    )
+    return (
+        "Auth is enabled with open registration: anyone who can reach this server "
+        f"can create an account, and {readable}. Set settings.auth.allow_registration: "
+        "false or require_invite_code: true to close it."
+    )
 
 
 def _repair_ephemeral_default_role(kb: KBConfig) -> None:

@@ -20,9 +20,10 @@ Local username/password authentication with session tokens for the web UI. Uses 
 
 ### User & Session Management
 
-- `register(username, password)` — creates a new user, returns user dict
+- `create_user(username, password, role)` — the operator path (`pyrite-admin user create`); how the first admin is made
+- `register(username, password, display_name, invite_code)` — web sign-up; refused (`RegistrationClosedError`) until an admin exists, never makes an admin. Without an invite the user gets `read` on public KBs only (`global_access` 0); an invite code is claimed by one conditional UPDATE in the same transaction as the insert, so one code makes at most one user
 - `login(username, password)` — validates credentials, creates session token
-- `oauth_login(profile, provider_config)` — create/update OAuth user, returns session
+- `oauth_login(profile, provider_config)` — create/update OAuth user, returns session; a new sign-up is refused until an admin exists, and gets `global_access` only through `allowed_orgs` or an `org_tier_map` match
 - `logout(token)` — invalidates a session
 - `verify_session(token)` — returns user info if token is valid
 
@@ -48,7 +49,9 @@ effective_role(user, kb) =
     1. Global admin → always "admin"
     2. kb_permission[user_id, kb_name]   -- explicit per-KB grant
     3. kb.default_role                   -- KB-level default
-    4. user.role                         -- user's global role fallback
+    4. user.role                         -- user's global role fallback, only
+                                            when user.global_access (operator-
+                                            vetted users; not self-registered)
     5. anonymous_tier                    -- anonymous fallback (if no user)
 ```
 

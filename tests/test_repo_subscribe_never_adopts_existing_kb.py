@@ -25,6 +25,7 @@ from pyrite.server.api import create_app, get_config, get_db, get_repo_service
 from pyrite.services.git_service import GitService, _git_env
 from pyrite.services.repo_service import RepoService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 EXISTING = "p"
 SUBSCRIBE_URL = "https://github.com/someone/notes"
@@ -122,8 +123,7 @@ def env(tmp_path, monkeypatch):
     )
 
     client = TestClient(app)
-    r = client.post("/auth/register", json={"username": "admin", "password": "password123"})
-    assert r.status_code == 200, r.text
+    seed_and_sign_in(client, "admin", "password123")  # the sole admin, seeded via the operator path
 
     def snapshot():
         kb_row = db.execute_sql("SELECT * FROM kb WHERE name = :n", {"n": EXISTING})

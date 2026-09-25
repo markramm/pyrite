@@ -5,6 +5,7 @@ import pytest
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
 from pyrite.services.auth_service import AuthService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 
 @pytest.fixture
@@ -34,9 +35,9 @@ def setup(tmpdir):
     with PyriteDB(db_path) as db:
         auth = AuthService(db, config.settings.auth)
 
-        # Register admin (first user) and a regular user
-        admin = auth.register("admin", "password123", "Admin User")
-        user = auth.register("alice", "password123", "Alice")
+        # Seed admin (first user) and a regular user via the operator path.
+        admin = seed_user(db, "admin", "password123", role="admin", display_name="Admin User")
+        user = seed_user(db, "alice", "password123", role="read", display_name="Alice")
 
         yield auth, db, config, admin, user
 

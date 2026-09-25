@@ -382,8 +382,12 @@ def make_client(tmp_path):
         client = TestClient(application)
 
         if register_user is not None:
+            # The operator path, not /auth/register: registration is closed
+            # until an admin exists. See tests/auth_seed.py.
+            from tests.auth_seed import seed_and_sign_in
+
             username, password = register_user
-            client.post("/auth/register", json={"username": username, "password": password})
+            seed_and_sign_in(client, username, password)
 
         return client, config, db
 

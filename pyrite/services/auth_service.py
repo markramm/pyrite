@@ -11,6 +11,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 import bcrypt as _bcrypt
+from sqlalchemy.exc import IntegrityError
 
 from ..config import AuthConfig, OAuthProviderConfig
 from ..exceptions import LastAdminError
@@ -19,6 +20,22 @@ from ..storage.database import PyriteDB
 from .credential_events import CredentialChange, publish
 
 logger = logging.getLogger(__name__)
+
+#: Where an operator creates the first admin. Registration and OAuth sign-up
+#: stay closed until one exists.
+BOOTSTRAP_HINT = "pyrite-admin user create <username> --role admin"
+
+VALID_ROLES = ("read", "write", "admin")
+
+
+class RegistrationClosedError(ValueError):
+    """Sign-up refused because the instance has no admin yet."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Registration is closed until an administrator exists. "
+            f"The operator creates the first one with: {BOOTSTRAP_HINT}"
+        )
 
 
 class AuthService:
@@ -77,16 +94,28 @@ class AuthService:
         return row
 
     def _redeem_invite_code(self, code: str, username: str) -> str:
-        """Mark an invite code as used. Returns the role from the code."""
+        """Claim an invite code for ``username`` and return its role.
+
+        Must run inside the caller's write transaction (it does not commit),
+        before the user is inserted. The claim is one conditional UPDATE: of
+        any number of registrations presenting one code at once, only the one
+        whose UPDATE changed the row gets it; the rest see rowcount 0 and are
+        refused. Raises ValueError when the code is unknown, used or expired.
+        """
         now = datetime.now(UTC).isoformat()
-        self.db.execute_write_sql(
-            "UPDATE invite_code SET used_by = :username, used_at = :now WHERE code = :code",
+        claimed = self.db.execute_write_sql(
+            "UPDATE invite_code SET used_by = :username, used_at = :now "
+            "WHERE code = :code AND used_by IS NULL "
+            "AND (expires_at IS NULL OR expires_at > :now)",
             {"username": username, "now": now, "code": code},
+            commit=False,
         )
+        if claimed != 1:
+            raise ValueError("Invalid or expired invite code")
         rows = self.db.execute_sql(
             "SELECT role FROM invite_code WHERE code = :code", {"code": code}
         )
-        return rows[0]["role"] if rows else "read"
+        return rows[0]["role"] if rows and rows[0]["role"] else "read"
 
     def delete_invite_code(self, code: str) -> bool:
         """Delete an unused invite code."""
@@ -197,84 +226,84 @@ class AuthService:
 
     # ── Registration ──────────────────────────────────────────────
 
-    def register(
-        self,
-        username: str,
-        password: str,
-        display_name: str | None = None,
-        invite_code: str | None = None,
-    ) -> dict:
-        """Create a new local user.
+    def admin_exists(self) -> bool:
+        """Whether any user holds the global admin role."""
+        return bool(
+            self.db.execute_sql("SELECT 1 AS one FROM local_user WHERE role = 'admin' LIMIT 1")
+        )
 
-        First registered user gets 'admin' role; subsequent users get role from
-        invite code (or 'read' default).
-        Raises ValueError if username is taken, registration is disabled, or
-        invite code is required but invalid.
-        """
-        if not self.config.allow_registration:
-            raise ValueError("Registration is disabled")
-
-        # Validate invite code if required
-        invite_role = None
-        if self.config.require_invite_code:
-            if not invite_code:
-                raise ValueError("An invite code is required to register")
-            code_info = self.validate_invite_code(invite_code)
-            if not code_info:
-                raise ValueError("Invalid or expired invite code")
-            invite_role = code_info.get("role", "write")
-
+    @staticmethod
+    def _check_credentials(username: str, password: str) -> None:
         if not username or not password:
             raise ValueError("Username and password are required")
-
         if len(password) < 8:
             raise ValueError("Password must be at least 8 characters")
 
-        # Check if username exists
-        rows = self.db.execute_sql(
-            "SELECT id FROM local_user WHERE username = :username",
-            {"username": username},
-        )
-        if rows:
-            raise ValueError("Username already taken")
+    def _insert_local_user(
+        self,
+        username: str,
+        password_hash: str,
+        role: str,
+        display_name: str | None,
+        global_access: bool,
+    ) -> int:
+        """Insert a local user inside the caller's transaction; return its id.
 
-        # First user gets admin role; invite code overrides default role
-        count_rows = self.db.execute_sql("SELECT COUNT(*) AS cnt FROM local_user")
-        count = count_rows[0]["cnt"] if count_rows else 0
-        if count == 0:
-            role = "admin"
-        elif invite_role:
-            role = invite_role
-        else:
-            role = "read"
-
-        password_hash = self._hash_password(password)
+        A taken username is refused by the table's UNIQUE constraint, so two
+        registrations racing for one name cannot both succeed.
+        """
         now = datetime.now(UTC).isoformat()
+        try:
+            rows = self.db.execute_sql(
+                """INSERT INTO local_user
+                (username, display_name, password_hash, role, global_access, auth_provider,
+                 created_at, updated_at)
+                VALUES (:username, :display_name, :password_hash, :role, :global_access, 'local',
+                 :now, :now2)
+                RETURNING id""",
+                {
+                    "username": username,
+                    "display_name": display_name,
+                    "password_hash": password_hash,
+                    "role": role,
+                    "global_access": 1 if global_access else 0,
+                    "now": now,
+                    "now2": now,
+                },
+            )
+        except IntegrityError:
+            raise ValueError("Username already taken") from None
+        return rows[0]["id"]
 
-        self.db.execute_write_sql(
-            """INSERT INTO local_user
-            (username, display_name, password_hash, role, auth_provider, created_at, updated_at)
-            VALUES (:username, :display_name, :password_hash, :role, 'local', :now, :now2)""",
-            {
-                "username": username,
-                "display_name": display_name,
-                "password_hash": password_hash,
-                "role": role,
-                "now": now,
-                "now2": now,
-            },
-        )
+    def _create_local_user(
+        self,
+        username: str,
+        password: str,
+        role: str,
+        display_name: str | None,
+        *,
+        global_access: bool,
+        invite_code: str | None = None,
+    ) -> dict:
+        """Hash, then claim the invite (if any) and insert the user as one
+        write transaction. The invite UPDATE comes first so the transaction
+        opens with a write and holds SQLite's write lock from there on.
 
-        # Redeem invite code if one was used
-        if invite_code and invite_role:
-            self._redeem_invite_code(invite_code, username)
-
-        rows = self.db.execute_sql(
-            "SELECT id FROM local_user WHERE username = :username",
-            {"username": username},
-        )
-        user_id = rows[0]["id"]
-
+        An invite's role was chosen by the admin who made the code, so an
+        invited user's role covers every KB (``global_access``)."""
+        password_hash = self._hash_password(password)  # slow: outside the lock
+        session = self.db.session
+        try:
+            if invite_code is not None:
+                role = self._redeem_invite_code(invite_code, username)
+                global_access = True
+            user_id = self._insert_local_user(
+                username, password_hash, role, display_name, global_access
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
         return {
             "id": user_id,
             "username": username,
@@ -283,6 +312,59 @@ class AuthService:
             "auth_provider": "local",
             "avatar_url": None,
         }
+
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        role: str = "read",
+        display_name: str | None = None,
+    ) -> dict:
+        """Create a local user with ``role``: the operator's path (the CLI).
+
+        Unlike :meth:`register` it ignores ``allow_registration`` and does not
+        need an existing admin -- it is how the first admin is made.
+        """
+        if role not in VALID_ROLES:
+            raise ValueError(f"Invalid role: {role} (expected one of {', '.join(VALID_ROLES)})")
+        self._check_credentials(username, password)
+        return self._create_local_user(username, password, role, display_name, global_access=True)
+
+    def register(
+        self,
+        username: str,
+        password: str,
+        display_name: str | None = None,
+        invite_code: str | None = None,
+    ) -> dict:
+        """Self-register a local user (the web sign-up path).
+
+        Refused until an admin exists (:class:`RegistrationClosedError`); the
+        first admin comes from :meth:`create_user`, never from being first.
+        With an invite code the user gets its role, across every KB. Without
+        one they get ``read`` on public KBs only -- a KB whose ``default_role``
+        is set -- plus whatever an admin grants (``global_access`` 0).
+        Raises ValueError if username is taken, registration is disabled, or
+        invite code is required but invalid.
+        """
+        if not self.config.allow_registration:
+            raise ValueError("Registration is disabled")
+        if not self.admin_exists():
+            raise RegistrationClosedError()
+
+        if self.config.require_invite_code and not invite_code:
+            raise ValueError("An invite code is required to register")
+
+        self._check_credentials(username, password)
+
+        return self._create_local_user(
+            username,
+            password,
+            "read",
+            display_name,
+            global_access=False,
+            invite_code=invite_code if self.config.require_invite_code else None,
+        )
 
     def login(self, username: str, password: str) -> tuple[dict, str]:
         """Authenticate user and create session.
@@ -339,12 +421,20 @@ class AuthService:
 
         # 2. Determine role from org_tier_map or default_tier
         role = provider_config.default_tier
+        mapped_by_org = False
         if provider_config.org_tier_map:
             role_priority = {"read": 0, "write": 1, "admin": 2}
             for org in profile.orgs:
                 mapped = provider_config.org_tier_map.get(org)
+                if mapped:
+                    mapped_by_org = True
                 if mapped and role_priority.get(mapped, -1) > role_priority.get(role, -1):
                     role = mapped
+        # An operator vetted this sign-up when it had to come from an allowed
+        # org or matched an org the operator mapped to a role; only then does
+        # the role cover KBs without a default_role. An open sign-up reads
+        # public KBs only, like a web registration.
+        global_access = bool(provider_config.allowed_orgs) or mapped_by_org
 
         # 3. Look up existing OAuth user
         rows = self.db.execute_sql(
@@ -383,22 +473,22 @@ class AuthService:
             if conflict:
                 username = f"{profile.provider}:{profile.username}"
 
-            # First OAuth user gets admin if no users exist at all
-            count_rows = self.db.execute_sql("SELECT COUNT(*) AS cnt FROM local_user")
-            count = count_rows[0]["cnt"] if count_rows else 0
-            if count == 0:
-                role = "admin"
+            # Sign-up waits for an operator-created admin, and nobody becomes
+            # admin by being first.
+            if not self.admin_exists():
+                raise RegistrationClosedError()
 
             self.db.execute_write_sql(
                 """INSERT INTO local_user
-                (username, display_name, password_hash, role, auth_provider, provider_id,
-                 avatar_url, created_at, updated_at)
-                VALUES (:username, :display_name, '', :role, :provider, :provider_id,
-                 :avatar_url, :now, :now2)""",
+                (username, display_name, password_hash, role, global_access, auth_provider,
+                 provider_id, avatar_url, created_at, updated_at)
+                VALUES (:username, :display_name, '', :role, :global_access, :provider,
+                 :provider_id, :avatar_url, :now, :now2)""",
                 {
                     "username": username,
                     "display_name": profile.display_name,
                     "role": role,
+                    "global_access": 1 if global_access else 0,
                     "provider": profile.provider,
                     "provider_id": profile.provider_id,
                     "avatar_url": profile.avatar_url,
@@ -554,7 +644,9 @@ class AuthService:
         # need `SELECT ... FOR UPDATE` on the admin rows, or an advisory
         # lock, around the check-and-update.
         rowcount = self.db.execute_write_sql(
-            "UPDATE local_user SET role = :role, updated_at = :now "
+            # An admin setting a role is the operator's decision, so from now
+            # on the role covers KBs without a default_role too.
+            "UPDATE local_user SET role = :role, global_access = 1, updated_at = :now "
             "WHERE id = :user_id AND ("
             "  :role = 'admin' OR role != 'admin'"
             "  OR (SELECT COUNT(*) FROM local_user WHERE role = 'admin') > 1"
@@ -697,14 +789,16 @@ class AuthService:
         1. Global admin always returns "admin"
         2. Explicit kb_permission grant
         3. KB default_role
-        4. User global role
+        4. User global role -- only for a user whose role covers every KB
+           (``global_access``); a self-registered user gets None here, so a
+           KB without a default_role stays closed to them until a grant
         5. Anonymous visitor (user_id None): the lower of anonymous_tier and
            the KB default_role; None for a `none` KB or no anonymous_tier
         """
         if user_id is not None:
             # Check if global admin
             rows = self.db.execute_sql(
-                "SELECT role FROM local_user WHERE id = :user_id",
+                "SELECT role, global_access FROM local_user WHERE id = :user_id",
                 {"user_id": user_id},
             )
             if rows and rows[0]["role"] == "admin":
@@ -726,6 +820,8 @@ class AuthService:
             if rows:
                 # If KB is private (default_role="none"), deny unless explicit grant
                 if kb_default_role == "none":
+                    return None
+                if not rows[0]["global_access"]:
                     return None
                 return rows[0]["role"]
 

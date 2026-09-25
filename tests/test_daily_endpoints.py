@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from pyrite.config import AuthConfig, KBConfig, PyriteConfig, Settings
 from pyrite.server.api import create_app, get_config, get_db
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 
 @pytest.fixture
@@ -45,8 +46,8 @@ def daily_env():
         app.dependency_overrides[get_db] = lambda: db
 
         client = TestClient(app)
-        # First user registered is always admin (write access).
-        client.post("/auth/register", json={"username": "admin", "password": "password123"})
+        # The sole admin (write access), seeded via the operator path.
+        seed_and_sign_in(client, "admin", "password123")
         admin_client = client
 
         # Second user is read-tier by default.

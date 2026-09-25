@@ -1,28 +1,21 @@
 /**
- * Phase two of the auth-enabled world's seed: create the one user.
+ * Check the auth-enabled world's seeded user against the running backend.
  *
- * `auth-setup.ts`'s `seedAuthWorld()` runs while `playwright.config.ts` is
- * evaluated and builds everything that is a file on disk. The user is not a
- * file: it is a row in `index.db` whose password column is a bcrypt hash that
- * only `AuthService.register` produces, and there is no CLI command that calls
- * it (`pyrite auth` is GitHub OAuth; there is no `pyrite user`). So the user
- * has to be created against a running backend, which means after `webServer`
- * has started — which is exactly what a Playwright setup project is for.
+ * `auth-setup.ts`'s `seedAuthWorld()` creates the user with
+ * `pyrite-admin user create --role admin` while `playwright.config.ts` is
+ * evaluated, before `webServer` starts (registration is closed until an admin
+ * exists). This setup project confirms, once, that the
+ * backend sees that user as an admin who can sign in, so a broken seed fails
+ * here with one clear message instead of in every spec.
  *
- * This runs as the `auth-setup` project, which the `chromium-auth` project
- * declares as a dependency, so it completes before any auth spec starts and
- * runs exactly once regardless of worker count.
- *
- * Registering (rather than asserting a user already exists) is what makes the
- * world self-building: `seedAuthWorld()` deletes `index.db` every run, so this
- * registration is always the first one, and the first registered user is
- * always given role `admin` (`AuthService.register`).
+ * Runs as the `auth-setup` project, which the `chromium-auth` project declares
+ * as a dependency.
  */
 import { test as setup, expect } from '@playwright/test';
 
 import { AUTH_BACKEND_URL, SEEDED_USER } from './auth-setup';
 
-setup('register the seeded auth user', async ({ request }) => {
+setup('the seeded admin can sign in', async ({ request }) => {
 	// Talk to the backend directly rather than through the dev-server proxy:
 	// this is world construction, not a user journey, and it must not depend on
 	// the Vite server being up yet.
@@ -38,25 +31,17 @@ setup('register the seeded auth user', async ({ request }) => {
 		'the auth-enabled backend must allow registration'
 	).toBe(true);
 
-	const response = await request.post(`${AUTH_BACKEND_URL}/auth/register`, {
-		data: {
-			username: SEEDED_USER.username,
-			password: SEEDED_USER.password,
-			display_name: SEEDED_USER.displayName
-		}
+	const response = await request.post(`${AUTH_BACKEND_URL}/auth/login`, {
+		data: { username: SEEDED_USER.username, password: SEEDED_USER.password }
 	});
 	expect(
 		response.ok(),
-		`registering ${SEEDED_USER.username} failed: ${response.status()} ${await response.text()}`
+		`signing in as ${SEEDED_USER.username} failed: ${response.status()} ${await response.text()}`
 	).toBeTruthy();
 
 	const user = await response.json();
 	expect(user.username).toBe(SEEDED_USER.username);
-	// First registration gets admin; if it did not, the data directory was not
-	// wiped and this world is carrying state from a previous run.
-	expect(user.role, 'the first registered user must be admin — was the world wiped?').toBe(
-		'admin'
-	);
+	expect(user.role, 'the seeded user must be admin — did the CLI seed run?').toBe('admin');
 });
 
 /**

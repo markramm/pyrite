@@ -23,6 +23,7 @@ from pyrite.server import mcp_routes
 from pyrite.server.api import create_app, resolve_api_key_role
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 PUBLIC, PRIVATE = "pub", "priv"
 BOGUS = "garbage-not-a-configured-key"
@@ -53,9 +54,10 @@ def auth_env():
         app = create_app(config=config)
         db = PyriteDB(config.settings.index_path)
         KBService(config, db).create_entry(PRIVATE, "secret-note", "Secret note", "note", "hidden")
-        admin = TestClient(app)
-        r = admin.post("/auth/register", json={"username": "admin-user", "password": "password123"})
-        assert r.status_code == 200, r.text
+        # The sole admin, seeded via the operator path (this app has no
+        # test-supplied get_db override, so /auth/register -- and
+        # auth_seed's own app_db-based helpers -- are unavailable here).
+        seed_user(db, "admin-user", "password123", role="admin")
         try:
             yield {"app": app, "config": config}
         finally:

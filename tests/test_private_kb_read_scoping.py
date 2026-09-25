@@ -20,6 +20,7 @@ from pyrite.services.auth_service import AuthService
 from pyrite.services.kb_service import KBService
 from pyrite.services.link_discovery_service import LinkDiscoveryService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_and_sign_in
 
 PUBLIC, PRIVATE = "public-kb", "private-kb"
 
@@ -83,8 +84,14 @@ def env():
                 assert r.status_code == 200, r.text
             return c
 
-        admin = client_for("admin-user")  # first registered user is admin
-        peer = client_for("peer")  # second: plain read-tier user
+        # admin is seeded via the operator path:
+        # registration is refused until an admin exists, and nobody becomes
+        # admin by registering first. peer then self-registers for real --
+        # that IS what this test means by "plain read-tier user": read on
+        # public KBs (default_role) only, nothing by global_access.
+        admin = TestClient(app)
+        seed_and_sign_in(admin, "admin-user", "password123", role="admin")
+        peer = client_for("peer")
         anon = client_for(None)
         try:
             yield {"admin": admin, "peer": peer, "anon": anon, "db": db, "config": config}

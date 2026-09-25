@@ -32,6 +32,7 @@ from pyrite.server.mcp_server import KB_ARGUMENT_NAMES, PyriteMCPServer
 from pyrite.services.auth_service import AuthService
 from pyrite.services.kb_service import KBService
 from pyrite.storage.database import PyriteDB
+from tests.auth_seed import seed_user
 
 PUB, TEAM = "pub", "team"
 
@@ -56,12 +57,13 @@ def env(tmp_path: Path):
     svc.create_entry(TEAM, "team-note", "Team note", "note", "team body")
 
     auth = AuthService(db, config.settings.auth)
-    auth.register("admin-user", "password123")  # first user: admin
-    auth.register("writer", "password123")  # global write, per-KB read everywhere
-    auth.register("granted", "password123")  # global write, per-KB write on TEAM
+    # Seeded via the operator path: admin is the first
+    # user; writer and granted get global "write" (covering every KB, as a
+    # registrant used to), matching what this test's assertions rely on.
+    seed_user(db, "admin-user", "password123", role="admin")  # first user: admin
+    seed_user(db, "writer", "password123", role="write")  # global write, per-KB read everywhere
+    seed_user(db, "granted", "password123", role="write")  # global write, per-KB write on TEAM
     users = {u["username"]: u for u in auth.list_users()}
-    for name in ("writer", "granted"):
-        auth.set_role(users[name]["id"], "write")
     auth.grant_kb_permission(users["granted"]["id"], TEAM, "write", users["admin-user"]["id"])
     users = {u["username"]: u for u in auth.list_users()}
 
