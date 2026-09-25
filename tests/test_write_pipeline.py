@@ -620,6 +620,23 @@ def test_rest_patch_refuses_a_managed_field_and_leaves_one_file(env, rest, task_
     assert sorted(p.name for p in env["kb_path"].rglob("*.md")) == ["pinned.md"]
 
 
+def test_rest_patch_stores_an_undeclared_field(env, rest):
+    """#407: PATCH with `field: foo` (not a model attribute, not schema-declared)
+    used to return 200 and write nothing. It now stores the key the way
+    `create` would have."""
+    resp = rest.post(
+        "/api/entries", json={"kb": KB, "entry_type": "note", "title": "Undeclared", "body": "b"}
+    )
+    assert resp.status_code == 200, resp.text
+    entry_id = resp.json()["id"]
+
+    resp = rest.patch(f"/api/entries/{entry_id}", json={"kb": KB, "field": "foo", "value": "bar"})
+    assert resp.status_code == 200, resp.text
+
+    text = next(env["kb_path"].rglob(f"{entry_id}.md")).read_text()
+    assert "foo: bar" in text, text
+
+
 def test_rest_patch_refuses_a_task_audit_field(task_env):
     from pyrite.services.kb_service import KBService
 

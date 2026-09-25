@@ -904,8 +904,9 @@ class KBService:
         depth. A field the service or the type manages (``id``, the file
         path, links, a task's audit trail...) is refused rather than written:
         setting ``id`` used to leave a second file. A field the entry's model
-        does not have but its KB schema names for the type is written as a
-        custom field instead of being dropped.
+        does not have -- kb.yaml-declared or not -- is written as a custom
+        field, the way ``create`` would have stored it, instead of being
+        dropped (#407).
 
         Raises:
             KBNotFoundError: If KB not found
@@ -918,10 +919,16 @@ class KBService:
     def _update(
         self, entry_id: str, kb_name: str, updates: dict[str, Any], *, restrict: bool
     ) -> WriteResult:
-        # ADR-0034 marker keys are refused here and otherwise never stored:
-        # they are not model attributes, so the loop below skips them.
+        # ADR-0034 marker keys are refused here (a truthy `body_truncated`)
+        # and otherwise never stored. Before #407 this fell out for free: an
+        # undeclared key was always dropped by the loop below, and a marker
+        # key is never a model attribute. Now that an undeclared key is
+        # stored instead of dropped, the markers have to be stripped
+        # explicitly -- the same way `_prepare` does at its own write path --
+        # or an allowed `body_truncated: false` would be persisted as
+        # frontmatter.
         ensure_not_truncated(updates)
-        updates = dict(updates)
+        updates = {k: v for k, v in updates.items() if k not in MARKER_KEYS}
 
         kb_config = self._writable_kb(kb_name)
 
@@ -930,7 +937,7 @@ class KBService:
         if not entry:
             raise EntryNotFoundError(f"Entry not found: {entry_id}")
 
-        _, schema_fields, managed = self._field_sets(entry.entry_type, kb_config)
+        _, _, managed = self._field_sets(entry.entry_type, kb_config)
         if restrict:
             refused = sorted(k for k in updates if k in managed)
             if refused:
@@ -957,16 +964,19 @@ class KBService:
         # Apply updates
         for key, value in updates.items():
             if not hasattr(entry, key):
-                if key in schema_fields:
-                    # A kb.yaml-declared field with no model attribute: it
-                    # lives in the entry's custom fields, where a loaded
-                    # kb.yaml-only type keeps it (GenericEntry promotes
-                    # metadata to top-level frontmatter; a typed entry keeps
-                    # an undeclared key in extra_frontmatter).
-                    if key in entry.extra_frontmatter:
-                        entry.extra_frontmatter[key] = value
-                    else:
-                        entry.metadata = {**(entry.metadata or {}), key: value}
+                # A key with no model attribute: kb.yaml-declared or not,
+                # `create` stores it rather than dropping it (`build_entry`
+                # puts unknown kwargs in metadata), so `update` follows the
+                # same rule -- this is what generalises the old
+                # `schema_fields`-only branch. A key already recorded under
+                # `extra_frontmatter` (an undeclared key on a typed entry,
+                # loaded from the file) stays there; everything else merges
+                # into `metadata`, where `GenericEntry`/`TaskEntry` promote it
+                # back to a top-level frontmatter key on save, same as create.
+                if key in entry.extra_frontmatter:
+                    entry.extra_frontmatter[key] = value
+                else:
+                    entry.metadata = {**(entry.metadata or {}), key: value}
                 continue
             # Metadata is a bag of keys — merge shallowly so a partial update
             # (e.g. just review_comments) does not clobber other metadata.
