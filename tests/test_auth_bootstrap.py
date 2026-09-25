@@ -309,11 +309,37 @@ class TestSelfRegisteredReadsPublicKbsOnly:
     @pytest.mark.control(
         reason="on dev every registrant read every KB; pins the admin path back to that"
     )
-    def test_an_admin_setting_the_global_role_opens_every_kb(self, two_kb_app):
+    def test_changing_the_role_alone_does_not_open_every_kb(self, two_kb_app):
         client, user_id = _signed_up(two_kb_app)
-        r = two_kb_app["admin"].put(f"/auth/users/{user_id}/role", json={"role": "read"})
+        for role in ("write", "read"):
+            r = two_kb_app["admin"].put(f"/auth/users/{user_id}/role", json={"role": role})
+            assert r.status_code == 200, r.text
+            assert "team-kb" not in _visible_kbs(client)
+
+    def test_an_explicit_admin_grant_of_global_access_opens_and_closes_every_kb(self, two_kb_app):
+        client, user_id = _signed_up(two_kb_app)
+        admin = two_kb_app["admin"]
+        r = admin.put(f"/auth/users/{user_id}/role", json={"role": "read", "global_access": True})
         assert r.status_code == 200, r.text
         assert {"public-kb", "team-kb"} <= _visible_kbs(client)
+        r = admin.put(f"/auth/users/{user_id}/role", json={"role": "read", "global_access": False})
+        assert r.status_code == 200, r.text
+        assert "team-kb" not in _visible_kbs(client)
+
+    def test_a_self_registered_user_gets_at_most_read_on_a_public_kb(self, two_kb_app):
+        _, user_id = _signed_up(two_kb_app)
+        service = AuthService(two_kb_app["db"], two_kb_app["config"].settings.auth)
+        assert service.get_kb_role(user_id, "open-kb", "write") == "read"
+        assert service.get_kb_role(user_id, "public-kb", "read") == "read"
+
+    def test_a_user_row_that_omits_global_access_gets_none(self, tmp_path):
+        """Fail closed: an insert that does not name the column grants nothing."""
+        with PyriteDB(tmp_path / "index.db") as db:
+            db.execute_write_sql(
+                "INSERT INTO local_user (username, password_hash, role) VALUES ('x', 'h', 'read')"
+            )
+            uid = db.execute_sql("SELECT id FROM local_user WHERE username = 'x'")[0]["id"]
+            assert AuthService(db, AuthConfig(enabled=True)).get_kb_role(uid, "team-kb") is None
 
     @pytest.mark.control(reason="invited users already had their role everywhere on dev")
     def test_an_invited_user_gets_the_invite_role_on_every_kb(self, tmp_path):
@@ -630,3 +656,126 @@ class TestRateLimitEnv:
         assert auth.login_rate_limit == "1000/minute"
         assert auth.login_rate_limit_per_username == "900/minute"
         assert auth.register_rate_limit == "800/minute"
+
+
+class TestOAuthObeysTheRegistrationSwitches:
+    def _profile(self, orgs=()):
+        return OAuthProfile(provider="github", provider_id="77", username="octo", orgs=list(orgs))
+
+    @pytest.mark.parametrize(
+        "switches", [{"allow_registration": False}, {"require_invite_code": True}]
+    )
+    def test_an_unvetted_signup_is_refused_when_registration_is_closed(self, db_path, switches):
+        with PyriteDB(db_path) as db:
+            _insert_admin(db)
+            service = AuthService(db, AuthConfig(enabled=True, **switches))
+            with pytest.raises(ValueError):
+                service.oauth_login(self._profile(), _PROVIDER)
+        assert set(_roles(db_path)) == {"root"}
+
+    @pytest.mark.parametrize(
+        "provider",
+        [
+            OAuthProviderConfig(client_id="i", client_secret="s", allowed_orgs=["acme"]),
+            OAuthProviderConfig(client_id="i", client_secret="s", org_tier_map={"acme": "write"}),
+        ],
+    )
+    def test_a_vetted_signup_is_allowed_when_registration_is_closed(self, db_path, provider):
+        with PyriteDB(db_path) as db:
+            _insert_admin(db)
+            service = AuthService(db, AuthConfig(enabled=True, allow_registration=False))
+            user, _ = service.oauth_login(self._profile(["acme"]), provider)
+        assert user["username"] == "octo"
+
+    def test_an_org_map_miss_is_not_vetted(self, db_path):
+        provider = OAuthProviderConfig(
+            client_id="i", client_secret="s", org_tier_map={"acme": "write"}
+        )
+        with PyriteDB(db_path) as db:
+            _insert_admin(db)
+            service = AuthService(db, AuthConfig(enabled=True, allow_registration=False))
+            with pytest.raises(ValueError):
+                service.oauth_login(self._profile(["other"]), provider)
+
+    @pytest.mark.control(reason="an existing OAuth user could always sign in again")
+    def test_an_existing_oauth_user_still_signs_in_when_registration_is_closed(self, db_path):
+        with PyriteDB(db_path) as db:
+            _insert_admin(db)
+            AuthService(db, AuthConfig(enabled=True)).oauth_login(self._profile(), _PROVIDER)
+            closed = AuthService(db, AuthConfig(enabled=True, allow_registration=False))
+            user, _ = closed.oauth_login(self._profile(), _PROVIDER)
+        assert user["username"] == "octo"
+
+
+class TestOpenRegistrationWarningCoversOAuth:
+    def test_warning_names_github_signup_and_the_vetting_settings(self):
+        from pyrite.config import PyriteConfig, Settings, open_registration_warning
+
+        cfg = PyriteConfig(
+            settings=Settings(
+                auth=AuthConfig(
+                    enabled=True,
+                    providers={"github": OAuthProviderConfig(client_id="i", client_secret="s")},
+                )
+            )
+        )
+        text = open_registration_warning(cfg)
+        assert text and "GitHub" in text and "allowed_orgs" in text
+
+    @pytest.mark.control(reason="a closed instance never warned")
+    def test_no_warning_when_registration_is_closed_even_with_github(self):
+        from pyrite.config import PyriteConfig, Settings, open_registration_warning
+
+        cfg = PyriteConfig(
+            settings=Settings(
+                auth=AuthConfig(
+                    enabled=True,
+                    allow_registration=False,
+                    providers={"github": OAuthProviderConfig(client_id="i", client_secret="s")},
+                )
+            )
+        )
+        assert open_registration_warning(cfg) is None
+
+
+class TestLoginTiming:
+    def test_an_unknown_username_still_pays_for_a_password_check(self, db_path, monkeypatch):
+        calls = []
+        real = AuthService._verify_password
+
+        def counting(self, password, pw_hash):
+            calls.append(pw_hash)
+            return real(self, password, pw_hash)
+
+        monkeypatch.setattr(AuthService, "_verify_password", counting)
+        with PyriteDB(db_path) as db:
+            with pytest.raises(ValueError):
+                AuthService(db, AuthConfig(enabled=True)).login("nobody", "password123")
+        assert len(calls) == 1
+
+    def test_a_password_login_to_an_oauth_account_pays_the_same_cost(self, db_path, monkeypatch):
+        calls = []
+        real = AuthService._verify_password
+
+        def counting(self, password, pw_hash):
+            calls.append(pw_hash)
+            return real(self, password, pw_hash)
+
+        profile = OAuthProfile(provider="github", provider_id="5", username="octo", orgs=[])
+        with PyriteDB(db_path) as db:
+            _insert_admin(db)
+            service = AuthService(db, AuthConfig(enabled=True))
+            service.oauth_login(profile, _PROVIDER)
+            monkeypatch.setattr(AuthService, "_verify_password", counting)
+            with pytest.raises(ValueError):
+                service.login("octo", "password123")
+        assert len(calls) == 1
+
+
+def test_the_role_endpoint_refuses_a_non_boolean_global_access(two_kb_app):
+    client, user_id = _signed_up(two_kb_app)
+    r = two_kb_app["admin"].put(
+        f"/auth/users/{user_id}/role", json={"role": "read", "global_access": "yes"}
+    )
+    assert r.status_code == 400
+    assert "team-kb" not in _visible_kbs(client)

@@ -270,8 +270,10 @@ class LocalUser(Base):
     role = Column(String, nullable=False, server_default="read")
     # Whether `role` also covers KBs without a `default_role`. 0 for a
     # self-registered user (public KBs and explicit grants only) until an
-    # admin sets their role; 1 for everyone an operator vetted (migration v25).
-    global_access = Column(Integer, nullable=False, server_default="1")
+    # admin grants it; 1 for everyone an operator vetted. Defaults to 0 so an
+    # insert that forgets the column grants nothing; migration v25 set it to
+    # 1 for the users that existed before it.
+    global_access = Column(Integer, nullable=False, server_default="0")
     created_at = Column(String, server_default="CURRENT_TIMESTAMP")
     updated_at = Column(String)
     auth_provider = Column(String, server_default="local")

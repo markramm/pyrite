@@ -164,8 +164,11 @@ async def set_user_role(
     if role not in ("read", "write", "admin"):
         raise HTTPException(status_code=400, detail=f"Invalid role: {role}")
 
+    global_access = body.get("global_access")
+    if global_access is not None and not isinstance(global_access, bool):
+        raise HTTPException(status_code=400, detail="global_access must be true or false")
     try:
-        found = auth_service.set_role(user_id, role)
+        found = auth_service.set_role(user_id, role, global_access=global_access)
     except LastAdminError as e:
         raise HTTPException(status_code=409, detail={"code": "LAST_ADMIN", "message": str(e)})
     if not found:

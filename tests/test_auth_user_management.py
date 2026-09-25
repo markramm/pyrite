@@ -298,7 +298,7 @@ class TestLastAdminErrorType:
         from pyrite.exceptions import ValidationError
         from pyrite.services.auth_service import AuthService
 
-        def _boom(self, user_id, role):
+        def _boom(self, user_id, role, **kwargs):
             raise ValidationError("some other validation failure")
 
         monkeypatch.setattr(AuthService, "set_role", _boom)

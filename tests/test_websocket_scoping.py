@@ -57,15 +57,6 @@ def _config(tmp: Path, *, auth: bool, anonymous_tier=None, api_key="") -> Pyrite
     )
 
 
-def _register(app, username) -> str:
-    """Register through the real route; return the session token it set."""
-    r = TestClient(app).post(
-        "/auth/register", json={"username": username, "password": "password123"}
-    )
-    assert r.status_code == 200, r.text
-    return r.cookies["pyrite_session"]
-
-
 def _cookie(token):
     return {"cookie": f"pyrite_session={token}"}
 
@@ -87,15 +78,17 @@ def secured(stub_clip):
     with tempfile.TemporaryDirectory() as d:
         config = _config(Path(d), auth=True)
         app = create_app(config=config)
-        # admin-user is seeded via the operator path;
-        # granted and peer then self-register for real, which is exactly
-        # "no default access" -- granted gets an explicit read grant below.
+        # Seeded the operator's way. granted and peer hold the global read
+        # role (covering every KB without a default_role), so peer is the
+        # persona denied the default_role: none KB; granted gets a grant.
         tokens = {}
         admin_client = TestClient(app)
         admin_user = seed_and_sign_in(admin_client, "admin-user", "password123", role="admin")
         tokens["admin-user"] = admin_client.cookies["pyrite_session"]
-        tokens["granted"] = _register(app, "granted")
-        tokens["peer"] = _register(app, "peer")
+        for name in ("granted", "peer"):
+            c = TestClient(app)
+            seed_and_sign_in(c, name, "password123", role="read")
+            tokens[name] = c.cookies["pyrite_session"]
         db = PyriteDB(config.settings.index_path)
         try:
             auth = AuthService(db, config.settings.auth)

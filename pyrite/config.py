@@ -1214,18 +1214,23 @@ def open_registration_warning(config: PyriteConfig) -> str | None:
     auth = config.settings.auth
     if not auth.enabled or not auth.allow_registration or auth.require_invite_code:
         return None
-    public = sorted(
-        kb.name for kb in config.knowledge_bases if kb.default_role in ("read", "write")
-    )
+    public = sorted(kb.name for kb in config.all_kbs() if kb.default_role in ("read", "write"))
     readable = (
-        f"they can read KBs with default_role read or write: {', '.join(public)}"
+        f"they can read (never write) KBs with default_role read or write: {', '.join(public)}"
         if public
         else "no KB has default_role read or write, so they can read nothing until granted"
     )
+    github = any(p.client_id for p in auth.providers.values())
+    how = "an account (on the web form or through GitHub sign-in)" if github else "an account"
+    advice = "Set settings.auth.allow_registration: false or require_invite_code: true to close it"
+    if github:
+        advice += (
+            "; GitHub sign-up then creates accounts only for members of the provider's "
+            "allowed_orgs or of an org in its org_tier_map"
+        )
     return (
         "Auth is enabled with open registration: anyone who can reach this server "
-        f"can create an account, and {readable}. Set settings.auth.allow_registration: "
-        "false or require_invite_code: true to close it."
+        f"can create {how}, and {readable}. {advice}."
     )
 
 

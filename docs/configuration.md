@@ -191,18 +191,33 @@ pyrite-admin user create alice --role admin     # prompts for the password
 ```
 
 `settings.auth.require_invite_code: true` makes registration need a code an
-admin created; the new user gets the code's role. Limits use the same syntax
-as slowapi (`"5/minute"`, several joined by `;`); an over-limit request gets
-429 with `Retry-After`. `pyrite serve` warns at startup when registration is
-open, naming the KBs a stranger could read by signing up.
+admin created; the new user gets the code's role. GitHub sign-up obeys the same
+switches: with registration off or needing an invite code, a first GitHub
+login creates an account only for a member of the provider's `allowed_orgs` or
+of an org in its `org_tier_map`. `pyrite serve` warns at startup when
+registration is open, naming the KBs a stranger could read by signing up.
+
+Rate limits use the same syntax as slowapi (`"5/minute"`, several joined by
+`;`); an over-limit request gets 429 with `Retry-After`. Know their limits:
+
+- They are counted in memory, per server process, and keyed on the address of
+  the connection's peer. Behind a reverse proxy every client arrives from the
+  proxy's address and shares one budget; several worker processes each keep
+  their own count.
+- The per-username limit counts failed logins, so anyone who knows a username
+  can lock that account's password login for about a minute.
+- An IPv6 client is keyed by its full address, so one host with many
+  addresses in its prefix gets a budget per address.
 
 **What a self-registered user can read.** Someone who signs up without an
 invite code (or through GitHub without an `allowed_orgs` or `org_tier_map`
-match) reads only KBs whose `default_role` is set to `read` or `write`, plus any
-KB an admin grants them. A KB with no `default_role` stays closed to them. Users
-an operator created or vetted -- the CLI, an invite code, an org rule, or an
-admin setting their global role -- keep the old rule: their global role applies
-to every KB without a `default_role`. To share a KB with every signed-in user,
+match) can read, and never write, KBs whose `default_role` is set to `read` or
+`write`, plus whatever an admin grants them per KB. A KB with no `default_role`
+stays closed to them. Users an operator created or vetted -- the CLI, an invite
+code, an org rule -- keep the old rule: their global role applies to every KB
+without a `default_role`. Changing a user's role does not change this; an
+admin grants or removes it explicitly (`"global_access": true|false` in
+`PUT /auth/users/{id}/role`). To share a KB with every signed-in user,
 set its `default_role` to `read` (which also puts it on the public site, below),
 or grant it per user.
 

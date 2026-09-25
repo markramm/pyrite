@@ -504,8 +504,9 @@ MIGRATIONS: list[Migration] = [
         version=26,
         description="Add local_user.global_access: self-registered users read public KBs only",
         # ALTER handled conditionally in _apply_v26() since the column may
-        # already exist from ORM create_all. DEFAULT 1: every existing user
-        # keeps the access their global role gave them.
+        # already exist from ORM create_all. The column defaults to 0 (fail
+        # closed); the migration sets it to 1 for every user that exists then,
+        # so existing access is unchanged.
         up="",
         down="""
         -- SQLite < 3.35 does not support DROP COLUMN; column remains but is unused.
@@ -750,8 +751,12 @@ class MigrationManager:
         existing = {row[1] for row in self.conn.execute("PRAGMA table_info(local_user)").fetchall()}
         if "global_access" not in existing:
             self.conn.execute(
-                "ALTER TABLE local_user ADD COLUMN global_access INTEGER NOT NULL DEFAULT 1"
+                "ALTER TABLE local_user ADD COLUMN global_access INTEGER NOT NULL DEFAULT 0"
             )
+        # Every user that exists when this runs predates self-registration
+        # scoping and keeps what its global role gave it. New rows default to
+        # 0: an insert that omits the column grants nothing.
+        self.conn.execute("UPDATE local_user SET global_access = 1")
         self.conn.commit()
 
     def _apply_v24(self) -> None:

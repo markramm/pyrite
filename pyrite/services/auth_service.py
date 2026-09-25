@@ -27,6 +27,10 @@ BOOTSTRAP_HINT = "pyrite-admin user create <username> --role admin"
 
 VALID_ROLES = ("read", "write", "admin")
 
+# A real bcrypt hash of a random password, checked against when a login names
+# no user, so an unknown username costs the same time as a wrong password.
+_DUMMY_PASSWORD_HASH = _bcrypt.hashpw(secrets.token_bytes(16), _bcrypt.gensalt()).decode()
+
 
 class RegistrationClosedError(ValueError):
     """Sign-up refused because the instance has no admin yet."""
@@ -377,6 +381,9 @@ class AuthService:
             {"username": username},
         )
         if not rows:
+            # Pay for a password check anyway, so the response time does not
+            # say whether the username exists.
+            self._verify_password(password, _DUMMY_PASSWORD_HASH)
             raise ValueError("Invalid username or password")
 
         row = rows[0]
@@ -390,6 +397,7 @@ class AuthService:
 
         # Block password login for OAuth-only users
         if auth_provider != "local":
+            self._verify_password(password, _DUMMY_PASSWORD_HASH)  # same cost as a miss
             raise ValueError("This account uses external authentication")
 
         if not self._verify_password(password, password_hash):
@@ -435,6 +443,7 @@ class AuthService:
         # the role cover KBs without a default_role. An open sign-up reads
         # public KBs only, like a web registration.
         global_access = bool(provider_config.allowed_orgs) or mapped_by_org
+        vetted = global_access
 
         # 3. Look up existing OAuth user
         rows = self.db.execute_sql(
@@ -464,7 +473,16 @@ class AuthService:
             )
             role = existing_role  # preserve existing role
         else:
-            # 4. New user — handle username conflict with local users
+            # 4. New user. An unvetted sign-up obeys the same switches as web
+            # registration: closed registration, or one that needs an invite
+            # code (which OAuth cannot carry), creates no account.
+            if not vetted and (
+                not self.config.allow_registration or self.config.require_invite_code
+            ):
+                raise ValueError(
+                    "Registration is closed: this GitHub account is not in an organization "
+                    "the operator allows"
+                )
             username = profile.username
             conflict = self.db.execute_sql(
                 "SELECT id FROM local_user WHERE username = :username",
@@ -622,8 +640,13 @@ class AuthService:
             return None
         return rows[0]
 
-    def set_role(self, user_id: int, role: str) -> bool:
+    def set_role(self, user_id: int, role: str, global_access: bool | None = None) -> bool:
         """Set user role. Returns True if user found.
+
+        ``global_access`` says whether the role also covers KBs without a
+        default_role. None (the default) keeps what the user has: changing a
+        self-registered user's role never widens their access by itself; only
+        an explicit admin grant (True) does, and False takes it away.
 
         Raises:
             ValueError: `role` is not read, write or admin.
@@ -644,14 +667,18 @@ class AuthService:
         # need `SELECT ... FOR UPDATE` on the admin rows, or an advisory
         # lock, around the check-and-update.
         rowcount = self.db.execute_write_sql(
-            # An admin setting a role is the operator's decision, so from now
-            # on the role covers KBs without a default_role too.
-            "UPDATE local_user SET role = :role, global_access = 1, updated_at = :now "
+            "UPDATE local_user SET role = :role, "
+            "global_access = COALESCE(:global_access, global_access), updated_at = :now "
             "WHERE id = :user_id AND ("
             "  :role = 'admin' OR role != 'admin'"
             "  OR (SELECT COUNT(*) FROM local_user WHERE role = 'admin') > 1"
             ")",
-            {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
+            {
+                "role": role,
+                "global_access": None if global_access is None else int(bool(global_access)),
+                "now": datetime.now(UTC).isoformat(),
+                "user_id": user_id,
+            },
         )
         if rowcount > 0:
             # Publish on every role write, even an unchanged one: a separate
@@ -812,8 +839,11 @@ class AuthService:
             if perm_rows:
                 return perm_rows[0]["role"]
 
-            # KB default_role
+            # KB default_role. A self-registered user (no global_access) gets
+            # read on a public KB and never more, whatever the KB allows.
             if kb_default_role is not None and kb_default_role != "none":
+                if rows and not rows[0]["global_access"]:
+                    return "read"
                 return kb_default_role
 
             # Fall back to user's global role

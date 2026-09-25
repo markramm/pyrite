@@ -107,14 +107,12 @@ def env():
         )
 
         auth = AuthService(db, config.settings.auth)
-        # admin is seeded via the operator path:
-        # registration is refused until an admin exists. Once it does, peer
-        # and peer-granted self-register for real -- that IS "plain
-        # read-tier": read on public KBs (default_role) only, nothing by
-        # global_access, which is exactly what these tests need to pin.
+        # Seeded the operator's way. peer and peer-granted hold the global
+        # read role, which covers every KB without a default_role -- the
+        # persona these tests pin as denied a default_role: none KB.
         seed_user(db, "admin-user", "password123", role="admin")
-        auth.register("peer", "password123")
-        auth.register("peer-granted", "password123")
+        seed_user(db, "peer", "password123", role="read")
+        seed_user(db, "peer-granted", "password123", role="read")
         users = {u["username"]: u for u in auth.list_users()}
         auth.grant_kb_permission(
             users["peer-granted"]["id"], PRIVATE, "read", users["admin-user"]["id"]

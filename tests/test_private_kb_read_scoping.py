@@ -78,17 +78,15 @@ def env():
         )
 
         def client_for(username):
+            # A global-read user (seeded the operator's way): its read role
+            # covers every KB without a default_role, and it must still be
+            # denied the default_role: none KB.
             c = TestClient(app)
             if username:
-                r = c.post("/auth/register", json={"username": username, "password": "password123"})
-                assert r.status_code == 200, r.text
+                seed_and_sign_in(c, username, "password123", role="read")
             return c
 
-        # admin is seeded via the operator path:
-        # registration is refused until an admin exists, and nobody becomes
-        # admin by registering first. peer then self-registers for real --
-        # that IS what this test means by "plain read-tier user": read on
-        # public KBs (default_role) only, nothing by global_access.
+        # admin and peer are seeded via the operator path.
         admin = TestClient(app)
         seed_and_sign_in(admin, "admin-user", "password123", role="admin")
         peer = client_for("peer")

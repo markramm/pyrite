@@ -72,10 +72,11 @@ def env():
         )
 
         def client_for(username):
+            # A global-read user (seeded the operator's way): the persona
+            # denied a default_role: none KB below.
             c = TestClient(app)
             if username:
-                r = c.post("/auth/register", json={"username": username, "password": "password123"})
-                assert r.status_code == 200, r.text
+                seed_and_sign_in(c, username, "password123", role="read")
             return c
 
         admin = TestClient(app)
