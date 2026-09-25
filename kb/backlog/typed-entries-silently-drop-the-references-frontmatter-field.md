@@ -49,3 +49,11 @@ Option 2 is probably the more correct fix long-term — references is already tr
 ## Related
 
 - [[fail-open-exception-sweep]] site #4 — the swallowed-exception symptom this gap causes
+
+## Groom 2026-09-25
+
+**Probably already fixed. Verify, then close.** On `dev` 368f7fe2, `entry_from_frontmatter` (the loader `KBRepository` and the indexer use) calls `capture_extra_frontmatter`, and a sandbox check kept `references: ['k:x']` and an arbitrary `custom_key` through `to_frontmatter()` for `event`, `person` and `note`. The repro above calls `EventEntry.from_frontmatter` directly, which bypasses the loader, so it still "fails", but no write path calls it that way.
+
+**Acceptance for closing** (verbatim from this item): "write an EventEntry (or PersonEntry) markdown file with references:, index it, assert the cross-KB link appears in get_outlinks". If that test passes on `dev`, land it as a regression test and move this item to done. If it fails, this is a data-loss bug and goes to the top of 0.26.
+
+**Model:** Sonnet. **Size:** XS. **Heavy:** no. **Cold read:** no. **Sequence:** independent. It is a test only, in a new file. **Out of scope:** promoting `references` to a first-class field (option 2 above). Decide that only if the test fails.

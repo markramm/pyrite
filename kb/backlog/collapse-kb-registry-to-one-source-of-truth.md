@@ -173,3 +173,16 @@ REST is invisible until restart) is the **fourth** occurrence of this bug class,
 after closed issues #1 and #2 and commit 37a37c9, and no test checks that
 `add_kb()` refreshes `_db_kb_cache`. See
 [[live-server-integration-tests-for-multi-request-flows-plus-regression-tests-for-the-three-outside-prs]].
+
+## Groom 2026-09-25
+
+**Framed by #382 (one composition root and one hydrated KB catalog, 0.27).** The architecture-layers review of 2026-09-25 (section 2.5) re-measured the problem, and it is wider than the site list above:
+- About 60 `PyriteDB(` constructions outside storage and services never hydrate the registry. By file: software-kb cli 13, journalism cli 13, `admin_cli` 10, cascade cli 5, social cli 4, encyclopedia cli 4, zettelkasten cli 3, every extension `plugin.py`, `ui/data.py`, `read_cli.py`, and cli search/repo/init.
+- There are 3 hand-written `merge_registered_kbs` call patterns: `api.py`, `mcp_server.py` and `cli/context.py` ×3.
+- `config.knowledge_bases` is still iterated directly in about 15 places.
+
+Symptoms this item would fix: **#363** (KB_NOT_FOUND for a `kb add` KB), **#94** (journalism write tools against a `kb_registry_add` KB) and **#377** (`index_path` ignores the config dir).
+
+**Sequence:** #382 is the vehicle. Step 1 above (the `all_kbs()` sweep) becomes #382's ratchet acceptance: "`PyriteDB(` and `load_config(` appear only in `runtime.py`, `storage/` and an allowlist that can only shrink". Steps 2–3 (one library YAML, `kb add` writes it) stay here under ADR-0029, **after** #382. Record #382 as an ADR-0029 amendment; no new ADR is needed. #363 may land first as a small fix in 0.26; #382 then removes the local call.
+
+**Model:** Opus (with #382). **Heavy:** yes. **Cold read:** yes (config and storage). **Out of scope for #382:** steps 2–3 (the YAML consolidation), which stay here.

@@ -33,3 +33,10 @@ This is the first thing that will make `dev` red without a code change, and two 
 - No test made serial, no timeout widened; the fix is ordering, not waiting.
 
 Footprint: `tests/conftest.py` (or a new `tests/_teardown.py` helper), the fixtures in `tests/test_api_tiers.py`, `tests/test_index_worker.py`, `tests/test_admin_cli.py`; no production code unless `IndexWorker` lacks a joinable stop, in which case that is a small change with its own test. Model: sonnet.
+
+## Groom 2026-09-25
+
+**Absorbed into [[tests-t7-no-wall-clock-or-fixed-budget-waits-in-the-default-run-closes-88]]** (0.26). This item's acceptance ("20 consecutive runs, 0 errors… No test made serial, no timeout widened; the fix is ordering, not waiting") is carried there verbatim, with #88, #102's remaining half (`wait_for_idle` reports a timeout) and #127. Do not dispatch this item separately. Close it when T7 lands.
+
+- The `tests/test_api_tiers.py` fixture hunk is auth-adjacent. If the private security batch is open at dispatch and touches that file, the hunk lands after the batch.
+- `tests/test_admin_cli.py` moves in T5b (0.26), not here.

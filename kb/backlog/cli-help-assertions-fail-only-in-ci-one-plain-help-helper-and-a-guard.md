@@ -54,3 +54,7 @@ a `--help` test without mentioning it.
 ## Out of scope
 
 Changing how the CLI renders help for real users.
+
+## Groom 2026-09-25
+
+**Tracked on GitHub as #365** (labelled `good first issue`, unassigned). #321 is closed, so the guard's blast radius has shrunk as this item predicted. Contributors should work from #365. This item closes with it. Do not dispatch it separately.
