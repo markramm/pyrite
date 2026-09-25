@@ -1,7 +1,5 @@
 """Search endpoint."""
 
-import sqlite3
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 
@@ -152,5 +150,14 @@ def search(
             results=[SearchResult(**r) for r in results],
             warnings=warnings or None,
         )
-    except (sqlite3.OperationalError, ValueError) as e:
+    except ValueError as e:
+        # A caller-input problem (e.g. a bad `limit`) -- the caller's fault,
+        # 400. `sqlite3.OperationalError` used to be caught here too, but
+        # SearchService._db_search already reclassifies every DB-layer
+        # OperationalError: a real parse error becomes QuerySyntaxError
+        # (mapped to 400 QUERY_SYNTAX), and a genuine backend failure
+        # ("database is locked", disk I/O, a missing table) becomes
+        # StorageError (mapped to a logged 500). Catching the raw
+        # OperationalError here too would undo that distinction the moment
+        # it (incorrectly) reached this far (#414 round 2).
         raise HTTPException(status_code=400, detail={"code": "SEARCH_FAILED", "message": str(e)})

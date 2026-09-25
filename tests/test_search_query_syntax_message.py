@@ -69,3 +69,75 @@ def test_error_code_is_unchanged():
         service._db_search(query="detention AND third-party-doctrine")
 
     assert excinfo.value.error_code == "QUERY_SYNTAX"
+
+
+# ---------------------------------------------------------------------------
+# A non-syntax OperationalError is a server failure, not the caller's fault
+# (#414 fix round 2): "database is locked", a disk I/O error, a missing
+# table, or a database file that can't be opened must stay a 5xx and be
+# logged -- not get relabeled QUERY_SYNTAX/400 just because they are also
+# OperationalError under the hood.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "error_text",
+    [
+        "database is locked",
+        "disk I/O error",
+        "no such table: entry_fts",
+        "unable to open database file",
+    ],
+)
+def test_non_syntax_operational_errors_are_not_query_syntax_error(error_text):
+    from pyrite.exceptions import StorageError
+
+    service = SearchService(_RaisingDB(sqlite3.OperationalError(error_text)))
+    with pytest.raises(StorageError) as excinfo:
+        service._db_search(query="hello")
+    assert error_text in str(excinfo.value)
+    # And specifically not reclassified as the caller's query being bad.
+    assert not isinstance(excinfo.value, QuerySyntaxError)
+
+
+class TestOnlyQueryShapedErrorsAreTheCallersFault:
+    """#428 delta cold read: the parse-error allow-list must match what FTS5
+    says about a bad query, and must not match a schema fault that happens
+    to use the same words."""
+
+    @staticmethod
+    def _fts_error(query: str) -> str:
+        import sqlite3
+
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE VIRTUAL TABLE t USING fts5(body)")
+        try:
+            con.execute("SELECT * FROM t WHERE t MATCH ?", (query,)).fetchall()
+        except sqlite3.OperationalError as exc:
+            return str(exc)
+        finally:
+            con.close()
+        raise AssertionError(f"{query!r} parsed")
+
+    @pytest.mark.parametrize(
+        "query",
+        ["x AND " + "(" * 200 + "a" + ")" * 200, "x OR NEAR(a b, y)", "a:b", '"open'],
+        ids=["stack-overflow", "near-arg", "column-filter", "unterminated"],
+    )
+    def test_a_bad_query_is_a_syntax_error(self, query):
+        from pyrite.services.search_service import _looks_like_query_syntax_error
+
+        message = self._fts_error(query)
+        assert _looks_like_query_syntax_error(message), message
+
+    def test_a_missing_table_column_is_not_the_callers_fault(self):
+        import sqlite3
+
+        from pyrite.services.search_service import _looks_like_query_syntax_error
+
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE TABLE entry (id TEXT)")
+        with pytest.raises(sqlite3.OperationalError) as exc_info:
+            con.execute("SELECT e.fips FROM entry e").fetchall()
+        con.close()
+        assert not _looks_like_query_syntax_error(str(exc_info.value)), str(exc_info.value)

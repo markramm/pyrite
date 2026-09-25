@@ -133,12 +133,52 @@ class TestSearchService:
         'no relaxation applicable')."""
         assert SearchService._relax_to_or(input_query) == expected
 
+    @pytest.mark.parametrize(
+        ("input_query", "expected"),
+        [
+            ("alex-jones zzz", '"alex-jones" OR zzz'),
+            ("pre-push selection", '"pre-push" OR selection'),
+            ("section 230(c) reform", 'section OR "230(c)" OR reform'),
+        ],
+        ids=["hyphenated-term", "hyphenated-term-pre-push", "parenthesized-term"],
+    )
+    def test_relax_to_or_quotes_special_char_terms(self, input_query, expected):
+        """A term with an FTS5-special character (hyphen, parens, ...) must
+        be quoted before joining with " OR " -- sanitize_fts_query can't do
+        this after the fact, since it skips quoting once it sees the joined
+        query already contains an operator. Without per-term quoting, an
+        entirely ordinary plain-word query like "pre-push selection" relaxes
+        to unquoted `pre-push OR selection`, and the bare hyphenated term
+        then reaches FTS5 raw and raises QUERY_SYNTAX -- blaming the user
+        for a query they never wrote wrong (#361).
+        """
+        assert SearchService._relax_to_or(input_query) == expected
+
     def test_search_normalizes_all_kbs(self, test_db, test_config):
         """'All KBs' is normalized to None."""
         service = SearchService(test_db)
         # This should not raise - it normalizes the kb_name
         results = service.search("test", kb_name="All KBs")
         assert isinstance(results, list)
+
+    @pytest.mark.parametrize(
+        "query",
+        ["alex-jones zzz", "section 230(c) reform", "pre-push selection"],
+    )
+    def test_keyword_search_zero_hits_relaxes_without_raising(self, test_db, test_config, query):
+        """End-to-end, real SQLite FTS5 (no mock): a plain multi-word query
+        with a hyphenated or parenthesized term finds nothing on the first
+        (implicit-AND) pass, triggers the zero-hit OR-relaxation retry, and
+        that retry must not itself raise QUERY_SYNTAX. Before the per-term
+        quoting fix, `_relax_to_or` built an unquoted OR query
+        (`alex-jones OR zzz`) that sanitize_fts_query would not touch
+        (already has an operator), and the bare hyphenated/parenthesized
+        term then hit SQLite raw (#361).
+        """
+        service = SearchService(test_db)
+        # keyword mode is the only mode that calls _relax_to_or.
+        results = service.search(query, mode="keyword")
+        assert results == []
 
     def test_search_populates_trace(self, test_db, test_config):
         """A caller-supplied trace dict is filled with observability fields

@@ -309,6 +309,142 @@ class TestAISuggestLinks:
         )
         assert resp.status_code == 404
 
+    def test_suggest_links_empty_title_skips_search(self, ai_env):
+        """A title with no word long enough to search on (build_suggest_query
+        drops words of length <= 2, and drops a whole term that would push
+        the OR-joined query over the search cap) has nothing to search --
+        an empty query is not "no query", so suggest-links must not run
+        search at all, rather than ask the backend to special-case it.
+        Covers both the "too short" case and #414's original "title clips to
+        empty" case (a title so long a single unbroken token can't fit the
+        cap even quoted).
+        """
+        from pyrite.services.kb_service import KBService
+        from pyrite.server.api import get_search_service
+        from pyrite.services.search_service import MAX_SEARCH_QUERY_LENGTH
+
+        svc = KBService(ai_env["config"], ai_env["db"])
+        long_quoted_title = '"' + "x" * (MAX_SEARCH_QUERY_LENGTH + 100)
+        svc.create_entry("test-events", "blank-title-entry", long_quoted_title, "note", body="x")
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "blank-title-entry", "kb_name": "test-events"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["suggestions"] == []
+        mock_svc.search.assert_not_called()
+
+    def test_suggest_links_short_title_skips_search(self, ai_env):
+        """A title with only short words (<=2 chars, dropped by
+        build_suggest_query) also has nothing to search.
+        """
+        from pyrite.services.kb_service import KBService
+        from pyrite.server.api import get_search_service
+
+        svc = KBService(ai_env["config"], ai_env["db"])
+        svc.create_entry("test-events", "short-title-entry", "Q&A", "note", body="x")
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "short-title-entry", "kb_name": "test-events"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["suggestions"] == []
+        mock_svc.search.assert_not_called()
+
+    def test_suggest_links_on_an_fts5_unfriendly_title_does_not_500(self, ai_env):
+        """A title an ordinary editor would type -- quotes, AND, a hyphen --
+        must not make suggest-links fail. This runs the real SearchService
+        against real SQLite FTS5 (no mock): the endpoint passes the title
+        straight to search() today, and the title's own punctuation is
+        exactly what SQLite reads as query syntax it can't parse. See #361
+        ("pre-push selection") and the round-2 cold read on #414/#428.
+        """
+        from pyrite.services.kb_service import KBService
+
+        svc = KBService(ai_env["config"], ai_env["db"])
+        svc.create_entry(
+            "test-events",
+            "big-lie-entry",
+            'The "Big Lie" and e-mail',
+            "note",
+            body="x",
+        )
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "big-lie-entry", "kb_name": "test-events"},
+        )
+        assert resp.status_code == 200, resp.json()
+        assert resp.json()["suggestions"] == []
+
+    def test_suggest_links_query_syntax_error_is_not_500(self, ai_env):
+        """A title whose search (hybrid, then the keyword retry) both raise
+        QuerySyntaxError must not surface as a raw 500 -- the same syntax
+        problem MCP/CLI already report as QUERY_SYNTAX (see #361: a title
+        like "pre-push selection" hits this today).
+        """
+        from pyrite.exceptions import QuerySyntaxError
+        from pyrite.server.api import get_search_service
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = QuerySyntaxError("no such column: push")
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "2025-01-10--test-event-0", "kb_name": "test-events"},
+        )
+        assert resp.status_code != 500
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "QUERY_SYNTAX"
+
+    def test_suggest_links_query_syntax_error_skips_the_keyword_retry(self, ai_env):
+        """A syntax error is deterministic -- the keyword-mode retry the bare
+        except clause runs for other failures would fail identically, so it
+        must not even be attempted (same rationale as MCP's and the CLI's
+        QuerySyntaxError handling). Proven by a mock that would happily
+        return results on the retry, if it were called.
+        """
+        from pyrite.exceptions import QuerySyntaxError
+        from pyrite.server.api import get_search_service
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = [
+            QuerySyntaxError("no such column: push"),
+            [{"id": "x", "title": "t", "entry_type": "note", "snippet": "s"}],
+        ]
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "2025-01-10--test-event-0", "kb_name": "test-events"},
+        )
+        assert resp.status_code == 400
+        assert mock_svc.search.call_count == 1
+
 
 @pytest.mark.api
 class TestAIChat:
@@ -425,3 +561,60 @@ class TestAIChat:
             if line.startswith("data: "):
                 events.append(json.loads(line[6:]))
         assert any(e["type"] == "done" for e in events)
+
+    def test_chat_retrieval_skips_search_on_empty_clip(self, ai_env):
+        """Same rule as suggest-links: a message that clips to "" (an
+        unterminated quote past the cap) has nothing to search, so the RAG
+        step must not call search() at all. Round-2 cold read on #414/#428:
+        chat already survives this (the outer except swallows it), but it
+        should not attempt a pointless search either.
+        """
+        from pyrite.server.api import get_search_service
+        from pyrite.services.search_service import MAX_SEARCH_QUERY_LENGTH
+
+        llm = MockLLMService(stream_tokens=["Answer"])
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        long_unterminated_quote = '"' + "x" * (MAX_SEARCH_QUERY_LENGTH + 100)
+        resp = ai_env["client"].post(
+            "/api/ai/chat",
+            json={
+                "messages": [{"role": "user", "content": long_unterminated_quote}],
+                "kb": "test-events",
+            },
+        )
+        assert resp.status_code == 200
+        mock_svc.search.assert_not_called()
+
+    def test_chat_retrieval_skips_the_keyword_retry_on_a_syntax_error(self, ai_env):
+        """A QuerySyntaxError from the hybrid search is deterministic -- the
+        keyword-mode retry the bare except clause runs for other failures
+        would fail identically, so it must not even be attempted. Same
+        rationale as suggest-links, MCP and the CLI. Proven by a mock that
+        would happily return results on the retry, if it were called.
+        """
+        from pyrite.exceptions import QuerySyntaxError
+        from pyrite.server.api import get_search_service
+
+        llm = MockLLMService(stream_tokens=["Answer"])
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = [
+            QuerySyntaxError("no such column: push"),
+            [{"id": "x", "kb_name": "test-events", "title": "t", "snippet": "s"}],
+        ]
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/chat",
+            json={
+                "messages": [{"role": "user", "content": "pre-push selection"}],
+                "kb": "test-events",
+            },
+        )
+        assert resp.status_code == 200
+        assert mock_svc.search.call_count == 1

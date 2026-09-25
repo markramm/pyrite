@@ -354,6 +354,20 @@ class TestClipDerivedQuery:
         # The real path: cap check, sanitize, FTS5 MATCH on SQLite.
         SearchService(indexed_test_env["db"]).search(clipped)
 
+    def test_clip_then_sanitize_then_match_succeeds_across_a_paren_group(self, indexed_test_env):
+        """Same real path as test_clip_then_sanitize_then_match_succeeds, for
+        a cut that falls inside a parenthesised group -- kept as its own test
+        (not a new parametrize case on that one) so a diff-based check like
+        `scripts/verify-red.sh` can see this specific case is the new,
+        red-without-the-fix one, instead of re-flagging the older cases.
+        """
+        from pyrite.services.search_service import clip_derived_query
+
+        clipped = clip_derived_query(_straddling("(family OR separation)", 10))
+        assert len(clipped) <= MAX_SEARCH_QUERY_LENGTH
+        assert clipped.count("(") == clipped.count(")")
+        SearchService(indexed_test_env["db"]).search(clipped)
+
     def test_short_text_is_unchanged(self):
         from pyrite.services.search_service import clip_derived_query
 
@@ -364,6 +378,96 @@ class TestClipDerivedQuery:
 
         text = "a" * (MAX_SEARCH_QUERY_LENGTH - 3) + " immigration"
         assert clip_derived_query(text) == "a" * (MAX_SEARCH_QUERY_LENGTH - 3)
+
+    def test_a_cut_that_leaves_an_open_paren_drops_it(self):
+        """A group that opens before the cap and never closes: the clip must
+        not hand FTS5 a dangling '(' -- MATCH reads it as an unclosed group.
+        """
+        from pyrite.services.search_service import clip_derived_query
+
+        text = "immigration policy (family separation" + " trailing" * 5
+        clipped = clip_derived_query(text.ljust(MAX_SEARCH_QUERY_LENGTH + 20))
+        assert clipped.count("(") == clipped.count(")")
+
+    def test_nested_groups_across_the_cut_keep_the_closed_inner_group(self, indexed_test_env):
+        """A naive `count("(") != count(")")` then `rfind("(")` finds the
+        *inner*, already-closed "(" of a nested group and cuts there --
+        discarding the whole validly-closed inner group for no reason. The
+        fix must find the *outer* unmatched "(" instead.
+        """
+        from pyrite.services.search_service import clip_derived_query
+
+        group = "(a AND (b OR c) AND d AND e AND f AND g AND h)"
+        idx_in_group = group.index("AND e") + len("AND e")
+        prefix_len = MAX_SEARCH_QUERY_LENGTH - idx_in_group
+        prefix = "w" * (prefix_len - 1) + " "
+        text = prefix + group + " tail tail tail after the cap"
+        assert len(text) > MAX_SEARCH_QUERY_LENGTH
+
+        clipped = clip_derived_query(text)
+        assert clipped.count("(") == clipped.count(")")
+        SearchService(indexed_test_env["db"]).search(clipped)
+
+    @pytest.mark.control(
+        reason="passes against origin/dev because dev's clip_derived_query "
+        "has no paren handling at all yet (added in this PR's first round). "
+        "The bug this test targets -- the naive count-and-rfind approach "
+        "wrongly touching a quoted phrase's own '(' -- is that first "
+        "round's own regression, not a dev-baseline bug; confirmed red by "
+        "simulating that round's actual buggy code directly (rfind('(') "
+        "finds the quoted '(' and truncates to 'x AND \"a')."
+    )
+    def test_a_paren_inside_a_quoted_phrase_is_not_a_group(self, indexed_test_env):
+        """`"a(b"` is a literal "(" to FTS5 because it's inside quotes, not a
+        group opener. A naive character count treats it as one anyway and
+        can wrongly flag (or mask) an imbalance; the cut must not touch a
+        quoted phrase's own punctuation.
+        """
+        from pyrite.services.search_service import clip_derived_query
+
+        head = 'x AND "a(b" AND '
+        filler = "cccccccc " * 200
+        text = head + filler
+        assert len(text) > MAX_SEARCH_QUERY_LENGTH
+
+        clipped = clip_derived_query(text)
+        assert clipped.startswith(head)
+        SearchService(indexed_test_env["db"]).search(clipped)
+
+    def test_a_lone_close_paren_before_the_cut_is_dropped(self, indexed_test_env):
+        """A stray ")" with no "(" before it: `rfind("(")` returns -1, and
+        the old code sliced to `text[:-1]`, which just drops the *last*
+        character of the clip and leaves the stray ")" sitting there --
+        still `fts5: syntax error near ")"`. The fix must cut before the
+        lone ")" itself.
+        """
+        from pyrite.services.search_service import clip_derived_query
+
+        head = "x) AND "
+        filler = "cccccccc " * 200
+        text = head + filler
+        assert len(text) > MAX_SEARCH_QUERY_LENGTH
+
+        clipped = clip_derived_query(text)
+        assert ")" not in clipped
+        SearchService(indexed_test_env["db"]).search(clipped)
+
+    @pytest.mark.control(
+        reason="clip_derived_query's own empty-string result on an "
+        "unterminated quote was already correct before #414 -- what #414 "
+        "fixes is the callers (ai_ep.py) not skipping the search when it "
+        "happens; see test_suggest_links_empty_title_skips_search."
+    )
+    def test_an_unterminated_quote_clips_to_empty_not_blank_search(self):
+        """A text whose first MAX_SEARCH_QUERY_LENGTH characters open a quote
+        and never close it: the quote-balance step cuts back to the open
+        quote, which is index 0 here, leaving "". Callers must treat that as
+        "nothing to search", not run an empty MATCH.
+        """
+        from pyrite.services.search_service import clip_derived_query
+
+        text = '"' + "x" * (MAX_SEARCH_QUERY_LENGTH + 100)
+        assert clip_derived_query(text) == ""
 
 
 def test_build_suggest_query_keeps_short_terms_after_an_over_long_one():
