@@ -41,8 +41,13 @@ by `_enforce_max_sessions`, and the deletion of expired sessions by
 readable set is still resolved once, at connect. When the session that opened a
 socket ends, or the user's role or KB grants change, the server closes that
 user's affected sockets. A client that wants live updates reconnects and is
-scoped afresh. A socket never delivers an event its current credential could
-not read.
+scoped afresh.
+
+The guarantee covers **per-user credential changes made in the server process**:
+after one, no event reaches a socket opened with the old credential. It does not
+yet cover KB-wide access changes (a KB's `default_role` narrowed, a KB made
+private or unregistered) or changes made from another process; those are
+tracked separately (see Consequences).
 
 1. **Each socket records its credential.** `resolve_socket_scope` returns a
    `SocketScope`: the readable set, and for a session-authenticated socket the
@@ -64,7 +69,7 @@ not read.
    | session evicted by `_enforce_max_sessions` | the session |
    | `logout_all` | the user |
    | `set_role` (any change that took effect) | the user |
-   | `grant_kb_permission`, `revoke_kb_permission` | the user |
+   | `grant_kb_permission`, `revoke_kb_permission`, the creator's admin grant in `create_user_ephemeral_kb` | the user |
 
    The app subscribes `websocket.on_credential_change` at startup. The listener
    runs on the thread that made the change and hands the change to the server's
@@ -75,7 +80,8 @@ not read.
    that raises is logged and skipped: a broken listener never fails the write.
 
    Closing on *any* role or grant change, an upgrade included, keeps one rule
-   and costs a reconnect; the new socket carries the new scope.
+   and costs a reconnect; the new socket carries the new scope. Setting a user
+   to the role they already hold is not a change and closes nothing.
 
 3. **Expiry needs no event.** `broadcast` skips and closes a socket whose
    recorded expiry has passed, before sending, so an expired socket receives
@@ -112,10 +118,19 @@ changes a credential responsible for remembering the sockets.
   grant change from another process takes effect on the next reconnect.
   Cross-process delivery is a follow-up if Pyrite ever runs more than one
   server process per database.
-- **Follow-ups, out of scope here:** scope changes that are not per-user — a
-  KB's `default_role` edit, a KB made private, a KB removed (with its grants)
-  — do not close sockets. Each would publish a change naming a KB rather than
-  a user, and every socket whose readable set contains it would be closed.
+- **Not yet covered, tracked separately:** scope changes that are not per-user
+  — a KB's `default_role` edit, a KB made private, a KB removed (with its
+  grants) — do not close sockets. Each would publish a change naming a KB
+  rather than a user, and every socket whose readable set contains it would be
+  closed.
+- **API-key sockets are not revocable.** A socket opened with an operator API
+  key (header or `api_key` query parameter) carries no user or session, so no
+  `CredentialChange` names it. Keys come from configuration, and rotating a
+  key takes effect on sockets only when the server restarts.
+- **An expired tab retries until the client notices.** A browser tab whose
+  session expired has its socket closed; its reconnect is then refused at the
+  handshake, and it keeps retrying with the backoff until the web client
+  notices the expiry and follows the new identity (#420).
 - Pinned by `tests/test_websocket_credential_lifetime.py`, which drives a real
   WebSocket client for each trigger.
 
