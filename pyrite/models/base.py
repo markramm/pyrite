@@ -679,8 +679,24 @@ class Entry(ABC):
         entry.file_path = path
         return entry
 
-    def save(self, path: Path | None = None) -> Path:
-        """Save entry to file."""
+    def save(self, path: Path | None = None, *, exclusive: bool = False) -> Path:
+        """Save entry to file.
+
+        Args:
+            path: Target path; defaults to ``self.file_path``.
+            exclusive: ``True`` publishes the write with ``os.link`` instead
+                of ``os.replace`` -- it fails with ``FileExistsError`` if
+                ``path`` already exists, instead of silently overwriting it.
+                For the create path only (#391 cold read round 2): the
+                write-pipeline's own `resolved_path.exists()` check and this
+                publish step are two different moments, so two truly
+                concurrent creates can both pass the check before either
+                publishes. This closes that window at the one place a
+                filesystem call can enforce it atomically; it does not
+                replace the check (which gives the friendlier error message
+                and DB-index-consistency path in the common, non-racing
+                case).
+        """
         if path is None:
             path = self.file_path
         if path is None:
@@ -707,13 +723,23 @@ class Entry(ABC):
                 os.umask(umask)
                 mode = 0o666 & ~umask
             os.chmod(tmp, mode)
-            os.replace(tmp, path)
+            if exclusive:
+                # os.link fails with FileExistsError if `path` already
+                # exists, atomically -- unlike os.replace, which always
+                # succeeds. The temp file becomes a second name for the same
+                # inode; unlinking it after is bookkeeping, not the publish.
+                os.link(tmp, path)
+            else:
+                os.replace(tmp, path)
         except BaseException:
             try:
                 os.unlink(tmp)
             except OSError:
                 pass
             raise
+        else:
+            if exclusive:
+                os.unlink(tmp)
         self.file_path = path
         return path
 

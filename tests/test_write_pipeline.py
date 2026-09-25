@@ -794,6 +794,56 @@ def test_create_refuses_a_resolved_path_collision_from_unnumbered_titles(softwar
         db.close()
 
 
+def test_create_write_is_exclusive_against_a_true_toctou_race(software_env):
+    """#391 cold read round 2 item 2. `_prepare`'s exists() check and the
+    write that follows it are two different moments: two truly concurrent
+    creates can both pass the check before either publishes. This test
+    simulates the race window itself -- a `before_save` hook (which runs
+    strictly after `_prepare`'s check and strictly before the write) writes
+    the "other process's" file to disk as its side effect, then the create
+    continues into `save_entry`. Without an exclusive publish, `os.replace`
+    always succeeds, so the racing create would silently overwrite the
+    winner's file and report `created` anyway."""
+    from pyrite.exceptions import EntryExistsError
+    from pyrite.plugins.registry import get_registry
+    from pyrite.services.kb_service import KBService
+    from pyrite.storage.database import PyriteDB
+
+    winner_file = software_env["kb_path"] / "adrs" / "0005-race.md"
+
+    def concurrent_winner(entry, ctx):
+        # Simulate another process's create landing on disk in the window
+        # between this create's exists() check and its own write.
+        winner_file.parent.mkdir(parents=True, exist_ok=True)
+        winner_file.write_text(
+            "---\nid: adr-winner\ntype: adr\ntitle: Race\nadr_number: 5\n"
+            "status: proposed\n---\n\nWINNER\n"
+        )
+
+    class RaceHookPlugin:
+        name = "race_hook_plugin"
+
+        def get_hooks(self):
+            return {"before_save": [concurrent_winner]}
+
+    reg = get_registry()
+    reg.register(RaceHookPlugin())
+    db = PyriteDB(software_env["db_path"])
+    try:
+        svc = KBService(software_env["config"], db)
+        with pytest.raises(EntryExistsError):
+            svc.create_entry("sw", "adr-loser", "Race", "adr", "LOSER", adr_number=5)
+
+        assert winner_file.exists()
+        assert "WINNER" in winner_file.read_text(), (
+            "the exclusive write must refuse, not silently overwrite the concurrent winner's file"
+        )
+        assert len(list(software_env["kb_path"].rglob("*.md"))) == 1
+    finally:
+        del reg._plugins["race_hook_plugin"]
+        db.close()
+
+
 def test_update_keeps_the_existing_filename_for_a_file_pattern_type(software_env):
     """#391 cold read blocker 2. `document_manager.py` deleted the old file
     and wrote a new one whenever the resolved path changed on UPDATE. With a
@@ -828,6 +878,37 @@ def test_update_keeps_the_existing_filename_for_a_file_pattern_type(software_env
         content = original_file.read_text()
         assert "A Completely Different Title" in content
         assert "status: accepted" in content
+    finally:
+        db.close()
+
+
+def test_rename_an_adr_keeps_its_file_and_survives_index_verification(software_env):
+    """#391 cold read round 2 MUST: renaming an ADR's id deleted its file.
+    `KBRepository.rename` re-resolved the filename after the id change;
+    the `adr` pattern (`{adr_number:04d}-{title}.md`) has no `{id}`/`{slug}`,
+    so the new path equaled the old one, and the unconditional
+    `src.unlink()` deleted the file it had just written -- `renamed: True`,
+    zero files left, and the index-verification step below then failed too
+    (nothing on disk for sync_incremental to find)."""
+    from pyrite.services.kb_service import KBService
+    from pyrite.storage.database import PyriteDB
+
+    db = PyriteDB(software_env["db_path"])
+    try:
+        svc = KBService(software_env["config"], db)
+        svc.create_entry("sw", "adr-x", "Keep Me", "adr", "body", adr_number=9, status="proposed")
+        original_file = software_env["kb_path"] / "adrs" / "0009-keep-me.md"
+        assert original_file.exists(), original_file
+
+        result = svc.rename_entry("adr-x", "adr-y", "sw")
+
+        assert result["renamed"] is True, result
+        assert result.get("index_verified") is True, result
+        assert original_file.exists(), "the file must survive the rename"
+        assert "id: adr-y" in original_file.read_text()
+        assert len(list(software_env["kb_path"].rglob("*.md"))) >= 1
+        assert db.get_entry("adr-y", "sw") is not None
+        assert db.get_entry("adr-x", "sw") is None
     finally:
         db.close()
 

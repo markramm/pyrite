@@ -1253,6 +1253,58 @@ class TestSyncRecoversFromBrokenTimestamp:
             db.close()
 
 
+class TestSyncIncrementalRetiresTheOldIdWhenAFileIsRenamedInPlace:
+    """#391 cold read round 2: a rename that keeps the file's PATH fixed
+    (a `file_pattern` type with no `{id}`/`{slug}` placeholder, e.g. the
+    software-kb `adr` type's `{adr_number:04d}-{title}.md`) changes the
+    frontmatter `id:` without moving the file. `sync_incremental`'s
+    "known file" branch keyed its `seen_ids` bookkeeping off the file's
+    PATH, so the id it read from the index at that path (the OLD, stale
+    id) was marked "seen" regardless of what the file's frontmatter says
+    now -- the old id survived forever as a duplicate row pointing at the
+    same, now-renamed file, alongside the file's real, current id.
+    """
+
+    def test_sync_removes_the_stale_id_and_keeps_only_the_current_one(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir = Path(tmpdir)
+            db_path = tmpdir / "index.db"
+            kb_path = tmpdir / "kb"
+            kb_path.mkdir()
+
+            db = PyriteDB(db_path)
+            kb_config = KBConfig(
+                name="test-kb", path=kb_path, kb_type="generic", description="Test KB"
+            )
+            config = PyriteConfig(
+                knowledge_bases=[kb_config], settings=Settings(index_path=db_path)
+            )
+
+            md_file = kb_path / "entry-a.md"
+            md_file.write_text("---\nid: entry-a\ntype: note\ntitle: Original\n---\n\nBody.\n")
+
+            index_mgr = IndexManager(db, config)
+            index_mgr.index_all()
+            assert db.get_entry("entry-a", "test-kb") is not None
+
+            # Simulate a rename that keeps the SAME file path (the `adr`
+            # file_pattern scenario): only the frontmatter id changes.
+            md_file.write_text("---\nid: entry-b\ntype: note\ntitle: Original\n---\n\nBody.\n")
+
+            results = index_mgr.sync_incremental("test-kb")
+
+            assert db.get_entry("entry-b", "test-kb") is not None, (
+                f"the renamed id must be indexed: {results}"
+            )
+            assert db.get_entry("entry-a", "test-kb") is None, (
+                "the stale old id must not survive as a duplicate row "
+                f"pointing at the same file: {results}"
+            )
+            assert results["removed"] >= 1, results
+
+            db.close()
+
+
 class TestUndeclaredTypesInHealth:
     """`check_health` must surface entries whose `entry_type` is not declared
     in the KB's `kb.yaml` types section.

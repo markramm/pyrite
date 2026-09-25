@@ -1081,10 +1081,26 @@ class IndexManager:
                     if indexed_at:
                         try:
                             if self._is_stale(file_path, indexed_at):
-                                # Stale — parse and re-index
+                                # Stale — parse and re-index.
                                 entry = repo.load_entry_from_file(file_path)
                                 self.index_entry(entry, kb.name, file_path)
                                 results["updated"] += 1
+                                # #391 cold read round 2: a rename that keeps
+                                # the file's PATH fixed (a file_pattern type
+                                # with no {id}/{slug} placeholder) changes
+                                # the frontmatter id without moving the file,
+                                # so the id now on disk can differ from the
+                                # one this path was last indexed under.
+                                # `entry_id` (the STALE id) was marked "seen"
+                                # above so the cleanup loop below would not
+                                # otherwise retire it -- it would survive as
+                                # a stale duplicate row pointing at the same
+                                # (now-renamed) file. Retire it explicitly and
+                                # mark the entry's ACTUAL (current) id seen.
+                                if entry.id != entry_id:
+                                    self.remove_entry(entry_id, kb.name)
+                                    results["removed"] += 1
+                                    seen_ids.add(entry.id)
                         except FrontmatterError as e:
                             # Malformed frontmatter is content drift, not a
                             # Pyrite bug. Surface in the summary; log one-line.

@@ -650,7 +650,22 @@ class KBService:
         )
         ctx = hook_ctx or self._hook_ctx(kb_name, kb_config, "create")
         entry = self._run_hooks("before_save", entry, ctx)
-        self._doc_mgr.save_entry(entry, kb_name, kb_config, is_create=True)
+        try:
+            self._doc_mgr.save_entry(entry, kb_name, kb_config, is_create=True)
+        except FileExistsError as e:
+            # #391 cold read round 2: the exists() check in _prepare and this
+            # write are two different moments -- two truly concurrent creates
+            # can both pass the check before either publishes. The write
+            # itself is exclusive (KBRepository.save's exclusive=True, from
+            # is_create), so the LOSING side's publish raises this instead of
+            # silently overwriting the winner's file. Same refusal the fast
+            # path gives, so callers do not need to handle two exceptions
+            # for one user-visible outcome.
+            raise EntryExistsError(
+                f"Entry with ID '{entry.id}' already exists in KB '{kb_name}' "
+                "(a concurrent create won the race). Use update to change it, "
+                "or choose a different title/id."
+            ) from e
         if embed:
             self._auto_embed(entry.id, kb_name)
         self._run_hooks("after_save", entry, ctx)

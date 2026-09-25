@@ -65,3 +65,47 @@ def test_existing_file_mode_is_preserved(tmp_path):
     os.chmod(path, 0o600)
     NoteEntry(id="note", title="t2", body="b2").save(path)
     assert oct(path.stat().st_mode & 0o777) == oct(0o600)
+
+
+class TestExclusiveSave:
+    """#391 cold read round 2 item 2: `exclusive=True` closes the TOCTOU
+    window between the write pipeline's own exists() check and the write
+    that follows it -- `os.replace` always succeeds even if the target
+    exists, so two truly concurrent creates could both pass the check and
+    the second would silently overwrite the first. `os.link` fails with
+    `FileExistsError` if the target already exists, atomically.
+    """
+
+    def test_exclusive_save_succeeds_when_target_does_not_exist(self, tmp_path):
+        path = tmp_path / "note.md"
+        NoteEntry(id="note", title="t", body="b").save(path, exclusive=True)
+        assert path.exists()
+        assert "b" in path.read_text()
+
+    def test_exclusive_save_refuses_an_existing_target(self, tmp_path):
+        path = tmp_path / "note.md"
+        NoteEntry(id="note", title="t", body="ORIGINAL").save(path)
+        original = path.read_text()
+
+        with pytest.raises(FileExistsError):
+            NoteEntry(id="note", title="t", body="REPLACED").save(path, exclusive=True)
+
+        assert path.read_text() == original, "an exclusive save must never overwrite"
+
+    def test_exclusive_save_leaves_no_temp_file_on_refusal(self, tmp_path):
+        path = tmp_path / "note.md"
+        NoteEntry(id="note", title="t", body="ORIGINAL").save(path)
+
+        with pytest.raises(FileExistsError):
+            NoteEntry(id="note", title="t", body="REPLACED").save(path, exclusive=True)
+
+        assert [p.name for p in tmp_path.iterdir()] == ["note.md"], "no temp file left behind"
+
+    def test_non_exclusive_save_still_overwrites(self, tmp_path):
+        """Regression guard: exclusive=False (the default, every update)
+        must keep working exactly as before -- this is what makes create
+        different from update, not a global behavior change."""
+        path = tmp_path / "note.md"
+        NoteEntry(id="note", title="t", body="ORIGINAL").save(path)
+        NoteEntry(id="note", title="t", body="REPLACED").save(path)
+        assert "REPLACED" in path.read_text()

@@ -58,7 +58,14 @@ class DocumentManager:
                 field edit must not rename the file every time, matching the
                 subdirectory-preservation logic just below. ``True`` lets
                 ``KBRepository.save`` resolve a fresh filename, since there
-                is no existing one yet.
+                is no existing one yet, and also publishes exclusively
+                (``exclusive=True``): create means never overwrite, so the
+                same flag that says "resolve a fresh path" says "refuse if
+                something is already there when this writes" -- the
+                write-pipeline's own exists() check and the write itself are
+                two different moments, and two truly concurrent creates can
+                both pass the check before either publishes (#391 cold read
+                round 2).
 
         Returns:
             Path to the saved file.
@@ -85,6 +92,7 @@ class DocumentManager:
             subdir=subdir,
             touch_updated_at=touch_updated_at,
             keep_filename=not is_create,
+            exclusive=is_create,
         )
 
         # Clean up old file if path changed (template-driven move)
