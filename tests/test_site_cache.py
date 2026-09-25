@@ -1705,3 +1705,195 @@ class TestBrandingScalarFieldValidation:
         body = r.json()
         assert body.get("code") == "BRANDING_INVALID", body
         assert not isinstance(body.get("name"), list), body
+
+
+class TestBrandingFailureCacheDoesNotLeakTracebackFrames:
+    """#445 round 3: a cache hit re-raised the SAME stored exception object
+    (``raise cached[1]``). Python appends a frame to ``__traceback__`` on
+    every raise of that object, so the cached exception's traceback grows
+    without bound across requests, and the central handler's
+    ``logger.error(..., exc_info=exc)`` prints the whole (growing)
+    traceback on every single ``/config/branding`` request.
+    """
+
+    def test_traceback_length_does_not_grow_across_repeated_loads(self, tmp_path):
+        import traceback
+
+        from pyrite.exceptions import BrandingInvalidError
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+
+        svc = BrandingService(branding)
+        lengths = []
+        for _ in range(8):
+            svc._config = None  # force _load() again, same object, same mtime
+            with pytest.raises(BrandingInvalidError) as excinfo:
+                svc.get()
+            lengths.append(len(traceback.extract_tb(excinfo.value.__traceback__)))
+
+        # The first call is a real parse failure (a deeper stack, through
+        # _load_raw); every call after that is a cache hit and must raise a
+        # FRESH exception each time, so its traceback is a fixed, shallow
+        # depth -- not growing call over call. Comparing only the cache-hit
+        # calls (index 1 on) isolates the bug: re-raising the same stored
+        # exception object appends a frame on every raise, so those lengths
+        # would climb 1, 2, 3, ... instead of staying constant.
+        cache_hit_lengths = lengths[1:]
+        assert len(set(cache_hit_lengths)) == 1, (
+            f"traceback frame count grew across repeated cache-hit loads of "
+            f"the same unchanged file (first call, a real parse, is index 0 "
+            f"and expected to differ): {lengths}"
+        )
+
+    def test_config_branding_logged_traceback_does_not_grow_across_requests(self, tmp_path, caplog):
+        """Same story at the HTTP layer, checked where the bug actually
+        shows up: the coordinator's finding is specifically that
+        ``/config/branding`` *logs* the whole (growing) traceback on every
+        request via the central handler's ``exc_info=exc`` -- the response
+        body itself carries only the fixed ``public_message``, so it can't
+        show this. ``/config/branding`` builds a fresh ``BrandingService``
+        per request (no per-instance state to reset), so this exercises the
+        module-level cache directly, repeatedly, the way real traffic
+        would."""
+        import logging
+        import traceback
+
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        depths = []
+        with (
+            caplog.at_level(logging.ERROR, logger="pyrite.server.api"),
+            TestClient(app, raise_server_exceptions=False) as client,
+        ):
+            for _ in range(8):
+                caplog.clear()
+                r = client.get("/config/branding")
+                assert r.status_code == 500, r.text
+                handler_records = [rec for rec in caplog.records if rec.name == "pyrite.server.api"]
+                assert handler_records, "expected the central handler to log this 5xx"
+                exc_info = handler_records[0].exc_info
+                assert exc_info is not None and exc_info[2] is not None, (
+                    "expected a traceback on the logged record"
+                )
+                depths.append(len(traceback.extract_tb(exc_info[2])))
+
+        # Request 0 builds a fresh BrandingService and hits a real parse
+        # failure (deeper stack, through _load_raw); every request after
+        # that is a cache hit and must raise a fresh exception each time,
+        # so its logged traceback is a fixed, shallow depth -- not growing
+        # request over request the way re-raising the same stored object
+        # would (the bug: 1, 2, 3, ... frames deeper on each hit).
+        cache_hit_depths = depths[1:]
+        assert len(set(cache_hit_depths)) == 1, (
+            f"the logged traceback's frame count grew across identical repeated "
+            f"cache-hit requests to the same unchanged file (request 0, a real "
+            f"parse, is expected to differ): {depths}"
+        )
+
+
+class TestBrandingFailureCacheKey:
+    """#445 round 3: keyed on mtime alone, a fixed file whose mtime happens
+    not to change (``cp -p``, ``rsync -t``, tar extraction, or a filesystem
+    with 1-second mtime granularity racing two writes in the same second)
+    keeps failing forever with the stale cached error. Keying on
+    ``(st_mtime_ns, st_size)`` catches a same-second edit as long as the
+    byte size differs, which covers the realistic "operator fixed a typo"
+    case without needing a content hash.
+    """
+
+    @pytest.mark.control(
+        reason=(
+            "verify-red's baseline is before #408 existed at all, where "
+            "BrandingService has no failure cache whatsoever -- every load "
+            "re-parses the file fresh, so a stale-cache bug (this test's whole "
+            "point) cannot manifest there and the assertion trivially holds. "
+            "The bug was introduced by round 3 of this PR (the mtime-only cache "
+            "key) and fixed in this same round 4; confirmed red by mutation-"
+            "testing the (mtime_ns, size) key down to mtime-only (see the PR "
+            "report)."
+        )
+    )
+    def test_same_mtime_different_size_is_not_treated_as_the_same_failure(self, tmp_path):
+        import os
+
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        yaml_path = branding / "branding.yaml"
+        yaml_path.write_text("- a list, not a mapping\n")
+
+        svc = BrandingService(branding)
+        with pytest.raises(Exception):  # noqa: B017 -- BrandingInvalidError, imported below in the assert
+            svc.get()
+
+        # Fix the file's content but pin its mtime to the same value a
+        # coarse-grained filesystem or a `cp -p`/`rsync -t` copy would
+        # produce -- the size changes, the mtime does not.
+        st = yaml_path.stat()
+        yaml_path.write_text("name: Acme\n")
+        os.utime(yaml_path, ns=(st.st_atime_ns, st.st_mtime_ns))
+        assert yaml_path.stat().st_mtime_ns == st.st_mtime_ns, "test setup: mtime must be pinned"
+
+        svc2 = BrandingService(branding)
+        cfg = svc2.get()  # must NOT raise the stale cached failure
+        assert cfg.name == "Acme", cfg
+
+    def test_file_deleted_between_is_file_and_stat_is_treated_as_missing(
+        self, tmp_path, monkeypatch
+    ):
+        """A TOCTOU gap: ``is_file()`` passes, then the file is removed
+        before the later, unguarded ``yaml_path.stat()`` call runs (the one
+        that reads the cache key). Must fall back to defaults (the same
+        outcome as the file never having existed), not raise
+        FileNotFoundError.
+
+        ``Path.is_file()`` itself calls ``self.stat()`` internally (and
+        already handles ENOENT, returning False), so a naive "delete on the
+        first stat() call" monkeypatch deletes the file during is_file()'s
+        own check and never reaches the real gap this test targets. The
+        delete has to happen on the *second* stat() call -- the one after
+        is_file() has already returned True.
+        """
+        from pathlib import Path
+
+        from pyrite.services.branding_service import DEFAULT_BRAND_NAME, BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        yaml_path = branding / "branding.yaml"
+        yaml_path.write_text("name: Acme\n")
+
+        real_stat = Path.stat
+        calls = {"n": 0}
+
+        def _stat_then_delete_on_second_call(self, *args, **kwargs):
+            if self == yaml_path:
+                calls["n"] += 1
+                if calls["n"] == 2:
+                    yaml_path.unlink()
+            return real_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", _stat_then_delete_on_second_call)
+
+        svc = BrandingService(branding)
+        cfg = svc.get()
+        assert cfg.name == DEFAULT_BRAND_NAME, cfg

@@ -29,17 +29,25 @@ DEFAULT_PRIMARY_COLOR = "#d4a017"  # gold-400 equivalent — today's accent
 DEFAULT_FOOTER_CREDIT_URL = "https://pyrite.wiki"
 
 # Module-level, keyed on the resolved branding.yaml path, each holding at
-# most one (mtime, error) pair (#445 delta cold read): every request to an
-# anonymous route (/sitemap.xml, /robots.txt, /config/branding) that hits a
-# broken branding.yaml builds its own BrandingService (seo_endpoints.py has
-# no per-request caching the way branding_endpoints.py's _service_cache
-# does), so without this, a stuck operator typo logs a full traceback on
-# every single page load. Keyed on mtime, not just the path, so a fixed file
-# is re-read and re-logged on its next real failure instead of staying
-# silent forever -- and keyed per-path (not a single shared slot) so two
-# different branding dirs in the same process (e.g. two tests, or two
-# ephemeral configs) don't evict each other's cached failure.
-_failure_cache: dict[str, tuple[float, BrandingInvalidError]] = {}
+# most one ((mtime_ns, size), message) pair (#445 delta cold read): every
+# request to an anonymous route (/sitemap.xml, /robots.txt,
+# /config/branding) that hits a broken branding.yaml builds its own
+# BrandingService (seo_endpoints.py has no per-request caching the way
+# branding_endpoints.py's _service_cache does), so without this, a stuck
+# operator typo logs a full traceback on every single page load. Keyed on
+# (mtime, size), not just the path, so a fixed file is re-read and
+# re-logged on its next real failure instead of staying silent forever --
+# and keyed per-path (not a single shared slot) so two different branding
+# dirs in the same process (e.g. two tests, or two ephemeral configs) don't
+# evict each other's cached failure.
+#
+# The value is the exception's MESSAGE (a str), not the exception object
+# itself (#445 round 3): re-raising the same exception instance on every
+# cache hit appends a frame to its __traceback__ every time, so the cached
+# object's traceback -- and every subsequent request's logged traceback --
+# grows without bound. A cache hit constructs a fresh BrandingInvalidError
+# from the stored message instead.
+_failure_cache: dict[str, tuple[tuple[int, int], str]] = {}
 
 
 @dataclass
@@ -164,19 +172,42 @@ class BrandingService:
         if not yaml_path.is_file():
             return BrandingConfig(branding_dir=self._branding_dir)
 
+        try:
+            st = yaml_path.stat()
+        except FileNotFoundError:
+            # TOCTOU: is_file() passed above, then something (a rewrite via
+            # temp-file-and-rename, a delete) removed it before this stat()
+            # ran (#445 round 3). Treat exactly like "never had a
+            # branding.yaml" rather than letting the raw OS error escape.
+            return BrandingConfig(branding_dir=self._branding_dir)
+
         path_key = str(yaml_path)
-        mtime = yaml_path.stat().st_mtime
+        # (mtime_ns, size), not mtime alone (#445 round 3): a filesystem
+        # with 1-second mtime granularity, or a copy tool that preserves
+        # timestamps (`cp -p`, `rsync -t`, most tar extraction), can leave
+        # an edited file's mtime unchanged from the broken version's --
+        # keyed on mtime alone, a fixed file would keep re-raising the
+        # stale cached failure forever. Comparing the byte size too catches
+        # any edit that isn't a same-second, same-length in-place overwrite
+        # (not a content hash, but far cheaper, and covers the realistic
+        # "operator fixed a typo" case).
+        cache_key = (st.st_mtime_ns, st.st_size)
         cached = _failure_cache.get(path_key)
-        if cached is not None and cached[0] == mtime:
-            # Same file, same mtime as a failure already logged: re-raise
-            # without re-parsing or re-logging (see _failure_cache above).
-            raise cached[1]
+        if cached is not None and cached[0] == cache_key:
+            # Same file, same (mtime, size) as a failure already logged:
+            # raise a FRESH exception carrying the same message, not the
+            # stored object itself (see _failure_cache above) -- re-raising
+            # the same object appends a frame to its __traceback__ on every
+            # raise, so the cached exception's traceback (and therefore
+            # every /config/branding request's logged traceback) grows
+            # without bound across repeat requests (#445 round 3).
+            raise BrandingInvalidError(cached[1])
 
         try:
             cfg = self._load_raw(yaml_path)
         except BrandingInvalidError as e:
             logger.error("Invalid branding config: %s", e, exc_info=e)
-            _failure_cache[path_key] = (mtime, e)
+            _failure_cache[path_key] = (cache_key, str(e))
             raise
         return cfg
 
