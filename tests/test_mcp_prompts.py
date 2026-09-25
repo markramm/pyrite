@@ -342,6 +342,36 @@ class TestResearchTopicBranding:
         finally:
             server.close()
 
+    def test_broken_branding_yaml_is_a_refusal_not_a_raised_exception(self, tmp_path):
+        """#445 cold read: before this fix, a broken ``branding.yaml`` made
+        ``_get_prompt`` raise ``BrandingInvalidError`` straight out of
+        ``_prompt_research_topic`` -- nothing in the dispatch path caught it,
+        so it propagated as a raw exception (and, if serialized anywhere,
+        would show the branding.yaml's absolute path). It must come back as
+        the same structured MCP refusal envelope every other domain error
+        gets, with a code from ``_DOMAIN_ERROR_CODES`` and no path in the
+        message.
+        """
+        branding_dir = tmp_path / "branding"
+        branding_dir.mkdir()
+        (branding_dir / "branding.yaml").write_text("- a list, not a mapping\n")
+
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="test-kb", path=kb_path, kb_type=KBType.GENERIC)],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding_dir),
+        )
+        server = PyriteMCPServer(config=config, tier="read")
+        try:
+            result = server._get_prompt("research_topic", {"topic": "anything"})
+        finally:
+            server.close()
+
+        assert "error" in result, result
+        assert result["error_code"] == "BRANDING_INVALID", result
+        assert str(branding_dir) not in result["error"], result
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

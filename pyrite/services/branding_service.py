@@ -162,6 +162,19 @@ class BrandingService:
 
         meta = data.get("meta") or {}
         mcp = data.get("mcp") or {}
+        # The top-level check above only covers the outermost document --
+        # `meta: [x]` or `mcp: [x]` still parses as valid YAML with `data` a
+        # dict, so `.get()` on a nested key returns a list, and the reads
+        # below (`meta.get(...)`, `mcp.get(...)`) would raise a raw
+        # AttributeError instead of the named error (#445 cold read).
+        if not isinstance(meta, dict):
+            raise BrandingInvalidError(
+                f"{yaml_path}: 'meta' must be a YAML mapping, got {type(meta).__name__}"
+            )
+        if not isinstance(mcp, dict):
+            raise BrandingInvalidError(
+                f"{yaml_path}: 'mcp' must be a YAML mapping, got {type(mcp).__name__}"
+            )
 
         name = data.get("name", DEFAULT_BRAND_NAME)
         mcp_brand = mcp.get("agent_prompt_brand") or name

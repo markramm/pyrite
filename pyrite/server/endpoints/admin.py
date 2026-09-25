@@ -225,9 +225,12 @@ async def render_site_cache(
     try:
         svc = await asyncio.to_thread(SiteCacheService, config, db)
     except BrandingInvalidError as e:
+        # Logged detail names the real path; the response body carries only
+        # the exception's public_message (#377 pattern; #445 cold read --
+        # str(e) here previously leaked the branding.yaml path over HTTP).
         logger.warning("Site cache render refused: invalid branding.yaml: %s", e)
         raise HTTPException(
-            status_code=409, detail={"code": "BRANDING_INVALID", "message": str(e)}
+            status_code=409, detail={"code": "BRANDING_INVALID", "message": e.public_message}
         ) from None
     stats = await asyncio.to_thread(svc.render_all)
     return {"rendered": True, **stats}

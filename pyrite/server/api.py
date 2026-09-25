@@ -26,6 +26,7 @@ from slowapi.util import get_remote_address
 
 from ..config import ConfigSaveRefusedError, PyriteConfig, Settings, load_config
 from ..exceptions import (
+    BrandingInvalidError,
     ConfigError,
     EntryNotFoundError,
     FrontmatterError,
@@ -87,6 +88,14 @@ _PYRITE_ERROR_STATUS: list[tuple[type[PyriteError], int, str]] = [
     (ConfigError, 409, "CONFIG_CONFLICT"),
     (PluginError, 502, "PLUGIN_ERROR"),
     (StorageError, 500, "STORAGE_ERROR"),
+    # 500, not 409: this row governs the anonymous, always-public GET routes
+    # that build a BrandingService as a side effect of serving content
+    # (/config/branding, /sitemap.xml, /robots.txt) -- a broken branding.yaml
+    # there is a server misconfiguration, not something wrong with the
+    # caller's request. POST /api/site/render catches BrandingInvalidError
+    # itself before this handler ever sees it and answers 409 (#408); this
+    # row is unreached from that path.
+    (BrandingInvalidError, 500, "BRANDING_INVALID"),
 ]
 
 
@@ -115,11 +124,17 @@ def register_pyrite_exception_handler(app: FastAPI) -> None:
             # logged no traceback (#431).
             logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=exc)
         message = str(exc)
-        if isinstance(exc, ConfigSaveRefusedError):
-            # The detail names the absolute config path and the KBs in the
-            # registry: the operator's log, not the response (#377).
+        public_message = getattr(exc, "public_message", None)
+        if public_message is not None:
+            # `str(exc)` may name a real filesystem path or other operator
+            # detail unsafe to return over HTTP (#377's ConfigSaveRefusedError
+            # pattern, extended to any PyriteError subclass that opts in via
+            # a `public_message` class attribute -- e.g. BrandingInvalidError,
+            # #445's cold read). Logged at the exception's own severity
+            # already happened above for 5xx; a sub-500 refusal like this one
+            # is worth a line too, since `message` below won't carry it.
             logger.warning("%s", exc)
-            message = exc.public_message
+            message = public_message
         return JSONResponse(status_code=status_code, content={"code": code, "message": message})
 
     app.add_exception_handler(PyriteError, _handler)

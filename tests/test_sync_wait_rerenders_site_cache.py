@@ -130,8 +130,6 @@ class TestSyncWaitRerendersSiteCache:
         app = create_app(config=config)
         _write_entry(config.get_kb("public-kb").path)
 
-        real_render_entry = site_cache_module.SiteCacheService._render_entry
-
         def _boom(self, *args, **kwargs):
             raise RuntimeError("boom: entry render exploded")
 
@@ -145,7 +143,6 @@ class TestSyncWaitRerendersSiteCache:
             # that failed -- so `rendered` stays true; `errors` carries the count.
             assert body["site_cache"]["rendered"] is True, body
             assert body["site_cache"]["errors"] == 1, body
-        assert real_render_entry  # sanity: the patched attribute existed
 
     def test_sync_wait_true_does_not_hide_a_real_render_failure(
         self, tmp_path, monkeypatch, caplog

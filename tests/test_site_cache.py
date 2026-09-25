@@ -1365,7 +1365,11 @@ Body.
         """A half-edited ``branding.yaml`` is an operator mistake on an
         explicit, nothing-already-committed render call -- it must not
         report a generic 200 (that would hide the mistake) nor 500 (the
-        original bug); it answers 409 with a stable error code."""
+        original bug); it answers 409 with a stable error code, and the
+        envelope is the exact shape the endpoint returns (an ``HTTPException``
+        detail, not the central ``PyriteError`` handler's flat body) --
+        pinned rather than accepting either shape, so a change to either
+        one is caught (#445 cold read)."""
         fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
         from fastapi.testclient import TestClient
 
@@ -1388,5 +1392,172 @@ Body.
 
         assert resp.status_code == 409, resp.text
         body = resp.json()
-        detail = body.get("detail", body)
-        assert detail.get("code") == "BRANDING_INVALID", body
+        assert set(body.keys()) == {"detail"}, body
+        assert set(body["detail"].keys()) == {"code", "message"}, body
+        assert body["detail"]["code"] == "BRANDING_INVALID", body
+        message = body["detail"]["message"]
+        assert str(branding) not in message, (
+            f"the branding directory path must not appear in the public response: {message}"
+        )
+
+    def test_broken_branding_yaml_syntax_error_answers_409_branding_invalid(self, tmp_path):
+        """A YAML syntax error (not just 'valid YAML, wrong shape') takes the
+        same 409 path -- ``load_yaml_file`` raising is caught too, not just a
+        parsed-but-wrong-type result."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("name: Acme\ntagline: [unclosed\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/site/render")
+
+        assert resp.status_code == 409, resp.text
+        body = resp.json()
+        assert body["detail"]["code"] == "BRANDING_INVALID", body
+        message = body["detail"]["message"]
+        assert str(branding) not in message, (
+            f"the branding directory path must not appear in the public response: {message}"
+        )
+
+
+class TestBrokenBrandingDoesNotLeakOnPublicRoutes:
+    """#445 cold read: a broken ``branding.yaml`` must not turn anonymous,
+    always-public GET routes into a path-and-parser-text leak. Before #408's
+    fix these routes returned a bare 500 ("Internal Server Error"); adding
+    ``BrandingInvalidError`` without a row in ``_PYRITE_ERROR_STATUS`` made
+    the central handler fall through to ``str(exc)``, which is the absolute
+    branding.yaml path plus the parser's own text.
+    """
+
+    def _config_with_broken_branding(self, tmp_path, yaml_text):
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        (kb_path / "entry.md").write_text(
+            "---\nid: entry\ntitle: An Entry\nentry_type: note\n---\n\nBody.\n"
+        )
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(yaml_text)
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        return config, branding
+
+    @pytest.mark.control(
+        reason=(
+            "verify-red diffs against the PR's merge base, before #408 existed at "
+            "all -- there these routes hit FastAPI's default unhandled-exception "
+            "handler (a bare 'Internal Server Error', no message body), so the "
+            "leak assertions trivially hold there too. The bug this guards was "
+            "introduced BY #408 (BrandingInvalidError with no _PYRITE_ERROR_STATUS "
+            "row, so the central handler fell through to str(exc)) and fixed in "
+            "this same cold-read round -- confirmed red by mutation-testing the "
+            "_PYRITE_ERROR_STATUS row and the public_message generalization in "
+            "pyrite/server/api.py (see the PR report)."
+        )
+    )
+    @pytest.mark.parametrize("route", ["/config/branding", "/sitemap.xml", "/robots.txt"])
+    def test_public_route_does_not_leak_path_or_parser_text(self, tmp_path, route):
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        config, branding = self._config_with_broken_branding(tmp_path, "- a list, not a mapping\n")
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get(route)
+
+        assert resp.status_code >= 400, resp.text
+        # Naming the filename is fine (the public_message says "fix
+        # branding.yaml" so an operator knows what to look at); the
+        # filesystem path and the parser's own type/error text are not.
+        assert str(branding) not in resp.text, (
+            f"{route} leaked the branding directory path: {resp.text}"
+        )
+        assert "CommentedSeq" not in resp.text, (
+            f"{route} leaked the raw parser/type name: {resp.text}"
+        )
+
+    def test_config_branding_route_answers_a_named_code_not_a_bare_500(self, tmp_path):
+        """The route still fails closed (it cannot serve real branding), but
+        with the same ``{"code", "message"}`` shape every other PyriteError
+        gets from the central handler -- not FastAPI's generic
+        'Internal Server Error' text and not a traceback."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        config, _branding = self._config_with_broken_branding(tmp_path, "- a list, not a mapping\n")
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/config/branding")
+
+        body = resp.json()
+        assert body.get("code") == "BRANDING_INVALID", body
+
+
+class TestBrandingNestedMappingValidation:
+    """#445 cold read: ``meta:`` and ``mcp:`` are read with ``.get()``
+    immediately after the top-level mapping check, so ``meta: [x]`` or
+    ``mcp: [x]`` (a YAML list where a mapping is expected) still raised a
+    raw ``AttributeError`` -- the top-level ``isinstance(data, dict)`` guard
+    only covers the outermost document.
+    """
+
+    @pytest.mark.parametrize("bad_key", ["meta", "mcp"])
+    def test_nested_non_mapping_is_a_branding_invalid_error_not_an_attributeerror(
+        self, tmp_path, bad_key
+    ):
+        from pyrite.exceptions import BrandingInvalidError
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(f"name: Acme\n{bad_key}: [x]\n")
+
+        svc = BrandingService(branding)
+        with pytest.raises(BrandingInvalidError):
+            svc.get()
+
+    @pytest.mark.parametrize("bad_key", ["meta", "mcp"])
+    def test_render_endpoint_answers_409_for_a_nested_non_mapping(self, tmp_path, bad_key):
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(f"name: Acme\n{bad_key}: [x]\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/site/render")
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["detail"]["code"] == "BRANDING_INVALID", resp.text
