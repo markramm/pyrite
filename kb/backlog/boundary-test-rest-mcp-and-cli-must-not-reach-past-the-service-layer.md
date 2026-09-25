@@ -42,3 +42,11 @@ offenders in an explicit allowlist that can only shrink.
 - [ ] Allowlist is shorter than the list above.
 
 Source: 2026-09-17 project review (three read-only audits: docs/contributor, public-repo, code-health). Related: [[split-mcp-server-module]], [[split-entries-endpoint]], [[mcp-rest-tool-parity]].
+
+## Groom 2026-09-25
+
+**This item is now #380** (0.26: surfaces stop reaching past services, with a boundary test that only ratchets down). #380 carries this item's acceptance and adds two things:
+- `Depends(get_db)` appears only in the `api.py` providers, and `_raw_conn` appears nowhere under `pyrite/server`, `pyrite/cli` or `pyrite/ui`.
+- The AI-settings precedence (review 2.7): only REST applies the DB override (`api.py:234-237`), while MCP, the CLI and `search_service.py:54` build `LLMService` from config alone. The new `SettingsService` owns that rule. The `api.py` lines themselves move after the patch release.
+
+Dispatch from #380's groom comment, and close this item with it.

@@ -7,11 +7,14 @@ tags:
 - refactor
 importance: 5
 kind: tech_debt
-status: proposed
+status: wont_do
 priority: medium
 effort: M
 rank: 0
 ---
+
+## Superseded 2026-09-25
+The maintainer closed this approach (PR #374). The in-place revert-and-restore design is replaced by `test-evidence-diff-coverage-and-red-green-on-a-throwaway-tree`, which never modifies the developer's tree, so there is nothing to restore.
 
 ## Problem
 Two mechanisms own one invariant: `scripts/verify-red.sh` reverts the implementation files and restores them in an EXIT trap (`git checkout ... || true`), and `scripts/verify_red_ci.py` (the CI driver, #357) runs a second, content-based restore as a fallback. Every disagreement between them is a data-loss or wrong-verdict path: #357 took three fix-at-review rounds, each introducing the next defect (retro 10). #368 lists what is still open: `unittest.mock` patch forms counted as strong reds, a restore that stops at the first refused file, checkout conversion (`eol=crlf`/autocrlf) defeating the byte compare, an interrupt that can strand `.git/index.lock`, index-only state.

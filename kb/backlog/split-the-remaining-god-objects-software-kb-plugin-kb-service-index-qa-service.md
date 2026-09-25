@@ -36,3 +36,7 @@ line. Test markers are inconsistent (`cli` 99 uses, `api` 9, `mcp` 1), and
 collection emits a `PytestCollectionWarning` for `test_app`.
 
 Source: 2026-09-17 project review (three read-only audits: docs/contributor, public-repo, code-health). Related: [[split-mcp-server-module]], [[split-entries-endpoint]].
+
+## Groom 2026-09-25
+
+**Superseded by #385** (0.27: split the largest modules along their seams). #385 lists eight packages, each gated on the theme that settles its file: (a) `mcp_server.py` after #378/#380; (b) `entries.py` after #378/#380; (c) `kb_service.py` after #378/#379; (d) `api.py` after #383; (e) `config.py` after #382; (f) `cli/__init__.py`; (g) `storage/index.py` after the index-sync fixes (#6, #8, #47); (h) the software-kb plugin after #384. [[split-mcp-server-module]] and [[split-entries-endpoint]] become packages (a) and (b). Close this item when #385's packages have landed.

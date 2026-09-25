@@ -51,3 +51,7 @@ guard the `results =`/`loading =` assignment in
   resolving second, asserting the store ends up showing the SECOND
   call's results, not the first's.
 - No behavior change for the common case (single in-flight search).
+
+## Groom 2026-09-25
+
+**Migrated to GitHub as #364**, and an outside contributor's PR is open (#367, `fix(web): ignore stale search responses`). Close this item when #367 merges.
