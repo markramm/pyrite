@@ -29,7 +29,7 @@ config file at all.
    default install, `$PYRITE_CONFIG_DIR/index.db` when that is set
 
 Cloned repos follow the same order (`$PYRITE_DATA_DIR/repos`, then `repos/`
-beside `config.yaml`). In 0.25.1 and earlier, setting only `PYRITE_CONFIG_DIR` left the
+beside `config.yaml`). In 0.25.2 and earlier, setting only `PYRITE_CONFIG_DIR` left the
 index at `~/.pyrite/index.db`, so a sandboxed run still wrote your real index.
 
 `workspace_path` is neither read from nor written to `config.yaml`, and
