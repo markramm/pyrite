@@ -197,6 +197,30 @@ class TestSamePathReusedByAnotherEntry:
         )
         assert repo.svc.get_entry_at_version("p1", "k", c_s1) is None
 
+    @pytest.mark.parametrize("how", ["revert", "checkout"])
+    def test_a_restored_entry_keeps_its_own_history(self, repo, how):
+        """Add, edit, delete, then restore the same entry. git reports the
+        restore as an add, but the path's previous life is this entry's own
+        (same id:), so its earlier commits stay in its history. The delete
+        commit, where the file does not exist, is not a version."""
+        repo.write("kb/n.md", _note("e1", "N", "first"))
+        c1 = repo.commit("add")
+        repo.write("kb/n.md", _note("e1", "N", "second"))
+        c2 = repo.commit("edit")
+        (repo.kb / "n.md").unlink()
+        c3 = repo.commit("delete")
+        if how == "revert":
+            _git(repo.root, "revert", "--no-edit", c3)
+        else:
+            _git(repo.root, "checkout", c2, "--", "kb/n.md")
+            _git(repo.root, "commit", "-q", "-m", "restore")
+        c4 = _git(repo.root, "rev-parse", "HEAD")
+        repo.index()
+        repo.attribute()
+        # A set: the commits share a timestamp, so the list order is not the point.
+        assert {h for h, _ in repo.versions("e1")} == {c4, c2, c1}
+        assert "first" in repo.svc.get_entry_at_version("e1", "k", c1)
+
     @pytest.mark.control(
         reason="Guards against an over-strict fix: dev serves this too. An "
         "entry with no explicit id: derives it from its title, so a title "
