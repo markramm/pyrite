@@ -7,7 +7,7 @@ tags:
 - auth
 importance: 5
 kind: bug
-status: in_progress
+status: done
 priority: medium
 assignee: agent:pyrite-worker
 effort: S
