@@ -24,8 +24,12 @@ change stopped seeing. You read; you run; you do not edit.
 1. Read every hunk of the diff. Note the public surfaces it touches: CLI
    flags, REST fields, MCP tool arguments, file formats, config keys.
 2. For each behaviour change, ask: what input makes this wrong? Try it —
-   run the suite in the worktree's `.venv`, run the new tests with the
-   implementation stashed, write a throwaway probe if a claim needs one.
+   run the new tests with the implementation stashed, run the targeted tests
+   a specific claim rests on, write a throwaway probe if a claim needs one.
+   Do not re-run a suite on a tree CI or a pass stamp already passed (the PR's
+   `gh pr checks`, or `scripts/test-affected --run` printing `already passed
+   on tree ...`): read that result. The same tests on the same code say
+   nothing new and cost the loaded machine a suite slot.
 3. Read the tests as code: do they assert behaviour or the implementation?
    Would they fail if the fix were reverted? Is the "happy path" the only
    path?

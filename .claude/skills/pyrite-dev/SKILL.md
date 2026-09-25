@@ -145,6 +145,15 @@ request is the authority, so **open a draft PR right after your first push**
 (`gh pr create --draft --base dev --fill`, `Fixes #N` in the body) and let it
 run while you keep working; every later push re-runs it (#356).
 
+**Test each tree once.** Run `scripts/test-affected --run` once, in the
+foreground, on a committed tree; a pass stamps that tree and the pre-push
+hook reuses it instead of running the same tests on the same code again
+(about 45 minutes under load). After a failure that looks load-caused, re-run
+only the failures with `scripts/test-affected --run -- --lf`, not the whole
+selection; a `--lf` pass does not stamp, so the push then runs the selection
+once. Never start a second run while one is going: two suites on a loaded
+machine make both slower and the failures load, not signal.
+
 The suite runs in parallel. A test that passes alone and fails under
 `-n auto` is a bug in that test (shared state, a fixed timeout, an unclosed
 database), not a reason to run serially.

@@ -45,6 +45,10 @@ code nobody had pushed).
       by review; locally, `scripts/test-affected --run` on the head is enough (#356: full local suites from
       several worktrees at once filled the disk and pushed load past 25). Run the full suite here only to
       reproduce a CI failure
+- [ ] test each tree once: do not re-run a suite on a tree CI or a pass stamp already passed -- read the
+      result (`gh pr checks N`; `scripts/test-affected --run` answers `already passed on tree <sha>` and
+      exits in a second when the worker's run stamped that tree). Run only targeted tests for a specific
+      claim or probe (`pytest <file>::<test>`), never a second copy of a suite that is already going
 - [ ] the new tests notice the change: read the `verify-red` job's summary line on the PR's latest push
       (`gh run view <id>` / the Checks tab; `test-evidence.json` in the run's artifacts) and do not re-run it
       locally. The job (`scripts/verify_red_ci.py`) runs the PR's new and edited tests on a throwaway
