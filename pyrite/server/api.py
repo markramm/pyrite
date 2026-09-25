@@ -52,6 +52,7 @@ from ..services.llm_service import LLMService
 from ..services.llm_usage_service import LLMUsageService
 from ..services.review_service import ReviewService
 from ..services.search_service import SearchService
+from ..services.settings_service import SettingsService
 from ..services.starred_service import StarredService
 from ..services.task_service import TaskService
 from ..services.version_service import VersionService
@@ -410,6 +411,13 @@ def get_starred_service(
 ) -> StarredService:
     """Get StarredService instance via DI."""
     return StarredService(db, kb_service)
+
+
+def get_settings_service(
+    db: PyriteDB = Depends(get_db),
+) -> SettingsService:
+    """Get SettingsService instance via DI."""
+    return SettingsService(db)
 
 
 def invalidate_llm_service():
