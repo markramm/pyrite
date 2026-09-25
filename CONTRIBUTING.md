@@ -272,9 +272,11 @@ uv pip install --python .venv/bin/python -e ".[all,dev]"
 | pre-push | `scripts/test-affected --run`: core + affected tests on `PYRITE_PUSH_WORKERS` (default 4) workers, only when the push touches code, tests, scripts or test config (a docs- or KB-only push skips it); `PYRITE_PUSH_FULL=1` runs the full suite | Seconds to minutes, depending on what changed |
 
 CI runs the same checks plus the full Python matrix, Postgres, the frontend
-build and Playwright. `--no-verify` is for a documented emergency, not for a
-red test you did not write; if a test you did not touch fails, say so in the PR
-and we will look at it together.
+build and Playwright, so the pre-push run does not have to be perfect. If it
+fails in a test your change does not touch, re-run that test alone
+(`scripts/test-affected --run -- --lf`); if it passes, push with `--no-verify`
+and say so in the PR, and CI will decide. Name the test in the PR; if CI fails it too, it is a real failure your change caused, even in a test you did not touch. A failure in a test your change
+touches is a real failure: fix it.
 
 **Claiming an issue:** before you spend more than an hour on an issue, say so
 on the issue: two or three lines on how you'll fix it and what test proves

@@ -14,15 +14,15 @@ it (#111). Before reading a diff: `gh pr view N --json labels`; if
 redispatch it, or stop reviewing it. A label older than an hour with no
 comment from its owner is stale: take it over and say so on the PR.
 
-**A red pre-push during a rebase is a stop, not a bypass.** The conductor
-rebases branches while workers are editing `tests/` in sibling worktrees,
-which is exactly when the shared pre-push suite is flaky (#112: a teardown
-race, then an xdist collection mismatch). Do not `--no-verify`; the
-permission layer refuses it for a reason. Re-run once; if it is still red,
-say which test and hand the branch back to its worker with the rebase
-undone (`git rebase --abort` or `git reset --hard origin/<branch>`), or
-wait for the sibling to finish. A conductor that pushes through a red
-pre-push has turned the value chain's first gate off for itself.
+**A red pre-push is information, not a wall.** The local run is the first of
+several gates: PR CI, the merge queue's full matrix on the exact commit, the
+push to `dev`, `main` and review all come after it, so it does not have to be
+perfect (maintainer, 2026-09-25). A failure in a test the change touches is
+real: hand it back to the worker. A failure in a test it does not touch --
+common while sibling worktrees run suites (#112) -- is re-run alone; if it
+passes alone, push with `--no-verify` and say so on the PR, and let CI decide.
+File an issue only if the same test fails that way again. Name the skipped test in the PR, so a reviewer sees it and a repeat is visible. If PR CI or the merge queue then fails the same test, it is a real failure the change caused -- a test the change never touched can still be broken by it (2026-09-25: a module reload in one test broke an unrelated one only after the batch's change) -- and it goes back to the worker. Do not spend a
+worker round making a laptop run pristine.
 
 In **your own review worktree** on the pushed head — never the worker's
 (`scripts/new-worktree.sh review/<slug> origin/<branch>`; #119). First:
