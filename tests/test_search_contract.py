@@ -142,6 +142,9 @@ class TestLowercaseOperatorsArePlainWords:
         assert '"pre-push"' in sanitized
         _fts_accepts(sanitized)
 
+    @pytest.mark.control(
+        reason="uppercase operators pass through on dev too; pins that the case-sensitive check keeps them"
+    )
     @pytest.mark.parametrize("op", ["AND", "OR", "NOT"])
     def test_an_uppercase_operator_still_passes_through(self, op):
         query = f'alex {op} "not-here"'
@@ -198,6 +201,9 @@ class TestBuildSuggestQuery:
         query = LinkDiscoveryService.build_suggest_query({"title": "US IT policy"})
         assert query == '"US" OR "IT" OR "policy"'
 
+    @pytest.mark.control(
+        reason="unchanged behaviour: single characters were already dropped (by the old <=2 rule)"
+    )
     def test_single_letters_are_still_dropped(self):
         assert LinkDiscoveryService.build_suggest_query({"title": "Q&A"}) == ""
 
@@ -250,7 +256,19 @@ class TestChatRetrieval:
         assert mock_svc.search.call_args.kwargs["query"].count(f'"{word}"') == 1
 
     @pytest.mark.parametrize(
-        ("message", "word"), [(NUMBERED, "second"), ("thanks :)", "thanks")], ids=["clip", "smile"]
+        ("message", "word"),
+        [
+            pytest.param(NUMBERED, "second", id="clip"),
+            pytest.param(
+                "thanks :)",
+                "thanks",
+                id="smile",
+                marks=pytest.mark.control(
+                    reason="dev's sanitizer quoted ':)' and FTS5 dropped it, so this "
+                    "retrieved on dev too; the search-query test above is its red case"
+                ),
+            ),
+        ],
     )
     def test_sources_come_back_from_a_kb_holding_the_words(self, chat_env, message, word):
         from pyrite.services.kb_service import KBService
@@ -291,6 +309,9 @@ class TestSemanticLegText:
         svc.search('"border" OR "policy"', semantic_query="border policy", mode="semantic")
         assert fake_embeddings == ["border policy"]
 
+    @pytest.mark.control(
+        reason="the default is unchanged: without semantic_query both legs get the query, as on dev"
+    )
     def test_without_it_both_legs_get_the_query(self, indexed_test_env, fake_embeddings):
         SearchService(indexed_test_env["db"]).search("border policy", mode="hybrid")
         assert fake_embeddings == ["border policy"]
@@ -322,6 +343,9 @@ class TestSemanticLegText:
         assert len(fake_embeddings[0]) <= MAX_SEARCH_QUERY_LENGTH
         assert fake_embeddings[0].startswith("1) first thing 2) second thing")
 
+    @pytest.mark.control(
+        reason="semantic mode already embedded title+summary on dev; pins that the keyword/semantic split keeps it (mutation G11b)"
+    )
     def test_discover_neighbors_semantic_embeds_title_and_summary(
         self, indexed_test_env, fake_embeddings
     ):
@@ -395,46 +419,39 @@ class TestClassification:
             SearchService(db).search("hello")
         assert excinfo.value.retryable is False
 
-    def test_a_real_lock_is_retryable(self, indexed_test_env, tmp_path, monkeypatch):
-        db = indexed_test_env["db"]
-        monkeypatch.setattr(db, "search", _raise(_real_locked_error(tmp_path)))
-        with pytest.raises(StorageError) as excinfo:
-            SearchService(db).search("hello")
-        assert excinfo.value.retryable is True
+    # Retryability is judged on MCP's envelope, the surface that reports it.
+
+    def test_a_real_lock_is_retryable(self, mcp_server, tmp_path, monkeypatch):
+        assert _mcp_retryable(mcp_server, monkeypatch, _real_locked_error(tmp_path)) is True
 
     @pytest.mark.parametrize(
         "text", ["database is locked", "database table is locked", "database is busy"]
     )
-    def test_a_lock_message_without_an_error_code_is_retryable(
-        self, indexed_test_env, monkeypatch, text
-    ):
+    def test_a_lock_message_without_an_error_code_is_retryable(self, mcp_server, monkeypatch, text):
         """A driver or wrapper that loses ``sqlite_errorcode`` still keeps the text."""
-        db = indexed_test_env["db"]
-        monkeypatch.setattr(db, "search", _raise(sqlite3.OperationalError(text)))
-        with pytest.raises(StorageError) as excinfo:
-            SearchService(db).search("hello")
-        assert excinfo.value.retryable is True
+        error = sqlite3.OperationalError(text)
+        assert _mcp_retryable(mcp_server, monkeypatch, error) is True
 
-    def test_an_extended_busy_code_is_retryable(self):
-        from pyrite.services.search_service import storage_error_from
-
+    def test_an_extended_busy_code_is_retryable(self, mcp_server, monkeypatch):
         error = sqlite3.OperationalError("cannot start a transaction")
         error.sqlite_errorcode = sqlite3.SQLITE_BUSY_SNAPSHOT
-        assert storage_error_from(error).retryable is True
+        assert _mcp_retryable(mcp_server, monkeypatch, error) is True
 
-    def test_the_error_code_wins_over_the_text(self):
-        from pyrite.services.search_service import storage_error_from
-
+    @pytest.mark.control(
+        reason="nothing is retryable on dev; pins that sqlite_errorcode, when "
+        "present, decides over lock-like text (mutation G4c)"
+    )
+    def test_the_error_code_wins_over_the_text(self, mcp_server, monkeypatch):
         error = sqlite3.OperationalError("no such table: database is locked")
         error.sqlite_errorcode = sqlite3.SQLITE_ERROR
-        assert storage_error_from(error).retryable is False
+        assert _mcp_retryable(mcp_server, monkeypatch, error) is False
 
-    def test_a_missing_table_is_not_retryable(self, indexed_test_env, monkeypatch):
-        db = indexed_test_env["db"]
-        monkeypatch.setattr(db, "search", _raise(_real_missing_table_error()))
-        with pytest.raises(StorageError) as excinfo:
-            SearchService(db).search("hello")
-        assert excinfo.value.retryable is False
+    @pytest.mark.control(
+        reason="nothing is retryable on dev; pins that only a lock becomes "
+        "retryable -- the earlier all-StorageError-retryable attempt was reverted"
+    )
+    def test_a_missing_table_is_not_retryable(self, mcp_server, monkeypatch):
+        assert _mcp_retryable(mcp_server, monkeypatch, _real_missing_table_error()) is False
 
     def test_a_semantic_leg_failure_is_a_storage_error(self, indexed_test_env, monkeypatch):
         from pyrite.services.embedding_service import EmbeddingService
@@ -452,12 +469,19 @@ class TestClassification:
         )
         with pytest.raises(StorageError) as excinfo:
             SearchService(indexed_test_env["db"]).search("hello", mode="hybrid")
-        assert excinfo.value.retryable is True
+        assert "database is locked" in str(excinfo.value)
 
 
 # ---------------------------------------------------------------------------
 # 6. Surfaces: REST body and log, MCP envelope and log
 # ---------------------------------------------------------------------------
+
+
+def _mcp_retryable(server, monkeypatch, error) -> bool:
+    monkeypatch.setattr(server.db, "search", _raise(error))
+    result = server._dispatch_tool("kb_search", {"query": "hello", "mode": "keyword"})
+    assert result["error_code"] == "REQUEST_REFUSED", result
+    return result["retryable"]
 
 
 def _error_records(caplog):
@@ -540,7 +564,14 @@ class TestMcpContract:
         ("query", "code"),
         [
             ('x AND "a.b":y', "QUERY_SYNTAX"),
-            ("x" * (MAX_SEARCH_QUERY_LENGTH + 1), "QUERY_TOO_LONG"),
+            pytest.param(
+                "x" * (MAX_SEARCH_QUERY_LENGTH + 1),
+                "QUERY_TOO_LONG",
+                marks=pytest.mark.control(
+                    reason="dev logged no refusal at all; pins that only a StorageError "
+                    "is logged by the dispatcher (mutation G9c)"
+                ),
+            ),
         ],
         ids=["syntax", "too-long"],
     )

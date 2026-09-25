@@ -309,6 +309,7 @@ class TestAISuggestLinks:
         )
         assert resp.status_code == 404
 
+    @pytest.mark.control(reason="pre-existing; only its docstring changed, for #431's word rule")
     def test_suggest_links_empty_title_skips_search(self, ai_env):
         """A title with no word to search on (build_suggest_query drops single
         characters and lowercase stop words, and drops a whole term that would
@@ -341,6 +342,7 @@ class TestAISuggestLinks:
         assert resp.json()["suggestions"] == []
         mock_svc.search.assert_not_called()
 
+    @pytest.mark.control(reason="pre-existing; only its docstring changed, for #431's word rule")
     def test_suggest_links_short_title_skips_search(self, ai_env):
         """A title of single characters (dropped by build_suggest_query) also
         has nothing to search.
