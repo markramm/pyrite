@@ -148,7 +148,7 @@ def build_or_query(text: str, extra_terms: list[str] | tuple[str, ...] = ()) -> 
     text's words, each double-quoted so FTS5 reads it as a literal (never an
     operator or a ``column:`` filter), OR-joined so an entry sharing any of
     them matches and FTS5 ranks by overlap. ``extra_terms`` (tags) are quoted
-    and added as given.
+    and added whole, with any NUL removed.
 
     Words are split on non-word characters. Single characters are dropped, and
     so are lowercase stop words (``_STOP_WORDS``); a two-letter word such as
@@ -162,7 +162,9 @@ def build_or_query(text: str, extra_terms: list[str] | tuple[str, ...] = ()) -> 
         for w in re.split(r"\W+", text or "")
         if len(w) > 1 and not (w.lower() in _STOP_WORDS and not w.isupper())
     ]
-    tokens.extend(t for t in extra_terms if t)
+    # A NUL ends FTS5's quoted string early ("unterminated string"), and the
+    # quoting below is the whole guarantee, so strip it from terms taken whole.
+    tokens.extend(t.replace("\x00", "") for t in extra_terms if t and t.replace("\x00", ""))
     seen: set[str] = set()
     query = ""
     for token in tokens:

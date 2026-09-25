@@ -153,7 +153,10 @@ class LinkDiscoveryService:
         keyword_query = self.build_suggest_query({"title": title, "tags": tags})
         semantic_text = ""
         if mode in ("semantic", "hybrid"):
-            semantic_text = clip_semantic_text(" ".join(p for p in (title, summary[:200]) if p))
+            parts = [p for p in (title, summary[:200]) if p] or [t for t in tags or [] if t]
+            # With no title or summary, the tags are the text -- as words, not
+            # the OR-joined keyword query.
+            semantic_text = clip_semantic_text(" ".join(parts))
 
         # Fall back to keyword if semantic unavailable
         actual_mode = mode

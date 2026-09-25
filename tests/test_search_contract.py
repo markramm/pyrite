@@ -204,6 +204,16 @@ class TestBuildSuggestQuery:
     @pytest.mark.control(
         reason="unchanged behaviour: single characters were already dropped (by the old <=2 rule)"
     )
+    def test_a_nul_in_a_tag_cannot_break_the_query(self):
+        """FTS5 ends a quoted string at a NUL, so a NUL inside a quoted tag is
+        "unterminated string" (#437 cold read)."""
+        query = LinkDiscoveryService.build_suggest_query({"title": "", "tags": ["a\x00b"]})
+        assert "\x00" not in query
+        _fts_accepts(query)
+
+    def test_a_tag_that_is_only_nul_adds_nothing(self):
+        assert LinkDiscoveryService.build_suggest_query({"title": "", "tags": ["\x00"]}) == ""
+
     def test_single_letters_are_still_dropped(self):
         assert LinkDiscoveryService.build_suggest_query({"title": "Q&A"}) == ""
 
@@ -279,6 +289,21 @@ class TestChatRetrieval:
         sources = _chat(chat_env["client"], message)
         assert f"note-{word}" in [s["id"] for s in sources]
 
+    def test_a_storage_fault_before_the_keyword_retry_is_logged(self, chat_env, caplog):
+        """The keyword retry recovers, but the fault it recovered from is the
+        server's problem and must not vanish (#437 cold read)."""
+        from pyrite.server.api import get_search_service
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = [StorageError("Search failed: database is locked"), []]
+        chat_env["client"].app.dependency_overrides[get_search_service] = lambda: mock_svc
+        with caplog.at_level(logging.WARNING):
+            _chat(chat_env["client"], "border policy")
+        assert mock_svc.search.call_count == 2
+        warned = [r for r in caplog.records if r.levelno == logging.WARNING and r.exc_info]
+        assert len(warned) == 1, [r.getMessage() for r in caplog.records]
+        assert isinstance(warned[0].exc_info[1], StorageError)
+
     def test_a_message_that_is_invalid_fts5_still_retrieves(self, chat_env, caplog):
         from pyrite.services.kb_service import KBService
 
@@ -324,6 +349,23 @@ class TestSemanticLegText:
                 "x", semantic_query="y" * (MAX_SEARCH_QUERY_LENGTH + 1), mode="hybrid"
             )
 
+    def test_suggest_links_logs_a_fault_before_the_keyword_retry(self, ai_env_real, caplog):
+        from pyrite.server.api import get_search_service
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = [StorageError("Search failed: database is locked"), []]
+        ai_env_real["client"].app.dependency_overrides[get_search_service] = lambda: mock_svc
+        with caplog.at_level(logging.WARNING):
+            resp = ai_env_real["client"].post(
+                "/api/ai/suggest-links",
+                json={"entry_id": "2025-01-10--test-event-0", "kb_name": "test-events"},
+            )
+        assert resp.status_code == 200, resp.json()
+        assert mock_svc.search.call_count == 2
+        warned = [r for r in caplog.records if r.levelno == logging.WARNING and r.exc_info]
+        assert len(warned) == 1, [r.getMessage() for r in caplog.records]
+        assert isinstance(warned[0].exc_info[1], StorageError)
+
     def test_suggest_links_embeds_the_title(self, ai_env_real, fake_embeddings):
         resp = ai_env_real["client"].post(
             "/api/ai/suggest-links",
@@ -357,6 +399,22 @@ class TestSemanticLegText:
         )
         LinkDiscoveryService(config, db).discover_neighbors("sem", "test-events", mode="semantic")
         assert fake_embeddings == ["Border (policy A summary"]
+
+    def test_discover_neighbors_embeds_tags_as_text_when_there_is_no_title(
+        self, indexed_test_env, fake_embeddings
+    ):
+        """An indexed entry with no title (create_entry refuses one, a file on
+        disk need not) still has tags: the semantic leg embeds them as words,
+        not as the OR-joined keyword query."""
+        from pyrite.services.kb_service import KBService
+
+        config, db = indexed_test_env["config"], indexed_test_env["db"]
+        entry = {"id": "tagged", "title": "", "summary": "", "tags": ["border", "asylum-policy"]}
+        with patch.object(KBService, "get_entry", return_value=entry):
+            LinkDiscoveryService(config, db).discover_neighbors(
+                "tagged", "test-events", mode="hybrid"
+            )
+        assert fake_embeddings == ["border asylum-policy"]
 
     def test_discover_neighbors_hybrid_parses_and_embeds_the_title(
         self, indexed_test_env, fake_embeddings
@@ -470,6 +528,18 @@ class TestClassification:
         with pytest.raises(StorageError) as excinfo:
             SearchService(indexed_test_env["db"]).search("hello", mode="hybrid")
         assert "database is locked" in str(excinfo.value)
+        assert excinfo.value.retryable is True
+
+    def test_a_semantic_leg_lock_is_retryable_on_mcp(self, mcp_server, tmp_path, monkeypatch):
+        """On dev this escaped as a non-PyriteError: INTERNAL, retryable by accident."""
+        from pyrite.services.embedding_service import EmbeddingService
+
+        monkeypatch.setattr(
+            EmbeddingService, "has_embeddings", _raise(_real_locked_error(tmp_path))
+        )
+        result = mcp_server._dispatch_tool("kb_search", {"query": "hello", "mode": "hybrid"})
+        assert result["error_code"] == "REQUEST_REFUSED", result
+        assert result["retryable"] is True
 
 
 # ---------------------------------------------------------------------------

@@ -269,6 +269,11 @@ async def ai_suggest_links(
             # which maps it to 400 QUERY_SYNTAX.
             raise
         except Exception:
+            # Recovered, but not silently: a storage fault here is the
+            # server's problem (#437 cold read).
+            logger.warning(
+                "suggest-links hybrid search failed; retrying keyword-only", exc_info=True
+            )
             related = search_svc.search(
                 query=derived_query,
                 kb_name=req.kb_name,
@@ -386,6 +391,8 @@ async def ai_chat(
                 # rather than failing the request.
                 raise
             except Exception:
+                # Recovered, but not silently (#437 cold read).
+                logger.warning("chat hybrid search failed; retrying keyword-only", exc_info=True)
                 results = search_svc.search(
                     query=derived_query,
                     kb_name=req.kb,
