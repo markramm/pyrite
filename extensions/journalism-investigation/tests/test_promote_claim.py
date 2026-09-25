@@ -123,7 +123,9 @@ class TestPromoteCorroboratedClaim:
         assert "error" in result
         assert "owner" in result["error"] and "asset" in result["error"]
         # Nothing was created
-        assert db.get_entry("x-owns-y-ownership", "test") is None
+        kb_path = setup["config"].knowledge_bases[0].path
+        written = [p for p in kb_path.rglob("*.md") if p.parent.name != "claims"]
+        assert not written, f"an edge was written: {written}"
 
     def test_promote_ownership_partial_endpoint_fields_is_an_error(self, setup):
         """Only one of owner/asset supplied must still be refused, naming the missing one."""
@@ -289,3 +291,41 @@ class TestSourcedFromLink:
         assert len(sourced_from_links) == 1, (
             f"Expected sourced_from link to claim-link-test, got links: {links}"
         )
+
+
+class TestEndpointFieldsAreChecked:
+    """#422 delta cold read: endpoint_fields came straight from an MCP
+    argument into create_entry. Only the edge type's own endpoint names are
+    accepted, each a non-empty string; anything else is a clear refusal and
+    writes nothing."""
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"owner": "a", "asset": "b", "created_by": "x"},  # an extra key
+            {"owner": "a", "asset": "b", "title": "x"},  # collides with a create_entry arg
+            {"owner": {"x": 1}, "asset": ["y"]},  # not strings
+            "owner=a",  # not a mapping
+        ],
+        ids=["extra-key", "colliding-key", "non-string", "not-a-mapping"],
+    )
+    def test_bad_endpoint_fields_are_refused(self, setup, fields):
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+        _create_claim(kb_service, "claim-bad-fields", "X owns Y")
+
+        for dry_run in (True, False):
+            result = promote_claim_to_edge(
+                db=db,
+                kb_name="test",
+                claim_id="claim-bad-fields",
+                edge_type="ownership",
+                kb_service=kb_service,
+                endpoint_fields=fields,
+                dry_run=dry_run,
+            )
+            assert "error" in result, (dry_run, result)
+            assert "keyword argument" not in result["error"], result
+        kb_path = setup["config"].knowledge_bases[0].path
+        written = [p for p in kb_path.rglob("*.md") if p.parent.name != "claims"]
+        assert not written, f"an edge was written: {written}"

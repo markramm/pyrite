@@ -720,6 +720,18 @@ class JournalismInvestigationPlugin:
                         },
                         "endpoint_fields": {
                             "type": "object",
+                            "properties": {
+                                name: {"type": "string"}
+                                for name in (
+                                    "owner",
+                                    "asset",
+                                    "funder",
+                                    "recipient",
+                                    "person",
+                                    "organization",
+                                )
+                            },
+                            "additionalProperties": False,
                             "description": (
                                 "The edge type's own required relationship fields: "
                                 "{owner, asset} for ownership, {funder, recipient} for "

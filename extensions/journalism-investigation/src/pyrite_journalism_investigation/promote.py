@@ -21,6 +21,26 @@ EDGE_TYPE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _endpoint_fields_problem(edge_type: str, endpoint_fields: Any) -> str | None:
+    """Why `endpoint_fields` is unusable, or None. Only the edge type's own
+    endpoint names are accepted, each a string: the value comes straight from
+    an MCP argument and is passed to create_entry, so an extra key could set
+    any other field or collide with create_entry's own arguments."""
+    if not isinstance(endpoint_fields, dict):
+        return "endpoint_fields must be an object of field names to values"
+    allowed = EDGE_TYPE_REQUIRED_FIELDS.get(edge_type, ())
+    extra = sorted(k for k in endpoint_fields if k not in allowed)
+    if extra:
+        return (
+            f"endpoint_fields for '{edge_type}' accepts only {', '.join(allowed)}; "
+            f"not: {', '.join(map(str, extra))}"
+        )
+    not_strings = sorted(k for k, v in endpoint_fields.items() if not isinstance(v, str))
+    if not_strings:
+        return f"endpoint_fields values must be strings: {', '.join(not_strings)}"
+    return None
+
+
 def _missing_endpoint_fields(edge_type: str, endpoint_fields: dict[str, str]) -> list[str]:
     """Required fields for `edge_type` that are absent or empty in `endpoint_fields`."""
     required = EDGE_TYPE_REQUIRED_FIELDS.get(edge_type, ())
@@ -58,7 +78,8 @@ def promote_claim_to_edge(
     Returns:
         Result dict with created entry info, or error dict.
     """
-    endpoint_fields = endpoint_fields or {}
+    if endpoint_fields is None:
+        endpoint_fields = {}
 
     # Validate edge_type
     if edge_type not in VALID_EDGE_TYPES:
@@ -84,9 +105,13 @@ def promote_claim_to_edge(
             )
         }
 
-    # The edge type's own required relationship fields -- checked here, before
-    # dry_run branches, so a dry run reports the same refusal a real promotion
-    # would hit rather than reporting success for a promotion that would fail.
+    # The edge type's own relationship fields -- checked here, before dry_run
+    # branches, so a dry run refuses bad or missing endpoints as a real run
+    # does. A dry run does not run the KB's full schema and plugin validation
+    # (#427), so a real run can still refuse what a dry run showed.
+    problem = _endpoint_fields_problem(edge_type, endpoint_fields)
+    if problem:
+        return {"error": problem}
     missing = _missing_endpoint_fields(edge_type, endpoint_fields)
     if missing:
         required = EDGE_TYPE_REQUIRED_FIELDS[edge_type]
