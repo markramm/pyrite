@@ -34,7 +34,7 @@ Source of truth: `pyrite/utils/errors.py` (`build_error`).
 ## Write refusals (create, import, update)
 
 Every entry write — REST `POST /api/entries`, `PUT`/`PATCH
-/api/entries/{id}`, `POST /api/entries/import`; MCP `kb_create`,
+/api/entries/{id}`, `POST /api/entries/import`, `POST /api/clip`; MCP `kb_create`,
 `kb_update`, `kb_bulk_create`; CLI `pyrite create`, `pyrite update`,
 `pyrite add`, `pyrite import` — goes through one pipeline in `KBService`,
 so the same entry is refused with the same `error_code` on every surface:
@@ -62,8 +62,10 @@ results keep the input order. Each failed item carries `error_code`:
 REST import reports the same pair per item in `error_details`
 (`{"title", "error", "error_code"}`). `pyrite import` prints
 `Failed [CODE]: <title>: <message>` per refused record and exits `1` if any
-record was refused; `--dry-run` prints `Would refuse [CODE]: …` and writes
-nothing.
+record was refused (re-importing a file whose entries exist is refused per
+record, so it exits `1`); `--dry-run` prints `Would refuse [CODE]: …`,
+including for a record whose id an earlier record of the same file would
+create, and writes nothing.
 
 **Warnings.** A write that succeeds may still draw non-blocking schema
 findings (an unknown select value when the KB does not enforce). MCP
@@ -71,11 +73,21 @@ findings (an unknown select value when the KB does not enforce). MCP
 each `kb_bulk_create` result as `warnings`, and REST `POST`/`PUT`/`PATCH
 /api/entries` as `warnings: []` in the response body.
 
-**Update fields (MCP).** `kb_update` applies the fields of the entry's own
-type — its model's fields and the fields its `kb.yaml` declares for the
-type — and ignores the rest, including `id`, `file_path`, `links`,
-`sources`, `created_at` and `updated_at`, so a read result echoed back
-cannot rewrite them.
+**Update fields.** An update applies the fields of the entry's own type —
+its model's fields and every field its `kb.yaml` names for the type
+(`fields`, `optional`, `required`). Fields Pyrite maintains are never set by
+an update: `id`, `file_path`, `kb_name`, `links`, `sources`, `provenance`,
+plus a type's own `managed_fields` (a task's `status_change_log`,
+`evidence`, `agent_context`, `assigned_at`; an ADR's `adr_number`). REST
+`PUT`/`PATCH` and `pyrite update --field` refuse them with
+`VALIDATION_FAILED`; MCP `kb_update` ignores them, and also ignores
+`created_at`/`updated_at`, so a read result echoed back cannot rewrite them.
+A body marked `body_truncated` is refused at any depth of the request on
+every update surface.
+
+**Web client.** The web app sends `allow_undeclared: true` on create,
+`POST /api/clip` and import, so its forms, which offer every core and
+plugin type, keep working in a KB that declares types.
 
 Source of truth: `pyrite/services/kb_service.py` (`_prepare`,
 `bulk_create_entries`, `update`, `updatable_fields`) and the

@@ -1124,14 +1124,21 @@ class PyriteMCPServer:
         Only the entry type's own fields are passed on -- the set comes from
         the type registry and the KB schema (``KBService.updatable_fields``),
         so an agent that echoes a whole read result back cannot rewrite the
-        id, path or timestamps. ADR-0034 marker keys go through too, so the
-        service can refuse a truncated body.
+        id, path, timestamps or a type's managed fields.
         """
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
 
+        # ADR-0034 at any depth, on the raw arguments: the filter below keeps
+        # only the type's fields, which would drop a marker nested under any
+        # other key while keeping the body it marks.
+        try:
+            ensure_not_truncated(args)
+        except ValidationError as e:
+            return _refusal(e)
+
         fields = self.svc.updatable_fields(entry_id, kb_name)
-        updates = {k: v for k, v in args.items() if k in fields or k in MARKER_KEYS}
+        updates = {k: v for k, v in args.items() if k in fields}
 
         try:
             written = self.svc.update(entry_id, kb_name, updates)

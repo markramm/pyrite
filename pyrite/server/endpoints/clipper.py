@@ -4,11 +4,12 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ...exceptions import ClipperBlockedHostError
+from ...exceptions import ClipperBlockedHostError, ValidationError
 from ...services.clipper import ClipperService
 from ...services.kb_service import KBService
 from ..api import get_kb_service, limiter, requires_kb_tier
 from ..schemas import ClipRequest, ClipResponse
+from .write_refusal import refusal_http
 
 logger = logging.getLogger(__name__)
 
@@ -65,26 +66,25 @@ async def clip_url(
     source_header = f"> Clipped from [{result.title}]({result.source_url})\n\n"
     body = source_header + result.body
 
-    # Create the entry
-    from ...schema import generate_entry_id
-
-    entry_id = generate_entry_id(result.title)
-
+    # Create the entry through the write pipeline: the declared-type refusal
+    # (with the caller's override), schema validation and the exists check are
+    # the service's, as for POST /entries (#378).
+    spec = {
+        "entry_type": req.entry_type or "note",
+        "title": result.title,
+        "body": body,
+        "tags": req.tags or [],
+        "metadata": {"source_url": result.source_url, "clipped": True},
+    }
     try:
-        entry = svc.create_entry(
-            req.kb,
-            entry_id,
-            result.title,
-            req.entry_type or "note",
-            body,
-            tags=req.tags or [],
-            metadata={"source_url": result.source_url, "clipped": True},
-        )
+        entry = svc.create(req.kb, spec, allow_undeclared=req.allow_undeclared).entry
+    except ValidationError as e:
+        raise refusal_http(e) from e
     except Exception as e:
         raise HTTPException(
             status_code=400,
             detail={"code": "CREATE_FAILED", "message": f"Entry creation failed: {e}"},
-        )
+        ) from e
 
     # Broadcast WebSocket event
     from ..websocket import broadcast_event

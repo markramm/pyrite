@@ -16,6 +16,7 @@ same spec with the same code. This file pins the rest of the theme:
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -439,3 +440,291 @@ def test_cli_add_validate_only_reports_a_refusal_without_writing(env):
     assert result.exit_code == 1, result.output
     assert "Validation failed" in result.output and "role" in result.output, result.output
     assert _file(env, "checked-person") is None
+
+
+# ---------------------------------------------------------------------------
+# Cold-read fix round (#381 review)
+# ---------------------------------------------------------------------------
+
+
+def _kb_env(tmp_path, name, kb_type, kb_yaml):
+    kb_path = tmp_path / name
+    kb_path.mkdir()
+    (kb_path / "kb.yaml").write_text(kb_yaml)
+    db_path = tmp_path / f"{name}.db"
+    config = PyriteConfig(
+        knowledge_bases=[KBConfig(name=name, path=kb_path, kb_type=kb_type)],
+        settings=Settings(index_path=db_path, auto_embed=False),
+    )
+    db = PyriteDB(db_path)
+    IndexManager(db, config).index_all()
+    db.close()
+    return {"config": config, "kb_path": kb_path, "tmp_path": tmp_path, "db_path": db_path}
+
+
+#: Pyrite's own kb/kb.yaml, the KB a web user of this repo creates entries in.
+PYRITE_KB_YAML = (Path(__file__).resolve().parents[1] / "kb" / "kb.yaml").read_text()
+
+
+@pytest.fixture
+def software_env(tmp_path):
+    return _kb_env(tmp_path, "sw", "software", PYRITE_KB_YAML)
+
+
+def _rest_for(env):
+    from starlette.testclient import TestClient
+
+    from pyrite.server.api import create_app, get_config, get_db, get_index_worker
+    from pyrite.services.index_worker import IndexWorker
+
+    config = env["config"]
+    application = create_app(config=config)
+    db = PyriteDB(env["db_path"])
+    application.dependency_overrides[get_config] = lambda: config
+    application.dependency_overrides[get_db] = lambda: db
+    worker = IndexWorker(db, config)
+    application.dependency_overrides[get_index_worker] = lambda: worker
+    closers = [db]
+    state_db = getattr(application.state, "pyrite_db", None)
+    if state_db is not None and state_db is not db:
+        closers.append(state_db)
+
+    def close():
+        worker.wait_for_idle(timeout=10)
+        for d in closers:
+            d.close()
+
+    return TestClient(application), close
+
+
+def test_cli_add_keeps_the_files_declared_type_in_a_plugin_kb(software_env):
+    """Review blocker 1: `pyrite add` must not rewrite `type: note` to `adr` (#197)."""
+    src = software_env["tmp_path"] / "meeting.md"
+    src.write_text("---\ntype: note\ntitle: Meeting notes\n---\nhello\n")
+    result = _cli(software_env, ["add", str(src), "-k", "sw", "--allow-undeclared"])
+    assert result.exit_code == 0, result.output
+    saved = list(software_env["kb_path"].rglob("meeting-notes.md"))
+    assert len(saved) == 1, saved
+    text = saved[0].read_text()
+    assert "type: note" in text and "adr_number" not in text, text
+
+
+def test_rest_create_accepts_the_web_forms_default_payload_in_pyrites_own_kb(software_env):
+    """Review blocker 2. The New-entry form defaults to `note` and offers every
+    core and plugin type; the web client sends `allow_undeclared: true` on every
+    create (web/src/lib/api/client.ts), so the form keeps dev's behaviour in a
+    KB that declares types. API callers that do not send it are refused."""
+    client, close = _rest_for(software_env)
+    try:
+        form = {"kb": "sw", "entry_type": "note", "title": "From the form", "body": ""}
+        refused = client.post("/api/entries", json=form)
+        assert refused.status_code == 400, refused.text
+        assert refused.json()["detail"]["code"] == "UNDECLARED_TYPE"
+
+        resp = client.post("/api/entries", json={**form, "allow_undeclared": True})
+        assert resp.status_code == 200, resp.text
+        assert len(list(software_env["kb_path"].rglob("from-the-form.md"))) == 1
+    finally:
+        close()
+
+
+def test_mcp_kb_update_refuses_a_marker_nested_under_any_key(env, mcp):
+    """Review blocker 3: ADR-0034's any-depth rule on the raw kb_update args."""
+    eid = _create(mcp, entry_type="person", title="Deep Marker", body="WHOLE BODY")
+    res = mcp._dispatch_tool(
+        "kb_update",
+        {"kb_name": KB, "entry_id": eid, "body": "frag", "extra": {"body_truncated": True}},
+    )
+    assert res.get("error_code") == "VALIDATION_FAILED", res
+    assert "WHOLE BODY" in _file(env, eid).read_text()
+
+
+@pytest.mark.parametrize("method", ["put", "patch"])
+def test_rest_update_refuses_a_marker_nested_under_any_key(env, rest, method):
+    """Review blocker 3, REST half: the raw request body is checked, not the model."""
+    resp = rest.post(
+        "/api/entries",
+        json={"kb": KB, "entry_type": "person", "title": "Rest Deep", "body": "WHOLE"},
+    )
+    assert resp.status_code == 200, resp.text
+    if method == "put":
+        payload = {"kb": KB, "body": "frag", "extra": {"body_truncated": True}}
+    else:
+        payload = {"kb": KB, "field": "body", "value": "frag", "extra": {"body_truncated": True}}
+    resp = getattr(rest, method)("/api/entries/rest-deep", json=payload)
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert "WHOLE" in _file(env, "rest-deep").read_text()
+
+
+@pytest.fixture
+def task_env(tmp_path):
+    return _kb_env(tmp_path, "tk", "generic", "name: tk\ntypes:\n  task: {}\n")
+
+
+def test_task_audit_fields_are_not_updatable_through_mcp(task_env):
+    """Review blocker 4: a task's audit trail is the task service's, not the caller's."""
+    from pyrite.server.mcp_server import PyriteMCPServer
+
+    server = PyriteMCPServer(task_env["config"], tier="admin")
+    try:
+        assert server._dispatch_tool("task_create", {"kb_name": "tk", "title": "T"}).get("created")
+        fields = server.svc.updatable_fields("t", "tk")
+        assert not fields & {"status_change_log", "evidence", "agent_context", "assigned_at"}
+        path = next(task_env["kb_path"].rglob("t.md"))
+        before = path.read_text()
+        res = server._dispatch_tool(
+            "kb_update",
+            {
+                "kb_name": "tk",
+                "entry_id": "t",
+                "status_change_log": [{"from": "x", "to": "y", "by": "forged"}],
+                "evidence": ["forged"],
+                "agent_context": {"forged": True},
+            },
+        )
+        assert res.get("updated"), res
+        assert "forged" not in path.read_text()
+        assert path.read_text().count("---") == before.count("---")
+    finally:
+        server.close()
+
+
+def test_rest_patch_refuses_a_managed_field_and_leaves_one_file(env, rest, task_env):
+    rest.post(
+        "/api/entries", json={"kb": KB, "entry_type": "person", "title": "Pinned", "body": "b"}
+    )
+    resp = rest.patch("/api/entries/pinned", json={"kb": KB, "field": "id", "value": "moved"})
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert sorted(p.name for p in env["kb_path"].rglob("*.md")) == ["pinned.md"]
+
+
+def test_rest_patch_refuses_a_task_audit_field(task_env):
+    from pyrite.services.kb_service import KBService
+
+    db = PyriteDB(task_env["db_path"])
+    try:
+        from pyrite.services.task_service import TaskService
+
+        TaskService(task_env["config"], db).create_task(kb_name="tk", title="Audited")
+    finally:
+        db.close()
+    client, close = _rest_for(task_env)
+    try:
+        resp = client.patch(
+            "/api/entries/audited",
+            json={"kb": "tk", "field": "status_change_log", "value": "forged"},
+        )
+        assert resp.status_code == 400, resp.text
+        assert "forged" not in next(task_env["kb_path"].rglob("audited.md")).read_text()
+    finally:
+        close()
+    assert KBService  # imported for the service contract under test
+
+
+def test_cli_update_refuses_an_identity_field_and_leaves_one_file(env):
+    assert (
+        _cli(env, ["create", "-k", KB, "-t", "person", "--title", "Stay", "-b", "b"]).exit_code == 0
+    )
+    result = _cli(env, ["update", "stay", "-k", KB, "--field", "id=b"])
+    assert result.exit_code == 1, result.output
+    assert "VALIDATION_FAILED" in result.output
+    assert sorted(p.name for p in env["kb_path"].rglob("*.md")) == ["stay.md"]
+
+
+def test_adr_number_is_managed_by_the_software_plugin(software_env):
+    from pyrite.server.mcp_server import PyriteMCPServer
+
+    adr = software_env["kb_path"] / "adrs"
+    adr.mkdir(exist_ok=True)
+    (adr / "adr-0001.md").write_text(
+        "---\nid: adr-0001\ntitle: First\ntype: adr\nadr_number: 1\nstatus: accepted\n---\nb\n"
+    )
+    server = PyriteMCPServer(software_env["config"], tier="admin")
+    try:
+        server.index_mgr.index_all()
+        fields = server.svc.updatable_fields("adr-0001", "sw")
+        assert "adr_number" not in fields
+        assert "status" in fields
+    finally:
+        server.close()
+
+
+def test_cli_import_dry_run_reports_a_duplicate_within_the_batch(env):
+    """Review item 5: the dry run sees the ids earlier records would create."""
+    path = env["tmp_path"] / "twins.json"
+    path.write_text(
+        json.dumps(
+            [
+                {"type": "person", "title": "Twin Dry", "body": "a"},
+                {"type": "person", "title": "Twin Dry", "body": "b"},
+            ]
+        )
+    )
+    result = _cli(env, ["import", str(path), "-k", KB, "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert result.output.count("Would refuse [ENTRY_EXISTS]") == 1, result.output
+    assert _file(env, "twin-dry") is None
+
+
+def test_a_required_only_schema_field_is_updatable_and_written(tmp_path):
+    """Review item 7: `updatable_fields` and `update` agree on `required:` fields."""
+    fenv = _kb_env(
+        tmp_path, "fk", "generic", "name: fk\ntypes:\n  finding:\n    required: [title, owner]\n"
+    )
+    (fenv["kb_path"] / "f.md").write_text(
+        "---\nid: f\ntitle: F\ntype: finding\nowner: alice\n---\nb\n"
+    )
+    from pyrite.server.mcp_server import PyriteMCPServer
+
+    server = PyriteMCPServer(fenv["config"], tier="admin")
+    try:
+        server.index_mgr.index_all()
+        assert "owner" in server.svc.updatable_fields("f", "fk")
+        res = server._dispatch_tool("kb_update", {"kb_name": "fk", "entry_id": "f", "owner": "bob"})
+        assert res.get("updated"), res
+        assert "owner: bob" in (fenv["kb_path"] / "f.md").read_text()
+    finally:
+        server.close()
+
+
+def _fake_clip(monkeypatch, title):
+    from pyrite.services import clipper
+
+    class Result:
+        def __init__(self):
+            self.title = title
+            self.body = "clipped body"
+            self.source_url = "https://example.org/a"
+
+    async def clip_url(self, url, title=None):
+        return Result()
+
+    monkeypatch.setattr(clipper.ClipperService, "clip_url", clip_url)
+
+
+def test_clipper_goes_through_the_pipeline(env, rest, monkeypatch):
+    """Review item 8: the clipper maps the pipeline's codes and takes the override."""
+    _fake_clip(monkeypatch, "Clipped Page")
+    # `pipe` declares note, person and finding; a clip filed as `widget` is undeclared.
+    base = {"url": "https://example.org/a", "kb": KB, "entry_type": "widget"}
+
+    refused = rest.post("/api/clip", json=base)
+    assert refused.status_code == 400, refused.text
+    assert refused.json()["detail"]["code"] == "UNDECLARED_TYPE"
+
+    _stop_enforcing(env)
+    ok = rest.post("/api/clip", json={**base, "allow_undeclared": True})
+    assert ok.status_code == 200, ok.text
+
+    again = rest.post("/api/clip", json={**base, "allow_undeclared": True})
+    assert again.status_code == 409, again.text
+    assert again.json()["detail"]["code"] == "ENTRY_EXISTS"
+
+
+def test_bulk_create_description_does_not_promise_a_single_index_sync():
+    """Review item 9: each entry is indexed as it is saved."""
+    from pyrite.server.tool_schemas import WRITE_TOOLS
+
+    assert "single index sync" not in WRITE_TOOLS["kb_bulk_create"]["description"]

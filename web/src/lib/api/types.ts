@@ -167,6 +167,8 @@ export interface CreateEntryRequest {
 	participants?: string[];
 	role?: string;
 	metadata?: Record<string, unknown>;
+	/** Allow a type the KB's kb.yaml does not declare (the web client sends true). */
+	allow_undeclared?: boolean;
 }
 
 export interface UpdateEntryRequest {
@@ -603,6 +605,7 @@ export interface ClipRequest {
 	title?: string;
 	tags?: string[];
 	entry_type?: string;
+	allow_undeclared?: boolean;
 }
 
 export interface ClipResponse {

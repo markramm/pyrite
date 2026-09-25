@@ -306,10 +306,15 @@ class ApiClient {
 		return this.request(`/api/entries/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`);
 	}
 
+	// The web writes keep the pre-#378 type behaviour: REST refuses a type the
+	// KB's kb.yaml does not declare unless the caller sends allow_undeclared, and
+	// the New-entry form, the clipper and import offer every core and plugin
+	// type. So the web client opts in on every create. Offering only the
+	// declared types (and an explicit override) is the follow-up, #392.
 	async createEntry(req: CreateEntryRequest): Promise<CreateResponse> {
 		return this.request('/api/entries', {
 			method: 'POST',
-			body: JSON.stringify(req)
+			body: JSON.stringify({ allow_undeclared: true, ...req })
 		});
 	}
 
@@ -654,7 +659,7 @@ class ApiClient {
 	async clipUrl(req: ClipRequest): Promise<ClipResponse> {
 		return this.request('/api/clip', {
 			method: 'POST',
-			body: JSON.stringify(req)
+			body: JSON.stringify({ allow_undeclared: true, ...req })
 		});
 	}
 
@@ -774,7 +779,7 @@ class ApiClient {
 	async importEntries(file: File, kb: string, format?: string): Promise<ImportResult> {
 		const formData = new FormData();
 		formData.append('file', file);
-		const params = new URLSearchParams({ kb });
+		const params = new URLSearchParams({ kb, allow_undeclared: 'true' });
 		if (format) params.set('format', format);
 		const url = `${this.baseUrl}/api/entries/import?${params}`;
 		const res = await fetch(url, {

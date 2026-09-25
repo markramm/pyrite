@@ -1,7 +1,7 @@
 """Task entry type and workflow definitions."""
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from .core_types import NoteEntry
 from .protocols import Assignable, Parentable, Prioritizable, Statusable, Temporal
@@ -415,6 +415,12 @@ class TaskEntry(Assignable, Temporal, Statusable, Prioritizable, Parentable, Not
     # is supplied, so the *why* of a transition lives with the task rather than
     # only in git history.
     status_change_log: list[dict[str, Any]] = field(default_factory=list)
+
+    #: Written by TaskService (claim, checkpoint, transitions), never by a
+    #: caller's field update: the audit trail must say what really happened.
+    managed_fields: ClassVar[frozenset[str]] = frozenset(
+        {"status_change_log", "evidence", "agent_context", "assigned_at"}
+    )
 
     @property
     def entry_type(self) -> str:

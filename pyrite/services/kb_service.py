@@ -45,9 +45,9 @@ from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
 
-#: Entry attributes a field update never sets: identity, storage location and
-#: bookkeeping the service owns. An MCP caller that echoes a whole read result
-#: into ``kb_update`` must not rewrite them (see ``updatable_fields``).
+#: Entry attributes a caller's field update never sets, on any type: identity,
+#: storage location and structure the service owns. A type adds its own through
+#: ``Entry.managed_fields`` (a task's audit trail, an ADR's number).
 _MANAGED_FIELDS = frozenset(
     {
         "id",
@@ -56,11 +56,14 @@ _MANAGED_FIELDS = frozenset(
         "links",
         "sources",
         "provenance",
-        "created_at",
-        "updated_at",
         "extra_frontmatter",
     }
 )
+
+#: Timestamps a caller may set only by naming them (`--field updated_at=...`,
+#: REST PATCH, #151). They are left out of ``updatable_fields``, because a read
+#: result carries them and an agent echoing it back would freeze them.
+_TIMESTAMP_FIELDS = frozenset({"created_at", "updated_at"})
 
 
 @dataclass
@@ -485,6 +488,8 @@ class KBService:
         *,
         allow_undeclared: bool,
         builder: Callable[[str, str, str, str, dict[str, Any]], Entry] | None = None,
+        resolve_type: bool = True,
+        pending_ids: set[str] | None = None,
     ) -> tuple[Entry, list[dict[str, Any]]]:
         """Decide whether ``spec`` is a valid new entry; build it if so.
 
@@ -498,6 +503,11 @@ class KBService:
         ``builder(entry_type, entry_id, title, body, fields)`` builds the entry;
         the default is :func:`build_entry`. ``add_entry_from_file`` passes its
         own so a file's frontmatter round-trips exactly as the loader reads it.
+
+        ``resolve_type=False`` keeps the type exactly as named. A file's
+        frontmatter declares its type; rewriting `type: note` to a plugin's
+        most-derived `note` subtype is how #197 filed an ADR. ``pending_ids``
+        are ids an earlier item of the same dry run would have created.
         """
         from ..schema import generate_entry_id
 
@@ -522,7 +532,8 @@ class KBService:
         # Resolve a generic core type to a plugin subtype, scoped to THIS KB's
         # type so an unrelated installed extension can't rewrite the type
         # (plugin-type-resolution-scoping).
-        entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
+        if resolve_type:
+            entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
         if builder is None:
             entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **fields)
         else:
@@ -537,7 +548,7 @@ class KBService:
         # Create never replaces. Ids are derived from titles, so two entries
         # sharing a title is ordinary -- and used to destroy the first one while
         # reporting "Created". Callers that mean to replace use update_entry.
-        if KBRepository(kb_config).exists(entry.id):
+        if KBRepository(kb_config).exists(entry.id) or entry.id in (pending_ids or ()):
             raise EntryExistsError(
                 f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'. "
                 "Use update to change it, or choose a different title/id."
@@ -554,10 +565,16 @@ class KBService:
         hook_ctx: PluginContext | None = None,
         embed: bool = True,
         builder: Callable[[str, str, str, str, dict[str, Any]], Entry] | None = None,
+        resolve_type: bool = True,
     ) -> WriteResult:
         """The one create pipeline: :meth:`_prepare`, then hooks, save, index, embed."""
         entry, warnings = self._prepare(
-            kb_name, kb_config, spec, allow_undeclared=allow_undeclared, builder=builder
+            kb_name,
+            kb_config,
+            spec,
+            allow_undeclared=allow_undeclared,
+            builder=builder,
+            resolve_type=resolve_type,
         )
         ctx = hook_ctx or self._hook_ctx(kb_name, kb_config, "create")
         entry = self._run_hooks("before_save", entry, ctx)
@@ -656,13 +673,21 @@ class KBService:
 
         results: list[dict[str, Any]] = []
         created_ids: list[tuple[str, str]] = []  # (entry_id, kb_name) for batch embed
+        # A dry run writes nothing, so the exists check alone cannot see an id
+        # an earlier item of the same batch would have created.
+        would_create: set[str] = set()
 
         for spec in entries:
             try:
                 if validate_only:
                     entry, warnings = self._prepare(
-                        kb_name, kb_config, spec, allow_undeclared=allow_undeclared
+                        kb_name,
+                        kb_config,
+                        spec,
+                        allow_undeclared=allow_undeclared,
+                        pending_ids=would_create,
                     )
+                    would_create.add(entry.id)
                     item: dict[str, Any] = {"created": False, "valid": True, "entry_id": entry.id}
                 else:
                     written = self._prepare_and_save(
@@ -765,7 +790,12 @@ class KBService:
         if validate_only:
             try:
                 entry, warnings = self._prepare(
-                    kb_name, kb_config, spec, allow_undeclared=allow_undeclared, builder=from_file
+                    kb_name,
+                    kb_config,
+                    spec,
+                    allow_undeclared=allow_undeclared,
+                    builder=from_file,
+                    resolve_type=False,
                 )
             except ValidationError as e:
                 fallback = {k: v for k, v in meta.items() if k not in MARKER_KEYS}
@@ -776,22 +806,58 @@ class KBService:
             return entry, {"errors": [], "warnings": warnings}
 
         written = self._prepare_and_save(
-            kb_name, kb_config, spec, allow_undeclared=allow_undeclared, builder=from_file
+            kb_name,
+            kb_config,
+            spec,
+            allow_undeclared=allow_undeclared,
+            builder=from_file,
+            resolve_type=False,
         )
         return written.entry, {"errors": [], "warnings": written.warnings}
 
-    def updatable_fields(self, entry_id: str, kb_name: str) -> frozenset[str]:
-        """The fields a field-by-field update may set on this entry.
+    @staticmethod
+    def _field_sets(
+        entry_type: str, kb_config: KBConfig | None
+    ) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+        """``(updatable, schema_only, managed)`` for one entry type.
 
-        The entry type's own field set: its model class's fields (core or
-        plugin, from the type registry) plus the fields its KB schema declares
-        for the type, less the identity and bookkeeping fields the service
-        owns (``_MANAGED_FIELDS``). Replaces MCP's hand-maintained allowlist,
-        which named extension vocabulary in core and still missed every
-        kb.yaml-declared field (#378). Empty if the entry does not exist.
+        ``updatable`` is the type's own field set: its model class's fields
+        (core or plugin, from the type registry) plus every field its KB
+        schema names for the type (``fields``, ``optional`` and ``required``),
+        less ``managed`` -- the service's identity fields and the type's own
+        ``managed_fields``. ``schema_only`` is the schema's part, which an
+        update writes as a custom field when the model has no attribute for
+        it. One computation, so what ``updatable_fields`` reports and what
+        ``update`` writes cannot disagree.
         """
         from ..models.core_types import get_entry_class
 
+        cls = get_entry_class(entry_type)
+        managed = _MANAGED_FIELDS | frozenset(getattr(cls, "managed_fields", frozenset()))
+        model = {f.name for f in dataclasses.fields(cls) if f.init and not f.name.startswith("_")}
+        schema: set[str] = set()
+        if kb_config is not None:
+            type_schema = kb_config.kb_schema.get_type_schema(entry_type)
+            if type_schema is not None:
+                schema = set(type_schema.fields) | set(type_schema.optional)
+                schema |= set(type_schema.required)
+        return (
+            frozenset((model | schema) - managed - _TIMESTAMP_FIELDS),
+            frozenset(schema - managed),
+            managed,
+        )
+
+    def updatable_fields(self, entry_id: str, kb_name: str) -> frozenset[str]:
+        """The fields a caller's field update may set on this entry.
+
+        The entry type's own field set (see ``_field_sets``): model fields plus
+        the KB schema's fields for the type, less identity fields and the
+        type's ``managed_fields``. Timestamps are left out: :meth:`update`
+        accepts them only when a caller names them. Replaces MCP's
+        hand-maintained allowlist, which named extension vocabulary in core
+        and still missed every kb.yaml-declared field (#378). Empty if the
+        entry does not exist.
+        """
         row = self.db.get_entry(entry_id, kb_name)
         entry_type = row.get("entry_type") if row else None
         kb_config = self.config.get_kb(kb_name)
@@ -800,26 +866,19 @@ class KBService:
             entry_type = loaded.entry_type if loaded else None
         if entry_type is None:
             return frozenset()
-
-        cls = get_entry_class(entry_type)
-        names = {
-            f.name for f in dataclasses.fields(cls) if f.init and not f.name.startswith("_")
-        } - _MANAGED_FIELDS
-        if kb_config is not None:
-            type_schema = kb_config.kb_schema.get_type_schema(entry_type)
-            if type_schema is not None:
-                names |= set(type_schema.fields) | set(type_schema.optional)
-                names |= set(type_schema.required)
-        return frozenset(names - _MANAGED_FIELDS)
+        return self._field_sets(entry_type, kb_config)[0]
 
     def update(self, entry_id: str, kb_name: str, updates: dict[str, Any]) -> WriteResult:
-        """Update an existing entry, returning it and its schema warnings.
+        """Update an existing entry for a caller, returning it and its warnings.
 
-        ``updates`` is the caller's field set as sent, ADR-0034 marker keys
-        included: a body marked truncated is refused here, for every surface. A field the
-        entry's model does not have but its KB schema declares for the type is
-        written as a custom field (where a kb.yaml-only type keeps it) instead
-        of being dropped.
+        The surfaces' update (REST PUT/PATCH, MCP ``kb_update``, CLI
+        ``update``). ``updates`` is the caller's field set as sent, ADR-0034
+        marker keys included: a body marked truncated is refused, at any
+        depth. A field the service or the type manages (``id``, the file
+        path, links, a task's audit trail...) is refused rather than written:
+        setting ``id`` used to leave a second file. A field the entry's model
+        does not have but its KB schema names for the type is written as a
+        custom field instead of being dropped.
 
         Raises:
             KBNotFoundError: If KB not found
@@ -827,6 +886,11 @@ class KBService:
             EntryNotFoundError: If entry not found
             ValidationError: (or a subclass) if the write is refused
         """
+        return self._update(entry_id, kb_name, updates, restrict=True)
+
+    def _update(
+        self, entry_id: str, kb_name: str, updates: dict[str, Any], *, restrict: bool
+    ) -> WriteResult:
         # ADR-0034 marker keys are refused here and otherwise never stored:
         # they are not model attributes, so the loop below skips them.
         ensure_not_truncated(updates)
@@ -838,6 +902,15 @@ class KBService:
         entry = repo.load(entry_id)
         if not entry:
             raise EntryNotFoundError(f"Entry not found: {entry_id}")
+
+        _, schema_fields, managed = self._field_sets(entry.entry_type, kb_config)
+        if restrict:
+            refused = sorted(k for k in updates if k in managed)
+            if refused:
+                raise ValidationError(
+                    f"Cannot set {', '.join(refused)} on {entry.entry_type} "
+                    f"'{entry_id}' with an update: Pyrite maintains these fields."
+                )
 
         # Capture old_status before applying updates (for workflow hooks)
         old_status = getattr(entry, "status", None)
@@ -853,11 +926,6 @@ class KBService:
         for ts_key in ("created_at", "updated_at"):
             if ts_key in updates and not isinstance(updates[ts_key], datetime):
                 updates[ts_key] = parse_datetime(updates[ts_key])
-
-        type_schema = kb_config.kb_schema.get_type_schema(entry.entry_type)
-        schema_fields = (
-            set(type_schema.fields) | set(type_schema.optional) if type_schema else set()
-        ) - _MANAGED_FIELDS
 
         # Apply updates
         for key, value in updates.items():
@@ -912,7 +980,11 @@ class KBService:
 
     def update_entry(self, entry_id: str, kb_name: str, **updates) -> Entry:
         """
-        Update an existing entry. The keyword form of :meth:`update`.
+        Update an existing entry, for in-process callers.
+
+        The keyword form of :meth:`update`, with the same checks except the
+        managed-field refusal: the services that own a type's managed fields
+        (TaskService's audit trail, a plugin's numbering) write them here.
 
         Args:
             entry_id: Entry ID to update
@@ -922,7 +994,7 @@ class KBService:
         Returns:
             Updated Entry object
         """
-        return self.update(entry_id, kb_name, updates).entry
+        return self._update(entry_id, kb_name, updates, restrict=False).entry
 
     def delete_entry(self, entry_id: str, kb_name: str) -> bool:
         """

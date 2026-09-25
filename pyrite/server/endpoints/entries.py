@@ -45,32 +45,11 @@ from ..schemas import (
     WantedPage,
     WantedPagesResponse,
 )
+from .write_refusal import refusal_http, refuses_truncated_body
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Entries"])
-
-
-def _refused(exc: ValidationError) -> HTTPException:
-    """Map a write-pipeline refusal to REST, keeping its own code (#378).
-
-    The service decides; this only picks the status. `ENTRY_EXISTS` is a
-    conflict (409); every other refusal is a bad request (400). Never
-    retryable: the same request fails the same way.
-    """
-    code = getattr(exc, "error_code", None) or "VALIDATION_FAILED"
-    detail: dict = {"code": code, "message": str(exc), "retryable": False}
-    suggestion = getattr(exc, "suggestion", None)
-    if suggestion:
-        detail["hint"] = suggestion
-    declared = getattr(exc, "declared_types", None)
-    if declared is not None:
-        detail["declared_types"] = declared
-        detail.setdefault(
-            "hint",
-            f"Use an entry_type in [{', '.join(declared)}], or send allow_undeclared: true.",
-        )
-    return HTTPException(status_code=409 if code == "ENTRY_EXISTS" else 400, detail=detail)
 
 
 @router.get(
@@ -751,7 +730,7 @@ def get_entry(
 @router.post(
     "/entries",
     response_model=CreateResponse,
-    dependencies=[Depends(requires_kb_tier("write"))],
+    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
 )
 @limiter.limit("30/minute")
 def create_entry(
@@ -776,7 +755,7 @@ def create_entry(
         )
 
     # Map the request to a spec; None means "not given", so factory defaults
-    # apply. The marker goes through so the service can refuse it.
+    # apply. (A truncated body was refused on the raw request, above.)
     spec = {
         k: v
         for k, v in {
@@ -789,7 +768,6 @@ def create_entry(
             "role": req.role,
             "tags": req.tags,
             "metadata": req.metadata,
-            "body_truncated": req.body_truncated,
         }.items()
         if v is not None
     }
@@ -801,7 +779,7 @@ def create_entry(
     except KBReadOnlyError as e:
         raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
     except ValidationError as e:
-        raise _refused(e)
+        raise refusal_http(e)
     except (PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "CREATE_FAILED", "message": str(e)})
     entry = written.entry
@@ -819,7 +797,7 @@ def create_entry(
 @router.put(
     "/entries/{entry_id}",
     response_model=UpdateResponse,
-    dependencies=[Depends(requires_kb_tier("write"))],
+    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
 )
 @limiter.limit("30/minute")
 def update_entry(
@@ -849,8 +827,6 @@ def update_entry(
         updates["tags"] = req.tags
     if req.metadata is not None:
         updates["metadata"] = req.metadata
-    if req.body_truncated is not None:
-        updates["body_truncated"] = req.body_truncated
 
     try:
         written = svc.update(entry_id, req.kb, updates)
@@ -859,7 +835,7 @@ def update_entry(
     except KBReadOnlyError as e:
         raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
     except ValidationError as e:
-        raise _refused(e)
+        raise refusal_http(e)
     except (PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
@@ -874,7 +850,7 @@ def update_entry(
 @router.patch(
     "/entries/{entry_id}",
     response_model=UpdateResponse,
-    dependencies=[Depends(requires_kb_tier("write"))],
+    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
 )
 @limiter.limit("30/minute")
 def patch_entry_field(
@@ -893,8 +869,6 @@ def patch_entry_field(
             logger.warning("Worktree routing failed for PATCH, falling back to main")
 
     updates = {body.field: body.value}
-    if body.body_truncated is not None:
-        updates["body_truncated"] = body.body_truncated
     try:
         written = svc.update(entry_id, body.kb, updates)
     except (KBNotFoundError, EntryNotFoundError) as e:
@@ -902,7 +876,7 @@ def patch_entry_field(
     except KBReadOnlyError as e:
         raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
     except ValidationError as e:
-        raise _refused(e)
+        raise refusal_http(e)
     except (PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
