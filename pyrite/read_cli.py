@@ -12,11 +12,11 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .cli.context import open_index_db
 from .cli.search_commands import register_search_command
 from .config import CONFIG_FILE, load_config
 from .exceptions import PyriteError
 from .services.kb_service import KBService
-from .storage.database import PyriteDB
 
 app = typer.Typer(
     name="pyrite-read",
@@ -46,7 +46,7 @@ def _emit_error(message: str, output_format: str, *, error_code: str = "ERROR") 
 def _get_svc():
     """Create a KBService instance for CLI commands."""
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    db = open_index_db(config)
     return KBService(config, db), db
 
 

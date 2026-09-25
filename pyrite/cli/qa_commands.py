@@ -322,11 +322,7 @@ def _show_kb_coverage(kb_name: str, output_format: str) -> None:
         all_checkers = get_registry().get_all_rubric_checkers()
 
         # Get all entry types in this KB
-        type_rows = db.execute_sql(
-            "SELECT DISTINCT entry_type FROM entry WHERE kb_name = :kb",
-            {"kb": kb_name},
-        )
-        entry_types = sorted(row["entry_type"] for row in type_rows if row["entry_type"])
+        entry_types = sorted(t for t in svc.get_distinct_types(kb_name=kb_name) if t)
 
         total_checker = 0
         total_schema = 0

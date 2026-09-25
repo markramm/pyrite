@@ -156,18 +156,17 @@ def register_search_command(app: typer.Typer):
             _search_files(config, query, kb_name, entry_type, limit)
             return
 
-        from ..storage import PyriteDB
+        from ..storage import IndexManager
+        from .context import open_index_db
 
         db = None
         try:
-            db = PyriteDB(config.settings.index_path)
+            db = open_index_db(config)
 
-            if db.count_entries() == 0:
+            index_mgr = IndexManager(db, config)
+            if index_mgr.is_empty():
                 # Status to stderr — stdout must stay clean for -f json callers.
                 err_console.print("[yellow]Index is empty. Building index...[/yellow]")
-                from ..storage import IndexManager
-
-                index_mgr = IndexManager(db, config)
                 index_mgr.index_all()
             else:
                 # Warn (never silently) when the index is behind the files on

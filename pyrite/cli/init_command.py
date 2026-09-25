@@ -326,9 +326,9 @@ def init_kb(
     and runs initial indexing. Zero interactive prompts.
     """
     from ..config import KBConfig, load_config, save_config
-    from ..storage.database import PyriteDB
     from ..storage.index import IndexManager
     from ..utils.yaml import dump_yaml_file, load_yaml_file
+    from .context import open_index_db
 
     path = path.expanduser().resolve()
     kb_name = name or path.name
@@ -412,7 +412,7 @@ def init_kb(
     entries_indexed = 0
     try:
         config = load_config()  # reload to get the newly added KB
-        db = PyriteDB(config.settings.index_path)
+        db = open_index_db(config)
         index_mgr = IndexManager(db, config)
         entries_indexed = index_mgr.index_kb(kb_name)
         db.close()

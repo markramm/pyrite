@@ -58,6 +58,28 @@ def cli_db_context() -> Generator[tuple[PyriteConfig, PyriteDB], None, None]:
         db.close()
 
 
+def open_index_db(config: PyriteConfig) -> PyriteDB:
+    """Open the index database for ``config`` exactly as configured.
+
+    Unlike ``get_config_and_db`` this does **not** merge DB-registered KBs
+    into ``config``: it is for the commands that never did (``pyrite-admin``,
+    ``pyrite-read``, ``pyrite ci``, ``search``, ``init``, the repo commands),
+    which #380 moved here unchanged so that opening the index happens in one
+    module. The caller closes it.
+    """
+    return PyriteDB(config.settings.index_path)
+
+
+@contextmanager
+def index_db_context(config: PyriteConfig) -> Generator[PyriteDB, None, None]:
+    """``open_index_db`` as a context manager: the database is closed on exit."""
+    db = open_index_db(config)
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 def get_config_and_db(config: PyriteConfig | None = None) -> tuple[PyriteConfig, PyriteDB]:
     """Get config and db without a context manager, merging DB-registered KBs.
 

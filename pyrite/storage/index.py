@@ -586,6 +586,10 @@ class IndexManager:
         """Remove a KB and all its entries from the index."""
         self.db.unregister_kb(kb_name)
 
+    def is_empty(self) -> bool:
+        """True when the index holds no entries at all."""
+        return self.db.count_entries() == 0
+
     def get_index_stats(self, kb_names: set[str] | None = None) -> dict[str, Any]:
         """Get statistics about the index.
 

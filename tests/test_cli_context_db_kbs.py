@@ -113,3 +113,31 @@ def test_index_sync_indexes_entries_for_db_registered_kb():
                 )
             finally:
                 db.close()
+
+
+class TestOpenIndexDB:
+    """`open_index_db` / `index_db_context`: the CLI's one place to open the
+    index *without* merging DB-registered KBs, for the commands that never
+    merged (#380 moved their bare ``PyriteDB(...)`` here unchanged)."""
+
+    def test_does_not_merge_db_registered_kbs(self, db_with_user_kb):
+        from pyrite.cli.context import index_db_context, open_index_db
+
+        config = db_with_user_kb["config"]
+        db = open_index_db(config)
+        try:
+            assert isinstance(db, PyriteDB)
+            assert config.get_kb("some-kb") is None
+        finally:
+            db.close()
+        with index_db_context(config) as db:
+            assert isinstance(db, PyriteDB)
+        assert config.get_kb("some-kb") is None
+
+    def test_context_closes(self, db_with_user_kb):
+        from pyrite.cli.context import index_db_context
+
+        config = db_with_user_kb["config"]
+        with patch.object(PyriteDB, "close") as close, index_db_context(config):
+            pass
+        close.assert_called_once()

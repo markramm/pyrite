@@ -35,11 +35,10 @@ from ..exceptions import (
 )
 from ..logging import configure_logging
 from ..services.kb_service import KBService
-from ..storage.database import PyriteDB
 from ..utils.errors import PyriteCLIGroup, cli_error
 from .browse_commands import register_browse_commands
 from .collection_commands import collections_app
-from .context import cli_context
+from .context import cli_context, open_index_db
 from .db_commands import db_app
 from .entry_commands import register_entry_commands
 from .export_commands import export_app
@@ -102,7 +101,7 @@ def _get_svc():
     Deprecated: use cli_context() directly in new code.
     """
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
+    db = open_index_db(config)
     return KBService(config, db), db
 
 
@@ -225,7 +224,7 @@ def ci_command(
             typer.echo("pyrite ci — no KBs configured, nothing to validate.")
         raise typer.Exit(0)
 
-    db = PyriteDB(config.settings.index_path)
+    db = open_index_db(config)
     try:
         # Set up LLM service for tier >= 2
         llm_service = None
