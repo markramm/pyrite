@@ -309,6 +309,86 @@ class TestAISuggestLinks:
         )
         assert resp.status_code == 404
 
+    def test_suggest_links_empty_title_skips_search(self, ai_env):
+        """A title over the clip cap whose first MAX_SEARCH_QUERY_LENGTH
+        characters open a quote and never close it clips to "" (the same
+        case #414 names for chat retrieval). Suggest-links must not run
+        search at all on that -- an empty query is not "no query", and the
+        search backend need not be asked to special-case it.
+        """
+        from pyrite.services.kb_service import KBService
+        from pyrite.server.api import get_search_service
+        from pyrite.services.search_service import MAX_SEARCH_QUERY_LENGTH
+
+        svc = KBService(ai_env["config"], ai_env["db"])
+        long_quoted_title = '"' + "x" * (MAX_SEARCH_QUERY_LENGTH + 100)
+        svc.create_entry("test-events", "blank-title-entry", long_quoted_title, "note", body="x")
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "blank-title-entry", "kb_name": "test-events"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["suggestions"] == []
+        mock_svc.search.assert_not_called()
+
+    def test_suggest_links_query_syntax_error_is_not_500(self, ai_env):
+        """A title whose search (hybrid, then the keyword retry) both raise
+        QuerySyntaxError must not surface as a raw 500 -- the same syntax
+        problem MCP/CLI already report as QUERY_SYNTAX (see #361: a title
+        like "pre-push selection" hits this today).
+        """
+        from pyrite.exceptions import QuerySyntaxError
+        from pyrite.server.api import get_search_service
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = QuerySyntaxError("no such column: push")
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "2025-01-10--test-event-0", "kb_name": "test-events"},
+        )
+        assert resp.status_code != 500
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "QUERY_SYNTAX"
+
+    def test_suggest_links_query_syntax_error_skips_the_keyword_retry(self, ai_env):
+        """A syntax error is deterministic -- the keyword-mode retry the bare
+        except clause runs for other failures would fail identically, so it
+        must not even be attempted (same rationale as MCP's and the CLI's
+        QuerySyntaxError handling). Proven by a mock that would happily
+        return results on the retry, if it were called.
+        """
+        from pyrite.exceptions import QuerySyntaxError
+        from pyrite.server.api import get_search_service
+
+        llm = MockLLMService()
+        _inject_llm(ai_env["app"], llm)
+
+        mock_svc = MagicMock()
+        mock_svc.search.side_effect = [
+            QuerySyntaxError("no such column: push"),
+            [{"id": "x", "title": "t", "entry_type": "note", "snippet": "s"}],
+        ]
+        ai_env["app"].dependency_overrides[get_search_service] = lambda: mock_svc
+
+        resp = ai_env["client"].post(
+            "/api/ai/suggest-links",
+            json={"entry_id": "2025-01-10--test-event-0", "kb_name": "test-events"},
+        )
+        assert resp.status_code == 400
+        assert mock_svc.search.call_count == 1
+
 
 @pytest.mark.api
 class TestAIChat:

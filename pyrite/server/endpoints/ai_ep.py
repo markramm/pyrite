@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from ...config import PyriteConfig
+from ...exceptions import QuerySyntaxError
 from ...services.auth_service import AuthService
 from ...services.kb_service import KBService
 from ...services.llm_service import LLMService
@@ -236,22 +237,34 @@ async def ai_suggest_links(
     title = entry.get("title", "")
 
     kb_names = None if req.kb_name else readable
-    try:
-        related = search_svc.search(
-            query=clip_derived_query(title),
-            kb_name=req.kb_name,
-            kb_names=kb_names,
-            limit=15,
-            mode="hybrid",
-        )
-    except Exception:
-        related = search_svc.search(
-            query=clip_derived_query(title),
-            kb_name=req.kb_name,
-            kb_names=kb_names,
-            limit=15,
-            mode="keyword",
-        )
+    clipped_title = clip_derived_query(title)
+    if not clipped_title:
+        # A title that clips to "" (e.g. an unterminated quote past the cap)
+        # has nothing to search -- an empty query is not "no query", so skip
+        # the search rather than ask the backend to special-case it.
+        related = []
+    else:
+        try:
+            related = search_svc.search(
+                query=clipped_title,
+                kb_name=req.kb_name,
+                kb_names=kb_names,
+                limit=15,
+                mode="hybrid",
+            )
+        except QuerySyntaxError:
+            # Deterministic and not retryable in keyword mode either -- the
+            # query itself is bad, not the mode. Let it propagate to the
+            # central handler, which maps it to 400 QUERY_SYNTAX.
+            raise
+        except Exception:
+            related = search_svc.search(
+                query=clipped_title,
+                kb_name=req.kb_name,
+                kb_names=kb_names,
+                limit=15,
+                mode="keyword",
+            )
 
     # Filter out self
     related = [r for r in related if r.get("id") != req.entry_id][:10]

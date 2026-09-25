@@ -48,8 +48,11 @@ def clip_derived_query(text: str) -> str:
     ``check_query_length`` and is refused, never clipped.
 
     The result stays valid FTS5 input: it ends on a word boundary, never
-    inside a quoted phrase (an unbalanced quote is "unterminated string")
-    and never on a bare AND/OR/NOT.
+    inside a quoted phrase (an unbalanced quote is "unterminated string"),
+    never inside a parenthesised group (an unbalanced paren is also a syntax
+    error), and never on a bare AND/OR/NOT. The result may be empty -- callers
+    that derive a query from clipped text must treat "" as nothing to search,
+    not run an empty MATCH.
     """
     if len(text) <= MAX_SEARCH_QUERY_LENGTH:
         return text
@@ -61,8 +64,13 @@ def clip_derived_query(text: str) -> str:
     if clipped.count('"') % 2:
         # The cut fell inside a quoted phrase: drop the open phrase.
         clipped = clipped[: clipped.rfind('"')]
+    if clipped.count("(") != clipped.count(")"):
+        # The cut fell inside a parenthesised group: drop back to before the
+        # last unmatched "(" (an open group can't itself contain a balanced
+        # ")" that outnumbers "(", so the last "(" is always the culprit).
+        clipped = clipped[: clipped.rfind("(")]
     clipped = clipped.rstrip()
-    while clipped[_last_word_start(clipped) :] in _FTS_OPERATORS:
+    while clipped and clipped[_last_word_start(clipped) :] in _FTS_OPERATORS:
         # Never end on a bare operator: FTS5 reads it as a syntax error.
         clipped = clipped[: _last_word_start(clipped)].rstrip()
     return clipped

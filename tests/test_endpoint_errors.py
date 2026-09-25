@@ -120,6 +120,18 @@ class TestSearchEndpointErrors:
         data = resp.json()
         assert data["results"] == []
 
+    def test_search_bad_operator_syntax_is_400_not_500(self, rest_api_env):
+        """`beta:gamma` reaches FTS5 unquoted once the query has an explicit
+        AND (sanitize_fts_query skips quoting then), and SQLite reads the
+        colon as a column filter -- SearchService reclassifies that as
+        QuerySyntaxError, but until it's mapped in _PYRITE_ERROR_STATUS the
+        central handler answers 500 INTERNAL_ERROR for a plain user typo.
+        """
+        client = rest_api_env["client"]
+        resp = client.get("/api/search?q=alpha AND beta:gamma")
+        assert resp.status_code == 400
+        assert resp.json()["code"] == "QUERY_SYNTAX"
+
 
 @pytest.mark.api
 class TestKBEndpointErrors:

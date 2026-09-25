@@ -1,0 +1,1 @@
+- A derived search query (link-suggestion titles, AI chat retrieval) clipped to the length cap never leaves an unbalanced parenthesis, and a title that clips to an empty string no longer runs a blank search. A query syntax error now answers `400 QUERY_SYNTAX` on REST `GET /api/search` and `POST /api/ai/suggest-links`, matching MCP and the CLI, instead of a raw `500` (#414).
