@@ -36,48 +36,28 @@ def _cli_error(message: str, output_format: str = "rich", error_code: str | None
     cli_error(message, output_format, error_code=error_code or "ERROR")
 
 
-def _refuse_truncated_body_or_exit(
-    body: Any, extra: dict[str, Any], output_format: str = "rich"
-) -> None:
-    """ADR-0034 rule 2 for `pyrite create` / `pyrite update`.
+def _refusal_exit(exc: ValidationError, output_format: str = "rich") -> None:
+    """Report a write-pipeline refusal with its own code, and exit 1.
 
-    The CLI assembles its body and its extra fields separately -- the body from
-    `--body`/`--body-file`/`--stdin`, the marker from `--field
-    body_truncated=true` or from the YAML frontmatter of a saved bounded read
-    -- so the check reassembles them into the one shape the shared rule reads.
-
-    Exits 1 through `cli_error` (docs/json-contracts.md, "Exit codes (CLI)")
-    with a message that names how to get the whole body instead.
+    `KBService` decides every create and update refusal (#378); the CLI only
+    maps it: the error's own `error_code` (see the ValidationError subclasses
+    in `pyrite.exceptions`), and a hint phrased for the CLI.
     """
-    from ..services.body_bounds import REFUSAL_SUGGESTION, refuse_truncated_body
     from ..utils.errors import cli_error
 
-    payload = {**extra}
-    if body is not None:
-        payload["body"] = body
-
-    message = refuse_truncated_body(payload)
-    if message is None:
-        return
+    suggestion = getattr(exc, "suggestion", None)
+    if getattr(exc, "declared_types", None) is not None:
+        suggestion = (
+            "Use `pyrite kb schema show <kb>` to inspect the declared types, or pass "
+            "--allow-undeclared to override."
+        )
     cli_error(
-        message,
+        str(exc),
         output_format,
-        error_code="VALIDATION_FAILED",
-        suggestion=REFUSAL_SUGGESTION,
+        error_code=getattr(exc, "error_code", None) or "VALIDATION_FAILED",
+        suggestion=suggestion,
         retryable=False,
     )
-
-
-def _strip_truncation_keys(values: dict[str, Any]) -> dict[str, Any]:
-    """Drop ADR-0034's read-transport keys from a write's fields.
-
-    They are never entry content: an allowed `body_truncated: false` reaching
-    `create_entry`/`update_entry` as an extra field would be persisted as
-    frontmatter, come back on the next read, and be echoed into a later write.
-    """
-    from ..services.body_bounds import MARKER_KEYS
-
-    return {k: v for k, v in values.items() if k not in MARKER_KEYS}
 
 
 def _parse_field_value(value: str) -> Any:
@@ -208,7 +188,7 @@ def register_entry_commands(app: typer.Typer) -> None:
         ),
     ):
         """Create a new entry in a knowledge base."""
-        from ..schema import CORE_TYPES, generate_entry_id
+        from ..schema import CORE_TYPES
         from ..utils.yaml import dump_yaml
 
         # Template mode: output a skeleton and exit
@@ -273,8 +253,6 @@ def register_entry_commands(app: typer.Typer) -> None:
                             _file_meta[_k] = _v
                     body = body[_fm_end + 3 :].strip()
 
-        entry_id = generate_entry_id(title)
-
         extra: dict = {**_file_meta}
         if date:
             extra["date"] = date
@@ -296,61 +274,38 @@ def register_entry_commands(app: typer.Typer) -> None:
                 k, v = fv.split("=", 1)
                 extra[k] = _parse_field_value(v)
 
-        # ADR-0034 rule 2: refuse a body marked truncated, whether the marker
-        # arrived via --field or in the frontmatter of a --body-file/--stdin
-        # read. Then drop the keys so an allowed `false` is never persisted.
-        _refuse_truncated_body_or_exit(body, extra)
-        extra = _strip_truncation_keys(extra)
+        # Every create decision -- the ADR-0034 truncated-body refusal (the
+        # marker may arrive via --field or in the frontmatter of a
+        # --body-file/--stdin read), the undeclared-type refusal (core types
+        # not exempt, #197), schema validation, the exists check -- is made by
+        # the service's write pipeline, the same one REST and MCP use (#378).
+        spec = {**extra, "entry_type": entry_type, "title": title, "body": body}
 
         with cli_context() as (config, db, svc):
-            # Write-side type enforcement: refuse undeclared types unless
-            # --allow-undeclared was passed. Mirrors the MCP-side check in
-            # _kb_create (commit 435be48). Closes the CLI half of Tier A
-            # 1090 (bug-create-silently-accepts-undeclared-types).
-            #
-            # Core types are NOT exempt: a KB that declares a schema declares
-            # the vocabulary for that KB, and exempting core names is how
-            # `-t note` against a software KB skipped this refusal and then had
-            # plugin type resolution rewrite it to its most-derived `note`
-            # subtype -- an ADR with `adr_number: 0` under `kb/adrs/` (#197).
-            if not allow_undeclared:
-                kb_config_check = config.get_kb(kb_name)
-                if kb_config_check is not None:
-                    schema = kb_config_check.kb_schema
-                    declared_types = sorted(schema.types.keys()) if schema and schema.types else []
-                    if declared_types and entry_type not in schema.types:
-                        _cli_error(
-                            (
-                                f"type '{entry_type}' is not declared in KB "
-                                f"'{kb_name}'. Declared types: "
-                                f"{', '.join(declared_types)}. Use "
-                                f"`pyrite kb schema show {kb_name}` to inspect "
-                                f"the full schema, or pass --allow-undeclared "
-                                f"to override (the entry will be flagged by "
-                                f"`pyrite index health`)."
-                            ),
-                            "rich",
-                            "UNDECLARED_TYPE",
-                        )
             try:
-                entry = svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
-                console.print(f"[green]Created:[/green] {entry.id}")
-                console.print(f"[dim]Type: {entry.entry_type}[/dim]")
-
-                # Add links after creation
-                if link:
-                    for link_spec in link:
-                        if ":" in link_spec:
-                            target, relation = link_spec.split(":", 1)
-                        else:
-                            target, relation = link_spec, "related_to"
-                        try:
-                            svc.add_link(entry.id, kb_name, target.strip(), relation.strip())
-                            console.print(f"  [dim]Linked to {target} ({relation})[/dim]")
-                        except (PyriteError, ValueError) as e:
-                            console.print(f"  [yellow]Link failed:[/yellow] {e}")
+                written = svc.create(kb_name, spec, allow_undeclared=allow_undeclared)
+            except ValidationError as e:
+                _refusal_exit(e)
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), "rich")
+            entry = written.entry
+            console.print(f"[green]Created:[/green] {entry.id}")
+            console.print(f"[dim]Type: {entry.entry_type}[/dim]")
+            for warning in written.warnings:
+                console.print("[yellow]Warning:[/yellow]", _json.dumps(warning, default=str))
+
+            # Add links after creation
+            if link:
+                for link_spec in link:
+                    if ":" in link_spec:
+                        target, relation = link_spec.split(":", 1)
+                    else:
+                        target, relation = link_spec, "related_to"
+                    try:
+                        svc.add_link(entry.id, kb_name, target.strip(), relation.strip())
+                        console.print(f"  [dim]Linked to {target} ({relation})[/dim]")
+                    except (PyriteError, ValueError) as e:
+                        console.print(f"  [yellow]Link failed:[/yellow] {e}")
 
     @app.command("add")
     def add_entry(
@@ -358,6 +313,12 @@ def register_entry_commands(app: typer.Typer) -> None:
         kb_name: str = typer.Option(..., "--kb", "-k", help="Target knowledge base"),
         validate_only: bool = typer.Option(
             False, "--validate-only", help="Validate without saving"
+        ),
+        allow_undeclared: bool = typer.Option(
+            False,
+            "--allow-undeclared",
+            help="Allow entry types not declared in the KB's kb.yaml (the "
+            "entry will be flagged by `pyrite index health`).",
         ),
     ):
         """Add a markdown file to a knowledge base.
@@ -374,7 +335,10 @@ def register_entry_commands(app: typer.Typer) -> None:
         with cli_context() as (config, db, svc):
             try:
                 entry, result = svc.add_entry_from_file(
-                    kb_name, file_path, validate_only=validate_only
+                    kb_name,
+                    file_path,
+                    validate_only=validate_only,
+                    allow_undeclared=allow_undeclared,
                 )
 
                 # Show warnings
@@ -395,7 +359,7 @@ def register_entry_commands(app: typer.Typer) -> None:
                     console.print(f"[green]Added:[/green] {entry.id}")
                     console.print(f"[dim]Type: {entry.entry_type}[/dim]")
             except ValidationError as e:
-                _cli_error(str(e), "rich", "VALIDATION_FAILED")
+                _refusal_exit(e)
             except PyriteError as e:
                 _cli_error(str(e), "rich", "ERROR")
 
@@ -459,21 +423,19 @@ def register_entry_commands(app: typer.Typer) -> None:
                 # characters (#231).
                 updates[k] = _parse_field_value(v)
 
-        # ADR-0034 rule 2. `updates` already carries the body under "body",
-        # so it is the payload shape the shared rule reads. A marker with no
-        # body is a metadata-only update and passes.
-        _refuse_truncated_body_or_exit(None, updates, output_format)
-        updates = _strip_truncation_keys(updates)
-
+        # ADR-0034 rule 2 and schema validation are the service's (#378):
+        # `updates` goes through as given, marker keys included.
         with cli_context() as (config, db, svc):
             try:
-                entry = svc.update_entry(entry_id, kb_name, **updates)
-                if output_format != "rich":
-                    typer.echo(_json.dumps({"updated": True, "entry_id": entry.id}))
-                else:
-                    console.print(f"[green]Updated:[/green] {entry.id}")
+                entry = svc.update(entry_id, kb_name, updates).entry
+            except ValidationError as e:
+                _refusal_exit(e, output_format)
             except (PyriteError, ValueError) as e:
                 _cli_error(str(e), output_format)
+            if output_format != "rich":
+                typer.echo(_json.dumps({"updated": True, "entry_id": entry.id}))
+            else:
+                console.print(f"[green]Updated:[/green] {entry.id}")
 
     @app.command("delete")
     def delete_entry(

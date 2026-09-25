@@ -288,3 +288,32 @@ class TestBulkCreate:
             )
             assert result.exit_code == 1
             assert "KB not found" in result.output
+
+
+@pytest.mark.cli
+def test_bulk_create_edits_an_entry_kept_outside_its_type_directory_in_place(bulk_env):
+    """#375: the source is edited where it lives; no second copy appears.
+
+    `links bulk-create` used to `repo.save` the source, which re-derived its
+    path from the type. An `epic` kept under `notes/` was written again at the
+    KB root, carrying the link, while the original stayed unchanged -- two
+    files with one id. It now saves through KBService like `pyrite link`.
+    """
+    kb_path = bulk_env["notes_path"]
+    (kb_path / "notes").mkdir(exist_ok=True)
+    original = kb_path / "notes" / "epic-two.md"
+    original.write_text("---\nid: epic-two\ntitle: Epic two\ntype: epic\n---\n\nbody\n")
+    before = sorted(str(p.relative_to(kb_path)) for p in kb_path.rglob("*.md"))
+
+    with _patch_config(bulk_env):
+        result = runner.invoke(
+            app,
+            ["links", "bulk-create", "--kb", "test-notes", "-"],
+            input="- source: epic-two\n  target: entry-a\n",
+        )
+    assert result.exit_code == 0, result.output
+    assert "1 created" in result.output, result.output
+
+    after = sorted(str(p.relative_to(kb_path)) for p in kb_path.rglob("*.md"))
+    assert after == before, f"files changed: {set(after) ^ set(before)}"
+    assert "entry-a" in original.read_text()

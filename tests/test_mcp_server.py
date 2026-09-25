@@ -1670,6 +1670,9 @@ class TestMCPValidation:
                 "entry_type": "note",
                 "title": "Update Val Test",
                 "body": "Will be updated.",
+                # val-kb declares only `event`; since #378 MCP no longer
+                # exempts core types from the undeclared-type refusal (#197).
+                "allow_undeclared": True,
             },
         )
         assert create_result.get("created") is True

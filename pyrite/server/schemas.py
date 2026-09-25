@@ -326,6 +326,8 @@ class CreateResponse(BaseModel):
     id: str
     kb_name: str
     file_path: str
+    #: Non-blocking schema findings from the write pipeline (#378).
+    warnings: list[dict[str, Any]] = []
 
 
 class UpdateResponse(BaseModel):
@@ -333,6 +335,8 @@ class UpdateResponse(BaseModel):
 
     updated: bool
     id: str
+    #: Non-blocking schema findings from the write pipeline (#378).
+    warnings: list[dict[str, Any]] = []
 
 
 class DeleteResponse(BaseModel):
@@ -392,6 +396,8 @@ class CreateEntryRequest(BaseModel):
     participants: list[str] = []
     role: str | None = None
     metadata: dict[str, Any] = {}
+    #: Allow a type the KB's kb.yaml does not declare (refused otherwise).
+    allow_undeclared: bool = False
 
 
 class UpdateEntryRequest(BaseModel):
@@ -769,6 +775,8 @@ class ClipRequest(BaseModel):
     title: str | None = None
     tags: list[str] = []
     entry_type: str = "note"
+    #: Allow a type the KB's kb.yaml does not declare (refused otherwise).
+    allow_undeclared: bool = False
 
 
 class ClipResponse(BaseModel):

@@ -80,6 +80,32 @@ describe('ApiClient', () => {
 		});
 	});
 
+	describe('web writes keep the pre-#378 type behaviour', () => {
+		// The New-entry form defaults to `note` and offers every core and plugin
+		// type. REST refuses a type the KB's kb.yaml does not declare unless the
+		// caller sends allow_undeclared, so the web client sends it on every
+		// create, clip and import (#381 review, blocker 2).
+		it('createEntry sends allow_undeclared: true', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'n', kb_name: 'kb', file_path: '' }));
+			await api.createEntry({ kb: 'kb', entry_type: 'note', title: 'From the form', body: '' });
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+			expect(body).toEqual({ allow_undeclared: true, kb: 'kb', entry_type: 'note', title: 'From the form', body: '' });
+		});
+
+		it('clipUrl sends allow_undeclared: true', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ created: true, id: 'c', kb_name: 'kb', title: 't', source_url: 'u' }));
+			await api.clipUrl({ url: 'https://example.org', kb: 'kb' });
+			const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+			expect(body.allow_undeclared).toBe(true);
+		});
+
+		it('importEntries sends allow_undeclared=true', async () => {
+			mockFetch.mockResolvedValueOnce(jsonResponse({ imported: 0, errors: 0, entries: [], error_details: [] }));
+			await api.importEntries(new File(['[]'], 'x.json'), 'kb');
+			expect(mockFetch.mock.calls[0][0] as string).toContain('allow_undeclared=true');
+		});
+	});
+
 	describe('updateEntry', () => {
 		it('sends PUT with JSON body', async () => {
 			mockFetch.mockResolvedValueOnce(jsonResponse({ updated: true, id: 'entry-1' }));

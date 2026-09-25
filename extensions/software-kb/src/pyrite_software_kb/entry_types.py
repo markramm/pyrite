@@ -1,7 +1,7 @@
 """Software KB entry types."""
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from pyrite.models.core_types import DocumentEntry, NoteEntry
 from pyrite.models.protocols import Assignable, Statusable, Temporal
@@ -63,6 +63,9 @@ class ADREntry(Statusable, Temporal, NoteEntry):
     status: str = "proposed"  # overrides Statusable default
     deciders: list[str] = field(default_factory=list)
     superseded_by: str = ""
+
+    #: Assigned by `pyrite sw new-adr`; a field update must not renumber.
+    managed_fields: ClassVar[frozenset[str]] = frozenset({"adr_number"})
 
     @property
     def entry_type(self) -> str:

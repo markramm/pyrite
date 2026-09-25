@@ -6,7 +6,10 @@ Unified KB operations used by API, CLI, and UI layers.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -16,10 +19,14 @@ if TYPE_CHECKING:
 
 from ..config import KBConfig, PyriteConfig
 from ..exceptions import (
+    EntryExistsError,
     EntryNotFoundError,
     KBNotFoundError,
     KBReadOnlyError,
+    PyriteError,
+    SchemaViolationError,
     StorageError,
+    UndeclaredTypeError,
     ValidationError,
 )
 from ..models import Entry
@@ -31,12 +38,54 @@ from ..storage.document_manager import DocumentManager
 from ..storage.index import IndexManager
 from ..storage.repository import KBRepository
 from ..utils.metadata import parse_metadata
-from .body_bounds import MARKER_KEYS
+from .body_bounds import MARKER_KEYS, ensure_not_truncated
 from .export_service import ExportService
 from .hook_runner import HookRunner
 from .wikilink_service import WikilinkService
 
 logger = logging.getLogger(__name__)
+
+#: Entry attributes a caller's field update never sets, on any type: identity,
+#: storage location and structure the service owns. A type adds its own through
+#: ``Entry.managed_fields`` (a task's audit trail, an ADR's number).
+_MANAGED_FIELDS = frozenset(
+    {
+        "id",
+        "kb_name",
+        "file_path",
+        "links",
+        "sources",
+        "provenance",
+        "extra_frontmatter",
+    }
+)
+
+#: Timestamps a caller may set only by naming them (`--field updated_at=...`,
+#: REST PATCH, #151). They are left out of ``updatable_fields``, because a read
+#: result carries them and an agent echoing it back would freeze them.
+_TIMESTAMP_FIELDS = frozenset({"created_at", "updated_at"})
+
+
+@dataclass
+class WriteResult:
+    """What a write produced: the saved entry and the schema warnings it drew.
+
+    Warnings are the non-blocking findings of the same validation that refuses
+    a write (an unknown select value when the KB does not enforce, a missing
+    optional source...). Every surface can now return them (#378).
+    """
+
+    entry: Entry
+    warnings: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _refusal_result(exc: Exception) -> dict[str, Any]:
+    """A per-item failure in the bulk result shape, with its stable code."""
+    if isinstance(exc, PyriteError):
+        code = getattr(exc, "error_code", None) or "CREATE_FAILED"
+    else:
+        code = "CREATE_FAILED"
+    return {"created": False, "error": str(exc), "error_code": code}
 
 
 class KBService:
@@ -99,7 +148,9 @@ class KBService:
             logger.warning("Embedding service initialization failed", exc_info=True)
         return self._embedding_svc
 
-    def _validate_write(self, entry: Entry, kb_name: str, kb_config: KBConfig) -> None:
+    def _validate_write(
+        self, entry: Entry, kb_name: str, kb_config: KBConfig
+    ) -> list[dict[str, Any]]:
         """Refuse a write the KB schema or a plugin validator rejects.
 
         The same rules `index health` and `schema validate` report after the
@@ -109,10 +160,18 @@ class KBService:
         status). No kb.yaml means no schema to enforce; plugin validators for
         the KB type still run through validate_entry.
         """
+        # A typed entry keeps fields its model does not declare under a nested
+        # `metadata:` block, which is where build_entry puts a caller's extra
+        # kwargs. The schema declares them for the type all the same, so they
+        # are validated as the fields they are; a top-level key wins a clash.
+        fields = entry.to_frontmatter()
+        nested = fields.get("metadata")
+        if isinstance(nested, dict):
+            fields = {**nested, **fields}
         try:
             result = kb_config.kb_schema.validate_entry(
                 entry.entry_type,
-                entry.to_frontmatter(),
+                fields,
                 context={
                     "kb_name": kb_name,
                     "kb_type": kb_config.kb_type,
@@ -121,10 +180,10 @@ class KBService:
             )
         except Exception:  # a broken validator must not make every write fail
             logger.warning("Schema validation skipped for %s/%s", kb_name, entry.id, exc_info=True)
-            return
+            return []
         errors = result.get("errors") or []
         if not errors:
-            return
+            return list(result.get("warnings") or [])
         parts = []
         for e in errors:
             field = e.get("field", "?")
@@ -137,7 +196,9 @@ class KBService:
                 parts.append(f"{field}: required")
             else:
                 parts.append(f"{field}: {rule} (expected {expected}, got {got!r})")
-        raise ValidationError(f"Invalid {entry.entry_type} for KB '{kb_name}': " + "; ".join(parts))
+        raise SchemaViolationError(
+            f"Invalid {entry.entry_type} for KB '{kb_name}': " + "; ".join(parts), errors
+        )
 
     def _get_embedding_worker(self):
         """Lazy `EmbeddingWorker` over this service's index DB.
@@ -366,11 +427,194 @@ class KBService:
             logger.warning("Plugin type resolution failed for %s", entry_type, exc_info=True)
         return entry_type
 
+    # =========================================================================
+    # The write pipeline (#378)
+    #
+    # Every create decision is made here, once, for every surface: REST, MCP
+    # and the CLI only map their arguments into a spec and map the
+    # ValidationError subclasses below back out with ``error_code``. Before
+    # this, each surface made its own copy of these decisions and they drifted
+    # (#197, #359, #366).
+    # =========================================================================
+
+    def _writable_kb(self, kb_name: str) -> KBConfig:
+        kb_config = self.config.get_kb(kb_name)
+        if not kb_config:
+            raise KBNotFoundError(f"KB not found: {kb_name}")
+        if kb_config.read_only:
+            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
+        return kb_config
+
+    def _hook_ctx(
+        self, kb_name: str, kb_config: KBConfig, operation: str, extra: dict | None = None
+    ) -> PluginContext:
+        return PluginContext(
+            config=self.config,
+            db=self.db,
+            kb_name=kb_name,
+            user="",
+            operation=operation,
+            kb_type=kb_config.kb_type,
+            **({"extra": extra} if extra else {}),
+        )
+
+    @staticmethod
+    def _refuse_undeclared_type(entry_type: str, kb_name: str, kb_config: KBConfig) -> None:
+        """Refuse a type the KB's kb.yaml does not declare, when it declares any.
+
+        Core types are NOT exempt (#197): a KB that declares a schema declares
+        the vocabulary for that KB, and exempting core names is how `-t note`
+        against a software KB skipped this refusal and then had plugin type
+        resolution rewrite it to its most-derived `note` subtype -- an ADR with
+        `adr_number: 0` under `kb/adrs/`. Checked on the type as the caller
+        named it, before that resolution.
+        """
+        schema = kb_config.kb_schema
+        declared = sorted(schema.types.keys()) if schema and schema.types else []
+        if declared and entry_type not in schema.types:
+            raise UndeclaredTypeError(
+                f"type '{entry_type}' is not declared in KB '{kb_name}'. "
+                f"Declared types: {', '.join(declared)}. Inspect the KB schema, or "
+                f"override with allow_undeclared (the entry will be flagged by "
+                f"`pyrite index health`).",
+                declared,
+            )
+
+    def _prepare(
+        self,
+        kb_name: str,
+        kb_config: KBConfig,
+        spec: dict[str, Any],
+        *,
+        allow_undeclared: bool,
+        builder: Callable[[str, str, str, str, dict[str, Any]], Entry] | None = None,
+        resolve_type: bool = True,
+        pending_ids: set[str] | None = None,
+    ) -> tuple[Entry, list[dict[str, Any]]]:
+        """Decide whether ``spec`` is a valid new entry; build it if so.
+
+        In order: the ADR-0034 truncated-body refusal (on the spec as the
+        caller sent it, marker included) and marker stripping; the title; the
+        undeclared-type refusal; the plugin type resolution; the model's own
+        ``validate()``; the KB schema and plugin validators; and the exists
+        check -- create never replaces. Raises a ValidationError subclass
+        carrying a stable ``error_code``; returns the entry and its warnings.
+
+        ``builder(entry_type, entry_id, title, body, fields)`` builds the entry;
+        the default is :func:`build_entry`. ``add_entry_from_file`` passes its
+        own so a file's frontmatter round-trips exactly as the loader reads it.
+
+        ``resolve_type=False`` keeps the type exactly as named. A file's
+        frontmatter declares its type; rewriting `type: note` to a plugin's
+        most-derived `note` subtype is how #197 filed an ADR. ``pending_ids``
+        are ids an earlier item of the same dry run would have created.
+        """
+        from ..schema import generate_entry_id
+
+        ensure_not_truncated(spec)
+        # MARKER_KEYS are ADR-0034 read transport, never entry content: an
+        # allowed `body_truncated: false` must not be persisted as frontmatter.
+        # A None value means "not given", so the model's default applies.
+        fields = {k: v for k, v in spec.items() if k not in MARKER_KEYS and v is not None}
+
+        named_type = fields.pop("entry_type", None)
+        file_type = fields.pop("type", None)
+        entry_type = named_type or file_type or "note"
+        title = fields.pop("title", None)
+        if not title:
+            raise ValidationError("title is required")
+        if not allow_undeclared:
+            self._refuse_undeclared_type(entry_type, kb_name, kb_config)
+
+        entry_id = fields.pop("id", None) or generate_entry_id(title)
+        body = fields.pop("body", "")
+
+        # Resolve a generic core type to a plugin subtype, scoped to THIS KB's
+        # type so an unrelated installed extension can't rewrite the type
+        # (plugin-type-resolution-scoping).
+        if resolve_type:
+            entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
+        if builder is None:
+            entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **fields)
+        else:
+            entry = builder(entry_type, entry_id, title, body, fields)
+
+        # The model's own rules (an event needs a date, importance 1-10, ...).
+        errors = entry.validate()
+        if errors:
+            raise ValidationError("; ".join(errors))
+        warnings = self._validate_write(entry, kb_name, kb_config)
+
+        # Create never replaces. Ids are derived from titles, so two entries
+        # sharing a title is ordinary -- and used to destroy the first one while
+        # reporting "Created". Callers that mean to replace use update_entry.
+        if KBRepository(kb_config).exists(entry.id) or entry.id in (pending_ids or ()):
+            raise EntryExistsError(
+                f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'. "
+                "Use update to change it, or choose a different title/id."
+            )
+        return entry, warnings
+
+    def _prepare_and_save(
+        self,
+        kb_name: str,
+        kb_config: KBConfig,
+        spec: dict[str, Any],
+        *,
+        allow_undeclared: bool,
+        hook_ctx: PluginContext | None = None,
+        embed: bool = True,
+        builder: Callable[[str, str, str, str, dict[str, Any]], Entry] | None = None,
+        resolve_type: bool = True,
+    ) -> WriteResult:
+        """The one create pipeline: :meth:`_prepare`, then hooks, save, index, embed."""
+        entry, warnings = self._prepare(
+            kb_name,
+            kb_config,
+            spec,
+            allow_undeclared=allow_undeclared,
+            builder=builder,
+            resolve_type=resolve_type,
+        )
+        ctx = hook_ctx or self._hook_ctx(kb_name, kb_config, "create")
+        entry = self._run_hooks("before_save", entry, ctx)
+        self._doc_mgr.save_entry(entry, kb_name, kb_config)
+        if embed:
+            self._auto_embed(entry.id, kb_name)
+        self._run_hooks("after_save", entry, ctx)
+        return WriteResult(entry=entry, warnings=warnings)
+
+    def create(
+        self, kb_name: str, spec: dict[str, Any], *, allow_undeclared: bool = True
+    ) -> WriteResult:
+        """Create one entry from a spec, returning the entry and its warnings.
+
+        ``spec`` is the caller's entry as sent: ``entry_type`` (or ``type``),
+        ``title``, optional ``id`` (derived from the title otherwise),
+        ``body`` and any fields, with ADR-0034 marker keys left on so they can
+        be refused. See :meth:`_prepare` for every check.
+
+        ``allow_undeclared`` defaults to True for in-process callers (task,
+        collection, daily-note and plugin code writing their own types). Every
+        user-facing surface passes the caller's own override flag, False unless
+        they asked, which is what applies the undeclared-type refusal.
+        """
+        kb_config = self._writable_kb(kb_name)
+        return self._prepare_and_save(kb_name, kb_config, spec, allow_undeclared=allow_undeclared)
+
     def create_entry(
-        self, kb_name: str, entry_id: str, title: str, entry_type: str, body: str = "", **kwargs
+        self,
+        kb_name: str,
+        entry_id: str,
+        title: str,
+        entry_type: str,
+        body: str = "",
+        *,
+        allow_undeclared: bool = True,
+        **kwargs,
     ) -> Entry:
         """
-        Create a new entry.
+        Create a new entry. The positional form of :meth:`create`.
 
         Args:
             kb_name: Target KB name
@@ -378,6 +622,7 @@ class KBService:
             title: Entry title
             entry_type: Type (event, person, organization, note, topic, etc.)
             body: Markdown body content
+            allow_undeclared: False applies the undeclared-type refusal
             **kwargs: Additional fields (date, importance, tags, etc.)
 
         Returns:
@@ -386,139 +631,84 @@ class KBService:
         Raises:
             KBNotFoundError: If KB not found
             KBReadOnlyError: If KB is read-only
+            ValidationError: (or a subclass) if the pipeline refuses the entry
         """
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            raise KBNotFoundError(f"KB not found: {kb_name}")
-        if kb_config.read_only:
-            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
-
-        # Resolve generic core type to plugin subtype if one exists, scoped
-        # to THIS KB's type so an unrelated installed extension can't rewrite
-        # the type (plugin-type-resolution-scoping).
-        entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
-
-        # Create appropriate entry type via factory
-        entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **kwargs)
-
-        # Validate entry (e.g. events require a date, importance range, etc.)
-        errors = entry.validate()
-        if errors:
-            raise ValidationError("; ".join(errors))
-        self._validate_write(entry, kb_name, kb_config)
-
-        # Create never replaces. Ids are derived from titles, so two entries
-        # sharing a title is ordinary -- and used to destroy the first one while
-        # reporting "Created". Callers that mean to replace use update_entry.
-        if KBRepository(kb_config).exists(entry.id):
-            raise ValidationError(
-                f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'. "
-                "Use update to change it, or choose a different title/id."
-            )
-
-        # Run before_save hooks
-        hook_ctx = PluginContext(
-            config=self.config,
-            db=self.db,
-            kb_name=kb_name,
-            user="",
-            operation="create",
-            kb_type=kb_config.kb_type,
-        )
-        entry = self._run_hooks("before_save", entry, hook_ctx)
-
-        # Save to file, register KB, and index
-        self._doc_mgr.save_entry(entry, kb_name, kb_config)
-
-        # Auto-embed for semantic search
-        self._auto_embed(entry.id, kb_name)
-
-        # Run after_save hooks
-        self._run_hooks("after_save", entry, hook_ctx)
-
-        return entry
+        spec = {**kwargs, "id": entry_id, "title": title, "entry_type": entry_type, "body": body}
+        return self.create(kb_name, spec, allow_undeclared=allow_undeclared).entry
 
     def bulk_create_entries(
         self,
         kb_name: str,
         entries: list[dict[str, Any]],
+        *,
+        allow_undeclared: bool = True,
+        validate_only: bool = False,
     ) -> list[dict[str, Any]]:
         """
-        Create multiple entries in a single batch.
+        Create multiple entries in a single batch, through the same pipeline as
+        :meth:`create`, one item at a time.
 
-        Each entry spec should have at least {entry_type, title} plus optional
-        fields (body, date, importance, tags, metadata, etc.).
+        Each spec has at least {entry_type, title} plus optional fields (id,
+        body, date, importance, tags, metadata, etc.). An item the pipeline
+        refuses fails on its own; its siblings are still created, and results
+        keep the input order. An existing id -- including one an earlier item
+        in the same batch just created -- is refused (#359); schema and plugin
+        validation applies to every item (#366).
 
         Returns a list of result dicts, one per input entry:
-            {"created": True, "entry_id": "..."} on success
-            {"created": False, "error": "..."} on failure
+            {"created": True, "entry_id": "...", "warnings": [...]} on success
+                (``warnings`` only when there are any)
+            {"created": False, "error": "...", "error_code": "..."} on failure
+
+        ``validate_only`` runs every check without writing; a passing item is
+        reported as {"created": False, "valid": True, "entry_id": "..."}.
         """
-        from ..schema import generate_entry_id
-
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            raise KBNotFoundError(f"KB not found: {kb_name}")
-        if kb_config.read_only:
-            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
-
-        repository = KBRepository(kb_config)
-
-        hook_ctx = PluginContext(
-            config=self.config,
-            db=self.db,
-            kb_name=kb_name,
-            user="",
-            operation="create",
-            kb_type=kb_config.kb_type,
-        )
+        if validate_only:
+            kb_config = self.config.get_kb(kb_name)
+            if not kb_config:
+                raise KBNotFoundError(f"KB not found: {kb_name}")
+        else:
+            kb_config = self._writable_kb(kb_name)
+        hook_ctx = self._hook_ctx(kb_name, kb_config, "create")
 
         results: list[dict[str, Any]] = []
         created_ids: list[tuple[str, str]] = []  # (entry_id, kb_name) for batch embed
+        # A dry run writes nothing, so the exists check alone cannot see an id
+        # an earlier item of the same batch would have created.
+        would_create: set[str] = set()
 
         for spec in entries:
             try:
-                entry_type = spec.get("entry_type", "note")
-                title = spec.get("title")
-                if not title:
-                    results.append({"created": False, "error": "title is required"})
-                    continue
-
-                body = spec.get("body", "")
-                entry_id = generate_entry_id(title)
-
-                # Resolve type, scoped to this KB's type (see create_entry)
-                entry_type = self._resolve_entry_type(entry_type, kb_config.kb_type)
-
-                # Build extra kwargs. MARKER_KEYS are ADR-0034 read
-                # transport, never entry content: a spec that legitimately
-                # carries `body_truncated: false` must not have it persisted
-                # as frontmatter. (A truthy marker is refused before here.)
-                extra = {
-                    k: v
-                    for k, v in spec.items()
-                    if k not in ("entry_type", "title", "body", *MARKER_KEYS)
-                }
-
-                entry = build_entry(entry_type, entry_id=entry_id, title=title, body=body, **extra)
-
-                # Match create_entry: a create with an existing ID is never
-                # an update. This check also catches duplicate IDs earlier in
-                # this batch because each successful item has already been saved.
-                if repository.exists(entry.id):
-                    raise ValidationError(
-                        f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'. "
-                        "Use update to change it, or choose a different title/id."
+                if validate_only:
+                    entry, warnings = self._prepare(
+                        kb_name,
+                        kb_config,
+                        spec,
+                        allow_undeclared=allow_undeclared,
+                        pending_ids=would_create,
                     )
-
-                entry = self._run_hooks("before_save", entry, hook_ctx)
-
-                self._doc_mgr.save_entry(entry, kb_name, kb_config)
-                self._run_hooks("after_save", entry, hook_ctx)
-
-                created_ids.append((entry.id, kb_name))
-                results.append({"created": True, "entry_id": entry.id})
+                    would_create.add(entry.id)
+                    item: dict[str, Any] = {"created": False, "valid": True, "entry_id": entry.id}
+                else:
+                    written = self._prepare_and_save(
+                        kb_name,
+                        kb_config,
+                        spec,
+                        allow_undeclared=allow_undeclared,
+                        hook_ctx=hook_ctx,
+                        embed=False,
+                    )
+                    entry, warnings = written.entry, written.warnings
+                    created_ids.append((entry.id, kb_name))
+                    item = {"created": True, "entry_id": entry.id}
+                if warnings:
+                    item["warnings"] = warnings
+                results.append(item)
             except Exception as e:
-                results.append({"created": False, "error": str(e)})
+                result = _refusal_result(e)
+                if validate_only:
+                    result["valid"] = False
+                results.append(result)
 
         # Batch embed all created entries
         for eid, ekb in created_ids:
@@ -527,10 +717,16 @@ class KBService:
         return results
 
     def add_entry_from_file(
-        self, kb_name: str, source_path: Path, *, validate_only: bool = False
+        self,
+        kb_name: str,
+        source_path: Path,
+        *,
+        validate_only: bool = False,
+        allow_undeclared: bool = True,
     ) -> tuple[Entry, dict[str, Any]]:
         """
-        Add a markdown file with frontmatter to a knowledge base.
+        Add a markdown file with frontmatter to a knowledge base, through the
+        same pipeline as :meth:`create`.
 
         Reads the file, parses frontmatter, validates, and saves to the KB.
         Frontmatter must include 'type' and 'title'.
@@ -538,7 +734,9 @@ class KBService:
         Args:
             kb_name: Target KB name
             source_path: Path to the markdown file
-            validate_only: If True, validate without saving
+            validate_only: If True, validate without saving; refusals are
+                reported in the returned ``errors`` instead of raised
+            allow_undeclared: False applies the undeclared-type refusal
 
         Returns:
             Tuple of (Entry, validation_result dict with errors/warnings)
@@ -546,7 +744,8 @@ class KBService:
         Raises:
             KBNotFoundError: If KB not found
             KBReadOnlyError: If KB is read-only
-            ValidationError: If frontmatter is missing required fields or has errors
+            ValidationError: If frontmatter is missing required fields or the
+                pipeline refuses the entry
         """
         from ..models.core_types import entry_from_frontmatter
         from ..schema import generate_entry_id
@@ -581,87 +780,137 @@ class KBService:
         if "title" not in meta:
             raise ValidationError("Frontmatter must include 'title'")
 
-        # Generate ID from title if not present
-        if "id" not in meta:
-            meta["id"] = generate_entry_id(meta["title"])
+        def from_file(entry_type, entry_id, title, body_, fields):
+            # The loader's own reading of the frontmatter, so links, sources,
+            # timestamps and custom-type fields round-trip exactly.
+            fm = {**fields, "id": entry_id, "title": title, "type": entry_type}
+            return entry_from_frontmatter(fm, body_)
 
-        # Build Entry object
-        entry = entry_from_frontmatter(meta, body)
-
-        # Schema validation if kb.yaml exists
-        validation_result: dict[str, Any] = {"errors": [], "warnings": []}
-        kb_yaml = kb_config.path / "kb.yaml"
-        if kb_yaml.exists():
-            try:
-                schema = kb_config.kb_schema
-                validation_result = schema.validate_entry(
-                    entry.entry_type,
-                    meta,
-                    context={"kb_name": kb_name, "kb_type": kb_config.kb_type},
-                )
-            except Exception as e:
-                validation_result["warnings"].append(f"Schema validation skipped: {e}")
-
+        spec = {**meta, "body": body}
         if validate_only:
-            return entry, validation_result
+            try:
+                entry, warnings = self._prepare(
+                    kb_name,
+                    kb_config,
+                    spec,
+                    allow_undeclared=allow_undeclared,
+                    builder=from_file,
+                    resolve_type=False,
+                )
+            except ValidationError as e:
+                fallback = {k: v for k, v in meta.items() if k not in MARKER_KEYS}
+                fallback.setdefault("id", generate_entry_id(meta["title"]))
+                entry = entry_from_frontmatter(fallback, body)
+                errors = getattr(e, "errors", None) or [str(e)]
+                return entry, {"errors": errors, "warnings": []}
+            return entry, {"errors": [], "warnings": warnings}
 
-        if validation_result.get("errors"):
-            raise ValidationError(f"Validation errors: {validation_result['errors']}")
-
-        # Check for ID collision
-        repo = KBRepository(kb_config)
-        if repo.exists(entry.id):
-            raise ValidationError(f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'")
-
-        # Run before_save hooks
-        hook_ctx = PluginContext(
-            config=self.config,
-            db=self.db,
-            kb_name=kb_name,
-            user="",
-            operation="create",
-            kb_type=kb_config.kb_type,
+        written = self._prepare_and_save(
+            kb_name,
+            kb_config,
+            spec,
+            allow_undeclared=allow_undeclared,
+            builder=from_file,
+            resolve_type=False,
         )
-        entry = self._run_hooks("before_save", entry, hook_ctx)
+        return written.entry, {"errors": [], "warnings": written.warnings}
 
-        # Save to file, register KB, and index
-        self._doc_mgr.save_entry(entry, kb_name, kb_config)
+    @staticmethod
+    def _field_sets(
+        entry_type: str, kb_config: KBConfig | None
+    ) -> tuple[frozenset[str], frozenset[str], frozenset[str]]:
+        """``(updatable, schema_only, managed)`` for one entry type.
 
-        # Auto-embed for semantic search
-        self._auto_embed(entry.id, kb_name)
-
-        # Run after_save hooks
-        self._run_hooks("after_save", entry, hook_ctx)
-
-        return entry, validation_result
-
-    def update_entry(self, entry_id: str, kb_name: str, **updates) -> Entry:
+        ``updatable`` is the type's own field set: its model class's fields
+        (core or plugin, from the type registry) plus every field its KB
+        schema names for the type (``fields``, ``optional`` and ``required``),
+        less ``managed`` -- the service's identity fields and the type's own
+        ``managed_fields``. ``schema_only`` is the schema's part, which an
+        update writes as a custom field when the model has no attribute for
+        it. One computation, so what ``updatable_fields`` reports and what
+        ``update`` writes cannot disagree.
         """
-        Update an existing entry.
+        from ..models.core_types import get_entry_class
 
-        Args:
-            entry_id: Entry ID to update
-            kb_name: KB containing the entry
-            **updates: Fields to update
+        cls = get_entry_class(entry_type)
+        managed = _MANAGED_FIELDS | frozenset(getattr(cls, "managed_fields", frozenset()))
+        model = {f.name for f in dataclasses.fields(cls) if f.init and not f.name.startswith("_")}
+        schema: set[str] = set()
+        if kb_config is not None:
+            type_schema = kb_config.kb_schema.get_type_schema(entry_type)
+            if type_schema is not None:
+                schema = set(type_schema.fields) | set(type_schema.optional)
+                schema |= set(type_schema.required)
+        return (
+            frozenset((model | schema) - managed - _TIMESTAMP_FIELDS),
+            frozenset(schema - managed),
+            managed,
+        )
 
-        Returns:
-            Updated Entry object
+    def updatable_fields(self, entry_id: str, kb_name: str) -> frozenset[str]:
+        """The fields a caller's field update may set on this entry.
+
+        The entry type's own field set (see ``_field_sets``): model fields plus
+        the KB schema's fields for the type, less identity fields and the
+        type's ``managed_fields``. Timestamps are left out: :meth:`update`
+        accepts them only when a caller names them. Replaces MCP's
+        hand-maintained allowlist, which named extension vocabulary in core
+        and still missed every kb.yaml-declared field (#378). Empty if the
+        entry does not exist.
+        """
+        row = self.db.get_entry(entry_id, kb_name)
+        entry_type = row.get("entry_type") if row else None
+        kb_config = self.config.get_kb(kb_name)
+        if entry_type is None and kb_config is not None:
+            loaded = KBRepository(kb_config).load(entry_id)
+            entry_type = loaded.entry_type if loaded else None
+        if entry_type is None:
+            return frozenset()
+        return self._field_sets(entry_type, kb_config)[0]
+
+    def update(self, entry_id: str, kb_name: str, updates: dict[str, Any]) -> WriteResult:
+        """Update an existing entry for a caller, returning it and its warnings.
+
+        The surfaces' update (REST PUT/PATCH, MCP ``kb_update``, CLI
+        ``update``). ``updates`` is the caller's field set as sent, ADR-0034
+        marker keys included: a body marked truncated is refused, at any
+        depth. A field the service or the type manages (``id``, the file
+        path, links, a task's audit trail...) is refused rather than written:
+        setting ``id`` used to leave a second file. A field the entry's model
+        does not have but its KB schema names for the type is written as a
+        custom field instead of being dropped.
 
         Raises:
             KBNotFoundError: If KB not found
             KBReadOnlyError: If KB is read-only
             EntryNotFoundError: If entry not found
+            ValidationError: (or a subclass) if the write is refused
         """
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
-            raise KBNotFoundError(f"KB not found: {kb_name}")
-        if kb_config.read_only:
-            raise KBReadOnlyError(f"KB is read-only: {kb_name}")
+        return self._update(entry_id, kb_name, updates, restrict=True)
+
+    def _update(
+        self, entry_id: str, kb_name: str, updates: dict[str, Any], *, restrict: bool
+    ) -> WriteResult:
+        # ADR-0034 marker keys are refused here and otherwise never stored:
+        # they are not model attributes, so the loop below skips them.
+        ensure_not_truncated(updates)
+        updates = dict(updates)
+
+        kb_config = self._writable_kb(kb_name)
 
         repo = KBRepository(kb_config)
         entry = repo.load(entry_id)
         if not entry:
             raise EntryNotFoundError(f"Entry not found: {entry_id}")
+
+        _, schema_fields, managed = self._field_sets(entry.entry_type, kb_config)
+        if restrict:
+            refused = sorted(k for k in updates if k in managed)
+            if refused:
+                raise ValidationError(
+                    f"Cannot set {', '.join(refused)} on {entry.entry_type} "
+                    f"'{entry_id}' with an update: Pyrite maintains these fields."
+                )
 
         # Capture old_status before applying updates (for workflow hooks)
         old_status = getattr(entry, "status", None)
@@ -681,6 +930,16 @@ class KBService:
         # Apply updates
         for key, value in updates.items():
             if not hasattr(entry, key):
+                if key in schema_fields:
+                    # A kb.yaml-declared field with no model attribute: it
+                    # lives in the entry's custom fields, where a loaded
+                    # kb.yaml-only type keeps it (GenericEntry promotes
+                    # metadata to top-level frontmatter; a typed entry keeps
+                    # an undeclared key in extra_frontmatter).
+                    if key in entry.extra_frontmatter:
+                        entry.extra_frontmatter[key] = value
+                    else:
+                        entry.metadata = {**(entry.metadata or {}), key: value}
                 continue
             # Metadata is a bag of keys — merge shallowly so a partial update
             # (e.g. just review_comments) does not clobber other metadata.
@@ -699,19 +958,11 @@ class KBService:
             entry.touch_updated_at()
 
         # Refuse before anything is written: the file must stay exactly as it was.
-        self._validate_write(entry, kb_name, kb_config)
+        warnings = self._validate_write(entry, kb_name, kb_config)
 
         # Run before_save hooks
         extra = {"old_status": old_status} if old_status else {}
-        hook_ctx = PluginContext(
-            config=self.config,
-            db=self.db,
-            kb_name=kb_name,
-            user="",
-            operation="update",
-            kb_type=kb_config.kb_type,
-            extra=extra,
-        )
+        hook_ctx = self._hook_ctx(kb_name, kb_config, "update", extra)
         entry = self._run_hooks("before_save", entry, hook_ctx)
 
         # Save to file, register KB, and re-index
@@ -725,7 +976,25 @@ class KBService:
         # Run after_save hooks
         self._run_hooks("after_save", entry, hook_ctx)
 
-        return entry
+        return WriteResult(entry=entry, warnings=warnings)
+
+    def update_entry(self, entry_id: str, kb_name: str, **updates) -> Entry:
+        """
+        Update an existing entry, for in-process callers.
+
+        The keyword form of :meth:`update`, with the same checks except the
+        managed-field refusal: the services that own a type's managed fields
+        (TaskService's audit trail, a plugin's numbering) write them here.
+
+        Args:
+            entry_id: Entry ID to update
+            kb_name: KB containing the entry
+            **updates: Fields to update
+
+        Returns:
+            Updated Entry object
+        """
+        return self._update(entry_id, kb_name, updates, restrict=False).entry
 
     def delete_entry(self, entry_id: str, kb_name: str) -> bool:
         """
@@ -922,6 +1191,71 @@ class KBService:
         entry.touch_updated_at()
         self._doc_mgr.save_entry(entry, source_kb, kb_config)
         return {"resolved": resolved}
+
+    def add_links(
+        self, kb_name: str, links: list[dict[str, Any]], *, dry_run: bool = False
+    ) -> list[dict[str, Any]]:
+        """Add many links whose sources are in ``kb_name``, one save per source.
+
+        Each spec is ``{source, target, relation?, target_kb?, note?}``. A link
+        already recorded on its source is skipped, as :meth:`add_link` treats
+        it. Targets are not required to exist: a bulk link set is often loaded
+        before, or alongside, the entries it points at.
+
+        Each source is loaded once, gets all of its new links, and is saved
+        once through the same DocumentManager path :meth:`add_link` uses --
+        in place, wherever the file lives, and re-indexed. The CLI used to
+        ``repo.save`` it, which re-derived the path from the type and wrote a
+        second copy of any entry kept elsewhere (#375).
+
+        Returns one result per spec, in input order:
+        ``{"status": "created" | "skipped" | "failed", "error"?: str}``.
+        ``dry_run`` reports what would happen without writing.
+        """
+        kb_config = self._writable_kb(kb_name)
+        repo = KBRepository(kb_config)
+
+        results: list[dict[str, Any]] = [{} for _ in links]
+        loaded: dict[str, Entry | None] = {}
+        dirty: dict[str, list[int]] = {}
+
+        for i, spec in enumerate(links):
+            source_id = spec.get("source")
+            target_id = spec.get("target")
+            tkb = spec.get("target_kb") or kb_name
+            if source_id not in loaded:
+                loaded[source_id] = repo.load(source_id)
+            entry = loaded[source_id]
+            if entry is None:
+                results[i] = {"status": "failed", "error": f"source entry not found: {source_id}"}
+                continue
+            if any(
+                existing.target == target_id and (existing.kb or kb_name) == tkb
+                for existing in entry.links
+            ):
+                results[i] = {"status": "skipped"}
+                continue
+            entry.add_link(
+                target=target_id,
+                relation=spec.get("relation") or "related_to",
+                note=spec.get("note", ""),
+                kb=tkb,
+            )
+            results[i] = {"status": "created"}
+            dirty.setdefault(source_id, []).append(i)
+
+        if dry_run:
+            return results
+
+        for source_id, positions in dirty.items():
+            entry = loaded[source_id]
+            try:
+                entry.touch_updated_at()
+                self._doc_mgr.save_entry(entry, kb_name, kb_config)
+            except Exception as e:
+                for i in positions:
+                    results[i] = {"status": "failed", "error": str(e)}
+        return results
 
     # =========================================================================
     # Query Operations (read-only, delegate to db)

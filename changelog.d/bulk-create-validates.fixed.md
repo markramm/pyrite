@@ -1,0 +1,2 @@
+- **Bulk create refuses invalid items instead of writing them.** `kb_bulk_create`, `pyrite import` and task decomposition now refuse, per item, an entry the KB schema or a plugin validator rejects (#366), with the message and `error_code` `kb_create` gives. Siblings are still created, in order. Callers that sent off-schema values will now see per-item errors.
+- **`pyrite links bulk-create` edits an entry where it lives.** It used to re-derive the source entry's path from its type and write a second copy of any entry kept elsewhere (#375).

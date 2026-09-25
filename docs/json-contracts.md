@@ -31,6 +31,68 @@ Every error surface (CLI `cli_error`, MCP tool `_error`, REST
 
 Source of truth: `pyrite/utils/errors.py` (`build_error`).
 
+## Write refusals (create, import, update)
+
+Every entry write — REST `POST /api/entries`, `PUT`/`PATCH
+/api/entries/{id}`, `POST /api/entries/import`, `POST /api/clip`; MCP `kb_create`,
+`kb_update`, `kb_bulk_create`; CLI `pyrite create`, `pyrite update`,
+`pyrite add`, `pyrite import` — goes through one pipeline in `KBService`,
+so the same entry is refused with the same `error_code` on every surface:
+
+| `error_code` | Meaning |
+|---|---|
+| `UNDECLARED_TYPE` | the KB's `kb.yaml` declares types and this is not one of them. Core types (`note`, `person`, …) are **not** exempt. Override with `allow_undeclared` (MCP, REST body or import query) / `--allow-undeclared` (CLI). The error carries `declared_types` on MCP and REST. |
+| `ENTRY_EXISTS` | the id (given, or derived from the title) already exists. Create never replaces; use update. REST answers `409`. |
+| `SCHEMA_VIOLATION` | the KB schema (with `validation.enforce`) or a plugin validator rejected a field: enum, required, range, format. |
+| `VALIDATION_FAILED` | anything else the entry model refuses (an event without a date, a missing title), and the ADR-0034 truncated-body refusal below. |
+
+All are `retryable: false`. REST reports them as
+`{"detail": {"code", "message", "retryable": false, "hint"?, "declared_types"?}}`
+with status `400` (`409` for `ENTRY_EXISTS`); MCP and the CLI use the error
+shape above.
+
+**Per-item results.** `kb_bulk_create`, `POST /api/entries/import` and
+`pyrite import` refuse a bad item on its own and create its siblings;
+results keep the input order. Each failed item carries `error_code`:
+
+```json
+{"created": false, "error": "Entry with ID 'x' already exists in KB 'k'. ...", "error_code": "ENTRY_EXISTS"}
+```
+
+REST import reports the same pair per item in `error_details`
+(`{"title", "error", "error_code"}`). `pyrite import` prints
+`Failed [CODE]: <title>: <message>` per refused record and exits `1` if any
+record was refused (re-importing a file whose entries exist is refused per
+record, so it exits `1`); `--dry-run` prints `Would refuse [CODE]: …`,
+including for a record whose id an earlier record of the same file would
+create, and writes nothing.
+
+**Warnings.** A write that succeeds may still draw non-blocking schema
+findings (an unknown select value when the KB does not enforce). MCP
+`kb_create`/`kb_update` return them as `warnings` (omitted when empty),
+each `kb_bulk_create` result as `warnings`, and REST `POST`/`PUT`/`PATCH
+/api/entries` as `warnings: []` in the response body.
+
+**Update fields.** An update applies the fields of the entry's own type —
+its model's fields and every field its `kb.yaml` names for the type
+(`fields`, `optional`, `required`). Fields Pyrite maintains are never set by
+an update: `id`, `file_path`, `kb_name`, `links`, `sources`, `provenance`,
+plus a type's own `managed_fields` (a task's `status_change_log`,
+`evidence`, `agent_context`, `assigned_at`; an ADR's `adr_number`). REST
+`PUT`/`PATCH` and `pyrite update --field` refuse them with
+`VALIDATION_FAILED`; MCP `kb_update` ignores them, and also ignores
+`created_at`/`updated_at`, so a read result echoed back cannot rewrite them.
+A body marked `body_truncated` is refused at any depth of the request on
+every update surface.
+
+**Web client.** The web app sends `allow_undeclared: true` on create,
+`POST /api/clip` and import, so its forms, which offer every core and
+plugin type, keep working in a KB that declares types.
+
+Source of truth: `pyrite/services/kb_service.py` (`_prepare`,
+`bulk_create_entries`, `update`, `updatable_fields`) and the
+`ValidationError` subclasses in `pyrite/exceptions.py`.
+
 ## Repo endpoint errors
 
 `/api/repos/*` predates the shape above and answers a failure with a

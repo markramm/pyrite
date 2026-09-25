@@ -153,7 +153,7 @@ def links_bulk_create(
     'relation' (default: related_to), 'target_kb' (default: source KB), 'note'.
     """
 
-    from ..storage.repository import KBRepository
+    from ..exceptions import KBNotFoundError, KBReadOnlyError
 
     # Resolve input source: positional arg, --file option, or stdin
     input_path = file or file_option
@@ -207,84 +207,48 @@ def links_bulk_create(
         )
 
     with cli_context() as (_config, _db, svc):
-        kb_config = _config.get_kb(kb_name)
-        if not kb_config:
+        # KBService.add_links saves each source once, in place, through the
+        # same path `pyrite link` uses. This command used to `repo.save` the
+        # source, which re-derived its path from the type and wrote a second
+        # copy of any entry kept elsewhere (#375).
+        try:
+            results = svc.add_links(kb_name, specs, dry_run=dry_run)
+        except KBNotFoundError as e:
             from ..utils.errors import cli_error
 
             cli_error(
-                f"KB not found: {kb_name}",
+                str(e),
                 "rich",
                 error_code="KB_NOT_FOUND",
                 suggestion="Run `pyrite kb list` to see available KBs.",
             )
-        if kb_config.read_only:
+        except KBReadOnlyError as e:
             from ..utils.errors import cli_error
 
-            cli_error(
-                f"KB is read-only: {kb_name}",
-                "rich",
-                error_code="READ_ONLY",
-            )
+            cli_error(str(e), "rich", error_code="READ_ONLY")
 
-        repo = KBRepository(kb_config)
-
-        created = 0
-        skipped = 0
-        failed = 0
+        created = skipped = failed = 0
         failed_details: list[str] = []
-
-        for i, spec in enumerate(specs):
+        for i, (spec, r) in enumerate(zip(specs, results, strict=True)):
             source_id = spec["source"]
             target_id = spec["target"]
             relation = spec.get("relation", "related_to")
-            target_kb = spec.get("target_kb", kb_name)
-            note = spec.get("note", "")
-
-            try:
-                entry = repo.load(source_id)
-                if entry is None:
-                    msg = f"Link {i}: source entry not found: {source_id}"
-                    failed += 1
-                    failed_details.append(msg)
-                    continue
-
-                # Check for duplicate
-                is_dup = False
-                for existing in entry.links:
-                    if existing.target == target_id and (existing.kb or kb_name) == target_kb:
-                        is_dup = True
-                        break
-
-                if is_dup:
-                    skipped += 1
-                    if dry_run:
-                        console.print(
-                            f"  [dim]skip[/dim] {source_id} --[{relation}]--> {target_id}"
-                            f" (duplicate)"
-                        )
-                    continue
-
+            if r["status"] == "created":
+                created += 1
                 if dry_run:
                     console.print(
                         f"  [green]create[/green] {source_id} --[{relation}]--> {target_id}"
-                        f" (target_kb={target_kb})"
+                        f" (target_kb={spec.get('target_kb', kb_name)})"
                     )
-                    created += 1
-                    continue
-
-                # Add the link and save the file (no per-entry index)
-                entry.add_link(target=target_id, relation=relation, note=note, kb=target_kb)
-                entry.touch_updated_at()
-                repo.save(entry)
-                created += 1
-
-            except Exception as e:
+            elif r["status"] == "skipped":
+                skipped += 1
+                if dry_run:
+                    console.print(
+                        f"  [dim]skip[/dim] {source_id} --[{relation}]--> {target_id} (duplicate)"
+                    )
+            else:
                 failed += 1
-                failed_details.append(f"Link {i}: {e}")
-
-        # Single index sync after all writes (skip for dry-run)
-        if not dry_run and created > 0:
-            svc.sync_index(kb_name)
+                failed_details.append(f"Link {i}: {r.get('error', 'failed')}")
 
         # Report
         label = "Dry run" if dry_run else "Bulk create"

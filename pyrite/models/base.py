@@ -429,6 +429,15 @@ class Entry(ABC):
     # as extras (which would write the value twice).
     FRONTMATTER_ALIASES: ClassVar[frozenset[str]] = frozenset()
 
+    # Fields this type's own service logic maintains -- an audit trail, a
+    # number a command assigns -- which a caller's field update must not set
+    # (#378 review). `KBService.update` refuses them and
+    # `KBService.updatable_fields` leaves them out; in-process callers
+    # (`update_entry`) still write them. Plugin entry types declare theirs the
+    # same way. Identity and storage fields (id, path, links...) are managed by
+    # the service for every type and need not be listed.
+    managed_fields: ClassVar[frozenset[str]] = frozenset()
+
     @property
     @abstractmethod
     def entry_type(self) -> str:
