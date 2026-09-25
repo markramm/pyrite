@@ -378,16 +378,15 @@ class TestGitEnvIsolation:
     leak-isolated git environment (#415), so a parent git process's
     repo-scoped env vars (GIT_DIR, GIT_INDEX_FILE, ...) cannot leak in."""
 
-    def test_both_git_calls_get_isolated_env(self, version_setup, monkeypatch):
+    def test_both_git_calls_get_isolated_env(self, version_setup, monkeypatch, tmp_path):
         svc, db, commit1 = version_setup
-        db.upsert_entry_version(
-            entry_id="entry-1",
-            kb_name="test-kb",
-            commit_hash=commit1,
-            author_name="Test",
-            author_email="test@test.com",
-            commit_date="2026-01-01T00:00:00+00:00",
-        )
+        # Plant the leakable vars in *this* process's environment first, so
+        # the assertion below is a real check that they were stripped from
+        # the subprocess env -- not just that they happen to be absent from
+        # the test process already.
+        monkeypatch.setenv("GIT_DIR", str(tmp_path / "somewhere-else" / ".git"))
+        monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "somewhere-else" / "index"))
+
         real_run = subprocess.run
         seen_envs = []
 
