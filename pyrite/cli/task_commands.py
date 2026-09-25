@@ -58,6 +58,123 @@ def _get_service() -> tuple[TaskService, PyriteDB]:
     return TaskService(config, db), db
 
 
+#: `--field` keys refused because a dedicated option already sets them,
+#: named so the error can point the caller at the right option.
+_FIELD_OWN_OPTION: dict[str, str] = {
+    "title": "--title (or the positional TITLE)",
+    "body": "--body",
+    "parent": "--parent",
+    "priority": "--priority",
+    "assignee": "--assignee",
+    "tags": "--tags",
+}
+
+#: `--field` keys refused because `TaskService.create_task` forwards
+#: `fields` as `**kwargs` straight into `KBService.create_entry(kb_name,
+#: entry_id, title, entry_type, body, *, allow_undeclared, **kwargs)`
+#: (round-1 cold read). `kb_name`/`entry_id`/`entry_type` collide with that
+#: call's own positional/keyword arguments and crash with a raw "got
+#: multiple values for keyword argument" TypeError; `allow_undeclared`
+#: doesn't crash -- it silently binds to the control parameter that decides
+#: whether the undeclared-type refusal runs, so a caller naming a field
+#: `allow_undeclared` would instead flip the create pipeline's own safety
+#: switch without knowing it.
+_FIELD_CREATE_ENTRY_COLLISION: frozenset[str] = frozenset(
+    {"kb_name", "entry_id", "entry_type", "allow_undeclared"}
+)
+
+#: `--field` keys refused because a freshly created entry can never actually
+#: carry them, the #407 symptom recurring on `create` (round-2 cold read):
+#: `type` is frontmatter-only -- `build_entry` always writes the caller's
+#: own `entry_type` argument as `type:`, so `--field type=note` on a task
+#: silently had no effect and `task create` reported success anyway, the
+#: same as `update -f type=...` before it was refused. `created_at`/
+#: `updated_at` are accepted by the constructor (`build_entry` passes them
+#: through) but `Entry._base_frontmatter` only re-emits a timestamp for an
+#: entry loaded FROM a file (`_source_frontmatter` set, #151/#46) -- a
+#: freshly created entry never has that, so the value is silently dropped
+#: before the file is ever written, unlike `update -f created_at=...` on an
+#: existing entry, which does persist. Refusing here rather than silently
+#: accepting and dropping.
+_FIELD_CREATE_NEVER_TAKES_EFFECT: frozenset[str] = frozenset({"type", "created_at", "updated_at"})
+
+
+def _parse_task_create_fields(field: list[str] | None) -> dict[str, Any]:
+    """Parse `--field key=value` pairs for `task create`.
+
+    Uses the same value parser as `create -f`/`update -f`
+    (`_parse_field_value`), and refuses:
+
+    - a key that already has its own option;
+    - `status` (task lifecycle is `task update --status`, not a free-form
+      field);
+    - a `TaskEntry.managed_fields` key -- `create` does not run `update`'s
+      managed-field refusal, so without this an agent could forge the audit
+      trail (`status_change_log`, `evidence`, `agent_context`,
+      `assigned_at`) at creation instead of only failing to set it later;
+    - every service-level `KBService._MANAGED_FIELDS` key (`id`, `kb_name`,
+      `file_path`, `links`, `sources`, `provenance`, `extra_frontmatter`) --
+      `update` already refuses these on every entry type, not just tasks;
+      `create` didn't, so `--field links=[{"target": "ghost"}]` created a
+      task already linked to a target that doesn't exist, bypassing the
+      dangling-target check `add_link` applies everywhere else (round-1
+      cold read);
+    - a key colliding with `create_entry`'s own call signature or control
+      parameters (`_FIELD_CREATE_ENTRY_COLLISION`);
+    - `type`, `created_at` and `updated_at` -- a freshly created entry can
+      never actually carry them (`_FIELD_CREATE_NEVER_TAKES_EFFECT`), the
+      #407 symptom recurring on `create` (round-2 cold read).
+    """
+    from ..models.task import TaskEntry
+    from ..services.kb_service import _MANAGED_FIELDS
+    from .entry_commands import _parse_field_value
+
+    fields: dict[str, Any] = {}
+    for fv in field or []:
+        if "=" not in fv:
+            console.print(f"[red]Error:[/red] --field must be key=value, got '{fv}'")
+            raise typer.Exit(1)
+        k, v = fv.split("=", 1)
+        if k in _FIELD_OWN_OPTION:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: use {_FIELD_OWN_OPTION[k]} instead."
+            )
+            raise typer.Exit(1)
+        if k == "status":
+            console.print(
+                "[red]Error:[/red] --field status=... is refused: a new task is "
+                "always created open; use `task update --status` to change it."
+            )
+            raise typer.Exit(1)
+        if k in TaskEntry.managed_fields:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: Pyrite maintains "
+                f"this field as part of the task's audit trail."
+            )
+            raise typer.Exit(1)
+        if k in _MANAGED_FIELDS:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: Pyrite maintains "
+                f"this field; `update` refuses it too."
+            )
+            raise typer.Exit(1)
+        if k in _FIELD_CREATE_ENTRY_COLLISION:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: this name collides "
+                f"with a parameter `task create` itself needs."
+            )
+            raise typer.Exit(1)
+        if k in _FIELD_CREATE_NEVER_TAKES_EFFECT:
+            console.print(
+                f"[red]Error:[/red] --field {k}=... is refused: a freshly created "
+                f"task cannot carry this value; it would report success and set "
+                f"nothing."
+            )
+            raise typer.Exit(1)
+        fields[k] = _parse_field_value(v)
+    return fields
+
+
 @task_app.command("create")
 def task_create(
     title_arg: str | None = typer.Argument(
@@ -72,6 +189,9 @@ def task_create(
     ),
     body: str | None = typer.Option(None, "--body", "-b", help="Task description"),
     tags: str = typer.Option("", "--tags", help="Comma-separated tags"),
+    field: list[str] | None = typer.Option(
+        None, "--field", help="Extra field as key=value (repeatable)"
+    ),
     fmt: str = typer.Option("rich", "--format", "-f", help="Output format: rich, json"),
 ):
     """Create a new task.
@@ -79,6 +199,11 @@ def task_create(
     The title may be given either positionally (``task create "Title"``) or via
     the ``--title`` flag (``task create --title "Title"``) — both work, for
     consistency with the other ``--body``/``--priority`` flags.
+
+    ``--field key=value`` (repeatable) sets any field a KB's schema requires
+    or allows for ``task`` beyond the built-in options -- e.g. the desk
+    schema's ``project``/``kind``. ``-f`` is already ``--format`` on this
+    command (#303), so this is ``--field`` only, with no short flag.
     """
     if title_arg and title_opt:
         console.print(
@@ -93,6 +218,8 @@ def task_create(
         )
         raise typer.Exit(1)
 
+    fields = _parse_task_create_fields(field)
+
     svc, db = _get_service()
     try:
         result = svc.create_task(
@@ -103,6 +230,7 @@ def task_create(
             priority=priority,
             assignee=assignee or "",
             tags=[t.strip() for t in tags.split(",")] if tags else None,
+            fields=fields or None,
         )
 
         formatted = _format_output(result, fmt)

@@ -1228,6 +1228,7 @@ class PyriteMCPServer:
             "target_id": target_id,
             "relation": relation,
             "resolved": result["resolved"],
+            "created": result["created"],
         }
 
     # =========================================================================

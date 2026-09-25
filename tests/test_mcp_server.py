@@ -981,6 +981,7 @@ class TestPyriteMCPServer:
         )
         assert link_result.get("linked") is True
         assert link_result["relation"] == "caused_by"
+        assert link_result.get("created") is True
 
         # Verify via backlinks
         bl = server._dispatch_tool(
@@ -1024,6 +1025,8 @@ class TestPyriteMCPServer:
         result2 = server._dispatch_tool("kb_link", args)
         assert result1.get("linked") is True
         assert result2.get("linked") is True
+        assert result1.get("created") is True
+        assert result2.get("created") is False
 
         # Only one backlink should exist
         bl = server._dispatch_tool(

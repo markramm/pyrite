@@ -65,6 +65,29 @@ _MANAGED_FIELDS = frozenset(
 #: result carries them and an agent echoing it back would freeze them.
 _TIMESTAMP_FIELDS = frozenset({"created_at", "updated_at"})
 
+#: Two different spellings of "no relation was ever named" that must compare
+#: equal in a link's duplicate key. Every write surface (CLI `link`, MCP
+#: `kb_link`, `add_link`'s own default, `add_links`' bulk path) defaults an
+#: omitted relation to ``related_to``. But a file written before #396 --  or
+#: by hand -- with `links: [{target: b}]` and no `relation:` key at all loads
+#: through `Link.from_dict`, whose *own* default is the older ``related``
+#: (round-1 cold read). Comparing the raw strings in the duplicate check
+#: treated those as different relations: `pyrite link a b` with no `-r` on
+#: such a file added a second link where `dev` did nothing. `_norm_relation`
+#: is the one place both spellings collapse to the same key.
+_LEGACY_DEFAULT_RELATION = "related"
+_DEFAULT_RELATION = "related_to"
+
+
+def _norm_relation(relation: str) -> str:
+    """Canonicalise a relation for the link duplicate-key comparison only.
+
+    Never used to decide what gets *written* -- a link is saved with the
+    caller's or the file's relation exactly as given, never rewritten to this
+    canonical form, so this cannot silently migrate legacy data on save.
+    """
+    return _DEFAULT_RELATION if relation == _LEGACY_DEFAULT_RELATION else relation
+
 
 @dataclass
 class WriteResult:
@@ -904,8 +927,9 @@ class KBService:
         depth. A field the service or the type manages (``id``, the file
         path, links, a task's audit trail...) is refused rather than written:
         setting ``id`` used to leave a second file. A field the entry's model
-        does not have but its KB schema names for the type is written as a
-        custom field instead of being dropped.
+        does not have -- kb.yaml-declared or not -- is written as a custom
+        field, the way ``create`` would have stored it, instead of being
+        dropped (#407).
 
         Raises:
             KBNotFoundError: If KB not found
@@ -918,10 +942,16 @@ class KBService:
     def _update(
         self, entry_id: str, kb_name: str, updates: dict[str, Any], *, restrict: bool
     ) -> WriteResult:
-        # ADR-0034 marker keys are refused here and otherwise never stored:
-        # they are not model attributes, so the loop below skips them.
+        # ADR-0034 marker keys are refused here (a truthy `body_truncated`)
+        # and otherwise never stored. Before #407 this fell out for free: an
+        # undeclared key was always dropped by the loop below, and a marker
+        # key is never a model attribute. Now that an undeclared key is
+        # stored instead of dropped, the markers have to be stripped
+        # explicitly -- the same way `_prepare` does at its own write path --
+        # or an allowed `body_truncated: false` would be persisted as
+        # frontmatter.
         ensure_not_truncated(updates)
-        updates = dict(updates)
+        updates = {k: v for k, v in updates.items() if k not in MARKER_KEYS}
 
         kb_config = self._writable_kb(kb_name)
 
@@ -930,7 +960,35 @@ class KBService:
         if not entry:
             raise EntryNotFoundError(f"Entry not found: {entry_id}")
 
-        _, schema_fields, managed = self._field_sets(entry.entry_type, kb_config)
+        # `type`/`entry_type` and the empty key are never model attributes on
+        # any entry (`type` is frontmatter-only; `entry_type` is a read-only
+        # `@property` with no setter, so setting it raised a raw
+        # AttributeError instead of a clean refusal -- almost certainly a 500
+        # through REST PATCH, round-2 cold read), so #407's undeclared-key
+        # branch below would route `type` into `metadata` instead of refusing
+        # it: `-f type=hacked` reported `updated: true` and left the real
+        # `type:` frontmatter line untouched -- the #407 symptom recurring
+        # for a reserved key #407's own fix did not cover (round-1 cold
+        # read). Refused unconditionally, not gated by `restrict`: unlike a
+        # managed field an in-process caller might legitimately own (links,
+        # status), no caller -- internal or external -- means anything
+        # sensible by setting `type`, `entry_type` or `""` through an update.
+        #
+        # Checked AFTER the KB and entry lookups above (round-2 cold read):
+        # a missing KB or entry, or a read-only KB, must still answer its own
+        # 404/403 (KBNotFoundError/EntryNotFoundError/KBReadOnlyError), not a
+        # ValidationError that tells the caller their *request* was invalid
+        # when the real problem is that the KB or entry they named doesn't
+        # exist.
+        bad_keys = sorted(k for k in updates if k in ("type", "entry_type") or k == "")
+        if bad_keys:
+            raise ValidationError(
+                f"Cannot set {', '.join(k or '(empty key)' for k in bad_keys)} on "
+                f"{entry_id!r} with an update: an entry's type is fixed once "
+                "created, and a --field key must be non-empty."
+            )
+
+        _, _, managed = self._field_sets(entry.entry_type, kb_config)
         if restrict:
             refused = sorted(k for k in updates if k in managed)
             if refused:
@@ -957,16 +1015,19 @@ class KBService:
         # Apply updates
         for key, value in updates.items():
             if not hasattr(entry, key):
-                if key in schema_fields:
-                    # A kb.yaml-declared field with no model attribute: it
-                    # lives in the entry's custom fields, where a loaded
-                    # kb.yaml-only type keeps it (GenericEntry promotes
-                    # metadata to top-level frontmatter; a typed entry keeps
-                    # an undeclared key in extra_frontmatter).
-                    if key in entry.extra_frontmatter:
-                        entry.extra_frontmatter[key] = value
-                    else:
-                        entry.metadata = {**(entry.metadata or {}), key: value}
+                # A key with no model attribute: kb.yaml-declared or not,
+                # `create` stores it rather than dropping it (`build_entry`
+                # puts unknown kwargs in metadata), so `update` follows the
+                # same rule -- this is what generalises the old
+                # `schema_fields`-only branch. A key already recorded under
+                # `extra_frontmatter` (an undeclared key on a typed entry,
+                # loaded from the file) stays there; everything else merges
+                # into `metadata`, where `GenericEntry`/`TaskEntry` promote it
+                # back to a top-level frontmatter key on save, same as create.
+                if key in entry.extra_frontmatter:
+                    entry.extra_frontmatter[key] = value
+                else:
+                    entry.metadata = {**(entry.metadata or {}), key: value}
                 continue
             # Metadata is a bag of keys — merge shallowly so a partial update
             # (e.g. just review_comments) does not clobber other metadata.
@@ -1163,7 +1224,19 @@ class KBService:
         Returns:
             dict with ``resolved`` (bool) indicating whether the target
             exists as of this call -- including on the duplicate-link path,
-            where the write is a no-op but the target may since have gone.
+            where the write is a no-op but the target may since have gone --
+            ``created`` (bool): False on that no-op path, True when a new
+            link was written -- and ``relation`` (str): the relation actually
+            recorded on disk, which on the no-op path can differ from the
+            caller's own ``relation`` argument (``_norm_relation`` treats a
+            legacy file's ``related`` as equal to the ``related_to`` default,
+            so a caller's default matches without their spellings being
+            identical -- round-2 cold read: a confirmation naming the
+            caller's relation instead of the file's would mislead a caller
+            who then greps the file for what they typed). The duplicate key
+            is ``(target, kb, relation)``: a second, different relation
+            between the same two entries is a new link, not a duplicate
+            (#396).
         """
         kb_config = self.config.get_kb(source_kb)
         if not kb_config:
@@ -1204,11 +1277,23 @@ class KBService:
         # bulk script, an agent retrying a batch -- fails on links its own
         # earlier pass wrote correctly.
         for existing in entry.links:
-            if existing.target == target_id and (existing.kb or source_kb) == tkb:
+            if (
+                existing.target == target_id
+                and (existing.kb or source_kb) == tkb
+                and _norm_relation(existing.relation) == _norm_relation(relation)
+            ):
                 # The write is a no-op, but `resolved` is a claim about the
                 # target as it is now, so check rather than assume: a link
                 # recorded earlier may have been left dangling since.
-                return {"resolved": _target_exists()}
+                # `relation` in the result is what is actually on disk
+                # (`existing.relation`), not the caller's own argument: on
+                # legacy data those can differ in spelling while still
+                # matching under `_norm_relation` (round-2 cold read).
+                return {
+                    "resolved": _target_exists(),
+                    "created": False,
+                    "relation": existing.relation,
+                }
 
         resolved = _target_exists()
         if not resolved and not allow_dangling:
@@ -1217,7 +1302,7 @@ class KBService:
         entry.add_link(target=target_id, relation=relation, note=note, kb=tkb)
         entry.touch_updated_at()
         self._doc_mgr.save_entry(entry, source_kb, kb_config)
-        return {"resolved": resolved}
+        return {"resolved": resolved, "created": True, "relation": relation}
 
     def add_links(
         self, kb_name: str, links: list[dict[str, Any]], *, dry_run: bool = False
@@ -1225,8 +1310,10 @@ class KBService:
         """Add many links whose sources are in ``kb_name``, one save per source.
 
         Each spec is ``{source, target, relation?, target_kb?, note?}``. A link
-        already recorded on its source is skipped, as :meth:`add_link` treats
-        it. Targets are not required to exist: a bulk link set is often loaded
+        already recorded on its source is skipped, keyed on
+        ``(target, kb, relation)``, as :meth:`add_link` treats it -- a second,
+        different relation between the same pair is created, not skipped.
+        Targets are not required to exist: a bulk link set is often loaded
         before, or alongside, the entries it points at.
 
         Each source is loaded once, gets all of its new links, and is saved
@@ -1250,21 +1337,27 @@ class KBService:
             source_id = spec.get("source")
             target_id = spec.get("target")
             tkb = spec.get("target_kb") or kb_name
+            relation = spec.get("relation") or "related_to"
             if source_id not in loaded:
                 loaded[source_id] = repo.load(source_id)
             entry = loaded[source_id]
             if entry is None:
                 results[i] = {"status": "failed", "error": f"source entry not found: {source_id}"}
                 continue
+            # Duplicate key matches add_link's: (target, kb, relation) (#396),
+            # normalised the same way so legacy data (no `relation:` key,
+            # loaded as "related") matches this method's "related_to" default.
             if any(
-                existing.target == target_id and (existing.kb or kb_name) == tkb
+                existing.target == target_id
+                and (existing.kb or kb_name) == tkb
+                and _norm_relation(existing.relation) == _norm_relation(relation)
                 for existing in entry.links
             ):
                 results[i] = {"status": "skipped"}
                 continue
             entry.add_link(
                 target=target_id,
-                relation=spec.get("relation") or "related_to",
+                relation=relation,
                 note=spec.get("note", ""),
                 kb=tkb,
             )

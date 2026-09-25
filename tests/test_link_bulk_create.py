@@ -141,6 +141,35 @@ class TestBulkCreate:
             assert "1 created" in result.output
             assert "1 skipped" in result.output
 
+    def test_distinct_relation_is_created_not_skipped(self, bulk_env):
+        """A different relation between the same (source, target, kb) is a
+        new link, not a duplicate (#396): the duplicate key is
+        (target, kb, relation)."""
+        repo = KBRepository(bulk_env["config"].knowledge_bases[0])
+        entry = repo.load("entry-a")
+        entry.add_link(target="entry-b", relation="related_to", kb="test-notes")
+        repo.save(entry)
+
+        links = [
+            {"source": "entry-a", "target": "entry-b", "relation": "implements"},
+            {"source": "entry-a", "target": "entry-b", "relation": "related_to"},
+        ]
+        yaml_file = bulk_env["tmpdir"] / "links.yaml"
+        yaml_file.write_text(yaml.dump(links), encoding="utf-8")
+
+        with _patch_config(bulk_env):
+            result = runner.invoke(
+                app, ["links", "bulk-create", str(yaml_file), "--kb", "test-notes"]
+            )
+            assert result.exit_code == 0
+            assert "1 created" in result.output
+            assert "1 skipped" in result.output
+
+        repo = KBRepository(bulk_env["config"].knowledge_bases[0])
+        entry = repo.load("entry-a")
+        relations = {lnk.relation for lnk in entry.links}
+        assert relations == {"related_to", "implements"}, relations
+
     def test_missing_source_entry(self, bulk_env):
         """Missing source entry is reported as failed."""
         links = [

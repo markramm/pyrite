@@ -52,11 +52,21 @@ class TaskService:
         assignee: str = "",
         dependencies: list[str] | None = None,
         tags: list[str] | None = None,
+        fields: dict[str, Any] | None = None,
         *,
         # Legacy alias
         parent_task: str = "",
     ) -> dict[str, Any]:
         """Create a new task entry.
+
+        ``fields`` carries any additional key a KB's schema requires or
+        allows for ``task`` beyond the parameters above (#397) -- e.g. the
+        desk schema's ``project``/``kind``, without which a KB requiring
+        them refuses every task this command tries to create. The CLI and
+        MCP are responsible for refusing a key that already has its own
+        parameter or that `TaskEntry.managed_fields` reserves; this method
+        does not re-check that, so an in-process caller passing `fields`
+        directly is trusted the way `create_entry`'s own `**kwargs` is.
 
         Returns:
             Dict with created=True and entry details.
@@ -76,6 +86,8 @@ class TaskService:
             kwargs["dependencies"] = dependencies
         if tags:
             kwargs["tags"] = tags
+        if fields:
+            kwargs.update(fields)
 
         entry = self.kb_svc.create_entry(
             kb_name=kb_name,
