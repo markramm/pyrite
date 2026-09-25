@@ -774,7 +774,7 @@ class PyriteConfig:
 
         # Load GitHub auth from secure file if referenced
         github_auth = None
-        github_auth_file = CONFIG_DIR / "github_auth.yaml"
+        github_auth_file = trusted_config_dir() / "github_auth.yaml"
         if github_auth_file.exists():
             try:
                 auth_data = load_yaml_file(github_auth_file)
@@ -871,43 +871,78 @@ DEFAULT_CONFIG_DIR = Path("~/.pyrite").expanduser().resolve()
 LOCAL_CONFIG_DIRNAME = ".pyrite"
 
 
-def resolve_config_dir(start: Path | None = None) -> Path:
-    """Where this process reads its config from.
+def _home_config_dir() -> Path:
+    return Path("~/.pyrite").expanduser().resolve()
 
-    1. ``PYRITE_DATA_DIR`` or ``PYRITE_CONFIG_DIR`` when set -- explicit wins.
+
+def resolve_config_source(start: Path | None = None) -> tuple[Path, bool]:
+    """Where this process reads its config from, and whether it is trusted.
+
+    1. ``PYRITE_DATA_DIR`` or ``PYRITE_CONFIG_DIR`` when set -- explicit wins,
+       and is trusted: the user named it.
     2. A repo-local ``.pyrite/config.yaml``, searched upward from ``start``
        (the cwd). A worktree per session (ADR-0032) needs a KB registry that
        points at *that* checkout's ``kb/``; through ``~/.pyrite`` every
        worker's ``pyrite update`` landed in the main checkout instead.
-    3. ``~/.pyrite``.
+       **Untrusted**: it may belong to a cloned or downloaded tree, so only
+       the keys :func:`_restrict_untrusted` lets through are used.
+    3. ``~/.pyrite``, trusted.
     """
     explicit = os.environ.get("PYRITE_DATA_DIR") or os.environ.get("PYRITE_CONFIG_DIR")
     if explicit:
-        return Path(explicit).expanduser().resolve()
+        return Path(explicit).expanduser().resolve(), True
+    home = _home_config_dir()
     here = (start or Path.cwd()).resolve()
     for candidate in (here, *here.parents):
         local = candidate / LOCAL_CONFIG_DIRNAME
         if (local / "config.yaml").is_file():
-            return local.resolve()
-    return Path("~/.pyrite").expanduser().resolve()
+            local = local.resolve()
+            return local, local == home
+    return home, True
 
 
-CONFIG_DIR = resolve_config_dir()
+def resolve_config_dir(start: Path | None = None) -> Path:
+    """The config directory :func:`resolve_config_source` picks."""
+    return resolve_config_source(start)[0]
+
+
+CONFIG_DIR, _import_trusted = resolve_config_source()
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
+# The repo-local directory CONFIG_DIR was resolved to at import, when it was
+# one: a process started inside a tree must not trust that tree's config just
+# because the lookup happened early.
+_UNTRUSTED_IMPORT_DIR: Path | None = None if _import_trusted else CONFIG_DIR
+del _import_trusted
+
+
+def current_config_source() -> tuple[Path, bool]:
+    """The config file for *this call*, and whether it is trusted.
+
+    The module-level CONFIG_DIR is fixed at import. If something pinned it --
+    an env var, a repo-local directory found at import, or a test
+    monkeypatching it away from ~/.pyrite -- honour that. Otherwise resolve
+    again from the cwd, so a process that started elsewhere and `cd`ed into
+    a worktree still finds that worktree's `.pyrite/config.yaml`.
+    """
+    if CONFIG_DIR != _home_config_dir():
+        return CONFIG_FILE, CONFIG_DIR != _UNTRUSTED_IMPORT_DIR
+    config_dir, trusted = resolve_config_source()
+    return config_dir / "config.yaml", trusted
 
 
 def current_config_file() -> Path:
-    """The config file for *this call*.
+    """The config file for *this call* (see :func:`current_config_source`)."""
+    return current_config_source()[0]
 
-    The module-level CONFIG_DIR is fixed at import. If something pinned it --
-    an env var, or a test monkeypatching it away from ~/.pyrite -- honour
-    that. Otherwise resolve again from the cwd, so a process that started
-    elsewhere and `cd`ed into a worktree still finds that worktree's
-    `.pyrite/config.yaml`.
-    """
-    if CONFIG_DIR != Path("~/.pyrite").expanduser().resolve():
-        return CONFIG_FILE
-    return resolve_config_dir() / "config.yaml"
+
+def trusted_config_dir() -> Path:
+    """Where credentials live: CONFIG_DIR, unless that is an untrusted
+    repo-local directory, in which case ``~/.pyrite``. A tree's
+    ``.pyrite/`` neither supplies the user's GitHub credentials nor receives
+    them."""
+    if CONFIG_DIR == _UNTRUSTED_IMPORT_DIR:
+        return _home_config_dir()
+    return CONFIG_DIR
 
 
 def default_data_dir() -> Path:
@@ -990,18 +1025,119 @@ def _apply_env_overrides(config: PyriteConfig) -> None:
         config.settings.workspace_path = data_path / "repos"
 
 
+# What a repo-local (untrusted) config may set. Everything
+# here stays inside the tree the config came from, or is a harmless switch;
+# anything that changes what code runs (the embedding model, the editor, AI
+# providers), where Pyrite reads or writes outside the tree, or how a server
+# is exposed (host, auth, API keys, CORS) is ignored. Widening this list is a
+# security decision.
+_UNTRUSTED_TOP_KEYS = frozenset({"version", "knowledge_bases", "settings"})
+_UNTRUSTED_KB_KEYS = frozenset(
+    {"name", "path", "kb_type", "description", "read_only", "shortname", "default_role"}
+)
+_UNTRUSTED_SETTINGS_KEYS = frozenset({"index_path", "auto_embed", "search_mode", "summary_length"})
+
+
+def _untrusted_settings_defaults() -> dict[str, Any]:
+    """Settings as ``to_dict`` writes them for a fresh config: a file Pyrite
+    saved back holds these, and holding them changes nothing."""
+    return PyriteConfig().to_dict()["settings"]
+
+
+def _restrict_untrusted(data: Any, config_file: Path) -> tuple[dict[str, Any], list[str]]:
+    """Keep only the keys an untrusted config may set. Returns the filtered
+    data and the names of ignored keys whose value would have changed
+    something (a key holding its default is dropped silently)."""
+    if not isinstance(data, dict):
+        return {}, []
+    ignored: list[str] = []
+    kept: dict[str, Any] = {}
+    for key, value in data.items():
+        if key in _UNTRUSTED_TOP_KEYS:
+            kept[key] = value
+        elif value:
+            ignored.append(key)
+
+    kbs = []
+    for kb in kept.get("knowledge_bases") or []:
+        if not isinstance(kb, dict):
+            continue
+        for key, value in kb.items():
+            if key not in _UNTRUSTED_KB_KEYS and value not in (None, "", False, []):
+                ignored.append(f"knowledge_bases[{kb.get('name')}].{key}")
+        kbs.append({k: v for k, v in kb.items() if k in _UNTRUSTED_KB_KEYS})
+    if "knowledge_bases" in kept:
+        kept["knowledge_bases"] = kbs
+
+    settings = kept.get("settings")
+    if isinstance(settings, dict):
+        defaults = _untrusted_settings_defaults()
+        for key, value in settings.items():
+            if key not in _UNTRUSTED_SETTINGS_KEYS and value != defaults.get(key, None):
+                ignored.append(f"settings.{key}")
+        kept["settings"] = {k: v for k, v in settings.items() if k in _UNTRUSTED_SETTINGS_KEYS}
+    elif "settings" in kept:
+        kept["settings"] = {}
+    return kept, ignored
+
+
+def _contain_untrusted_paths(config: PyriteConfig, root: Path) -> list[str]:
+    """Drop KBs, and reset an index path, that resolve outside ``root``
+    (symlinks followed). Returns what was refused."""
+    refused: list[str] = []
+
+    def inside(path: Path) -> bool:
+        return Path(path).resolve().is_relative_to(root)
+
+    keep = []
+    for kb in config.knowledge_bases:
+        if inside(kb.path):
+            keep.append(kb)
+        else:
+            refused.append(f"knowledge base {kb.name!r} (path outside {root})")
+    if len(keep) != len(config.knowledge_bases):
+        config.knowledge_bases = keep
+        config._rebuild_index()
+
+    # workspace_path is never read from config.yaml, so it is always the
+    # default beside this config file: inside the tree.
+    if not inside(config.settings.index_path):
+        refused.append("settings.index_path (outside the tree)")
+        config.settings.index_path = Settings().index_path
+    return refused
+
+
 def load_config() -> PyriteConfig:
     """
     Load configuration from config.yaml.
 
-    Creates default config if it doesn't exist.
+    Creates default config if it doesn't exist. A repo-local config is
+    untrusted (see :func:`resolve_config_source`): only the keys in
+    ``_UNTRUSTED_*_KEYS`` are read from it, and only paths inside its own
+    tree; the rest is ignored with a warning.
     """
     ensure_config_dir()
 
-    config_file = current_config_file()
+    config_file, trusted = current_config_source()
     if config_file.exists():
         data = load_yaml_file(config_file)
+        ignored: list[str] = []
+        if not trusted:
+            data, ignored = _restrict_untrusted(data, config_file)
         config = PyriteConfig.from_dict(data)
+        if not trusted:
+            root = config_file.parent.parent.resolve()
+            ignored += _contain_untrusted_paths(config, root)
+            if ignored:
+                logger.warning(
+                    "Ignoring %s from the untrusted repo-local config %s: a config "
+                    "found by searching up from the working directory may only name "
+                    "paths inside its own tree. To trust it in full, point "
+                    "PYRITE_CONFIG_DIR at %s.",
+                    ", ".join(ignored),
+                    config_file,
+                    config_file.parent,
+                )
     else:
         # Create default config
         config = PyriteConfig()

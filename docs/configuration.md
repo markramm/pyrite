@@ -21,6 +21,22 @@ config file at all.
 3. a `.pyrite/config.yaml` in the current directory or a parent
 4. `~/.pyrite`
 
+**A repo-local `.pyrite/config.yaml` (3) is not trusted.** It may have come with
+a cloned or downloaded tree, so Pyrite reads only what stays inside that tree:
+`knowledge_bases` whose paths resolve inside it (keys `name`, `path`,
+`kb_type`, `description`, `read_only`, `shortname`, `default_role`), and
+`settings.index_path` (inside it), `auto_embed`, `search_mode` and
+`summary_length`. (`workspace_path` is never read from any `config.yaml`.) Anything else (the embedding model,
+editor, AI and server settings, auth, API keys, repositories, subscriptions)
+is ignored with a warning, and GitHub credentials are never read from or
+written to it. To use a directory's config in full, point `PYRITE_CONFIG_DIR`
+at it. The configs `scripts/new-worktree.sh` writes need nothing more.
+
+A local embedding model is named by an absolute path in your own config. A
+bare model name that is also a directory under the working directory is
+refused, and a model directory whose `modules.json` names code outside
+sentence-transformers is not loaded.
+
 **Where the index goes**, first match wins:
 
 1. `$PYRITE_DATA_DIR/index.db`

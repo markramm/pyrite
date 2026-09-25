@@ -7,9 +7,12 @@ semantic similarity search across knowledge base entries.
 Requires optional dependencies: pip install pyrite[semantic]
 """
 
+import json
 import logging
+import os
 import struct
 import threading
+from pathlib import Path
 from typing import Any
 
 from ..storage.database import PyriteDB
@@ -172,11 +175,59 @@ _MODEL_CACHE: dict[str, Any] = {}
 _MODEL_CACHE_LOCK = threading.Lock()
 
 
+class EmbeddingModelRefusedError(RuntimeError):
+    """The configured embedding model would load from somewhere, or run code,
+    that Pyrite does not trust."""
+
+
+def _check_model_source(name: str) -> None:
+    """Refuse a model that could run code shipped beside it.
+
+    - A bare name (a Hub id such as ``all-MiniLM-L6-v2``) must not also be a
+      path under the working directory: sentence-transformers prefers a local
+      directory of that name, so a tree the user merely ``cd``ed into could
+      supply the model. A local model is named by an absolute path, which only
+      trusted config can set (a repo-local config cannot set
+      ``embedding_model`` at all).
+    - A local model directory whose ``modules.json`` names a class outside the
+      ``sentence_transformers`` package is refused: loading it imports that
+      class's module. sentence-transformers before 6.0 did so without asking.
+    """
+    path = Path(name).expanduser()
+    if not path.is_absolute():
+        if os.path.lexists(name):
+            raise EmbeddingModelRefusedError(
+                f"Embedding model {name!r} is also a path under the working directory "
+                f"({Path.cwd()}); refusing to load it from there. Name a local model by "
+                "its absolute path in your own config (~/.pyrite or PYRITE_CONFIG_DIR)."
+            )
+        return
+    modules_file = path / "modules.json"
+    if not modules_file.is_file():
+        return
+    try:
+        modules = json.loads(modules_file.read_text())
+    except (OSError, ValueError) as e:
+        raise EmbeddingModelRefusedError(f"Cannot read {modules_file}: {e}") from e
+    for module in modules if isinstance(modules, list) else []:
+        ref = module.get("type", "") if isinstance(module, dict) else ""
+        if not str(ref).startswith("sentence_transformers."):
+            raise EmbeddingModelRefusedError(
+                f"Embedding model {name!r} names module class {ref!r}, which is not part "
+                "of sentence-transformers; Pyrite does not load model code."
+            )
+
+
 def _load_model(name: str) -> Any:
     """Construct a sentence-transformers model. A patchable seam so tests can
     stub the (slow, non-thread-safe) constructor without importing torch or
-    sentence-transformers (#207)."""
+    sentence-transformers (#207).
+
+    Never enables custom model code: the source is checked first
+    (:func:`_check_model_source`) and ``trust_remote_code`` is always False."""
     import logging
+
+    _check_model_source(name)
 
     # Suppress noisy output during model loading:
     # - transformers.disable_progress_bar() silences weight-loading tqdm bars
@@ -190,7 +241,8 @@ def _load_model(name: str) -> Any:
     for logger_name in loggers:
         logging.getLogger(logger_name).setLevel(logging.ERROR)
     try:
-        return SentenceTransformer(name)
+        # trust_remote_code exists from sentence-transformers 2.3 (the floor).
+        return SentenceTransformer(name, trust_remote_code=False)
     finally:
         for logger_name, level in old_levels.items():
             logging.getLogger(logger_name).setLevel(level)
