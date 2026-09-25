@@ -9,7 +9,7 @@ import shutil
 import time
 from pathlib import Path
 
-from ..config import KBConfig, PyriteConfig, save_config
+from ..config import KBConfig, PyriteConfig, check_config_save, save_config
 from ..storage.database import PyriteDB
 from .kb_names import PLAIN_KB_NAME_RULE, is_plain_kb_name, kb_name_in_use
 
@@ -177,23 +177,28 @@ class EphemeralKBService:
         kb = next((k for k in self.config.knowledge_bases if k.name == name), None)
         if not kb or not kb.ephemeral:
             return False
+        # Before the rows and the directory go (#377).
+        check_config_save(self.config, removed=[name])
         self._remove(kb)
         save_config(self.config, removed=[name])
         return True
 
     def gc_ephemeral_kbs(self) -> list[str]:
         """Garbage-collect expired ephemeral KBs. Returns list of removed KB names."""
-        removed = []
         now = time.time()
+        expired = [
+            kb
+            for kb in self.config.knowledge_bases
+            if kb.ephemeral and kb.ttl and kb.created_at_ts and now - kb.created_at_ts > kb.ttl
+        ]
+        removed = [kb.name for kb in expired]
+        if not removed:
+            return removed
 
-        for kb in list(self.config.knowledge_bases):
-            if not kb.ephemeral or not kb.ttl or not kb.created_at_ts:
-                continue
-            if now - kb.created_at_ts > kb.ttl:
-                self._remove(kb)
-                removed.append(kb.name)
-
-        if removed:
-            save_config(self.config, removed=removed)
+        # Before any rows or directories go (#377).
+        check_config_save(self.config, removed=removed)
+        for kb in expired:
+            self._remove(kb)
+        save_config(self.config, removed=removed)
 
         return removed

@@ -114,6 +114,25 @@ class ConfigError(PyriteError):
     """Raised when configuration is invalid."""
 
 
+class ConfigSaveRefusedError(ConfigError):
+    """A config save was refused: it would drop KBs the caller did not name,
+    or the file on disk could not be read to check (#377).
+
+    ``str()`` is the operator's message: it names the real config file and the
+    KBs. ``public_message`` is safe to return over HTTP.
+    """
+
+    public_message = (
+        "The configuration was not saved: it would have removed knowledge bases "
+        "this request did not remove. The server log names the file and the KBs."
+    )
+
+    def __init__(self, message: str, *, config_file=None, dropped: list[str] | None = None):
+        super().__init__(message)
+        self.config_file = config_file
+        self.dropped = list(dropped or [])
+
+
 class QuerySyntaxError(PyriteError):
     """Raised when a search query cannot be parsed by the backend's query
     engine (e.g. SQLite FTS5's ``no such column: ...`` when a bare

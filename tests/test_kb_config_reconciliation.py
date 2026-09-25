@@ -114,7 +114,7 @@ def test_cli_remove_after_editing_config_yaml(pyrite_config):
     assert listed.exit_code == 0, listed.output
 
     # The user hand-edits config.yaml down to no KBs: an intended empty write.
-    save_config(PyriteConfig(settings=pyrite_config.settings), allow_empty=True)
+    save_config(PyriteConfig(settings=pyrite_config.settings), allow_drop=True)
     listed = runner.invoke(app, ["kb", "list"])
     assert listed.exit_code == 0, listed.output
     removed = runner.invoke(app, ["kb", "remove", kb.name, "--force"])

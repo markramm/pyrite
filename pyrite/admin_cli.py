@@ -21,8 +21,10 @@ from .config import (
     load_config,
     save_config,
 )
+from .utils.errors import PyriteCLIGroup
 
 app = typer.Typer(
+    cls=PyriteCLIGroup,
     name="pyrite-admin",
     help="Pyrite admin CLI — KB management, indexing, repos, auth, config",
     no_args_is_help=True,

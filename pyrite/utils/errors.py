@@ -20,6 +20,7 @@ import json
 from typing import Any
 
 import typer
+from typer.core import TyperGroup
 
 
 def build_error(
@@ -76,3 +77,21 @@ def cli_error(
         if suggestion:
             console.print("    [dim]hint:[/dim]", Text(suggestion))
     raise typer.Exit(1)
+
+
+class PyriteCLIGroup(TyperGroup):
+    """Root command group for `pyrite` and `pyrite-admin`.
+
+    A refused config save (#377) -- from a command or from a service it calls
+    -- is one error line naming the file and the KBs, and exit 1; not a
+    traceback. Subcommands run inside the root group's ``invoke``, so this
+    covers every command of both CLIs, including under ``CliRunner``.
+    """
+
+    def invoke(self, ctx):
+        from ..exceptions import ConfigSaveRefusedError
+
+        try:
+            return super().invoke(ctx)
+        except ConfigSaveRefusedError as e:
+            cli_error(str(e), error_code="CONFIG_SAVE_REFUSED")

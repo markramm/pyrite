@@ -19,16 +19,12 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 
-from pyrite.exceptions import ConfigError
+from pyrite.exceptions import ConfigError, ConfigSaveRefusedError
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
 logger = logging.getLogger(__name__)
 
 load_dotenv()
-
-
-class ConfigWouldEmptyRegistryError(ConfigError):
-    """save_config refused to replace a config listing KBs with one listing none."""
 
 
 class KBType(StrEnum):
@@ -1035,50 +1031,106 @@ def _repair_ephemeral_default_role(kb: KBConfig) -> None:
         kb.default_role = "none"
 
 
+def _removed_set(removed: Iterable[str]) -> frozenset[str]:
+    if isinstance(removed, str | bytes):
+        raise TypeError("removed= takes an iterable of KB names, not a single string")
+    return frozenset(removed)
+
+
 def _kb_names_on_disk(config_file: Path) -> list[str]:
-    """KB names the config file currently lists ([] if absent or unreadable)."""
-    if not config_file.is_file():
+    """KB names the config file lists; [] when there is no file.
+
+    A file that exists but cannot be read as a registry raises: treating it as
+    empty would switch the protection off exactly when it is needed.
+    """
+    if not config_file.exists():
         return []
+
+    def unreadable(why: str) -> ConfigSaveRefusedError:
+        return ConfigSaveRefusedError(
+            f"Refusing to overwrite {config_file}: {why}, so this save cannot check "
+            "which knowledge bases it would remove. Fix or move the file, or call "
+            "save_config(config, allow_drop=True) to replace it.",
+            config_file=config_file,
+            dropped=[],
+        )
+
     try:
-        data = load_yaml_file(config_file) or {}
-    except Exception:
+        data = load_yaml_file(config_file)
+    except Exception as e:
+        raise unreadable(f"it could not be parsed ({type(e).__name__})") from e
+    if data is None:
         return []
-    kbs = data.get("knowledge_bases") or [] if isinstance(data, dict) else []
-    return [str(kb.get("name", "")) for kb in kbs if isinstance(kb, dict)]
+    if not isinstance(data, dict):
+        raise unreadable("it is not a YAML mapping")
+    kbs = data.get("knowledge_bases") or []
+    if not isinstance(kbs, list):
+        raise unreadable("its knowledge_bases is not a list")
+    names = []
+    for kb in kbs:
+        if not isinstance(kb, dict) or not kb.get("name"):
+            raise unreadable("a knowledge_bases entry has no name")
+        names.append(str(kb["name"]))
+    return names
+
+
+def check_config_save(
+    config: PyriteConfig,
+    *,
+    removed: Iterable[str] = (),
+    allow_drop: bool = False,
+) -> None:
+    """Raise ConfigSaveRefusedError if saving ``config`` would drop a KB the
+    caller did not name.
+
+    The one owner of the rule "a save never drops a KB the caller did not name"
+    (#377). Every KB the config file lists must either be in ``config`` or be
+    named in ``removed``. ``save_config`` always runs it; a service with
+    destructive side effects (deleting a clone, unregistering rows) runs it
+    first, *before* those side effects, with the KBs it is about to remove
+    still in memory -- the result is the same either side of the removal.
+    """
+    removed_set = _removed_set(removed)
+    if allow_drop:
+        return
+    real_file = current_config_file().resolve()
+    keeping = {kb.name for kb in config.knowledge_bases}
+    dropped = [
+        name
+        for name in _kb_names_on_disk(real_file)
+        if name not in keeping and name not in removed_set
+    ]
+    if dropped:
+        shown = ", ".join(dropped[:5]) + (", ..." if len(dropped) > 5 else "")
+        raise ConfigSaveRefusedError(
+            f"Refusing to overwrite {real_file}: the config being saved would drop "
+            f"{len(dropped)} knowledge base(s) this call did not remove ({shown}). "
+            "It was probably not loaded from this file, or the file changed since. "
+            "Pass the names removed as removed=[...], or call "
+            "save_config(config, allow_drop=True) if dropping them is intended.",
+            config_file=real_file,
+            dropped=dropped,
+        )
 
 
 def save_config(
     config: PyriteConfig,
     *,
-    allow_empty: bool = False,
     removed: Iterable[str] = (),
+    allow_drop: bool = False,
 ) -> None:
     """Save configuration to config.yaml.
 
-    Refuses to replace a file that lists KBs with a config that lists none
-    (#377: a test-shaped write emptied a ~50-KB registry and nothing said so
-    for nine hours). A caller that just removed KBs passes their names as
-    ``removed``; the write goes through when those are all the file lists.
-    ``allow_empty=True`` overrides outright.
+    Refuses (ConfigSaveRefusedError) to drop any KB the file lists that the
+    caller did not name in ``removed`` -- see check_config_save. #377: a
+    config never loaded from the file replaced a ~50-KB registry, silently.
     """
-    ensure_config_dir()
+    check_config_save(config, removed=removed, allow_drop=allow_drop)
 
+    ensure_config_dir()
     config_file = current_config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
     real_file = config_file.resolve()
-
-    if not config.knowledge_bases and not allow_empty:
-        on_disk = _kb_names_on_disk(real_file)
-        kept = [name for name in on_disk if name not in set(removed)]
-        if kept:
-            raise ConfigWouldEmptyRegistryError(
-                f"Refusing to overwrite {real_file}: it lists {len(on_disk)} knowledge "
-                f"base(s) ({', '.join(kept[:5])}{', ...' if len(kept) > 5 else ''}) and "
-                "the config being saved lists none. If emptying the registry is "
-                "intended, call save_config(config, allow_empty=True), or pass the "
-                "names just removed as removed=[...]."
-            )
-
     if real_file != config_file.absolute():
         logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
     dump_yaml_file(config.to_dict(), config_file)

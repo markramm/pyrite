@@ -35,7 +35,7 @@ from ..exceptions import (
 from ..logging import configure_logging
 from ..services.kb_service import KBService
 from ..storage.database import PyriteDB
-from ..utils.errors import cli_error
+from ..utils.errors import PyriteCLIGroup, cli_error
 from .browse_commands import register_browse_commands
 from .collection_commands import collections_app
 from .context import cli_context
@@ -57,6 +57,7 @@ from .task_commands import task_app
 logger = logging.getLogger(__name__)
 
 app = typer.Typer(
+    cls=PyriteCLIGroup,
     name="pyrite",
     help="Multi-KB research infrastructure for citizen journalists and AI agents",
     no_args_is_help=True,
