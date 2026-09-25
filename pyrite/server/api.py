@@ -24,7 +24,7 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from ..config import PyriteConfig, Settings, load_config
+from ..config import ConfigSaveRefusedError, PyriteConfig, Settings, load_config
 from ..exceptions import (
     ConfigError,
     EntryNotFoundError,
@@ -69,6 +69,7 @@ _PYRITE_ERROR_STATUS: list[tuple[type[PyriteError], int, str]] = [
     (FrontmatterError, 422, "INVALID_FRONTMATTER"),
     (QueryTooLongError, 422, "QUERY_TOO_LONG"),
     (ValidationError, 422, "VALIDATION_ERROR"),
+    (ConfigSaveRefusedError, 409, "CONFIG_SAVE_REFUSED"),
     (ConfigError, 409, "CONFIG_CONFLICT"),
     (PluginError, 502, "PLUGIN_ERROR"),
     (StorageError, 500, "STORAGE_ERROR"),
@@ -96,7 +97,13 @@ def register_pyrite_exception_handler(app: FastAPI) -> None:
         status_code, code = _classify(exc)
         if status_code >= 500:
             logger.error("Unhandled %s: %s", type(exc).__name__, exc, exc_info=True)
-        return JSONResponse(status_code=status_code, content={"code": code, "message": str(exc)})
+        message = str(exc)
+        if isinstance(exc, ConfigSaveRefusedError):
+            # The detail names the absolute config path and the KBs in the
+            # registry: the operator's log, not the response (#377).
+            logger.warning("%s", exc)
+            message = exc.public_message
+        return JSONResponse(status_code=status_code, content={"code": code, "message": message})
 
     app.add_exception_handler(PyriteError, _handler)
 

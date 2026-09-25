@@ -9,10 +9,74 @@ config file at all.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PYRITE_CONFIG_DIR` | `~/.pyrite` | Directory holding `config.yaml`. When unset, a `.pyrite/config.yaml` found in the current directory or any parent is used instead of `~/.pyrite` — a repo-local registry, so a checkout's `kb/` resolves to that checkout. |
-| `PYRITE_DATA_DIR` | `~/.pyrite` | Directory for the index (`index.db`) and cloned repos (`repos/`). Set this in containers and point a volume at it. |
+| `PYRITE_CONFIG_DIR` | `~/.pyrite` | Directory holding `config.yaml`. When unset, a `.pyrite/config.yaml` found in the current directory or any parent is used instead of `~/.pyrite` — a repo-local registry, so a checkout's `kb/` resolves to that checkout. The index and cloned repos default to this directory too (see below). |
+| `PYRITE_DATA_DIR` | `~/.pyrite` | Directory for the index (`index.db`) and cloned repos (`repos/`); overrides `settings.index_path` in `config.yaml`. When set it is also where `config.yaml` is read from, ahead of `PYRITE_CONFIG_DIR`. Set this in containers and point a volume at it. |
 | `PYRITE_STATIC_DIR` | `<checkout>/web/dist` | Built web UI to serve at `/`. Needed when the package is installed into site-packages rather than run from a checkout. |
 | `PYRITE_BRANDING_DIR` | built-in | Folder of white-label branding assets (see `deploy/branding-examples/`) |
+
+**Which directory holds `config.yaml`**, first match wins:
+
+1. `PYRITE_DATA_DIR`
+2. `PYRITE_CONFIG_DIR`
+3. a `.pyrite/config.yaml` in the current directory or a parent
+4. `~/.pyrite`
+
+**Where the index goes**, first match wins:
+
+1. `$PYRITE_DATA_DIR/index.db`
+2. `settings.index_path` in `config.yaml`
+3. `index.db` beside the `config.yaml` chosen above — `~/.pyrite/index.db` for a
+   default install, `$PYRITE_CONFIG_DIR/index.db` when that is set
+
+Cloned repos follow the same order (`$PYRITE_DATA_DIR/repos`, then `repos/`
+beside `config.yaml`). In 0.25.2 and earlier, setting only `PYRITE_CONFIG_DIR` left the
+index at `~/.pyrite/index.db`, so a sandboxed run still wrote your real index.
+
+`workspace_path` is neither read from nor written to `config.yaml`, and
+`index_path` is written only once Pyrite saves the file. So a hand-written
+config under `PYRITE_CONFIG_DIR` or a repo-local `.pyrite/` with no
+`index_path` uses that directory for both. To keep the index where it was, add
+`index_path: ~/.pyrite/index.db` under `settings:`; otherwise run
+`pyrite index sync` to rebuild it in the new place. Clones subscribed under
+`~/.pyrite/repos` can be moved into `<config dir>/repos/`.
+(`PYRITE_DATA_DIR=~/.pyrite` would keep both, but it also makes `~/.pyrite` the
+config directory, above.)
+
+**Pyrite never drops a knowledge base you did not remove.** A save that would
+drop a KB `config.yaml` lists fails. The CLI prints one error line naming the
+file and the KBs; the REST API returns a generic 409 and logs the details.
+The exceptions are commands that remove KBs (`kb remove`, `repo remove`,
+ephemeral expiry, unsubscribe), which name what they remove and check before
+deleting anything. A `config.yaml` that cannot be parsed is not overwritten
+either. Code that means to drop KBs passes `save_config(config, removed=[...])`
+or `allow_drop=True`. A write through a symlinked `config.yaml` logs the real
+file it changed.
+
+The refusal says which case it is. If `config.yaml` changed since the process
+loaded it (for example `pyrite-admin kb add` from a shell while a server runs),
+restart the server, or re-run the command, so it reads the current file. If
+`config.yaml` cannot be read (it does not parse, is not a mapping, or has an
+entry with no name), fix or move it: restarting would only fail to load it.
+An entry with a name but no `path` is reported as the first case, though a
+restart will fail to load that file too (#405).
+
+Known limits: only the list of knowledge bases is protected. A save from a
+process whose config is out of date still overwrites `repositories:` and
+`settings` with its own copy, and can bring back a KB another process removed.
+There is no lock between two processes saving at the same moment, and a
+repository subscribe that is refused at its final save is not rolled back
+(unsubscribe it and retry).
+
+The write is not atomic: a crash mid-write can leave a truncated
+`config.yaml`. The next save refuses to overwrite it when it cannot be
+parsed, and in a few other cases, but most truncations still parse --
+including the empty file a crash right after the file is opened leaves -- and
+then read as a shorter list of KBs, or none. A command that loads such a file
+usually sees only those KBs, with no error (some fail to load with a raw
+error instead), and its next save writes the shorter list. A process that
+loaded the file before the crash (a running server) usually writes its full
+list back on its next save. Keep
+a copy of `config.yaml` to restore from.
 
 ## Server
 

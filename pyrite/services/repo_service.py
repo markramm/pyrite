@@ -18,6 +18,7 @@ from ..config import (
     KBType,
     PyriteConfig,
     auto_discover_kbs,
+    check_config_save,
     save_config,
 )
 from ..github_auth import get_github_token
@@ -73,6 +74,8 @@ class RepoService:
         refusal = self._refuse_repo_name(full_name)
         if refusal:
             return refusal
+        # Before the clone and the index rows (#377).
+        check_config_save(self.config)
 
         # Determine workspace path
         workspace_path = self.config.settings.workspace_path / owner / repo_name
@@ -132,6 +135,8 @@ class RepoService:
         token = self._get_token()
         if not token:
             return {"success": False, "error": "GitHub authentication required for forking"}
+        # Before the fork on GitHub, the clone and the index rows (#377).
+        check_config_save(self.config)
 
         # Fork on GitHub
         success, fork_data = GitService.fork_repo(owner, repo_name, token)
@@ -252,8 +257,12 @@ class RepoService:
         if not repo:
             return {"success": False, "error": f"Repo '{repo_name}' not found"}
 
-        # Remove KBs associated with this repo
+        # Remove KBs associated with this repo -- but first make sure the
+        # config save at the end will go through, before any row or clone is
+        # deleted (#377).
         kb_rows = self.db.get_kbs_for_repo(repo["id"])
+        removed = [kb_row["name"] for kb_row in kb_rows]
+        check_config_save(self.config, removed=removed)
         for kb_row in kb_rows:
             self.config.remove_kb(kb_row["name"])
             self.db.unregister_kb(kb_row["name"])
@@ -273,7 +282,7 @@ class RepoService:
             if local_path.exists():
                 shutil.rmtree(local_path)
 
-        save_config(self.config)
+        save_config(self.config, removed=removed)
 
         return {
             "success": True,

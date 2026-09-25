@@ -501,3 +501,29 @@ set `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`. The model load then fails
 the way it would on a machine that has never seen it, in about 7 s instead of
 a minute. **A timing bound alone is never enough** — every developer machine
 has the model cached, which is precisely why no test ever caught #13.
+
+## A probe script outside pytest writes the real `~/.pyrite` (#377)
+
+The suite is isolated: the repo-root `conftest.py` exports `PYRITE_CONFIG_DIR`
+(a session temp dir) and clears `PYRITE_DATA_DIR`; child processes inherit both.
+A `python -c` / heredoc probe you run by hand is **not**: anything that calls
+`save_config` -- `EphemeralKBService` create/expire, `RepoService`, the admin
+CLI -- writes `current_config_file()`, which from a directory with no
+`.pyrite/config.yaml` is `~/.pyrite/config.yaml`. On 2026-09-23 a probe of
+ephemeral expiry (`ws/ephemeral/ln -> other/`, index `…/tmpXXXX/i.db`) did
+exactly that and emptied a ~50-KB registry through a symlink. `save_config`
+now refuses any save that drops a KB it was not told to remove, but sandbox
+probes anyway -- HOME and both directories in temp dirs:
+
+```bash
+T=$(mktemp -d); HOME=$T/home PYRITE_CONFIG_DIR=$T/cfg PYRITE_DATA_DIR=$T/cfg \
+  .venv/bin/python -c '...'
+```
+
+Point both at the **same** directory. `PYRITE_DATA_DIR` wins when both are set,
+so with two directories `config.yaml` is read from the data dir and a seed file
+put in the config dir is silently ignored -- a probe that "passes" against a
+file the code never read (the #387 delta read lost its first repro this way).
+
+`PYRITE_CONFIG_DIR` alone now moves the index too (it defaults beside
+`config.yaml`); before #377 it did not.

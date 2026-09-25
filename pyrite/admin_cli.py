@@ -21,8 +21,10 @@ from .config import (
     load_config,
     save_config,
 )
+from .utils.errors import PyriteCLIGroup
 
 app = typer.Typer(
+    cls=PyriteCLIGroup,
     name="pyrite-admin",
     help="Pyrite admin CLI — KB management, indexing, repos, auth, config",
     no_args_is_help=True,
@@ -113,7 +115,7 @@ def kb_remove(name: str = typer.Argument(..., help="KB name")):
         raise typer.Exit(1)
 
     config.remove_kb(name)
-    save_config(config)
+    save_config(config, removed=[name])
     console.print(f"[green]Removed:[/green] {name}")
 
 
@@ -443,7 +445,7 @@ def repo_remove(
         config.remove_kb(kb.name)
 
     config.remove_repo(name)
-    save_config(config)
+    save_config(config, removed=[kb.name for kb in kbs])
 
     console.print(f"[green]Removed:[/green] {name}")
     if kbs:

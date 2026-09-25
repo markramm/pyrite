@@ -11,6 +11,7 @@ Configuration is loaded from:
 import errno
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -18,7 +19,7 @@ from typing import Any, Literal
 
 from dotenv import load_dotenv
 
-from pyrite.exceptions import ConfigError
+from pyrite.exceptions import ConfigError, ConfigFileUnreadableError, ConfigSaveRefusedError
 from pyrite.utils.yaml import dump_yaml_file, load_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -347,7 +348,9 @@ class Settings:
     ai_api_base: str = ""
     summary_length: int = 280
     enable_mcp: bool = True
-    index_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "index.db")
+    # Defaults live beside the config file this process resolved (#377): under
+    # PYRITE_CONFIG_DIR or a repo-local .pyrite/ they are no longer ~/.pyrite.
+    index_path: Path = field(default_factory=lambda: default_data_dir() / "index.db")
     host: str = "127.0.0.1"
     port: int = 8088
     # Security
@@ -375,7 +378,7 @@ class Settings:
     search_mode: str = "keyword"
     search_backend: str = "sqlite"  # "sqlite" or "postgres"
     database_url: str = ""  # PostgreSQL connection string (for postgres backend)
-    workspace_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "repos")
+    workspace_path: Path = field(default_factory=lambda: default_data_dir() / "repos")
     strict_plugins: bool = False  # Raise on plugin load failures (dev/CI mode)
     prewarm_embeddings: bool = False  # Pre-load embedding model on server startup
     # Embed entries on write. Off = keyword search only, no torch import, no
@@ -807,13 +810,16 @@ class PyriteConfig:
             if not gh.client_secret:
                 gh.client_secret = os.environ.get("PYRITE_GITHUB_CLIENT_SECRET", "")
 
+        settings_kwargs: dict[str, Any] = {}
+        if settings_data.get("index_path"):
+            settings_kwargs["index_path"] = Path(settings_data["index_path"])
         settings = Settings(
+            **settings_kwargs,
             default_editor=settings_data.get("default_editor", os.environ.get("EDITOR", "vim")),
             ai_provider=settings_data.get("ai_provider", "stub"),
             ai_model=settings_data.get("ai_model", "claude-sonnet-4-20250514"),
             summary_length=settings_data.get("summary_length", 280),
             enable_mcp=settings_data.get("enable_mcp", True),
-            index_path=Path(settings_data.get("index_path", "~/.pyrite/index.db")),
             host=settings_data.get("host", "127.0.0.1"),
             port=settings_data.get("port", 8088),
             cors_origins=settings_data.get(
@@ -902,6 +908,21 @@ def current_config_file() -> Path:
     if CONFIG_DIR != Path("~/.pyrite").expanduser().resolve():
         return CONFIG_FILE
     return resolve_config_dir() / "config.yaml"
+
+
+def default_data_dir() -> Path:
+    """Where the index and workspace live when nothing names them.
+
+    The directory of the config file this call resolves: ``~/.pyrite`` for a
+    default install (unchanged), but the ``PYRITE_CONFIG_DIR`` or repo-local
+    ``.pyrite/`` directory when one is in effect. Before #377 the index stayed
+    at ``~/.pyrite/index.db`` whatever the config dir, so a sandboxed
+    ``pyrite kb add`` registered into the user's real index.
+
+    Precedence for ``index_path``: ``PYRITE_DATA_DIR`` > ``settings.index_path``
+    in config.yaml > this default.
+    """
+    return current_config_file().parent
 
 
 def ensure_config_dir() -> Path:
@@ -1010,12 +1031,111 @@ def _repair_ephemeral_default_role(kb: KBConfig) -> None:
         kb.default_role = "none"
 
 
-def save_config(config: PyriteConfig) -> None:
-    """Save configuration to config.yaml."""
-    ensure_config_dir()
+def _removed_set(removed: Iterable[str]) -> frozenset[str]:
+    if isinstance(removed, str | bytes):
+        raise TypeError("removed= takes an iterable of KB names, not a single string")
+    return frozenset(str(name) for name in removed)
 
+
+def _kb_names_on_disk(config_file: Path) -> list[str]:
+    """KB names the config file lists; [] when there is no file.
+
+    A file that exists but cannot be read as a registry raises: treating it as
+    empty would switch the protection off exactly when it is needed.
+    """
+    if not config_file.exists():
+        return []
+
+    def unreadable(why: str) -> ConfigFileUnreadableError:
+        return ConfigFileUnreadableError(
+            f"Refusing to overwrite {config_file}: {why}, so this save cannot check "
+            "which knowledge bases it would remove. Fix or move that config.yaml; it "
+            "was left unchanged. (In code: save_config(config, allow_drop=True) "
+            "replaces it.)",
+            config_file=config_file,
+            dropped=[],
+        )
+
+    try:
+        data = load_yaml_file(config_file)
+    except Exception as e:
+        raise unreadable(f"it could not be parsed ({type(e).__name__})") from e
+    if data is None:
+        return []
+    if not isinstance(data, dict):
+        raise unreadable("it is not a YAML mapping")
+    kbs = data.get("knowledge_bases") or []
+    if not isinstance(kbs, list):
+        raise unreadable("its knowledge_bases is not a list")
+    names = []
+    for kb in kbs:
+        if not isinstance(kb, dict) or kb.get("name") is None or str(kb["name"]) == "":
+            raise unreadable("a knowledge_bases entry has no name")
+        names.append(str(kb["name"]))
+    return names
+
+
+def check_config_save(
+    config: PyriteConfig,
+    *,
+    removed: Iterable[str] = (),
+    allow_drop: bool = False,
+) -> None:
+    """Raise ConfigSaveRefusedError if saving ``config`` would drop a KB the
+    caller did not name.
+
+    The one owner of the rule "a save never drops a KB the caller did not name"
+    (#377). Every KB the config file lists must either be in ``config`` or be
+    named in ``removed``. ``save_config`` always runs it; a service with
+    destructive side effects (deleting a clone, unregistering rows) runs it
+    first, *before* those side effects, with the KBs it is about to remove
+    still in memory -- the result is the same either side of the removal.
+    """
+    removed_set = _removed_set(removed)
+    if allow_drop:
+        return
+    real_file = current_config_file().resolve()
+    # YAML reads `name: 2024` as an int; the file side is compared as str.
+    keeping = {str(kb.name) for kb in config.knowledge_bases}
+    dropped = [
+        name
+        for name in _kb_names_on_disk(real_file)
+        if name not in keeping and name not in removed_set
+    ]
+    if dropped:
+        shown = ", ".join(dropped[:5]) + (", ..." if len(dropped) > 5 else "")
+        raise ConfigSaveRefusedError(
+            f"Refusing to overwrite {real_file}: it lists {len(dropped)} knowledge "
+            f"base(s) this process does not know about ({shown}). The file changed "
+            "since this process loaded it (another command or process edited it), or "
+            "this process never loaded it. Restart the server, or re-run the command, "
+            "so it reads the current file. (In code: pass the names removed as "
+            "removed=[...], or save_config(config, allow_drop=True) to drop them.)",
+            config_file=real_file,
+            dropped=dropped,
+        )
+
+
+def save_config(
+    config: PyriteConfig,
+    *,
+    removed: Iterable[str] = (),
+    allow_drop: bool = False,
+) -> None:
+    """Save configuration to config.yaml.
+
+    Refuses (ConfigSaveRefusedError) to drop any KB the file lists that the
+    caller did not name in ``removed`` -- see check_config_save. #377: a
+    config never loaded from the file replaced a ~50-KB registry, silently.
+    """
+    check_config_save(config, removed=removed, allow_drop=allow_drop)
+
+    ensure_config_dir()
     config_file = current_config_file()
     config_file.parent.mkdir(parents=True, exist_ok=True)
+    real_file = config_file.resolve()
+    if real_file != config_file.absolute():
+        logger.warning("Writing Pyrite config %s through symlink %s", real_file, config_file)
     dump_yaml_file(config.to_dict(), config_file)
 
 

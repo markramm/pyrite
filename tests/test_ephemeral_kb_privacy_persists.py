@@ -282,7 +282,8 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
         finally:
             db.close()
         config.remove_kb("lost")
-        save_config(config)
+        # Dropping the entry is the point: name it, or save_config refuses (#377).
+        save_config(config, removed=["lost"])
         return cookies
 
     def test_orphaned_row_is_private_after_restart(self, tmp_path, monkeypatch, caplog):
