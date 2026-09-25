@@ -305,7 +305,7 @@ maintainer" below; Theme D is written so it can be dispatched either way.
 Sequencing note: `pyrite/server/endpoints/*` is quiet right now. `mcp_server.py` will be
 touched by 7D/7E, but no theme here touches it.
 
-**Cold read: yes for all four themes. `heavy: no` for all four.**
+**Cold read: yes for all three themes. `heavy: no` for all three.**
 
 ---
 
@@ -349,7 +349,7 @@ operator's token, and needs a design decision rather than a message change.
 
 **Model: opus** (43 dismissals each need the right reason recorded, and one of them is a
 "noise today, would be a vulnerability if this function ever took request input" case).
-**Sequence: now**, but **after** Themes A and B have merged, so the two true positives are
+**Sequence: now**, but **after** Theme B and the privately tracked fix have merged, so the true positives are
 fixed before the remaining alerts are dismissed and the page reads honestly.
 
 Touches (existing): `pyrite/github_auth.py` (route line 363 through
@@ -400,7 +400,7 @@ Acceptance criteria:
 `gh api -X PATCH repos/markramm/pyrite/code-scanning/alerts/<n> -f state=dismissed
 -f dismissed_reason='<reason>' -f dismissed_comment='<one line>'`
 
-Dismiss **after** Themes A and B merge.
+Dismiss **after** Theme B and the privately tracked fix merge.
 
 | # | Rule | Reason | Comment |
 |---|---|---|---|
@@ -449,8 +449,8 @@ Dismiss **after** Themes A and B merge.
 | 55 | stack-trace-exposure | `false positive` | Same: authenticated worktree diff content. |
 | 56 | stack-trace-exposure | `false positive` | Same: authenticated worktree diff content. |
 
-Alerts **43, 51, 52, 53** are the true positives and must be closed **by a fix** (Themes A
-and B), never dismissed. They should go to `fixed` on their own when the branches land.
+Alerts **43, 51, 52, 53** are the true positives and must be closed **by a fix** (Theme B
+and the privately tracked fix), never dismissed. They should go to `fixed` on their own when the branches land.
 
 ---
 
@@ -476,7 +476,7 @@ Two decisions, both stated as recommendations only:
   caller learns whether any private repo exists, using the operator's stored token). Noted
   under #51, deliberately excluded from Theme B's scope; it needs a design decision, not a
   message change. No CodeQL alert covers it.
-- Whether the **read tier can reach any unbounded regex** CodeQL did not flag. `clipper.py`'s `_strip_elements`
+- Whether **any other unbounded regex** exists that CodeQL did not flag. `clipper.py`'s `_strip_elements`
   runs `re.sub` with `.*?` and `re.DOTALL` over attacker-influenced HTML on the write tier,
   which is the same rule's shape and was *not* flagged. Worth a follow-up spike.
 - The `tests/e2e/conftest.py` suite writes into `~/.pyrite/repos/` (there are ~2400 stale
@@ -491,7 +491,7 @@ Re-cut after #168 (one Pyrite task at a time; each theme one worker pass and one
 **Acceptance:** Theme C's criteria 1 and 2, verbatim, plus the comment at `mcp_routes.py:182`. The PR body lists the alert numbers it makes dismissible (criterion 3).
 **Regimes:** `https://github.com.evil.tld/a/b`, `https://evil.tld/github.com/a/b`, `https://user@github.com/a/b`, `git@github.com:a/b` (rewritten at `github_auth.py:355` before the check — still gets the token), `http://` (say whether a token is ever injected over plain HTTP), an empty/None URL, a GitHub Enterprise host (not supported today — must not get the github.com token).
 **Touches** — existing: `pyrite/github_auth.py` (:363), `pyrite/services/user_service.py` (:83, comment), `pyrite/config.py` (:155 `is_github`, comment), `pyrite/server/mcp_routes.py` (:182, comment), `CHANGELOG.md`. New: a test beside the existing `github_auth` tests. `GitService._github_repo_path` (`git_service.py:434`) is **called, not edited**.
-**Sequence:** after A and after #161 (Theme B) have merged — so both true positives are fixed before anything is dismissed — and #161 owns `git_service.py` until then.
+**Sequence:** after the privately tracked fix and #161 (Theme B) have merged — so both true positives are fixed before anything is dismissed — and #161 owns `git_service.py` until then.
 **Model:** opus (auth; a token goes where this check says). **heavy:** no. **Cold read:** yes. **Size:** S, ~80 lines.
 **Out of scope:** the dismissals (C2); making `config.py`/`user_service.py` use host equality (lookup-only uses — comments, per criterion 2).
 
