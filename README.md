@@ -394,6 +394,10 @@ seen (MCP over SSE, KB registry cache, embedding prewarm — v0.24.1). Bug repor
 go to [GitHub issues](https://github.com/pyrite-wiki/pyrite/issues); see
 [CONTRIBUTING.md](CONTRIBUTING.md) for how the project works.
 
+If Pyrite is useful to you, please [star the repository](https://github.com/pyrite-wiki/pyrite).
+Stars are how many people decide whether a project is alive and worth a look,
+so a star helps others find it.
+
 Started as a fork of [joshylchen/zettelkasten](https://github.com/joshylchen/zettelkasten). Since substantially rewritten: multi-KB, plugin system, three-tier MCP, FTS5 + vector search, REST API with tier enforcement, SvelteKit frontend, service layer, schema-as-config, content negotiation, collections, block references, web clipper, AI integration. See [UPSTREAM_CHANGES.md](UPSTREAM_CHANGES.md) for divergence history.
 
 ## License
