@@ -111,6 +111,40 @@ class TestVersionHistoryDB:
         versions = db.get_entry_versions("entry-1", "test-kb", limit=3)
         assert len(versions) == 3
 
+    def test_entry_version_exists(self, db):
+        """entry_version_exists is an exact existence check on
+        (entry_id, kb_name, commit_hash) -- an indexed point lookup, not a
+        full scan of the entry's recorded versions (#415 cold read)."""
+        db.register_kb("test-kb", "generic", "/tmp/test", "")
+        db.upsert_entry(
+            {
+                "id": "entry-1",
+                "kb_name": "test-kb",
+                "entry_type": "note",
+                "title": "Test",
+                "body": "",
+                "tags": [],
+                "sources": [],
+                "links": [],
+            }
+        )
+        db.upsert_entry_version(
+            entry_id="entry-1",
+            kb_name="test-kb",
+            commit_hash="abc123def456",
+            author_name="Alice",
+            author_email="alice@example.com",
+            commit_date="2025-01-20T10:00:00",
+            message="Initial commit",
+            change_type="created",
+        )
+
+        assert db.entry_version_exists("entry-1", "test-kb", "abc123def456") is True
+        # Wrong entry, wrong KB, wrong hash -- each dimension must matter.
+        assert db.entry_version_exists("entry-2", "test-kb", "abc123def456") is False
+        assert db.entry_version_exists("entry-1", "other-kb", "abc123def456") is False
+        assert db.entry_version_exists("entry-1", "test-kb", "0" * 40) is False
+
 
 class TestVersionHistoryAPI:
     """Test version history REST endpoints."""

@@ -32,6 +32,7 @@ from ..exceptions import (
     KBNotFoundError,
     KBProtectedError,
     KBReadOnlyError,
+    LastAdminError,
     PluginError,
     PyriteError,
     QuerySyntaxError,
@@ -70,6 +71,17 @@ _PYRITE_ERROR_STATUS: list[tuple[type[PyriteError], int, str]] = [
     (FrontmatterError, 422, "INVALID_FRONTMATTER"),
     (QueryTooLongError, 422, "QUERY_TOO_LONG"),
     (QuerySyntaxError, 400, "QUERY_SYNTAX"),
+    # The one route that raises LastAdminError (PUT /auth/users/{id}/role)
+    # catches it itself and re-raises as HTTPException, so this row is never
+    # reached from there -- and its response shape differs from what this
+    # row would produce: the route's HTTPException(detail={...}) nests as
+    # {"detail": {"code", "message"}}, while this central handler returns
+    # {"code", "message"} flat. This row exists so a *different*,
+    # not-yet-written caller of AuthService.set_role -- one that lets
+    # LastAdminError propagate instead of catching it -- still gets 409
+    # LAST_ADMIN instead of falling through to the base ValidationError's
+    # 422. Keep it above ValidationError so isinstance() matches it first.
+    (LastAdminError, 409, "LAST_ADMIN"),
     (ValidationError, 422, "VALIDATION_ERROR"),
     (ConfigSaveRefusedError, 409, "CONFIG_SAVE_REFUSED"),
     (ConfigError, 409, "CONFIG_CONFLICT"),

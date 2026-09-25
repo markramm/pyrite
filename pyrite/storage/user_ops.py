@@ -291,6 +291,20 @@ class UserOpsMixin:
         )
         return [self._version_to_dict(v) for v in versions]
 
+    def entry_version_exists(self, entry_id: str, kb_name: str, commit_hash: str) -> bool:
+        """Is `commit_hash` one of this entry's recorded versions?
+
+        An exact point lookup on the indexed (entry_id, kb_name, commit_hash)
+        columns, not a scan of the entry's version history -- used to check
+        membership before serving content at a caller-supplied commit (#415).
+        """
+        return (
+            self.session.query(EntryVersion.id)
+            .filter_by(entry_id=entry_id, kb_name=kb_name, commit_hash=commit_hash)
+            .first()
+            is not None
+        )
+
     def _version_to_dict(self, v: EntryVersion) -> dict[str, Any]:
         """Convert EntryVersion ORM object to dict."""
         return {

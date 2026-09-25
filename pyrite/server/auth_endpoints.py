@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..config import PyriteConfig
-from ..exceptions import ValidationError
+from ..exceptions import LastAdminError
 from ..services.auth_service import AuthService
 from ..services.oauth_providers import GitHubOAuthProvider
 from ..storage.database import PyriteDB
@@ -165,7 +165,7 @@ async def set_user_role(
 
     try:
         found = auth_service.set_role(user_id, role)
-    except ValidationError as e:
+    except LastAdminError as e:
         raise HTTPException(status_code=409, detail={"code": "LAST_ADMIN", "message": str(e)})
     if not found:
         raise HTTPException(status_code=404, detail="User not found")

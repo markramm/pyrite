@@ -79,6 +79,7 @@ class VersionService:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                env=GitService.subprocess_env(),
             )
             return result.stdout.strip() if result.returncode == 0 else None
 
@@ -94,14 +95,28 @@ class VersionService:
         if commit is None:
             raise InvalidGitRefError("Invalid commit hash: the object is not a commit")
 
-        # Read the entry's file at the peeled, full commit id
+        # The commit must be one of THIS entry's recorded versions -- not
+        # merely any commit that exists in the repo. Without this, any
+        # commit id served whatever content that commit's tree happened to
+        # have at this entry's path, including commits that never touched
+        # this entry (#415). Membership is checked on the peeled, full
+        # commit id so an abbreviated form of a recorded hash still matches.
+        if not self.db.entry_version_exists(entry_id, kb_name, commit):
+            return None
+
+        # Read the entry's file at the peeled, full commit id. `<rev>:<path>`
+        # is resolved by git relative to the repo root, not to `cwd`, so a
+        # path relative to a KB directory that is itself a subdirectory of
+        # its repo must be anchored with `./` -- otherwise git looks for it
+        # at the repo root and never finds it (#415).
         try:
             result = subprocess.run(
-                ["git", "show", "--end-of-options", f"{commit}:{rel_path}"],
+                ["git", "show", "--end-of-options", f"{commit}:./{rel_path}"],
                 cwd=str(kb_path),
                 capture_output=True,
                 text=True,
                 timeout=10,
+                env=GitService.subprocess_env(),
             )
             if result.returncode == 0:
                 return result.stdout
