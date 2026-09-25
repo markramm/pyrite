@@ -268,3 +268,88 @@ class TestRobotsTxt:
         client = _make_env(tmp_path, [("public-kb", "read")], [], branding_dir=branding_dir)
         r = client.get("/robots.txt")
         assert "https://example.org/sitemap.xml" in r.text
+
+
+# ---------------------------------------------------------------------------
+# Broken branding.yaml must not pull the site out of search (#445 delta
+# cold read). A crawler reading a 5xx on /robots.txt takes it as "don't
+# crawl" -- an operator's config typo must not have that blast radius.
+# Unlike POST /api/site/render (a deliberate operator action, nothing
+# committed yet, so 409 BRANDING_INVALID is the right signal) and
+# GET /config/branding (the settings UI, which already has a fallback for
+# the 500), these two anonymous, always-on routes degrade instead: default
+# branding, relative URLs (no site_url), logged once.
+# ---------------------------------------------------------------------------
+
+
+class TestSitemapAndRobotsSurviveBrokenBranding:
+    def test_sitemap_degrades_to_relative_urls_on_broken_branding(self, tmp_path):
+        branding_dir = tmp_path / "branding"
+        branding_dir.mkdir()
+        (branding_dir / "branding.yaml").write_text("- a list, not a mapping\n")
+        client = _make_env(
+            tmp_path,
+            [("public-kb", "read")],
+            [{"id": "a", "kb_name": "public-kb", "title": "A"}],
+            branding_dir=branding_dir,
+        )
+        r = client.get("/sitemap.xml")
+        assert r.status_code == 200, r.text
+        root = ET.fromstring(r.text)
+        url = root.find(f"{SITEMAP_NS}url")
+        assert url is not None
+        loc = url.findtext(f"{SITEMAP_NS}loc")
+        # No site_url to prefix with -- falls back to the relative,
+        # path-only form the module docstring describes for "unset".
+        assert loc == "/entries/a?kb=public-kb", loc
+
+    def test_robots_still_serves_200_on_broken_branding(self, tmp_path):
+        branding_dir = tmp_path / "branding"
+        branding_dir.mkdir()
+        (branding_dir / "branding.yaml").write_text("- a list, not a mapping\n")
+        client = _make_env(tmp_path, [("public-kb", "read")], [], branding_dir=branding_dir)
+        r = client.get("/robots.txt")
+        assert r.status_code == 200, r.text
+        assert "User-agent: *" in r.text
+        assert "Allow: /" in r.text
+        assert "/sitemap.xml" in r.text
+
+    def test_broken_branding_does_not_leak_path_on_sitemap_or_robots(self, tmp_path):
+        branding_dir = tmp_path / "branding"
+        branding_dir.mkdir()
+        (branding_dir / "branding.yaml").write_text("- a list, not a mapping\n")
+        client = _make_env(tmp_path, [("public-kb", "read")], [], branding_dir=branding_dir)
+        for route in ("/sitemap.xml", "/robots.txt"):
+            r = client.get(route)
+            assert r.status_code == 200, (route, r.text)
+            assert str(branding_dir) not in r.text, f"{route} leaked the branding path: {r.text}"
+            assert "CommentedSeq" not in r.text, f"{route} leaked parser internals: {r.text}"
+
+    def test_broken_branding_logged_once_not_per_request(self, tmp_path, caplog):
+        """A broken file must not flood the log with a full traceback on
+        every page load: the failure is cached (keyed on the file's mtime)
+        so repeat requests don't re-log it."""
+        import logging
+
+        branding_dir = tmp_path / "branding"
+        branding_dir.mkdir()
+        (branding_dir / "branding.yaml").write_text("- a list, not a mapping\n")
+        client = _make_env(tmp_path, [("public-kb", "read")], [], branding_dir=branding_dir)
+
+        with caplog.at_level(logging.WARNING):
+            for _ in range(5):
+                r = client.get("/sitemap.xml")
+                assert r.status_code == 200, r.text
+
+        branding_records = [
+            rec
+            for rec in caplog.records
+            if "branding" in rec.getMessage().lower() or "BrandingInvalid" in rec.getMessage()
+        ]
+        # Exactly one, not "at most one": the failure must be logged (a
+        # silently-dropped exception is its own bug), just not once per
+        # request across all 5 calls to the same broken, unchanged file.
+        assert len(branding_records) == 1, (
+            f"expected the broken-branding failure logged exactly once across 5 requests, "
+            f"got {len(branding_records)}: {[r.getMessage() for r in branding_records]}"
+        )

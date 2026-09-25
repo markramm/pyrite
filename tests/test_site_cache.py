@@ -1278,3 +1278,622 @@ class TestSiteCacheBranding:
         cache_env["svc"].render_all()
         html = (cache_env["cache_dir"] / "index.html").read_text()
         assert "Pyrite Knowledge Base" in html
+
+
+class TestRenderSiteCacheEndpoint:
+    """``POST /api/site/render`` (#408): the endpoint must mean the same
+    thing by ``rendered`` and ``errors`` as the sync path's ``site_cache``
+    status, and a broken ``branding.yaml`` must not 500.
+    """
+
+    @pytest.fixture
+    def _client(self, tmp_path):
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        (kb_path / "entry.md").write_text(
+            """---
+id: entry
+title: An Entry
+entry_type: note
+---
+
+Body.
+"""
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client._pyrite_config = config
+            sync_resp = client.post("/api/index/sync", params={"wait": "true"})
+            assert sync_resp.status_code == 200, sync_resp.text
+            assert sync_resp.json()["added"] == 1, (
+                f"precondition: the entry must be indexed before render, got {sync_resp.json()}"
+            )
+            yield client
+
+    @pytest.mark.control(
+        reason=(
+            "The pre-fix render endpoint already did `{'rendered': True, **stats}`, "
+            "and `stats` already carried `errors` from `render_all()` -- this "
+            "endpoint's success/errors-present shape was never the #408 bug (only "
+            "the sync path's SiteCacheSyncStatus lacked `errors`). Kept as a "
+            "control so a future change to this endpoint can't silently drop it."
+        )
+    )
+    def test_render_reports_rendered_true_and_errors_zero_on_success(self, _client):
+        resp = _client.post("/api/site/render")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["rendered"] is True, body
+        assert body["errors"] == 0, body
+
+    @pytest.mark.control(
+        reason=(
+            "Same reason as the test above: `render_all()`'s `errors` count "
+            "already rode along via `**stats` before this fix. `rendered` "
+            "staying true under a per-entry failure was already correct on "
+            "this endpoint; #408's bug was the sync path discarding it."
+        )
+    )
+    def test_render_reports_errors_even_though_rendered_true(self, _client, monkeypatch):
+        """Same meaning as the sync path: ``rendered`` says the render ran
+        to completion, ``errors`` carries per-entry failure counts."""
+        import pyrite.services.site_cache as site_cache_module
+
+        def _boom(self, *args, **kwargs):
+            raise RuntimeError("boom: entry render exploded")
+
+        monkeypatch.setattr(site_cache_module.SiteCacheService, "_render_entry", _boom)
+
+        resp = _client.post("/api/site/render")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["rendered"] is True, body
+        assert body["errors"] == 1, body
+
+    def test_broken_branding_yaml_answers_409_branding_invalid(self, tmp_path):
+        """A half-edited ``branding.yaml`` is an operator mistake on an
+        explicit, nothing-already-committed render call -- it must not
+        report a generic 200 (that would hide the mistake) nor 500 (the
+        original bug); it answers 409 with a stable error code, and the
+        envelope is the exact shape the endpoint returns (an ``HTTPException``
+        detail, not the central ``PyriteError`` handler's flat body) --
+        pinned rather than accepting either shape, so a change to either
+        one is caught (#445 cold read)."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/site/render")
+
+        assert resp.status_code == 409, resp.text
+        body = resp.json()
+        assert set(body.keys()) == {"detail"}, body
+        assert set(body["detail"].keys()) == {"code", "message"}, body
+        assert body["detail"]["code"] == "BRANDING_INVALID", body
+        message = body["detail"]["message"]
+        assert str(branding) not in message, (
+            f"the branding directory path must not appear in the public response: {message}"
+        )
+
+    def test_broken_branding_yaml_syntax_error_answers_409_branding_invalid(self, tmp_path):
+        """A YAML syntax error (not just 'valid YAML, wrong shape') takes the
+        same 409 path -- ``load_yaml_file`` raising is caught too, not just a
+        parsed-but-wrong-type result."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("name: Acme\ntagline: [unclosed\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/site/render")
+
+        assert resp.status_code == 409, resp.text
+        body = resp.json()
+        assert body["detail"]["code"] == "BRANDING_INVALID", body
+        message = body["detail"]["message"]
+        assert str(branding) not in message, (
+            f"the branding directory path must not appear in the public response: {message}"
+        )
+
+
+class TestBrokenBrandingDoesNotLeakOnPublicRoutes:
+    """#445 cold read: a broken ``branding.yaml`` must not turn anonymous,
+    always-public GET routes into a path-and-parser-text leak. Before #408's
+    fix these routes returned a bare 500 ("Internal Server Error"); adding
+    ``BrandingInvalidError`` without a row in ``_PYRITE_ERROR_STATUS`` made
+    the central handler fall through to ``str(exc)``, which is the absolute
+    branding.yaml path plus the parser's own text.
+
+    ``/sitemap.xml`` and ``/robots.txt`` no longer fail at all on a broken
+    branding.yaml (#445's delta cold read: a crawler reading a 5xx there
+    takes it as "don't crawl") -- their no-leak coverage lives in
+    ``tests/test_sitemap.py::TestSitemapAndRobotsSurviveBrokenBranding``
+    alongside the 200-and-degrades-cleanly assertions, so this class keeps
+    only ``/config/branding``, which still fails closed at 500.
+    """
+
+    def _config_with_broken_branding(self, tmp_path, yaml_text):
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        (kb_path / "entry.md").write_text(
+            "---\nid: entry\ntitle: An Entry\nentry_type: note\n---\n\nBody.\n"
+        )
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(yaml_text)
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        return config, branding
+
+    @pytest.mark.control(
+        reason=(
+            "verify-red diffs against the PR's merge base, before #408 existed at "
+            "all -- there this route hit FastAPI's default unhandled-exception "
+            "handler (a bare 'Internal Server Error', no message body), so the "
+            "leak assertions trivially hold there too. The bug this guards was "
+            "introduced BY #408 (BrandingInvalidError with no _PYRITE_ERROR_STATUS "
+            "row, so the central handler fell through to str(exc)) and fixed in "
+            "the first cold-read round -- confirmed red by mutation-testing the "
+            "_PYRITE_ERROR_STATUS row and the public_message generalization in "
+            "pyrite/server/api.py (see the PR report)."
+        )
+    )
+    def test_config_branding_route_does_not_leak_path_or_parser_text(self, tmp_path):
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        config, branding = self._config_with_broken_branding(tmp_path, "- a list, not a mapping\n")
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/config/branding")
+
+        assert resp.status_code >= 400, resp.text
+        # Naming the filename is fine (the public_message says "fix
+        # branding.yaml" so an operator knows what to look at); the
+        # filesystem path and the parser's own type/error text are not.
+        assert str(branding) not in resp.text, (
+            f"/config/branding leaked the branding directory path: {resp.text}"
+        )
+        assert "CommentedSeq" not in resp.text, (
+            f"/config/branding leaked the raw parser/type name: {resp.text}"
+        )
+
+    def test_config_branding_route_answers_a_named_code_not_a_bare_500(self, tmp_path):
+        """The route still fails closed (it cannot serve real branding), but
+        with the same ``{"code", "message"}`` shape every other PyriteError
+        gets from the central handler -- not FastAPI's generic
+        'Internal Server Error' text and not a traceback."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        config, _branding = self._config_with_broken_branding(tmp_path, "- a list, not a mapping\n")
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.get("/config/branding")
+
+        body = resp.json()
+        assert body.get("code") == "BRANDING_INVALID", body
+
+    @pytest.mark.control(
+        reason=(
+            "verify-red's baseline is before #408 existed at all, where "
+            "BrandingInvalidError does not exist and so cannot reach the "
+            "central handler's public_message branch either -- the double-log "
+            "bug this guards was introduced by round 1 of THIS PR (the "
+            "public_message generalization in pyrite/server/api.py) and fixed "
+            "in this same delta round; confirmed red by directly mutating out "
+            "the `if status_code < 500` guard (see the PR report)."
+        )
+    )
+    def test_config_branding_central_handler_does_not_log_a_5xx_twice(self, tmp_path, caplog):
+        """#445 delta cold read: ``pyrite.server.api``'s central handler
+        logged a 5xx PyriteError with ``logger.error`` (with a traceback)
+        AND, whenever it had a ``public_message``, an unconditional second
+        ``logger.warning`` line for the very same exception -- doubling the
+        handler's own log output for a broken branding.yaml on every
+        request. Scoped to the ``pyrite.server.api`` logger specifically:
+        ``BrandingService`` logging its own line (once per mtime, a
+        separate concern) is not part of this count."""
+        import logging
+
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        config, _branding = self._config_with_broken_branding(tmp_path, "- a list, not a mapping\n")
+        app = create_app(config=config)
+        with (
+            caplog.at_level(logging.WARNING, logger="pyrite.server.api"),
+            TestClient(app, raise_server_exceptions=False) as client,
+        ):
+            resp = client.get("/config/branding")
+
+        assert resp.status_code >= 500, resp.text
+        handler_records = [r for r in caplog.records if r.name == "pyrite.server.api"]
+        assert len(handler_records) <= 1, (
+            f"expected the central handler to log this 5xx at most once, got "
+            f"{len(handler_records)}: {[r.getMessage() for r in handler_records]}"
+        )
+
+
+class TestBrandingNestedMappingValidation:
+    """#445 cold read: ``meta:`` and ``mcp:`` are read with ``.get()``
+    immediately after the top-level mapping check, so ``meta: [x]`` or
+    ``mcp: [x]`` (a YAML list where a mapping is expected) still raised a
+    raw ``AttributeError`` -- the top-level ``isinstance(data, dict)`` guard
+    only covers the outermost document.
+    """
+
+    @pytest.mark.parametrize("bad_key", ["meta", "mcp"])
+    def test_nested_non_mapping_is_a_branding_invalid_error_not_an_attributeerror(
+        self, tmp_path, bad_key
+    ):
+        from pyrite.exceptions import BrandingInvalidError
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(f"name: Acme\n{bad_key}: [x]\n")
+
+        svc = BrandingService(branding)
+        with pytest.raises(BrandingInvalidError):
+            svc.get()
+
+    @pytest.mark.parametrize("bad_key", ["meta", "mcp"])
+    def test_render_endpoint_answers_409_for_a_nested_non_mapping(self, tmp_path, bad_key):
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(f"name: Acme\n{bad_key}: [x]\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/site/render")
+
+        assert resp.status_code == 409, resp.text
+        assert resp.json()["detail"]["code"] == "BRANDING_INVALID", resp.text
+
+
+class TestBrandingScalarFieldValidation:
+    """#445 delta cold read: BrandingService validated the top-level
+    document and the two nested mappings (round 2), but not that the
+    scalar fields it reads (``name``, ``site_url``, etc.) are actually
+    strings. ``site_url: [x]`` reached SitemapService as a list (a bare
+    500 on /sitemap.xml and /robots.txt); ``name: [x]`` came out of
+    /config/branding as a JSON array where every consumer expects text.
+    """
+
+    @pytest.mark.parametrize(
+        "yaml_text",
+        [
+            "name: [x]\n",
+            "site_url: [x]\n",
+            "tagline: 123\n",
+            "primary_color: true\n",
+            "meta:\n  description: [x]\n",
+            "mcp:\n  agent_prompt_brand: [x]\n",
+        ],
+        ids=[
+            "name-list",
+            "site_url-list",
+            "tagline-number",
+            "primary_color-bool",
+            "meta.description-list",
+            "mcp.agent_prompt_brand-list",
+        ],
+    )
+    def test_non_string_scalar_field_is_branding_invalid_error(self, tmp_path, yaml_text):
+        from pyrite.exceptions import BrandingInvalidError
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text(yaml_text)
+
+        svc = BrandingService(branding)
+        with pytest.raises(BrandingInvalidError):
+            svc.get()
+
+    def test_site_url_list_no_longer_500s_sitemap(self, tmp_path):
+        """The exact failure mode the cold read named: site_url: [x] must
+        not reach SitemapService as a list."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        (kb_path / "e.md").write_text("---\nid: e\ntitle: E\nentry_type: note\n---\nBody\n")
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("site_url: [x]\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            r = client.get("/sitemap.xml")
+        assert r.status_code == 200, r.text
+
+    def test_name_list_no_longer_a_list_from_config_branding(self, tmp_path):
+        """The exact failure mode the cold read named: name: [x] must not
+        come out of /config/branding as a list -- the route stays a named
+        500 (unlike sitemap/robots, GET /config/branding keeps failing
+        closed; the web store already has a fallback for it), so this
+        pins that it does NOT silently serialize the list through."""
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("name: [x]\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        with TestClient(app, raise_server_exceptions=False) as client:
+            r = client.get("/config/branding")
+        assert r.status_code == 500, r.text
+        body = r.json()
+        assert body.get("code") == "BRANDING_INVALID", body
+        assert not isinstance(body.get("name"), list), body
+
+
+class TestBrandingFailureCacheDoesNotLeakTracebackFrames:
+    """#445 round 3: a cache hit re-raised the SAME stored exception object
+    (``raise cached[1]``). Python appends a frame to ``__traceback__`` on
+    every raise of that object, so the cached exception's traceback grows
+    without bound across requests, and the central handler's
+    ``logger.error(..., exc_info=exc)`` prints the whole (growing)
+    traceback on every single ``/config/branding`` request.
+    """
+
+    def test_traceback_length_does_not_grow_across_repeated_loads(self, tmp_path):
+        import traceback
+
+        from pyrite.exceptions import BrandingInvalidError
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+
+        svc = BrandingService(branding)
+        lengths = []
+        for _ in range(8):
+            svc._config = None  # force _load() again, same object, same mtime
+            with pytest.raises(BrandingInvalidError) as excinfo:
+                svc.get()
+            lengths.append(len(traceback.extract_tb(excinfo.value.__traceback__)))
+
+        # The first call is a real parse failure (a deeper stack, through
+        # _load_raw); every call after that is a cache hit and must raise a
+        # FRESH exception each time, so its traceback is a fixed, shallow
+        # depth -- not growing call over call. Comparing only the cache-hit
+        # calls (index 1 on) isolates the bug: re-raising the same stored
+        # exception object appends a frame on every raise, so those lengths
+        # would climb 1, 2, 3, ... instead of staying constant.
+        cache_hit_lengths = lengths[1:]
+        assert len(set(cache_hit_lengths)) == 1, (
+            f"traceback frame count grew across repeated cache-hit loads of "
+            f"the same unchanged file (first call, a real parse, is index 0 "
+            f"and expected to differ): {lengths}"
+        )
+
+    def test_config_branding_logged_traceback_does_not_grow_across_requests(self, tmp_path, caplog):
+        """Same story at the HTTP layer, checked where the bug actually
+        shows up: the coordinator's finding is specifically that
+        ``/config/branding`` *logs* the whole (growing) traceback on every
+        request via the central handler's ``exc_info=exc`` -- the response
+        body itself carries only the fixed ``public_message``, so it can't
+        show this. ``/config/branding`` builds a fresh ``BrandingService``
+        per request (no per-instance state to reset), so this exercises the
+        module-level cache directly, repeatedly, the way real traffic
+        would."""
+        import logging
+        import traceback
+
+        fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+        from fastapi.testclient import TestClient
+
+        from pyrite.server.api import create_app
+
+        kb_path = tmp_path / "public-kb"
+        kb_path.mkdir()
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+        config = PyriteConfig(
+            knowledge_bases=[
+                KBConfig(name="public-kb", path=kb_path, kb_type="generic", default_role="read"),
+            ],
+            settings=Settings(index_path=tmp_path / "index.db", branding_dir=branding),
+        )
+        app = create_app(config=config)
+        depths = []
+        with (
+            caplog.at_level(logging.ERROR, logger="pyrite.server.api"),
+            TestClient(app, raise_server_exceptions=False) as client,
+        ):
+            for _ in range(8):
+                caplog.clear()
+                r = client.get("/config/branding")
+                assert r.status_code == 500, r.text
+                handler_records = [rec for rec in caplog.records if rec.name == "pyrite.server.api"]
+                assert handler_records, "expected the central handler to log this 5xx"
+                exc_info = handler_records[0].exc_info
+                assert exc_info is not None and exc_info[2] is not None, (
+                    "expected a traceback on the logged record"
+                )
+                depths.append(len(traceback.extract_tb(exc_info[2])))
+
+        # Request 0 builds a fresh BrandingService and hits a real parse
+        # failure (deeper stack, through _load_raw); every request after
+        # that is a cache hit and must raise a fresh exception each time,
+        # so its logged traceback is a fixed, shallow depth -- not growing
+        # request over request the way re-raising the same stored object
+        # would (the bug: 1, 2, 3, ... frames deeper on each hit).
+        cache_hit_depths = depths[1:]
+        assert len(set(cache_hit_depths)) == 1, (
+            f"the logged traceback's frame count grew across identical repeated "
+            f"cache-hit requests to the same unchanged file (request 0, a real "
+            f"parse, is expected to differ): {depths}"
+        )
+
+
+class TestBrandingFailureCacheKey:
+    """#445 round 3: keyed on mtime alone, a fixed file whose mtime happens
+    not to change (``cp -p``, ``rsync -t``, tar extraction, or a filesystem
+    with 1-second mtime granularity racing two writes in the same second)
+    keeps failing forever with the stale cached error. Keying on
+    ``(st_mtime_ns, st_size)`` catches a same-second edit as long as the
+    byte size differs, which covers the realistic "operator fixed a typo"
+    case without needing a content hash.
+    """
+
+    @pytest.mark.control(
+        reason=(
+            "verify-red's baseline is before #408 existed at all, where "
+            "BrandingService has no failure cache whatsoever -- every load "
+            "re-parses the file fresh, so a stale-cache bug (this test's whole "
+            "point) cannot manifest there and the assertion trivially holds. "
+            "The bug was introduced by round 3 of this PR (the mtime-only cache "
+            "key) and fixed in this same round 4; confirmed red by mutation-"
+            "testing the (mtime_ns, size) key down to mtime-only (see the PR "
+            "report)."
+        )
+    )
+    def test_same_mtime_different_size_is_not_treated_as_the_same_failure(self, tmp_path):
+        import os
+
+        from pyrite.services.branding_service import BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        yaml_path = branding / "branding.yaml"
+        yaml_path.write_text("- a list, not a mapping\n")
+
+        svc = BrandingService(branding)
+        with pytest.raises(Exception):  # noqa: B017 -- BrandingInvalidError, imported below in the assert
+            svc.get()
+
+        # Fix the file's content but pin its mtime to the same value a
+        # coarse-grained filesystem or a `cp -p`/`rsync -t` copy would
+        # produce -- the size changes, the mtime does not.
+        st = yaml_path.stat()
+        yaml_path.write_text("name: Acme\n")
+        os.utime(yaml_path, ns=(st.st_atime_ns, st.st_mtime_ns))
+        assert yaml_path.stat().st_mtime_ns == st.st_mtime_ns, "test setup: mtime must be pinned"
+
+        svc2 = BrandingService(branding)
+        cfg = svc2.get()  # must NOT raise the stale cached failure
+        assert cfg.name == "Acme", cfg
+
+    def test_file_deleted_between_is_file_and_stat_is_treated_as_missing(
+        self, tmp_path, monkeypatch
+    ):
+        """A TOCTOU gap: ``is_file()`` passes, then the file is removed
+        before the later, unguarded ``yaml_path.stat()`` call runs (the one
+        that reads the cache key). Must fall back to defaults (the same
+        outcome as the file never having existed), not raise
+        FileNotFoundError.
+
+        ``Path.is_file()`` itself calls ``self.stat()`` internally (and
+        already handles ENOENT, returning False), so a naive "delete on the
+        first stat() call" monkeypatch deletes the file during is_file()'s
+        own check and never reaches the real gap this test targets. The
+        delete has to happen on the *second* stat() call -- the one after
+        is_file() has already returned True.
+        """
+        from pathlib import Path
+
+        from pyrite.services.branding_service import DEFAULT_BRAND_NAME, BrandingService
+
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        yaml_path = branding / "branding.yaml"
+        yaml_path.write_text("name: Acme\n")
+
+        real_stat = Path.stat
+        calls = {"n": 0}
+
+        def _stat_then_delete_on_second_call(self, *args, **kwargs):
+            if self == yaml_path:
+                calls["n"] += 1
+                if calls["n"] == 2:
+                    yaml_path.unlink()
+            return real_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", _stat_then_delete_on_second_call)
+
+        svc = BrandingService(branding)
+        cfg = svc.get()
+        assert cfg.name == DEFAULT_BRAND_NAME, cfg

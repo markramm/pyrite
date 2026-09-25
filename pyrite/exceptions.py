@@ -132,6 +132,25 @@ class ConfigError(PyriteError):
     """Raised when configuration is invalid."""
 
 
+class BrandingInvalidError(PyriteError):
+    """Raised when ``branding.yaml`` exists but cannot be parsed, or it or
+    one of its nested mappings (``meta``, ``mcp``) is not a mapping (#408).
+
+    ``str()`` names the real branding.yaml path and the parser's own text --
+    useful in the server log, not safe to return over HTTP or MCP: every
+    caller of ``BrandingService`` runs on an anonymous, always-public path
+    (``/config/branding``, ``/sitemap.xml``, ``/robots.txt``, the MCP
+    ``research_topic`` prompt), not just the admin-only render endpoint
+    (#445's cold read). ``public_message`` is safe to show; it names neither.
+    """
+
+    public_message = (
+        "The server's branding configuration is invalid and could not be loaded. "
+        "An administrator needs to fix branding.yaml; the server log names the "
+        "file and the problem."
+    )
+
+
 class ConfigSaveRefusedError(ConfigError):
     """A config save was refused: it would drop KBs the caller did not name,
     or the file on disk could not be read to check (#377).

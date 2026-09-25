@@ -18,6 +18,7 @@ from pydantic import AnyUrl
 
 from ..config import PyriteConfig, load_config
 from ..exceptions import (
+    BrandingInvalidError,
     ConfigError,
     EntryNotFoundError,
     InvalidGitRefError,
@@ -88,6 +89,7 @@ _DOMAIN_ERROR_CODES: tuple[tuple[type[PyriteError], str], ...] = (
     (QueryTooLongError, "QUERY_TOO_LONG"),
     (ValidationError, "VALIDATION_FAILED"),
     (ConfigError, "CONFIG_ERROR"),
+    (BrandingInvalidError, "BRANDING_INVALID"),
 )
 
 
@@ -119,7 +121,13 @@ def _refusal(exc: PyriteError) -> dict:
         (c for t, c in _DOMAIN_ERROR_CODES if isinstance(exc, t)), "REQUEST_REFUSED"
     )
     retryable = isinstance(exc, StorageError) and exc.retryable
-    err = _error(code, str(exc), suggestion=getattr(exc, "suggestion", None), retryable=retryable)
+    # str(exc) is safe for every existing domain error here -- validation
+    # messages, "not found", query syntax -- except one that opts out via a
+    # `public_message` class attribute because its own str() names a real
+    # filesystem path (BrandingInvalidError; the REST side's #377 pattern,
+    # #445's cold read).
+    message = getattr(exc, "public_message", None) or str(exc)
+    err = _error(code, message, suggestion=getattr(exc, "suggestion", None), retryable=retryable)
     declared = getattr(exc, "declared_types", None)
     if declared is not None:
         err["declared_types"] = declared
@@ -1760,9 +1768,22 @@ class PyriteMCPServer:
                     return _kb_not_found(kb_name)
         import inspect
 
-        if READABLE_KBS_KWARG in inspect.signature(handler).parameters:
-            return handler(arguments, readable_kbs=readable_kbs)
-        return handler(arguments)
+        try:
+            if READABLE_KBS_KWARG in inspect.signature(handler).parameters:
+                return handler(arguments, readable_kbs=readable_kbs)
+            return handler(arguments)
+        except PyriteError as e:
+            # Same refusal-not-a-crash handling as _dispatch_tool (#445 cold
+            # read): research_topic reads BrandingService as a side effect,
+            # and an uncaught BrandingInvalidError previously propagated raw
+            # out of this method with nothing to convert it to the MCP
+            # envelope. A storage fault is the server's problem and is
+            # logged once, with its traceback (#431); every other refusal
+            # (including BrandingInvalidError) is the caller finding out the
+            # service said no, not a crash.
+            if isinstance(e, StorageError):
+                logger.error("Prompt %s failed: %s", name, e, exc_info=e)
+            return _refusal(e)
 
     def _prompt_research_topic(self, args: dict[str, Any]) -> dict[str, Any]:
         """Generate research prompt for a topic."""

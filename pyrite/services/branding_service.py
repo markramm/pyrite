@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..exceptions import BrandingInvalidError
 from ..utils.yaml import load_yaml_file
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,27 @@ logger = logging.getLogger(__name__)
 DEFAULT_BRAND_NAME = "Pyrite"
 DEFAULT_PRIMARY_COLOR = "#d4a017"  # gold-400 equivalent — today's accent
 DEFAULT_FOOTER_CREDIT_URL = "https://pyrite.wiki"
+
+# Module-level, keyed on the resolved branding.yaml path, each holding at
+# most one ((mtime_ns, size), message) pair (#445 delta cold read): every
+# request to an anonymous route (/sitemap.xml, /robots.txt,
+# /config/branding) that hits a broken branding.yaml builds its own
+# BrandingService (seo_endpoints.py has no per-request caching the way
+# branding_endpoints.py's _service_cache does), so without this, a stuck
+# operator typo logs a full traceback on every single page load. Keyed on
+# (mtime, size), not just the path, so a fixed file is re-read and
+# re-logged on its next real failure instead of staying silent forever --
+# and keyed per-path (not a single shared slot) so two different branding
+# dirs in the same process (e.g. two tests, or two ephemeral configs) don't
+# evict each other's cached failure.
+#
+# The value is the exception's MESSAGE (a str), not the exception object
+# itself (#445 round 3): re-raising the same exception instance on every
+# cache hit appends a frame to its __traceback__ every time, so the cached
+# object's traceback -- and every subsequent request's logged traceback --
+# grows without bound. A cache hit constructs a fresh BrandingInvalidError
+# from the stored message instead.
+_failure_cache: dict[str, tuple[tuple[int, int], str]] = {}
 
 
 @dataclass
@@ -150,14 +172,107 @@ class BrandingService:
         if not yaml_path.is_file():
             return BrandingConfig(branding_dir=self._branding_dir)
 
-        data = load_yaml_file(yaml_path) or {}
+        try:
+            st = yaml_path.stat()
+        except FileNotFoundError:
+            # TOCTOU: is_file() passed above, then something (a rewrite via
+            # temp-file-and-rename, a delete) removed it before this stat()
+            # ran (#445 round 3). Treat exactly like "never had a
+            # branding.yaml" rather than letting the raw OS error escape.
+            return BrandingConfig(branding_dir=self._branding_dir)
+
+        path_key = str(yaml_path)
+        # (mtime_ns, size), not mtime alone (#445 round 3): a filesystem
+        # with 1-second mtime granularity, or a copy tool that preserves
+        # timestamps (`cp -p`, `rsync -t`, most tar extraction), can leave
+        # an edited file's mtime unchanged from the broken version's --
+        # keyed on mtime alone, a fixed file would keep re-raising the
+        # stale cached failure forever. Comparing the byte size too catches
+        # any edit that isn't a same-second, same-length in-place overwrite
+        # (not a content hash, but far cheaper, and covers the realistic
+        # "operator fixed a typo" case).
+        cache_key = (st.st_mtime_ns, st.st_size)
+        cached = _failure_cache.get(path_key)
+        if cached is not None and cached[0] == cache_key:
+            # Same file, same (mtime, size) as a failure already logged:
+            # raise a FRESH exception carrying the same message, not the
+            # stored object itself (see _failure_cache above) -- re-raising
+            # the same object appends a frame to its __traceback__ on every
+            # raise, so the cached exception's traceback (and therefore
+            # every /config/branding request's logged traceback) grows
+            # without bound across repeat requests (#445 round 3).
+            raise BrandingInvalidError(cached[1])
+
+        try:
+            cfg = self._load_raw(yaml_path)
+        except BrandingInvalidError as e:
+            logger.error("Invalid branding config: %s", e, exc_info=e)
+            _failure_cache[path_key] = (cache_key, str(e))
+            raise
+        return cfg
+
+    def _load_raw(self, yaml_path: Path) -> BrandingConfig:
+        try:
+            data = load_yaml_file(yaml_path) or {}
+        except Exception as e:
+            raise BrandingInvalidError(f"{yaml_path} could not be parsed: {e}") from e
+        if not isinstance(data, dict):
+            raise BrandingInvalidError(
+                f"{yaml_path} must be a YAML mapping, got {type(data).__name__}"
+            )
+
         meta = data.get("meta") or {}
         mcp = data.get("mcp") or {}
+        # The top-level check above only covers the outermost document --
+        # `meta: [x]` or `mcp: [x]` still parses as valid YAML with `data` a
+        # dict, so `.get()` on a nested key returns a list, and the reads
+        # below (`meta.get(...)`, `mcp.get(...)`) would raise a raw
+        # AttributeError instead of the named error (#445 cold read).
+        if not isinstance(meta, dict):
+            raise BrandingInvalidError(
+                f"{yaml_path}: 'meta' must be a YAML mapping, got {type(meta).__name__}"
+            )
+        if not isinstance(mcp, dict):
+            raise BrandingInvalidError(
+                f"{yaml_path}: 'mcp' must be a YAML mapping, got {type(mcp).__name__}"
+            )
+
+        # Every scalar field BrandingConfig exposes must be a string (or
+        # absent) -- a list or number reads fine as far as .get() is
+        # concerned, but silently breaks the field's contract: site_url: [x]
+        # reaches SitemapService as a list where f-string interpolation
+        # expects str, and name: [x] serializes through to_public_dict() as
+        # a JSON array where every consumer (the web branding store, the
+        # <title> tag, the MCP prompt) expects text (#445 delta cold read).
+        string_fields = {
+            "name": data.get("name"),
+            "tagline": data.get("tagline"),
+            "primary_color": data.get("primary_color"),
+            "site_url": data.get("site_url"),
+            "support_url": data.get("support_url"),
+            "footer_credit_url": data.get("footer_credit_url"),
+            "logo": data.get("logo"),
+            "wordmark": data.get("wordmark"),
+            "favicon": data.get("favicon"),
+            "apple_touch_icon": data.get("apple_touch_icon"),
+            "logo_light": data.get("logo_light"),
+            "logo_dark": data.get("logo_dark"),
+            "wordmark_light": data.get("wordmark_light"),
+            "wordmark_dark": data.get("wordmark_dark"),
+            "meta.og_image_path": meta.get("og_image_path"),
+            "meta.description": meta.get("description"),
+            "mcp.agent_prompt_brand": mcp.get("agent_prompt_brand"),
+        }
+        for field_name, value in string_fields.items():
+            if value is not None and not isinstance(value, str):
+                raise BrandingInvalidError(
+                    f"{yaml_path}: '{field_name}' must be a string, got {type(value).__name__}"
+                )
 
         name = data.get("name", DEFAULT_BRAND_NAME)
         mcp_brand = mcp.get("agent_prompt_brand") or name
 
-        cfg = BrandingConfig(
+        return BrandingConfig(
             name=name,
             tagline=data.get("tagline", ""),
             primary_color=data.get("primary_color", DEFAULT_PRIMARY_COLOR),
@@ -178,4 +293,3 @@ class BrandingService:
             mcp_agent_prompt_brand=mcp_brand,
             branding_dir=self._branding_dir,
         )
-        return cfg

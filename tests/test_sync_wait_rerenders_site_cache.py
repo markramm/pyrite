@@ -101,7 +101,9 @@ class TestSyncWaitRerendersSiteCache:
         assert "public-kb" in html
 
     def test_sync_wait_true_reports_rendered_true_on_success(self, tmp_path):
-        """A successful render reports ``rendered: true`` with no error."""
+        """A successful render reports ``rendered: true`` with no error and
+        ``errors: 0`` -- the field is always present, per #408's groom, so a
+        caller reads ``rendered and errors == 0`` as "all pages are fresh"."""
         config = _config(tmp_path)
         app = create_app(config=config)
         _write_entry(config.get_kb("public-kb").path)
@@ -110,7 +112,37 @@ class TestSyncWaitRerendersSiteCache:
             resp = client.post("/api/index/sync", params={"wait": "true"})
             assert resp.status_code == 200, resp.text
             body = resp.json()
-            assert body["site_cache"] == {"rendered": True, "error": None}, body
+            assert body["site_cache"] == {"rendered": True, "errors": 0, "error": None}, body
+
+    def test_sync_wait_true_reports_per_entry_errors_even_though_rendered_true(
+        self, tmp_path, monkeypatch
+    ):
+        """#408: ``render_all``'s return value carries per-entry failures in
+        ``stats['errors']``, but the sync handler used to discard it, so
+        ``rendered: true`` even when every entry page failed to render.
+        ``rendered`` means "the render ran to completion", independent of
+        whether individual entry pages succeeded -- ``errors`` is the signal
+        for that.
+        """
+        import pyrite.services.site_cache as site_cache_module
+
+        config = _config(tmp_path)
+        app = create_app(config=config)
+        _write_entry(config.get_kb("public-kb").path)
+
+        def _boom(self, *args, **kwargs):
+            raise RuntimeError("boom: entry render exploded")
+
+        monkeypatch.setattr(site_cache_module.SiteCacheService, "_render_entry", _boom)
+
+        with TestClient(app) as client:
+            resp = client.post("/api/index/sync", params={"wait": "true"})
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            # The render itself ran to completion -- it's per-entry pages
+            # that failed -- so `rendered` stays true; `errors` carries the count.
+            assert body["site_cache"]["rendered"] is True, body
+            assert body["site_cache"]["errors"] == 1, body
 
     def test_sync_wait_true_does_not_hide_a_real_render_failure(
         self, tmp_path, monkeypatch, caplog
@@ -154,6 +186,8 @@ class TestSyncWaitRerendersSiteCache:
             assert body["added"] == 1, body
             assert body["site_cache"]["rendered"] is False, body
             assert body["site_cache"]["error"], "the error field must be populated, not None"
+            # `render_all` never returned -- no stats to report a count from.
+            assert body["site_cache"]["errors"] == 0, body
             # Generic to callers -- the raw exception text stays in the log.
             assert "boom" not in body["site_cache"]["error"]
 
@@ -245,6 +279,7 @@ class TestSyncWaitRerendersSiteCache:
             body = resp.json()
             assert body["added"] == 1, body
             assert body["site_cache"]["rendered"] is False, body
+            assert body["site_cache"]["errors"] == 0, body
 
     def test_a_sync_that_changes_nothing_reports_no_site_cache(self, tmp_path):
         """``site_cache`` is null when nothing changed: no render was attempted."""
