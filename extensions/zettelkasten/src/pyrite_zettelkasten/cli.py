@@ -1,16 +1,11 @@
 """Zettelkasten CLI commands."""
 
-from datetime import UTC, datetime
-
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from pyrite.config import load_config
-from pyrite.schema import generate_entry_id
 from pyrite.storage.database import PyriteDB
-
-from .entry_types import LiteratureNoteEntry, ZettelEntry
 
 zettel_app = typer.Typer(help="Zettelkasten knowledge management")
 console = Console()
@@ -25,8 +20,18 @@ def zettel_new(
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="Target KB"),
     source: str = typer.Option("", "--source", "-s", help="Source reference"),
 ):
-    """Create a new zettel with the appropriate template."""
-    from pyrite.storage.repository import KBRepository
+    """Create a new zettel through the KBService write pipeline (#391).
+
+    Was: build the entry, `repo.save(entry)` directly (no exists check -- an
+    existing id was silently overwritten -- no validators, no before/after-save
+    hooks, and nothing indexed until a separate `pyrite index sync`). Now goes
+    through `KBService.create_entry`, same as `software-kb`'s backlog_item
+    creation.
+    """
+    from pyrite.exceptions import PyriteError
+    from pyrite.services.kb_service import KBService
+    from pyrite.storage.database import PyriteDB
+    from pyrite.utils.errors import cli_error
 
     config = load_config()
 
@@ -44,30 +49,40 @@ def zettel_new(
         console.print("[red]Error:[/red] No KB found. Specify --kb.")
         raise typer.Exit(1)
 
-    entry_id = generate_entry_id(title)
-    now = datetime.now(UTC)
-
-    if zettel_type == "literature":
-        entry = LiteratureNoteEntry(
-            id=entry_id,
-            title=title,
-            source_work=source,
-            created_at=now,
-            updated_at=now,
-        )
+    entry_type = "literature_note" if zettel_type == "literature" else "zettel"
+    fields: dict[str, object]
+    if entry_type == "zettel":
+        fields = {
+            "source_ref": source,
+            "zettel_type": zettel_type,
+            "processing_stage": "capture" if zettel_type == "fleeting" else "",
+        }
     else:
-        entry = ZettelEntry(
-            id=entry_id,
-            title=title,
-            zettel_type=zettel_type,
-            processing_stage="capture" if zettel_type == "fleeting" else "",
-            source_ref=source,
-            created_at=now,
-            updated_at=now,
-        )
+        fields = {"source_work": source}
 
-    repo = KBRepository(kb_config)
-    file_path = repo.save(entry)
+    db = PyriteDB(config.settings.index_path)
+    try:
+        svc = KBService(config, db)
+        try:
+            entry = svc.create_entry(
+                kb_config.name,
+                None,
+                title,
+                entry_type,
+                "",
+                **fields,
+            )
+        except PyriteError as e:
+            code = getattr(e, "error_code", None) or "CREATE_FAILED"
+            cli_error(str(e), error_code=code)
+
+        from pyrite.storage.repository import KBRepository
+
+        repo = KBRepository(kb_config)
+        file_path = repo._resolve_file_path(entry, repo._infer_subdir(entry))
+    finally:
+        db.close()
+
     console.print(f"[green]Created {zettel_type} note:[/green] {file_path}")
 
 
