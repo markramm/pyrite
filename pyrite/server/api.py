@@ -12,6 +12,7 @@ import hashlib
 import logging
 import os
 import secrets
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -426,6 +427,28 @@ def get_settings_service(
 ) -> SettingsService:
     """Get SettingsService instance via DI."""
     return SettingsService(db)
+
+
+KBRoleResolver = Callable[[str], Awaitable[str | None]]
+
+
+def get_kb_role_resolver(
+    request: Request,
+    config: PyriteConfig = Depends(get_config),
+    db: PyriteDB = Depends(get_db),
+) -> KBRoleResolver:
+    """The caller's effective role on a KB, for a handler that decides inline.
+
+    Returns an async callable: ``await role_of(kb_name)`` is
+    ``resolve_effective_kb_role`` for this request. It exists so a handler
+    needs no database handle of its own (#380); the access-policy work
+    (#383, ADR-0037) replaces it.
+    """
+
+    async def role_of(kb_name: str) -> str | None:
+        return await resolve_effective_kb_role(request, config, db, kb_name)
+
+    return role_of
 
 
 def invalidate_llm_service():

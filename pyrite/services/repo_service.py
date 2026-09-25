@@ -347,6 +347,18 @@ class RepoService:
             return self.db.get_workspace_repos(user_id)
         return self.db.list_repos()
 
+    def get_repo(self, name: str) -> dict | None:
+        """The repo row named ``name``, or ``None``."""
+        return self.db.get_repo(name=name)
+
+    def repo_kb_names(self, repo_id: int) -> list[str]:
+        """The KBs a repository holds, as recorded when it was subscribed."""
+        return [row["name"] for row in self.db.get_kbs_for_repo(repo_id)]
+
+    def kb_entry_count(self, kb_name: str) -> int:
+        """How many indexed entries ``kb_name`` has."""
+        return self.db.count_entries(kb_name)
+
     def get_repo_status(self, repo_name: str) -> dict:
         """Get detailed status for a repo."""
         repo = self.db.get_repo(name=repo_name)

@@ -221,3 +221,25 @@ class TestSync:
         result = repo_service.sync("org/kb")
         assert result["success"] is True
         assert result["repos"]["org/kb"]["message"] == "Already up to date"
+
+
+class TestRepoLookups:
+    """Lookups the surfaces used to make on the DB themselves (#380)."""
+
+    def test_get_repo_by_name(self, repo_service, db):
+        db.register_repo("org/kb", "/tmp/a")
+        assert repo_service.get_repo("org/kb")["name"] == "org/kb"
+        assert repo_service.get_repo("org/none") is None
+
+    def test_repo_kb_names(self, repo_service, db):
+        repo_id = db.register_repo("org/kb", "/tmp/a")["id"]
+        assert repo_service.repo_kb_names(repo_id) == []
+        db.register_kb("k1", "generic", "/tmp/a/k1")
+        db.register_kb("k2", "generic", "/tmp/a/k2")
+        db.register_kb("elsewhere", "generic", "/tmp/b")
+        db.link_kb_to_repo("k1", repo_id, "k1")
+        db.link_kb_to_repo("k2", repo_id, "k2")
+        assert sorted(repo_service.repo_kb_names(repo_id)) == ["k1", "k2"]
+
+    def test_kb_entry_count(self, repo_service):
+        assert repo_service.kb_entry_count("nothing-indexed") == 0
