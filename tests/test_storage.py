@@ -1565,11 +1565,18 @@ class TestInvalidStatusInHealth:
                 db.close()
 
     def test_broken_validator_logs_warning_not_silent(self, caplog):
-        """fail-open-exception-sweep site #2b: each validator call in
-        `_check_invalid_status` was wrapped in a bare `except Exception:
-        continue` -- a buggy/raising validator is silently skipped per
-        entry, with no log line to reveal that the check is degraded."""
+        """fail-open-exception-sweep site #2b: a buggy/raising validator must
+        not be silently skipped -- there must be a log line revealing that
+        the check is degraded for that entry. The degrade-per-validator
+        try/except now lives in `PluginRegistry.run_validators` (#379, the
+        single call site both kb_schema.py and index.py use), so this test
+        exercises the real registry with one conforming plugin plus one
+        broken validator patched into its aggregation, rather than mocking
+        `get_registry` wholesale (which would bypass `run_validators`
+        entirely and prove nothing about the real degrade path)."""
         import logging
+
+        from pyrite.plugins.registry import PluginRegistry
 
         with tempfile.TemporaryDirectory() as raw_tmp:
             tmp = Path(raw_tmp)
@@ -1598,17 +1605,126 @@ class TestInvalidStatusInHealth:
                 def _broken_validator(entry_type, fields, ctx=None):
                     raise RuntimeError("simulated validator crash")
 
-                with patch("pyrite.plugins.get_registry") as mock_get_registry:
-                    mock_get_registry.return_value.get_validators_for_kb.return_value = [
-                        _broken_validator
-                    ]
-                    with caplog.at_level(logging.WARNING, logger="pyrite.storage.index"):
+                broken_registry = PluginRegistry()
+                broken_registry.get_validators_for_kb = lambda kb_type="": [_broken_validator]
+
+                with patch("pyrite.plugins.get_registry", return_value=broken_registry):
+                    with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
                         health = index_mgr.check_health()
 
                 warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
                 assert warnings, (
                     "expected a warning-level log when a validator raises; "
                     f"got {[(r.levelname, r.getMessage()) for r in caplog.records]}"
+                )
+                assert health.get("invalid_statuses", []) == []
+            finally:
+                db.close()
+
+    def test_validators_looked_up_once_per_kb_not_once_per_row(self):
+        """Coordinator blocker 3: _check_invalid_status must build the
+        validator list once per KB, not call get_validators_for_kb for
+        every row. A KB with N entries used to mean N lookups (and N log
+        lines from a broken validator, since PluginRegistry.run_validators
+        warns every time it degrades) -- this pins the call count to one
+        per KB regardless of entry count."""
+        from pyrite.plugins.registry import PluginRegistry
+
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "sw-kb5"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb5\nkb_type: software\ntypes:\n  backlog_item:\n"
+                "    description: A work item\n"
+            )
+
+            db, config = self._make_software_config(tmp, kb_path)
+            try:
+                for i in range(5):
+                    db.upsert_entry(
+                        {
+                            "id": f"row-{i}",
+                            "kb_name": kb_path.name,
+                            "entry_type": "backlog_item",
+                            "title": f"Row {i}",
+                            "body": "body",
+                            "status": "completed",
+                            "file_path": str(kb_path / f"row-{i}.md"),
+                        }
+                    )
+                index_mgr = IndexManager(db, config)
+
+                call_count = 0
+                real_registry = PluginRegistry()
+                real_get_validators_for_kb = real_registry.get_validators_for_kb
+
+                def _counting_get_validators_for_kb(kb_type=""):
+                    nonlocal call_count
+                    call_count += 1
+                    return real_get_validators_for_kb(kb_type)
+
+                real_registry.get_validators_for_kb = _counting_get_validators_for_kb
+
+                with patch("pyrite.plugins.get_registry", return_value=real_registry):
+                    index_mgr.check_health()
+
+                assert call_count == 1, (
+                    f"expected get_validators_for_kb called once per KB (5 rows), "
+                    f"got {call_count} calls"
+                )
+            finally:
+                db.close()
+
+    def test_no_validators_short_circuits_without_calling_run_validators(self):
+        """Coordinator blocker 3: restore the no-validators short-circuit --
+        a KB whose kb_type has no registered validators must skip the
+        per-row status check entirely, not call run_validators (and log
+        nothing) for every row."""
+        from pyrite.plugins.registry import PluginRegistry
+
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            tmp = Path(raw_tmp)
+            kb_path = tmp / "sw-kb6"
+            kb_path.mkdir()
+            (kb_path / "kb.yaml").write_text(
+                "name: sw-kb6\nkb_type: software\ntypes:\n  backlog_item:\n"
+                "    description: A work item\n"
+            )
+
+            db, config = self._make_software_config(tmp, kb_path)
+            try:
+                db.upsert_entry(
+                    {
+                        "id": "row-0",
+                        "kb_name": kb_path.name,
+                        "entry_type": "backlog_item",
+                        "title": "Row 0",
+                        "body": "body",
+                        "status": "completed",
+                        "file_path": str(kb_path / "row-0.md"),
+                    }
+                )
+                index_mgr = IndexManager(db, config)
+
+                empty_registry = PluginRegistry()
+                empty_registry._discovered = True  # no validators at all
+
+                run_validators_called = False
+                real_run_validators = empty_registry.run_validators
+
+                def _spy_run_validators(*args, **kwargs):
+                    nonlocal run_validators_called
+                    run_validators_called = True
+                    return real_run_validators(*args, **kwargs)
+
+                empty_registry.run_validators = _spy_run_validators
+
+                with patch("pyrite.plugins.get_registry", return_value=empty_registry):
+                    health = index_mgr.check_health()
+
+                assert not run_validators_called, (
+                    "expected the no-validators short-circuit to skip run_validators entirely"
                 )
                 assert health.get("invalid_statuses", []) == []
             finally:

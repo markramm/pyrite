@@ -245,3 +245,84 @@ class TestHelpText:
         assert "claims" in result.output
         assert "network" in result.output
         assert "evidence-chain" in result.output
+
+
+class TestPromoteClaimCommand:
+    """#424: promote-claim's endpoint-field CLI options, wired end to end."""
+
+    def _create_claim(self, svc):
+        svc.create_entry(
+            "test",
+            "claim-x-owns-y",
+            "X owns Y",
+            "claim",
+            body="Test claim body.",
+            assertion="Entity X owns Entity Y",
+            claim_status="corroborated",
+            confidence="high",
+            importance=7,
+        )
+
+    def test_promote_claim_without_endpoint_fields_is_refused(self, populated_kb):
+        """No --owner/--asset: refused with a clear error, not a raw traceback.
+
+        `--json` mode echoes the result dict and exits 0 regardless of
+        "error" (matching the rest of this file's `network`/`evidence-chain`
+        JSON-mode tests -- the error key, not the exit code, is the
+        machine-readable signal); the non-JSON path is what exits 1, covered
+        by test_promote_claim_dry_run_reports_the_same_refusal below.
+        """
+        self._create_claim(populated_kb["svc"])
+        result = runner.invoke(
+            investigation_app,
+            ["promote-claim", "claim-x-owns-y", "--edge-type", "ownership", "-k", "test", "--json"],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "error" in data
+        assert "owner" in data["error"] and "asset" in data["error"]
+
+    def test_promote_claim_with_endpoint_fields_succeeds(self, populated_kb):
+        """--owner/--asset supplied: promotion creates the edge entity."""
+        self._create_claim(populated_kb["svc"])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "promote-claim",
+                "claim-x-owns-y",
+                "--edge-type",
+                "ownership",
+                "-k",
+                "test",
+                "--owner",
+                "[[entity-x]]",
+                "--asset",
+                "[[entity-y]]",
+                "--json",
+            ],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "error" not in data
+        assert "created" in data
+
+    def test_promote_claim_dry_run_reports_the_same_refusal(self, populated_kb):
+        """--dry-run without endpoint fields must also report the error (#424,
+        coordinator note 1) -- it used to report success for a promotion that
+        would fail for real. Non-JSON mode, where an error exits non-zero."""
+        self._create_claim(populated_kb["svc"])
+        result = runner.invoke(
+            investigation_app,
+            [
+                "promote-claim",
+                "claim-x-owns-y",
+                "--edge-type",
+                "ownership",
+                "-k",
+                "test",
+                "--dry-run",
+            ],
+        )
+        assert result.exit_code == 1
+        assert "owner" in result.output and "asset" in result.output
+        assert "Dry run" not in result.output

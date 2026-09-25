@@ -116,12 +116,21 @@ class KBService:
         self._embedding_worker = None  # Set externally to enable queue-based embedding
         self._wikilink_svc: WikilinkService | None = None
 
-        # Hook orchestration. The runner owns core-hook dispatch; plugin-hook
-        # dispatch stays inline in _dispatch_plugin_hooks below for now (the
-        # original code used a per-call lazy ``from ..plugins import
-        # get_registry`` to avoid the plugins↔services import cycle, and
-        # threading that through HookRunner is a separate cleanup step).
-        self.hook_runner = HookRunner(plugin_registry=None)
+        # Hook orchestration. HookRunner owns BOTH core-hook and plugin-hook
+        # dispatch under one raise/swallow contract (#379); _run_hooks below
+        # is a one-line delegation. The lazy `from ..plugins import
+        # get_registry` here (rather than a module-level import) is
+        # deliberate, not a leftover: tests patch `pyrite.plugins.get_registry`
+        # with `unittest.mock.patch`, which only intercepts a *fresh* lookup
+        # of that name -- a module-level `from ..plugins import get_registry`
+        # binds this module's own reference at import time, which the patch
+        # cannot reach, so construction would silently keep using the real
+        # registry. `get_registry()` itself is a lazy singleton (same
+        # instance every call in production), so this costs nothing but the
+        # one attribute lookup.
+        from ..plugins import get_registry
+
+        self.hook_runner = HookRunner(plugin_registry=get_registry())
         # Register the platform-level core hooks. The task-system ones live in
         # task_service.py — register_task_hooks is the explicit entry point so
         # the cross-service dependency is visible at the call site rather than
@@ -190,10 +199,16 @@ class KBService:
             rule = e.get("rule", "")
             got = e.get("got")
             expected = e.get("expected")
+            message = e.get("message")
             if rule == "enum":
                 parts.append(f"{field}: {got!r} is not one of {expected}")
             elif rule == "required":
                 parts.append(f"{field}: required")
+            elif message:
+                # A rule this renderer does not know, or none at all (e.g.
+                # cascade's "Importance must be 1-10, got: 99"): the
+                # validator's own message beats "(expected None, got None)".
+                parts.append(f"{field}: {message}" if field != "?" else message)
             else:
                 parts.append(f"{field}: {rule} (expected {expected}, got {got!r})")
         raise SchemaViolationError(
@@ -1832,7 +1847,7 @@ class KBService:
     # =========================================================================
 
     def _run_hooks(self, hook_name: str, entry: Entry, context: dict) -> Entry:
-        """Run core hooks (via HookRunner) then plugin hooks.
+        """Run core hooks then plugin hooks, both via HookRunner.
 
         Hook ordering:
         - ``before_save`` / ``before_delete``: Run BEFORE persistence. If any hook
@@ -1842,28 +1857,13 @@ class KBService:
           already committed. Exceptions are logged but swallowed — the operation
           is considered successful.
 
-        Core-hook dispatch lives in HookRunner; plugin-hook dispatch stays
-        inline here for now because of the plugins↔services import-cycle
-        constraint (a per-call lazy import). The HookRunner.plugin_registry
-        path will absorb this once that cycle is sorted.
+        HookRunner owns the raise/swallow contract for both phases (#379);
+        this is a one-line delegation.
         """
-        # Core-hook phase — runner owns the loop + raise/swallow contract.
         method = getattr(self.hook_runner, f"run_{hook_name}", None)
         if method is None:
             raise ValueError(f"Unknown hook name: {hook_name}")
-        entry = method(entry, context)
-
-        # Plugin-hook phase — same raise-vs-swallow contract, inline.
-        try:
-            from ..plugins import get_registry
-
-            kb_type = context.get("kb_type", "") if context else ""
-            return get_registry().run_hooks_for_kb(hook_name, entry, context, kb_type=kb_type)
-        except Exception:
-            if hook_name.startswith("before_"):
-                raise  # before_* hooks abort the operation on ANY exception
-            logger.warning("Hook %s failed", hook_name, exc_info=True)
-            return entry
+        return method(entry, context)
 
     # =========================================================================
     # Index Operations

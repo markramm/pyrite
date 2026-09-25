@@ -833,22 +833,17 @@ class IndexManager:
             if not kb_schema or not kb_schema.types:
                 continue
 
-            # Plugin validators scoped to this KB type. We reuse them (rather
-            # than hardcoding any status enum in core) to detect entries whose
-            # `status` is not in its type's declared set — the drift that let
-            # 75 backlog items sit on an off-enum `completed` status undetected.
+            # Plugin validators scoped to this KB type, looked up ONCE per
+            # KB (coordinator blocker 3: this used to be re-looked-up, and
+            # its non-conforming-validator warnings re-logged, on every row
+            # -- a KB with N entries meant N lookups). A KB with none
+            # registered short-circuits the per-row status check below
+            # entirely: `run_validators` is never called for that KB's rows.
             try:
                 from ..plugins import get_registry
 
                 kb_validators = get_registry().get_validators_for_kb(kb.kb_type)
             except Exception:
-                # get_validators_for_kb already degrades per-plugin with its
-                # own warning logs internally -- this outer except only
-                # catches something unexpected (e.g. the import itself
-                # failing). Log it: the invalid-status check silently
-                # turning itself off for a whole KB is exactly the failure
-                # mode that let 75 backlog items drift onto an off-enum
-                # status undetected (fail-open-exception-sweep site #2).
                 logger.warning(
                     "Could not load status validators for KB %r; invalid-status "
                     "check is disabled for this KB this pass",
@@ -864,7 +859,8 @@ class IndexManager:
                 {"kb_name": kb.name},
             )
             for row in entry_rows:
-                self._check_invalid_status(kb, row, kb_validators, health)
+                if kb_validators:
+                    self._check_invalid_status(kb, row, kb_validators, health)
 
                 type_schema = kb_schema.types.get(row["entry_type"])
                 if type_schema is None:
@@ -920,38 +916,33 @@ class IndexManager:
     def _check_invalid_status(kb, row: dict, validators: list, health: dict) -> None:
         """Flag an entry whose `status` is not in its type's declared enum.
 
-        Runs the KB's plugin validators against the row's fields and records any
-        error reported on the `status` field with rule `enum`. This reuses the
-        existing validator logic (e.g. software-kb's BACKLOG_STATUSES) so core
-        does not hardcode any plugin's status vocabulary.
+        ``validators`` is the KB's plugin validators, looked up ONCE per KB
+        by the caller (coordinator blocker 3) -- not re-fetched here per
+        row. Every validator in the list already binds the
+        ``(entry_type, fields, ctx)`` contract (registration refused any
+        that didn't); calling one directly that still raises is a bug in
+        that validator, not a contract mismatch, and costs this one entry's
+        check, not the whole KB's pass -- the same degrade-per-validator
+        guarantee ``PluginRegistry.run_validators`` provides, applied here
+        without re-fetching the validator list on every call. This reuses
+        the existing validator logic (e.g. software-kb's BACKLOG_STATUSES)
+        so core does not hardcode any plugin's status vocabulary. Silently
+        turning the whole check off for a KB is exactly the failure mode
+        that let 75 backlog items drift onto an off-enum status undetected
+        (fail-open-exception-sweep site #2).
         """
         status = row.get("status")
-        if not status or not validators:
+        if not status:
             return
         fields = {"status": status}
         ctx = {"kb_type": kb.kb_type}
         for validator in validators:
             try:
                 results = validator(row["entry_type"], fields, ctx)
-            except TypeError:
-                # Signature fallback: some validators take (entry_type,
-                # fields) without ctx. Not an error -- try the 2-arg form.
-                try:
-                    results = validator(row["entry_type"], fields)
-                except Exception:
-                    logger.warning(
-                        "Status validator %r raised for %s/%s (2-arg form); "
-                        "invalid-status check skipped for this entry",
-                        getattr(validator, "__name__", validator),
-                        kb.name,
-                        row["id"],
-                        exc_info=True,
-                    )
-                    continue
             except Exception:
                 logger.warning(
                     "Status validator %r raised for %s/%s; invalid-status "
-                    "check skipped for this entry",
+                    "check skipped for this entry from this validator",
                     getattr(validator, "__name__", validator),
                     kb.name,
                     row["id"],
@@ -959,6 +950,8 @@ class IndexManager:
                 )
                 continue
             for item in results or []:
+                if not isinstance(item, dict):
+                    continue  # malformed validator output; run_validators drops it too
                 if item.get("field") == "status" and item.get("rule") == "enum":
                     health["invalid_statuses"].append(
                         {

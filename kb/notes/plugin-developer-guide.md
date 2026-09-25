@@ -441,20 +441,26 @@ def validate_my_plugin(
   - `user: str` — current user identity
   - `existing_entry: Entry | None` — the existing entry (for updates, `None` for creates)
 
-**Returns:** A list of validation error dicts. Each dict has these keys:
+**Returns:** A `list[dict]` of validation issue dicts (NOT `list[str]` — see rule 4
+below). Each dict has these keys:
 - `field: str` — the field name that failed validation
 - `rule: str` — a short identifier for the rule (e.g., `"required"`, `"enum"`, `"ga_min_sources"`)
 - `expected` — what was expected (string or list)
 - `got` — the actual value
+- `message: str` (optional, recommended) — a human-readable message; preferred over the
+  field/rule/expected/got rendering when present, and the only thing shown for an item
+  with no `rule`
 - `severity: str` (optional) — set to `"warning"` for non-blocking advisories; omit for hard errors
 
 ### Key rules for validators
 
 1. **Return `[]` for unrelated entry types.** Your validator is called for every entry in every KB. If the entry type is not one your plugin owns, return an empty list immediately.
 
-2. **Plugin validators always run**, even for types not declared in `kb.yaml`. This was a deliberate design decision — see `KBSchema.validate_entry()` in `pyrite/schema.py`.
+2. **Plugin validators always run**, even for types not declared in `kb.yaml`. This was a deliberate design decision — see `KBSchema.validate_entry()` in `pyrite/schema/kb_schema.py`.
 
-3. **The context parameter is required** but has a backward-compatibility fallback. The registry catches `TypeError` and retries with the old 2-argument signature `(entry_type, data)`.
+3. **The `ctx` parameter is required — there is no fallback.** `(entry_type: str, fields: dict, ctx: dict) -> list[dict]` is the *only* supported signature (#379). `PluginRegistry` checks this with `inspect.signature(...).bind` the first time a plugin's validators are needed (cached after that, not re-checked per call) and refuses — logs once, drops — a validator that does not bind it. A 2-argument `(entry_type, fields)` validator does not run at all; there used to be a `TypeError`-catching fallback that retried the 2-arg form, but it silently disabled two in-tree extensions' validators for months (they were never updated past a 1-arg signature, so even the fallback didn't help) and is gone.
+
+4. **Return `list[dict]`, not `list[str]`.** Binding the signature says nothing about the return type — a validator that returns strings still passes registration. `PluginRegistry.run_validators` drops any non-dict item (logged as a warning) rather than passing it to a caller that calls `.get(...)` on it, but that just means your strings vanish silently; write the dict shape from the start.
 
 ### Real example: Social's author validation
 
@@ -549,24 +555,27 @@ def validate_encyclopedia(
 
 ### How validators are called
 
-Validators run inside `KBSchema.validate_entry()` (in `pyrite/schema.py`):
+Validators run inside `KBSchema.validate_entry()` (in `pyrite/schema/kb_schema.py`),
+through `PluginRegistry.run_validators` — the single call site both
+`kb_schema.py` and `storage/index.py` use, scoped to the KB's `kb_type`:
 
 ```python
-# From pyrite/schema.py — inside validate_entry()
-from .plugins import get_registry
-for validator in get_registry().get_all_validators():
-    try:
-        results = validator(entry_type, fields, ctx)
-        for item in results or []:
-            if item.get("severity") == "warning":
-                warnings.append(item)
-            else:
-                errors.append(item)
-    except TypeError:
-        # Fallback for old (entry_type, data) signature
-        results = validator(entry_type, fields)
-        ...
+# From pyrite/schema/kb_schema.py — inside validate_entry()
+from ..plugins import get_registry
+
+for item in get_registry().run_validators(kb_type, entry_type, fields, ctx):
+    if item.get("severity") == "warning":
+        warnings.append(item)
+    else:
+        errors.append(item)
 ```
+
+`run_validators` (in `pyrite/plugins/registry.py`) does the per-validator work:
+calls each validator scoped to `kb_type`, catches and logs (then skips) one that
+raises rather than aborting the whole pass, and drops any non-dict item a
+validator returns. There is no signature fallback — every validator it calls
+already bound the `(entry_type, fields, ctx)` contract at registration, or it
+would not be in the list at all.
 
 ---
 
@@ -668,22 +677,40 @@ def after_save_update_counts(entry: Entry, context: dict[str, Any]) -> None:
 
 ### How hooks are executed
 
-The registry's `run_hooks()` method runs all registered hooks for a given hook point:
+`HookRunner` (`pyrite/services/hook_runner.py`) is the only place that runs
+hooks -- both core hooks and plugin hooks, under one raise-before/
+swallow-after contract. `PluginRegistry.run_hooks`/`run_hooks_for_kb` used
+to run plugin hooks directly; both are gone (#379). `PluginRegistry.get_hooks_for_kb(kb_type)`
+is now a pure lookup -- it returns `{hook_name: [callables]}` for the plugins
+active on `kb_type` and does not call any of them.
 
 ```python
-# From pyrite/plugins/registry.py
-def run_hooks(self, hook_name: str, entry: Any, context: dict) -> Any:
-    hooks = self.get_all_hooks().get(hook_name, [])
-    for hook in hooks:
-        try:
-            result = hook(entry, context)
-            if result is not None:
-                entry = result
-        except Exception:
-            if hook_name.startswith("before_"):
-                raise  # Let before_* hooks abort operations
-            logger.warning("Hook %s failed", hook_name, exc_info=True)
-    return entry
+# From pyrite/services/hook_runner.py, simplified
+class HookRunner:
+    def run_before_save(self, entry, context):
+        return self._run("before_save", entry, context)
+    # run_after_save / run_before_delete / run_after_delete follow the same shape
+
+    def _run(self, hook_name, entry, context):
+        is_before = hook_name.startswith("before_")
+        for hook_fn in self._core_hooks.get(hook_name, []):
+            ...  # raise-before/swallow-after, same as below
+        if self._plugin_registry is None:
+            return entry
+        kb_type = context.get("kb_type", "")
+        plugin_hooks = self._plugin_registry.get_hooks_for_kb(kb_type).get(hook_name, [])
+        for hook_fn in plugin_hooks:
+            try:
+                result = hook_fn(entry, context)
+                if result is not None:
+                    entry = result
+            except Exception:
+                if is_before:
+                    raise  # Let before_* hooks abort operations
+                logger.warning("Hook %s failed", hook_name, exc_info=True)
+        # a before_* hook DROPPED as non-conforming (wrong arity) also
+        # refuses the write for this KB -- see below
+        return entry
 ```
 
 Key behavior:
@@ -691,6 +718,28 @@ Key behavior:
 - **after_* hooks** that raise are logged but do not abort
 - If a hook returns a value, it replaces the entry for subsequent hooks
 - If a hook returns `None`, the entry is passed through unchanged
+- **Signature is checked once, at registration** (the first time a plugin's
+  hooks are needed, then cached): a hook callable that does not bind
+  `(entry, context)` is dropped and logged once, not discovered as a
+  `TypeError` at call time
+- **A dropped before_* hook fails the KB's before_* dispatch closed** — the
+  write is refused, the same as if the hook itself had raised, because a
+  before_* hook exists to enforce an invariant and silently losing it would
+  make writes succeed that a conforming version of the plugin would have
+  refused. A dropped after_* hook only logs a warning (the operation has
+  already succeeded; after-hooks are independent side effects)
+
+To use a runner directly (e.g. in a test), construct one with a registry:
+
+```python
+from pyrite.plugins.registry import PluginRegistry
+from pyrite.services.hook_runner import HookRunner
+
+registry = PluginRegistry()
+registry.register(MyPlugin())
+runner = HookRunner(plugin_registry=registry)
+result = runner.run_before_save(entry, {"kb_type": "my-kb-type", ...})
+```
 
 ### Known gap: hooks do not receive the DB instance
 
@@ -1541,7 +1590,7 @@ The proven test structure for an extension has 8 sections:
 1. **TestPluginRegistration** — Verify name, all capabilities appear in registry
 2. **TestEntryType** — Defaults, to_frontmatter, from_frontmatter, roundtrip_markdown
 3. **TestValidators** — One test per rule (positive + negative), test ignores-other-types
-4. **TestHooks** — Direct call tests + registry.run_hooks tests
+4. **TestHooks** — Direct call tests + HookRunner tests
 5. **TestWorkflows** — Test each transition allowed/blocked, requires_reason
 6. **TestDBTables** — Definition checks + actual SQLite creation in tmpdir
 7. **TestPreset** — Structure, directories, validation rules
@@ -1606,6 +1655,9 @@ class TestValidators:
 ### Testing hooks
 
 ```python
+from pyrite.plugins.registry import PluginRegistry
+from pyrite.services.hook_runner import HookRunner
+
 class TestHooks:
     def test_before_save_sets_author_on_create(self):
         entry = WriteupEntry(id="test", title="Test")
@@ -1619,21 +1671,25 @@ class TestHooks:
         with pytest.raises(PermissionError, match="bob.*cannot edit.*alice"):
             before_save_author_check(entry, ctx)
 
-    def test_hooks_run_via_registry(self):
+    def test_hooks_run_via_hook_runner(self):
+        # HookRunner, not the registry, runs hooks (#379) --
+        # registry.get_hooks_for_kb is a lookup, not a runner.
         registry = PluginRegistry()
         registry.register(SocialPlugin())
+        runner = HookRunner(plugin_registry=registry)
         entry = WriteupEntry(id="test", title="Test")
         ctx = {"user": "alice", "operation": "create"}
-        result = registry.run_hooks("before_save", entry, ctx)
+        result = runner.run_before_save(entry, ctx)
         assert result.author_id == "alice"
 
     def test_hooks_abort_on_permission_error(self):
         registry = PluginRegistry()
         registry.register(SocialPlugin())
+        runner = HookRunner(plugin_registry=registry)
         entry = WriteupEntry(id="test", title="Test", author_id="alice")
         ctx = {"user": "bob", "operation": "update"}
         with pytest.raises(PermissionError):
-            registry.run_hooks("before_save", entry, ctx)
+            runner.run_before_save(entry, ctx)
 ```
 
 ### Testing entry type resolution through core

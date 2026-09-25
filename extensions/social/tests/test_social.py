@@ -13,6 +13,7 @@ from pyrite_social.tables import SOCIAL_TABLES
 from pyrite_social.validators import validate_social
 
 from pyrite.plugins.registry import PluginRegistry
+from pyrite.services.hook_runner import HookRunner
 
 # =========================================================================
 # Plugin registration
@@ -332,24 +333,28 @@ class TestHooks:
         assert result is entry
 
     def test_hooks_run_via_registry(self):
-        """Test that hooks fire through the registry's run_hooks method."""
+        """Test that hooks fire through HookRunner, which owns the
+        raise/swallow contract for both core and plugin hooks (#379); the
+        registry's run_hooks_for_kb is a pure lookup, not a runner."""
         registry = PluginRegistry()
         registry.register(SocialPlugin())
+        runner = HookRunner(plugin_registry=registry)
 
         entry = WriteupEntry(id="test", title="Test")
         ctx = {"user": "alice", "operation": "create"}
-        result = registry.run_hooks("before_save", entry, ctx)
+        result = runner.run_before_save(entry, ctx)
         assert result.author_id == "alice"
 
     def test_hooks_abort_on_permission_error(self):
-        """Test that before_save hooks can abort via the registry."""
+        """Test that before_save hooks can abort via HookRunner."""
         registry = PluginRegistry()
         registry.register(SocialPlugin())
+        runner = HookRunner(plugin_registry=registry)
 
         entry = WriteupEntry(id="test", title="Test", author_id="alice")
         ctx = {"user": "bob", "operation": "update"}
         with pytest.raises(PermissionError):
-            registry.run_hooks("before_save", entry, ctx)
+            runner.run_before_save(entry, ctx)
 
 
 # =========================================================================

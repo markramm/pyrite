@@ -718,6 +718,28 @@ class JournalismInvestigationPlugin:
                             "type": "string",
                             "description": "KB name (auto-detected if omitted)",
                         },
+                        "endpoint_fields": {
+                            "type": "object",
+                            "properties": {
+                                name: {"type": "string"}
+                                for name in (
+                                    "owner",
+                                    "asset",
+                                    "funder",
+                                    "recipient",
+                                    "person",
+                                    "organization",
+                                )
+                            },
+                            "additionalProperties": False,
+                            "description": (
+                                "The edge type's own required relationship fields: "
+                                "{owner, asset} for ownership, {funder, recipient} for "
+                                "funding, {person, organization} for membership. A "
+                                "promotion missing them is refused (#424); the same "
+                                "check runs for dry_run."
+                            ),
+                        },
                         "dry_run": {
                             "type": "boolean",
                             "description": "Preview without creating (default false)",
@@ -1312,6 +1334,7 @@ class JournalismInvestigationPlugin:
                 claim_id=args["claim_id"],
                 edge_type=args["edge_type"],
                 kb_service=kb_service,
+                endpoint_fields=args.get("endpoint_fields") or {},
                 dry_run=args.get("dry_run", False),
             )
         finally:

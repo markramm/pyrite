@@ -967,13 +967,39 @@ def promote_claim(
         ..., "--edge-type", help="Edge type: ownership, membership, funding"
     ),
     kb_name: str = typer.Option(..., "--kb", "-k", help="KB name"),
+    owner: str = typer.Option("", "--owner", help="ownership: the owning entity"),
+    asset: str = typer.Option("", "--asset", help="ownership: the owned asset"),
+    funder: str = typer.Option("", "--funder", help="funding: the funding entity"),
+    recipient: str = typer.Option("", "--recipient", help="funding: the recipient entity"),
+    person: str = typer.Option("", "--person", help="membership: the member"),
+    organization: str = typer.Option("", "--organization", help="membership: the organization"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview without creating"),
     output_json: bool = typer.Option(False, "--json", help="Output as JSON"),
 ):
-    """Promote a corroborated claim to an edge-entity."""
+    """Promote a corroborated claim to an edge-entity.
+
+    The edge type's own required relationship fields must be supplied:
+    --owner/--asset for ownership, --funder/--recipient for funding,
+    --person/--organization for membership. A promotion missing them is
+    refused (the same check runs for --dry-run) rather than creating an
+    entry the plugin validator would refuse (#424).
+    """
     from pyrite.services.kb_service import KBService
 
     from .promote import promote_claim_to_edge
+
+    endpoint_fields = {
+        k: v
+        for k, v in {
+            "owner": owner,
+            "asset": asset,
+            "funder": funder,
+            "recipient": recipient,
+            "person": person,
+            "organization": organization,
+        }.items()
+        if v
+    }
 
     config = load_config()
     db = PyriteDB(config.settings.index_path)
@@ -985,6 +1011,7 @@ def promote_claim(
             claim_id=claim_id,
             edge_type=edge_type,
             kb_service=kb_service,
+            endpoint_fields=endpoint_fields,
             dry_run=dry_run,
         )
 

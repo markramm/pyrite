@@ -13,6 +13,21 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from .context import PluginContext
 
+# The plugin validator contract (checked at registration in PluginRegistry,
+# see `_conforms_to` / `register`): a validator binds
+# ``(entry_type: str, fields: dict, ctx: dict)`` and returns a list of issue
+# dicts, each with a ``message`` (or ``field``) key and an optional
+# ``severity`` key (``"warning"``, or omitted/anything else for an error).
+# There is exactly one contract; the legacy 2-argument
+# ``(entry_type, fields)`` form is not supported (#379, #376, #48).
+Validator = Callable[[str, dict, dict], list[dict]]
+
+# The plugin hook contract: a hook binds ``(entry, ctx)``. ``before_*`` hooks
+# may raise to abort the operation or return a (possibly modified) entry;
+# ``after_*`` hook exceptions are logged and swallowed (HookRunner owns this
+# raise/swallow contract).
+Hook = Callable[[Any, dict], Any]
+
 
 @runtime_checkable
 class PyritePlugin(Protocol):

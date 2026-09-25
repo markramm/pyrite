@@ -72,7 +72,7 @@ Every create/update decision is made here, once, for every surface. REST, MCP an
 
 ## Hook Integration
 
-- **`_run_hooks(hook_name, entry, context)`** -- Dispatches `before_save`, `after_save`, `before_delete`, `after_delete` to the plugin registry. Passes a `PluginContext` with config, db, kb_name, user, and operation. Pyrite exceptions propagate; other exceptions are logged and swallowed.
+- **`_run_hooks(hook_name, entry, context)`** -- One call to `HookRunner` (`services/hook_runner.py`), which owns core and plugin hooks under one contract: any exception from a `before_*` hook (or a failed hook lookup, or a `before_*` hook dropped for the wrong signature) aborts the write; an `after_*` hook's exception is logged and the next hook still runs (#379).
 
 ## Other Operations
 

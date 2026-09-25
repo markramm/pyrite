@@ -42,6 +42,38 @@ extensions/<name>/
 - Use severity="warning" for advisory checks
 - DB table names MUST be prefixed with plugin name to avoid collisions
 
+### Validator signature
+
+A validator returned from `get_validators()` MUST bind exactly
+`(entry_type: str, fields: dict, ctx: dict) -> list[dict]`. There is one
+contract; there is no 2-argument `(entry_type, fields)` fallback and no
+`(entry: Entry)` object form. `PluginRegistry` checks the signature with
+`inspect.signature(...).bind` **at registration**, not at call time: a
+validator that does not bind the contract is logged and dropped before it
+ever runs, rather than raising a `TypeError` on every write that gets
+swallowed by a broad `except Exception` and silently disables validation for
+that plugin (#379, #376, #48 — two in-tree extensions shipped for months
+with a 1-argument, `list[str]`-returning validator that never actually ran).
+
+Each returned item is a dict, not a string: `{"field": ..., "rule": ...,
+"message": ..., "severity": "warning"}` (`severity` omitted or anything
+other than `"warning"` is treated as an error). `field`/`rule`/`expected`/
+`got` are conventional, used by callers that build a human-readable message
+or match on a specific rule (e.g. `index.py`'s invalid-status check matches
+`field == "status"` and `rule == "enum"`); only `message` (or `field`, as a
+fallback label) is required.
+
+Lifecycle hooks (`get_hooks()`) have the equivalent rule: every callable
+MUST bind `(entry, ctx)`. The registry checks this the same way, at
+registration.
+
+Write a test using the real plugin instance, not a fixture that hand-crafts
+a conforming callable: `plugin.get_validators()` (or `get_hooks()`) fed
+through `inspect.signature(...).bind(...)` with the contract's argument
+shape, the way `tests/test_plugin_contract.py` does for every installed
+plugin. That test would have caught #376/#48 the day the validator was
+written, not months later against production data.
+
 ## CLI Rules
 - CLI module imported lazily inside `get_cli_commands()` to handle missing typer
 - Dependencies list should be empty — pyrite is a peer dependency
