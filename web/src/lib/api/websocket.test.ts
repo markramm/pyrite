@@ -326,6 +326,8 @@ describe('a refused handshake', () => {
 	});
 
 	it('online or visibility does nothing unless refused', () => {
+		// Visible, so only the status check can be what stops a retry.
+		const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
 		client.follow('user:1');
 		latest().fireOpen();
 		window.dispatchEvent(new Event('online'));
@@ -334,7 +336,9 @@ describe('a refused handshake', () => {
 
 		client.follow(null);
 		window.dispatchEvent(new Event('online'));
+		document.dispatchEvent(new Event('visibilitychange'));
 		expect(FakeWebSocket.instances).toHaveLength(1);
+		visibility.mockRestore();
 	});
 
 	it('a disconnected client removes its online and visibility listeners', () => {

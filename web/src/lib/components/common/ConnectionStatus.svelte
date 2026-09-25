@@ -8,6 +8,12 @@
 	// A dropped connection shows only after a grace period (no flash on a
 	// server restart); a refusal shows at once, since nothing will retry it.
 	let lostLongEnough = $state(false);
+	// A dismissal lasts until the connection opens or is torn down (a user
+	// change passes through idle). It survives the retries in between: closed
+	// <-> connecting while lost, and refused -> connecting -> refused on an
+	// online or tab-focus retry. The banner cannot change kind without passing
+	// through open or idle ("lost" needs a socket that once opened, which rules
+	// out "refused" for that identity), so a flag is enough; no kind is stored.
 	let dismissed = $state(false);
 
 	let banner = $derived.by(() => {
@@ -24,9 +30,7 @@
 
 		const unsub = wsClient.onStatus((next) => {
 			status = next;
-			// A dismissal covers one episode: it outlives the reconnect
-			// attempts (closed <-> connecting), not a change of kind.
-			if (next === 'open' || next === 'refused' || next === 'idle') dismissed = false;
+			if (next === 'open' || next === 'idle') dismissed = false;
 			if (next === 'closed') {
 				if (timer === null) {
 					timer = setTimeout(() => {

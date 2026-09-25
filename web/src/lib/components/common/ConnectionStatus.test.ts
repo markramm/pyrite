@@ -142,7 +142,7 @@ describe('ConnectionStatus', () => {
 		expect(screen.queryByRole('status')).toBeNull();
 	});
 
-	it('a dismissal lasts only until the status changes kind', async () => {
+	it('a dismissal lasts only until the connection opens again', async () => {
 		render(ConnectionStatus);
 		wsClient.follow('user:1');
 		await act(() => latest().onopen?.(new Event('open')));
@@ -155,6 +155,40 @@ describe('ConnectionStatus', () => {
 		await act(() => close(1001));
 		await act(() => vi.advanceTimersByTime(3000));
 		expect(screen.getByRole('status')).toHaveTextContent('Connection lost');
+	});
+
+	it('a dismissed refusal stays dismissed through online and tab-focus retries', async () => {
+		render(ConnectionStatus);
+		wsClient.follow('anonymous');
+		await act(() => refuseEveryAttempt());
+		await act(() => screen.getByRole('button', { name: 'Dismiss' }).click());
+		expect(screen.queryByRole('status')).toBeNull();
+
+		// refused -> connecting -> refused, twice.
+		const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+		await act(() => window.dispatchEvent(new Event('online')));
+		expect(FakeWebSocket.instances).toHaveLength(4);
+		await act(() => close(1006));
+		expect(wsClient.status).toBe('refused');
+		await act(() => document.dispatchEvent(new Event('visibilitychange')));
+		expect(FakeWebSocket.instances).toHaveLength(5);
+		await act(() => close(1006));
+		expect(wsClient.status).toBe('refused');
+		visibility.mockRestore();
+
+		expect(screen.queryByRole('status')).toBeNull();
+	});
+
+	it('a dismissed refusal returns once the user changes and is refused again', async () => {
+		render(ConnectionStatus);
+		wsClient.follow('anonymous');
+		await act(() => refuseEveryAttempt());
+		await act(() => screen.getByRole('button', { name: 'Dismiss' }).click());
+
+		await act(() => wsClient.follow('user:1'));
+		await act(() => refuseEveryAttempt());
+
+		expect(screen.getByRole('status')).toHaveTextContent('Real-time updates unavailable');
 	});
 
 	it('shows nothing while signed out with no socket', async () => {
