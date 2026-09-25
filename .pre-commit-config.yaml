@@ -9,7 +9,8 @@
 #   commit     fast checks only (seconds): ruff, file hygiene, import cycles,
 #              KB schema validation. No pytest.
 #   commit-msg `fix:` commits must touch tests/.
-#   pre-push   the full test suite, only when the pushed range touches code.
+#   pre-push   core + affected tests (scripts/test-affected), only when the
+#              pushed range touches code; PYRITE_PUSH_FULL=1 for everything.
 #   CI         the authority. Full suite + everything above, on every push and PR.
 #
 # The commit stage must stay fast because pre-commit stashes EVERY unstaged edit
@@ -85,7 +86,16 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
       - id: pytest-full
-        name: pytest full suite (pre-push, code changes only)
+        name: pytest core + affected tests (pre-push, code changes only)
+        # Runs scripts/test-affected: the core set plus every test that
+        # imports what the branch changed, on ${PYRITE_PUSH_WORKERS:-4}
+        # workers; the full suite when the branch touches conftest, pytest
+        # config, this file or CI. PYRITE_PUSH_FULL=1 (or true/yes; read by the
+        # script) forces the full suite.
+        # The full suite at every push filled the disk and pushed load past 25
+        # on 2026-09-24 with several worktrees pushing (#356); CI on the PR
+        # runs everything, so this is feedback, not the gate.
+        #
         # Refuse rather than fall back. This used to end `|| PY=python`, and in
         # a worktree created with a bare `git worktree add` (no venv) that
         # resolved to the main checkout's interpreter -- whose editable
@@ -102,12 +112,17 @@ repos:
           checkout, so this push is refused. Create one with
           scripts/new-worktree.sh, or run
           uv venv && uv pip install -e \".[all,dev]\"" >&2; exit 1; fi;
-          exec "$PY" -m pytest tests/ extensions/ -n auto -q --tb=short'
+          exec "$PY" scripts/test-affected --run -n "${PYRITE_PUSH_WORKERS:-4}"'
         language: system
         pass_filenames: false
         # Matched against the files changed in the pushed range: a docs- or
-        # KB-only push skips the suite. CI still runs it.
-        files: '(\.py$|(^|/)pyproject\.toml$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
+        # KB-only push skips the suite. CI still runs it. Must cover every
+        # code path scripts/test-affected acts on (code and data under
+        # pyrite/, extensions/, tests/, scripts/, and the root test config),
+        # or a push of only those runs no tests at all. Docs, kb/, root *.md,
+        # changelog.d/ and web/ are deliberately left to CI, including the
+        # contract tests that read them (README tool table, CONTRIBUTING).
+        files: '(\.py$|^(pyrite|extensions|tests|scripts)/|(^|/)(pyproject\.toml|pytest\.ini|setup\.cfg|tox\.ini)$|^kb/kb\.yaml$|^\.pre-commit-config\.yaml$|^\.github/workflows/)'
         stages: [pre-push]
       - id: fix-commit-has-tests
         name: "fix: commits must touch tests/"

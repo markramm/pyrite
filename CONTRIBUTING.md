@@ -113,19 +113,77 @@ pyrite/
 4. **Plugin Protocol**: Extensions use structural typing (Protocol) — no base class inheritance required
 5. **SearchBackend Abstraction**: All search operations go through `SearchBackend` protocol (SQLite or Postgres)
 
-## Testing
+## Running the tests
+
+Pyrite is written largely by AI agents and runs on its users' machines, so
+most tests are **medium**: agents build units that pass alone and do not work
+together, and a user's machine is production, with no rollback. New
+behaviour, every fix and every guard is tested through the real wiring, so a
+guard's test fails when the guard is mis-wired, not only when its logic is
+wrong.
+
+| Size | What | For | Runs |
+|---|---|---|---|
+| Small | one process, no I/O | pure logic with a large input space (parsers, schema validation, query sanitizing, selection rules), where medium is too slow to cover it | editing, pre-push, PR CI |
+| **Medium** (default) | one machine, the real wiring: SQLite, temp dirs, `TestClient`, the CLI via Typer, MCP dispatch, git in temp repos, subprocesses | new behaviour, fixes, guards | editing, pre-push, PR CI |
+| Large | several processes or a browser | the release gate, standing in for the production monitoring a hosted service would have: live server + MCP smoke, the tutorial, Playwright, install from the tag, upgrade on a real KB | `dev` after merge, manual, release |
+
+`scripts/test-affected` picks tests by what a change can reach, not by size.
+Tests carry no size marker yet.
+
+**Everything**
 
 ```bash
-# Everything, in parallel. This is what the pre-push hook and CI run.
-.venv/bin/pytest tests/ extensions/ -n auto
-
-# One file, or tests matching a pattern
-.venv/bin/pytest tests/test_models.py
-.venv/bin/pytest -k "search"
-
-# Frontend
-cd web && npm run check && npm run test:unit
+.venv/bin/pytest tests/ extensions/ -n 4       # backend, ~6,000 tests, ~10 min on a busy laptop
+cd web && npm ci && npm run check && npm run test:unit && npm run build   # frontend
+HF_HUB_OFFLINE=1 .venv/bin/pytest tests/e2e -m e2e -n 4 --dist loadfile   # large: real server and MCP processes
+PATH="$PWD/.venv/bin:$PATH" bash scripts/run_tutorial.sh                  # large: docs/getting-started.md as a test
+cd web && npx playwright install chromium && npm run test:e2e             # large: browser; manual-only in CI while non-deterministic
 ```
+
+Use `-n 4`, not `-n auto`, on a laptop: `-n auto` starts a worker per core,
+each with its own databases and temp trees, and several worktrees doing that
+at once ran a 16 GB machine out of memory (#168) and filled its disk (#356).
+
+**A subset**
+
+```bash
+.venv/bin/pytest tests/test_storage.py -n 4                         # one file
+.venv/bin/pytest tests/test_storage.py -k search                    # matching tests
+.venv/bin/pytest "tests/test_rest_api.py::TestKBEndpoints::test_list_kbs"   # one test
+.venv/bin/pytest extensions/software-kb -n 4                        # one extension
+.venv/bin/pytest tests/ extensions/ -m core -n 4                    # the core smoke set
+scripts/test-affected --list          # what your branch affects, against origin/dev's merge base
+scripts/test-affected --explain       # ... and why each test was chosen
+scripts/test-affected --run           # run it: core + affected, -n 4 (-n N or -n auto)
+```
+
+`test-affected` diffs your working tree, uncommitted and untracked files
+included, against the merge base with `--base` (default `origin/dev`;
+`--committed` ignores uncommitted work). It selects every test that imports,
+through any chain, a module you changed or uses a conftest fixture that does,
+plus the tests that load plugins when an extension changes, plus the `core`
+set; and it switches to the full suite when you touch `conftest.py`,
+`pyproject.toml`, pytest or hook configuration, CI workflows or
+`tests/**/fixtures/`. Its known limit is import-time reach: importing
+`pkg.x` runs `pkg/__init__.py`, which it does not follow, so a change to
+`pyrite/services/kb_service.py` selects 167 of the 281 test files that
+execute it on import. CI catches the rest.
+
+**When to test what**
+
+| When | Run |
+|---|---|
+| While editing | the test file you are changing; `scripts/test-affected --run` |
+| Before a commit | nothing extra: the commit hooks run ruff and the fast checks in seconds |
+| Before a push | the pre-push hook runs `scripts/test-affected --run` on `PYRITE_PUSH_WORKERS` (default 4) workers. It already runs everything for conftest, fixtures, pyproject and config changes; set `PYRITE_PUSH_FULL=1` yourself for storage or migration changes and cross-cutting refactors |
+| On the pull request | nothing: CI runs the full backend suite (all three Pythons when test infrastructure changes), KB validation, the frontend job when `web/` changes, and the advisory `verify-red` job (your changed tests, with the fix reverted); after the merge, `dev` runs the full matrix, the e2e smoke and the tutorial |
+| A frontend change | `cd web && npm run check && npm run test:unit && npm run build` |
+| A release | the large tests: `scripts/release.py` installs the release commit into a fresh venv and runs the tutorial against it; Playwright and the smoke layer per the release runbook |
+
+**What CI guarantees:** no pull request merges until the full backend suite
+has passed on top of current `dev`. Run the full suite locally to reproduce a
+CI failure, not out of habit.
 
 The suite does not load the embedding model unless a test is marked
 `@pytest.mark.embeddings`; everything else runs with `auto_embed` off. A test
@@ -133,9 +191,6 @@ that passes alone but fails under `-n auto` is a bug in that test (shared
 state, a fixed wall-clock timeout, an unclosed database), not a reason to run
 serially — `tests/test_task_claim_concurrency.py` shows the pattern for
 process-spawning tests.
-
-The full suite can take several minutes; runtime varies with available CPU
-cores and system load.
 
 **The runner itself is pinned.** `pytest`, `pytest-cov` and `pytest-xdist`
 are exact `==` pins in the `dev` extra (#128) — not a floor like the rest of
@@ -182,7 +237,7 @@ uv pip install --python .venv/bin/python -e ".[all,dev]"
 |---|---|---|
 | commit | ruff, formatting, file hygiene, import-cycle check, KB schema validation | seconds |
 | commit-msg | a `fix:` commit must touch `tests/` | — |
-| pre-push | `pytest tests/ extensions/ -n auto`, only when the push touches code or config | Several minutes; varies by machine and load |
+| pre-push | `scripts/test-affected --run`: core + affected tests on `PYRITE_PUSH_WORKERS` (default 4) workers, only when the push touches code, tests, scripts or test config (a docs- or KB-only push skips it); `PYRITE_PUSH_FULL=1` runs the full suite | Seconds to minutes, depending on what changed |
 
 CI runs the same checks plus the full Python matrix, Postgres, the frontend
 build and Playwright. `--no-verify` is for a documented emergency, not for a
@@ -210,7 +265,7 @@ and "it's in a local commit" has cost a round trip more than once.
 
 1. `git checkout -b fix/what-it-fixes dev` (or `feature/...`)
 2. Write the failing test, then the fix
-3. Push; the pre-push hook runs the suite
+3. Push; the pre-push hook runs the affected tests (CI runs the full suite)
 4. Open the PR against `dev` and fill in the template (`Fixes #N` for bugs)
 5. Expect a first response **within 72 hours**. If you have heard nothing
    after that, comment on the PR — it is a lapse, not a verdict, and saying
@@ -264,8 +319,8 @@ the ones that arrived on 2026-09-18 from four first-time contributors all did:
   job is advisory: it is not a required check and fails only when it could
   not run (`python scripts/verify_red_ci.py --base origin/dev` runs it
   locally).
-- The full suite green locally: `pytest tests/ extensions/ -n auto`, plus
-  `ruff check` and `ruff format --check`.
+- The affected tests green locally (`scripts/test-affected --run`), plus
+  `ruff check` and `ruff format --check`. CI runs the full suite on the PR.
 - A changelog fragment: a **new file** `changelog.d/<slug>.<section>.md`
   containing the bullet as it should read in the release notes. Do **not** edit
   `CHANGELOG.md` — it is the one file every pull request used to conflict on,

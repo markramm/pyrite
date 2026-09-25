@@ -168,6 +168,7 @@ class TestCentralExceptionHandler:
         assert "Traceback" not in body["message"]
 
 
+@pytest.mark.core
 class TestKBEndpoints:
     """Test KB listing endpoint."""
 
@@ -235,6 +236,7 @@ class TestSearchEndpoints:
             assert set(result) == {"id", "kb_name"}
 
 
+@pytest.mark.core
 class TestEntryEndpoints:
     """Test entry CRUD operations."""
 

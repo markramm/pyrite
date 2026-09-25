@@ -40,7 +40,11 @@ code nobody had pushed).
       a review worktree whose .venv symlinked the main checkout's resolved every extension package to an
       editable install on `dev`, not the branch under review, and a suite number measured that way is not
       evidence)
-- [ ] .venv/bin/pytest tests/ extensions/ -n auto     green, here, now
+- [ ] the full suite: the PR's CI on the pushed SHA (`gh pr checks N`; `test (3.12)` and `gate` green) --
+      NOT a local re-run. The worker opened the draft PR after its first push, so CI has usually finished
+      by review; locally, `scripts/test-affected --run` on the head is enough (#356: full local suites from
+      several worktrees at once filled the disk and pushed load past 25). Run the full suite here only to
+      reproduce a CI failure
 - [ ] fix reverted to the merge base, the new tests fail: `scripts/verify-red.sh <test-node-id> <impl file>...`
       (exit 0 = red without the fix; exit 1 = passes anyway; exit 2 = nothing was reverted, NO claim — #121) — EVERY test
       named for a regression or a "still works" case, not one at random (PR #69: a class named for the

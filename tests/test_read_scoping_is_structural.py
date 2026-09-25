@@ -53,10 +53,13 @@ appear in the tree; a bare call does not, and this test will fail --
 correctly, because such a call is invisible to review.
 """
 
+import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from pyrite.server.api import create_app
+
+pytestmark = pytest.mark.core  # the local smoke set; see scripts/test-affected
 
 # Qualified names of the dependencies that scope a route's reads. A route
 # whose dependant tree contains any of these is scoped:

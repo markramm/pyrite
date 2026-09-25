@@ -24,6 +24,8 @@ from tests.test_mcp_server import (
     _populate_events_and_person,
 )
 
+pytestmark = pytest.mark.core  # the local smoke set; see scripts/test-affected
+
 # Tools not dispatched here, each with the reason. Keep this short: a skip is
 # a tool nothing proves can run.
 SKIP: dict[str, str] = {

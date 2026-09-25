@@ -43,6 +43,11 @@ def _stages(hook: dict, config: dict) -> set[str]:
     return set(hook.get("stages") or config.get("default_stages") or ["pre-commit"])
 
 
+def _runs_tests(hook: dict) -> bool:
+    entry = str(hook.get("entry", ""))
+    return "pytest" in entry or "test-affected" in entry
+
+
 def _local_hooks(config: dict) -> list[dict]:
     return [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
 
@@ -52,7 +57,7 @@ class TestPreCommitConfig:
         offenders = [
             hook["id"]
             for hook in _hooks(precommit)
-            if "pytest" in str(hook.get("entry", "")) and "pre-commit" in _stages(hook, precommit)
+            if _runs_tests(hook) and "pre-commit" in _stages(hook, precommit)
         ]
         assert offenders == [], f"pytest must not run at the commit stage: {offenders}"
 
@@ -60,12 +65,12 @@ class TestPreCommitConfig:
         pushed = [
             hook
             for hook in _hooks(precommit)
-            if "pytest" in str(hook.get("entry", "")) and _stages(hook, precommit) == {"pre-push"}
+            if _runs_tests(hook) and _stages(hook, precommit) == {"pre-push"}
         ]
         assert len(pushed) == 1, "expected exactly one pre-push pytest hook"
 
     def test_pre_push_suite_is_scoped_to_code_changes(self, precommit):
-        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
         assert not hook.get("always_run"), "always_run defeats the docs-only skip"
         assert hook.get("files"), "pre-push pytest needs a `files:` filter"
 
@@ -215,19 +220,109 @@ class TestPrePushStage:
         offenders = [
             hook["id"]
             for hook in _hooks(precommit)
-            if "pytest" not in str(hook.get("entry", "")) and hook.get("stages") is None
+            if not _runs_tests(hook) and hook.get("stages") is None
         ]
         assert offenders == [], f"hooks relying on default_stages (pin `stages:`): {offenders}"
 
 
 class TestParallelSuite:
     # Serial: tests/ alone took 7m41s locally and ~22 min in CI. Parallel:
-    # tests/ + extensions/ in ~2-3 min. ADR-0032's up-to-date requirement is
-    # only livable with the fast number, so both gates pin -n auto.
-    def test_pre_push_runs_the_suite_in_parallel_including_extensions(self, precommit):
-        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
-        assert "-n auto" in hook["entry"]
-        assert "extensions/" in hook["entry"]
+    # tests/ + extensions/ in ~2-3 min. CI pins -n auto; the pre-push hook
+    # runs a selection (below) on a capped number of workers.
+    def test_pre_push_runs_the_affected_selection_not_the_full_suite(self, precommit):
+        """#356: the full suite at every push filled the disk and pushed load
+        past 25 on 2026-09-24 (one push took ~35 minutes, several worktrees
+        pushing at once). Locally, a fast feedback loop: the core set plus
+        the tests the branch can affect. CI on the PR runs everything."""
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "scripts/test-affected --run" in hook["entry"], hook["entry"]
+
+    def test_pre_push_workers_are_capped_and_overridable(self, precommit):
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "-n auto" not in hook["entry"], "uncapped workers per push (#356)"
+        assert "${PYRITE_PUSH_WORKERS:-4}" in hook["entry"], hook["entry"]
+
+    @pytest.mark.parametrize(
+        ("value", "full"),
+        [("1", True), ("true", True), ("yes", True), ("0", False), ("false", False)],
+    )
+    def test_pre_push_full_suite_is_one_variable_away(self, precommit, value, full):
+        # PYRITE_PUSH_FULL=1 forces the full suite; 0/false do not (a shell
+        # `${VAR:+--full}` would have treated any non-empty value as yes).
+        import os
+        import subprocess
+        import sys
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "${PYRITE_PUSH_FULL:+" not in hook["entry"]
+        out = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "test-affected"), "--run", "--dry-run"]
+            + ["--files", "docs/index.md"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYRITE_PUSH_FULL": value},
+        )
+        assert out.returncode == 0, out.stderr
+        assert ("tests/ extensions/" in out.stdout) is full, out.stdout
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "scripts/test-affected",
+            "scripts/verify-red.sh",
+            "scripts/new-worktree.sh",
+            "pyrite/x.py",
+        ],
+    )
+    def test_pre_push_runs_for_scripts_without_a_py_suffix(self, precommit, path):
+        # The hook's files: filter decides whether it runs at all. It matched
+        # `\.py$`, so a push changing only scripts/test-affected (no suffix)
+        # skipped the tests of the script that selects the tests.
+        import re
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert re.search(hook["files"], path), (path, hook["files"])
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            # every path scripts/test-affected answers with the full suite ...
+            "conftest.py",
+            "tests/conftest.py",
+            "pyproject.toml",
+            "extensions/foo/pyproject.toml",
+            ".pre-commit-config.yaml",
+            ".github/workflows/ci.yml",
+            "pytest.ini",
+            "setup.cfg",
+            "tox.ini",
+            "tests/fixtures/roundtrip/entry.md",
+            # ... and non-Python code and data it selects tests for
+            "pyrite/server/templates/page.html",
+            "pyrite/storage/alembic.ini",
+            "pyrite/storage/alembic/script.py.mako",
+            "extensions/foo/src/foo/types.yaml",
+        ],
+    )
+    def test_pre_push_runs_for_every_code_path_test_affected_acts_on(self, precommit, path):
+        # A path the selector would act on but the hook's files: filter does not
+        # match is a push that runs no tests at all, reported only as "Skipped".
+        import re
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert re.search(hook["files"], path), (path, hook["files"])
+
+    @pytest.mark.parametrize("path", ["docs/guide.md", "kb/backlog/x.md", "README.md"])
+    def test_pre_push_still_skips_docs_only_pushes(self, precommit, path):
+        import re
+
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert not re.search(hook["files"], path), (path, hook["files"])
+
+    def test_the_full_selection_covers_extensions(self):
+        # --full (and every fallback) must still mean tests/ AND extensions/.
+        script = (REPO / "scripts" / "test-affected").read_text()
+        assert '"tests/", "extensions/"' in script
 
     def test_pre_push_refuses_a_worktree_with_no_venv(self, precommit):
         """No `.venv` here means the suite would test another checkout's code.
@@ -245,7 +340,7 @@ class TestParallelSuite:
         (#210, #242). Failing loudly is the whole fix: the wrong answer was
         silent, and silence is what cost the time.
         """
-        (hook,) = [h for h in _hooks(precommit) if "pytest" in str(h.get("entry", ""))]
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
         entry = hook["entry"]
         assert "|| PY=python" not in entry, (
             "the pre-push hook still falls back to system python when a "
@@ -613,3 +708,31 @@ class TestInfraChangesRunTheFullMatrixOnAPR:
         # narrow a push's.
         matrix = str(ci["jobs"]["test"]["strategy"]["matrix"]["python-version"])
         assert "github.event_name == 'pull_request'" in matrix
+
+
+class TestRunningTheTestsDoc:
+    """CONTRIBUTING's "Running the tests" names a marker, two variables and a
+    script; each must still exist where the doc says it does (#356)."""
+
+    @pytest.fixture(scope="class")
+    def section(self) -> str:
+        text = (REPO / "CONTRIBUTING.md").read_text()
+        start = text.index("## Running the tests")
+        return text[start : text.index("\n## ", start + 1)]
+
+    def test_the_core_marker_is_registered(self, section, pyproject):
+        assert "-m core" in section
+        markers = pyproject["tool"]["pytest"]["ini_options"]["markers"]
+        assert any(m.startswith("core:") for m in markers), markers
+
+    def test_the_push_variables_are_the_ones_the_hook_and_script_read(self, section, precommit):
+        (hook,) = [h for h in _hooks(precommit) if _runs_tests(h)]
+        assert "PYRITE_PUSH_WORKERS" in section and "PYRITE_PUSH_WORKERS" in hook["entry"]
+        script = (REPO / "scripts" / "test-affected").read_text()
+        assert "PYRITE_PUSH_FULL" in section and '"PYRITE_PUSH_FULL"' in script
+
+    def test_the_documented_commands_exist(self, section):
+        assert "scripts/test-affected --run" in section
+        assert (REPO / "scripts" / "test-affected").exists()
+        assert (REPO / "scripts" / "run_tutorial.sh").exists()
+        assert "--dist loadfile" in section and (REPO / "tests" / "e2e").is_dir()

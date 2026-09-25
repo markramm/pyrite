@@ -16,6 +16,8 @@ from fastapi.testclient import TestClient
 from pyrite.config import KBConfig, PyriteConfig, Settings
 from pyrite.storage.database import PyriteDB
 
+pytestmark = pytest.mark.core  # the local smoke set; see scripts/test-affected
+
 
 class TestAppStateIsolation:
     """Verify that create_app stores DI state on app.state, not module globals."""

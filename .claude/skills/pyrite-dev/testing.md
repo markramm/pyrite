@@ -1,5 +1,11 @@
 # Testing Conventions for Pyrite
 
+**How to run the tests** -- everything, a subset, the core set,
+`scripts/test-affected`, test sizes and when to run what -- is in
+[CONTRIBUTING.md, "Running the tests"](../../../CONTRIBUTING.md#running-the-tests).
+In short: medium tests through the real wiring are the default; run
+`scripts/test-affected --run` while you work; the PR's CI runs the full suite.
+
 ## 8-Section Extension Test Structure
 
 Every extension test file follows this structure. Not every section is required — only include sections for capabilities your extension implements.

@@ -8,8 +8,8 @@ description: "This skill should be used by an agent developing Pyrite code — f
 **Announce at start:** "I'm using the pyrite-dev skill."
 
 You develop Pyrite code on **one branch, in one worktree, on one theme**. You
-do not pick the theme, you do not open the pull request, and you never touch
-`dev`. Those belong to [pyrite-conductor](../pyrite-conductor/SKILL.md). If
+do not pick the theme, you do not review, ready or merge the pull request,
+and you never touch `dev`. Those belong to [pyrite-conductor](../pyrite-conductor/SKILL.md). If
 you are the only agent in the session — nobody dispatched you — you are also
 the conductor: finish the work here, then load pyrite-conductor for the review
 and PR steps.
@@ -111,7 +111,8 @@ claim, run it in full, read the output, then claim.
 
 | Claim | Run | Look for |
 |---|---|---|
-| Backend tests pass | `.venv/bin/pytest tests/ extensions/ -n auto` | `N passed, 0 failed` |
+| Backend tests pass (local) | `scripts/test-affected --run` (core + tests importing what you changed, `-n 4`) | `N passed, 0 failed` |
+| Backend tests pass (all) | the draft PR's CI: `gh pr checks <n>` | `test (3.12)` and `gate` pass |
 | The fix is real | the new test, with the fix reverted (`git stash`) | it fails |
 | Each guard is tested | delete **that guard alone** (one condition, one early return, one check) and run the tests | at least one test fails -- for every guard you added |
 | Frontend passes | `cd web && npm run check && npm run test:unit && npm run build` | all green |
@@ -127,6 +128,12 @@ push cycle. Deleting one guard at a time before you report is minutes.
 
 Forbidden without evidence: "should work", "looks correct", "probably
 passes", "I'm confident".
+
+**Run `scripts/test-affected --run` while you work** (`--explain` says why
+each test was chosen); the full suite locally is optional. CI on the pull
+request is the authority, so **open a draft PR right after your first push**
+(`gh pr create --draft --base dev --fill`, `Fixes #N` in the body) and let it
+run while you keep working; every later push re-runs it (#356).
 
 The suite runs in parallel. A test that passes alone and fails under
 `-n auto` is a bug in that test (shared state, a fixed timeout, an unclosed
@@ -161,15 +168,16 @@ origin/dev...HEAD`; anything on that list means something entered your
 branch that is not yours — on 2026-09-18 a worker found 18 foreign commits
 this way, one push from the wrong PR, #119); **push** (`git push -u origin
 <branch>`; a red pre-push is a stop, never `--no-verify`); **report with the
-pushed SHA** — a conductor reviews only what is on the remote. Do **not**
-open a PR. Report:
+pushed SHA** — a conductor reviews only what is on the remote. The PR stays a
+draft: the conductor flips it ready after review. Report:
 
 ```
 Branch:   fix/what-it-fixes      Worktree: ../pyrite-wt/fix-what-it-fixes
 Pushed:   <sha> == origin/<branch>
 Commits:  <n>, listed with one line each
 Closes:   #N, #M  (or the backlog item ids)
-Evidence: full suite output line; the RED run of each new test; lint
+Evidence: test-affected output line; the draft PR's CI result on the pushed
+          SHA; the RED run of each new test; lint
 Guards:   each check you added -> the test that fails when that check alone
           is removed (a guard no test catches is not done)
 Changed:  files touched, new vs existing
@@ -178,8 +186,8 @@ Unsure:   anything a reviewer should look at twice, or a decision that could
 Left:     anything in the theme you did not finish, and why
 ```
 
-A conductor will read the diff and re-run the suite before opening the PR;
-make that cheap by keeping commits focused and the report honest.
+A conductor will read the diff and check the PR's CI before flipping it
+ready; make that cheap by keeping commits focused and the report honest.
 
 ---
 

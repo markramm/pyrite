@@ -117,8 +117,8 @@ ruff check pyrite/
 
 ## Two skills: worker and conductor
 
-- **pyrite-dev** — for an agent writing Pyrite code: one theme, one branch, one worktree, TDD, evidence, a report. It does not choose work or open PRs.
-- **pyrite-conductor** — for orchestrating: reads GitHub issues and the roadmap, composes **reviewable themes**, creates a worktree and dispatches a `pyrite-worker` per theme (Sonnet 5 for well-specified work, Opus 5 for design-shaped work), reviews each branch (diff, suite, a `pyrite-reviewer` cold read for risky changes), opens the PR, shepherds it, keeps the repo healthy. Also releases and deploys.
+- **pyrite-dev** — for an agent writing Pyrite code: one theme, one branch, one worktree, TDD, evidence, a report. It opens a draft PR after its first push so CI starts; it does not choose work or mark the PR ready.
+- **pyrite-conductor** — for orchestrating: reads GitHub issues and the roadmap, composes **reviewable themes**, creates a worktree and dispatches a `pyrite-worker` per theme (Sonnet 5 for well-specified work, Opus 5 for design-shaped work), reviews each branch (diff, the draft PR's CI, a `pyrite-reviewer` cold read for risky changes), flips the PR ready, shepherds it, keeps the repo healthy. Also releases and deploys.
 - Dispatchable agents (`.claude/agents/`): `pyrite-worker`, `pyrite-reviewer` (cold read), `pyrite-architect` (breakdown), `pyrite-explorer` (browser, exploratory), `pyrite-docs` (documentation drift), `pyrite-spike` (a time-boxed investigation whose only deliverable is a ticket with acceptance criteria, an ADR draft, or "not feasible").
 - **pyrite-meta-conductor** — run by the strongest model after every ~5 landed themes (a human team's week is a few features, so the unit is themes, not days): watches the conductor's loops for the constraint (PR timings, rebases, redispatches, CI, the maintainer's queue) and proposes one measured change to the skills, an ADR or a ticket. Hallway testing applied to the process.
 - A session with a single agent is both: do the work under pyrite-dev, then load pyrite-conductor for review and the PR.
@@ -146,11 +146,11 @@ One-time setup on a fresh clone: `.venv/bin/pip install -e ".[dev]"` (installs `
 |-------|-----------|
 | commit | ruff, ruff-format, trailing-whitespace, end-of-file, check-yaml, check-large-files, check-merge-conflict, debug-statements, import-cycle check, KB schema validation. Seconds. **No pytest.** |
 | commit-msg | `fix:` commits must touch `tests/` |
-| pre-push | full pytest suite incl. `extensions/`, `-n auto`, only when the pushed range touches code or config; runtime varies by machine and load |
+| pre-push | `scripts/test-affected --run`: the `core` tests plus every test importing what the push changed, `-n 4` (`PYRITE_PUSH_WORKERS`); the full suite for conftest/config/CI changes or `PYRITE_PUSH_FULL=1`; only when the pushed range touches code, scripts or config |
 | CI | the authority — everything above plus the full matrix |
 
 If ruff-format modifies files, re-stage and commit again.
 
 **Why the commit stage is fast:** pre-commit stashes *every* unstaged edit in the working tree to `~/.cache/pre-commit/patch*` while commit hooks run. With several sessions sharing the tree, a slow hook makes other sessions' edits vanish for minutes. `tests/test_dev_process_config.py` pins this layout — change the config and the tests together. If a commit is killed mid-hook (crash, Ctrl-C at the wrong moment), unstaged edits may exist *only* in the newest patch file: check `git apply --check ~/.cache/pre-commit/patch<newest>`, then `git apply` it.
 
-The pre-push suite runs in parallel. A test that passes alone and fails under `-n auto` is a real bug in that test (shared state, fixed wall-clock timeouts under load, a shared port or path), not a reason to go serial; `tests/test_task_claim_concurrency.py` shows the pattern for process-spawning tests (start barrier + one group deadline). If a blocked push fails on a test you didn't touch, re-run that file under `-n auto` with the rest of the suite to confirm it is load-sensitive, then fix the test or file a GitHub issue for it; `--no-verify` needs a clear justification in the commit message plus the issue number.
+The pre-push suite runs in parallel. A test that passes alone and fails under `-n auto` is a real bug in that test (shared state, fixed wall-clock timeouts under load, a shared port or path), not a reason to go serial; `tests/test_task_claim_concurrency.py` shows the pattern for process-spawning tests (start barrier + one group deadline). If a blocked push fails on a test you didn't touch, re-run that file with the full suite (`PYRITE_PUSH_FULL=1 scripts/test-affected --run`, or `pytest tests/ extensions/ -n 4`) to confirm it is load-sensitive, then fix the test or file a GitHub issue for it; `--no-verify` needs a clear justification in the commit message plus the issue number.
