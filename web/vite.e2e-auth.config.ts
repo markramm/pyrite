@@ -31,6 +31,16 @@ const proxy = Object.fromEntries(
 	])
 );
 
+/**
+ * The live-update socket (#336), which the auth spec's socket case needs. Not
+ * `changeOrigin`: the server's `/ws` handshake admits an `Origin` that matches
+ * its `Host`, and the browser's `Origin` is this dev server, so the proxied
+ * `Host` must stay this dev server too. Only here, not in `vite.config.ts`:
+ * a live socket in the base world would toast every write the other specs
+ * make.
+ */
+const wsProxy = { '/ws': { target, ws: true, changeOrigin: false } };
+
 export default mergeConfig(baseConfig as UserConfig, {
 	server: {
 		port: AUTH_WEB_PORT,
@@ -38,6 +48,6 @@ export default mergeConfig(baseConfig as UserConfig, {
 		// holds the port: a dev server on an unexpected port would leave the
 		// spec talking to A's world through A's proxy.
 		strictPort: true,
-		proxy
+		proxy: { ...proxy, ...wsProxy }
 	}
 } satisfies UserConfig);

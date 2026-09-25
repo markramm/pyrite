@@ -180,3 +180,64 @@ describe('AuthStore', () => {
 		});
 	});
 });
+
+describe('socketIdentity (#336): whom the live-update socket is opened for', () => {
+	const enabled = (anonymous_tier: string) => ({
+		...disabledAuthConfig,
+		enabled: true,
+		anonymous_tier
+	});
+
+	it('is null while auth is still loading, so no socket opens with an unknown scope', () => {
+		authStore.loading = true;
+		expect(authStore.socketIdentity).toBeNull();
+	});
+
+	it('is one constant when auth is disabled', () => {
+		authStore.loading = false;
+		expect(authStore.socketIdentity).toBe('local');
+	});
+
+	it('names the signed-in user by id, so a different user is a different identity', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled('none');
+		authStore.user = sampleUser;
+		const alice = authStore.socketIdentity;
+		authStore.user = adminUser;
+		expect(alice).toBe('user:1');
+		expect(authStore.socketIdentity).toBe('user:2');
+	});
+
+	it('is the same for a refetched copy of the same user', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled('none');
+		authStore.user = sampleUser;
+		const before = authStore.socketIdentity;
+		authStore.user = { ...sampleUser };
+		expect(authStore.socketIdentity).toBe(before);
+	});
+
+	it('is anonymous when signed out and the server admits anonymous readers', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled('read');
+		expect(authStore.socketIdentity).toBe('anonymous');
+	});
+
+	it('is null when signed out and the server admits no anonymous reader', () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled('none');
+		authStore.user = sampleUser;
+		expect(authStore.socketIdentity).toBe('user:1');
+		authStore.user = null;
+		expect(authStore.socketIdentity).toBeNull();
+	});
+
+	it('is null after logout()', async () => {
+		authStore.loading = false;
+		authStore.authConfig = enabled('none');
+		authStore.user = sampleUser;
+		mockLogout.mockResolvedValue(undefined as never);
+		await authStore.logout();
+		expect(authStore.socketIdentity).toBeNull();
+	});
+});

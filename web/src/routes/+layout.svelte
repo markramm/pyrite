@@ -52,8 +52,8 @@
 			starredStore.load();
 		});
 
-		// WebSocket for multi-tab awareness
-		wsClient.connect();
+		// WebSocket for multi-tab awareness. Opened (and reopened) by the
+		// $effect below, which follows the signed-in user.
 		const unregisterWS = wsClient.onEvent((event) => {
 			if (event.type === 'entry_updated' || event.type === 'entry_deleted') {
 				// If viewing the changed entry, auto-reload
@@ -110,6 +110,15 @@
 			unregisterSidebar();
 			window.removeEventListener('keydown', handleQuestionMark);
 		};
+	});
+
+	// The live-update socket follows the signed-in user (#336). The server
+	// fixes a socket's readable KBs at handshake, so a login, logout or change
+	// of user must close the socket and open a new one; `follow` is a no-op
+	// while the identity is unchanged. Null (loading, or signed out where no
+	// anonymous reader is admitted) means no socket at all.
+	$effect(() => {
+		wsClient.follow(authStore.socketIdentity);
 	});
 
 	// Push the brand color into the DOM as it loads.
