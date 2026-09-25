@@ -511,29 +511,39 @@ class CascadePlugin:
                 db.close()
 
 
-def _validate_cascade_entry(entry: Any) -> list[str]:
-    """Validate Cascade Series entries."""
-    errors = []
-    entry_type = getattr(entry, "entry_type", "")
+def _validate_cascade_entry(entry_type: str, fields: dict, ctx: dict) -> list[dict]:
+    """Validate Cascade Series entries.
 
-    if entry_type == "actor" and not getattr(entry, "title", ""):
-        errors.append("Actor must have a title")
+    Plugin validator contract (#379, #376, #48): binds
+    (entry_type: str, fields: dict, ctx: dict) and returns a list of issue
+    dicts with a `message` (or `field`) key and an optional `severity`
+    (default: error).
+    """
+    errors: list[dict] = []
+
+    if entry_type == "actor" and not fields.get("title"):
+        errors.append({"field": "title", "message": "Actor must have a title"})
 
     if entry_type == "timeline_event":
-        if not getattr(entry, "date", ""):
-            errors.append("Timeline event must have a date")
-        if not getattr(entry, "title", ""):
-            errors.append("Timeline event must have a title")
+        if not fields.get("date"):
+            errors.append({"field": "date", "message": "Timeline event must have a date"})
+        if not fields.get("title"):
+            errors.append({"field": "title", "message": "Timeline event must have a title"})
 
     if entry_type == "solidarity_event":
-        if not getattr(entry, "date", ""):
-            errors.append("Solidarity event must have a date")
-        if not getattr(entry, "title", ""):
-            errors.append("Solidarity event must have a title")
+        if not fields.get("date"):
+            errors.append({"field": "date", "message": "Solidarity event must have a date"})
+        if not fields.get("title"):
+            errors.append({"field": "title", "message": "Solidarity event must have a title"})
 
-    importance = getattr(entry, "importance", None)
+    importance = fields.get("importance")
     if importance is not None and isinstance(importance, int):
         if importance < 1 or importance > 10:
-            errors.append(f"Importance must be 1-10, got: {importance}")
+            errors.append(
+                {
+                    "field": "importance",
+                    "message": f"Importance must be 1-10, got: {importance}",
+                }
+            )
 
     return errors

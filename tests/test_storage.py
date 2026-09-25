@@ -1565,11 +1565,18 @@ class TestInvalidStatusInHealth:
                 db.close()
 
     def test_broken_validator_logs_warning_not_silent(self, caplog):
-        """fail-open-exception-sweep site #2b: each validator call in
-        `_check_invalid_status` was wrapped in a bare `except Exception:
-        continue` -- a buggy/raising validator is silently skipped per
-        entry, with no log line to reveal that the check is degraded."""
+        """fail-open-exception-sweep site #2b: a buggy/raising validator must
+        not be silently skipped -- there must be a log line revealing that
+        the check is degraded for that entry. The degrade-per-validator
+        try/except now lives in `PluginRegistry.run_validators` (#379, the
+        single call site both kb_schema.py and index.py use), so this test
+        exercises the real registry with one conforming plugin plus one
+        broken validator patched into its aggregation, rather than mocking
+        `get_registry` wholesale (which would bypass `run_validators`
+        entirely and prove nothing about the real degrade path)."""
         import logging
+
+        from pyrite.plugins.registry import PluginRegistry
 
         with tempfile.TemporaryDirectory() as raw_tmp:
             tmp = Path(raw_tmp)
@@ -1598,11 +1605,11 @@ class TestInvalidStatusInHealth:
                 def _broken_validator(entry_type, fields, ctx=None):
                     raise RuntimeError("simulated validator crash")
 
-                with patch("pyrite.plugins.get_registry") as mock_get_registry:
-                    mock_get_registry.return_value.get_validators_for_kb.return_value = [
-                        _broken_validator
-                    ]
-                    with caplog.at_level(logging.WARNING, logger="pyrite.storage.index"):
+                broken_registry = PluginRegistry()
+                broken_registry.get_validators_for_kb = lambda kb_type="": [_broken_validator]
+
+                with patch("pyrite.plugins.get_registry", return_value=broken_registry):
+                    with caplog.at_level(logging.WARNING, logger="pyrite.plugins.registry"):
                         health = index_mgr.check_health()
 
                 warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]

@@ -380,35 +380,20 @@ class KBSchema:
                 }
                 warnings.append(item)
 
-        # Run plugin validators
+        # Run plugin validators — one call site, one contract (#379): every
+        # validator returned by the registry already binds
+        # (entry_type, fields, ctx), checked at registration, so there is no
+        # signature fallback here.
         try:
             from ..plugins import get_registry
 
             ctx = context or {}
             kb_type = ctx.get("kb_type", "") or self.kb_type
-            for validator in get_registry().get_validators_for_kb(kb_type):
-                try:
-                    results = validator(entry_type, fields, ctx)
-                    for item in results or []:
-                        if item.get("severity") == "warning":
-                            warnings.append(item)
-                        else:
-                            errors.append(item)
-                except TypeError:
-                    # Fallback for validators with old (entry_type, data) signature
-                    try:
-                        results = validator(entry_type, fields)
-                        for item in results or []:
-                            if item.get("severity") == "warning":
-                                warnings.append(item)
-                            else:
-                                errors.append(item)
-                    except Exception:
-                        logger.warning(
-                            "Validator fallback failed for %s", entry_type, exc_info=True
-                        )
-                except Exception:
-                    logger.warning("Validator execution failed for %s", entry_type, exc_info=True)
+            for item in get_registry().run_validators(kb_type, entry_type, fields, ctx):
+                if item.get("severity") == "warning":
+                    warnings.append(item)
+                else:
+                    errors.append(item)
         except Exception:
             logger.warning("Schema validation failed for %s", entry_type, exc_info=True)
 

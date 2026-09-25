@@ -833,30 +833,6 @@ class IndexManager:
             if not kb_schema or not kb_schema.types:
                 continue
 
-            # Plugin validators scoped to this KB type. We reuse them (rather
-            # than hardcoding any status enum in core) to detect entries whose
-            # `status` is not in its type's declared set — the drift that let
-            # 75 backlog items sit on an off-enum `completed` status undetected.
-            try:
-                from ..plugins import get_registry
-
-                kb_validators = get_registry().get_validators_for_kb(kb.kb_type)
-            except Exception:
-                # get_validators_for_kb already degrades per-plugin with its
-                # own warning logs internally -- this outer except only
-                # catches something unexpected (e.g. the import itself
-                # failing). Log it: the invalid-status check silently
-                # turning itself off for a whole KB is exactly the failure
-                # mode that let 75 backlog items drift onto an off-enum
-                # status undetected (fail-open-exception-sweep site #2).
-                logger.warning(
-                    "Could not load status validators for KB %r; invalid-status "
-                    "check is disabled for this KB this pass",
-                    kb.name,
-                    exc_info=True,
-                )
-                kb_validators = []
-
             entry_rows = self.db.execute_sql(
                 "SELECT id, entry_type, title, body, summary, file_path, "
                 "date, start_date, end_date, due_date, status, location, "
@@ -864,7 +840,7 @@ class IndexManager:
                 {"kb_name": kb.name},
             )
             for row in entry_rows:
-                self._check_invalid_status(kb, row, kb_validators, health)
+                self._check_invalid_status(kb, row, health)
 
                 type_schema = kb_schema.types.get(row["entry_type"])
                 if type_schema is None:
@@ -917,59 +893,51 @@ class IndexManager:
         return health
 
     @staticmethod
-    def _check_invalid_status(kb, row: dict, validators: list, health: dict) -> None:
+    def _check_invalid_status(kb, row: dict, health: dict) -> None:
         """Flag an entry whose `status` is not in its type's declared enum.
 
-        Runs the KB's plugin validators against the row's fields and records any
-        error reported on the `status` field with rule `enum`. This reuses the
-        existing validator logic (e.g. software-kb's BACKLOG_STATUSES) so core
-        does not hardcode any plugin's status vocabulary.
+        Runs the KB's plugin validators (via the registry's single
+        ``run_validators`` call site, #379) against the row's fields and
+        records any error reported on the `status` field with rule `enum`.
+        This reuses the existing validator logic (e.g. software-kb's
+        BACKLOG_STATUSES) so core does not hardcode any plugin's status
+        vocabulary. ``run_validators`` already degrades per-validator (logs
+        and skips one that raises) — the invalid-status check silently
+        turning itself off for a whole KB is exactly the failure mode that
+        let 75 backlog items drift onto an off-enum status undetected
+        (fail-open-exception-sweep site #2), so a validator failure here
+        costs one entry's check, not the whole pass.
         """
         status = row.get("status")
-        if not status or not validators:
+        if not status:
             return
         fields = {"status": status}
         ctx = {"kb_type": kb.kb_type}
-        for validator in validators:
-            try:
-                results = validator(row["entry_type"], fields, ctx)
-            except TypeError:
-                # Signature fallback: some validators take (entry_type,
-                # fields) without ctx. Not an error -- try the 2-arg form.
-                try:
-                    results = validator(row["entry_type"], fields)
-                except Exception:
-                    logger.warning(
-                        "Status validator %r raised for %s/%s (2-arg form); "
-                        "invalid-status check skipped for this entry",
-                        getattr(validator, "__name__", validator),
-                        kb.name,
-                        row["id"],
-                        exc_info=True,
-                    )
-                    continue
-            except Exception:
-                logger.warning(
-                    "Status validator %r raised for %s/%s; invalid-status "
-                    "check skipped for this entry",
-                    getattr(validator, "__name__", validator),
-                    kb.name,
-                    row["id"],
-                    exc_info=True,
+        try:
+            from ..plugins import get_registry
+
+            results = get_registry().run_validators(kb.kb_type, row["entry_type"], fields, ctx)
+        except Exception:
+            logger.warning(
+                "Could not run status validators for %s/%s; invalid-status "
+                "check skipped for this entry",
+                kb.name,
+                row["id"],
+                exc_info=True,
+            )
+            return
+        for item in results:
+            if item.get("field") == "status" and item.get("rule") == "enum":
+                health["invalid_statuses"].append(
+                    {
+                        "kb": kb.name,
+                        "id": row["id"],
+                        "type": row["entry_type"],
+                        "status": status,
+                        "allowed": item.get("expected", []),
+                    }
                 )
-                continue
-            for item in results or []:
-                if item.get("field") == "status" and item.get("rule") == "enum":
-                    health["invalid_statuses"].append(
-                        {
-                            "kb": kb.name,
-                            "id": row["id"],
-                            "type": row["entry_type"],
-                            "status": status,
-                            "allowed": item.get("expected", []),
-                        }
-                    )
-                    return  # one report per entry is enough
+                return  # one report per entry is enough
 
     def sync_incremental(
         self,

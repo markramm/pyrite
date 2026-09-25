@@ -61,62 +61,76 @@ class TestExceptionHierarchy:
 
 
 class TestRunHooksPropagation:
-    """_run_hooks lets PyriteError propagate but catches other exceptions."""
+    """_run_hooks lets PyriteError propagate but catches other exceptions.
+
+    #379: HookRunner owns both core- and plugin-hook dispatch, and it looks
+    plugin hooks up via the registry's get_hooks_for_kb (a pure lookup, not
+    a runner -- run_hooks_for_kb no longer exists). So these mock the hook
+    *callable* the lookup returns, the way a real plugin hook would raise or
+    return a value, rather than mocking a runner method directly on the
+    registry.
+    """
+
+    def _svc_with_plugin_hook(self, hook_fn):
+        """A KBService whose plugin registry has one before_save hook."""
+        from pyrite.services.kb_service import KBService
+
+        mock_registry = MagicMock()
+        mock_registry.get_hooks_for_kb.return_value = {"before_save": [hook_fn]}
+        # KBService.__init__ resolves get_registry() once at construction
+        # time (#379), so the patch must be active for the constructor call.
+        with patch("pyrite.plugins.get_registry", return_value=mock_registry):
+            return KBService(config=MagicMock(), db=MagicMock())
 
     def test_pyrite_error_propagates(self):
         """PyriteError from hooks should propagate through _run_hooks."""
         from pyrite.models.core_types import NoteEntry
-        from pyrite.services.kb_service import KBService
 
-        mock_registry = MagicMock()
-        mock_registry.run_hooks_for_kb.side_effect = KBReadOnlyError("read-only")
+        def raising_hook(entry, ctx):
+            raise KBReadOnlyError("read-only")
 
-        with patch("pyrite.plugins.get_registry", return_value=mock_registry):
-            entry = NoteEntry(id="test", title="Test")
-            with pytest.raises(KBReadOnlyError):
-                KBService(config=MagicMock(), db=MagicMock())._run_hooks("before_save", entry, {})
+        svc = self._svc_with_plugin_hook(raising_hook)
+        entry = NoteEntry(id="test", title="Test")
+        with pytest.raises(KBReadOnlyError):
+            svc._run_hooks("before_save", entry, {})
 
     def test_permission_error_propagated_in_before_hooks(self):
         """PermissionError in before_save hooks should propagate (hook atomicity)."""
         from pyrite.models.core_types import NoteEntry
-        from pyrite.services.kb_service import KBService
 
-        mock_registry = MagicMock()
-        mock_registry.run_hooks_for_kb.side_effect = PermissionError("denied")
+        def raising_hook(entry, ctx):
+            raise PermissionError("denied")
 
-        with patch("pyrite.plugins.get_registry", return_value=mock_registry):
-            entry = NoteEntry(id="test", title="Test")
-            with pytest.raises(PermissionError, match="denied"):
-                KBService(config=MagicMock(), db=MagicMock())._run_hooks("before_save", entry, {})
+        svc = self._svc_with_plugin_hook(raising_hook)
+        entry = NoteEntry(id="test", title="Test")
+        with pytest.raises(PermissionError, match="denied"):
+            svc._run_hooks("before_save", entry, {})
 
     def test_generic_exception_propagated_in_before_hooks(self):
         """Generic exceptions in before_save hooks should propagate (hook atomicity)."""
         from pyrite.models.core_types import NoteEntry
-        from pyrite.services.kb_service import KBService
 
-        mock_registry = MagicMock()
-        mock_registry.run_hooks_for_kb.side_effect = RuntimeError("boom")
+        def raising_hook(entry, ctx):
+            raise RuntimeError("boom")
 
-        with patch("pyrite.plugins.get_registry", return_value=mock_registry):
-            entry = NoteEntry(id="test", title="Test")
-            with pytest.raises(RuntimeError, match="boom"):
-                KBService(config=MagicMock(), db=MagicMock())._run_hooks("before_save", entry, {})
+        svc = self._svc_with_plugin_hook(raising_hook)
+        entry = NoteEntry(id="test", title="Test")
+        with pytest.raises(RuntimeError, match="boom"):
+            svc._run_hooks("before_save", entry, {})
 
     def test_successful_hook_returns_result(self):
         """Successful hooks return the modified entry."""
         from pyrite.models.core_types import NoteEntry
-        from pyrite.services.kb_service import KBService
 
         modified = NoteEntry(id="modified", title="Modified")
-        mock_registry = MagicMock()
-        mock_registry.run_hooks_for_kb.return_value = modified
 
-        with patch("pyrite.plugins.get_registry", return_value=mock_registry):
-            entry = NoteEntry(id="test", title="Test")
-            result = KBService(config=MagicMock(), db=MagicMock())._run_hooks(
-                "before_save", entry, {}
-            )
-            assert result is modified
+        def replacing_hook(entry, ctx):
+            return modified
+
+        svc = self._svc_with_plugin_hook(replacing_hook)
+        entry = NoteEntry(id="test", title="Test")
+        result = svc._run_hooks("before_save", entry, {})
+        assert result is modified
 
 
 class TestServiceExceptionTypes:

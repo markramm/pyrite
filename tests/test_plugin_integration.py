@@ -55,6 +55,16 @@ def registry():
 
 
 @pytest.fixture
+def hook_runner(registry):
+    """HookRunner wired to the test registry -- the only module that runs
+    hooks under the raise-before/swallow-after contract (#379); the
+    registry's get_hooks_for_kb is a pure lookup."""
+    from pyrite.services.hook_runner import HookRunner
+
+    return HookRunner(plugin_registry=registry)
+
+
+@pytest.fixture
 def patched_registry(registry):
     """Temporarily replace the global registry with our test registry."""
     import pyrite.plugins.registry as reg_module
@@ -479,43 +489,43 @@ class TestValidatorExecution:
 
 
 class TestHookExecution:
-    def test_before_save_hooks_fire(self, registry):
+    def test_before_save_hooks_fire(self, hook_runner):
         """before_save hooks modify the entry."""
         entry = WriteupEntry(id="test", title="Test")
         ctx = {"user": "alice", "operation": "create"}
-        result = registry.run_hooks("before_save", entry, ctx)
+        result = hook_runner.run_before_save(entry, ctx)
         assert result.author_id == "alice"
 
-    def test_before_save_hooks_can_abort(self, registry):
+    def test_before_save_hooks_can_abort(self, hook_runner):
         """before_save hooks can raise to abort."""
         entry = WriteupEntry(id="test", title="Test", author_id="alice")
         ctx = {"user": "bob", "operation": "update"}
         with pytest.raises(PermissionError):
-            registry.run_hooks("before_save", entry, ctx)
+            hook_runner.run_before_save(entry, ctx)
 
-    def test_after_save_hooks_fire(self, registry):
+    def test_after_save_hooks_fire(self, hook_runner):
         """after_save hooks run without error."""
         entry = WriteupEntry(id="test", title="Test", author_id="alice")
         ctx = {"kb_name": "test", "user": "alice", "operation": "create"}
         # Should not raise
-        registry.run_hooks("after_save", entry, ctx)
+        hook_runner.run_after_save(entry, ctx)
 
-    def test_after_delete_hooks_fire(self, registry):
+    def test_after_delete_hooks_fire(self, hook_runner):
         entry = WriteupEntry(id="test", title="Test", author_id="alice")
         ctx = {"kb_name": "test", "user": "alice", "operation": "delete"}
-        registry.run_hooks("after_delete", entry, ctx)
+        hook_runner.run_after_delete(entry, ctx)
 
-    def test_hooks_pass_through_non_writeup_entries(self, registry):
+    def test_hooks_pass_through_non_writeup_entries(self, hook_runner):
         """Hooks don't interfere with non-writeup entry types."""
         entry = NoteEntry(id="test", title="Regular Note")
         ctx = {"user": "alice", "operation": "create"}
-        result = registry.run_hooks("before_save", entry, ctx)
+        result = hook_runner.run_before_save(entry, ctx)
         assert result is entry  # unchanged
 
-    def test_nonexistent_hook_is_noop(self, registry):
+    def test_nonexistent_hook_is_noop(self, hook_runner):
         """Running a hook that no plugin provides is a no-op."""
         entry = NoteEntry(id="test", title="Test")
-        result = registry.run_hooks("before_index", entry, {})
+        result = hook_runner._run("before_index", entry, {})
         assert result is entry
 
 
@@ -530,12 +540,22 @@ class TestHookAtomicity:
 
         entry = NoteEntry(id="test", title="Test")
         ctx = {"kb_type": "", "operation": "create"}
+        # KBService.__init__ resolves get_registry() once at construction
+        # time and hands the registry object to HookRunner (#379), so the
+        # patch must land on that object's method, not on the get_registry
+        # function (which construction has already called by the time a
+        # function-level patch would take effect). get_hooks_for_kb is the
+        # registry's plugin-hook lookup -- a pure lookup, not a runner
+        # (HookRunner._run is the sole runner) -- so patching it to raise
+        # exercises the same "something in the plugin-hook phase blew up"
+        # path a raising hook would.
         svc = KBService(config=MagicMock(), db=MagicMock())
 
-        with patch("pyrite.plugins.get_registry") as mock_reg:
-            mock_reg.return_value.run_hooks_for_kb.side_effect = ValueError(
-                "hook validation failed"
-            )
+        with patch.object(
+            svc.hook_runner._plugin_registry,
+            "get_hooks_for_kb",
+            side_effect=ValueError("hook validation failed"),
+        ):
             with pytest.raises(ValueError, match="hook validation failed"):
                 svc._run_hooks("before_save", entry, ctx)
 
@@ -549,8 +569,11 @@ class TestHookAtomicity:
         ctx = {"kb_type": "", "operation": "create"}
         svc = KBService(config=MagicMock(), db=MagicMock())
 
-        with patch("pyrite.plugins.get_registry") as mock_reg:
-            mock_reg.return_value.run_hooks_for_kb.side_effect = RuntimeError("oops")
+        with patch.object(
+            svc.hook_runner._plugin_registry,
+            "get_hooks_for_kb",
+            side_effect=RuntimeError("oops"),
+        ):
             # Should NOT raise — after_save errors are swallowed
             result = svc._run_hooks("after_save", entry, ctx)
             assert result is entry
@@ -846,7 +869,7 @@ class TestPluginContextInjection:
         assert ctx.get("nonexistent", "fallback") == "fallback"
         assert "kb_name" in ctx
 
-    def test_hooks_receive_plugin_context(self, registry, temp_dir):
+    def test_hooks_receive_plugin_context(self, hook_runner, temp_dir):
         """Hooks receive PluginContext which is backwards compatible with dict access."""
         from pyrite.plugins.context import PluginContext
 
@@ -855,10 +878,10 @@ class TestPluginContextInjection:
             config=None, db=None, kb_name="social-kb", user="alice", operation="create"
         )
         # Hooks should still work — they call context.get("user", "") etc.
-        result = registry.run_hooks("before_save", entry, ctx)
+        result = hook_runner.run_before_save(entry, ctx)
         assert result.author_id == "alice"
 
-    def test_after_save_hook_writes_to_db(self, registry, db_with_plugins):
+    def test_after_save_hook_writes_to_db(self, hook_runner, db_with_plugins):
         """after_save_update_counts actually writes to DB when context has db."""
         from pyrite.plugins.context import PluginContext
 
@@ -867,7 +890,7 @@ class TestPluginContextInjection:
             config=None, db=db_with_plugins, kb_name="test", user="alice", operation="create"
         )
         # Run after_save hooks
-        registry.run_hooks("after_save", entry, ctx)
+        hook_runner.run_after_save(entry, ctx)
 
         # Check that a reputation log entry was created
         row = db_with_plugins._raw_conn.execute(
@@ -877,7 +900,7 @@ class TestPluginContextInjection:
         assert row["delta"] == 1
         assert "writeup_created:test-writeup" in row["reason"]
 
-    def test_after_delete_hook_adjusts_reputation(self, registry, db_with_plugins):
+    def test_after_delete_hook_adjusts_reputation(self, hook_runner, db_with_plugins):
         """after_delete_adjust_reputation reverses vote reputation when db available."""
         from pyrite.plugins.context import PluginContext
 
@@ -896,7 +919,7 @@ class TestPluginContextInjection:
         ctx = PluginContext(
             config=None, db=db_with_plugins, kb_name="test", user="alice", operation="delete"
         )
-        registry.run_hooks("after_delete", entry, ctx)
+        hook_runner.run_after_delete(entry, ctx)
 
         # Check reputation adjustment was logged (should be -2 to reverse the +2 votes)
         row = db_with_plugins._raw_conn.execute(
@@ -1053,8 +1076,12 @@ class TestValidatorScoping:
         hooks = reg.get_hooks_for_kb("task")
         assert len(hooks.get("before_save", [])) == 1
 
-    def test_run_hooks_for_kb_scoped(self):
-        """run_hooks_for_kb only runs hooks from matching plugins."""
+    def test_hook_runner_scopes_plugin_hooks_by_kb_type(self):
+        """HookRunner, the sole runner of the raise/swallow contract (#379),
+        only runs plugin hooks from matching plugins -- scoping comes from
+        the registry's get_hooks_for_kb lookup, keyed off context["kb_type"]."""
+        from pyrite.services.hook_runner import HookRunner
+
         reg = self._fresh_registry()
         called = []
 
@@ -1065,12 +1092,13 @@ class TestValidatorScoping:
         plugin = self._make_scoped_plugin("task", ["task"])
         plugin.get_hooks = lambda: {"before_save": [task_hook]}
         reg.register(plugin)
+        runner = HookRunner(plugin_registry=reg)
 
         entry = NoteEntry(id="test", title="Test")
-        reg.run_hooks_for_kb("before_save", entry, {}, kb_type="software")
+        runner.run_before_save(entry, {"kb_type": "software"})
         assert called == []
 
-        reg.run_hooks_for_kb("before_save", entry, {}, kb_type="task")
+        runner.run_before_save(entry, {"kb_type": "task"})
         assert called == ["task"]
 
     def test_validate_entry_with_kb_type_context(self, patched_registry):

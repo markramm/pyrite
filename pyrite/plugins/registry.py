@@ -9,6 +9,7 @@ Plugins register via pyproject.toml:
     my_plugin = "my_package.plugin:MyPlugin"
 """
 
+import inspect
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -19,6 +20,70 @@ from .context import PluginContext
 from .protocol import PyritePlugin
 
 logger = logging.getLogger(__name__)
+
+# Probe arguments used only to check that a callable's signature *binds* the
+# plugin contract's arity (inspect.signature(...).bind never calls the
+# callable). Validators bind (entry_type, fields, ctx); hooks bind
+# (entry, ctx). A callable that cannot bind these is refused at
+# registration rather than discovered via a TypeError at call time (#379).
+_VALIDATOR_PROBE_ARGS: tuple[Any, ...] = ("__probe_entry_type__", {}, {})
+_HOOK_PROBE_ARGS: tuple[Any, ...] = (None, {})
+
+
+def _binds(fn: Callable, probe_args: tuple[Any, ...]) -> bool:
+    """True if ``fn``'s signature can bind ``probe_args`` positionally."""
+    try:
+        sig = inspect.signature(fn)
+    except (TypeError, ValueError):
+        # Builtins / C callables without introspectable signatures: assume
+        # conforming rather than refuse something we can't check.
+        return True
+    try:
+        sig.bind(*probe_args)
+    except TypeError:
+        return False
+    return True
+
+
+def _filter_conforming_validators(validators: list[Callable], plugin_name: str) -> list[Callable]:
+    """Drop validators that don't bind (entry_type, fields, ctx), logging each."""
+    conforming = []
+    for fn in validators:
+        if _binds(fn, _VALIDATOR_PROBE_ARGS):
+            conforming.append(fn)
+        else:
+            logger.warning(
+                "Plugin '%s' validator %r does not accept (entry_type, fields, ctx); "
+                "refusing it at registration rather than discovering the mismatch via "
+                "a TypeError at call time",
+                plugin_name,
+                getattr(fn, "__name__", fn),
+            )
+    return conforming
+
+
+def _filter_conforming_hooks(
+    hooks: dict[str, list[Callable]], plugin_name: str
+) -> dict[str, list[Callable]]:
+    """Drop hook callables that don't bind (entry, ctx), logging each."""
+    filtered: dict[str, list[Callable]] = {}
+    for hook_name, callables in hooks.items():
+        kept = []
+        for fn in callables:
+            if _binds(fn, _HOOK_PROBE_ARGS):
+                kept.append(fn)
+            else:
+                logger.warning(
+                    "Plugin '%s' hook %r for %r does not accept (entry, ctx); "
+                    "refusing it at registration rather than discovering the mismatch "
+                    "via a TypeError at call time",
+                    plugin_name,
+                    getattr(fn, "__name__", fn),
+                    hook_name,
+                )
+        filtered[hook_name] = kept
+    return filtered
+
 
 # =============================================================================
 # Method-to-capability map (Tier A r1500 / Option B / ADR-0002 addendum)
@@ -286,6 +351,10 @@ class PluginRegistry:
                     _METHOD_CAPABILITIES.get(method_name),
                 )
                 continue
+            if method_name == "get_validators":
+                items = _filter_conforming_validators(list(items), plugin.name)
+                if not items:
+                    continue
             result.extend(items)
         return result
 
@@ -322,6 +391,8 @@ class PluginRegistry:
                     _METHOD_CAPABILITIES.get(method_name),
                 )
                 continue
+            if method_name == "get_hooks":
+                items = _filter_conforming_hooks(dict(items), plugin.name)
             for key, lst in items.items():
                 result.setdefault(key, []).extend(lst)
         return result
@@ -394,23 +465,6 @@ class PluginRegistry:
     def get_all_hooks(self) -> dict[str, list[Callable]]:
         """Get all lifecycle hooks from all plugins, merged by hook name."""
         return self._aggregate_dict_of_lists("get_hooks")
-
-    def run_hooks(self, hook_name: str, entry: Any, context: dict) -> Any:
-        """Run all hooks for a given hook point. Returns the (possibly modified) entry.
-
-        Raises if any before_* hook raises (to abort the operation).
-        """
-        hooks = self.get_all_hooks().get(hook_name, [])
-        for hook in hooks:
-            try:
-                result = hook(entry, context)
-                if result is not None:
-                    entry = result
-            except Exception:
-                if hook_name.startswith("before_"):
-                    raise  # Let before_* hooks abort operations
-                logger.warning("Hook %s failed for %s", hook_name, hook.__name__, exc_info=True)
-        return entry
 
     def get_all_kb_presets(self) -> dict[str, dict]:
         """Get all KB presets: core + plugins."""
@@ -576,6 +630,8 @@ class PluginRegistry:
                 try:
                     items = getattr(plugin, method_name)()
                     if items:
+                        if method_name == "get_validators":
+                            items = _filter_conforming_validators(list(items), plugin.name)
                         result.extend(items)
                 except Exception as e:
                     logger.warning("Plugin %s %s failed: %s", plugin.name, method_name, e)
@@ -592,6 +648,8 @@ class PluginRegistry:
                 try:
                     items = getattr(plugin, method_name)()
                     if items:
+                        if method_name == "get_hooks":
+                            items = _filter_conforming_hooks(dict(items), plugin.name)
                         for key, lst in items.items():
                             result.setdefault(key, []).extend(lst)
                 except Exception as e:
@@ -643,23 +701,45 @@ class PluginRegistry:
         """Get validators scoped to a specific KB type."""
         return self._aggregate_list_for_kb("get_validators", kb_type)
 
-    def get_hooks_for_kb(self, kb_type: str = "") -> dict[str, list[Callable]]:
-        """Get lifecycle hooks scoped to a specific KB type."""
-        return self._aggregate_dict_of_lists_for_kb("get_hooks", kb_type)
+    def run_validators(self, kb_type: str, entry_type: str, fields: dict, ctx: dict) -> list[dict]:
+        """Run every validator scoped to ``kb_type`` against ``fields``.
 
-    def run_hooks_for_kb(self, hook_name: str, entry: Any, context: dict, kb_type: str = "") -> Any:
-        """Run hooks for a given hook point, scoped to a KB type."""
-        hooks = self.get_hooks_for_kb(kb_type).get(hook_name, [])
-        for hook in hooks:
+        The single call site for plugin validation (#379): ``kb_schema.py``
+        and ``storage/index.py`` both call this instead of open-coding the
+        aggregation-plus-call loop. Every returned validator already binds
+        the ``(entry_type, fields, ctx)`` contract -- registration refused
+        any that didn't (see ``_filter_conforming_validators``) -- so there
+        is no signature fallback here; a validator that still raises is a
+        bug in that validator, not a contract mismatch, and is logged and
+        skipped rather than aborting the whole validation pass.
+        """
+        results: list[dict] = []
+        for validator in self.get_validators_for_kb(kb_type):
             try:
-                result = hook(entry, context)
-                if result is not None:
-                    entry = result
+                items = validator(entry_type, fields, ctx)
             except Exception:
-                if hook_name.startswith("before_"):
-                    raise
-                logger.warning("Hook %s failed for %s", hook_name, hook.__name__, exc_info=True)
-        return entry
+                logger.warning(
+                    "Validator %r raised for entry_type %r",
+                    getattr(validator, "__name__", validator),
+                    entry_type,
+                    exc_info=True,
+                )
+                continue
+            if items:
+                results.extend(items)
+        return results
+
+    def get_hooks_for_kb(self, kb_type: str = "") -> dict[str, list[Callable]]:
+        """Get lifecycle hooks scoped to a specific KB type.
+
+        This is a pure lookup -- it does not run the hooks. Running them
+        under the raise-before/swallow-after contract is HookRunner's job
+        alone (#379): exactly one module implements that contract, so it
+        cannot drift between a "core hook" code path and a "plugin hook"
+        code path. See ``HookRunner._run``, which calls this to get the
+        plugin-provided callables for a hook point.
+        """
+        return self._aggregate_dict_of_lists_for_kb("get_hooks", kb_type)
 
 
 def get_registry() -> PluginRegistry:

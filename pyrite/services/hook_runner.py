@@ -89,11 +89,19 @@ class HookRunner:
     # ------------------------------------------------------------------
 
     def _run(self, hook_name: str, entry: Entry, context: dict[str, Any]) -> Entry:
-        """Run all hooks for ``hook_name`` honoring the raise/swallow contract."""
+        """Run all hooks for ``hook_name`` honoring the raise/swallow contract.
+
+        This is the ONLY place that implements the before-raises/
+        after-swallows contract (#379) — core hooks and plugin hooks both
+        run through this one loop, so the contract cannot drift between the
+        two. Plugin hooks are looked up (not run) via the registry's
+        ``get_hooks_for_kb`` — a pure lookup — so the registry itself has no
+        opinion on raise-vs-swallow.
+        """
         is_before = hook_name.startswith(_BEFORE_HOOK_PREFIX)
 
-        # Core hooks first.
-        for hook_fn in self._core_hooks.get(hook_name, []):
+        def _run_one(hook_fn: Callable[..., Any], label: str) -> None:
+            nonlocal entry
             try:
                 result = hook_fn(entry, context)
                 if result is not None:
@@ -102,25 +110,30 @@ class HookRunner:
                 if is_before:
                     raise
                 logger.warning(
-                    "Core hook %s failed",
+                    "%s hook %s failed",
+                    label,
                     getattr(hook_fn, "__name__", repr(hook_fn)),
                     exc_info=True,
                 )
+
+        # Core hooks first.
+        for hook_fn in self._core_hooks.get(hook_name, []):
+            _run_one(hook_fn, "Core")
 
         # Plugin hooks second (only if a registry was supplied).
         if self._plugin_registry is None:
             return entry
 
+        kb_type = context.get("kb_type", "") if context else ""
         try:
-            kb_type = context.get("kb_type", "") if context else ""
-            return self._plugin_registry.run_hooks_for_kb(
-                hook_name,
-                entry,
-                context,
-                kb_type=kb_type,
-            )
+            plugin_hooks = self._plugin_registry.get_hooks_for_kb(kb_type).get(hook_name, [])
         except Exception:
             if is_before:
-                raise
-            logger.warning("Plugin hooks %s failed", hook_name, exc_info=True)
+                raise  # a lookup failure is as much an abort signal as a hook raising
+            logger.warning("Plugin hook lookup for %s failed", hook_name, exc_info=True)
             return entry
+
+        for hook_fn in plugin_hooks:
+            _run_one(hook_fn, "Plugin")
+
+        return entry
