@@ -480,7 +480,8 @@ byte-identical except where a line below says otherwise. Order:
 5. **`REPO_EGRESS`:** theme 3c maps it to today's tiers exactly. Splitting it
    out is still ADR-0031's decision.
 
-The ADR's status stays `proposed` until the maintainer accepts it.
+The ADR stays `proposed` until theme 1 (#383) lands and proves the design;
+the maintainer accepts it then (2026-09-25).
 
 ---
 
