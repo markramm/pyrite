@@ -102,14 +102,16 @@ def sync_index(
         # a retry see `added=0` (nothing changed), so the cache would never
         # get another chance to render. The failure is instead reported on
         # `site_cache.error` and logged with its traceback -- narrow because
-        # only `render_all` is wrapped, not the sync, drain or broadcast above.
+        # only building the service and `render_all` are wrapped, not the
+        # sync, drain or broadcast above.
         site_cache_status = None
         if result.get("added", 0) + result.get("updated", 0) + result.get("removed", 0) > 0:
             from ...services.site_cache import SiteCacheService
 
-            cache_svc = SiteCacheService(config=index_mgr.config, db=index_mgr.db)
             try:
-                cache_svc.render_all()
+                # Inside the try: the constructor reads branding.yaml, which
+                # an operator may have left half-edited.
+                SiteCacheService(config=index_mgr.config, db=index_mgr.db).render_all()
             except Exception:
                 logger.exception("Site cache render failed after sync")
                 site_cache_status = SiteCacheSyncStatus(

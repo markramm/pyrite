@@ -223,3 +223,40 @@ class TestSyncWaitRerendersSiteCache:
         assert calls == ["drain", "broadcast", "render"], (
             f"expected drain and broadcast before render, got {calls}"
         )
+
+    def test_a_broken_branding_file_does_not_fail_a_committed_sync(self, tmp_path):
+        """Building the render service can fail too (#402 delta cold read).
+
+        ``SiteCacheService`` reads ``branding.yaml`` in its constructor; an
+        operator's half-edited file must be reported on ``site_cache``, not
+        turn the committed sync into a 500.
+        """
+        config = _config(tmp_path)
+        branding = tmp_path / "branding"
+        branding.mkdir()
+        (branding / "branding.yaml").write_text("- a list, not a mapping\n")
+        config.settings.branding_dir = branding
+        app = create_app(config=config)
+        _write_entry(config.get_kb("public-kb").path)
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            resp = client.post("/api/index/sync", params={"wait": "true"})
+            assert resp.status_code == 200, resp.text
+            body = resp.json()
+            assert body["added"] == 1, body
+            assert body["site_cache"]["rendered"] is False, body
+
+    def test_a_sync_that_changes_nothing_reports_no_site_cache(self, tmp_path):
+        """``site_cache`` is null when nothing changed: no render was attempted."""
+        config = _config(tmp_path)
+        app = create_app(config=config)
+        _write_entry(config.get_kb("public-kb").path)
+
+        with TestClient(app) as client:
+            first = client.post("/api/index/sync", params={"wait": "true"})
+            assert first.status_code == 200, first.text
+            second = client.post("/api/index/sync", params={"wait": "true"})
+            assert second.status_code == 200, second.text
+            body = second.json()
+            assert body["added"] + body["updated"] + body["removed"] == 0, body
+            assert "site_cache" in body and body["site_cache"] is None, body
