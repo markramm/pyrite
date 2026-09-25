@@ -347,7 +347,9 @@ class Settings:
     ai_api_base: str = ""
     summary_length: int = 280
     enable_mcp: bool = True
-    index_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "index.db")
+    # Defaults live beside the config file this process resolved (#377): under
+    # PYRITE_CONFIG_DIR or a repo-local .pyrite/ they are no longer ~/.pyrite.
+    index_path: Path = field(default_factory=lambda: default_data_dir() / "index.db")
     host: str = "127.0.0.1"
     port: int = 8088
     # Security
@@ -375,7 +377,7 @@ class Settings:
     search_mode: str = "keyword"
     search_backend: str = "sqlite"  # "sqlite" or "postgres"
     database_url: str = ""  # PostgreSQL connection string (for postgres backend)
-    workspace_path: Path = field(default_factory=lambda: Path.home() / ".pyrite" / "repos")
+    workspace_path: Path = field(default_factory=lambda: default_data_dir() / "repos")
     strict_plugins: bool = False  # Raise on plugin load failures (dev/CI mode)
     prewarm_embeddings: bool = False  # Pre-load embedding model on server startup
     # Embed entries on write. Off = keyword search only, no torch import, no
@@ -807,13 +809,16 @@ class PyriteConfig:
             if not gh.client_secret:
                 gh.client_secret = os.environ.get("PYRITE_GITHUB_CLIENT_SECRET", "")
 
+        settings_kwargs: dict[str, Any] = {}
+        if settings_data.get("index_path"):
+            settings_kwargs["index_path"] = Path(settings_data["index_path"])
         settings = Settings(
+            **settings_kwargs,
             default_editor=settings_data.get("default_editor", os.environ.get("EDITOR", "vim")),
             ai_provider=settings_data.get("ai_provider", "stub"),
             ai_model=settings_data.get("ai_model", "claude-sonnet-4-20250514"),
             summary_length=settings_data.get("summary_length", 280),
             enable_mcp=settings_data.get("enable_mcp", True),
-            index_path=Path(settings_data.get("index_path", "~/.pyrite/index.db")),
             host=settings_data.get("host", "127.0.0.1"),
             port=settings_data.get("port", 8088),
             cors_origins=settings_data.get(
@@ -902,6 +907,21 @@ def current_config_file() -> Path:
     if CONFIG_DIR != Path("~/.pyrite").expanduser().resolve():
         return CONFIG_FILE
     return resolve_config_dir() / "config.yaml"
+
+
+def default_data_dir() -> Path:
+    """Where the index and workspace live when nothing names them.
+
+    The directory of the config file this call resolves: ``~/.pyrite`` for a
+    default install (unchanged), but the ``PYRITE_CONFIG_DIR`` or repo-local
+    ``.pyrite/`` directory when one is in effect. Before #377 the index stayed
+    at ``~/.pyrite/index.db`` whatever the config dir, so a sandboxed
+    ``pyrite kb add`` registered into the user's real index.
+
+    Precedence for ``index_path``: ``PYRITE_DATA_DIR`` > ``settings.index_path``
+    in config.yaml > this default.
+    """
+    return current_config_file().parent
 
 
 def ensure_config_dir() -> Path:

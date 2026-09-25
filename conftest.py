@@ -1,6 +1,7 @@
 """Repo-root pytest configuration, shared by tests/ and extensions/*/tests.
 
-Its one job is to cut the suite off from any parent git process.
+It cuts the suite off from two things a test must never reach: any parent
+git process, and the developer's own Pyrite config and index.
 
 Under the pre-commit pytest hook the suite runs as a child of `git commit`,
 which exports GIT_DIR, GIT_INDEX_FILE and GIT_AUTHOR_* pointing at the real
@@ -51,6 +52,39 @@ def _isolate_git_environment() -> None:
 
 
 _isolate_git_environment()
+
+
+def _isolate_pyrite_config_environment() -> None:
+    """Point every Pyrite default path at a session temp dir, for children too.
+
+    tests/conftest.py's autouse `_isolate_global_config` patches CONFIG_DIR
+    in-process only. A `pyrite`, `pyrite-admin` or `python -c` child process
+    does not inherit a monkeypatch, so it read and wrote the real ~/.pyrite --
+    and on 2026-09-23 a test-shaped write (`knowledge_bases: []`, an index in a
+    TemporaryDirectory) emptied a user's ~50-KB registry through a symlinked
+    ~/.pyrite/config.yaml (#377). Environment variables are inherited, so set
+    them here, at conftest import: before pyrite.config computes CONFIG_DIR,
+    before any fixture, for tests/ and extensions/*/tests alike. Overwrites
+    whatever the developer's shell exported, deliberately.
+
+    tests/test_config_isolation.py is the canary.
+    """
+    session_dir = Path(tempfile.mkdtemp(prefix="pyrite-test-config-")).resolve()
+    atexit.register(shutil.rmtree, session_dir, ignore_errors=True)
+    os.environ["PYRITE_CONFIG_DIR"] = str(session_dir)
+    os.environ["PYRITE_DATA_DIR"] = str(session_dir)
+
+    # A plugin loaded before this conftest may already have imported
+    # pyrite.config and fixed CONFIG_DIR at the developer's location.
+    import sys
+
+    config_module = sys.modules.get("pyrite.config")
+    if config_module is not None:
+        config_module.CONFIG_DIR = session_dir
+        config_module.CONFIG_FILE = session_dir / "config.yaml"
+
+
+_isolate_pyrite_config_environment()
 
 
 @pytest.fixture(autouse=True)
