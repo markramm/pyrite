@@ -372,7 +372,12 @@ class KBRepository:
             return None
 
     def save(
-        self, entry: Entry, subdir: str | None = None, *, touch_updated_at: bool = True
+        self,
+        entry: Entry,
+        subdir: str | None = None,
+        *,
+        touch_updated_at: bool = True,
+        keep_filename: bool = False,
     ) -> Path:
         """
         Save an entry to file.
@@ -384,6 +389,15 @@ class KBRepository:
                 writing. Callers that already stamped it -- or that write a
                 caller-supplied ``updated_at`` and must not overwrite it
                 (#151) -- pass ``False``.
+            keep_filename: A file's name is fixed at creation (#391 cold
+                read). ``True`` (an update) keeps ``entry.file_path``'s
+                existing filename instead of re-running
+                ``resolve_filename``/``file_pattern`` -- a title or field
+                edit must not rename the file every time. ``False`` (a
+                create, or a caller with no on-disk path yet) resolves a
+                fresh filename as before. Ignored -- falls back to a fresh
+                resolution -- when ``entry.file_path`` is unset, since there
+                is no existing filename to keep.
 
         Returns:
             Path to the saved file
@@ -394,8 +408,15 @@ class KBRepository:
         if subdir is None:
             subdir = self._infer_subdir(entry)
 
-        # Check for custom file_pattern in the type schema
-        file_path = self._resolve_file_path(entry, subdir)
+        if keep_filename and entry.file_path is not None:
+            filename = entry.file_path.name
+            if subdir:
+                file_path = self._contained(self.path / subdir / filename)
+            else:
+                file_path = self._contained(self.path / filename)
+        else:
+            # Check for custom file_pattern in the type schema
+            file_path = self._resolve_file_path(entry, subdir)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Stamp current schema version on save

@@ -1959,6 +1959,20 @@ class TestNewAdrGoesThroughPipeline:
             return runner.invoke(sw_app, args)
 
     @pytest.mark.control(
+        reason="repo.save()'s mkdir(parents=True) already created missing "
+        "directories before this fix; pins the pipeline still does, not #391"
+    )
+    def test_creates_adrs_directory_if_missing(self, env):
+        """sw new-adr must create the adrs/ directory if it doesn't exist yet
+        -- every other test's `env` fixture never creates it either, but this
+        names the behaviour explicitly so a future regression fails here
+        first, on its own, instead of only as a side effect elsewhere."""
+        assert not (env["kb_path"] / "adrs").exists()
+        result = self._run(env, ["new-adr", "Use Kafka", "--kb", "sw-kb"])
+        assert result.exit_code == 0, result.output
+        assert (env["kb_path"] / "adrs" / "0001-use-kafka.md").exists()
+
+    @pytest.mark.control(
         reason="the pre-pipeline direct write already produced this filename/content; "
         "pins the pipeline keeps the convention, not the write-pipeline bug itself"
     )
@@ -1974,6 +1988,9 @@ class TestNewAdrGoesThroughPipeline:
         assert "adr_number: 1" in content
         assert "id: adr-0001" in content
         assert "status: proposed" in content
+        assert "# ADR-0001: Use PostgreSQL" in content, (
+            "26 of 37 existing ADRs in this repo have this heading (#391 cold read item 6)"
+        )
         assert "## Context" in content
         assert "## Decision" in content
         assert "## Consequences" in content

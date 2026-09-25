@@ -195,6 +195,8 @@ def sw_new_adr(
         today = date.today().isoformat()
 
         body = (
+            f"# ADR-{next_num:04d}: {title}\n"
+            "\n"
             "## Context\n"
             "\n"
             "TODO: What is the issue that we're seeing that is motivating this decision or change?\n"

@@ -509,17 +509,20 @@ def test_cli_add_keeps_the_files_declared_type_in_a_plugin_kb(software_env):
     assert "type: note" in text and "adr_number" not in text, text
 
 
-@pytest.mark.control(
-    reason="unrelated to #391 -- this test's own assertion was made robust to "
-    "a pre-existing, separately-filed bug (#468) that #391's file_pattern "
-    "change surfaced (a `note` create silently resolves to ADREntry in a "
-    "software-type KB); it does not pin #391's write-pipeline behaviour"
-)
 def test_rest_create_accepts_the_web_forms_default_payload_in_pyrites_own_kb(software_env):
     """Review blocker 2. The New-entry form defaults to `note` and offers every
     core and plugin type; the web client sends `allow_undeclared: true` on every
     create (web/src/lib/api/client.ts), so the form keeps dev's behaviour in a
-    KB that declares types. API callers that do not send it are refused."""
+    KB that declares types. API callers that do not send it are refused.
+
+    The exact-path assertion below is red without #391's fix for an incidental
+    reason worth naming: this KB's `note` -> most-derived-NoteEntry-subtype
+    resolution silently resolves the entry to an ADREntry (#468, filed,
+    out of scope for #391), so the file only lands under `adrs/` with the
+    `0000-` prefix once the `adr` type's `file_pattern` entry-field
+    placeholder support (this PR) exists at all; on dev, `{adr_number:04d}`
+    is unrecognized and `resolve_filename` falls back to the default
+    `<id>.md`, landing at `adrs/from-the-form.md` instead."""
     client, close = _rest_for(software_env)
     try:
         form = {"kb": "sw", "entry_type": "note", "title": "From the form", "body": ""}
@@ -529,14 +532,16 @@ def test_rest_create_accepts_the_web_forms_default_payload_in_pyrites_own_kb(sof
 
         resp = client.post("/api/entries", json={**form, "allow_undeclared": True})
         assert resp.status_code == 200, resp.text
-        # Not a hardcoded filename: this KB's `note` -> most-derived-NoteEntry-
-        # subtype resolution (#468, filed while adding #391's file_pattern
-        # support) can give the entry a plugin type with its own file_pattern,
-        # so its filename is not necessarily `<id>.md`. The write succeeding
-        # and landing *some* file for the returned id is what this test pins.
-        entry_id = resp.json()["id"]
-        assert any(entry_id in p.name for p in software_env["kb_path"].rglob("*.md")), (
-            f"no file for {entry_id!r} under {software_env['kb_path']}"
+        # Exact path, not a substring match: #468 (filed, out of scope for
+        # #391) means this KB's `note` -> most-derived-NoteEntry-subtype
+        # resolution silently resolves this to an ADREntry, so the file
+        # lands under adrs/ with the adr type's file_pattern
+        # (adr_number defaults to 0 since this create never sets it).
+        assert resp.json()["id"] == "from-the-form"
+        expected = software_env["kb_path"] / "adrs" / "0000-from-the-form.md"
+        assert expected.exists(), (
+            f"expected {expected} (see #468: `note` resolves to ADREntry here); "
+            f"found: {sorted(p.relative_to(software_env['kb_path']) for p in software_env['kb_path'].rglob('*.md'))}"
         )
     finally:
         close()
@@ -730,6 +735,101 @@ def test_adr_number_is_managed_by_the_software_plugin(software_env):
         assert "status" in fields
     finally:
         server.close()
+
+
+def test_create_refuses_a_resolved_path_collision_between_different_ids(software_env):
+    """#391 cold read blocker 1. `_prepare`'s exists check only looked at the
+    id, but a `file_pattern` type's filename comes from FIELDS
+    (`{adr_number:04d}-{title}.md`), not the id -- two different ids can
+    resolve to the SAME path. Before the fix, `create_entry('adr-a', ...)`
+    then `create_entry('adr-b', ...)`, both with `adr_number=5`, both
+    reported `created` and the second silently overwrote the first's file."""
+    from pyrite.exceptions import EntryExistsError
+    from pyrite.services.kb_service import KBService
+    from pyrite.storage.database import PyriteDB
+
+    db = PyriteDB(software_env["db_path"])
+    try:
+        svc = KBService(software_env["config"], db)
+        first = svc.create_entry(
+            "sw", "adr-a", "Same Title", "adr", "ORIGINAL", adr_number=5, status="proposed"
+        )
+        expected_file = software_env["kb_path"] / "adrs" / "0005-same-title.md"
+        assert expected_file.exists(), expected_file
+        original = expected_file.read_bytes()
+        assert first.id == "adr-a"
+
+        with pytest.raises(EntryExistsError):
+            svc.create_entry(
+                "sw", "adr-b", "Same Title", "adr", "REPLACED", adr_number=5, status="proposed"
+            )
+
+        assert expected_file.read_bytes() == original, "the first ADR's file must be untouched"
+        # And the second id must never have been written under ANY name.
+        assert not list(software_env["kb_path"].rglob("*adr-b*"))
+    finally:
+        db.close()
+
+
+def test_create_refuses_a_resolved_path_collision_from_unnumbered_titles(software_env):
+    """Two ADRs without an explicit adr_number both default to 0 and slug the
+    same title identically -- both would resolve to `0000-same-idea.md`."""
+    from pyrite.exceptions import EntryExistsError
+    from pyrite.services.kb_service import KBService
+    from pyrite.storage.database import PyriteDB
+
+    db = PyriteDB(software_env["db_path"])
+    try:
+        svc = KBService(software_env["config"], db)
+        svc.create_entry("sw", "adr-first", "Same Idea", "adr", "ORIGINAL", status="proposed")
+        expected_file = software_env["kb_path"] / "adrs" / "0000-same-idea.md"
+        assert expected_file.exists(), expected_file
+        original = expected_file.read_bytes()
+
+        with pytest.raises(EntryExistsError):
+            svc.create_entry("sw", "adr-second", "Same Idea", "adr", "REPLACED", status="proposed")
+
+        assert expected_file.read_bytes() == original
+    finally:
+        db.close()
+
+
+def test_update_keeps_the_existing_filename_for_a_file_pattern_type(software_env):
+    """#391 cold read blocker 2. `document_manager.py` deleted the old file
+    and wrote a new one whenever the resolved path changed on UPDATE. With a
+    `file_pattern` like `{adr_number:04d}-{title}.md`, EVERY title edit (and,
+    before #391's fix, even just updating `status`) renamed the file. A
+    file's name is fixed at creation; only create resolves a filename."""
+    from pyrite.services.kb_service import KBService
+    from pyrite.storage.database import PyriteDB
+
+    db = PyriteDB(software_env["db_path"])
+    try:
+        svc = KBService(software_env["config"], db)
+        svc.create_entry(
+            "sw", "adr-x", "Original Title", "adr", "body", adr_number=9, status="proposed"
+        )
+        original_file = software_env["kb_path"] / "adrs" / "0009-original-title.md"
+        assert original_file.exists(), original_file
+
+        # Update the status only: the resolved path is unaffected by status,
+        # so this pins the simplest case first.
+        svc.update_entry("adr-x", "sw", status="accepted")
+        assert original_file.exists(), "status update must not move the file"
+        assert "status: accepted" in original_file.read_text()
+
+        # Update the title: {title} IS part of the file_pattern, so a naive
+        # re-resolution renames the file. It must not.
+        svc.update_entry("adr-x", "sw", title="A Completely Different Title")
+        assert original_file.exists(), "title update must not rename the file"
+        assert not (
+            software_env["kb_path"] / "adrs" / "0009-a-completely-different-title.md"
+        ).exists()
+        content = original_file.read_text()
+        assert "A Completely Different Title" in content
+        assert "status: accepted" in content
+    finally:
+        db.close()
 
 
 def test_cli_import_dry_run_reports_a_duplicate_within_the_batch(env):

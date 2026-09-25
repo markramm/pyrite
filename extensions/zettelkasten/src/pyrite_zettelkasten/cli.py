@@ -46,8 +46,7 @@ def zettel_new(
             break
 
     if not kb_config:
-        console.print("[red]Error:[/red] No KB found. Specify --kb.")
-        raise typer.Exit(1)
+        cli_error("No KB found. Specify --kb.", error_code="KB_NOT_FOUND")
 
     entry_type = "literature_note" if zettel_type == "literature" else "zettel"
     fields: dict[str, object]

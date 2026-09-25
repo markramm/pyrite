@@ -540,6 +540,7 @@ class KBService:
         builder: Callable[[str, str, str, str, dict[str, Any]], Entry] | None = None,
         resolve_type: bool = True,
         pending_ids: set[str] | None = None,
+        pending_paths: set[Path] | None = None,
     ) -> tuple[Entry, list[dict[str, Any]]]:
         """Decide whether ``spec`` is a valid new entry; build it if so.
 
@@ -557,7 +558,11 @@ class KBService:
         ``resolve_type=False`` keeps the type exactly as named. A file's
         frontmatter declares its type; rewriting `type: note` to a plugin's
         most-derived `note` subtype is how #197 filed an ADR. ``pending_ids``
-        are ids an earlier item of the same dry run would have created.
+        are ids an earlier item of the same dry run would have created;
+        ``pending_paths`` are resolved file paths an earlier item of the same
+        dry run would have created -- needed because a `file_pattern` type's
+        filename comes from FIELDS, not the id, so two different ids can
+        collide on the same path (#391 cold read).
         """
         from ..schema import generate_entry_id
 
@@ -603,6 +608,23 @@ class KBService:
                 f"Entry with ID '{entry.id}' already exists in KB '{kb_name}'. "
                 "Use update to change it, or choose a different title/id."
             )
+
+        # #391 cold read: the id check above is not enough once a filename
+        # comes from FIELDS (file_pattern), not the id -- two different ids
+        # (or two ids without a number, whose titles slug alike) can resolve
+        # to the SAME path. `adr-a` and `adr-b`, both adr_number=5, both
+        # resolve to `0005-same.md`; the second call must refuse, not
+        # overwrite the first's file. The pending set uses the resolved path
+        # itself as its key so a dry-run batch catches an in-batch collision
+        # the same way the real filesystem does for a non-dry-run one.
+        repo = KBRepository(kb_config)
+        resolved_path = repo._resolve_file_path(entry, repo._infer_subdir(entry))
+        if resolved_path.exists() or resolved_path in (pending_paths or ()):
+            raise EntryExistsError(
+                f"Entry with ID '{entry.id}' would resolve to a file that already "
+                f"exists ({resolved_path.name}) in KB '{kb_name}'. Use update to "
+                "change it, or choose a different title/id."
+            )
         return entry, warnings
 
     def _prepare_and_save(
@@ -628,7 +650,7 @@ class KBService:
         )
         ctx = hook_ctx or self._hook_ctx(kb_name, kb_config, "create")
         entry = self._run_hooks("before_save", entry, ctx)
-        self._doc_mgr.save_entry(entry, kb_name, kb_config)
+        self._doc_mgr.save_entry(entry, kb_name, kb_config, is_create=True)
         if embed:
             self._auto_embed(entry.id, kb_name)
         self._run_hooks("after_save", entry, ctx)
@@ -724,8 +746,10 @@ class KBService:
         results: list[dict[str, Any]] = []
         created_ids: list[tuple[str, str]] = []  # (entry_id, kb_name) for batch embed
         # A dry run writes nothing, so the exists check alone cannot see an id
-        # an earlier item of the same batch would have created.
+        # -- or, for a file_pattern type, a resolved PATH -- an earlier item
+        # of the same batch would have created.
         would_create: set[str] = set()
+        would_create_paths: set[Path] = set()
 
         for spec in entries:
             try:
@@ -736,8 +760,13 @@ class KBService:
                         spec,
                         allow_undeclared=allow_undeclared,
                         pending_ids=would_create,
+                        pending_paths=would_create_paths,
                     )
                     would_create.add(entry.id)
+                    repo = KBRepository(kb_config)
+                    would_create_paths.add(
+                        repo._resolve_file_path(entry, repo._infer_subdir(entry))
+                    )
                     item: dict[str, Any] = {"created": False, "valid": True, "entry_id": entry.id}
                 else:
                     written = self._prepare_and_save(

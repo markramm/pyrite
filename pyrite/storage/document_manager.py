@@ -37,6 +37,7 @@ class DocumentManager:
         kb_config: KBConfig,
         *,
         touch_updated_at: bool = True,
+        is_create: bool = False,
     ) -> Path:
         """Save an entry to disk, register the KB, and index it.
 
@@ -49,6 +50,15 @@ class DocumentManager:
             kb_config: KB configuration (provides path, type, description).
             touch_updated_at: Passed through to ``KBRepository.save``; ``False``
                 keeps a caller-supplied ``updated_at`` (#151).
+            is_create: ``True`` only for a brand-new entry (the sole caller is
+                ``KBService``'s create pipeline). A file's name is fixed at
+                creation (#391 cold read): the default ``False`` keeps the
+                entry's existing filename (``entry.file_path``'s basename)
+                fixed across an update -- a `file_pattern` type's title or
+                field edit must not rename the file every time, matching the
+                subdirectory-preservation logic just below. ``True`` lets
+                ``KBRepository.save`` resolve a fresh filename, since there
+                is no existing one yet.
 
         Returns:
             Path to the saved file.
@@ -70,7 +80,12 @@ class DocumentManager:
             if existing_subdir is not None:
                 subdir = existing_subdir
 
-        file_path = repo.save(entry, subdir=subdir, touch_updated_at=touch_updated_at)
+        file_path = repo.save(
+            entry,
+            subdir=subdir,
+            touch_updated_at=touch_updated_at,
+            keep_filename=not is_create,
+        )
 
         # Clean up old file if path changed (template-driven move)
         if old_path and old_path.resolve() != file_path.resolve() and old_path.exists():

@@ -584,3 +584,23 @@ class TestZettelNewGoesThroughPipeline:
         assert result.exit_code != 0, result.output
         assert "ENTRY_EXISTS" in result.output, result.output
         assert self._file(env, "same-title").read_bytes() == original
+
+    def test_no_kb_found_carries_an_error_code(self, tmp_path):
+        """#391 cold read item 9: 'No KB found' was a plain message with no
+        error_code, unlike every other refusal in this pipeline."""
+        from unittest.mock import patch
+
+        from pyrite_zettelkasten.cli import zettel_app
+        from typer.testing import CliRunner
+
+        from pyrite.config import PyriteConfig, Settings
+
+        empty_config = PyriteConfig(
+            knowledge_bases=[], settings=Settings(index_path=tmp_path / "test.db")
+        )
+        runner = CliRunner()
+        with patch("pyrite_zettelkasten.cli.load_config", return_value=empty_config):
+            result = runner.invoke(zettel_app, ["new", "Orphan Note"])
+
+        assert result.exit_code != 0, result.output
+        assert "KB_NOT_FOUND" in result.output, result.output
