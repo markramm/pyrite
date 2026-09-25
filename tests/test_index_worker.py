@@ -1,10 +1,42 @@
 """Tests for the IndexWorker background index service."""
 
+import threading
 import time
+from unittest.mock import patch
 
 import pytest
 
 from pyrite.services.index_worker import IndexWorker
+
+
+@pytest.fixture
+def gated_sync(worker):
+    """Patch IndexManager.sync_incremental so the job's background thread
+    blocks on a controllable threading.Event instead of racing the test's
+    own assertions against however long a real (or, under load, near-
+    instant on an empty fixture KB) sync happens to take (#88).
+
+    Yields (release, released) where:
+      - release(): lets the currently-blocked (or next) sync proceed
+      - released: an Event set just before sync_incremental returns, so a
+        test can confirm the job actually completed after release()
+
+    The job is guaranteed to still be in 'running' status for as long as
+    the test holds the gate closed -- no sleep, no timing assumption.
+    """
+    entered = threading.Event()
+    gate = threading.Event()
+    released = threading.Event()
+
+    def fake_sync_incremental(kb_name=None, progress_callback=None):
+        entered.set()
+        gate.wait(timeout=5)
+        released.set()
+        return {"added": 0, "updated": 0, "removed": 0}
+
+    with patch("pyrite.services.index_worker.IndexManager") as mock_index_manager:
+        mock_index_manager.return_value.sync_incremental.side_effect = fake_sync_incremental
+        yield entered, gate, released
 
 
 @pytest.fixture
@@ -128,11 +160,26 @@ class TestThreadCleanup:
 class TestConcurrency:
     """Duplicate job prevention."""
 
-    def test_duplicate_sync_returns_same_id(self, worker):
-        """Submitting sync for same kb while active returns existing job_id."""
+    def test_duplicate_sync_returns_same_id(self, worker, gated_sync):
+        """Submitting sync for same kb while active returns existing job_id.
+
+        Regression for #88: this used to submit twice in a row and assume
+        the first job's background thread hadn't finished yet by the time
+        the second submit_sync's dedup check ran -- true most of the time,
+        false under CPU contention on an empty fixture KB (the sync
+        completes near-instantly). Gating sync_incremental behind an Event
+        makes "job 1 still active" deterministic instead of a timing bet.
+        """
+        entered, gate, released = gated_sync
         job_id_1 = worker.submit_sync(kb_name="test-events")
+        entered.wait(timeout=5)  # job 1's thread is inside sync_incremental, gate closed
+        assert not released.is_set(), "job 1 must still be active for this test to prove anything"
+
         job_id_2 = worker.submit_sync(kb_name="test-events")
         assert job_id_1 == job_id_2
+
+        gate.set()
+        released.wait(timeout=5)
 
     def test_different_kbs_get_different_jobs(self, worker):
         """Submitting sync for different kbs creates separate jobs."""
@@ -171,14 +218,28 @@ class TestProgress:
 class TestGetActiveJobs:
     """Active job listing."""
 
-    def test_active_jobs_filters(self, worker):
-        """get_active_jobs returns only pending/running jobs."""
+    def test_active_jobs_filters(self, worker, gated_sync):
+        """get_active_jobs returns only pending/running jobs.
+
+        Regression for #88: this used to submit a sync and assert, on the
+        very next line, that get_active_jobs() still showed it as pending/
+        running -- true most of the time, false under CPU contention on an
+        empty fixture KB where the background thread can run to completion
+        before this thread's next line executes. Gating sync_incremental
+        behind an Event makes "still active" deterministic.
+        """
+        entered, gate, released = gated_sync
         job_id = worker.submit_sync(kb_name="test-events")
+        entered.wait(timeout=5)  # job's thread is inside sync_incremental, gate closed
+        assert not released.is_set(), "job must still be active for this test to prove anything"
+
         active = worker.get_active_jobs()
-        # Should have at least one active job
         assert len(active) >= 1
         job_ids = [j["job_id"] for j in active]
         assert job_id in job_ids
+
+        gate.set()
+        released.wait(timeout=5)
 
     def test_completed_not_in_active(self, worker, sample_events):
         """Completed jobs don't appear in active list."""
