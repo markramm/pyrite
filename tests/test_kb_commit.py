@@ -255,6 +255,16 @@ class TestExportServiceCommit:
         assert content is not None
         assert "Content" in content
 
+    @pytest.mark.control(
+        reason="On origin/dev, commit_kb never calls record_commit at all "
+        "(that recording is #432's own root feature), so under lock "
+        "contention there is no INSERT to fail and nothing to poison the "
+        "session -- this passes on the merge base for a reason unrelated "
+        "to the rollback fix. Against round 1 of this PR (which added "
+        "recording without a rollback) this was red; the mutation check "
+        "(removing self.db.session.rollback()) is what proves it is "
+        "load-bearing against the code as it stands now."
+    )
     def test_commit_kb_recovers_the_session_when_recording_fails_under_lock(self, git_kb):
         """A concurrent writer (another index sync, another request) can
         hold the sqlite write lock right when record_commit tries to

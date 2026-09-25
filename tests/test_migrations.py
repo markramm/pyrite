@@ -223,6 +223,13 @@ class TestEntryVersionFilePathMigration:
         ).fetchone()
         assert row["file_path"] == "notes/a.md", row["file_path"]
 
+    @pytest.mark.control(
+        reason="No v25 exists at all on the merge base, so this passes "
+        "there trivially (nothing runs to touch the row); it pins a "
+        "negative case once the fix exists, not a regression it corrects. "
+        "The mutation check (forcing the normalise branch unconditionally) "
+        "is what proves this test is load-bearing once the fix exists."
+    )
     def test_v25_leaves_an_already_relative_path_untouched(self, temp_db):
         mgr = MigrationManager(temp_db)
         mgr.migrate(target_version=24)

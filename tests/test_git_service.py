@@ -290,6 +290,11 @@ class TestGetFileLog:
         assert len(log) == 1
         assert log[0]["file_path"] == name
 
+    @pytest.mark.control(
+        reason="get_file_log's empty-result behaviour for a nonexistent "
+        "file predates #432 and is unchanged by it (converted off a mock "
+        "to a real repo per the coordinator's cold read, not a new claim)."
+    )
     def test_get_file_log_empty(self, tmp_path):
         repo = tmp_path / "repo"
         _init_repo(repo)
@@ -300,6 +305,11 @@ class TestGetFileLog:
         log = GitService.get_file_log(repo, "nonexistent.md")
         assert log == []
 
+    @pytest.mark.control(
+        reason="get_file_log's since_commit range-filtering predates #432 "
+        "and is unchanged by it (converted off a mock to a real repo per "
+        "the coordinator's cold read, not a new claim)."
+    )
     def test_get_file_log_with_since(self, tmp_path):
         repo = tmp_path / "repo"
         _init_repo(repo)
