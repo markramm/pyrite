@@ -352,3 +352,146 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
         finally:
             blocker.rollback()
             blocker.close()
+
+    # -- One owner of the decision -------------------------------------------
+    #
+    # The merge loop decides from the rows it loads: an orphaned ephemeral row
+    # loads private whether or not anything else succeeds. Writing "none" back
+    # to the row is best-effort record-keeping.
+
+    @staticmethod
+    def _fail_statements(monkeypatch, marker: str):
+        """Make every ORM statement whose SQL contains `marker` fail.
+
+        Only statements touching rows that have no policy carry the marker
+        ("default_role IS NULL"); the merge's own SELECT does not, so it
+        still succeeds -- a transient SQLITE_BUSY that hits one statement.
+        """
+        from sqlalchemy.exc import OperationalError
+        from sqlalchemy.orm import Session
+
+        from sqlalchemy import text as sql_text
+
+        real = Session.execute
+
+        def execute(self, statement, *args, **kwargs):
+            if marker in str(statement):
+                # As a real failing statement does: the session has begun its
+                # transaction by the time the error arrives.
+                real(self, sql_text("SELECT 1"))
+                raise OperationalError(str(statement), {}, Exception("database is locked"))
+            return real(self, statement, *args, **kwargs)
+
+        monkeypatch.setattr(Session, "execute", execute)
+
+    def test_kb_loads_private_when_every_policy_statement_fails(self, tmp_path, monkeypatch):
+        """Acceptance 1: the statements that find or fix NULL policies fail;
+        the merge's SELECT succeeds. The KB still loads "none"."""
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        self._fail_statements(monkeypatch, "default_role IS NULL")
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            db.merge_registered_kbs(config)  # must not raise
+            assert config.get_kb("lost").default_role == "none"
+            assert config.get_kb("open-kb").default_role is None
+            assert config.get_kb("root-kb").default_role is None
+        finally:
+            db.close()
+
+    def test_a_failed_write_is_rolled_back(self, tmp_path, monkeypatch):
+        """Acceptance 2 and 4: a write that fails under a lock is rolled back:
+        the session holds no transaction afterwards, so a checkpoint by
+        another connection is not blocked by it."""
+        import sqlite3
+
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        db = PyriteDB(tmp_path / "index.db")
+        blocker = sqlite3.connect(tmp_path / "index.db", timeout=0)
+        blocker.execute("BEGIN EXCLUSIVE")
+        try:
+            db.merge_registered_kbs(config)  # must not raise
+            assert config.get_kb("lost").default_role == "none"
+            assert not db.session.in_transaction()
+            blocker.rollback()
+            busy, _, _ = blocker.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+            assert busy == 0, "a transaction left open by the load blocks the checkpoint"
+        finally:
+            blocker.close()
+            db.close()
+
+    def test_a_second_merge_in_one_process_keeps_the_kb_private(self, tmp_path, monkeypatch):
+        """Acceptance 3: seed_from_config merges again and the merge replaces
+        the cached KB. With the write failing on both merges -- a lock on the
+        first, a failing statement on the second -- the KB stays private."""
+        import sqlite3
+
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            blocker = sqlite3.connect(tmp_path / "index.db", timeout=0)
+            blocker.execute("BEGIN EXCLUSIVE")
+            try:
+                db.merge_registered_kbs(config)
+            finally:
+                blocker.rollback()
+                blocker.close()
+            assert config.get_kb("lost").default_role == "none"
+
+            self._fail_statements(monkeypatch, "default_role IS NULL")
+            db.merge_registered_kbs(config)
+            assert config.get_kb("lost").default_role == "none"
+        finally:
+            db.close()
+
+    def test_listing_shows_the_effective_policy(self, tmp_path, monkeypatch):
+        """Acceptance 5: /api/kbs and /api/kbs/{name} show "none" for such a
+        KB even when the registry row still holds NULL."""
+        cookies = self._orphan(tmp_path, monkeypatch)
+        self._fail_statements(monkeypatch, "default_role IS NULL")
+        app = create_app(config=load_config())
+        admin = TestClient(app, cookies=cookies["admin"])
+
+        listed = {k["name"]: k for k in admin.get("/api/kbs").json()["kbs"]}
+        assert listed["lost"]["default_role"] == "none"
+        assert listed["open-kb"]["default_role"] is None
+        one = admin.get("/api/kbs/lost")
+        assert one.status_code == 200, one.text
+        assert one.json()["default_role"] == "none"
+
+        monkeypatch.undo()
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            row = db.execute_sql("SELECT default_role FROM kb WHERE name = 'lost'")
+        finally:
+            db.close()
+        assert row[0]["default_role"] is None, "the write was meant to fail in this test"
+
+    def test_the_load_leaves_no_transaction_open(self, tmp_path, monkeypatch):
+        """With nothing to record, the merge still ends its read transaction."""
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            db.merge_registered_kbs(config)  # records "none" for 'lost'
+            db.merge_registered_kbs(config)  # nothing left to record
+            assert config.get_kb("lost").default_role == "none"
+            assert not db.session.in_transaction()
+        finally:
+            db.close()
+
+    def test_a_failed_registry_read_is_rolled_back(self, tmp_path, monkeypatch):
+        """The merge's own SELECT failing loads nothing, raises nothing, and
+        leaves no failed transaction behind."""
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        db = PyriteDB(tmp_path / "index.db")
+        try:
+            self._fail_statements(monkeypatch, "FROM kb WHERE source = 'user'")
+            assert db.merge_registered_kbs(config) == 0
+            assert config.get_kb("lost") is None
+            assert not db.session.in_transaction()
+        finally:
+            db.close()

@@ -17,6 +17,19 @@ from ..storage.index import IndexManager
 logger = logging.getLogger(__name__)
 
 
+def _effective_default_role(cfg: KBConfig | None, row_role: str | None) -> str | None:
+    """The policy access checks use: the loaded KB's first, then the registry row's.
+
+    The same precedence as `api.resolve_kb_default_role`. The loaded policy
+    can differ from the row -- an orphaned ephemeral KB loads "none" even
+    when that could not be written back -- and a listing must not show a
+    KB as open that every check treats as private.
+    """
+    if cfg is not None and cfg.default_role is not None:
+        return cfg.default_role
+    return row_role
+
+
 class KBRegistryService:
     """Unified KB registry backed by the DB kb table."""
 
@@ -80,7 +93,7 @@ class KBRegistryService:
                 "entries": r.get("entry_count", 0) or 0,
                 "indexed": bool(r.get("last_indexed")),
                 "last_indexed": r.get("last_indexed"),
-                "default_role": r.get("default_role"),
+                "default_role": _effective_default_role(cfg, r.get("default_role")),
             }
             if type_filter and kb_info["type"] != type_filter:
                 continue
@@ -106,7 +119,7 @@ class KBRegistryService:
             "entries": kb.entry_count or 0,
             "indexed": bool(kb.last_indexed),
             "last_indexed": kb.last_indexed,
-            "default_role": kb.default_role,
+            "default_role": _effective_default_role(cfg, kb.default_role),
         }
 
     def add_kb(
@@ -298,6 +311,13 @@ class KBRegistryService:
             if key in allowed:
                 setattr(kb, key, value)
         self.db.session.commit()
+        if "default_role" in updates:
+            # Access checks read the loaded KB's policy before the row's
+            # (`_effective_default_role`), so the loaded KB takes the new one
+            # too, or this process would go on applying the old policy.
+            cfg = self.config.get_kb(name)
+            if cfg is not None:
+                cfg.default_role = updates["default_role"]
         return self.get_kb(name)  # type: ignore[return-value]
 
     def reindex_kb(self, name: str) -> dict[str, int]:
