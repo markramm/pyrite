@@ -15,7 +15,7 @@ tags: [testing, pytest]
 1. **TestPluginRegistration** — verify name, all capabilities in registry (use `in` not `len ==`)
 2. **TestEntryType** — defaults, to_frontmatter, from_frontmatter, roundtrip_markdown
 3. **TestValidators** — one test per rule (positive + negative), test ignores-other-types
-4. **TestHooks** — direct call + registry.run_hooks tests
+4. **TestHooks** — direct call + `HookRunner(plugin_registry=...)` tests (`PluginRegistry.run_hooks`/`run_hooks_for_kb` are gone -- `registry.get_hooks_for_kb` is a pure lookup, `HookRunner` is what runs hooks, #379)
 5. **TestWorkflows** — each transition allowed/blocked, requires_reason
 6. **TestDBTables** — definition checks + actual SQLite creation in tmpdir
 7. **TestPreset** — structure, directories, validation rules

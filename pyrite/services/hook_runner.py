@@ -136,4 +136,33 @@ class HookRunner:
         for hook_fn in plugin_hooks:
             _run_one(hook_fn, "Plugin")
 
+        # A before_* hook that got dropped at registration for being
+        # non-conforming (wrong arity) must fail dispatch closed for this KB
+        # -- the write is refused, same as if the hook had raised, rather
+        # than silently proceeding with whatever before_* hooks survived the
+        # filter. On dev, a wrong-arity before_save raised TypeError and
+        # aborted the write; #379's registration-time filter made that
+        # fail-open by simply omitting the dropped hook. Checked AFTER the
+        # conforming sibling hooks run (not instead of them) -- a dropped
+        # hook refuses the write, it doesn't also suppress a working sibling
+        # hook's effect. after_* hooks are NOT covered by this check -- a
+        # dropped after_* hook still only warns (the operation already
+        # succeeded; the existing raise-before/swallow-after contract
+        # already treats after_* this way for a hook that raises, so a
+        # dropped one is consistent).
+        if is_before:
+            try:
+                dropped = self._plugin_registry.dropped_before_hooks_for_kb(kb_type)
+            except Exception:
+                dropped = set()
+            if hook_name in dropped:
+                from ..exceptions import PluginError
+
+                raise PluginError(
+                    f"{hook_name} dispatch refused: a plugin's {hook_name} hook for "
+                    f"KB type {kb_type!r} was dropped at registration for not matching "
+                    f"the (entry, ctx) contract. The write cannot proceed without "
+                    f"knowing what that hook would have enforced."
+                )
+
         return entry

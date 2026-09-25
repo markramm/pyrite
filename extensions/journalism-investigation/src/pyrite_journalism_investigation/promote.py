@@ -9,6 +9,23 @@ from pyrite.storage.database import PyriteDB
 PROMOTABLE_STATUSES = {"corroborated", "partially_verified"}
 VALID_EDGE_TYPES = {"ownership", "membership", "funding"}
 
+# Each edge type's own required relationship endpoints (validate_investigation_entry,
+# extensions/journalism-investigation/src/pyrite_journalism_investigation/validators.py,
+# has always declared these -- #424: promote_claim_to_edge never actually set them, a gap
+# invisible until #379 fixed the validator's signature and validation started running for
+# real). The caller (CLI option, MCP argument) supplies these by name in `endpoint_fields`.
+EDGE_TYPE_REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
+    "ownership": ("owner", "asset"),
+    "membership": ("person", "organization"),
+    "funding": ("funder", "recipient"),
+}
+
+
+def _missing_endpoint_fields(edge_type: str, endpoint_fields: dict[str, str]) -> list[str]:
+    """Required fields for `edge_type` that are absent or empty in `endpoint_fields`."""
+    required = EDGE_TYPE_REQUIRED_FIELDS.get(edge_type, ())
+    return [f for f in required if not endpoint_fields.get(f)]
+
 
 def promote_claim_to_edge(
     *,
@@ -17,6 +34,7 @@ def promote_claim_to_edge(
     claim_id: str,
     edge_type: str,
     kb_service: KBService,
+    endpoint_fields: dict[str, str] | None = None,
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Convert a corroborated claim into an edge-entity entry.
@@ -27,11 +45,21 @@ def promote_claim_to_edge(
         claim_id: ID of the claim entry to promote.
         edge_type: Edge type to create (ownership, membership, funding).
         kb_service: KBService for creating the new entry.
+        endpoint_fields: The edge type's own required relationship fields --
+            ``{"owner": ..., "asset": ...}`` for ownership, ``{"funder": ...,
+            "recipient": ...}`` for funding, ``{"person": ..., "organization": ...}``
+            for membership. Validated up front (same check for a real run and a
+            dry run) so a promotion missing them is refused with a clear message
+            rather than surfacing the plugin validator's raw SchemaViolationError,
+            or -- pre-#424 -- silently creating an entry the validator would have
+            refused if it had ever run.
         dry_run: If True, return what would be created without creating.
 
     Returns:
         Result dict with created entry info, or error dict.
     """
+    endpoint_fields = endpoint_fields or {}
+
     # Validate edge_type
     if edge_type not in VALID_EDGE_TYPES:
         return {"error": f"Invalid edge_type: {edge_type}. Must be one of {VALID_EDGE_TYPES}"}
@@ -56,6 +84,19 @@ def promote_claim_to_edge(
             )
         }
 
+    # The edge type's own required relationship fields -- checked here, before
+    # dry_run branches, so a dry run reports the same refusal a real promotion
+    # would hit rather than reporting success for a promotion that would fail.
+    missing = _missing_endpoint_fields(edge_type, endpoint_fields)
+    if missing:
+        required = EDGE_TYPE_REQUIRED_FIELDS[edge_type]
+        return {
+            "error": (
+                f"Promoting to '{edge_type}' requires {', '.join(required)}; "
+                f"missing: {', '.join(missing)}"
+            )
+        }
+
     # Derive edge entry properties from the claim
     claim_title = claim.get("title", "")
     edge_title = f"{claim_title} [{edge_type}]"
@@ -69,6 +110,7 @@ def promote_claim_to_edge(
         "edge_type": edge_type,
         "importance": importance,
         "sourced_from": claim_id,
+        **endpoint_fields,
     }
 
     if dry_run:
@@ -91,6 +133,7 @@ def promote_claim_to_edge(
             links=[
                 {"target": claim_id, "relation": "sourced_from"},
             ],
+            **endpoint_fields,
         )
         return {
             "created": edge_id,

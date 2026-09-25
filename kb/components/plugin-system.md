@@ -23,7 +23,28 @@ Lazy-loaded plugin system using Python entry points for discovery and a structur
 2. Each plugin class is instantiated and `set_context()` injects shared config/db
 3. Registry exposes `get_all_*()` aggregation methods per capability axis
 4. Dict capabilities warn on key collisions, list capabilities extend, dict-of-list merge by key
-5. `run_hooks_for_kb()` filters hooks by KB type for domain-scoped plugins
+5. `get_hooks_for_kb()`/`get_validators_for_kb()` filter hooks/validators by KB type for domain-scoped plugins — pure lookups, not runners
+
+## Validator and hook contract (checked once at registration)
+
+- **Validators** bind `(entry_type: str, fields: dict, ctx: dict) -> list[dict]`.
+  **Hooks** bind `(entry, ctx)`. There is exactly one contract each; no 2-argument
+  validator fallback exists.
+- The signature is checked with `inspect.signature(...).bind` the first time a
+  plugin's validators/hooks are needed (`PluginRegistry._conformance_for`),
+  and the result — including which `before_*` hook points had a non-conforming
+  callable dropped — is cached for the registry's lifetime, not re-checked
+  (and re-warned) on every call.
+- `run_validators(kb_type, entry_type, fields, ctx)` is the single call site
+  both `schema/kb_schema.py` and `storage/index.py` use to run plugin
+  validators; it degrades per-validator (one raising validator does not
+  suppress the rest) and drops any non-dict item a validator returns.
+- **`HookRunner`** (`pyrite/services/hook_runner.py`), not the registry, runs
+  hooks — one raise-before/swallow-after contract for both core and plugin
+  hooks. A dropped `before_*` hook fails that KB's `before_*` dispatch
+  closed (the write is refused, same as a raising hook); a dropped `after_*`
+  hook only warns. `PluginRegistry.run_hooks`/`run_hooks_for_kb` (which used
+  to run hooks directly) are gone.
 
 ## Capabilities
 

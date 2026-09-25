@@ -310,3 +310,62 @@ class TestEvidenceChainRoundTrip:
         assert "error" not in chain
         assert chain["claim"]["id"] == claim_result["created"]
         assert len(chain["gaps"]) >= 1  # evidence entry doesn't exist
+
+
+class TestPromoteClaimMCPTool:
+    """#424: investigation_promote_claim's endpoint_fields argument."""
+
+    def _create_corroborated_claim(self, setup):
+        # investigation_create_claim always hard-codes claim_status="unverified"
+        # (a claim earns "corroborated" through a separate review step, out of
+        # scope here); create the claim directly, the way test_promote_claim.py
+        # does, to get a promotable one.
+        setup["kb_service"].create_entry(
+            kb_name="test",
+            entry_id="x-owns-y",
+            title="X owns Y",
+            entry_type="claim",
+            body="Test claim body.",
+            assertion="Entity X owns Entity Y",
+            claim_status="corroborated",
+            confidence="high",
+            importance=7,
+        )
+        return "x-owns-y"
+
+    def test_promote_claim_without_endpoint_fields_is_refused(self, setup):
+        claim_id = self._create_corroborated_claim(setup)
+        promote = setup["write"]["investigation_promote_claim"]["handler"]
+
+        result = promote({"claim_id": claim_id, "edge_type": "ownership", "kb_name": "test"})
+
+        assert "error" in result
+        assert "owner" in result["error"] and "asset" in result["error"]
+
+    def test_promote_claim_with_endpoint_fields_succeeds(self, setup):
+        claim_id = self._create_corroborated_claim(setup)
+        promote = setup["write"]["investigation_promote_claim"]["handler"]
+
+        result = promote(
+            {
+                "claim_id": claim_id,
+                "edge_type": "ownership",
+                "kb_name": "test",
+                "endpoint_fields": {"owner": "[[entity-x]]", "asset": "[[entity-y]]"},
+            }
+        )
+
+        assert "error" not in result
+        assert "created" in result
+
+    def test_promote_claim_dry_run_reports_the_same_refusal(self, setup):
+        """dry_run without endpoint_fields must report the error, not fabricate success."""
+        claim_id = self._create_corroborated_claim(setup)
+        promote = setup["write"]["investigation_promote_claim"]["handler"]
+
+        result = promote(
+            {"claim_id": claim_id, "edge_type": "ownership", "kb_name": "test", "dry_run": True}
+        )
+
+        assert "error" in result
+        assert "owner" in result["error"] and "asset" in result["error"]

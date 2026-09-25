@@ -53,16 +53,6 @@ def _create_claim(kb_service, claim_id, title, claim_status="corroborated", impo
 
 
 class TestPromoteCorroboratedClaim:
-    @pytest.mark.xfail(
-        reason=(
-            "promote_claim_to_edge never populates owner/asset (#424): the "
-            "journalism-investigation validator's `ownership` required-field "
-            "rule was on the old 1-arg signature (#379/#376) and never ran "
-            "until now, so this gap was invisible until the validator "
-            "contract was fixed."
-        ),
-        strict=True,
-    )
     def test_promote_corroborated_claim(self, setup):
         """Creates claim with status corroborated, promotes it, verifies edge-entity created."""
         db = setup["db"]
@@ -76,6 +66,7 @@ class TestPromoteCorroboratedClaim:
             claim_id="claim-ownership-x-y",
             edge_type="ownership",
             kb_service=kb_service,
+            endpoint_fields={"owner": "[[entity-x]]", "asset": "[[entity-y]]"},
         )
 
         assert "error" not in result
@@ -86,14 +77,10 @@ class TestPromoteCorroboratedClaim:
         edge_entry = db.get_entry(result["created"], "test")
         assert edge_entry is not None
         assert edge_entry["entry_type"] == "ownership"
+        meta = edge_entry.get("metadata", {})
+        assert meta.get("owner") == "[[entity-x]]"
+        assert meta.get("asset") == "[[entity-y]]"
 
-    @pytest.mark.xfail(
-        reason=(
-            "promote_claim_to_edge never populates funder/recipient (#424): "
-            "same root cause as test_promote_corroborated_claim above."
-        ),
-        strict=True,
-    )
     def test_promote_partially_verified_claim(self, setup):
         """partially_verified claims should also be promotable."""
         db = setup["db"]
@@ -112,10 +99,50 @@ class TestPromoteCorroboratedClaim:
             claim_id="claim-funding-a-b",
             edge_type="funding",
             kb_service=kb_service,
+            endpoint_fields={"funder": "[[entity-a]]", "recipient": "[[entity-b]]"},
         )
 
         assert "error" not in result
         assert result["edge_type"] == "funding"
+
+    def test_promote_ownership_missing_endpoint_fields_is_an_error(self, setup):
+        """Omitting owner/asset must be a clean error, not a raw SchemaViolationError."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-ownership-missing", "X owns Y")
+
+        result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-ownership-missing",
+            edge_type="ownership",
+            kb_service=kb_service,
+        )
+
+        assert "error" in result
+        assert "owner" in result["error"] and "asset" in result["error"]
+        # Nothing was created
+        assert db.get_entry("x-owns-y-ownership", "test") is None
+
+    def test_promote_ownership_partial_endpoint_fields_is_an_error(self, setup):
+        """Only one of owner/asset supplied must still be refused, naming the missing one."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-ownership-partial", "X owns Y")
+
+        result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-ownership-partial",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields={"owner": "[[entity-x]]"},
+        )
+
+        assert "error" in result
+        assert "asset" in result["error"]
 
 
 class TestRejectUnverifiedClaim:
@@ -182,7 +209,7 @@ class TestRejectUnverifiedClaim:
 
 class TestDryRunNoCreation:
     def test_dry_run_no_creation(self, setup):
-        """dry_run returns proposed entry but doesn't create."""
+        """dry_run returns proposed entry but doesn't create, when endpoint fields are valid."""
         db = setup["db"]
         kb_service = setup["kb_service"]
 
@@ -194,6 +221,7 @@ class TestDryRunNoCreation:
             claim_id="claim-dry-run",
             edge_type="ownership",
             kb_service=kb_service,
+            endpoint_fields={"owner": "[[entity-x]]", "asset": "[[entity-y]]"},
             dry_run=True,
         )
 
@@ -206,17 +234,29 @@ class TestDryRunNoCreation:
         edge_entry = db.get_entry(proposed_id, "test")
         assert edge_entry is None
 
+    def test_dry_run_still_validates_missing_endpoint_fields(self, setup):
+        """dry_run must run the same validation as a real promotion (coordinator note 1):
+        a dry run that would fail for real must report the failure, not silent success."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-dry-run-bad", "Dry run claim missing fields")
+
+        result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-dry-run-bad",
+            edge_type="ownership",
+            kb_service=kb_service,
+            dry_run=True,
+        )
+
+        assert "error" in result
+        assert "owner" in result["error"] and "asset" in result["error"]
+        assert result.get("dry_run") is not True or "proposed" not in result
+
 
 class TestSourcedFromLink:
-    @pytest.mark.xfail(
-        reason=(
-            "promote_claim_to_edge never populates person/organization "
-            "(#424): same root cause as TestPromoteCorroboratedClaim above "
-            "-- edge_type='membership' hits the same missing-required-fields "
-            "gap."
-        ),
-        strict=True,
-    )
     def test_sourced_from_link(self, setup):
         """Promoted edge-entity has sourced_from link to original claim."""
         db = setup["db"]
@@ -230,6 +270,7 @@ class TestSourcedFromLink:
             claim_id="claim-link-test",
             edge_type="membership",
             kb_service=kb_service,
+            endpoint_fields={"person": "[[person-x]]", "organization": "[[org-y]]"},
         )
 
         assert "error" not in result
