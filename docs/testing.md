@@ -49,10 +49,10 @@ write to your real config. `HF_HOME` still points at your model cache.
 A PR whose only non-test changes are changelog fragments, `kb/` entries or
 Markdown has nothing to verify. Those files are still left out of the run
 without the fix, since a test may read them. A pytest run with the fix that
-collects no test file at all (a broken conftest or plugin) is the check
-failing: exit 2, with pytest's last lines in the summary. A file that collects
-but runs nothing, such as one that skips itself when an optional dependency
-is missing, makes its tests *n/a* instead.
+collects no test file at all (a conftest or plugin that breaks before
+collection) is the check failing: exit 2, with pytest's last lines in the
+summary. A file that collects but runs nothing, such as one that skips itself
+when an optional dependency is missing, makes its tests *n/a* instead.
 
 ### Verdicts
 
@@ -112,6 +112,11 @@ These are not fixed; weigh the line with them in mind.
 - **One scratch `HOME` serves both runs**, so the run without the fix can
   leave files the run with the fix sees. It also hides `~/.gitconfig` and the
   Playwright browser cache, so tests that need them are *n/a*.
+- **A conftest or plugin hook that crashes after collection reads as *n/a*,
+  not exit 2**, and so does a new test deselected by the default `-m` filter
+  (`slow`, `e2e`). Both show "not collected", which isn't the real reason.
+  Either way the line claims nothing, so a `fix:` PR with it still goes back
+  for having no red test (#409).
 - **Stale-tree cleanup assumes absolute `gitdir` paths.** With
   `worktree.useRelativePaths` set, a live run's registration could be removed.
   The cleanup also ignores `git worktree lock`.
