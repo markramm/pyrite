@@ -84,7 +84,7 @@ import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 RED = "red without the fix"
@@ -110,8 +110,11 @@ _WEAK_RED = re.compile(
     r"(?:ImportError|ModuleNotFoundError): "
     r"|AttributeError: (?:module '[^']+'|<module [^>]+>|'module' object at \S+|<class '[^']+'>)"
     r" (?:has no attribute|does not have the attribute) "
-    r"|AttributeError: [A-Za-z_]\w*$"
 )
+# monkeypatch.delattr reports only the bare name -- as does any __getattr__ that
+# raises AttributeError(name). It is weak only when the traceback's failing line
+# (pytest hides monkeypatch's own frames) is the delattr call.
+_BARE_NAME = re.compile(r"AttributeError: [A-Za-z_]\w*$")
 # A fixture's error: `failed on setup with "AttributeError: ..."`.
 _PHASE = re.compile(r'failed on (?:setup|teardown) with "(.*)"\Z', re.DOTALL)
 
@@ -196,7 +199,15 @@ def touched_tests(base_src: str | None, head_src: str) -> set[tuple[str, ...]]:
     return {key for key, dump in head.items() if base.get(key) != dump}
 
 
-def classify(head: Outcome, reverted: Outcome | None, *, collection_error: bool) -> tuple[str, str]:
+def _raised_by_delattr(text: str) -> bool:
+    """Whether the last `>` (failing) line of a pytest traceback calls .delattr(."""
+    failing = [line for line in text.splitlines() if line.startswith(">")]
+    return bool(failing) and ".delattr(" in failing[-1]
+
+
+def classify(
+    head: Outcome, reverted: Outcome | None, *, collection_error: bool, text: str = ""
+) -> tuple[str, str]:
     """(label, detail) for one test, from its run with the fix and without it."""
     if head[0] != "passed":
         return NOT_VERIFIABLE, f"{head[0]} with the fix"
@@ -210,7 +221,8 @@ def classify(head: Outcome, reverted: Outcome | None, *, collection_error: bool)
     if state == "skipped":
         return NOT_VERIFIABLE, "skipped without the fix"
     first = message.strip().splitlines()[0] if message.strip() else state
-    if _WEAK_RED.match(exception_line(message)):
+    line = exception_line(message)
+    if _WEAK_RED.match(line) or (_BARE_NAME.match(line) and _raised_by_delattr(text)):
         return RED_IMPORT, first
     return RED, first
 
@@ -225,6 +237,7 @@ class Report:
     outcomes: dict[str, Outcome]  # node id -> outcome
     keys: dict[str, tuple[str, ...]]  # node id -> (class..., function)
     collection_error: bool
+    texts: dict[str, str] = field(default_factory=dict)  # node id -> the failure's traceback
 
 
 def read_junit(path: Path, test_file: str) -> Report:
@@ -233,6 +246,7 @@ def read_junit(path: Path, test_file: str) -> Report:
     stem = PurePosixPath(test_file).stem
     outcomes: dict[str, Outcome] = {}
     keys: dict[str, tuple[str, ...]] = {}
+    texts: dict[str, str] = {}
     collection_error = False
     for case in ET.parse(path).getroot().iter("testcase"):
         classname, name = case.get("classname", ""), case.get("name", "")
@@ -253,10 +267,11 @@ def read_junit(path: Path, test_file: str) -> Report:
             if el is not None:
                 state = {"failure": "failed"}.get(tag, tag)
                 message = el.get("message", "") or (el.text or "")
+                texts[nodeid] = el.text or ""
                 break
         outcomes[nodeid] = (state, message)
         keys[nodeid] = (*classes, name.split("[", 1)[0])
-    return Report(outcomes, keys, collection_error)
+    return Report(outcomes, keys, collection_error, texts)
 
 
 # ---------------------------------------------------------------------------
@@ -715,6 +730,7 @@ def verify_file(
             outcome,
             reverted_run.outcomes.get(nodeid),
             collection_error=reverted_run.collection_error,
+            text=reverted_run.texts.get(nodeid, ""),
         )
         rows.append(Row(nodeid, test_file, label, detail, head.keys[nodeid] in touched))
     return rows

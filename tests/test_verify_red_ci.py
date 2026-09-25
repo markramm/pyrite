@@ -309,6 +309,15 @@ def test_delattr_string_target(monkeypatch):
     monkeypatch.delattr("json.nope_helper")
 
 
+class Lazy:
+    def __getattr__(self, name):
+        raise AttributeError(name)
+
+
+def test_getattr_raising_the_bare_name():
+    Lazy().title
+
+
 def test_assertion_quoting_an_import_error():
     assert "ImportError: cannot import name 'x'" == "fixed"
 
@@ -319,7 +328,7 @@ def test_assertion_message_with_an_attribute_error_line():
 
 
 @pytest.fixture(scope="module")
-def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
+def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[tuple[str, str], str]]:
     """The failure messages the job actually parses: a real pytest run, its JUnit report."""
     d = tmp_path_factory.mktemp("attr")
     (d / "pytest.ini").write_text("[pytest]\npythonpath = .\n")
@@ -344,7 +353,10 @@ def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
         capture_output=True,
     )
     report = vr.read_junit(d / "r.xml", "test_mp.py")
-    return {nodeid.split("::")[-1]: outcome for nodeid, outcome in report.outcomes.items()}
+    return {
+        nodeid.split("::")[-1]: (outcome, report.texts.get(nodeid, ""))
+        for nodeid, outcome in report.outcomes.items()
+    }
 
 
 @pytest.mark.parametrize(
@@ -367,6 +379,8 @@ def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
         ("test_delattr_module", True),
         ("test_delattr_class", True),
         ("test_delattr_string_target", True),
+        # the same bare "AttributeError: title" from an object's __getattr__: behaviour
+        ("test_getattr_raising_the_bare_name", False),
         # the exception is AssertionError: text quoted in its message is not the error
         ("test_assertion_quoting_an_import_error", False),
         ("test_assertion_message_with_an_attribute_error_line", False),
@@ -375,9 +389,9 @@ def junit_attribute_errors(vr, tmp_path_factory) -> dict[str, tuple[str, str]]:
 def test_attribute_errors_as_the_junit_report_carries_them(
     vr, junit_attribute_errors, test: str, weak: bool
 ) -> None:
-    outcome = junit_attribute_errors[test]
+    outcome, text = junit_attribute_errors[test]
     assert outcome[0] in ("failed", "error"), outcome
-    label, _ = vr.classify(("passed", ""), outcome, collection_error=False)
+    label, _ = vr.classify(("passed", ""), outcome, collection_error=False, text=text)
     assert label == (vr.RED_IMPORT if weak else vr.RED), outcome
 
 
