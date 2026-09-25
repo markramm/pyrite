@@ -113,6 +113,7 @@ class TestCentralExceptionHandler:
             FrontmatterError,
             KBNotFoundError,
             KBProtectedError,
+            LastAdminError,
             PluginError,
             PyriteError,
             StorageError,
@@ -128,23 +129,13 @@ class TestCentralExceptionHandler:
             "kb_not_found": KBNotFoundError("no kb here"),
             "protected": KBProtectedError("kb is protected"),
             "validation": ValidationError("bad field"),
+            "last_admin": LastAdminError("cannot demote the last admin"),
             "frontmatter": FrontmatterError("bad yaml"),
             "config": ConfigError("dup kb"),
             "plugin": PluginError("missing sdk"),
             "storage": StorageError("disk gone"),
             "base": PyriteError("generic domain error"),
         }
-        try:
-            # #416: imported inside a try so a checkout that has not yet
-            # added LastAdminError only loses the "last_admin" probe route
-            # (and its one parametrized case, which 404s instead of
-            # exercising the fixture) rather than failing this fixture --
-            # and every other case that shares it -- to construct at all.
-            from pyrite.exceptions import LastAdminError
-
-            raisers["last_admin"] = LastAdminError("cannot demote the last admin")
-        except ImportError:
-            pass
         for name, exc in raisers.items():
 
             def _route(_exc=exc):
