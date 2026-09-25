@@ -27,9 +27,10 @@ MAX_SEARCH_QUERY_LENGTH = 1000
 #: text; anything that doesn't match one of these is not the caller's query
 #: being bad.
 _QUERY_SYNTAX_ERROR_MARKERS = (
-    "no such column:",
-    "fts5: syntax error",
+    "fts5:",  # "fts5: syntax error near ...", "fts5: parser stack overflow"
     "unterminated string",
+    "unknown special query",
+    "expected integer",  # NEAR(a b, <not an int>)
 )
 
 
@@ -43,6 +44,11 @@ def _looks_like_query_syntax_error(message: str) -> bool:
     the caller did nothing to cause.
     """
     lowered = message.lower()
+    if lowered.startswith("no such column:"):
+        # FTS5 reports a `col:term` filter unqualified ("no such column: a");
+        # a qualified name ("e.fips") is the SQL itself missing a column --
+        # schema drift, not the caller's query.
+        return "." not in lowered.split(":", 1)[1]
     return any(marker in lowered for marker in _QUERY_SYNTAX_ERROR_MARKERS)
 
 
