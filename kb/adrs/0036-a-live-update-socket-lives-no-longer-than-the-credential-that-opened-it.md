@@ -45,9 +45,8 @@ scoped afresh.
 
 The guarantee covers **per-user credential changes made in the server process**:
 after one, no event reaches a socket opened with the old credential. It does not
-yet cover KB-wide access changes (a KB's `default_role` narrowed, a KB made
-private or unregistered) or changes made from another process; those are
-tracked separately (see Consequences).
+yet cover KB-wide access changes or changes made from another process; those
+are tracked separately.
 
 1. **Each socket records its credential.** `resolve_socket_scope` returns a
    `SocketScope`: the readable set, and for a session-authenticated socket the
@@ -118,11 +117,9 @@ changes a credential responsible for remembering the sockets.
   grant change from another process takes effect on the next reconnect.
   Cross-process delivery is a follow-up if Pyrite ever runs more than one
   server process per database.
-- **Not yet covered, tracked separately:** scope changes that are not per-user
-  — a KB's `default_role` edit, a KB made private, a KB removed (with its
-  grants) — do not close sockets. Each would publish a change naming a KB
-  rather than a user, and every socket whose readable set contains it would be
-  closed.
+- **Not yet covered, tracked separately:** KB-wide access changes. The
+  mechanism extends to them by publishing a change that names a KB rather than
+  a user.
 - **API-key sockets are not revocable.** A socket opened with an operator API
   key (header or `api_key` query parameter) carries no user or session, so no
   `CredentialChange` names it. Keys come from configuration, and rotating a

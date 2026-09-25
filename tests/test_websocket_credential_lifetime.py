@@ -574,18 +574,6 @@ class TestFanOut:
 class TestFixRound:
     """The #433 cold read's follow-ups."""
 
-    def test_setting_the_same_role_closes_nothing(self, env):
-        app, tokens, users = env["app"], env["tokens"], env["users"]
-        with TestClient(app) as c:
-            with c.websocket_connect("/ws", headers=_cookie(tokens["alice"])) as alice:
-                r = c.put(
-                    f"/auth/users/{users['alice']}/role",
-                    json={"role": "write"},  # alice is already write
-                    headers=_cookie(tokens["admin-user"]),
-                )
-                assert r.status_code == 200, r.text
-                _assert_open(alice, c)
-
     def test_creating_an_ephemeral_kb_closes_the_creators_socket(self, env):
         """Its admin grant is a grant write like any other."""
         app, tokens = env["app"], env["tokens"]

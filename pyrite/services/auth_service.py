@@ -576,10 +576,6 @@ class AuthService:
         """
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
-        # Read first so an unchanged role closes no sockets (ADR-0036).
-        before = self.db.execute_sql(
-            "SELECT role FROM local_user WHERE id = :user_id", {"user_id": user_id}
-        )
         # Atomic only because the auth tables live in SQLite: SQLite
         # serializes writers, so the COUNT(*) subquery and the UPDATE it
         # gates always see a consistent snapshot within this one statement.
@@ -598,8 +594,10 @@ class AuthService:
             {"role": role, "now": datetime.now(UTC).isoformat(), "user_id": user_id},
         )
         if rowcount > 0:
-            if not before or before[0]["role"] != role:
-                publish(CredentialChange(user_id=user_id))
+            # Publish on every role write, even an unchanged one: a separate
+            # read to skip that case races a concurrent change and can miss a
+            # downgrade (#433 delta cold read). An extra reconnect is the cost.
+            publish(CredentialChange(user_id=user_id))
             return True
         exists = self.db.execute_sql(
             "SELECT 1 FROM local_user WHERE id = :user_id", {"user_id": user_id}
