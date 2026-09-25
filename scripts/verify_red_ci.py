@@ -396,14 +396,21 @@ def plan(paths: list[str], mb: str) -> list[Target]:
     left out: there is nothing to revert.
     """
     _check_no_run_in_flight()
-    staged = subprocess.run(["git", "diff", "--cached", "--quiet", "HEAD", "--", *paths])
-    if staged.returncode != 0:
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--quiet", "HEAD", "--", *paths], capture_output=True
+    )
+    if staged.returncode not in (0, 1):  # 1 is "differs"; anything else is git failing
+        raise InfraError(f"git diff --cached: {staged.stderr.decode(errors='replace').strip()}")
+    if staged.returncode == 1:
         raise InfraError(
             f"{', '.join(paths)} have uncommitted changes (in the index); commit them first"
         )
     targets = []
     for path in paths:
         head, base = _blob_id("HEAD", path), _blob_id(mb, path)
+        if Path(path).is_symlink():
+            # The revert and the restore write regular files: the link would not survive.
+            raise InfraError(f"{path} is a symlink; verify-red reverts regular files only")
         try:
             disk = _read(path)
             mode = Path(path).stat().st_mode & 0o7777 if disk is not None else 0o644

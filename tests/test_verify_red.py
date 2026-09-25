@@ -438,3 +438,26 @@ def test_contributing_names_what_the_restore_covers_and_what_it_cannot() -> None
     assert "however the run ends" not in para
     for covered in ("SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGKILL"):
         assert covered in para, covered
+
+
+def test_a_symlinked_impl_file_is_refused_not_replaced(repo: Path) -> None:
+    # Same bytes as HEAD through the link, but the revert would write a regular
+    # file in its place and the restore would never make the link again.
+    (repo / "elsewhere.py").write_text(IMPL_FIXED)
+    (repo / "impl.py").unlink()
+    (repo / "impl.py").symlink_to("elsewhere.py")
+    result = run(repo, "test_impl.py::test_add", "impl.py")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "symlink" in result.stderr
+    assert (repo / "impl.py").is_symlink()
+
+
+def test_a_git_error_in_the_index_check_is_not_reported_as_staged(
+    repo: Path, tmp_path: Path
+) -> None:
+    outside = tmp_path / "outside.py"
+    outside.write_text("x = 1\n")
+    result = run(repo, "test_impl.py::test_add", "impl.py", "../outside.py")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "in the index" not in result.stderr
+    assert "outside repository" in result.stderr, result.stderr
