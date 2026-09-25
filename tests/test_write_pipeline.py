@@ -523,7 +523,15 @@ def test_rest_create_accepts_the_web_forms_default_payload_in_pyrites_own_kb(sof
 
         resp = client.post("/api/entries", json={**form, "allow_undeclared": True})
         assert resp.status_code == 200, resp.text
-        assert len(list(software_env["kb_path"].rglob("from-the-form.md"))) == 1
+        # Not a hardcoded filename: this KB's `note` -> most-derived-NoteEntry-
+        # subtype resolution (#468, filed while adding #391's file_pattern
+        # support) can give the entry a plugin type with its own file_pattern,
+        # so its filename is not necessarily `<id>.md`. The write succeeding
+        # and landing *some* file for the returned id is what this test pins.
+        entry_id = resp.json()["id"]
+        assert any(entry_id in p.name for p in software_env["kb_path"].rglob("*.md")), (
+            f"no file for {entry_id!r} under {software_env['kb_path']}"
+        )
     finally:
         close()
 

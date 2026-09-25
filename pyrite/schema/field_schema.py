@@ -175,24 +175,73 @@ class TypeSchema:
           - ``{date}`` — entry date field (YYYY-MM-DD)
           - ``{title}`` — slugified title
           - ``{type}`` — entry type
+          - any other ``{field}`` — the entry's own field of that name (a
+            dataclass attribute, falling back to ``entry.metadata[field]``),
+            with an optional Python format spec, e.g. ``{adr_number:04d}``
+            (#391 — the software-kb ``adr`` type keeps its ``NNNN-slug.md``
+            convention through ``KBService.create`` this way).
+
+        A placeholder naming a field the entry does not have is refused
+        (:class:`~pyrite.exceptions.ValidationError`), not silently dropped —
+        an ADR created without its number must not land at a filename nobody
+        can find. The resolved filename is also refused if it would escape
+        the type's folder (a path separator or ``..`` from a field's own
+        value, since only the FIXED placeholders above are slugified).
 
         Example: ``file_pattern: "{date}--{slug}.md"``
         """
         if not self.file_pattern:
             return None
+        from ..exceptions import ValidationError
         from ..schema import generate_entry_id
 
-        replacements = {
+        fixed = {
             "id": entry.id,
             "slug": entry.id,
             "date": getattr(entry, "date", "") or "",
             "title": generate_entry_id(entry.title),
             "type": entry.entry_type,
         }
+
+        class _FieldLookup(dict):
+            """Resolves an unknown key from the entry itself on first use.
+
+            ``str.format_map`` calls ``__getitem__`` once per placeholder, so
+            this is where a missing field raises, and it sees the raw value
+            *before* any format-spec conversion (e.g. `:04d`) is applied.
+            """
+
+            def __missing__(self, key: str) -> Any:
+                if hasattr(entry, key):
+                    value = getattr(entry, key)
+                else:
+                    meta = getattr(entry, "metadata", None) or {}
+                    if key not in meta:
+                        raise ValidationError(
+                            f"file_pattern {self_pattern!r} names field {key!r}, which "
+                            f"entry {entry.id!r} (type {entry.entry_type!r}) does not have"
+                        ) from None
+                    value = meta[key]
+                self[key] = value
+                return value
+
+        self_pattern = self.file_pattern
+        lookup = _FieldLookup(fixed)
         try:
-            return self.file_pattern.format(**replacements)
-        except (KeyError, IndexError):
-            return None
+            result = self.file_pattern.format_map(lookup)
+        except (IndexError, AttributeError) as e:
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} could not be resolved for entry "
+                f"{entry.id!r}: {e}"
+            ) from e
+
+        if "/" in result or "\\" in result or ".." in result:
+            raise ValidationError(
+                f"file_pattern {self.file_pattern!r} resolved to {result!r} for entry "
+                f"{entry.id!r}, which would escape the type's folder (a path separator "
+                "or '..' in a field's value); refusing to write it"
+            )
+        return result
 
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {"description": self.description}

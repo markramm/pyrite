@@ -1917,238 +1917,188 @@ class TestFlowToolRegistration:
 # =========================================================================
 
 
-class TestNewAdrCreatesFile:
-    def test_creates_adr_file(self):
-        """sw new-adr should create the actual markdown file."""
+class TestNewAdrGoesThroughPipeline:
+    """`sw new-adr` used to write the file directly with `file_path.write_text`
+    (cli.py:239 before this fix): no exists check (an existing ADR number or
+    id was silently overwritten), no validators, no before/after-save hooks,
+    nothing indexed until a separate `pyrite index sync`, and a missing KB
+    silently fell back to writing `./adrs` under the cwd. These tests pin the
+    pipeline instead: `KBService.create_entry`, the software-kb `adr` type's
+    `file_pattern` keeping the `NNNN-slug.md` convention (#391).
+    """
+
+    @pytest.fixture
+    def env(self, tmp_path):
+        import yaml
+
+        from pyrite.config import KBConfig, PyriteConfig, Settings
+        from pyrite.storage.database import PyriteDB
+        from pyrite.storage.index import IndexManager
+
+        kb_path = tmp_path / "sw-kb"
+        kb_path.mkdir()
+        (kb_path / "kb.yaml").write_text(yaml.safe_dump(SOFTWARE_KB_PRESET, sort_keys=False))
+        db_path = tmp_path / "index.db"
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="sw-kb", path=kb_path, kb_type="software")],
+            settings=Settings(index_path=db_path, auto_embed=False),
+        )
+        db = PyriteDB(db_path)
+        IndexManager(db, config).index_all()
+        db.close()
+        return {"config": config, "kb_path": kb_path, "db_path": db_path}
+
+    def _run(self, env, args):
         from unittest.mock import patch
 
         from pyrite_software_kb.cli import sw_app
         from typer.testing import CliRunner
 
         runner = CliRunner()
+        with patch("pyrite_software_kb.cli.load_config", return_value=env["config"]):
+            return runner.invoke(sw_app, args)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kb_path = Path(tmpdir)
-            adrs_dir = kb_path / "adrs"
-            adrs_dir.mkdir()
+    def test_creates_adr_file_with_the_conventional_filename(self, env):
+        result = self._run(env, ["new-adr", "Use PostgreSQL", "--kb", "sw-kb"])
+        assert result.exit_code == 0, result.output
 
-            db = _make_test_db(tmpdir)
-            try:
-                # Mock load_config to return a config with our test KB path
-                mock_config = type(
-                    "C",
-                    (),
-                    {
-                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                        "get_kb": lambda self, name: (
-                            type("KB", (), {"path": kb_path})() if name else None
-                        ),
-                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                    },
-                )()
+        expected_file = env["kb_path"] / "adrs" / "0001-use-postgresql.md"
+        assert expected_file.exists(), f"Expected {expected_file} to be created"
 
-                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
-                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
-                        result = runner.invoke(
-                            sw_app, ["new-adr", "Use PostgreSQL", "--kb", "test"]
-                        )
+        content = expected_file.read_text()
+        assert "type: adr" in content
+        assert "adr_number: 1" in content
+        assert "id: adr-0001" in content
+        assert "status: proposed" in content
+        assert "## Context" in content
+        assert "## Decision" in content
+        assert "## Consequences" in content
 
-                assert result.exit_code == 0
-                # Should have created the file
-                expected_file = adrs_dir / "0001-use-postgresql.md"
-                assert expected_file.exists(), f"Expected {expected_file} to be created"
-
-                content = expected_file.read_text()
-                assert "type: adr" in content
-                assert "adr_number: 1" in content
-                assert "status: proposed" in content
-                assert "title:" in content
-                assert "## Context" in content
-                assert "## Decision" in content
-                assert "## Consequences" in content
-            finally:
-                db.close()
-
-    def test_title_punctuation_never_reaches_the_filename(self):
+    def test_title_punctuation_never_reaches_the_filename(self, env):
         """`/` and `:` in a title used to land in the ADR filename (#17):
         `adrs/0001-use-a/b-testing.md` crashed with FileNotFoundError, and a
-        colon is illegal on Windows. The filename uses the shared slug."""
-        from unittest.mock import patch
+        colon is illegal on Windows. `{title}` is the shared, slugified
+        placeholder, so this still holds through `file_pattern`."""
+        result = self._run(env, ["new-adr", "Use A/B testing: now, or later?", "--kb", "sw-kb"])
+        assert result.exit_code == 0, result.output
+        created = sorted(p.name for p in (env["kb_path"] / "adrs").glob("*.md"))
+        assert created == ["0001-use-a-b-testing-now-or-later.md"], created
+        assert not (env["kb_path"] / "adrs" / "0001-use-a").exists()
 
-        from pyrite_software_kb.cli import sw_app
-        from typer.testing import CliRunner
+    def test_new_adr_is_indexed_immediately(self, env):
+        result = self._run(env, ["new-adr", "Use Redis", "--kb", "sw-kb"])
+        assert result.exit_code == 0, result.output
 
-        runner = CliRunner()
+        from pyrite.storage.database import PyriteDB
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kb_path = Path(tmpdir)
-            (kb_path / "adrs").mkdir()
-            db = _make_test_db(tmpdir)
-            try:
-                mock_config = type(
-                    "C",
-                    (),
-                    {
-                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                        "get_kb": lambda self, name: (
-                            type("KB", (), {"path": kb_path})() if name else None
-                        ),
-                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                    },
-                )()
-                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
-                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
-                        result = runner.invoke(
-                            sw_app,
-                            ["new-adr", "Use A/B testing: now, or later?", "--kb", "test"],
-                        )
-                assert result.exit_code == 0, result.output
-                created = sorted(p.name for p in (kb_path / "adrs").glob("*.md"))
-                assert created == ["0001-use-a-b-testing-now-or-later.md"], created
-                assert not (kb_path / "adrs" / "0001-use-a").exists()
-            finally:
-                db.close()
+        db = PyriteDB(env["db_path"])
+        try:
+            row = db.get_entry("adr-0001", "sw-kb")
+            assert row is not None, "a new ADR should be indexed without `index sync`"
+        finally:
+            db.close()
 
-    def test_auto_increments_number(self):
-        """sw new-adr should pick the next sequential number."""
-        from unittest.mock import patch
+    def test_new_adr_runs_before_and_after_save_hooks(self, env):
+        from pyrite.plugins.registry import get_registry
 
-        from pyrite_software_kb.cli import sw_app
-        from typer.testing import CliRunner
+        before_calls = []
+        after_calls = []
 
-        runner = CliRunner()
+        def before_save(entry, ctx):
+            before_calls.append(entry.id)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kb_path = Path(tmpdir)
-            adrs_dir = kb_path / "adrs"
-            adrs_dir.mkdir()
+        def after_save(entry, ctx):
+            after_calls.append(entry.id)
 
-            db = _make_test_db(
-                tmpdir,
-                entries=[
-                    {
-                        "id": "adr-existing",
-                        "title": "Existing ADR",
-                        "entry_type": "adr",
-                        "meta": {"adr_number": 5, "status": "accepted"},
-                    },
-                ],
-            )
-            try:
-                mock_config = type(
-                    "C",
-                    (),
-                    {
-                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                        "get_kb": lambda self, name: (
-                            type("KB", (), {"path": kb_path})() if name else None
-                        ),
-                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                    },
-                )()
+        class ProbePlugin:
+            name = "probe_hook_plugin_adr"
 
-                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
-                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
-                        result = runner.invoke(sw_app, ["new-adr", "Use Redis", "--kb", "test"])
+            def get_hooks(self):
+                return {"before_save": [before_save], "after_save": [after_save]}
 
-                assert result.exit_code == 0
-                expected_file = adrs_dir / "0006-use-redis.md"
-                assert expected_file.exists(), (
-                    f"Expected {expected_file} (number 6 after existing 5)"
-                )
+        reg = get_registry()
+        reg.register(ProbePlugin())
+        try:
+            result = self._run(env, ["new-adr", "Hooked ADR", "--kb", "sw-kb"])
+            assert result.exit_code == 0, result.output
+            assert before_calls == ["adr-0001"], before_calls
+            assert after_calls == ["adr-0001"], after_calls
+        finally:
+            del reg._plugins["probe_hook_plugin_adr"]
 
-                content = expected_file.read_text()
-                assert "adr_number: 6" in content
-            finally:
-                db.close()
+    def test_auto_increments_number(self, env):
+        first = self._run(env, ["new-adr", "First ADR", "--kb", "sw-kb"])
+        assert first.exit_code == 0, first.output
+        second = self._run(env, ["new-adr", "Second ADR", "--kb", "sw-kb"])
+        assert second.exit_code == 0, second.output
 
-    def test_creates_adrs_directory_if_missing(self):
-        """sw new-adr should create the adrs/ directory if it doesn't exist."""
-        from unittest.mock import patch
+        expected_file = env["kb_path"] / "adrs" / "0002-second-adr.md"
+        assert expected_file.exists(), f"Expected {expected_file} (number 2 after 1)"
+        assert "adr_number: 2" in expected_file.read_text()
+        assert "id: adr-0002" in expected_file.read_text()
 
-        from pyrite_software_kb.cli import sw_app
-        from typer.testing import CliRunner
-
-        runner = CliRunner()
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            kb_path = Path(tmpdir)
-            # Intentionally do NOT create adrs/
-
-            db = _make_test_db(tmpdir)
-            try:
-                mock_config = type(
-                    "C",
-                    (),
-                    {
-                        "settings": type("S", (), {"index_path": Path(tmpdir) / "test.db"})(),
-                        "get_kb": lambda self, name: (
-                            type("KB", (), {"path": kb_path})() if name else None
-                        ),
-                        "knowledge_bases": [type("KB", (), {"name": "test", "path": kb_path})()],
-                    },
-                )()
-
-                with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
-                    with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
-                        result = runner.invoke(sw_app, ["new-adr", "Use Kafka", "--kb", "test"])
-
-                assert result.exit_code == 0
-                expected_file = kb_path / "adrs" / "0001-use-kafka.md"
-                assert expected_file.exists()
-            finally:
-                db.close()
-
-    def test_resolves_single_kb_without_kb_flag(self, tmp_path, monkeypatch):
+    def test_resolves_single_kb_without_kb_flag(self, env):
         """Without --kb, new-adr must write into the (single) configured KB's
-        adrs/ dir, not ./adrs relative to the cwd.
+        adrs/ dir. Regression for new-adr-writes-to-cwd-without-kb-flag."""
+        result = self._run(env, ["new-adr", "Use gRPC"])
+        assert result.exit_code == 0, result.output
+        expected = env["kb_path"] / "adrs" / "0001-use-grpc.md"
+        assert expected.exists(), f"ADR should land in the KB: {expected}"
 
-        Regression for new-adr-writes-to-cwd-without-kb-flag: the file path was
-        resolved only when --kb was passed, otherwise silently falling back to
-        Path('.'), so the ADR landed in the cwd and was never indexed.
-        """
+    def test_no_kb_resolved_refuses_and_writes_nothing(self, tmp_path, monkeypatch):
+        """No KB resolved must refuse with a clear, KB_NOT_FOUND-style error --
+        NOT fall back to writing ./adrs under the cwd (the old behaviour this
+        pipeline replaces)."""
         from unittest.mock import patch
 
         from pyrite_software_kb.cli import sw_app
         from typer.testing import CliRunner
 
-        runner = CliRunner()
+        from pyrite.config import PyriteConfig, Settings
 
-        kb_path = tmp_path / "kb-root"
-        kb_path.mkdir()
-        # Run from a DIFFERENT cwd so a Path(".") fallback would be detectable.
         run_cwd = tmp_path / "elsewhere"
         run_cwd.mkdir()
         monkeypatch.chdir(run_cwd)
 
-        db = _make_test_db(str(tmp_path))
+        empty_config = PyriteConfig(
+            knowledge_bases=[],
+            settings=Settings(index_path=tmp_path / "test.db"),
+        )
+        runner = CliRunner()
+        with patch("pyrite_software_kb.cli.load_config", return_value=empty_config):
+            result = runner.invoke(sw_app, ["new-adr", "Use gRPC"])
+
+        assert result.exit_code != 0, result.output
+        assert "KB_NOT_FOUND" in result.output or "No KB" in result.output, result.output
+        assert not (run_cwd / "adrs").exists(), (
+            "new-adr must not create ./adrs in the current directory"
+        )
+
+    def test_existing_adr_number_is_refused_with_entry_exists(self, env):
+        """An existing ADR's id (adr-0001) is refused; the file is untouched."""
+        first = self._run(env, ["new-adr", "Original Title", "--kb", "sw-kb"])
+        assert first.exit_code == 0, first.output
+        expected_file = env["kb_path"] / "adrs" / "0001-original-title.md"
+        original = expected_file.read_bytes()
+
+        # A second ADR that resolves to the SAME id (adr-0001) is refused.
+        # The numbering query only sees indexed ADRs, so this simulates a
+        # race/duplicate rather than the auto-increment's normal path.
+        from pyrite.storage.database import PyriteDB
+
+        db = PyriteDB(env["db_path"])
         try:
-            mock_config = type(
-                "C",
-                (),
-                {
-                    "settings": type("S", (), {"index_path": tmp_path / "test.db"})(),
-                    "get_kb": lambda self, name: (
-                        type("KB", (), {"path": kb_path})() if name else None
-                    ),
-                    "knowledge_bases": [type("KB", (), {"name": "only-kb", "path": kb_path})()],
-                },
-            )()
-
-            with patch("pyrite_software_kb.cli.load_config", return_value=mock_config):
-                with patch("pyrite_software_kb.cli.PyriteDB", return_value=db):
-                    # NOTE: no --kb passed.
-                    result = runner.invoke(sw_app, ["new-adr", "Use gRPC"])
-
-            assert result.exit_code == 0, result.output
-            expected = kb_path / "adrs" / "0001-use-grpc.md"
-            assert expected.exists(), f"ADR should land in the KB: {expected}"
-            # And must NOT have been written to the cwd.
-            assert not (run_cwd / "adrs").exists(), (
-                "new-adr must not create ./adrs in the current directory"
+            db._raw_conn.execute(
+                "DELETE FROM entry WHERE id = ? AND kb_name = ?", ("adr-0001", "sw-kb")
             )
+            db._raw_conn.commit()
         finally:
             db.close()
+
+        result = self._run(env, ["new-adr", "Original Title", "--kb", "sw-kb"])
+        assert result.exit_code != 0, result.output
+        assert "ENTRY_EXISTS" in result.output, result.output
+        assert expected_file.read_bytes() == original
 
 
 # =========================================================================

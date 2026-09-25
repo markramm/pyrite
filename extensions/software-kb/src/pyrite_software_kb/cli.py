@@ -8,7 +8,6 @@ from rich.console import Console
 from rich.table import Table
 
 from pyrite.config import load_config
-from pyrite.schema import generate_entry_id
 from pyrite.storage.database import PyriteDB
 
 sw_app = typer.Typer(help="Software KB commands (ADRs, backlog, standards, components)")
@@ -42,22 +41,6 @@ def _resolve_adr_kb(config: Any, kb_name: str | None):
         except Exception:
             continue
     return adr_kbs[0] if len(adr_kbs) == 1 else None
-
-
-def _adr_subdirectory(kb_conf: Any) -> str:
-    """Subdirectory ADRs live in for this KB.
-
-    Prefer the ``adr`` type's declared ``subdirectory`` so a KB that configured
-    a non-default location is honored; fall back to the conventional ``adrs``.
-    """
-    try:
-        schema = kb_conf.kb_schema
-        type_schema = schema.get_type_schema("adr") if schema else None
-        if type_schema and type_schema.subdirectory:
-            return type_schema.subdirectory.rstrip("/")
-    except Exception:
-        pass
-    return "adrs"
 
 
 def _query_entries(db: PyriteDB, entry_type: str, kb_name: str | None = None) -> list[dict]:
@@ -170,59 +153,48 @@ def sw_new_adr(
     status: str = typer.Option("proposed", "--status", "-s", help="Initial status"),
     kb_name: str | None = typer.Option(None, "--kb", "-k", help="KB name"),
 ):
-    """Create a new ADR with the next sequential number."""
+    """Create a new ADR with the next sequential number, through the write
+    pipeline (#391).
+
+    Was: query the next number, then `file_path.write_text` the ADR directly
+    -- no exists check (an existing ADR number or id was silently
+    overwritten), no validators, no before/after-save hooks, nothing indexed
+    until a separate `pyrite index sync`, and no KB resolved fell back to
+    writing `./adrs` under the cwd. Now goes through `KBService.create_entry`;
+    the software-kb `adr` type's `file_pattern`
+    (``{adr_number:04d}-{title}.md``) keeps the `NNNN-slug.md` filename and
+    `adr-NNNN` id this command has always produced.
+    """
     from datetime import date
-    from pathlib import Path
+
+    from pyrite.exceptions import PyriteError
+    from pyrite.services.kb_service import KBService
+    from pyrite.utils.errors import cli_error
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
 
+    # Resolve the KB up front: with none resolved, refuse -- do NOT fall back
+    # to writing into the cwd, where the ADR is never indexed and the
+    # numbering query (scoped to KBs) would never see it again.
+    kb_conf = _resolve_adr_kb(config, kb_name)
+    if kb_conf is None:
+        cli_error(
+            "No KB resolved for the ADR (pass --kb).",
+            error_code="KB_NOT_FOUND",
+        )
+
+    db = PyriteDB(config.settings.index_path)
     try:
-        rows = _query_entries(db, "adr", kb_name)
+        rows = _query_entries(db, "adr", kb_conf.name)
         max_num = 0
         for row in rows:
             num = row["_meta"].get("adr_number", 0)
             if isinstance(num, int) and num > max_num:
                 max_num = num
         next_num = max_num + 1
-
-        slug = generate_entry_id(title)
-        filename = f"{next_num:04d}-{slug}.md"
         today = date.today().isoformat()
 
-        # Resolve KB for file creation. When --kb is omitted, fall back to the
-        # configured KB the same way the numbering query does, rather than
-        # silently writing ./adrs in the cwd (where the file is never indexed).
-        kb_conf = _resolve_adr_kb(config, kb_name)
-        if kb_conf is None:
-            kb_path = Path(".")
-            console.print(
-                "[yellow]Warning:[/yellow] no KB resolved (pass --kb); writing "
-                f"ADR under {(kb_path / 'adrs').resolve()} — it will not be "
-                "indexed until moved into a KB."
-            )
-            adr_subdir = "adrs"
-        else:
-            kb_path = kb_conf.path
-            adr_subdir = _adr_subdirectory(kb_conf)
-
-        adrs_dir = kb_path / adr_subdir
-        adrs_dir.mkdir(parents=True, exist_ok=True)
-        file_path = adrs_dir / filename
-
-        # Build the ADR file content
-        content = (
-            "---\n"
-            f"id: adr-{next_num:04d}\n"
-            "type: adr\n"
-            f'title: "{title}"\n'
-            f"adr_number: {next_num}\n"
-            f"status: {status}\n"
-            f"date: {today}\n"
-            "---\n"
-            "\n"
-            f"# ADR-{next_num:04d}: {title}\n"
-            "\n"
+        body = (
             "## Context\n"
             "\n"
             "TODO: What is the issue that we're seeing that is motivating this decision or change?\n"
@@ -236,12 +208,30 @@ def sw_new_adr(
             "TODO: What becomes easier or more difficult to do because of this change?\n"
         )
 
-        file_path.write_text(content)
+        svc = KBService(config, db)
+        try:
+            entry = svc.create_entry(
+                kb_conf.name,
+                f"adr-{next_num:04d}",
+                title,
+                "adr",
+                body,
+                adr_number=next_num,
+                status=status,
+                date=today,
+            )
+        except PyriteError as e:
+            code = getattr(e, "error_code", None) or "CREATE_FAILED"
+            cli_error(str(e), error_code=code)
+
+        from pyrite.storage.repository import KBRepository
+
+        repo = KBRepository(kb_conf)
+        file_path = repo._resolve_file_path(entry, repo._infer_subdir(entry))
 
         console.print(f"[green]Created ADR-{next_num:04d}:[/green] {title}")
         console.print(f"  File: [cyan]{file_path}[/cyan]")
         console.print(f"  Status: [yellow]{status}[/yellow]")
-        console.print("[dim]Run `pyrite index sync` to update the index.[/dim]")
     finally:
         db.close()
 
