@@ -75,7 +75,10 @@ def build_entry(
             "type": entry_type,
         }
         if isinstance(explicit_metadata, dict):
-            fm.update(explicit_metadata)
+            # The same reserved names are refused inside `metadata=`: a
+            # `metadata={"type": ...}` retyped the entry past schema
+            # validation (delta cold read, #394).
+            fm.update({k: v for k, v in explicit_metadata.items() if k not in _reserved})
         for k, v in kwargs.items():
             if k in _reserved or k == "metadata":
                 continue

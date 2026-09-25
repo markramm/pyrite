@@ -318,6 +318,40 @@ class TestMCPKBCreateSurface:
         finally:
             server.close()
 
+    def test_kb_create_metadata_cannot_retype_or_rename_the_entry(self, tmp_path):
+        """Delta cold read on eda8018a: reserved names inside `metadata=` were
+        merged after `id`/`title`/`type`, so `metadata={"type": "event"}`
+        validated and wrote a `finding` as an `event` -- and an off-enum
+        value got past `enforce: true`. It is refused as a finding, and
+        nothing is written."""
+        config, kb_config = _make_kb(tmp_path)
+        server = PyriteMCPServer(config, tier="write")
+        try:
+            result = server._dispatch_tool(
+                "kb_create",
+                {
+                    "kb_name": "t",
+                    "entry_type": "finding",
+                    "title": "X",
+                    "body": "body",
+                    "metadata": {"type": "event", "id": "other-id", "severity": "critical"},
+                },
+            )
+            assert result.get("created") is not True, result
+            assert not list(Path(kb_config.path).rglob("*.md")), "nothing is written"
+        finally:
+            server.close()
+
+    def test_build_entry_metadata_reserved_keys_are_ignored(self):
+        e = build_entry(
+            "finding",
+            entry_id="x",
+            title="X",
+            metadata={"type": "event", "id": "other", "title": "Other", "m": 1},
+        )
+        fm = e.to_frontmatter()
+        assert (fm["id"], fm["title"], fm["type"], fm["m"]) == ("x", "X", "finding", 1)
+
     def test_kb_create_refuses_off_enum(self, tmp_path):
         config, kb_config = _make_kb(tmp_path)
         server = PyriteMCPServer(config, tier="write")
