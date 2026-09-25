@@ -648,20 +648,18 @@ def user_create(
 
         pyrite-admin user create alice --role admin
     """
+    from .cli.context import index_db_context
     from .services.auth_service import AuthService
-    from .storage import PyriteDB
 
     config = load_config()
-    db = PyriteDB(config.settings.index_path)
-    try:
-        user = AuthService(db, config.settings.auth).create_user(
-            username, password, role=role, display_name=display_name
-        )
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from None
-    finally:
-        db.close()
+    with index_db_context(config) as db:
+        try:
+            user = AuthService(db, config.settings.auth).create_user(
+                username, password, role=role, display_name=display_name
+            )
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1) from None
     console.print(f"[green]Created user[/green] {user['username']} (role: {user['role']})")
 
 
