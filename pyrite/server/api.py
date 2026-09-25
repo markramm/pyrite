@@ -41,6 +41,7 @@ from ..exceptions import (
     StorageError,
     ValidationError,
 )
+from ..services.block_service import BlockService
 from ..services.ephemeral_service import EphemeralKBService
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
@@ -411,6 +412,13 @@ def get_starred_service(
 ) -> StarredService:
     """Get StarredService instance via DI."""
     return StarredService(db, kb_service)
+
+
+def get_block_service(
+    db: PyriteDB = Depends(get_db),
+) -> BlockService:
+    """Get BlockService instance via DI."""
+    return BlockService(db)
 
 
 def get_settings_service(

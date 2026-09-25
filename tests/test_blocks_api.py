@@ -100,3 +100,47 @@ class TestBlocksAPI:
         assert resp.status_code == 200
         paths = resp.json()["paths"]
         assert "/api/entries/{entry_id}/blocks" in paths
+
+    def test_get_entry_blocks_filter_by_block_id(self, client):
+        """Filter by block_id returns exactly that block (characterizes #380's move)."""
+        all_blocks = client.get("/api/entries/test-note/blocks?kb=test-kb").json()["blocks"]
+        target = all_blocks[1]
+        resp = client.get(f"/api/entries/test-note/blocks?kb=test-kb&block_id={target['block_id']}")
+        assert resp.status_code == 200
+        assert resp.json()["blocks"] == [target]
+
+    def test_get_entry_blocks_filters_combine(self, client):
+        resp = client.get(
+            "/api/entries/test-note/blocks?kb=test-kb&heading=Details&block_type=paragraph"
+        )
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["blocks"][0]["content"].startswith("Some details")
+
+
+class TestResolveFragments:
+    """`/entries/resolve` with a `#heading` or `^block-id` fragment returns the
+    matching block's content (characterizes #380's move to BlockService)."""
+
+    client = TestBlocksAPI.client
+
+    def test_heading_fragment_returns_first_block_under_heading(self, client):
+        data = client.get("/api/entries/resolve?target=test-note%23Details").json()
+        assert data["resolved"] is True
+        assert data["heading"] == "Details"
+        assert data["block_id"] is None
+        assert data["block_content"] == "## Details"
+
+    def test_block_id_fragment_returns_that_block(self, client):
+        blocks = client.get("/api/entries/test-note/blocks?kb=test-kb").json()["blocks"]
+        para = next(b for b in blocks if b["block_type"] == "paragraph")
+        data = client.get(f"/api/entries/resolve?target=test-note%5E{para['block_id']}").json()
+        assert data["resolved"] is True
+        assert data["block_id"] == para["block_id"]
+        assert data["block_content"] == para["content"]
+
+    def test_unknown_fragment_resolves_without_content(self, client):
+        data = client.get("/api/entries/resolve?target=test-note%23Nowhere").json()
+        assert data["resolved"] is True
+        assert data["heading"] == "Nowhere"
+        assert data["block_content"] is None

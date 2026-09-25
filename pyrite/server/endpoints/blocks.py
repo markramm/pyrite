@@ -2,9 +2,9 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from ...services.block_service import BlockService
 from ...services.kb_service import KBService
-from ...storage.models import Block
-from ..api import get_kb_service, limiter, negotiate_response, requires_kb_read
+from ..api import get_block_service, get_kb_service, limiter, negotiate_response, requires_kb_read
 from ..schemas import BlockListResponse, BlockResponse
 
 router = APIRouter(tags=["Blocks"])
@@ -24,6 +24,7 @@ def get_entry_blocks(
     block_type: str | None = Query(None, description="Filter by block type"),
     block_id: str | None = Query(None, description="Filter by block ID"),
     svc: KBService = Depends(get_kb_service),
+    block_svc: BlockService = Depends(get_block_service),
 ):
     """Get blocks extracted from an entry."""
     entry = svc.get_entry(entry_id, kb_name=kb)
@@ -33,18 +34,9 @@ def get_entry_blocks(
             detail={"code": "NOT_FOUND", "message": f"Entry '{entry_id}' not found"},
         )
 
-    # Query blocks from database
-    blocks_query = svc.db.session.query(Block).filter_by(entry_id=entry_id, kb_name=kb)
-
-    if heading:
-        blocks_query = blocks_query.filter(Block.heading == heading)
-    if block_type:
-        blocks_query = blocks_query.filter(Block.block_type == block_type)
-    if block_id:
-        blocks_query = blocks_query.filter(Block.block_id == block_id)
-
-    blocks_query = blocks_query.order_by(Block.position)
-    block_rows = blocks_query.all()
+    block_rows = block_svc.list_blocks(
+        entry_id, kb, heading=heading, block_type=block_type, block_id=block_id
+    )
 
     blocks = [
         BlockResponse(
