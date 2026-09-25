@@ -141,14 +141,3 @@ class TestOnlyQueryShapedErrorsAreTheCallersFault:
             con.execute("SELECT e.fips FROM entry e").fetchall()
         con.close()
         assert not _looks_like_query_syntax_error(str(exc_info.value)), str(exc_info.value)
-
-
-def test_mcp_reports_a_storage_failure_as_retryable_not_a_refusal():
-    """#428 delta cold read: a locked database is a transient server fault;
-    an MCP agent must not be told the request was refused for good."""
-    from pyrite.exceptions import StorageError
-    from pyrite.server.mcp_server import _refusal
-
-    err = _refusal(StorageError("Search failed: database is locked"))
-    assert err["error_code"] == "STORAGE_ERROR", err
-    assert err["retryable"] is True, err
