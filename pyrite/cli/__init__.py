@@ -817,8 +817,20 @@ def import_entries(
     kb_name: str = typer.Option(..., "--kb", "-k", help="Target knowledge base"),
     fmt: str = typer.Option(None, "--format", help="json or yaml (auto-detected from extension)"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate without creating entries"),
+    allow_undeclared: bool = typer.Option(
+        False,
+        "--allow-undeclared",
+        help="Allow entry types not declared in the KB's kb.yaml (the entries "
+        "will be flagged by `pyrite index health`).",
+    ),
 ):
-    """Bulk import entries from a JSON or YAML file."""
+    """Bulk import entries from a JSON or YAML file.
+
+    Every record goes through the same write pipeline as `pyrite create`
+    (declared type, existing id, schema and plugin validation, the ADR-0034
+    truncated-body refusal). A refused record fails on its own, its siblings
+    are imported, and the command exits 1.
+    """
     from ..formats.importers import get_importer_registry
 
     if not file_path.exists():
@@ -858,51 +870,44 @@ def import_entries(
         console.print("[yellow]No entries found in file.[/yellow]")
         raise typer.Exit(0)
 
-    # ADR-0034 rule 2, per record: a record whose body is marked truncated is
-    # a partial read someone saved to a file. Refuse it on its own and import
-    # its clean siblings -- the same semantics as REST's /entries/import.
-    # Checked here, after parsing, because the importers differ in whether
-    # their key whitelist carries the marker through (json and markdown do;
-    # yaml and csv strip it), and the guard must not depend on which did.
-    from ..services.body_bounds import refuse_truncated_body
+    from rich.text import Text
 
-    refused: list[dict] = []
-    clean: list[dict] = []
-    for record in parsed:
-        message = refuse_truncated_body(record)
-        if message is None:
-            clean.append(record)
-        else:
-            refused.append({"title": record.get("title", "?"), "error": message})
-
-    if dry_run:
-        console.print(f"[bold]Dry run:[/bold] {len(parsed)} entries parsed")
-        for i, entry in enumerate(parsed):
-            title = entry.get("title", "Untitled")
-            etype = entry.get("entry_type", "note")
-            console.print(f"  {i + 1}. [{etype}] {title}")
-        for r in refused:
-            console.print(f"  [red]Would refuse:[/red] {r['title']}: {r['error']}")
-        console.print("\n[dim]No entries were created (--dry-run).[/dim]")
-        return
+    def _refusal_line(label: str, record: dict, r: dict) -> Text:
+        # Text, not markup: the code's brackets and the message are data.
+        title = record.get("title", "?") if isinstance(record, dict) else "?"
+        line = Text(f"  {label} ")
+        line.append(f"[{r.get('error_code', 'ERROR')}]", style="red")
+        line.append(f": {title}: {r.get('error', 'unknown error')}")
+        return line
 
     with cli_context() as (config, db, svc):
         try:
-            results = svc.bulk_create_entries(kb_name, clean) if clean else []
+            results = svc.bulk_create_entries(
+                kb_name, parsed, allow_undeclared=allow_undeclared, validate_only=dry_run
+            )
         except PyriteError as e:
             _cli_err(e)
 
-        for r in refused:
-            console.print(f"  [red]Refused:[/red] {r['title']}: {r['error']}")
+        if dry_run:
+            console.print(f"[bold]Dry run:[/bold] {len(parsed)} entries parsed")
+            for i, (record, r) in enumerate(zip(parsed, results, strict=True)):
+                title = record.get("title", "Untitled")
+                etype = record.get("entry_type", "note")
+                console.print(f"  {i + 1}. [{etype}] {title}", markup=False)
+                if not r.get("valid"):
+                    console.print(_refusal_line("Would refuse", record, r))
+            console.print("\n[dim]No entries were created (--dry-run).[/dim]")
+            return
 
-        created = sum(1 for r in results if r.get("created"))
-        failed = sum(1 for r in results if not r.get("created")) + len(refused)
-
-        for r in results:
+        created = 0
+        failed = 0
+        for record, r in zip(parsed, results, strict=True):
             if r.get("created"):
+                created += 1
                 console.print(f"  [green]Created:[/green] {r['entry_id']}")
             else:
-                console.print(f"  [red]Failed:[/red] {r.get('error', 'unknown error')}")
+                failed += 1
+                console.print(_refusal_line("Failed", record, r))
 
         console.print(f"\n[bold]Imported {created} entries[/bold]", end="")
         if failed:
@@ -910,11 +915,11 @@ def import_entries(
         else:
             console.print()
 
-        # A refused record is a data-loss guard firing, not an ordinary
-        # per-record failure: exit non-zero so a script or agent cannot read
-        # "Imported N" off a run that silently dropped a truncated body.
-        # (Pre-existing per-record failures keep their exit-0 behaviour.)
-        if refused:
+        # A refused record is the write pipeline saying no -- a truncated
+        # body, an existing id, an undeclared type, a schema violation. Exit
+        # non-zero so a script or agent cannot read "Imported N" off a run
+        # that silently dropped records.
+        if failed:
             raise typer.Exit(1)
 
 

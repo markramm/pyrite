@@ -326,6 +326,8 @@ class CreateResponse(BaseModel):
     id: str
     kb_name: str
     file_path: str
+    #: Non-blocking schema findings from the write pipeline (#378).
+    warnings: list[dict[str, Any]] = []
 
 
 class UpdateResponse(BaseModel):
@@ -333,6 +335,8 @@ class UpdateResponse(BaseModel):
 
     updated: bool
     id: str
+    #: Non-blocking schema findings from the write pipeline (#378).
+    warnings: list[dict[str, Any]] = []
 
 
 class DeleteResponse(BaseModel):
@@ -392,6 +396,11 @@ class CreateEntryRequest(BaseModel):
     participants: list[str] = []
     role: str | None = None
     metadata: dict[str, Any] = {}
+    #: Allow a type the KB's kb.yaml does not declare (refused otherwise).
+    allow_undeclared: bool = False
+    #: ADR-0034 read-transport marker. Declared so it reaches the service,
+    #: which refuses a body marked truncated; never stored.
+    body_truncated: Any = None
 
 
 class UpdateEntryRequest(BaseModel):
@@ -403,6 +412,8 @@ class UpdateEntryRequest(BaseModel):
     importance: int | None = Field(None, ge=1, le=10)
     tags: list[str] | None = None
     metadata: dict[str, Any] | None = None
+    #: ADR-0034 read-transport marker; see CreateEntryRequest.
+    body_truncated: Any = None
 
 
 class PatchEntryRequest(BaseModel):
@@ -411,6 +422,8 @@ class PatchEntryRequest(BaseModel):
     kb: str
     field: str
     value: str
+    #: ADR-0034 read-transport marker; see CreateEntryRequest.
+    body_truncated: Any = None
 
 
 class EntryListResponse(BaseModel):

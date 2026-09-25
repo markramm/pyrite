@@ -3,19 +3,21 @@
 import json
 from typing import Any
 
-from ...services.body_bounds import MARKER_KEYS
-
 
 def import_json(data: str | bytes) -> list[dict[str, Any]]:
-    """Parse JSON array of entries.
+    """Parse a JSON array of entries into entry specs.
 
-    Expected format: array of objects with at least {id, title, body}.
-    Optional: entry_type, tags, date, importance, sources, links, metadata.
+    Expected format: array of objects with at least {title}; the wrapped form
+    {"entries": [...]} and a single object are accepted too. `type` is read as
+    `entry_type` when `entry_type` is absent.
 
-    ADR-0034's truncation keys are carried through when present, so the caller
-    can refuse a record whose body is a partial read; this whitelist would
-    otherwise strip the marker and hand the importer a body it was told not to
-    trust.
+    Every other key is carried through unchanged -- the entry's own fields
+    (`role`, `kind`, `status`, ...) and ADR-0034's truncation keys alike. The
+    importer only parses: deciding what a valid entry is, refusing a body
+    marked truncated and stripping the marker are the write pipeline's job
+    (`KBService`, #378). A key whitelist here used to drop type-specific
+    fields before validation could see them, so an import wrote entries that
+    `pyrite create` would have refused.
     """
     if isinstance(data, bytes):
         data = data.decode("utf-8")
@@ -33,25 +35,11 @@ def import_json(data: str | bytes) -> list[dict[str, Any]]:
     for item in parsed:
         if not isinstance(item, dict):
             continue
-        entry = {
-            "id": item.get("id", ""),
-            "title": item.get("title", "Untitled"),
-            "body": item.get("body", ""),
-            "entry_type": item.get("entry_type", item.get("type", "note")),
-            "tags": item.get("tags", []),
-        }
-        # Optional fields
-        for key in (
-            "date",
-            "importance",
-            "summary",
-            "status",
-            "sources",
-            "links",
-            "metadata",
-            *MARKER_KEYS,
-        ):
-            if key in item:
-                entry[key] = item[key]
+        entry = {k: v for k, v in item.items() if k != "type"}
+        entry.setdefault("id", "")
+        entry.setdefault("title", "Untitled")
+        entry.setdefault("body", "")
+        entry["entry_type"] = item.get("entry_type", item.get("type", "note"))
+        entry.setdefault("tags", [])
         entries.append(entry)
     return entries

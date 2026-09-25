@@ -109,5 +109,6 @@ def test_domain_errors_are_not_reported_as_retryable_internal_errors(server):
     first = server._dispatch_tool("task_create", args, client_id="stdio")
     assert "error" not in first, first
     second = server._dispatch_tool("task_create", args, client_id="stdio")
-    assert second.get("error_code") == "VALIDATION_FAILED", second
+    # An existing id is refused with its own code since #378.
+    assert second.get("error_code") == "ENTRY_EXISTS", second
     assert second.get("retryable") is False

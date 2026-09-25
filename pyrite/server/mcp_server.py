@@ -29,13 +29,11 @@ from ..exceptions import (
     QueryTooLongError,
     ValidationError,
 )
-from ..schema import generate_entry_id
 from ..services.body_bounds import (
     MARKER_KEYS,
-    REFUSAL_SUGGESTION,
     BodyBounds,
+    ensure_not_truncated,
     load_body_bounds,
-    refuse_truncated_body,
 )
 from ..services.export_service import ExportService
 from ..services.graph_service import GraphService
@@ -49,49 +47,8 @@ logger = logging.getLogger(__name__)
 
 URI_SCHEME = "pyrite://"
 MAX_BATCH_READ_ENTRIES = 50
-_UPDATE_FIELDS = frozenset(
-    {
-        "title",
-        "body",
-        "importance",
-        "tags",
-        "participants",
-        "metadata",
-        "status",
-        "date",
-        "location",
-        "summary",
-        "role",
-        "assignee",
-        "priority",
-        "due_date",
-        "lifecycle",
-        "affiliations",
-        "org_type",
-        "jurisdiction",
-        "notes",
-        "research_status",
-        "verification_status",
-        "claim_status",
-        "confidence",
-        "reliability",
-        "evidence_refs",
-        "actors",
-        "source_refs",
-        "sender",
-        "receiver",
-        "owner",
-        "asset",
-        "person",
-        "organization",
-        "funder",
-        "recipient",
-        "amount",
-        "currency",
-        "beneficial",
-        "aliases",
-    }
-)
+#: Arguments of kb_create / kb_update that steer the tool, never entry fields.
+_CREATE_CONTROL_KEYS = frozenset({"kb_name", "validate", "allow_undeclared"})
 
 
 # Identity fields every `fields` projection keeps. Agents key on these to
@@ -147,20 +104,38 @@ def _error(
     return r
 
 
+def _refusal(exc: PyriteError) -> dict:
+    """Map a service refusal to the MCP envelope, keeping its own code.
+
+    Write refusals carry a stable ``error_code`` (see the ValidationError
+    subclasses in ``pyrite.exceptions``) that REST and the CLI report
+    unchanged (#378). Never retryable: the same call fails the same way.
+    """
+    code = getattr(exc, "error_code", None) or next(
+        (c for t, c in _DOMAIN_ERROR_CODES if isinstance(exc, t)), "REQUEST_REFUSED"
+    )
+    err = _error(code, str(exc), suggestion=getattr(exc, "suggestion", None))
+    declared = getattr(exc, "declared_types", None)
+    if declared is not None:
+        err["declared_types"] = declared
+        err.setdefault(
+            "suggestion",
+            f"Re-call with entry_type in [{', '.join(declared)}] (see kb_schema), "
+            "or pass allow_undeclared=true to override.",
+        )
+    return err
+
+
 MAX_TIMELINE_EVENTS = 50
 MAX_BULK_CREATE_ENTRIES = 50
 MAX_RESOURCE_LIST_ENTRIES = 200
 
-#: Write tools whose request holds a LIST of bodies AND whose result contract
-#: is per-item ({"created": False, "error": ...}). The dispatcher-level guard
-#: skips their nested specs so one marked item does not refuse the whole call;
-#: the handler refuses that item on its own (ADR-0034 rule 2, acceptance
-#: criterion 4). `task_decompose` is deliberately NOT here: it succeeds or
-#: fails as a whole, so the dispatcher's whole-request guard is its contract.
-_PER_ITEM_BODY_TOOLS = frozenset({"kb_bulk_create"})
-
-#: The argument each per-item tool puts its list of specs under.
-_PER_ITEM_SPEC_KEYS = frozenset({"entries"})
+#: Write tools whose handlers go through KBService's write pipeline, which
+#: makes the ADR-0034 truncated-body refusal itself (per item, for bulk). The
+#: dispatcher's gate skips them so that decision is made once, in the service
+#: (#378); it still covers every other write tool -- task tools and any plugin
+#: tool registered into the write or admin tier -- by construction.
+_PIPELINE_WRITE_TOOLS = frozenset({"kb_create", "kb_update", "kb_bulk_create"})
 
 
 # ---------------------------------------------------------------------------
@@ -1077,91 +1052,46 @@ class PyriteMCPServer:
     # =========================================================================
 
     def _kb_create(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Create a new entry."""
+        """Create a new entry. Every create decision is KBService's (#378)."""
         kb_name = args.get("kb_name")
-        entry_type = args.get("entry_type", "note")
-        title = args.get("title")
-        body = args.get("body", "")
-
-        kb_config = self.config.get_kb(kb_name)
-        if not kb_config:
+        spec = {k: v for k, v in args.items() if k not in _CREATE_CONTROL_KEYS}
+        spec.setdefault("entry_type", "note")
+        try:
+            written = self.svc.create(
+                kb_name, spec, allow_undeclared=bool(args.get("allow_undeclared"))
+            )
+        except KBNotFoundError:
             return _error(
                 "KB_NOT_FOUND",
                 f"KB '{kb_name}' not found",
                 suggestion="Use kb_list to see available KBs",
             )
-        if kb_config.read_only:
+        except KBReadOnlyError:
             return _error("READ_ONLY", f"KB '{kb_name}' is read-only")
-
-        # Validate against schema
-        schema = kb_config.kb_schema
-
-        # Write-side type enforcement: refuse undeclared types unless the
-        # caller explicitly overrides. The schema validator surfaces this as
-        # a warning when validation.enforce=False (the common default for
-        # ephemeral KBs); but for the create path we need a refusal to stop
-        # external agents (e.g. the cascade-research conductor) from silently
-        # filing entries with their native type vocabulary into KBs that
-        # declare a different schema. See Tier A 1090 / commit b2e7ae8 for
-        # the conductor-filing incident.
-        if not args.get("allow_undeclared"):
-            from pyrite.schema import CORE_TYPES
-
-            declared_types = sorted(schema.types.keys()) if schema.types else []
-            if (
-                declared_types  # only enforce when the KB has a declared schema
-                and entry_type not in CORE_TYPES
-                and entry_type not in schema.types
-            ):
-                err = _error(
-                    "UNDECLARED_TYPE",
-                    (
-                        f"type '{entry_type}' is not declared in KB '{kb_name}'. "
-                        f"Declared types: {', '.join(declared_types)}. "
-                        f"Use kb_schema to inspect the full schema, or pass "
-                        f"allow_undeclared=true to override (the entry will be "
-                        f"flagged by `pyrite index health`)."
-                    ),
-                    suggestion=(
-                        f"Re-call kb_create with entry_type in [{', '.join(declared_types)}]."
-                    ),
-                )
-                err["declared_types"] = declared_types
-                return err
-
-        validation = schema.validate_entry(entry_type, args, context={"kb_type": kb_config.kb_type})
-        warnings = validation.get("warnings", [])
-
-        entry_id = generate_entry_id(title)
-
-        # Filter out keys already passed as explicit arguments. MARKER_KEYS
-        # go too: they are read-transport metadata (ADR-0034), and an allowed
-        # `body_truncated: false` must not be persisted as frontmatter.
-        extra = {
-            k: v
-            for k, v in args.items()
-            if k not in ("kb_name", "entry_type", "title", "body", "validate", *MARKER_KEYS)
-        }
-
-        try:
-            entry = self.svc.create_entry(kb_name, entry_id, title, entry_type, body, **extra)
+        except ValidationError as e:
+            return _refusal(e)
         except PyriteError as e:
             return _error("CREATE_FAILED", str(e), retryable=True)
 
+        entry = written.entry
         result = {
             "created": True,
             "entry_id": entry.id,
             "file_path": str(entry.file_path) if entry.file_path else "",
         }
-        if warnings:
-            result["warnings"] = warnings
+        if written.warnings:
+            result["warnings"] = written.warnings
         qa_issues = self._maybe_validate(entry.id, kb_name, args)
         if qa_issues:
             result["qa_issues"] = qa_issues
         return result
 
     def _kb_bulk_create(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Batch-create multiple entries."""
+        """Batch-create multiple entries through KBService's write pipeline.
+
+        Each item is refused or created on its own, with the same codes
+        kb_create gives (#359, #366, #378); results keep the input order.
+        """
         kb_name = args.get("kb_name")
         entries = args.get("entries", [])
 
@@ -1172,49 +1102,12 @@ class PyriteMCPServer:
                 "VALIDATION_FAILED", f"Maximum {MAX_BULK_CREATE_ENTRIES} entries per call"
             )
 
-        # ADR-0034 rule 2, per item: a spec whose body is marked truncated is
-        # refused on its own and never reaches the service, while its clean
-        # siblings are created -- the tool's existing per-item contract
-        # ({"created": False, "error": ...}).
-        #
-        refusals: dict[int, dict[str, Any]] = {}
-        clean: list[dict[str, Any]] = []
-        for i, spec in enumerate(entries):
-            message = refuse_truncated_body(spec)
-            if message is None:
-                clean.append(spec)
-            else:
-                refusals[i] = {"created": False, "error": message}
-
-        # Pre-validate each entry against schema
-        kb_config = self.config.get_kb(kb_name)
-        schema = None
-        if kb_config:
-            schema = kb_config.kb_schema
-
         try:
-            clean_results = self.svc.bulk_create_entries(kb_name, clean) if clean else []
+            results = self.svc.bulk_create_entries(
+                kb_name, entries, allow_undeclared=bool(args.get("allow_undeclared"))
+            )
         except PyriteError as e:
             return _error("BULK_CREATE_FAILED", str(e), retryable=True)
-
-        # Splice the refusals back into their caller-supplied positions so a
-        # result index still lines up with the request's entries array.
-        results: list[dict[str, Any]] = []
-        clean_iter = iter(clean_results)
-        for i in range(len(entries)):
-            results.append(refusals[i] if i in refusals else next(clean_iter, {"created": False}))
-
-        # Attach per-entry validation warnings
-        if schema:
-            for i, spec in enumerate(entries):
-                if i < len(results) and results[i].get("created"):
-                    entry_type = spec.get("entry_type", "note")
-                    validation = schema.validate_entry(
-                        entry_type, spec, context={"kb_type": kb_config.kb_type}
-                    )
-                    entry_warnings = validation.get("warnings", [])
-                    if entry_warnings:
-                        results[i]["warnings"] = entry_warnings
 
         created = sum(1 for r in results if r.get("created"))
         failed = len(results) - created
@@ -1226,44 +1119,35 @@ class PyriteMCPServer:
         }
 
     def _kb_update(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Update an existing entry."""
+        """Update an existing entry.
+
+        Only the entry type's own fields are passed on -- the set comes from
+        the type registry and the KB schema (``KBService.updatable_fields``),
+        so an agent that echoes a whole read result back cannot rewrite the
+        id, path or timestamps. ADR-0034 marker keys go through too, so the
+        service can refuse a truncated body.
+        """
         entry_id = args.get("entry_id")
         kb_name = args.get("kb_name")
 
-        updates = {}
-        for key in _UPDATE_FIELDS:
-            if key in args:
-                updates[key] = args[key]
-
-        # Schema validation on the updated fields
-        warnings: list[dict[str, Any]] = []
-        kb_config = self.config.get_kb(kb_name)
-        if kb_config:
-            schema = kb_config.kb_schema
-            # Get the current entry to determine its type
-            existing = self.svc.get_entry(entry_id, kb_name)
-            if existing:
-                entry_type = existing.get("entry_type", "note")
-                # Merge existing fields with updates for validation
-                validation = schema.validate_entry(
-                    entry_type,
-                    {**existing, **updates},
-                    context={"kb_type": kb_config.kb_type},
-                )
-                warnings = validation.get("warnings", [])
+        fields = self.svc.updatable_fields(entry_id, kb_name)
+        updates = {k: v for k, v in args.items() if k in fields or k in MARKER_KEYS}
 
         try:
-            entry = self.svc.update_entry(entry_id, kb_name, **updates)
+            written = self.svc.update(entry_id, kb_name, updates)
+        except ValidationError as e:
+            return _refusal(e)
         except PyriteError as e:
             return _error("UPDATE_FAILED", str(e), retryable=True)
 
+        entry = written.entry
         result: dict[str, Any] = {
             "updated": True,
             "entry_id": entry.id,
             "file_path": str(entry.file_path) if entry.file_path else "",
         }
-        if warnings:
-            result["warnings"] = warnings
+        if written.warnings:
+            result["warnings"] = written.warnings
         qa_issues = self._maybe_validate(entry.id, kb_name, args)
         if qa_issues:
             result["qa_issues"] = qa_issues
@@ -2154,28 +2038,24 @@ class PyriteMCPServer:
         ]
 
     def _refuse_truncated_write(self, name: str, arguments: dict[str, Any]) -> dict | None:
-        """ADR-0034 rule 2, applied to one MCP call.
+        """ADR-0034 rule 2, applied to one MCP call to a non-pipeline write tool.
 
         Returns the error envelope when this call is a write carrying both a
         body and a truthy `body_truncated`, otherwise None. Reads are never
         guarded: `body_truncated` is a marker a read *produces*, and a read
-        that echoes it back as an argument loses nothing.
+        that echoes it back as an argument loses nothing. Tools whose handlers
+        go through the KBService write pipeline are left to it, so the
+        decision for them is made once (#378).
         """
         if self._tool_tiers.get(name, "read") == "read":
             return None
-        if name in _PER_ITEM_BODY_TOOLS:
-            payload = {k: v for k, v in arguments.items() if k not in _PER_ITEM_SPEC_KEYS}
-        else:
-            payload = arguments
-        message = refuse_truncated_body(payload)
-        if message is None:
+        if name in _PIPELINE_WRITE_TOOLS:
             return None
-        return _error(
-            "VALIDATION_FAILED",
-            message,
-            suggestion=REFUSAL_SUGGESTION,
-            retryable=False,
-        )
+        try:
+            ensure_not_truncated(arguments)
+        except ValidationError as e:
+            return _refusal(e)
+        return None
 
     def _dispatch_tool(
         self,
@@ -2275,11 +2155,11 @@ class PyriteMCPServer:
                     )
 
         # ADR-0034 rule 2: a truncated body is never valid input to a write.
-        # The check sits here rather than in each handler so that it covers
-        # every write tool -- kb_create, kb_update, task_create and any plugin
-        # tool registered into the write or admin tier -- by construction
-        # rather than by enumeration. Tools in _PER_ITEM_BODY_TOOLS carry a
-        # per-item result contract and refuse marked items inside the handler.
+        # kb_create, kb_update and kb_bulk_create get it from KBService's
+        # write pipeline. For every other write tool -- task_create and any
+        # plugin tool registered into the write or admin tier -- the check
+        # sits here, so it covers them by construction rather than by
+        # enumeration.
         refusal = self._refuse_truncated_write(name, arguments)
         if refusal is not None:
             return refusal
@@ -2296,10 +2176,7 @@ class PyriteMCPServer:
             # A refused request, not a crash: the service said no for a reason
             # the caller can act on. Never retryable -- the same call fails the
             # same way -- and not logged as an exception.
-            code = next(
-                (c for exc, c in _DOMAIN_ERROR_CODES if isinstance(e, exc)), "REQUEST_REFUSED"
-            )
-            return _error(code, str(e))
+            return _refusal(e)
         except Exception as e:
             logger.exception("Tool %s failed with args %s", name, arguments)
             return _error("INTERNAL", str(e), retryable=True)

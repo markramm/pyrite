@@ -47,7 +47,9 @@ class TestEntryEndpointErrors:
         )
         assert resp.status_code == 400
         data = resp.json()
-        assert data["detail"]["code"] == "CREATE_FAILED"
+        # The model's own validation is a refusal with a stable code, the same
+        # on every surface (#378); it used to be the catch-all CREATE_FAILED.
+        assert data["detail"]["code"] == "VALIDATION_FAILED"
         assert "date" in data["detail"]["message"].lower()
 
     def test_update_entry_not_found(self, rest_api_env):

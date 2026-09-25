@@ -743,12 +743,16 @@ WRITE_TOOLS = {
                     "type": "boolean",
                     "description": "Run QA validation after save and return issues. Also runs automatically if KB has qa_on_write: true in kb.yaml.",
                 },
+                "allow_undeclared": {
+                    "type": "boolean",
+                    "description": "Allow an entry_type the KB's kb.yaml does not declare (refused otherwise, core types included). The entry will be flagged by index health.",
+                },
             },
             "required": ["kb_name", "entry_type", "title"],
         },
     },
     "kb_bulk_create": {
-        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Validates each entry against kb.yaml schema. After parameter validation, entries succeed or fail independently: a missing or empty title is reported per entry without rejecting valid siblings. The results list preserves input order. Invalid parameter types, an unavailable KB, or an invalid batch size still reject the call. Max 50 entries per call. Refuses any entry whose body is carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
+        "description": "Create multiple entries in one batch. More efficient than sequential kb_create calls \u2014 single index sync and batched embedding. Each entry goes through the same checks as kb_create (declared type, existing id, kb.yaml schema and plugin validators). After parameter validation, entries succeed or fail independently: a refused entry (a missing or empty title, an undeclared type, an existing id, a schema violation) is reported per entry, with the same error_code kb_create gives, without rejecting valid siblings. The results list preserves input order. Invalid parameter types, an unavailable KB, or an invalid batch size still reject the call. Max 50 entries per call. Refuses any entry whose body is carrying body_truncated: true (a partial read from kb_get/kb_batch_read); assemble the whole body with kb_read_body first.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -785,6 +789,10 @@ WRITE_TOOLS = {
                             },
                         },
                     },
+                },
+                "allow_undeclared": {
+                    "type": "boolean",
+                    "description": "Allow entry types the KB's kb.yaml does not declare (each such item is refused otherwise).",
                 },
             },
             "required": ["kb_name", "entries"],

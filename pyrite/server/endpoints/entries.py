@@ -51,58 +51,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Entries"])
 
 
-async def refuses_truncated_body(request: Request) -> None:
-    """ADR-0034 rule 2 for the REST JSON write endpoints.
+def _refused(exc: ValidationError) -> HTTPException:
+    """Map a write-pipeline refusal to REST, keeping its own code (#378).
 
-    A FastAPI dependency rather than a check inside each handler, because the
-    pydantic request models do not declare `body_truncated` and drop it before
-    any handler could see it. This reads the *raw* JSON body, so the marker is
-    still there. It runs before the handler and raises 400 instead of letting
-    a partial body overwrite a whole one.
-
-    A request whose payload is not JSON (a multipart upload, an empty body) is
-    left alone: there is nothing to inspect, and `/entries/import` does its own
-    per-item check on the parsed file.
-
-    **The JSON test mirrors FastAPI's own**, deliberately. FastAPI parses a
-    body whenever the media type's maintype is `application` and its subtype
-    is `json` or ends `+json`, lower-cased by `email.message` first
-    (`fastapi/routing.py::get_request_handler`). A narrower test here does not
-    make the guard conservative -- it makes it *bypassable*, because the
-    handler still runs and still writes. `Content-Type: Application/JSON` is
-    legal (media types are case-insensitive, RFC 9110 section 8.3) and
-    `application/vnd.api+json` is ordinary; both parsed and both skipped this
-    guard until the cold read caught it.
+    The service decides; this only picks the status. `ENTRY_EXISTS` is a
+    conflict (409); every other refusal is a bad request (400). Never
+    retryable: the same request fails the same way.
     """
-    from ...services.body_bounds import REFUSAL_SUGGESTION, refuse_truncated_body
-
-    media_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
-    if not (media_type == "application/json" or media_type.endswith("+json")):
-        return
-    try:
-        payload = await request.json()
-    except Exception:
-        return
-
-    # PATCH writes one named field, so it is a body write only when that field
-    # IS the body -- and then `value`, not a `body` key, holds the body.
-    if isinstance(payload, dict) and payload.get("field") is not None:
-        if payload.get("field") != "body":
-            return
-        payload = {**payload, "body": payload.get("value")}
-
-    message = refuse_truncated_body(payload)
-    if message is None:
-        return
-    raise HTTPException(
-        status_code=400,
-        detail={
-            "code": "VALIDATION_FAILED",
-            "message": message,
-            "hint": REFUSAL_SUGGESTION,
-            "retryable": False,
-        },
-    )
+    code = getattr(exc, "error_code", None) or "VALIDATION_FAILED"
+    detail: dict = {"code": code, "message": str(exc), "retryable": False}
+    suggestion = getattr(exc, "suggestion", None)
+    if suggestion:
+        detail["hint"] = suggestion
+    declared = getattr(exc, "declared_types", None)
+    if declared is not None:
+        detail["declared_types"] = declared
+        detail.setdefault(
+            "hint",
+            f"Use an entry_type in [{', '.join(declared)}], or send allow_undeclared: true.",
+        )
+    return HTTPException(status_code=409 if code == "ENTRY_EXISTS" else 400, detail=detail)
 
 
 @router.get(
@@ -632,11 +600,13 @@ async def import_entries(
     format: str = Query(
         None, description="Format: json, markdown, csv (auto-detected from extension if omitted)"
     ),
+    allow_undeclared: bool = Query(
+        False, description="Allow entry types the KB's kb.yaml does not declare"
+    ),
     svc: KBService = Depends(get_kb_service),
 ):
     """Import entries from an uploaded file."""
     from ...formats.importers import get_importer_registry
-    from ...schema import generate_entry_id
 
     if not svc.get_kb(kb):
         raise HTTPException(
@@ -678,35 +648,19 @@ async def import_entries(
             detail={"code": "PARSE_ERROR", "message": f"Failed to parse file: {e}"},
         )
 
-    from ...services.body_bounds import MARKER_KEYS, refuse_truncated_body
+    # Every per-record decision (the ADR-0034 truncated-body refusal, the
+    # declared type, an existing id, schema and plugin validation) is the
+    # service's write pipeline, the same one POST /entries uses (#378).
+    results = svc.bulk_create_entries(kb, parsed, allow_undeclared=allow_undeclared)
 
     created = []
     errors = []
-    for entry_data in parsed:
-        # ADR-0034 rule 2, per item: an imported record that carries the
-        # truncation marker alongside a body is a partial read someone saved
-        # to a file. Refuse it on its own; import the clean records.
-        refusal = refuse_truncated_body(entry_data)
-        if refusal is not None:
-            errors.append({"title": entry_data.get("title", "?"), "error": refusal})
-            continue
-        try:
-            entry_id = entry_data.get("id") or generate_entry_id(entry_data["title"])
-            entry_type = entry_data.get("entry_type", "note")
-            # The truncation keys are transport, not content: an untruncated
-            # record may still carry `body_truncated: false`, and that must not
-            # become frontmatter on the stored entry.
-            extra = {
-                k: v
-                for k, v in entry_data.items()
-                if k not in ("id", "title", "entry_type", "body", *MARKER_KEYS) and v is not None
-            }
-            entry = svc.create_entry(
-                kb, entry_id, entry_data["title"], entry_type, entry_data.get("body", ""), **extra
-            )
-            created.append({"id": entry.id, "title": entry.title})
-        except Exception as e:
-            errors.append({"title": entry_data.get("title", "?"), "error": str(e)})
+    for entry_data, r in zip(parsed, results, strict=True):
+        title = entry_data.get("title", "?") if isinstance(entry_data, dict) else "?"
+        if r.get("created"):
+            created.append({"id": r["entry_id"], "title": title})
+        else:
+            errors.append({"title": title, "error": r["error"], "error_code": r["error_code"]})
 
     return {
         "imported": len(created),
@@ -797,7 +751,7 @@ def get_entry(
 @router.post(
     "/entries",
     response_model=CreateResponse,
-    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
+    dependencies=[Depends(requires_kb_tier("write"))],
 )
 @limiter.limit("30/minute")
 def create_entry(
@@ -821,47 +775,51 @@ def create_entry(
             detail={"code": "KB_NOT_FOUND", "message": f"KB '{req.kb}' not found"},
         )
 
-    # Filter out None values so factory defaults apply
-    extra = {
+    # Map the request to a spec; None means "not given", so factory defaults
+    # apply. The marker goes through so the service can refuse it.
+    spec = {
         k: v
         for k, v in {
+            "entry_type": req.entry_type or "note",
+            "title": req.title,
+            "body": req.body,
             "date": req.date,
             "importance": req.importance,
             "participants": req.participants,
             "role": req.role,
             "tags": req.tags,
             "metadata": req.metadata,
+            "body_truncated": req.body_truncated,
         }.items()
         if v is not None
     }
 
-    from ...schema import generate_entry_id
-
-    entry_id = generate_entry_id(req.title)
-
     try:
-        entry = svc.create_entry(
-            req.kb, entry_id, req.title, req.entry_type or "note", req.body, **extra
-        )
+        written = svc.create(req.kb, spec, allow_undeclared=req.allow_undeclared)
     except (KBNotFoundError, EntryNotFoundError) as e:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
     except KBReadOnlyError as e:
         raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
-    except (ValidationError, PyriteError, ValueError) as e:
+    except ValidationError as e:
+        raise _refused(e)
+    except (PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "CREATE_FAILED", "message": str(e)})
+    entry = written.entry
 
     # Broadcast WebSocket event
     from ..websocket import broadcast_event
 
     broadcast_event("entry_created", entry_id=entry.id, kb_name=req.kb)
 
-    return CreateResponse(created=True, id=entry.id, kb_name=req.kb, file_path="")
+    return CreateResponse(
+        created=True, id=entry.id, kb_name=req.kb, file_path="", warnings=written.warnings
+    )
 
 
 @router.put(
     "/entries/{entry_id}",
     response_model=UpdateResponse,
-    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
+    dependencies=[Depends(requires_kb_tier("write"))],
 )
 @limiter.limit("30/minute")
 def update_entry(
@@ -891,14 +849,18 @@ def update_entry(
         updates["tags"] = req.tags
     if req.metadata is not None:
         updates["metadata"] = req.metadata
+    if req.body_truncated is not None:
+        updates["body_truncated"] = req.body_truncated
 
     try:
-        svc.update_entry(entry_id, req.kb, **updates)
+        written = svc.update(entry_id, req.kb, updates)
     except (KBNotFoundError, EntryNotFoundError) as e:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
     except KBReadOnlyError as e:
         raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
-    except (ValidationError, PyriteError, ValueError) as e:
+    except ValidationError as e:
+        raise _refused(e)
+    except (PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
     # Broadcast WebSocket event
@@ -906,13 +868,13 @@ def update_entry(
 
     broadcast_event("entry_updated", entry_id=entry_id, kb_name=req.kb)
 
-    return UpdateResponse(updated=True, id=entry_id)
+    return UpdateResponse(updated=True, id=entry_id, warnings=written.warnings)
 
 
 @router.patch(
     "/entries/{entry_id}",
     response_model=UpdateResponse,
-    dependencies=[Depends(requires_kb_tier("write")), Depends(refuses_truncated_body)],
+    dependencies=[Depends(requires_kb_tier("write"))],
 )
 @limiter.limit("30/minute")
 def patch_entry_field(
@@ -930,16 +892,21 @@ def patch_entry_field(
         except (ValueError, Exception):
             logger.warning("Worktree routing failed for PATCH, falling back to main")
 
+    updates = {body.field: body.value}
+    if body.body_truncated is not None:
+        updates["body_truncated"] = body.body_truncated
     try:
-        svc.update_entry(entry_id, body.kb, **{body.field: body.value})
+        written = svc.update(entry_id, body.kb, updates)
     except (KBNotFoundError, EntryNotFoundError) as e:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": str(e)})
     except KBReadOnlyError as e:
         raise HTTPException(status_code=403, detail={"code": "READ_ONLY", "message": str(e)})
-    except (ValidationError, PyriteError, ValueError) as e:
+    except ValidationError as e:
+        raise _refused(e)
+    except (PyriteError, ValueError) as e:
         raise HTTPException(status_code=400, detail={"code": "UPDATE_FAILED", "message": str(e)})
 
-    return UpdateResponse(updated=True, id=entry_id)
+    return UpdateResponse(updated=True, id=entry_id, warnings=written.warnings)
 
 
 @router.delete(
