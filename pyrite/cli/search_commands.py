@@ -14,6 +14,7 @@ from ..config import load_config
 from ..exceptions import QuerySyntaxError, QueryTooLongError
 from ..services.read_shaping import parse_fields_param, project_fields
 from ..storage.repository import KBRepository
+from .context import get_config_with_registered_kbs
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,8 @@ def register_search_command(app: typer.Typer):
         entries, not excluding them).
         """
         config = load_config()
+        if kb_name:
+            config = get_config_with_registered_kbs(config, name=kb_name)
 
         # A search scoped to an unregistered KB used to return an empty result
         # set (exit 0), which looks like a query miss rather than a wrong KB.
@@ -155,6 +158,7 @@ def register_search_command(app: typer.Typer):
 
         from ..storage import PyriteDB
 
+        db = None
         try:
             db = PyriteDB(config.settings.index_path)
 
@@ -311,6 +315,9 @@ def register_search_command(app: typer.Typer):
             console.print(f"[red]Search error ({type(e).__name__}):[/red] {e}")
             console.print("[dim]Falling back to file search...[/dim]")
             _search_files(config, query, kb_name, entry_type, limit)
+        finally:
+            if db is not None:
+                db.close()
 
 
 def _search_files(config, query, kb_name, entry_type, limit):

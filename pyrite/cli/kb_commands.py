@@ -16,7 +16,12 @@ from ..config import (
     load_config,
 )
 from ..exceptions import PyriteError
-from .context import cli_context, cli_registry_context
+from .context import (
+    cli_context,
+    cli_registry_context,
+    get_config_and_db,
+    get_config_with_registered_kbs,
+)
 
 kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
@@ -252,30 +257,27 @@ def kb_validate(
     && deploy` blocks on structural errors; scripts that want to gate on
     drift too can check for exit code 2.
     """
-    config = load_config()
-
-    if name:
-        kb = config.get_kb(name)
-        if not kb:
-            from ..utils.errors import cli_error
-
-            cli_error(
-                f"KB '{name}' not found",
-                output_format,
-                error_code="KB_NOT_FOUND",
-                suggestion="Run `pyrite kb list` to see registered KBs.",
-            )
-        kbs = [kb]
-    else:
-        kbs = config.knowledge_bases
-
-    # Run content-drift checks once (check_health walks all KBs internally),
-    # then bucket results by kb name.
-    from ..storage import IndexManager
-    from ..storage.database import PyriteDB
-
-    db = PyriteDB(config.settings.index_path)
+    config, db = get_config_and_db(load_config())
     try:
+        if name:
+            kb = config.get_kb(name)
+            if not kb:
+                from ..utils.errors import cli_error
+
+                cli_error(
+                    f"KB '{name}' not found",
+                    output_format,
+                    error_code="KB_NOT_FOUND",
+                    suggestion="Run `pyrite kb list` to see registered KBs.",
+                )
+            kbs = [kb]
+        else:
+            kbs = config.all_kbs()
+
+        # Run content-drift checks once (check_health walks all KBs internally),
+        # then bucket results by kb name.
+        from ..storage import IndexManager
+
         index_mgr = IndexManager(db, config)
         health = index_mgr.check_health()
     finally:
@@ -577,7 +579,7 @@ def schema_show(
     """Show the current schema for a KB."""
     from ..services.schema_service import SchemaService
 
-    config = load_config()
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
     try:
         svc = SchemaService(config)
         result = svc.show_schema(kb_name)
@@ -631,7 +633,7 @@ def schema_add_type(
     """Add a type definition to a KB's schema."""
     from ..services.schema_service import SchemaService
 
-    config = load_config()
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
     type_def: dict[str, Any] = {}
     if description:
         type_def["description"] = description
@@ -670,7 +672,7 @@ def schema_remove_type(
     """Remove a type definition from a KB's schema."""
     from ..services.schema_service import SchemaService
 
-    config = load_config()
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
     try:
         svc = SchemaService(config)
         result = svc.remove_type(kb_name, type_name)
@@ -700,7 +702,7 @@ def schema_set(
     from ..services.schema_service import SchemaService
     from ..utils.yaml import load_yaml_file as load_yaml
 
-    config = load_config()
+    config = get_config_with_registered_kbs(load_config(), name=kb_name)
 
     if not schema_file.exists():
         from ..utils.errors import cli_error
