@@ -74,15 +74,6 @@ def _isolate_pyrite_config_environment() -> None:
     os.environ["PYRITE_CONFIG_DIR"] = str(session_dir)
     os.environ["PYRITE_DATA_DIR"] = str(session_dir)
 
-    # A plugin loaded before this conftest may already have imported
-    # pyrite.config and fixed CONFIG_DIR at the developer's location.
-    import sys
-
-    config_module = sys.modules.get("pyrite.config")
-    if config_module is not None:
-        config_module.CONFIG_DIR = session_dir
-        config_module.CONFIG_FILE = session_dir / "config.yaml"
-
 
 _isolate_pyrite_config_environment()
 
