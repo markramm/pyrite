@@ -28,6 +28,14 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "test-affected"
 
+# A "never stamp" / "never skip" guard passes on a base that never stamps
+# anything, by construction; what it pins is that the stamp does not
+# over-reach. Each one fails when its guard alone is removed (mutation-checked
+# when the stamp landed).
+NEVER = pytest.mark.control(
+    reason="never-stamp/never-skip guard: passes where nothing stamps; red when its guard is removed"
+)
+
 FAKE_PYTHON = """\
 #!/bin/sh
 # The version query: `python -c ...`.
@@ -167,6 +175,7 @@ class TestStampWritten:
 
 
 class TestNeverStamped:
+    @NEVER
     def test_a_failure_is_not_stamped(self, repo):
         out = _run(repo, FAKE_EXIT="1")
         assert out.returncode == 1
@@ -174,11 +183,13 @@ class TestNeverStamped:
         assert _run(repo).returncode == 0
         assert len(_calls()) == 2, "a failed selection was treated as passed"
 
+    @NEVER
     def test_a_tree_with_uncommitted_tracked_changes_is_not_stamped(self, repo):
         (repo / "pyrite" / "c.py").write_text("C = 2\n")
         assert _run(repo).returncode == 0
         assert _stamps(repo) == []
 
+    @NEVER
     def test_an_untracked_python_file_makes_the_tree_dirty(self, repo):
         # An untracked conftest.py or module changes what ran without
         # changing HEAD's tree.
@@ -186,6 +197,7 @@ class TestNeverStamped:
         assert _run(repo).returncode == 0
         assert _stamps(repo) == []
 
+    @NEVER
     def test_a_dirty_tree_does_not_skip_on_heads_stamp(self, repo):
         # The edit is what is being tested; HEAD's pass says nothing about it.
         assert _run(repo).returncode == 0
@@ -193,6 +205,7 @@ class TestNeverStamped:
         assert _run(repo).returncode == 0
         assert len(_calls()) == 2
 
+    @NEVER
     def test_a_commit_during_the_run_is_not_stamped(self, repo):
         # The tree HEAD names afterwards is not the tree that was tested.
         during = "echo 'C = 9' > pyrite/c.py && git commit -qam during"
@@ -200,12 +213,14 @@ class TestNeverStamped:
         assert _git(repo, "log", "-1", "--format=%s").strip() == "during"
         assert _stamps(repo) == []
 
+    @NEVER
     def test_a_last_failed_run_is_not_stamped(self, repo):
         out = _run(repo, "--", "--lf")
         assert out.returncode == 0, out.stderr
         assert "--lf" in _calls()[0].split(), "--lf did not reach pytest"
         assert _stamps(repo) == []
 
+    @NEVER
     @pytest.mark.parametrize("narrowing", [["-k", "b"], ["--last-failed"], ["--deselect", "x"]])
     def test_pytest_args_that_narrow_the_run_are_not_stamped(self, repo, narrowing):
         assert _run(repo, "--", *narrowing).returncode == 0
@@ -216,6 +231,7 @@ class TestNeverStamped:
         assert _run(repo, "--", "-v", "-x", "--tb=long").returncode == 0
         assert len(_stamps(repo)) == 1
 
+    @NEVER
     def test_a_dry_run_is_not_stamped(self, repo):
         assert _run(repo, "--dry-run").returncode == 0
         assert _stamps(repo) == []
@@ -228,6 +244,7 @@ class TestCoverage:
         assert out.returncode == 0, out.stderr
         assert len(_calls()) == 1
 
+    @NEVER
     def test_a_subset_does_not_cover_a_superset(self, repo):
         assert _run(repo, "--files", "pyrite/b.py").returncode == 0
         assert _run(repo, "--files", "pyrite/a.py", "pyrite/b.py").returncode == 0
@@ -238,6 +255,7 @@ class TestCoverage:
         assert _run(repo, "--files", "pyrite/a.py", "pyrite/c.py").returncode == 0
         assert len(_calls()) == 1
 
+    @NEVER
     def test_a_selection_does_not_cover_full(self, repo):
         assert _run(repo, "--files", "pyrite/a.py", "pyrite/b.py", "pyrite/c.py").returncode == 0
         assert _run(repo, "--full").returncode == 0
@@ -249,6 +267,7 @@ class TestCoverage:
         assert _run(repo, "--files", "pyrite/a.py", "pyrite/b.py").returncode == 0
         assert len(_calls()) == 2
 
+    @NEVER
     def test_a_different_tree_does_not_match(self, repo):
         assert _run(repo).returncode == 0
         (repo / "pyrite" / "b.py").write_text("def func():\n    return 3\n")
@@ -256,6 +275,7 @@ class TestCoverage:
         assert _run(repo).returncode == 0
         assert len(_calls()) == 2
 
+    @NEVER
     def test_a_different_python_does_not_match(self, repo):
         assert _run(repo).returncode == 0
         assert _run(repo, FAKE_PY_VERSION="3.13").returncode == 0
@@ -292,6 +312,7 @@ class TestBypass:
         assert _run(repo, "--force").returncode == 0
         assert len(_calls()) == 2
 
+    @NEVER
     def test_the_force_variable_ignores_the_stamp(self, repo):
         assert _run(repo).returncode == 0
         assert _run(repo, PYRITE_PUSH_FORCE="1").returncode == 0
@@ -374,6 +395,7 @@ class TestPrePush:
         assert out.returncode == 0, out.stderr
         assert len(_calls()) == 1, "the pushed tree passed already; the hook ran it again"
 
+    @NEVER
     def test_a_pushed_tree_with_no_stamp_runs(self, repo):
         assert _run(repo).returncode == 0
         base = _git(repo, "rev-parse", "dev").strip()
