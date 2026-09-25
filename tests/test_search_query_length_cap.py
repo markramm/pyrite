@@ -268,3 +268,122 @@ class TestDerivedQueriesStayWithinTheCap:
             "/api/ai/suggest-links", json={"entry_id": entry_id, "kb_name": "test-events"}
         )
         assert resp.status_code == 200, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Query expansion: derived terms fit the room the caller's query leaves
+# ---------------------------------------------------------------------------
+
+
+class _Expander:
+    def __init__(self, terms):
+        self.terms = terms
+
+    def expand(self, query):
+        return list(self.terms)
+
+
+class TestExpansionStaysUnderTheCap:
+    """Only the caller's own query is refused. Expansion terms are derived
+    text: they are added while they fit and dropped whole when they do not."""
+
+    @pytest.mark.parametrize("mode", ["keyword", "hybrid"])
+    def test_a_query_under_the_cap_is_never_refused_for_its_expansion(self, indexed_test_env, mode):
+        svc = SearchService(indexed_test_env["db"])
+        svc._expansion_service = _Expander(["policy", "x" * 300, "border"])
+        seen = []
+        real = svc._db_search
+
+        def spy(**kwargs):
+            seen.append(kwargs["query"])
+            return real(**kwargs)
+
+        svc._db_search = spy
+        query = "immigration".ljust(MAX_SEARCH_QUERY_LENGTH - 20)
+
+        results = svc.search(query, mode=mode, expand=True)
+
+        assert results
+        assert seen and all(len(q) <= MAX_SEARCH_QUERY_LENGTH for q in seen)
+        # Whole terms that fit are kept, one that does not is dropped whole,
+        # and a shorter term after it still gets in.
+        assert seen[0].endswith(" OR policy OR border"), seen[0][-40:]
+        assert "xxx" not in seen[0]
+
+    def test_no_room_means_the_query_alone(self, indexed_test_env):
+        svc = SearchService(indexed_test_env["db"])
+        svc._expansion_service = _Expander(["policy"])
+        query = "immigration".ljust(MAX_SEARCH_QUERY_LENGTH)
+        assert svc._expand_query(query) == query
+
+    def test_the_callers_own_over_cap_query_is_still_refused(self, indexed_test_env):
+        svc = SearchService(indexed_test_env["db"])
+        svc._expansion_service = _Expander(["policy"])
+        with pytest.raises(QueryTooLongError):
+            svc.search(OVER_CAP, expand=True)
+
+
+# ---------------------------------------------------------------------------
+# clip_derived_query: never an unbalanced quote or a dangling operator
+# ---------------------------------------------------------------------------
+
+
+def _straddling(fragment: str, back: int) -> str:
+    """Text whose `fragment` starts `back` characters before the cap."""
+    lead = ("immigration " * 200)[: MAX_SEARCH_QUERY_LENGTH - back - 1].rstrip()
+    lead = lead.ljust(MAX_SEARCH_QUERY_LENGTH - back)
+    return lead + fragment + " trailing words after the cap"
+
+
+class TestClipDerivedQuery:
+    @pytest.mark.parametrize(
+        ("fragment", "back"),
+        [
+            ('"family separation policy"', 8),  # cut inside a quoted phrase
+            ("OR policy", 2),  # cut right after an operator
+            ("AND policy", 3),
+            ("NOT policy", 3),
+        ],
+    )
+    def test_clip_then_sanitize_then_match_succeeds(self, indexed_test_env, fragment, back):
+        from pyrite.services.search_service import clip_derived_query
+
+        clipped = clip_derived_query(_straddling(fragment, back))
+        assert len(clipped) <= MAX_SEARCH_QUERY_LENGTH
+        assert clipped.count('"') % 2 == 0
+        # The real path: cap check, sanitize, FTS5 MATCH on SQLite.
+        SearchService(indexed_test_env["db"]).search(clipped)
+
+    def test_short_text_is_unchanged(self):
+        from pyrite.services.search_service import clip_derived_query
+
+        assert clip_derived_query('say "hello there" OR bye') == 'say "hello there" OR bye'
+
+    def test_a_word_is_never_cut_mid_word(self):
+        from pyrite.services.search_service import clip_derived_query
+
+        text = "a" * (MAX_SEARCH_QUERY_LENGTH - 3) + " immigration"
+        assert clip_derived_query(text) == "a" * (MAX_SEARCH_QUERY_LENGTH - 3)
+
+
+def test_build_suggest_query_keeps_short_terms_after_an_over_long_one():
+    from pyrite.services.link_discovery_service import LinkDiscoveryService
+
+    entry = {"title": "", "tags": ["alpha", "x" * (MAX_SEARCH_QUERY_LENGTH + 5), "beta"]}
+    assert LinkDiscoveryService.build_suggest_query(entry) == '"alpha" OR "beta"'
+
+
+@pytest.mark.cli
+class TestCliFileSearch:
+    def test_files_over_cap_is_refused(self, cli_config):
+        from pyrite.cli import app
+
+        result = CliRunner().invoke(app, ["search", OVER_CAP, "--files", "--format", "json"])
+        assert result.exit_code == 1, result.output
+        assert json.loads(result.output)["error_code"] == "QUERY_TOO_LONG"
+
+    def test_files_at_cap_runs(self, cli_config):
+        from pyrite.cli import app
+
+        result = CliRunner().invoke(app, ["search", AT_CAP, "--files"])
+        assert result.exit_code == 0, result.output

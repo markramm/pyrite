@@ -132,6 +132,23 @@ def register_search_command(app: typer.Typer):
                 suggestion=f"known KBs: {known} (or run `pyrite kb list`)",
             )
 
+        # Every surface refuses an over-long query the same way, file search
+        # included; the index path must not fall back to file search with it.
+        from ..services.search_service import check_query_length
+
+        try:
+            check_query_length(query)
+        except QueryTooLongError as e:
+            from ..utils.errors import cli_error
+
+            cli_error(
+                str(e),
+                output_format,
+                error_code=e.error_code,
+                suggestion="shorten the query",
+                retryable=False,
+            )
+
         if use_files:
             _search_files(config, query, kb_name, entry_type, limit)
             return
@@ -253,18 +270,6 @@ def register_search_command(app: typer.Typer):
 
             console.print(table)
 
-        except QueryTooLongError as e:
-            # Refused, not a search failure: falling back to file search would
-            # run the very query the cap refused.
-            from ..utils.errors import cli_error
-
-            cli_error(
-                str(e),
-                output_format,
-                error_code=e.error_code,
-                suggestion="shorten the query",
-                retryable=False,
-            )
         except QuerySyntaxError as e:
             # Deterministic, not retryable — falling back to file search
             # would not help (the query itself is the problem) and the

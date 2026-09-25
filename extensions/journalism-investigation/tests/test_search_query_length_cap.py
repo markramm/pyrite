@@ -72,3 +72,20 @@ def test_cli_at_cap_searches(kb_env):
     result = CliRunner().invoke(investigation_app, ["search", AT_CAP, "--json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output)["total_count"] >= 1
+
+
+def test_mcp_investigation_search_all_over_cap_is_a_validation_error(tmp_path):
+    from pyrite.server.mcp_server import PyriteMCPServer
+
+    kb_path = tmp_path / "test-kb"
+    kb_path.mkdir()
+    kb = KBConfig(name="test", path=kb_path, kb_type="journalism-investigation")
+    config = PyriteConfig(knowledge_bases=[kb], settings=Settings(index_path=tmp_path / "index.db"))
+    server = PyriteMCPServer(config, tier="read")
+    try:
+        assert "investigation_search_all" in server.tools
+        result = server._dispatch_tool("investigation_search_all", {"query": OVER_CAP})
+        assert result.get("error_code") == "QUERY_TOO_LONG", result
+        assert result.get("retryable") is False
+    finally:
+        server.close()

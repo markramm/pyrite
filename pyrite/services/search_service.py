@@ -35,14 +35,45 @@ def check_query_length(query: str) -> None:
         )
 
 
-def clip_derived_query(query: str) -> str:
-    """Bound a query Pyrite derives from stored content (never a caller's).
+_FTS_OPERATORS = frozenset({"AND", "OR", "NOT"})
 
-    Link suggestions and chat retrieval build a query out of an entry title or
-    a chat message; that text is not a search the caller typed, so it is cut
-    to the cap rather than refused.
+
+def clip_derived_query(text: str) -> str:
+    """Bound text that a search is *built from*, where refusing would break
+    the feature: an entry title for link suggestions, a chat message for
+    retrieval. The chat message is the caller's own text, but it is not a
+    search the caller asked for, so the feature searches with a bounded
+    prefix of it instead of failing. Every direct search query -- REST
+    ``q``, MCP ``kb_search``, the CLI -- still goes through
+    ``check_query_length`` and is refused, never clipped.
+
+    The result stays valid FTS5 input: it ends on a word boundary, never
+    inside a quoted phrase (an unbalanced quote is "unterminated string")
+    and never on a bare AND/OR/NOT.
     """
-    return query[:MAX_SEARCH_QUERY_LENGTH]
+    if len(text) <= MAX_SEARCH_QUERY_LENGTH:
+        return text
+    clipped = text[:MAX_SEARCH_QUERY_LENGTH]
+    if not text[MAX_SEARCH_QUERY_LENGTH].isspace():
+        # The cut fell inside a word: drop the partial word (unless it is the
+        # only word, which then stays cut -- still valid FTS5 input).
+        clipped = clipped[: _last_word_start(clipped)] or clipped
+    if clipped.count('"') % 2:
+        # The cut fell inside a quoted phrase: drop the open phrase.
+        clipped = clipped[: clipped.rfind('"')]
+    clipped = clipped.rstrip()
+    while clipped[_last_word_start(clipped) :] in _FTS_OPERATORS:
+        # Never end on a bare operator: FTS5 reads it as a syntax error.
+        clipped = clipped[: _last_word_start(clipped)].rstrip()
+    return clipped
+
+
+def _last_word_start(text: str) -> int:
+    """Index where the last whitespace-separated word of `text` begins."""
+    i = len(text)
+    while i and not text[i - 1].isspace():
+        i -= 1
+    return i
 
 
 class SearchMode(StrEnum):
@@ -453,9 +484,16 @@ class SearchService:
         if not terms:
             return query
 
-        # Combine: original query OR term1 OR term2 ...
-        parts = [query] + terms
-        return " OR ".join(parts)
+        # Combine: original query OR term1 OR term2 ... The terms are derived
+        # text, so they only take the room the caller's query leaves under the
+        # cap; a term that does not fit is dropped whole, and a shorter one
+        # after it may still fit. Only the caller's own query is ever refused.
+        expanded = query
+        for term in terms:
+            candidate = f"{expanded} OR {term}"
+            if len(candidate) <= MAX_SEARCH_QUERY_LENGTH:
+                expanded = candidate
+        return expanded
 
     def _semantic_search(
         self,

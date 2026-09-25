@@ -63,7 +63,7 @@ class LinkDiscoveryService:
         for term in quoted:
             candidate = f"{query} OR {term}" if query else term
             if len(candidate) > MAX_SEARCH_QUERY_LENGTH:
-                break
+                continue  # drop this term whole; a shorter one may still fit
             query = candidate
         return query
 
