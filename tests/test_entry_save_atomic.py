@@ -101,6 +101,12 @@ class TestExclusiveSave:
 
         assert [p.name for p in tmp_path.iterdir()] == ["note.md"], "no temp file left behind"
 
+    @pytest.mark.control(
+        reason="exclusive=False is the default and was the only behavior "
+        "before this change, so save() overwriting is exactly what dev "
+        "already did -- this is a regression guard for the untouched path, "
+        "not a test of the new exclusive=True behavior"
+    )
     def test_non_exclusive_save_still_overwrites(self, tmp_path):
         """Regression guard: exclusive=False (the default, every update)
         must keep working exactly as before -- this is what makes create

@@ -213,6 +213,15 @@ class TestRenameKeepsAFilePatternTypesFilename:
             "exactly one file must exist after the rename -- not zero, not two"
         )
 
+    @pytest.mark.control(
+        reason="dev's resolve_filename has no entry-field placeholder support "
+        "at all, so {adr_number:04d} in the fixture's file_pattern KeyErrors "
+        "and resolve_filename always returns None there -- rename resolves a "
+        "genuinely different <new_id>.md path on dev (no collision to lose "
+        "data over), so the renamed entry is trivially findable by its new "
+        "id without this PR's fix. Pins the same outcome now reached "
+        "deliberately by keeping the existing filename, not by accident."
+    )
     def test_renaming_an_adr_is_findable_by_the_new_id(self, adr_repo):
         adr_repo.rename("adr-x", "adr-y")
         found = adr_repo.find_file("adr-y")
