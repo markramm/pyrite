@@ -13,6 +13,7 @@ from typing import Any
 
 from ..config import PyriteConfig
 from ..storage.database import PyriteDB
+from .search_service import MAX_SEARCH_QUERY_LENGTH, clip_derived_query
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,15 @@ class LinkDiscoveryService:
         # `OperationalError: no such column: <token>`. Double-quoting disables
         # operator/column interpretation for the token. Escape embedded quotes.
         quoted = ['"' + t.replace('"', '""') + '"' for t in unique]
-        return " OR ".join(quoted)
+        # Whole terms only, and no more than the search-query cap: a
+        # heavily-tagged entry must still get suggestions, not a refusal.
+        query = ""
+        for term in quoted:
+            candidate = f"{query} OR {term}" if query else term
+            if len(candidate) > MAX_SEARCH_QUERY_LENGTH:
+                break
+            query = candidate
+        return query
 
     # ------------------------------------------------------------------
     # suggest_links — single-entry keyword-based suggestion
@@ -168,25 +177,10 @@ class LinkDiscoveryService:
             query_parts = [title]
             if summary:
                 query_parts.append(summary[:200])
-            query = " ".join(query_parts)
+            query = clip_derived_query(" ".join(query_parts))
         else:
-            # Keyword: OR-joined tokens
-            tokens: list[str] = []
-            if title:
-                tokens.extend(w for w in re.split(r"\W+", title) if w and len(w) > 2)
-            if tags:
-                tokens.extend(t for t in tags if t)
-            seen: set[str] = set()
-            unique: list[str] = []
-            for t in tokens:
-                lower = t.lower()
-                if lower not in seen:
-                    seen.add(lower)
-                    unique.append(t)
-            # Quote each term: a bare token matching an FTS column name (e.g.
-            # "capture", "legalism") is otherwise parsed as a `column:` filter
-            # and raises OperationalError. Same fix as build_suggest_query.
-            query = " OR ".join('"' + t.replace('"', '""') + '"' for t in unique)
+            # Keyword: OR-joined quoted tokens, bounded by the query cap.
+            query = self.build_suggest_query({"title": title, "tags": tags})
 
         if not query.strip():
             return []

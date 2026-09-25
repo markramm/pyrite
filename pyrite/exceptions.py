@@ -75,6 +75,17 @@ class QuerySyntaxError(PyriteError):
     error_code = "QUERY_SYNTAX"
 
 
+class QueryTooLongError(ValidationError):
+    """A search query is longer than the fixed maximum length.
+
+    Raised before any sanitizing or searching runs, on every surface, so the
+    cost of preparing a query is bounded by the cap. A query is never silently
+    truncated. Carries ``error_code`` ``QUERY_TOO_LONG``; REST maps it to 422.
+    """
+
+    error_code = "QUERY_TOO_LONG"
+
+
 class ClipperBlockedHostError(PyriteError):
     """Raised when the web clipper refuses to fetch a URL because the
     resolved host is on the SSRF blocklist (loopback, link-local,

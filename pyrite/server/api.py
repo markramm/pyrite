@@ -34,6 +34,7 @@ from ..exceptions import (
     KBReadOnlyError,
     PluginError,
     PyriteError,
+    QueryTooLongError,
     StorageError,
     ValidationError,
 )
@@ -66,6 +67,7 @@ _PYRITE_ERROR_STATUS: list[tuple[type[PyriteError], int, str]] = [
     (KBReadOnlyError, 403, "KB_READ_ONLY"),
     (KBProtectedError, 403, "KB_PROTECTED"),
     (FrontmatterError, 422, "INVALID_FRONTMATTER"),
+    (QueryTooLongError, 422, "QUERY_TOO_LONG"),
     (ValidationError, 422, "VALIDATION_ERROR"),
     (ConfigError, 409, "CONFIG_CONFLICT"),
     (PluginError, 502, "PLUGIN_ERROR"),

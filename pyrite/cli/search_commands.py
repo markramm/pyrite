@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..config import load_config
-from ..exceptions import QuerySyntaxError
+from ..exceptions import QuerySyntaxError, QueryTooLongError
 from ..services.read_shaping import parse_fields_param, project_fields
 from ..storage.repository import KBRepository
 
@@ -253,6 +253,18 @@ def register_search_command(app: typer.Typer):
 
             console.print(table)
 
+        except QueryTooLongError as e:
+            # Refused, not a search failure: falling back to file search would
+            # run the very query the cap refused.
+            from ..utils.errors import cli_error
+
+            cli_error(
+                str(e),
+                output_format,
+                error_code=e.error_code,
+                suggestion="shorten the query",
+                retryable=False,
+            )
         except QuerySyntaxError as e:
             # Deterministic, not retryable — falling back to file search
             # would not help (the query itself is the problem) and the

@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from pyrite.config import load_config
+from pyrite.exceptions import QueryTooLongError
 from pyrite.storage.database import PyriteDB
 
 from .plugin import JournalismInvestigationPlugin
@@ -421,13 +422,24 @@ def search_all(
     config = load_config()
     db = PyriteDB(config.settings.index_path)
     try:
-        result = cross_kb_search(
-            db,
-            query,
-            kb_names=kb_names if kb_names else None,
-            entry_type=entry_type if entry_type else None,
-            limit=limit,
-        )
+        try:
+            result = cross_kb_search(
+                db,
+                query,
+                kb_names=kb_names if kb_names else None,
+                entry_type=entry_type if entry_type else None,
+                limit=limit,
+            )
+        except QueryTooLongError as e:
+            from pyrite.utils.errors import cli_error
+
+            cli_error(
+                str(e),
+                "json" if output_json else "rich",
+                error_code=e.error_code,
+                suggestion="shorten the query",
+                retryable=False,
+            )
 
         if correlate:
             # Flatten and correlate

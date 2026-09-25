@@ -12,10 +12,37 @@ import time
 from enum import StrEnum
 from typing import Any
 
-from ..exceptions import QuerySyntaxError
+from ..exceptions import QuerySyntaxError, QueryTooLongError
 from ..storage.database import PyriteDB
 
 logger = logging.getLogger(__name__)
+
+#: The longest search query, in characters, that any surface accepts.
+MAX_SEARCH_QUERY_LENGTH = 1000
+
+
+def check_query_length(query: str) -> None:
+    """Refuse a search query longer than ``MAX_SEARCH_QUERY_LENGTH``.
+
+    Called before anything else looks at the query, so every later step --
+    sanitizing, expansion, the backend -- sees a bounded input. Refused, never
+    truncated: a caller must know their query was not the one that ran.
+    """
+    if len(query) > MAX_SEARCH_QUERY_LENGTH:
+        raise QueryTooLongError(
+            f"Search query is {len(query)} characters; the maximum is "
+            f"{MAX_SEARCH_QUERY_LENGTH}. Shorten the query."
+        )
+
+
+def clip_derived_query(query: str) -> str:
+    """Bound a query Pyrite derives from stored content (never a caller's).
+
+    Link suggestions and chat retrieval build a query out of an entry title or
+    a chat message; that text is not a search the caller typed, so it is cut
+    to the cap rather than refused.
+    """
+    return query[:MAX_SEARCH_QUERY_LENGTH]
 
 
 class SearchMode(StrEnum):
@@ -88,7 +115,12 @@ class SearchService:
             "0.6 milestone" -> '"0.6" milestone'
             "alex jones" -> "alex jones" (unchanged)
             'alex AND "not-here"' -> 'alex AND "not-here"' (preserved)
+
+        Raises ``QueryTooLongError`` for a query over
+        ``MAX_SEARCH_QUERY_LENGTH``, before any other work.
         """
+        check_query_length(query)
+
         # If query already contains FTS5 operators or quotes, assume user knows what they're doing
         if any(op in query.upper() for op in [" AND ", " OR ", " NOT ", '"']):
             return query
@@ -270,6 +302,10 @@ class SearchService:
         # (not on self) because the service instance is shared across requests
         # on the server/MCP side.
         tr: dict[str, Any] = trace if trace is not None else {}
+
+        # Before expansion, mode selection or sanitizing: every mode refuses an
+        # over-long query the same way.
+        check_query_length(query)
 
         # Validate `limit` once, here, rather than letting whatever arithmetic
         # reaches it first decide the error. `limit=None` used to surface as a
