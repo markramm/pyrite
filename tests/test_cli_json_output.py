@@ -513,3 +513,22 @@ def test_create_allows_core_types_even_without_declaration(cli_env):
         f"core type 'note' must succeed even when not in kb.yaml; got exit "
         f"{result.exit_code} with output:\n{result.output}"
     )
+
+
+@pytest.mark.cli
+@pytest.mark.parametrize("subcommand", ["stats", "health"])
+def test_index_stats_and_health_close_database(cli_env, subcommand):
+    """Both read-only index commands close the DB they open."""
+    closed_dbs = []
+    original_close = PyriteDB.close
+
+    def tracked_close(db):
+        closed_dbs.append(db)
+        original_close(db)
+
+    with patch.object(PyriteDB, "close", tracked_close):
+        with _patch_config("pyrite.cli.index_commands.load_config", cli_env):
+            result = runner.invoke(app, ["index", subcommand, "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    assert len(closed_dbs) == 1

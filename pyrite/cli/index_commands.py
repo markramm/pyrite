@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..utils.errors import cli_error
-from .context import get_config_and_db
+from .context import cli_db_context, get_config_and_db
 
 logger = logging.getLogger(__name__)
 
@@ -236,10 +236,9 @@ def index_stats(
     """Show index statistics."""
     from ..storage import IndexManager
 
-    config, db = get_config_and_db()
-    index_mgr = IndexManager(db, config)
-
-    stats = index_mgr.get_index_stats()
+    with cli_db_context() as (config, db):
+        index_mgr = IndexManager(db, config)
+        stats = index_mgr.get_index_stats()
 
     formatted = _format_output(stats, output_format)
     if formatted is not None:
@@ -365,19 +364,18 @@ def index_health(
     """
     from ..storage import IndexManager
 
-    config, db = get_config_and_db()
-    if kb_name is not None and config.get_kb(kb_name) is None:
-        # Reporting a clean bill for a KB that does not exist would be the same
-        # bug as exiting 0 while unhealthy: a non-answer that reads as success.
-        cli_error(
-            f"KB not found: {kb_name}",
-            output_format,
-            error_code="KB_NOT_FOUND",
-            suggestion="run `pyrite kb list` to see configured KBs",
-        )
-    index_mgr = IndexManager(db, config)
-
-    health = index_mgr.check_health(kb_name=kb_name)
+    with cli_db_context() as (config, db):
+        if kb_name is not None and config.get_kb(kb_name) is None:
+            # Reporting a clean bill for a KB that does not exist would be the same
+            # bug as exiting 0 while unhealthy: a non-answer that reads as success.
+            cli_error(
+                f"KB not found: {kb_name}",
+                output_format,
+                error_code="KB_NOT_FOUND",
+                suggestion="run `pyrite kb list` to see configured KBs",
+            )
+        index_mgr = IndexManager(db, config)
+        health = index_mgr.check_health(kb_name=kb_name)
 
     broken_links = health.get("broken_links", 0)
     undeclared_types = health.get("undeclared_types", [])
