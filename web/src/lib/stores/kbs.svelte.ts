@@ -8,6 +8,7 @@ class KBStore {
 	activeKB = $state<string | null>(null);
 	loading = $state(false);
 	error = $state<string | null>(null);
+	initialized = $state(false);
 
 	get activeKBInfo(): KBInfo | undefined {
 		return this.kbs.find((kb) => kb.name === this.activeKB);
@@ -28,6 +29,7 @@ class KBStore {
 			this.error = e instanceof Error ? e.message : 'Failed to load KBs';
 		} finally {
 			this.loading = false;
+			this.initialized = true;
 		}
 	}
 

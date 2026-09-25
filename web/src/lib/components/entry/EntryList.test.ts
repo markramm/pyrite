@@ -8,6 +8,8 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 const mockEntryStore = vi.hoisted(() => ({
 	entries: [] as any[],
 	loading: false,
+	initialized: true,
+	listKB: 'test-kb' as string | undefined,
 	error: null as string | null,
 	total: 0,
 	limit: 50,
@@ -15,8 +17,20 @@ const mockEntryStore = vi.hoisted(() => ({
 	loadList: vi.fn()
 }));
 
+const mockKBStore = vi.hoisted(() => ({
+	activeKB: 'test-kb' as string | null,
+	loading: false,
+	initialized: true,
+	error: null as string | null,
+	load: vi.fn()
+}));
+
 vi.mock('$lib/stores/entries.svelte', () => ({
 	entryStore: mockEntryStore
+}));
+
+vi.mock('$lib/stores/kbs.svelte', () => ({
+	kbStore: mockKBStore
 }));
 
 import EntryList from './EntryList.svelte';
@@ -29,10 +43,16 @@ afterEach(() => {
 beforeEach(() => {
 	mockEntryStore.entries = [];
 	mockEntryStore.loading = false;
+	mockEntryStore.initialized = true;
+	mockEntryStore.listKB = 'test-kb';
 	mockEntryStore.error = null;
 	mockEntryStore.total = 0;
 	mockEntryStore.limit = 50;
 	mockEntryStore.offset = 0;
+	mockKBStore.activeKB = 'test-kb';
+	mockKBStore.loading = false;
+	mockKBStore.initialized = true;
+	mockKBStore.error = null;
 });
 
 const sampleEntry = {
@@ -51,6 +71,46 @@ const sampleEntry = {
 };
 
 describe('EntryList', () => {
+	it('shows a skeleton before the initial KB load settles instead of an empty state', () => {
+		mockKBStore.activeKB = null;
+		mockKBStore.initialized = false;
+		mockEntryStore.initialized = false;
+		mockEntryStore.listKB = undefined;
+		const { container } = render(EntryList);
+
+		expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+		expect(screen.queryByText('No entries found')).not.toBeInTheDocument();
+	});
+
+	it('shows a skeleton until the selected KB entry list has settled', () => {
+		mockEntryStore.initialized = false;
+		mockEntryStore.listKB = undefined;
+		const { container } = render(EntryList);
+
+		expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+		expect(screen.queryByText('No entries found')).not.toBeInTheDocument();
+	});
+
+	it('shows a skeleton while the entry list catches up with a changed KB', () => {
+		mockKBStore.activeKB = 'new-kb';
+		mockEntryStore.listKB = 'old-kb';
+		const { container } = render(EntryList);
+
+		expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+		expect(screen.queryByText('No entries found')).not.toBeInTheDocument();
+	});
+
+	it('shows the KB load error after the initial load fails', () => {
+		mockKBStore.activeKB = null;
+		mockKBStore.initialized = true;
+		mockKBStore.error = 'KB registry unavailable';
+		render(EntryList);
+
+		expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+		expect(screen.getByText('KB registry unavailable')).toBeInTheDocument();
+		expect(screen.queryByText('No entries found')).not.toBeInTheDocument();
+	});
+
 	it('shows skeleton loader when loading is true', () => {
 		mockEntryStore.loading = true;
 		const { container } = render(EntryList);

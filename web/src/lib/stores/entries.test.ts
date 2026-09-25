@@ -36,6 +36,8 @@ beforeEach(() => {
 	entryStore.total = 0;
 	entryStore.offset = 0;
 	entryStore.loading = false;
+	entryStore.initialized = false;
+	entryStore.listKB = undefined;
 	entryStore.saving = false;
 	entryStore.error = null;
 	entryStore.dirty = false;
@@ -54,12 +56,15 @@ describe('EntryStore', () => {
 			await entryStore.loadList({ kb: 'test-kb' });
 			expect(entryStore.entries).toHaveLength(1);
 			expect(entryStore.total).toBe(1);
+			expect(entryStore.initialized).toBe(true);
+			expect(entryStore.listKB).toBe('test-kb');
 		});
 
 		it('handles API errors gracefully', async () => {
 			mockListEntries.mockRejectedValueOnce(new Error('Server error'));
 			await entryStore.loadList();
 			expect(entryStore.error).toBe('Server error');
+			expect(entryStore.initialized).toBe(true);
 		});
 	});
 
