@@ -255,6 +255,54 @@ class TestExportServiceCommit:
         assert content is not None
         assert "Content" in content
 
+    def test_commit_kb_recovers_the_session_when_recording_fails_under_lock(self, git_kb):
+        """A concurrent writer (another index sync, another request) can
+        hold the sqlite write lock right when record_commit tries to
+        insert -- that insert then raises OperationalError, and commit_kb's
+        except must roll the ORM session back. Without a rollback, the
+        session stays poisoned (PendingRollbackError) for every later call
+        on it in the same process -- the MCP server and the CLI both reuse
+        one long-lived session (coordinator cold read on #432)."""
+        import sqlite3
+        import time
+
+        export_svc = git_kb["export_svc"]
+        db = git_kb["db"]
+        config = git_kb["config"]
+        kb_path = git_kb["kb_path"]
+        db_path = config.settings.index_path
+
+        entry_file = kb_path / "entry-1.md"
+        entry_file.write_text("---\nid: entry-1\ntitle: Entry\ntype: note\n---\n\nContent")
+        IndexManager(db, config).index_all()
+
+        # Hold the write lock from a second connection while commit_kb runs,
+        # so record_commit's INSERT hits "database is locked".
+        blocker = sqlite3.connect(str(db_path), timeout=0.1)
+        blocker.execute("BEGIN IMMEDIATE")
+        try:
+            t0 = time.time()
+            result = export_svc.commit_kb("test-kb", message="Add entry-1")
+            # commit_kb must still report the commit succeeded -- the git
+            # commit itself is not undone by a recording failure.
+            assert result["success"]
+            assert time.time() - t0 < 15, "commit_kb should not hang waiting on the lock"
+        finally:
+            blocker.rollback()
+            blocker.close()
+
+        # The session must be usable again -- not raising PendingRollbackError.
+        db.get_entry("entry-1", "test-kb")
+        db.get_entry_versions("entry-1", "test-kb")
+        db.upsert_entry_version(
+            entry_id="entry-1",
+            kb_name="test-kb",
+            commit_hash="0" * 40,
+            author_name="x",
+            author_email="x@example.com",
+            commit_date="2026-01-01T00:00:00+00:00",
+        )
+
     def test_commit_kb_not_found(self, git_kb):
         export_svc = git_kb["export_svc"]
         with pytest.raises(KBNotFoundError):

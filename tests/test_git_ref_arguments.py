@@ -296,11 +296,6 @@ _ALLOWED_BEFORE_SEPARATOR = {
     # versions-commit-hash issue tracks validating them).
     ("get_file_log", "f'{since_commit}..HEAD'"),
     ("get_changed_files", "f'{since_commit}..HEAD'"),
-    # --format=<marker>%H|... : a hardcoded module constant (a single
-    # control character, _LOG_COMMIT_MARKER) plus a literal git pretty
-    # format -- never derived from caller input, so it can never be
-    # option-shaped in a way a caller controls (#432).
-    ("get_file_log", "f'--format={marker}%H|%an|%ae|%aI|%s'"),
     # check-ref-format refs/heads/<name>: begins with "refs/", never an option.
     ("is_valid_branch_name", "f'refs/heads/{name}'"),
 }

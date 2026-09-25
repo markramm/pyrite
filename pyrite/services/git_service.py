@@ -146,6 +146,107 @@ class GitService:
     """Low-level git operations via subprocess."""
 
     @staticmethod
+    def get_kb_prefix(kb_path: Path) -> str:
+        """The KB's path relative to its git repo ROOT, e.g. "kbdir/" for a
+        KB that is a subdirectory of its repo, or "" when the KB path IS
+        the repo root.
+
+        `git log`/`git show` report paths relative to the repo root, not to
+        `cwd` -- joining such a path directly onto `kb_path` double-prefixes
+        a KB in a subdirectory (repo/kbdir/ + "kbdir/a.md" ->
+        repo/kbdir/kbdir/a.md). Every caller that turns a repo-relative
+        path into a KB-relative one must go through this (#432 cold read).
+        """
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-prefix"],
+                cwd=str(kb_path),
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=_git_env(),
+            )
+            if result.returncode != 0:
+                return ""
+            return result.stdout.strip()
+        except (subprocess.SubprocessError, OSError):
+            logger.warning("Failed to get KB prefix for %s", kb_path, exc_info=True)
+            return ""
+
+    @staticmethod
+    def _kb_relative_path(repo_relative_path: str, kb_prefix: str) -> str | None:
+        """Convert a repo-relative path to KB-relative, or None if the path
+        falls outside the KB's own subtree (e.g. another KB in a sibling
+        directory, or `--follow` reporting a path from before a move into
+        this KB). Never resolves a path outside the prefix -- a caller must
+        treat None as "not this KB's file", not fall back to any other
+        path (#432 cold read: refuse, don't guess)."""
+        if not kb_prefix:
+            return repo_relative_path
+        if repo_relative_path == kb_prefix.rstrip("/"):
+            # The prefix itself named as a file is not a real case for a
+            # KB (a directory), but guards a degenerate rstrip edge.
+            return None
+        if not repo_relative_path.startswith(kb_prefix):
+            return None
+        return repo_relative_path[len(kb_prefix) :]
+
+    @staticmethod
+    def _parse_nul_separated_name_status(raw: bytes) -> list[dict]:
+        """Parse `git log --name-status -z` / `git show --name-status -z`
+        output into per-commit blocks.
+
+        NUL-separated so a quoted path (core.quotePath: unicode, a tab, a
+        backslash) comes back as the exact raw bytes git wrote, never
+        through the human-quoted plain-output form (#432 cold read; one
+        parser, shared by every caller that reads --name-status -z).
+
+        Byte layout per commit (verified against real git output, not
+        assumed): "<format-line>\\0\\n<status>\\0<path>\\0[<path2>\\0]",
+        repeated. The "\\n" is a PREFIX of the status token, not a suffix
+        of the header -- splitting on "\\0" alone and looking for "\\n"
+        inside the *header* token finds nothing; it must be looked for at
+        the START of the token that follows a header. Positional, not
+        content-sniffed: a path or commit message could itself contain
+        anything, so the only reliable signal is "this token follows
+        either the very start of the stream, or the expected number of
+        path tokens for the previous status field."
+
+        Returns a list of dicts: {"header": <the format-string line, str>,
+        "statuses": [(status, [paths...]), ...]}.
+        """
+        text = raw.decode("utf-8", errors="surrogateescape")
+        tokens = text.split("\0")
+        blocks: list[dict] = []
+        i = 0
+        n = len(tokens)
+        while i < n:
+            header = tokens[i]
+            i += 1
+            if header == "" and i >= n:
+                break
+            statuses: list[tuple[str, list[str]]] = []
+            # Each status token begins with the "\n" left over from the
+            # header/status boundary; strip exactly that one leading
+            # newline (never anything else -- a status code is never
+            # itself empty) to recover the real status field.
+            while i < n and tokens[i].startswith("\n"):
+                status_field = tokens[i][1:]
+                i += 1
+                if status_field[:1] in ("R", "C"):
+                    old_path = tokens[i] if i < n else ""
+                    i += 1
+                    new_path = tokens[i] if i < n else ""
+                    i += 1
+                    statuses.append((status_field, [old_path, new_path]))
+                else:
+                    path = tokens[i] if i < n else ""
+                    i += 1
+                    statuses.append((status_field, [path]))
+            blocks.append({"header": header, "statuses": statuses})
+        return blocks
+
+    @staticmethod
     def subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
         """Public entry point for other modules that shell out to git
         directly (e.g. WorktreeService) to get the same leak-isolated
@@ -349,11 +450,6 @@ class GitService:
             logger.warning("Failed to get HEAD commit for %s", local_path, exc_info=True)
         return ""
 
-    # A marker unlikely to appear in a commit subject, used to split a
-    # `--name-status` log into per-commit blocks without an intermediate
-    # empty-line convention that a multi-line commit message could confuse.
-    _LOG_COMMIT_MARKER = "\x1e"
-
     @staticmethod
     def get_file_log(
         local_path: Path,
@@ -363,20 +459,42 @@ class GitService:
         """
         Get git log for a specific file, following renames.
 
-        Returns list of dicts with: hash, author_name, author_email, date,
-        message, file_path -- `file_path` is the path this file had *at
-        that commit* (its tree), which for commits before a rename is the
-        old name, not the name passed in (#432: reading a pre-rename
-        commit at the current path 404s, because that path did not exist
-        yet).
+        `local_path` is the KB directory (git's cwd for this call);
+        `file_path` is KB-relative. Returns list of dicts with: hash,
+        author_name, author_email, date, message, file_path -- `file_path`
+        is the KB-relative path this file had *at that commit* (its tree),
+        which for commits before a rename is the old name, not the name
+        passed in (#432: reading a pre-rename commit at the current path
+        404s, because that path did not exist yet).
+
+        Uses `-z` throughout: `--name-status` alone prints a quoted,
+        escaped form for a non-ASCII or whitespace-containing name
+        (core.quotePath), which a naive split would return verbatim
+        instead of the real filename (#432 cold read).
+
+        `-M10%` makes `--follow` keep tracking a file across a rename even
+        when it was also heavily edited in the same commit -- git's
+        default similarity threshold for rename detection (50%) would
+        otherwise treat that as a delete+add and silently truncate history
+        at the rename (#432 cold read).
+
+        git reports every path relative to the repo ROOT, not to
+        `local_path` -- a KB that is a subdirectory of its repo would
+        otherwise get its prefix doubled by a caller that joins the
+        reported path onto `local_path` directly (#432 cold read). Any
+        commit whose reported path falls outside the KB's own subtree
+        (e.g. `--follow` chasing a rename from a sibling KB, or from
+        before a move into this KB) is dropped, not guessed at.
         """
-        marker = GitService._LOG_COMMIT_MARKER
+        kb_prefix = GitService.get_kb_prefix(local_path)
         cmd = [
             "git",
             "log",
             "--follow",
-            f"--format={marker}%H|%an|%ae|%aI|%s",
+            "-M10%",
+            "--format=%H|%an|%ae|%aI|%s",
             "--name-status",
+            "-z",
             "--",
             file_path,
         ]
@@ -388,7 +506,6 @@ class GitService:
                 cmd,
                 cwd=str(local_path),
                 capture_output=True,
-                text=True,
                 timeout=30,
                 env=_git_env(),
             )
@@ -396,29 +513,27 @@ class GitService:
                 return []
 
             entries = []
-            for block in result.stdout.split(marker):
-                block = block.strip("\n")
-                if not block:
-                    continue
-                lines = block.split("\n")
-                header = lines[0]
+            for block in GitService._parse_nul_separated_name_status(result.stdout):
+                header = block["header"]
                 parts = header.split("|", 4)
                 if len(parts) < 5:
                     continue
-                # The name-status line(s) that follow the header: for a
-                # plain change, "M\tpath"; for a rename, "R100\told\tnew" --
-                # the path that existed in *this* commit's tree is always
-                # the last field (new name on a rename, the only name
-                # otherwise).
-                commit_file_path = file_path
-                for status_line in lines[1:]:
-                    status_line = status_line.strip()
-                    if not status_line:
-                        continue
-                    fields = status_line.split("\t")
-                    if len(fields) >= 2:
-                        commit_file_path = fields[-1]
+                # The status line(s) for this commit: for a plain change,
+                # one ("M", [path]); for a rename/copy, ("R100", [old,
+                # new]) -- the path that existed in *this* commit's tree is
+                # always the last path (the new name on a rename, the only
+                # name otherwise).
+                repo_relative_path = None
+                for _status, paths in block["statuses"]:
+                    if paths:
+                        repo_relative_path = paths[-1]
                     break
+                if repo_relative_path is None:
+                    continue
+                kb_relative_path = GitService._kb_relative_path(repo_relative_path, kb_prefix)
+                if kb_relative_path is None:
+                    # Outside this KB's subtree -- never resolve to it.
+                    continue
                 entries.append(
                     {
                         "hash": parts[0],
@@ -426,7 +541,7 @@ class GitService:
                         "author_email": parts[2],
                         "date": parts[3],
                         "message": parts[4],
-                        "file_path": commit_file_path,
+                        "file_path": kb_relative_path,
                     }
                 )
             return entries
@@ -479,38 +594,98 @@ class GitService:
 
     @staticmethod
     def get_commit_files(local_path: Path, commit_hash: str) -> list[str]:
-        """Get the paths (repo-relative) that a single commit changed.
+        """Get the KB-relative paths that a single commit changed.
 
         Unlike `get_changed_files` (a range diff against HEAD), this is one
         commit's own change set -- what a server write's commit just
         touched, for recording entry_version rows right after that commit
         (#432). Works for the root commit (no parent) as well as ordinary
         commits: `git show --name-only` handles both.
+
+        Uses `-z` (see `get_file_log`'s docstring for why: a quoted/escaped
+        name from core.quotePath would otherwise come back as the escaped
+        literal, not the real filename) and converts each repo-relative
+        path git reports to KB-relative, dropping any that fall outside
+        this KB's own subtree (`local_path`).
         """
+        return [
+            status_path
+            for _status, status_path in GitService.get_commit_file_statuses(local_path, commit_hash)
+        ]
+
+    @staticmethod
+    def get_commit_file_statuses(local_path: Path, commit_hash: str) -> list[tuple[str, str]]:
+        """Get (status, KB-relative path) for each file a single commit
+        changed -- `status` is git's one-letter name-status code (A, M, D,
+        R<NN>, C<NN>, ...), needed to tell "this commit created the file"
+        (A) from every other change, e.g. for entry_version.change_type
+        (#432 cold read: record_commit previously hardcoded "modified" for
+        every row, including the add).
+
+        For a rename/copy, only the destination path is returned (what
+        exists in this commit's tree) -- same rule as `get_file_log`.
+        """
+        kb_prefix = GitService.get_kb_prefix(local_path)
         try:
             result = subprocess.run(
                 [
                     "git",
                     "show",
-                    "--name-only",
+                    "--name-status",
+                    "-M10%",
                     "--format=",
+                    "-z",
                     "--end-of-options",
                     commit_hash,
                 ],
                 cwd=str(local_path),
                 capture_output=True,
-                text=True,
                 timeout=30,
                 env=_git_env(),
             )
             if result.returncode != 0:
                 return []
-            return [line for line in result.stdout.strip().split("\n") if line]
+            out: list[tuple[str, str]] = []
+            for status, paths in GitService._parse_nul_separated_name_only_statuses(result.stdout):
+                if not paths:
+                    continue
+                repo_relative_path = paths[-1]
+                kb_relative_path = GitService._kb_relative_path(repo_relative_path, kb_prefix)
+                if kb_relative_path is None:
+                    continue
+                out.append((status, kb_relative_path))
+            return out
         except (subprocess.SubprocessError, OSError):
             logger.warning(
                 "Failed to get commit files for %s at %s", local_path, commit_hash, exc_info=True
             )
             return []
+
+    @staticmethod
+    def _parse_nul_separated_name_only_statuses(raw: bytes) -> list[tuple[str, list[str]]]:
+        """Parse `git show --name-status -z --format=` output (no header
+        line -- just NUL-terminated status/path tokens) into (status,
+        [paths]) pairs, sharing the rename/copy two-path handling with
+        `_parse_nul_separated_name_status`."""
+        text = raw.decode("utf-8", errors="surrogateescape")
+        tokens = [t for t in text.split("\0") if t != ""]
+        out: list[tuple[str, list[str]]] = []
+        i = 0
+        n = len(tokens)
+        while i < n:
+            status_field = tokens[i]
+            i += 1
+            if status_field and status_field[0] in ("R", "C"):
+                old_path = tokens[i] if i < n else ""
+                i += 1
+                new_path = tokens[i] if i < n else ""
+                i += 1
+                out.append((status_field, [old_path, new_path]))
+            else:
+                path = tokens[i] if i < n else ""
+                i += 1
+                out.append((status_field, [path]))
+        return out
 
     @staticmethod
     def get_changed_files(

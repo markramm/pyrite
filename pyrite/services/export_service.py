@@ -254,6 +254,17 @@ class ExportService:
                     # into a reported failure -- the commit already
                     # happened. The next `index build --with-attribution`
                     # still recovers these rows.
+                    #
+                    # The rollback is not optional: a failed INSERT (e.g.
+                    # "database is locked" under write contention from a
+                    # concurrent index sync) leaves this ORM session's
+                    # transaction in a failed state. Without rolling it
+                    # back here, every later call on this exact session --
+                    # which the MCP server and the CLI both reuse across
+                    # requests, not just this one call -- raises
+                    # PendingRollbackError instead of doing its own work
+                    # (coordinator cold read on #432).
+                    self.db.session.rollback()
                     logger.warning(
                         "Failed to record entry_version rows for %s@%s",
                         kb_name,

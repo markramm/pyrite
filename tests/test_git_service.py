@@ -162,64 +162,211 @@ class TestGetters:
         assert GitService.is_git_repo(Path("/tmp/test")) is False
 
 
+def _git(cwd, *args):
+    return subprocess.run(
+        ["git", *args], cwd=str(cwd), capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def _init_repo(path):
+    path.mkdir(parents=True, exist_ok=True)
+    _git(path, "init", "-q")
+    _git(path, "config", "user.email", "test@test.com")
+    _git(path, "config", "user.name", "Test")
+
+
 class TestGetFileLog:
-    """Tests for get_file_log."""
+    """Tests for get_file_log, against real git repos -- the output shape
+    (-z NUL-separated, quoted-path handling, rename detection thresholds)
+    cannot be trusted from a hand-written mock (#432 cold read)."""
 
-    @patch("pyrite.services.git_service.subprocess.run")
-    def test_get_file_log(self, mock_run):
-        marker = GitService._LOG_COMMIT_MARKER
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout=(
-                f"{marker}abc123|Alice|alice@example.com|2025-01-20T10:00:00|Initial commit\n"
-                "A\tactors/test.md\n"
-                f"{marker}def456|Bob|bob@example.com|2025-01-21T11:00:00|Update entry\n"
-                "M\tactors/test.md\n"
-            ),
-        )
-        log = GitService.get_file_log(Path("/tmp/test"), "actors/test.md")
+    def test_get_file_log(self, tmp_path):
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        (repo / "test.md").write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "Initial commit")
+        c1 = _git(repo, "rev-parse", "HEAD")
+
+        (repo / "test.md").write_text("v2")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "Update entry")
+        c2 = _git(repo, "rev-parse", "HEAD")
+
+        log = GitService.get_file_log(repo, "test.md")
         assert len(log) == 2
-        assert log[0]["hash"] == "abc123"
-        assert log[0]["author_name"] == "Alice"
-        assert log[0]["file_path"] == "actors/test.md"
-        assert log[1]["message"] == "Update entry"
+        assert log[0]["hash"] == c2
+        assert log[0]["message"] == "Update entry"
+        assert log[0]["file_path"] == "test.md"
+        assert log[1]["hash"] == c1
+        assert log[1]["file_path"] == "test.md"
 
-    @patch("pyrite.services.git_service.subprocess.run")
-    def test_get_file_log_reports_the_path_at_each_commit(self, mock_run):
+    def test_get_file_log_reports_the_path_at_each_commit(self, tmp_path):
         """A commit before a rename reports the *old* path -- what
         get_entry_at_version needs to read at that commit's tree (#432),
         not the path passed in to follow the file's history."""
-        marker = GitService._LOG_COMMIT_MARKER
-        mock_run.return_value = MagicMock(
-            returncode=0,
-            stdout=(
-                f"{marker}c2|Alice|alice@example.com|2025-01-22T10:00:00|After rename\n"
-                "M\tb.md\n"
-                f"{marker}c1|Alice|alice@example.com|2025-01-21T10:00:00|Rename\n"
-                "R100\ta.md\tb.md\n"
-                f"{marker}c0|Alice|alice@example.com|2025-01-20T10:00:00|Initial\n"
-                "A\ta.md\n"
-            ),
-        )
-        log = GitService.get_file_log(Path("/tmp/test"), "b.md")
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        (repo / "a.md").write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "Initial")
+        c0 = _git(repo, "rev-parse", "HEAD")
+
+        _git(repo, "mv", "a.md", "b.md")
+        _git(repo, "commit", "-q", "-m", "Rename")
+        c1 = _git(repo, "rev-parse", "HEAD")
+
+        (repo / "b.md").write_text("v2")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "After rename")
+        c2 = _git(repo, "rev-parse", "HEAD")
+
+        log = GitService.get_file_log(repo, "b.md")
         assert [(entry["hash"], entry["file_path"]) for entry in log] == [
-            ("c2", "b.md"),
-            ("c1", "b.md"),
-            ("c0", "a.md"),
+            (c2, "b.md"),
+            (c1, "b.md"),
+            (c0, "a.md"),
         ]
 
-    @patch("pyrite.services.git_service.subprocess.run")
-    def test_get_file_log_empty(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
-        log = GitService.get_file_log(Path("/tmp/test"), "nonexistent.md")
+    def test_get_file_log_follows_a_rename_below_default_similarity(self, tmp_path):
+        """A rename bundled with a big enough content edit falls below
+        git's default rename-detection threshold, so plain --follow stops
+        at the rename and never reaches the file's original commit --
+        get_file_log must pass an explicit low -M so history is not
+        silently truncated (coordinator cold read on #432)."""
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        original = "\n".join(f"line {i}" for i in range(50))
+        (repo / "a.md").write_text(original)
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "add")
+        c0 = _git(repo, "rev-parse", "HEAD")
+
+        _git(repo, "mv", "a.md", "z.md")
+        # Rewrite most lines so similarity drops well below 50%.
+        lines = original.split("\n")
+        for i in range(0, len(lines), 2):
+            lines[i] = lines[i] + " CHANGED SUBSTANTIALLY TO DROP SIMILARITY"
+        (repo / "z.md").write_text("\n".join(lines))
+        _git(repo, "add", "-A")
+        _git(repo, "commit", "-q", "-m", "rename+edit")
+        c1 = _git(repo, "rev-parse", "HEAD")
+
+        log = GitService.get_file_log(repo, "z.md")
+        hashes = [entry["hash"] for entry in log]
+        assert c1 in hashes
+        assert c0 in hashes, (
+            "history stopped at the rename: --follow needs an explicit low "
+            "-M threshold, not git's default"
+        )
+
+    def test_get_file_log_unquotes_a_unicode_filename(self, tmp_path):
+        """core.quotePath quotes a non-ASCII name in git's plain output;
+        -z must be used so the path comes back raw, not as the literal
+        quoted-escaped string "caf\\303\\251.md" (#432 cold read)."""
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        name = "café.md"
+        (repo / name).write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "add unicode")
+
+        log = GitService.get_file_log(repo, name)
+        assert len(log) == 1
+        assert log[0]["file_path"] == name
+
+    def test_get_file_log_unquotes_a_tab_in_filename(self, tmp_path):
+        """A tab in a filename is quote-escaped by git's plain output too;
+        -z must be used so field-splitting on a literal tab in
+        --name-status cannot be confused by one embedded in the path."""
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        name = "a\tb.md"
+        (repo / name).write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "add tab name")
+
+        log = GitService.get_file_log(repo, name)
+        assert len(log) == 1
+        assert log[0]["file_path"] == name
+
+    def test_get_file_log_empty(self, tmp_path):
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        (repo / "other.md").write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "unrelated")
+
+        log = GitService.get_file_log(repo, "nonexistent.md")
         assert log == []
 
-    @patch("pyrite.services.git_service.subprocess.run")
-    def test_get_file_log_with_since(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="")
-        GitService.get_file_log(Path("/tmp/test"), "test.md", since_commit="abc123")
-        cmd = mock_run.call_args[0][0]
-        assert "abc123..HEAD" in cmd
+    def test_get_file_log_with_since(self, tmp_path):
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        (repo / "test.md").write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "v1")
+        c1 = _git(repo, "rev-parse", "HEAD")
+
+        (repo / "test.md").write_text("v2")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "v2")
+
+        log = GitService.get_file_log(repo, "test.md", since_commit=c1)
+        assert [entry["message"] for entry in log] == ["v2"]
+
+
+class TestGetCommitFiles:
+    """Tests for get_commit_files, against real repos (quoted-path handling
+    cannot be trusted from a mock)."""
+
+    def test_get_commit_files_plain(self, tmp_path):
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        (repo / "a.md").write_text("v1")
+        (repo / "b.md").write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "add two")
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        files = GitService.get_commit_files(repo, commit)
+        assert sorted(files) == ["a.md", "b.md"]
+
+    def test_get_commit_files_unquotes_unicode(self, tmp_path):
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        name = "café.md"
+        (repo / name).write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "add unicode")
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        files = GitService.get_commit_files(repo, commit)
+        assert files == [name]
+
+    def test_get_commit_files_unquotes_tab(self, tmp_path):
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        name = "a\tb.md"
+        (repo / name).write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "add tab name")
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        files = GitService.get_commit_files(repo, commit)
+        assert files == [name]
+
+    def test_get_commit_files_root_commit(self, tmp_path):
+        """git show --name-only handles the root commit (no parent) the
+        same way as any other."""
+        repo = tmp_path / "repo"
+        _init_repo(repo)
+        (repo / "a.md").write_text("v1")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", "root")
+        commit = _git(repo, "rev-parse", "HEAD")
+
+        assert GitService.get_commit_files(repo, commit) == ["a.md"]
 
 
 class TestGetChangedFiles:

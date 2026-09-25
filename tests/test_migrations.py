@@ -188,6 +188,65 @@ class TestEntryVersionFilePathMigration:
         assert row["commit_hash"] == "deadbeef"
         assert row["file_path"] is None
 
+    def test_v25_normalises_an_absolute_path_to_kb_relative(self, temp_db):
+        """A dev database that ran an earlier (pre-coordinator-round)
+        version of this migration would have absolute file_path values --
+        upsert_entry_version only fills a *missing* path, never replaces
+        one already set, so nothing else can ever repair these rows. The
+        migration itself must normalise them once, here."""
+        mgr = MigrationManager(temp_db)
+        mgr.migrate(target_version=24)
+        temp_db.execute("ALTER TABLE entry_version ADD COLUMN file_path TEXT")
+        # migrations.py never creates the `kb` table itself (only ORM
+        # create_all does); build the minimal shape _apply_v25 reads.
+        temp_db.execute("CREATE TABLE kb (name TEXT PRIMARY KEY, kb_type TEXT, path TEXT)")
+        temp_db.execute("""
+            INSERT INTO kb (name, kb_type, path)
+            VALUES ('kb1', 'generic', '/home/user/kbs/kb1')
+        """)
+        temp_db.execute("""
+            INSERT INTO entry_version
+                (entry_id, kb_name, commit_hash, author_name, author_email,
+                 commit_date, message, change_type, file_path)
+            VALUES ('e1', 'kb1', 'deadbeef', 'A', 'a@x.com', '2026-01-01', 'msg',
+                    'modified', '/home/user/kbs/kb1/notes/a.md')
+        """)
+        temp_db.commit()
+
+        # Record the column as already present so _apply_v25's "already
+        # has the column" branch is what runs the normalisation, matching
+        # a real upgrade from a DB that ran an earlier v25.
+        mgr.migrate()
+
+        row = temp_db.execute(
+            "SELECT file_path FROM entry_version WHERE entry_id = 'e1'"
+        ).fetchone()
+        assert row["file_path"] == "notes/a.md", row["file_path"]
+
+    def test_v25_leaves_an_already_relative_path_untouched(self, temp_db):
+        mgr = MigrationManager(temp_db)
+        mgr.migrate(target_version=24)
+        temp_db.execute("ALTER TABLE entry_version ADD COLUMN file_path TEXT")
+        temp_db.execute("CREATE TABLE kb (name TEXT PRIMARY KEY, kb_type TEXT, path TEXT)")
+        temp_db.execute("""
+            INSERT INTO kb (name, kb_type, path) VALUES ('kb1', 'generic', '/kbs/kb1')
+        """)
+        temp_db.execute("""
+            INSERT INTO entry_version
+                (entry_id, kb_name, commit_hash, author_name, author_email,
+                 commit_date, message, change_type, file_path)
+            VALUES ('e1', 'kb1', 'deadbeef', 'A', 'a@x.com', '2026-01-01', 'msg',
+                    'modified', 'a.md')
+        """)
+        temp_db.commit()
+
+        mgr.migrate()
+
+        row = temp_db.execute(
+            "SELECT file_path FROM entry_version WHERE entry_id = 'e1'"
+        ).fetchone()
+        assert row["file_path"] == "a.md"
+
     def test_v25_is_idempotent(self, temp_db):
         mgr = MigrationManager(temp_db)
         mgr.migrate(target_version=24)

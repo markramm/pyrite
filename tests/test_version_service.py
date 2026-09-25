@@ -498,13 +498,16 @@ class TestRecordCommit:
         assert len(versions) == 1
 
     def test_renamed_entry_pre_rename_version_is_readable(self, kb_setup):
-        """git mv a.md b.md, commit, run attribution indexing: the list
-        shows both commits, and reading the pre-rename hash returns the
-        content as of that commit (#432 -- today this 404s because
-        get_entry_at_version reads `git show <c>:./<current path>`, and the
-        entry's current path is now b.md, which didn't exist at commit1)."""
+        """git mv a.md b.md, commit, run attribution indexing ONLY -- no
+        record_commit call for commit1 -- so commit1's stored path comes
+        entirely from get_file_log's rename-following --name-status parse,
+        not from a fresher record_commit call made while the file still
+        lived at its original path. The list shows both commits, and
+        reading the pre-rename hash returns the content as of that commit
+        (#432 -- today this 404s because get_entry_at_version reads
+        `git show <c>:./<current path>`, and the entry's current path is
+        now b.md, which didn't exist at commit1)."""
         svc, db, config, kb_path, commit1 = kb_setup
-        svc.record_commit("test-kb", commit1)
 
         _git(kb_path, "mv", "a.md", "b.md")
         _git(kb_path, "commit", "-m", "rename a.md to b.md")
@@ -529,6 +532,60 @@ class TestRecordCommit:
         assert post_rename_content is not None
         assert "Version 1" in post_rename_content
 
+    def test_renamed_entry_below_default_similarity_pre_rename_version_is_readable(self, kb_setup):
+        """A rename bundled with a content edit big enough to drop
+        similarity below git's default rename-detection threshold (50%)
+        must still resolve the pre-rename commit's content, not silently
+        drop it from history (coordinator cold read on #432). The base
+        file has real bulk (50 lines) so editing roughly half of it lands
+        in a believable ~30% similarity band -- not the near-0% a small
+        file plus a large unrelated addition would produce, which any
+        threshold handles trivially and proves nothing about the fix."""
+        svc, db, config, kb_path, commit1 = kb_setup
+        frontmatter = "---\nid: entry-1\ntitle: V1\ntype: note\n---\n\n"
+        body_lines = [f"line {i}" for i in range(50)]
+        original = frontmatter + "\n".join(body_lines)
+        (kb_path / "a.md").write_text(original)
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "bulk content")
+        commit1 = _git(kb_path, "rev-parse", "HEAD")
+
+        _git(kb_path, "mv", "a.md", "b.md")
+        # Only the body is mutated -- the frontmatter block must stay
+        # parseable, or this entry never gets indexed at its new path and
+        # the fixture would fail for the wrong reason.
+        for i in range(0, len(body_lines), 2):
+            body_lines[i] = body_lines[i] + " CHANGED"
+        rewritten = frontmatter + "\n".join(body_lines)
+        (kb_path / "b.md").write_text(rewritten)
+        _git(kb_path, "add", "-A")
+        _git(kb_path, "commit", "-m", "rename with partial rewrite")
+        commit2 = _git(kb_path, "rev-parse", "HEAD")
+
+        # Confirm the fixture itself actually produced a sub-100 rename --
+        # otherwise this test would pass for the wrong reason.
+        status = _git(kb_path, "show", "--name-status", "-M10%", "--format=", commit2)
+        assert status.startswith("R"), f"fixture did not produce a rename: {status!r}"
+        assert status.split("\t")[0] != "R100", f"fixture rename was 100% similar: {status!r}"
+
+        from pyrite.services.git_service import GitService
+        from pyrite.storage.index import IndexManager
+
+        idx = IndexManager(db, config)
+        idx.index_with_attribution("test-kb", GitService)
+
+        versions = svc.get_entry_versions("entry-1", "test-kb")
+        hashes = {v["commit_hash"] for v in versions}
+        assert commit1 in hashes, (
+            "history was truncated at the low-similarity rename: --follow "
+            "needs an explicit low -M threshold"
+        )
+        assert commit2 in hashes
+
+        pre_rename_content = svc.get_entry_at_version("entry-1", "test-kb", commit1)
+        assert pre_rename_content is not None
+        assert pre_rename_content == original
+
     def test_foreign_commit_to_different_entrys_old_path_still_404s(self, kb_setup):
         """#415 must hold across the rename fix: a commit that touched a
         *different* entry's old path is not this entry's version, even if
@@ -551,6 +608,275 @@ class TestRecordCommit:
 
         # entry-1 never had this commit as one of its own versions.
         assert svc.get_entry_at_version("entry-1", "test-kb", foreign_rename_commit) is None
+
+    def test_created_change_type_only_for_the_add_commit(self, kb_setup):
+        """record_commit must report change_type="created" for the commit
+        that adds the file, and "modified" for every other commit -- the
+        same distinction index_with_attribution already makes from the
+        full log (coordinator cold read on #432: every row from
+        record_commit was hardcoded "modified", including the add)."""
+        from pyrite.storage.models import EntryVersion
+
+        svc, db, config, kb_path, commit1 = kb_setup
+
+        svc.record_commit("test-kb", commit1)
+        row = db.session.query(EntryVersion).filter_by(commit_hash=commit1).first()
+        assert row.change_type == "created"
+
+        (kb_path / "a.md").write_text("---\nid: entry-1\ntitle: V2\ntype: note\n---\n\nVersion 2")
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "edit")
+        commit2 = _git(kb_path, "rev-parse", "HEAD")
+
+        svc.record_commit("test-kb", commit2)
+        row2 = db.session.query(EntryVersion).filter_by(commit_hash=commit2).first()
+        assert row2.change_type == "modified"
+
+
+class TestRecordCommitSubdirectoryKB:
+    """record_commit against a KB that is a subdirectory of its git repo --
+    git reports paths relative to the repo ROOT, not the KB (coordinator
+    cold read: joining a repo-relative path onto kb_path double-prefixes
+    the subdirectory, e.g. repo/kbdir/kbdir/a.md)."""
+
+    @pytest.fixture
+    def subdir_kb_setup(self, tmp_path):
+        repo_root = tmp_path / "repo"
+        repo_root.mkdir()
+        _git(repo_root, "init")
+        _git(repo_root, "config", "user.email", "test@test.com")
+        _git(repo_root, "config", "user.name", "Test")
+
+        kb_path = repo_root / "kbdir"
+        kb_path.mkdir()
+        (kb_path / "a.md").write_text("---\nid: entry-1\ntitle: V1\ntype: note\n---\n\nVersion 1")
+        _git(repo_root, "add", ".")
+        _git(repo_root, "commit", "-m", "v1")
+        commit1 = _git(repo_root, "rev-parse", "HEAD")
+
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="sub-kb", path=kb_path)],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, config).index_all()
+
+        svc = VersionService(config, db)
+        yield svc, db, config, repo_root, kb_path, commit1
+        db.close()
+
+    def test_record_commit_resolves_subdir_entry(self, subdir_kb_setup):
+        svc, db, config, repo_root, kb_path, commit1 = subdir_kb_setup
+
+        n = svc.record_commit("sub-kb", commit1)
+        assert n == 1
+
+        content = svc.get_entry_at_version("entry-1", "sub-kb", commit1)
+        assert content is not None
+        assert "Version 1" in content
+
+    def test_record_commit_refuses_a_path_outside_the_kb(self, subdir_kb_setup):
+        """A commit that touches a file elsewhere in the repo (another KB,
+        or a directory outside this one) must never resolve to an entry in
+        THIS KB, even by coincidence of a matching relative suffix. An
+        entry moved into the KB from outside must not have its pre-move
+        (outside-KB) content readable through this KB."""
+        svc, db, config, repo_root, kb_path, commit1 = subdir_kb_setup
+
+        outside_dir = repo_root / "other-kbdir"
+        outside_dir.mkdir()
+        (outside_dir / "a.md").write_text(
+            "---\nid: entry-1\ntitle: Outside\ntype: note\n---\n\nOutside content, not this KB"
+        )
+        _git(repo_root, "add", ".")
+        _git(repo_root, "commit", "-m", "add file outside the kb")
+        outside_commit = _git(repo_root, "rev-parse", "HEAD")
+
+        n = svc.record_commit("sub-kb", outside_commit)
+        assert n == 0, "a path outside the KB's subtree must never be recorded as this KB's version"
+
+    def test_record_commit_refuses_a_path_that_would_collide_after_naive_prefix_slicing(
+        self, subdir_kb_setup
+    ):
+        """A weaker implementation than "refuse if the path does not start
+        with the KB's prefix" -- e.g. always slicing off len(prefix)
+        characters, regardless of whether the path actually starts with
+        that prefix -- can accidentally produce a KB-relative path that
+        collides with a real entry, purely by character count. The KB's
+        prefix here is "kbdir/" (6 chars); an outside path is constructed
+        so that path[6:] == "a.md", the real entry's KB-relative path, to
+        catch exactly that weaker implementation."""
+        svc, db, config, repo_root, kb_path, commit1 = subdir_kb_setup
+
+        from pyrite.services.git_service import GitService
+
+        assert GitService.get_kb_prefix(kb_path) == "kbdir/"
+        # Repo-relative "aaaaaaa.md" (7 a's + ".md" = 10 chars); slicing
+        # off the first 6 characters (len("kbdir/")) leaves "a.md" --
+        # colliding with entry-1's real KB-relative path, but this file is
+        # NOT under kbdir/ at all.
+        colliding_name = "aaaaaaa.md"
+        assert colliding_name[len("kbdir/") :] == "a.md"
+        (repo_root / colliding_name).write_text(
+            "---\nid: entry-1\ntitle: Outside\ntype: note\n---\n\nOutside content via slice collision"
+        )
+        _git(repo_root, "add", ".")
+        _git(repo_root, "commit", "-m", "add colliding file outside the kb")
+        outside_commit = _git(repo_root, "rev-parse", "HEAD")
+
+        n = svc.record_commit("sub-kb", outside_commit)
+        assert n == 0, (
+            "a path outside the KB, even one that collides with a real "
+            "entry's path after naive prefix slicing, must never be recorded"
+        )
+
+    def test_moving_a_file_into_the_kb_does_not_expose_its_pre_move_content(self, subdir_kb_setup):
+        svc, db, config, repo_root, kb_path, commit1 = subdir_kb_setup
+
+        outside_dir = repo_root / "other-kbdir"
+        outside_dir.mkdir()
+        (outside_dir / "b.md").write_text(
+            "---\nid: entry-2\ntitle: Outside\ntype: note\n---\n\nOutside content"
+        )
+        _git(repo_root, "add", ".")
+        _git(repo_root, "commit", "-m", "add outside")
+
+        _git(repo_root, "mv", "other-kbdir/b.md", "kbdir/b.md")
+        _git(repo_root, "commit", "-m", "move into kb")
+        move_commit = _git(repo_root, "rev-parse", "HEAD")
+
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, config).index_all()
+        n = svc.record_commit("sub-kb", move_commit)
+        assert n == 1
+
+        # entry-2 is now in the KB, but its ONLY recorded version is the
+        # move commit -- the pre-move commit (outside the KB) was never
+        # recorded as one of this KB's entry's versions.
+        content = svc.get_entry_at_version("entry-2", "sub-kb", move_commit)
+        assert content is not None
+        assert "Outside content" in content
+        versions = svc.get_entry_versions("entry-2", "sub-kb")
+        assert len(versions) == 1
+        assert versions[0]["commit_hash"] == move_commit
+
+
+class TestFilePathStoredKBRelative:
+    """entry_version.file_path is stored KB-relative, not absolute
+    (coordinator cold read: an absolute path breaks the moment the KB's
+    directory moves, and the model's own docstring says "relative")."""
+
+    def test_stored_path_is_kb_relative_not_absolute(self, tmp_path):
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        _git(kb_path, "init")
+        _git(kb_path, "config", "user.email", "test@test.com")
+        _git(kb_path, "config", "user.name", "Test")
+        (kb_path / "a.md").write_text("---\nid: entry-1\ntitle: V1\ntype: note\n---\n\nV1")
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "v1")
+        commit1 = _git(kb_path, "rev-parse", "HEAD")
+
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="k", path=kb_path)],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, config).index_all()
+        VersionService(config, db).record_commit("k", commit1)
+
+        stored = db.get_entry_version_file_path("entry-1", "k", commit1)
+        assert stored == "a.md", f"expected a KB-relative path, got {stored!r}"
+        db.close()
+
+    def test_reading_a_version_survives_the_kb_directory_moving(self, tmp_path):
+        """The reader must be tolerant of a stored path -- KB-relative for
+        every version recorded after this fix -- surviving a move of the
+        KB's own directory: only the KBConfig.path changes, the stored
+        rel path does not need to."""
+        old_repo = tmp_path / "old"
+        old_repo.mkdir()
+        _git(old_repo, "init")
+        _git(old_repo, "config", "user.email", "test@test.com")
+        _git(old_repo, "config", "user.name", "Test")
+        (old_repo / "a.md").write_text("---\nid: entry-1\ntitle: V1\ntype: note\n---\n\nV1")
+        _git(old_repo, "add", ".")
+        _git(old_repo, "commit", "-m", "v1")
+        commit1 = _git(old_repo, "rev-parse", "HEAD")
+
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="k", path=old_repo)],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, config).index_all()
+        VersionService(config, db).record_commit("k", commit1)
+
+        import shutil
+
+        new_repo = tmp_path / "new"
+        shutil.move(str(old_repo), str(new_repo))
+
+        moved_config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="k", path=new_repo)],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        IndexManager(db, moved_config).index_all()
+
+        content = VersionService(moved_config, db).get_entry_at_version("entry-1", "k", commit1)
+        assert content is not None
+        assert "V1" in content
+        db.close()
+
+    def test_reader_tolerates_a_stored_absolute_path(self, tmp_path):
+        """A row whose file_path is still absolute (from before the
+        migration's normalisation ran, or before this coordinator round)
+        must still be readable -- the reader relativizes it against the
+        KB's own current path rather than trying it as-is."""
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        _git(kb_path, "init")
+        _git(kb_path, "config", "user.email", "test@test.com")
+        _git(kb_path, "config", "user.name", "Test")
+        (kb_path / "a.md").write_text("---\nid: entry-1\ntitle: V1\ntype: note\n---\n\nV1")
+        _git(kb_path, "add", ".")
+        _git(kb_path, "commit", "-m", "v1")
+        commit1 = _git(kb_path, "rev-parse", "HEAD")
+
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="k", path=kb_path)],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(tmp_path / "index.db")
+        from pyrite.storage.index import IndexManager
+
+        IndexManager(db, config).index_all()
+        # Insert the row directly with an absolute path -- what a
+        # pre-normalisation row looks like -- rather than through
+        # record_commit, which always stores KB-relative now.
+        db.upsert_entry_version(
+            entry_id="entry-1",
+            kb_name="k",
+            commit_hash=commit1,
+            author_name="Test",
+            author_email="test@test.com",
+            commit_date="2026-01-01T00:00:00+00:00",
+            change_type="created",
+            file_path=str(kb_path / "a.md"),
+        )
+
+        content = VersionService(config, db).get_entry_at_version("entry-1", "k", commit1)
+        assert content is not None
+        assert "V1" in content
+        db.close()
 
 
 class TestGitEnvIsolation:

@@ -44,6 +44,16 @@ class VersionService:
         upsert_entry_version's existing (entry_id, kb_name, commit_hash)
         dedup.
 
+        `file_path` is stored KB-relative (matching get_commit_file_statuses'
+        already-KB-relative, already-outside-KB-refused output), never
+        absolute -- an absolute path breaks the moment the KB's directory
+        moves (#432 cold read).
+
+        `change_type` is "created" for the file this commit added (status
+        "A"), "modified" for anything else -- matching what
+        index_with_attribution derives from the full log, not a blanket
+        "modified" for every row.
+
         Returns the number of entry_version rows written (existing rows
         that only had their file_path backfilled do not count).
         """
@@ -61,28 +71,32 @@ class VersionService:
         if commit_info is None:
             return 0
 
+        # (status, KB-relative path) per changed .md file -- already
+        # resolved against the KB's repo prefix and refused if outside it
+        # (GitService.get_commit_file_statuses).
         changed = [
-            f for f in GitService.get_commit_files(kb_path, commit_hash) if f.endswith(".md")
+            (status, path)
+            for status, path in GitService.get_commit_file_statuses(kb_path, commit_hash)
+            if path.endswith(".md")
         ]
         if not changed:
             return 0
 
         # Path -> entry id, from the index (not from parsing frontmatter
-        # again): the same source of truth IndexManager itself uses.
+        # again): the same source of truth IndexManager itself uses. Loaded
+        # once for this whole commit, not once per changed file.
         entries_by_path = {
-            e["file_path"]: e["id"] for e in self.db.get_entries_for_indexing(kb_name)
+            str(Path(e["file_path"]).relative_to(kb_path)): e["id"]
+            for e in self.db.get_entries_for_indexing(kb_name)
         }
 
         recorded = 0
-        for rel_path in changed:
-            # Match Entry.file_path's own construction (repository.list_files:
-            # kb_config.path / rel, via rglob -- not resolve()'d), so this
-            # looks up the exact string get_entries_for_indexing returns.
-            abs_path = str(kb_path / rel_path)
-            entry_id = entries_by_path.get(abs_path)
+        for status, kb_relative_path in changed:
+            entry_id = entries_by_path.get(kb_relative_path)
             if entry_id is None:
                 continue
             existed = self.db.entry_version_exists(entry_id, kb_name, commit_hash)
+            change_type = "created" if status == "A" else "modified"
             self.db.upsert_entry_version(
                 entry_id=entry_id,
                 kb_name=kb_name,
@@ -91,8 +105,8 @@ class VersionService:
                 author_email=commit_info["author_email"],
                 commit_date=commit_info["date"],
                 message=commit_info["message"],
-                change_type="modified",
-                file_path=abs_path,
+                change_type=change_type,
+                file_path=kb_relative_path,
             )
             if not existed:
                 recorded += 1
@@ -169,12 +183,25 @@ class VersionService:
         # possibly-abbreviated hash. Falls back to the entry's current path
         # for rows recorded before #432 (no stored path), same as today.
         versioned_path = self.db.get_entry_version_file_path(entry_id, kb_name, commit)
-        file_path = versioned_path or entry["file_path"]
-        # Make relative to KB path
-        try:
-            rel_path = str(Path(file_path).relative_to(kb_path))
-        except ValueError:
-            rel_path = file_path
+        if versioned_path:
+            # Stored KB-relative from this fix onward. Tolerate an absolute
+            # path too (nothing storing that shape is released, but an
+            # existing dev database may have rows from before this
+            # coordinator round) by relativizing it the same way the
+            # entry's own current path is handled below.
+            if Path(versioned_path).is_absolute():
+                try:
+                    rel_path = str(Path(versioned_path).relative_to(kb_path))
+                except ValueError:
+                    rel_path = versioned_path
+            else:
+                rel_path = versioned_path
+        else:
+            file_path = entry["file_path"]
+            try:
+                rel_path = str(Path(file_path).relative_to(kb_path))
+            except ValueError:
+                rel_path = file_path
 
         # Read the entry's file at the peeled, full commit id. `<rev>:<path>`
         # is resolved by git relative to the repo root, not to `cwd`, so a

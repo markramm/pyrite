@@ -781,7 +781,17 @@ class MigrationManager:
             raise
 
     def _apply_v25(self) -> None:
-        """Conditionally add file_path to entry_version (#432)."""
+        """Conditionally add file_path to entry_version (#432), and
+        normalise any absolute paths already written to KB-relative.
+
+        Only pre-release code (this branch, before the coordinator's
+        second round) ever stored an absolute path; nothing shipped with
+        that shape. Still, a dev database that already ran an earlier
+        version of this migration would have absolute rows with no way to
+        repair them later (upsert_entry_version only fills a *missing*
+        path, never replaces one that is set) -- so this normalises them
+        in place, once, here.
+        """
         table_exists = self.conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='entry_version'"
         ).fetchone()
@@ -792,6 +802,34 @@ class MigrationManager:
         }
         if "file_path" not in existing:
             self.conn.execute("ALTER TABLE entry_version ADD COLUMN file_path TEXT")
+            self.conn.commit()
+            return
+
+        kb_exists = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='kb'"
+        ).fetchone()
+        if not kb_exists:
+            return
+
+        kb_paths = dict(self.conn.execute("SELECT name, path FROM kb").fetchall())
+        rows = self.conn.execute(
+            "SELECT id, kb_name, file_path FROM entry_version WHERE file_path IS NOT NULL"
+        ).fetchall()
+        for row_id, kb_name, file_path in rows:
+            kb_path = kb_paths.get(kb_name)
+            if not kb_path:
+                continue
+            # An absolute path always starts with the KB's own root, plus a
+            # separator, since it was built as kb_path / rel; anything else
+            # (already relative, or from a different KB root entirely) is
+            # left untouched rather than guessed at.
+            prefix = kb_path.rstrip("/\\") + "/"
+            if file_path.startswith(prefix):
+                relative = file_path[len(prefix) :]
+                self.conn.execute(
+                    "UPDATE entry_version SET file_path = ? WHERE id = ?",
+                    (relative, row_id),
+                )
         self.conn.commit()
 
     def _apply_v21(self) -> None:

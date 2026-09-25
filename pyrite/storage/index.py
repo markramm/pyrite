@@ -1237,10 +1237,12 @@ class IndexManager:
                 self.db.upsert_entry(data)
 
                 # Then populate entry_version table. Each commit's file_path
-                # is the path this entry had *at that commit* (its own tree),
-                # not necessarily its current path -- get_file_log resolves
-                # this per commit via --name-status so a pre-rename commit
-                # stays readable at the name it actually had (#432).
+                # is the KB-relative path this entry had *at that commit*
+                # (its own tree), not necessarily its current path --
+                # get_file_log resolves this per commit via --name-status
+                # so a pre-rename commit stays readable at the name it
+                # actually had (#432). Stored KB-relative, not absolute: an
+                # absolute path breaks the moment the KB's directory moves.
                 for i, log_entry in enumerate(log_entries):
                     change_type = "created" if i == len(log_entries) - 1 else "modified"
                     commit_rel_path = log_entry.get("file_path", rel_path)
@@ -1253,7 +1255,7 @@ class IndexManager:
                         commit_date=log_entry["date"],
                         message=log_entry["message"],
                         change_type=change_type,
-                        file_path=str(kb_path / commit_rel_path),
+                        file_path=commit_rel_path,
                     )
                 indexed_count += 1
 
