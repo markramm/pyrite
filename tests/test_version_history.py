@@ -145,12 +145,6 @@ class TestVersionHistoryDB:
         assert db.entry_version_exists("entry-1", "other-kb", "abc123def456") is False
         assert db.entry_version_exists("entry-1", "test-kb", "0" * 40) is False
 
-        assert db.entry_version_exists("entry-1", "test-kb", "abc123def456") is True
-        # Wrong entry, wrong KB, wrong hash -- each dimension must matter.
-        assert db.entry_version_exists("entry-2", "test-kb", "abc123def456") is False
-        assert db.entry_version_exists("entry-1", "other-kb", "abc123def456") is False
-        assert db.entry_version_exists("entry-1", "test-kb", "0" * 40) is False
-
     def test_upsert_entry_version_stores_file_path(self, db):
         """A version records the path the entry had at that commit, so a
         rename doesn't strand earlier rows against a path that didn't exist

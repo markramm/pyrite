@@ -198,6 +198,13 @@ class TestEntryVersionFilePathMigration:
         cols = {row[1] for row in temp_db.execute("PRAGMA table_info(entry_version)")}
         assert "file_path" in cols
 
+    @pytest.mark.control(
+        reason="No v25 exists at all on the merge base, so this passes there "
+        "trivially (nothing runs to raise) -- it pins a coexistence with the "
+        "fix present, not a regression the fix corrects. The mutation check "
+        "(removing the 'file_path' not in existing guard) is what proves "
+        "this test is load-bearing once the fix exists."
+    )
     def test_v25_does_not_error_when_orm_create_all_already_added_the_column(self, temp_db):
         """A fresh install goes through Base.metadata.create_all() (the ORM
         model already declares file_path), then MigrationManager.migrate()
