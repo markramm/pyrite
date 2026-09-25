@@ -498,11 +498,36 @@ current code rather than a moving target.
   Windows drive-relative names; symlinks out of a KB; `POST /mcp/messages/`
   trusting the SDK session id; REST ignoring `Bearer <valid key>`.
 
+### Workstream S — Structure first (maintainer decision, 2026-09-25)
+
+Most 0.26 bugs are one fix made four times. REST, MCP, CLI and the UI each
+reach past the service layer, so a parity fix has to find every copy:
+- the update semantics (#407), dry-run (#427), refusal reasons (#429) and the
+  search contract (#431);
+- 59 read-authorization checks in 16 files, with no single policy point;
+- 124 hand-raised `HTTPException`s in the endpoints.
+
+Themes on that surface took 150 to 500 worker turns. So this workstream
+dispatches **ahead of everything below except work already in flight**:
+1. **#380 (T6): the surfaces stop reaching past services**, with a boundary
+   test that only ratchets down. It runs once #445 and #447 land, because
+   they share its files. It uses Opus, because the ratchet is the design.
+2. **ADR-0037 (proposed): one authorization policy point and one error
+   contract.** Every REST route, MCP tool and CLI write asks one service
+   whether the caller may act, and every refusal leaves through one mapping.
+   This is the mechanism behind the definition of done's structural
+   authorization guard. Security fixes after batch 3 are built against it,
+   not route by route.
+
+**Check:** after #380, a parity fix touches one service plus thin adapters.
+If one still takes more than about 150 worker turns, the diagnosis was
+wrong; say so at the next retro.
+
 ### Workstream 0 — Write paths the investigation conductor depends on (maintainer priority, 2026-09-25)
 
 Every write says what it did and stores what it was given, or refuses. These
 block the maintainer's investigation conductor, so they dispatch ahead of the
-rest of 0.26.
+rest of 0.26, after Workstream S.
 
 - **CLI write path honours the schema** (#407, #397, #396, one PR): `update -f`
   stores undeclared keys where `create` puts them; `task create --field` so
