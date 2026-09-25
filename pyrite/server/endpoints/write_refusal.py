@@ -62,8 +62,10 @@ async def refuses_truncated_body(request: Request) -> None:
         return
 
     # PATCH writes one named field, so it is a body write only when that field
-    # IS the body -- and then `value`, not a `body` key, holds the body.
-    if isinstance(payload, dict) and payload.get("field") is not None:
+    # IS the body -- and then `value`, not a `body` key, holds the body. The
+    # method decides, never the payload: a stray `field` key on a POST or PUT
+    # must not skip the check.
+    if request.method == "PATCH" and isinstance(payload, dict):
         if payload.get("field") != "body":
             return
         payload = {**payload, "body": payload.get("value")}

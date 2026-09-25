@@ -557,6 +557,26 @@ def test_rest_update_refuses_a_marker_nested_under_any_key(env, rest, method):
     assert "WHOLE" in _file(env, "rest-deep").read_text()
 
 
+@pytest.mark.parametrize("method", ["post", "put"])
+def test_rest_a_stray_field_key_does_not_skip_the_truncation_check(env, rest, method):
+    """Delta review on 9d2d3d47: PATCH was detected by a `field` key in the payload,
+    so a POST or PUT carrying a stray `field` skipped the ADR-0034 check and wrote
+    the fragment. Only the method decides that a request is a PATCH."""
+    resp = rest.post(
+        "/api/entries",
+        json={"kb": KB, "entry_type": "person", "title": "Rest Stray", "body": "WHOLE"},
+    )
+    assert resp.status_code == 200, resp.text
+    marked = {"kb": KB, "body": "frag", "body_truncated": True, "field": "title"}
+    if method == "post":
+        resp = rest.post("/api/entries", json={**marked, "entry_type": "person", "title": "Other"})
+    else:
+        resp = rest.put("/api/entries/rest-stray", json=marked)
+    assert resp.status_code == 400, resp.text
+    assert resp.json()["detail"]["code"] == "VALIDATION_FAILED"
+    assert "WHOLE" in _file(env, "rest-stray").read_text()
+
+
 @pytest.fixture
 def task_env(tmp_path):
     return _kb_env(tmp_path, "tk", "generic", "name: tk\ntypes:\n  task: {}\n")
