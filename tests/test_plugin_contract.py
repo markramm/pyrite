@@ -900,3 +900,54 @@ class TestIndexHealthToleratesMalformedValidatorOutput:
         assert health["invalid_statuses"] == [
             {"kb": "k", "id": "i", "type": "t", "status": "odd", "allowed": ["ok"]}
         ]
+
+
+class TestValidateWriteKeepsEnumDetail:
+    """#422 delta cold read: preferring a validator's `message` must not lose
+    the allowed values of an enum error (journalism's validate_enum sets both
+    `expected` and `message`). Structured rules render as before; `message`
+    is used when the rule is missing or unknown."""
+
+    def _refusal(self, tmp_path, monkeypatch, error):
+        from pyrite.config import KBConfig, PyriteConfig, Settings
+        from pyrite.exceptions import SchemaViolationError
+        from pyrite.schema.kb_schema import KBSchema
+        from pyrite.services.kb_service import KBService
+        from pyrite.storage.database import PyriteDB
+
+        monkeypatch.setattr(
+            KBSchema, "validate_entry", lambda self, *a, **k: {"errors": [error], "warnings": []}
+        )
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        config = PyriteConfig(
+            knowledge_bases=[KBConfig(name="k", path=kb_path, kb_type="generic")],
+            settings=Settings(index_path=tmp_path / "index.db"),
+        )
+        db = PyriteDB(config.settings.index_path)
+        try:
+            with pytest.raises(SchemaViolationError) as exc_info:
+                KBService(config, db).create_entry("k", "e", "E", "note")
+            return str(exc_info.value)
+        finally:
+            db.close()
+
+    def test_an_enum_error_keeps_its_allowed_values(self, tmp_path, monkeypatch):
+        text = self._refusal(
+            tmp_path,
+            monkeypatch,
+            {
+                "field": "status",
+                "rule": "enum",
+                "expected": ["open", "closed"],
+                "got": "foo",
+                "message": "Invalid status: foo",
+            },
+        )
+        assert "open" in text and "closed" in text, text
+
+    def test_a_ruleless_error_uses_its_message(self, tmp_path, monkeypatch):
+        text = self._refusal(
+            tmp_path, monkeypatch, {"field": "importance", "message": "Importance must be 1-10"}
+        )
+        assert "Importance must be 1-10" in text, text

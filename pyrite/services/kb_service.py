@@ -200,19 +200,15 @@ class KBService:
             got = e.get("got")
             expected = e.get("expected")
             message = e.get("message")
-            if message:
-                # A validator's own message (e.g. cascade's "Importance must
-                # be 1-10, got: 99") is more useful than the generic
-                # field/rule/expected/got rendering, and is the ONLY
-                # information available for an item with no `rule` --
-                # falling through to the generic branch there rendered as
-                # the unhelpful "field: (expected None, got None)"
-                # (coordinator should-fix 4).
-                parts.append(f"{field}: {message}" if field != "?" else message)
-            elif rule == "enum":
+            if rule == "enum":
                 parts.append(f"{field}: {got!r} is not one of {expected}")
             elif rule == "required":
                 parts.append(f"{field}: required")
+            elif message:
+                # A rule this renderer does not know, or none at all (e.g.
+                # cascade's "Importance must be 1-10, got: 99"): the
+                # validator's own message beats "(expected None, got None)".
+                parts.append(f"{field}: {message}" if field != "?" else message)
             else:
                 parts.append(f"{field}: {rule} (expected {expected}, got {got!r})")
         raise SchemaViolationError(
