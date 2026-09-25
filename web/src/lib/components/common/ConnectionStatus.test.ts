@@ -28,6 +28,18 @@ function latest(): FakeWebSocket {
 	return FakeWebSocket.instances[FakeWebSocket.instances.length - 1];
 }
 
+const close = (code: number) => latest().onclose?.(new CloseEvent('close', { code }));
+
+/** Fail the first handshake and both of its retries: the client settles on refused. */
+function refuseEveryAttempt() {
+	close(1006);
+	vi.advanceTimersByTime(1000);
+	close(1006);
+	vi.advanceTimersByTime(2000);
+	close(1006);
+	expect(wsClient.status).toBe('refused');
+}
+
 /**
  * jsdom has no Web Animations API, so a Svelte `transition:` outro never
  * finishes and the banner would stay in the DOM. This animation finishes on
@@ -68,14 +80,14 @@ describe('ConnectionStatus', () => {
 		render(ConnectionStatus);
 		wsClient.follow('anonymous');
 
-		await act(() => latest().onclose?.(new CloseEvent('close', { code: 1006 })));
+		await act(() => refuseEveryAttempt());
 
 		expect(screen.getByRole('status')).toHaveTextContent('Real-time updates unavailable');
 	});
 
 	it('shows a refusal that happened before it mounted', async () => {
 		wsClient.follow('anonymous');
-		latest().onclose?.(new CloseEvent('close', { code: 1006 }));
+		refuseEveryAttempt();
 
 		render(ConnectionStatus);
 		await act(() => {});
@@ -111,6 +123,40 @@ describe('ConnectionStatus', () => {
 		expect(screen.queryByRole('status')).toBeNull();
 	});
 
+	it('a dismissed "Connection lost" stays dismissed through the reconnect attempts', async () => {
+		render(ConnectionStatus);
+		wsClient.follow('user:1');
+		await act(() => latest().onopen?.(new Event('open')));
+		await act(() => close(1001));
+		await act(() => vi.advanceTimersByTime(3000));
+		// The 1 s reconnect has fired and is still connecting.
+		await act(() => screen.getByRole('button', { name: 'Dismiss' }).click());
+		expect(screen.queryByRole('status')).toBeNull();
+
+		// Each attempt fails (the server is still down): closed, connecting, ...
+		await act(() => close(1006));
+		await act(() => vi.advanceTimersByTime(2000));
+		await act(() => close(1006));
+		await act(() => vi.advanceTimersByTime(4000));
+		expect(wsClient.status).toBe('connecting');
+		expect(screen.queryByRole('status')).toBeNull();
+	});
+
+	it('a dismissal lasts only until the status changes kind', async () => {
+		render(ConnectionStatus);
+		wsClient.follow('user:1');
+		await act(() => latest().onopen?.(new Event('open')));
+		await act(() => close(1001));
+		await act(() => vi.advanceTimersByTime(3000));
+		await act(() => screen.getByRole('button', { name: 'Dismiss' }).click());
+
+		// Reconnected, then lost again: a new loss, shown after its grace period.
+		await act(() => latest().onopen?.(new Event('open')));
+		await act(() => close(1001));
+		await act(() => vi.advanceTimersByTime(3000));
+		expect(screen.getByRole('status')).toHaveTextContent('Connection lost');
+	});
+
 	it('shows nothing while signed out with no socket', async () => {
 		render(ConnectionStatus);
 		wsClient.follow('user:1');
@@ -124,7 +170,7 @@ describe('ConnectionStatus', () => {
 	it('hides the refusal once the user changes and the new socket opens', async () => {
 		render(ConnectionStatus);
 		wsClient.follow('anonymous');
-		await act(() => latest().onclose?.(new CloseEvent('close', { code: 1006 })));
+		await act(() => refuseEveryAttempt());
 		expect(screen.getByRole('status')).toBeInTheDocument();
 
 		await act(() => wsClient.follow('user:1'));

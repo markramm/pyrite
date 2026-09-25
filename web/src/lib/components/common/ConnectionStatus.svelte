@@ -24,7 +24,9 @@
 
 		const unsub = wsClient.onStatus((next) => {
 			status = next;
-			dismissed = false;
+			// A dismissal covers one episode: it outlives the reconnect
+			// attempts (closed <-> connecting), not a change of kind.
+			if (next === 'open' || next === 'refused' || next === 'idle') dismissed = false;
 			if (next === 'closed') {
 				if (timer === null) {
 					timer = setTimeout(() => {
