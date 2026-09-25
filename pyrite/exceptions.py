@@ -184,3 +184,16 @@ class ClipperBlockedHostError(PyriteError):
     """
 
     error_code = "CLIPPER_BLOCKED_HOST"
+
+
+class LastAdminError(ValidationError):
+    """AuthService.set_role refused to demote the last global admin (#416).
+
+    A ValidationError subclass so any generic ``except ValidationError``
+    handler still catches it, but with its own ``error_code`` so a route
+    that wants to label *this specific* refusal (409 LAST_ADMIN) does not
+    also mislabel every other validation failure from the same call the
+    same way.
+    """
+
+    error_code = "LAST_ADMIN"

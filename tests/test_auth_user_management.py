@@ -269,3 +269,42 @@ class TestLastAdminService:
     def test_unknown_user_is_still_not_found(self, auth):
         auth.register("root", "password123")
         assert auth.set_role(9999, "read") is False
+
+    def test_raises_last_admin_error_specifically(self, auth):
+        """#416: the last-admin refusal is its own type, not the base
+        ValidationError, so the route can label it 409 LAST_ADMIN without
+        mislabeling every other validation failure the same way."""
+        from pyrite.exceptions import LastAdminError
+
+        first = auth.register("root", "password123")
+        auth.register("other", "password123")
+        with pytest.raises(LastAdminError):
+            auth.set_role(first["id"], "read")
+
+
+class TestLastAdminErrorType:
+    """#416: LastAdminError is a distinct ValidationError subclass with its
+    own error_code, so the route (and the central handler) can catch it by
+    name instead of assuming every ValidationError from set_role is this
+    one refusal."""
+
+    def test_is_a_validation_error_with_its_own_code(self):
+        from pyrite.exceptions import LastAdminError, ValidationError
+
+        assert issubclass(LastAdminError, ValidationError)
+        assert LastAdminError.error_code == "LAST_ADMIN"
+
+    def test_other_validation_errors_from_set_role_are_422_not_409(self, two_sessions, monkeypatch):
+        """A ValidationError from set_role that isn't the last-admin refusal
+        must not be mislabeled 409 LAST_ADMIN by the route's except clause."""
+        from pyrite.exceptions import ValidationError
+        from pyrite.services.auth_service import AuthService
+
+        def _boom(self, user_id, role):
+            raise ValidationError("some other validation failure")
+
+        monkeypatch.setattr(AuthService, "set_role", _boom)
+        admin, _, _, admin_id, _ = two_sessions
+        r = admin.put(f"/auth/users/{admin_id}/role", json={"role": "read"})
+        assert r.status_code == 422, r.text
+        assert r.json().get("code") == "VALIDATION_ERROR", r.text

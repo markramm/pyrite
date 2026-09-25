@@ -1,0 +1,1 @@
+- `PUT /auth/users/{id}/role` now answers `409 LAST_ADMIN` only for the specific refusal to demote the last global admin; any other validation failure from the same call now correctly answers `422 VALIDATION_ERROR` instead of being mislabeled `409 LAST_ADMIN` (#416).

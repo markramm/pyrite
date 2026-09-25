@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 import bcrypt as _bcrypt
 
 from ..config import AuthConfig, OAuthProviderConfig
-from ..exceptions import ValidationError
+from ..exceptions import LastAdminError
 from ..services.oauth_providers import OAuthProfile
 from ..storage.database import PyriteDB
 
@@ -543,13 +543,22 @@ class AuthService:
 
         Raises:
             ValueError: `role` is not read, write or admin.
-            ValidationError: the change would demote the last global admin,
+            LastAdminError: the change would demote the last global admin,
                 leaving nobody able to manage users. The count and the update
                 are one statement, so two admins demoting each other at once
                 cannot both succeed.
         """
         if role not in ("read", "write", "admin"):
             raise ValueError(f"Invalid role: {role}")
+        # Atomic only because the auth tables live in SQLite: SQLite
+        # serializes writers, so the COUNT(*) subquery and the UPDATE it
+        # gates always see a consistent snapshot within this one statement.
+        # If the auth tables ever move to a database with a weaker default
+        # isolation level (e.g. Postgres READ COMMITTED), this single
+        # statement is no longer enough -- two concurrent demotions could
+        # both read "more than one admin" before either commits. It would
+        # need `SELECT ... FOR UPDATE` on the admin rows, or an advisory
+        # lock, around the check-and-update.
         rowcount = self.db.execute_write_sql(
             "UPDATE local_user SET role = :role, updated_at = :now "
             "WHERE id = :user_id AND ("
@@ -564,7 +573,7 @@ class AuthService:
             "SELECT 1 FROM local_user WHERE id = :user_id", {"user_id": user_id}
         )
         if exists:
-            raise ValidationError("Cannot demote the last admin: promote another user first")
+            raise LastAdminError("Cannot demote the last admin: promote another user first")
         return False
 
     def set_usage_tier(self, user_id: int, usage_tier: str) -> bool:
