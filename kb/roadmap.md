@@ -498,6 +498,21 @@ current code rather than a moving target.
   Windows drive-relative names; symlinks out of a KB; `POST /mcp/messages/`
   trusting the SDK session id; REST ignoring `Bearer <valid key>`.
 
+### Workstream 0 — Write paths the investigation conductor depends on (maintainer priority, 2026-09-25)
+
+Every write says what it did and stores what it was given, or refuses. These
+block the maintainer's investigation conductor, so they dispatch ahead of the
+rest of 0.26.
+
+- **CLI write path honours the schema** (#407, #397, #396, one PR): `update -f`
+  stores undeclared keys where `create` puts them; `task create --field` so
+  desk-schema tasks can be created in one step; `link` records a second relation
+  and says "Already linked" when it wrote nothing.
+- **Extension writes through the pipeline** (#391): social post and zettel new
+  now; `sw new-adr` after the ADR-filename decision.
+- **Web New-entry offers declared types** (#392): `allow_undeclared` becomes an
+  explicit choice, not the web's default.
+
 ### Workstream 2 — Multi-user correctness the review will touch
 
 - **#326 / #322** WebSocket events are never delivered: one root cause, no
