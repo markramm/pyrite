@@ -326,3 +326,29 @@ class TestRepairOfEphemeralRegistryRowsWithoutConfig:
         finally:
             other.close()
         assert rows[0]["default_role"] == "none"
+
+    def test_a_repair_that_cannot_write_still_loads_the_kb_private(self, tmp_path, monkeypatch):
+        """A locked (or read-only) index must not stop the load, nor open the KB.
+
+        The registry merge runs while every entry point is constructed and is
+        documented not to raise. If the repair's write fails, the KB is still
+        merged with the private policy -- in memory -- and the load goes on.
+        """
+        import sqlite3
+
+        self._orphan(tmp_path, monkeypatch)
+        config = load_config()
+        blocker = sqlite3.connect(tmp_path / "index.db", timeout=0)
+        blocker.execute("BEGIN EXCLUSIVE")
+        try:
+            db = PyriteDB(tmp_path / "index.db")
+            try:
+                db.merge_registered_kbs(config)  # must not raise
+                assert config.get_kb("lost").default_role == "none"
+                # The session is usable afterwards (rolled back, not poisoned).
+                db.execute_sql("SELECT 1")
+            finally:
+                db.close()
+        finally:
+            blocker.rollback()
+            blocker.close()

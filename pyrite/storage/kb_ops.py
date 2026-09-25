@@ -107,7 +107,7 @@ class KBOpsMixin:
 
         Returns the number of KBs merged (0 on failure or none pending).
         """
-        self._repair_ephemeral_rows_without_policy(config)
+        private = self._repair_ephemeral_rows_without_policy(config)
         try:
             rows = self.session.execute(
                 text(
@@ -131,13 +131,15 @@ class KBOpsMixin:
                 "path": r[1],
                 "kb_type": r[2],
                 "description": r[3] or "",
-                "default_role": r[4],
+                # Applied here as well as written: if the repair's write
+                # failed, the KB still loads private rather than open.
+                "default_role": "none" if r[4] is None and r[0] in private else r[4],
             }
             for r in rows
         ]
         return config.register_db_kbs(db_kbs)
 
-    def _repair_ephemeral_rows_without_policy(self, config: "PyriteConfig") -> None:
+    def _repair_ephemeral_rows_without_policy(self, config: "PyriteConfig") -> set[str]:
         """Make registry rows of ephemeral KBs without a policy private.
 
         Versions before this one never wrote an ephemeral KB's private policy
@@ -146,6 +148,11 @@ class KBOpsMixin:
         user at their global role. A row whose path is under
         <workspace>/ephemeral/ is an ephemeral KB's; with no default_role it
         gets "none", logged at WARNING.
+
+        Returns the names that must load private. The caller applies that
+        in memory too, so a write that fails (a locked or read-only index)
+        neither stops the load -- this runs while every entry point is
+        constructed -- nor lets the KB load open.
         """
         root = (config.settings.workspace_path / "ephemeral").resolve()
         try:
@@ -154,7 +161,8 @@ class KBOpsMixin:
             ).fetchall()
         except SQLAlchemyError:
             logger.warning("Could not check ephemeral KB rows for a policy", exc_info=True)
-            return
+            self.session.rollback()
+            return set()
         repaired = []
         for name, path in rows:
             if not path:
@@ -163,19 +171,30 @@ class KBOpsMixin:
             if resolved != root and resolved.is_relative_to(root):
                 repaired.append(name)
         if not repaired:
-            return
+            return set()
         for name in repaired:
             logger.warning(
                 "Ephemeral KB %r has no default_role in the registry; making it private ('none')",
                 name,
             )
-            self.session.execute(
-                text(
-                    "UPDATE kb SET default_role = 'none' WHERE name = :n AND default_role IS NULL"
-                ),
-                {"n": name},
+        try:
+            for name in repaired:
+                self.session.execute(
+                    text(
+                        "UPDATE kb SET default_role = 'none' "
+                        "WHERE name = :n AND default_role IS NULL"
+                    ),
+                    {"n": name},
+                )
+            self.session.commit()
+        except SQLAlchemyError:
+            self.session.rollback()
+            logger.warning(
+                "Could not persist the private policy for %s; applying it for this load only",
+                ", ".join(repaired),
+                exc_info=True,
             )
-        self.session.commit()
+        return set(repaired)
 
     def update_kb_default_role(self, name: str, default_role: str | None) -> bool:
         """Update a KB's default_role. Returns True if KB was found."""
