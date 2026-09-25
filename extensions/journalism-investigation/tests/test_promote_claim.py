@@ -146,6 +146,30 @@ class TestPromoteCorroboratedClaim:
         assert "error" in result
         assert "asset" in result["error"]
 
+    def test_promote_ownership_whitespace_only_endpoint_field_is_an_error(self, setup):
+        """A whitespace-only value (`"   "`) is truthy in Python, so a naive
+        `not endpoint_fields.get(f)` check treats it as present -- it must
+        count as missing, same as an empty string or an absent key."""
+        db = setup["db"]
+        kb_service = setup["kb_service"]
+
+        _create_claim(kb_service, "claim-ownership-whitespace", "X owns Y")
+
+        result = promote_claim_to_edge(
+            db=db,
+            kb_name="test",
+            claim_id="claim-ownership-whitespace",
+            edge_type="ownership",
+            kb_service=kb_service,
+            endpoint_fields={"owner": "[[entity-x]]", "asset": "   "},
+        )
+
+        assert "error" in result
+        assert "asset" in result["error"]
+        kb_path = setup["config"].knowledge_bases[0].path
+        written = [p for p in kb_path.rglob("*.md") if p.parent.name != "claims"]
+        assert not written, f"an edge was written: {written}"
+
 
 class TestRejectUnverifiedClaim:
     def test_reject_unverified_claim(self, setup):

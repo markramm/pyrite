@@ -42,9 +42,13 @@ def _endpoint_fields_problem(edge_type: str, endpoint_fields: Any) -> str | None
 
 
 def _missing_endpoint_fields(edge_type: str, endpoint_fields: dict[str, str]) -> list[str]:
-    """Required fields for `edge_type` that are absent or empty in `endpoint_fields`."""
+    """Required fields for `edge_type` that are absent, empty, or
+    whitespace-only in `endpoint_fields`. A whitespace-only string (`"   "`)
+    is truthy in Python, so `not endpoint_fields.get(f)` alone would let it
+    through as "present" -- `.strip()` catches it the same as an empty
+    string or a missing key."""
     required = EDGE_TYPE_REQUIRED_FIELDS.get(edge_type, ())
-    return [f for f in required if not endpoint_fields.get(f)]
+    return [f for f in required if not endpoint_fields.get(f, "").strip()]
 
 
 def promote_claim_to_edge(

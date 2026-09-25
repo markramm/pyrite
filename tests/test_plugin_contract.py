@@ -951,3 +951,51 @@ class TestValidateWriteKeepsEnumDetail:
             tmp_path, monkeypatch, {"field": "importance", "message": "Importance must be 1-10"}
         )
         assert "Importance must be 1-10" in text, text
+
+    def test_a_required_error_keeps_its_message(self, tmp_path, monkeypatch):
+        """#429: a conditional `required` rule (journalism's transaction-type
+        check) sets `message` to explain *why* the field is required --
+        rendering `field: required` and dropping it makes the refusal
+        useless for a rule that isn't simply "this field is always
+        required"."""
+        text = self._refusal(
+            tmp_path,
+            monkeypatch,
+            {
+                "field": "amount",
+                "rule": "required",
+                "message": "Transaction of type 'payment' must have an amount",
+            },
+        )
+        assert "Transaction of type 'payment' must have an amount" in text, text
+
+    @pytest.mark.control(
+        reason="negative control for the required-message fix: a `required` "
+        "rule with no `message` at all must still fall back to the old "
+        "`field: required` rendering rather than `field: None`. This passes "
+        "against origin/dev too (the fallback text is unchanged) -- it pins "
+        "the no-message case so the fix above doesn't regress it."
+    )
+    def test_a_required_error_with_no_message_still_says_required(self, tmp_path, monkeypatch):
+        """A `required` rule with no `message` (nothing set one) falls back to
+        the old rendering rather than showing `None` or an empty string."""
+        text = self._refusal(tmp_path, monkeypatch, {"field": "title", "rule": "required"})
+        assert "title: required" in text, text
+
+    def test_an_enum_error_with_a_message_that_says_more_appends_it(self, tmp_path, monkeypatch):
+        """An enum error whose `message` adds detail beyond the generic
+        "Invalid <field>: <got>" (e.g. a plugin explaining a conditional
+        enum) keeps both the allowed values and the extra detail."""
+        text = self._refusal(
+            tmp_path,
+            monkeypatch,
+            {
+                "field": "case_status",
+                "rule": "enum",
+                "expected": ["open", "closed"],
+                "got": "foo",
+                "message": "Invalid case_status: foo (only closed cases may be archived)",
+            },
+        )
+        assert "open" in text and "closed" in text, text
+        assert "only closed cases may be archived" in text, text

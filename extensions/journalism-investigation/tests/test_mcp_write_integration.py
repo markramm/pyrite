@@ -177,6 +177,29 @@ class TestCreateEventRoundTrip:
         )
         assert "error" in result
 
+    def test_payment_transaction_missing_amount_keeps_the_validator_reason(self, setup):
+        """#429: transaction's conditional `amount` rule (validators.py) only
+        fires for payment/bribe/kickback types and sets a `message` -- a
+        real create through KBService must surface that message, not the
+        generic `amount: required` the old renderer produced."""
+        create = setup["write"]["investigation_create_event"]["handler"]
+
+        result = create(
+            {
+                "event_type": "transaction",
+                "title": "Wire Transfer to Cyprus",
+                "date": "2019-06-15",
+                "fields": {
+                    "transaction_type": "payment",
+                    "sender": "[[oligarchov]]",
+                    "receiver": "[[cyprus-corp]]",
+                },
+                "kb_name": "test",
+            }
+        )
+        assert "error" in result
+        assert "Transaction of type 'payment' must have an amount" in result["error"], result
+
 
 class TestCreateClaimRoundTrip:
     def test_create_claim_and_query(self, setup):
