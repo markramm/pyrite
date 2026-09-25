@@ -11,7 +11,7 @@ Both helpers must merge DB-registered KBs, matching `_init_base()`.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -62,6 +62,21 @@ def test_get_config_and_db_resolves_db_registered_kb(db_with_user_kb):
             )
         finally:
             db.close()
+
+
+def test_get_config_and_db_closes_database_when_registry_merge_fails(db_with_user_kb):
+    from pyrite.cli.context import get_config_and_db
+
+    db = MagicMock()
+    db.merge_registered_kbs.side_effect = RuntimeError("registry read failed")
+    with (
+        patch("pyrite.cli.context.load_config", return_value=db_with_user_kb["config"]),
+        patch("pyrite.cli.context.PyriteDB", return_value=db),
+    ):
+        with pytest.raises(RuntimeError, match="registry read failed"):
+            get_config_and_db()
+
+    db.close.assert_called_once_with()
 
 
 def test_cli_db_context_resolves_db_registered_kb(db_with_user_kb):

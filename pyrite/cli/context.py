@@ -88,7 +88,13 @@ def get_config_and_db(config: PyriteConfig | None = None) -> tuple[PyriteConfig,
     """
     config = config or load_config()
     db = PyriteDB(config.settings.index_path)
-    db.merge_registered_kbs(config)
+    try:
+        db.merge_registered_kbs(config)
+    except Exception:
+        # Do not leak the engine if registry loading fails before this helper
+        # can return the database to its caller.
+        db.close()
+        raise
     return config, db
 
 

@@ -6,6 +6,7 @@ invoke the real Typer commands against SQLite.
 """
 
 import json
+import shutil
 
 import pytest
 from typer.testing import CliRunner
@@ -93,6 +94,23 @@ def test_kb_validate_without_name_includes_db_registered_kbs(registered_kb):
     assert [kb["name"] for kb in payload["kbs"]] == ["registry-only"]
 
 
+def test_kb_validate_uses_yaml_config_when_index_database_is_unreadable(registered_kb, caplog):
+    _write_yaml_kb_config(registered_kb)
+    index_db = registered_kb["data_dir"] / "index.db"
+    corrupt_bytes = b"not a sqlite database"
+    index_db.write_bytes(corrupt_bytes)
+
+    with caplog.at_level("WARNING", logger="pyrite.cli.kb_commands"):
+        result = runner.invoke(app, ["kb", "validate", "--format", "json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [kb["name"] for kb in payload["kbs"]] == ["yaml-only"]
+    assert "using YAML config" in caplog.text
+    assert "without content-drift checks" in caplog.text
+    assert index_db.read_bytes() == corrupt_bytes
+
+
 def test_kb_schema_show_finds_db_registered_kb(registered_kb):
     payload = json.loads(
         _invoke(["kb", "schema", "show", "registry-only", "--format", "json"]).stdout
@@ -172,6 +190,31 @@ def test_kb_schema_set_finds_db_registered_kb(registered_kb, tmp_path):
 
     assert payload["set"] is True
     assert payload["type_count"] == 1
+
+
+@pytest.mark.parametrize("operation", ["add-type", "remove-type", "set"])
+def test_schema_writes_refuse_missing_db_registered_kb_directory(
+    registered_kb, tmp_path, operation
+):
+    shutil.rmtree(registered_kb["kb_path"])
+    args = ["kb", "schema", operation, "registry-only"]
+    if operation == "add-type":
+        args.extend(["--type", "project"])
+    elif operation == "remove-type":
+        args.extend(["--type", "note"])
+    else:
+        schema_file = tmp_path / "schema.yaml"
+        schema_file.write_text("types: {}\n", encoding="utf-8")
+        args.extend(["--schema-file", str(schema_file)])
+    args.extend(["--format", "json"])
+
+    result = runner.invoke(app, args)
+
+    assert result.exit_code == 1, result.output
+    payload = json.loads(result.stdout)
+    assert payload["error_code"] == "KB_NOT_FOUND"
+    assert "directory does not exist" in payload["error"]
+    assert not registered_kb["kb_path"].exists()
 
 
 @pytest.mark.control(

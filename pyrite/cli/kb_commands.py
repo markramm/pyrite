@@ -4,12 +4,15 @@ KB management commands for pyrite CLI.
 Commands: list, add, remove, discover, validate, create, reindex, health, commit, push, gc
 """
 
+import logging
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
+from sqlalchemy.exc import SQLAlchemyError
 
 from ..config import (
     auto_discover_kbs,
@@ -25,6 +28,7 @@ from .context import (
 
 kb_app = typer.Typer(help="Knowledge base management")
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def _format_output(data: dict, fmt: str) -> str | None:
@@ -257,10 +261,13 @@ def kb_validate(
     && deploy` blocks on structural errors; scripts that want to gate on
     drift too can check for exit code 2.
     """
-    config, db = get_config_and_db(load_config())
-    try:
+    config = load_config()
+    db = None
+    health = {}
+
+    def _select_kbs(current_config):
         if name:
-            kb = config.get_kb(name)
+            kb = current_config.get_kb(name)
             if not kb:
                 from ..utils.errors import cli_error
 
@@ -270,9 +277,12 @@ def kb_validate(
                     error_code="KB_NOT_FOUND",
                     suggestion="Run `pyrite kb list` to see registered KBs.",
                 )
-            kbs = [kb]
-        else:
-            kbs = config.all_kbs()
+            return [kb]
+        return current_config.all_kbs()
+
+    try:
+        config, db = get_config_and_db(config)
+        kbs = _select_kbs(config)
 
         # Run content-drift checks once (check_health walks all KBs internally),
         # then bucket results by kb name.
@@ -280,8 +290,21 @@ def kb_validate(
 
         index_mgr = IndexManager(db, config)
         health = index_mgr.check_health()
+    except (OSError, sqlite3.Error, SQLAlchemyError) as exc:
+        logger.warning(
+            "Could not read index database %s while validating KBs; "
+            "using YAML config without content-drift checks: %s",
+            config.settings.index_path,
+            exc,
+        )
+        # A failed merge may have partially added DB-only KBs. Reload to make
+        # the fallback strictly YAML-backed, matching other CLI commands.
+        config = load_config()
+        kbs = _select_kbs(config)
+        health = {}
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
     def _for_kb(kb_name: str, field: str) -> list:
         return [row for row in health.get(field, []) if row.get("kb") == kb_name]

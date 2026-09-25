@@ -1,0 +1,1 @@
+- **KB validation tolerates an unreadable index, and schema writes no longer recreate deleted KBs (#458).** `pyrite kb validate` warns and validates YAML-configured KBs when the index database cannot be read; schema write commands now clearly refuse a missing KB directory.

@@ -24,6 +24,11 @@ class SchemaService:
             raise KBNotFoundError(f"KB '{kb_name}' not found")
         return kb
 
+    def _require_kb_directory(self, kb: KBConfig) -> None:
+        """Refuse schema writes when the registered KB directory is gone."""
+        if not kb.path.is_dir():
+            raise KBNotFoundError(f"KB '{kb.name}' directory does not exist: {kb.path}")
+
     def _load_kb_yaml(self, kb: KBConfig) -> dict[str, Any]:
         """Load kb.yaml, returning empty dict if missing."""
         if kb.kb_yaml_path.exists():
@@ -32,7 +37,6 @@ class SchemaService:
 
     def _save_kb_yaml(self, kb: KBConfig, data: dict[str, Any]) -> None:
         """Save kb.yaml and refresh in-memory config."""
-        kb.kb_yaml_path.parent.mkdir(parents=True, exist_ok=True)
         dump_yaml_file(data, kb.kb_yaml_path)
         kb.load_kb_yaml()
 
@@ -59,6 +63,7 @@ class SchemaService:
             Result dict with added status.
         """
         kb = self._get_kb(kb_name)
+        self._require_kb_directory(kb)
         data = self._load_kb_yaml(kb)
 
         types = data.get("types", {})
@@ -82,6 +87,7 @@ class SchemaService:
             Result dict with removed status.
         """
         kb = self._get_kb(kb_name)
+        self._require_kb_directory(kb)
         data = self._load_kb_yaml(kb)
 
         types = data.get("types", {})
@@ -107,6 +113,7 @@ class SchemaService:
             Result dict with set status.
         """
         kb = self._get_kb(kb_name)
+        self._require_kb_directory(kb)
         data = self._load_kb_yaml(kb)
 
         if "types" in schema:
